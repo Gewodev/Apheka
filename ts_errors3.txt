@@ -1,0 +1,4 @@
+src/components/Dashboard.tsx(5,35): error TS6133: 'Calendar' is declared but its value is never read.
+src/components/Dashboard.tsx(106,10): error TS6133: 'QuickNavCard' is declared but its value is never read.
+src/components/Dashboard.tsx(157,35): error TS6133: 'onNavigate' is declared but its value is never read.
+src/components/Tareas.tsx(181,21): error TS6133: 'badgeColor' is declared but its value is never read.

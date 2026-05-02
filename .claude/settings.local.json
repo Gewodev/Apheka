@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc:*)",
+      "Bash(mv Configuracion_temp.tsx Configuracion.tsx)",
+      "Bash(sed:*)",
+      "Bash(npm run:*)",
+      "Bash(npx vite:*)",
+      "Bash(curl -s http://127.0.0.1:5173)",
+      "Bash(ls:*)",
+      "Bash(grep -n \"const \\\\\\\\[musicExpanded\" src/components/Estudio.tsx)",
+      "Bash(grep -n \"const { tracks, addTrack, deleteTrack }\" src/components/Estudio.tsx)",
+      "Bash(netstat -ano)",
+      "Bash(tasklist)",
+      "Bash(curl -s http://localhost:1420/)",
+      "Bash(kill 26860)",
+      "Bash(curl:*)",
+      "Bash(touch:*)",
+      "Bash(npm list:*)",
+      "Bash(grep -rE \"var\\\\\\(--[^\\)]+\\\\\\)/\\(25|42|45|55|5|40\\)\" src/components/*.tsx)",
+      "Bash(grep -rE \"var\\\\\\(--[^\\)]+\\\\\\)/\\([0-9]+\\)\" src/components/*.tsx)",
+      "Bash(grep:*)",
+      "Bash(find src:*)",
+      "Bash(npm install:*)"
+    ]
+  }
+}

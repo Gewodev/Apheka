@@ -1,0 +1,14 @@
+src/components/Dashboard.tsx(84,41): error TS2322: Type '{ size: number; strokeWidth: number; style: { color: string; }; }' is not assignable to type 'IntrinsicAttributes & { size: number; strokeWidth?: number | undefined; className?: string | undefined; }'.
+  Property 'style' does not exist on type 'IntrinsicAttributes & { size: number; strokeWidth?: number | undefined; className?: string | undefined; }'.
+src/components/Dashboard.tsx(146,41): error TS2322: Type '{ size: number; strokeWidth: number; style: { color: string; }; }' is not assignable to type 'IntrinsicAttributes & { size: number; strokeWidth?: number | undefined; }'.
+  Property 'style' does not exist on type 'IntrinsicAttributes & { size: number; strokeWidth?: number | undefined; }'.
+src/components/Estudio.tsx(19,19): error TS2339: Property 'setTareas' does not exist on type '{ tareas: Tarea[]; crearTarea: (data: Omit<Tarea, "id" | "creadoEn" | "tiempoEstudiadoSegundos">) => Tarea; actualizarTarea: (id: string, changes: Partial<Tarea>) => void; eliminarTarea: (id: string) => void; registrarTiempo: (id: string, segundos: number) => void; }'.
+src/components/Estudio.tsx(30,9): error TS6133: 'phaseColor' is declared but its value is never read.
+src/components/global/BottomMusicBar.tsx(11,81): error TS2339: Property 'openLibrary' does not exist on type 'MusicPlayerContextType'.
+src/components/global/SideMusicBar.tsx(7,53): error TS6133: 'ChevronDown' is declared but its value is never read.
+src/components/global/SideMusicBar.tsx(7,66): error TS6133: 'ChevronUp' is declared but its value is never read.
+src/components/Notas.tsx(77,43): error TS6133: 'placeholder' is declared but its value is never read.
+src/components/Notas.tsx(79,9): error TS6133: 'keyRef' is declared but its value is never read.
+src/components/Notas.tsx(82,3): error TS2304: Cannot find name 'useEffect'.
+src/components/Tareas.tsx(181,21): error TS6133: 'badgeColor' is declared but its value is never read.
+src/hooks/useDocumentPIP.ts(67,13): error TS6133: 'descansoBg' is declared but its value is never read.
