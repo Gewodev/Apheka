@@ -8,16 +8,10 @@ export interface EmptyStateProps {
 }
 
 export const EmptyState = ({ icon, title, description, action }: EmptyStateProps) => (
-  <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-    {icon && (
-      <div className="mb-4 text-text-tertiary/50">
-        {icon}
-      </div>
-    )}
-    <h3 className="text-sm font-semibold text-text-primary mb-1">{title}</h3>
-    {description && (
-      <p className="text-xs text-text-tertiary mb-4">{description}</p>
-    )}
-    {action}
+  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 24px', textAlign: 'center' }}>
+    {icon && <div style={{ color: 'var(--text-muted)', marginBottom: 16, opacity: 0.3 }}>{icon}</div>}
+    <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>{title}</h3>
+    {description && <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginBottom: 24 }}>{description}</p>}
+    {action && <div>{action}</div>}
   </div>
 );

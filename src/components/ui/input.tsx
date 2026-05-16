@@ -1,5 +1,4 @@
 import React from 'react';
-import clsx from 'clsx';
 
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
@@ -8,32 +7,32 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
 }
 
 export const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ className, label, error, icon, ...props }, ref) => {
+  ({ label, error, icon, style, ...props }, ref) => {
     return (
-      <div className="w-full">
+      <div style={{ width: '100%' }}>
         {label && (
-          <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1.5">
+          <label style={{ display: 'block', fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
             {label}
           </label>
         )}
-        <div className="relative">
+        <div style={{ position: 'relative' }}>
           {icon && (
-            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary">
+            <div style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }}>
               {icon}
             </div>
           )}
           <input
             ref={ref}
-            className={clsx(
-              'w-full bg-bg-elevated border border-border-default rounded-lg px-3 py-2 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all',
-              icon && 'pl-10',
-              error && 'border-danger focus:ring-danger/20',
-              className
-            )}
+            className="input-base"
+            style={{
+              ...(icon ? { paddingLeft: 36 } : {}),
+              ...(error ? { borderColor: 'var(--error)' } : {}),
+              ...style,
+            }}
             {...props}
           />
         </div>
-        {error && <p className="mt-1 text-xs text-danger">{error}</p>}
+        {error && <p style={{ marginTop: 4, fontSize: 11, color: 'var(--error)' }}>{error}</p>}
       </div>
     );
   }
@@ -42,24 +41,27 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
 Input.displayName = 'Input';
 
 export const Textarea = React.forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttributes<HTMLTextAreaElement> & { label?: string; error?: string }>(
-  ({ className, label, error, ...props }, ref) => {
+  ({ label, error, style, ...props }, ref) => {
     return (
-      <div className="w-full">
+      <div style={{ width: '100%' }}>
         {label && (
-          <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1.5">
+          <label style={{ display: 'block', fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
             {label}
           </label>
         )}
         <textarea
           ref={ref}
-          className={clsx(
-            'w-full bg-bg-elevated border border-border-default rounded-lg px-3 py-2 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-all resize-none',
-            error && 'border-danger focus:ring-danger/20',
-            className
-          )}
+          className="input-base"
+          style={{
+            minHeight: 80,
+            resize: 'vertical',
+            paddingTop: 12,
+            ...(error ? { borderColor: 'var(--error)' } : {}),
+            ...style,
+          }}
           {...props}
         />
-        {error && <p className="mt-1 text-xs text-danger">{error}</p>}
+        {error && <p style={{ marginTop: 4, fontSize: 11, color: 'var(--error)' }}>{error}</p>}
       </div>
     );
   }

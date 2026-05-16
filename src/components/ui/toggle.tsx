@@ -1,39 +1,44 @@
 import React from 'react';
-import clsx from 'clsx';
 
 export interface ToggleProps {
   checked: boolean;
   onChange: (checked: boolean) => void;
   label?: string;
   description?: string;
-  size?: 'sm' | 'md';
 }
 
-export const Toggle = ({ checked, onChange, label, description, size = 'md' }: ToggleProps) => (
-  <div className="flex items-center justify-between gap-3">
-    {(label || description) && (
-      <div>
-        {label && <span className="text-sm font-medium text-text-primary">{label}</span>}
-        {description && <p className="text-xs text-text-tertiary mt-0.5">{description}</p>}
-      </div>
-    )}
+export const Toggle = ({ checked, onChange, label, description }: ToggleProps) => (
+  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0' }}>
+    <div>
+      {label && <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)' }}>{label}</div>}
+      {description && <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>{description}</div>}
+    </div>
     <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
       onClick={() => onChange(!checked)}
-      className={clsx(
-        'relative inline-flex shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2',
-        size === 'sm' ? 'h-5 w-9' : 'h-6 w-11',
-        checked ? 'bg-accent' : 'bg-bg-active'
-      )}
+      style={{
+        width: 44,
+        height: 24,
+        borderRadius: 12,
+        background: checked ? 'var(--accent)' : 'var(--bg-elevated)',
+        border: 'none',
+        cursor: 'pointer',
+        position: 'relative',
+        transition: 'all 200ms cubic-bezier(0.16, 1, 0.3, 1)',
+        flexShrink: 0,
+      }}
     >
-      <span
-        className={clsx(
-          'pointer-events-none inline-block rounded-full bg-white shadow-lg ring-0 transition-transform duration-200 ease-in-out',
-          size === 'sm' ? 'h-4 w-4 translate-x-0.5' : 'h-5 w-5 translate-x-0.5',
-          checked && (size === 'sm' ? 'translate-x-[18px]' : 'translate-x-[22px]')
-        )}
+      <div
+        style={{
+          width: 18,
+          height: 18,
+          borderRadius: '50%',
+          background: '#fff',
+          position: 'absolute',
+          top: 3,
+          left: checked ? 23 : 3,
+          transition: 'all 200ms cubic-bezier(0.16, 1, 0.3, 1)',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+        }}
       />
     </button>
   </div>

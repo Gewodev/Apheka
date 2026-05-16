@@ -1,5 +1,4 @@
 import React from 'react';
-import clsx from 'clsx';
 
 export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   hoverable?: boolean;
@@ -7,16 +6,20 @@ export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 export const Card = React.forwardRef<HTMLDivElement, CardProps>(
-  ({ className, hoverable, compact, children, ...props }, ref) => {
+  ({ hoverable, compact, children, style, ...props }, ref) => {
     return (
       <div
         ref={ref}
-        className={clsx(
-          'bg-bg-surface border border-border-subtle rounded-xl transition-all duration-200',
-          hoverable && 'hover:border-border-strong hover:shadow-md cursor-pointer',
-          compact ? 'p-3' : 'p-4',
-          className
-        )}
+        style={{
+          background: 'var(--bg-surface)',
+          border: '1px solid var(--border-subtle)',
+          borderRadius: 'var(--radius-lg)',
+          padding: compact ? 12 : 20,
+          transition: 'all 200ms cubic-bezier(0.16, 1, 0.3, 1)',
+          cursor: hoverable ? 'pointer' : undefined,
+          ...(hoverable ? { border: '1px solid var(--border-default)' } : {}),
+          ...style,
+        }}
         {...props}
       >
         {children}
@@ -27,20 +30,20 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(
 
 Card.displayName = 'Card';
 
-export const CardHeader = ({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={clsx('flex items-center justify-between mb-4', className)} {...props}>
+export const CardHeader = ({ children, style, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
+  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, ...style }} {...props}>
     {children}
   </div>
 );
 
-export const CardTitle = ({ className, children, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => (
-  <h3 className={clsx('text-sm font-semibold text-text-primary uppercase tracking-wider', className)} {...props}>
+export const CardTitle = ({ children, style, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => (
+  <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.08em', ...style }} {...props}>
     {children}
   </h3>
 );
 
-export const CardContent = ({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={clsx('', className)} {...props}>
+export const CardContent = ({ children, style, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
+  <div style={style} {...props}>
     {children}
   </div>
 );

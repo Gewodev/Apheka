@@ -1,5 +1,4 @@
 import React, { createContext, useContext } from 'react';
-import clsx from 'clsx';
 
 interface TabsContextValue {
   value: string;
@@ -8,37 +7,41 @@ interface TabsContextValue {
 
 const TabsContext = createContext<TabsContextValue | null>(null);
 
-export const Tabs = ({ value, onValueChange, className, children }: {
+export const Tabs = ({ value, onValueChange, children }: {
   value: string;
   onValueChange: (v: string) => void;
-  className?: string;
   children: React.ReactNode;
 }) => (
   <TabsContext.Provider value={{ value, onValueChange }}>
-    <div className={clsx('', className)}>{children}</div>
+    <div>{children}</div>
   </TabsContext.Provider>
 );
 
-export const TabsList = ({ className, children }: { className?: string; children: React.ReactNode }) => (
-  <div className={clsx('flex gap-1 p-1 bg-bg-elevated rounded-lg', className)}>
+export const TabsList = ({ children }: { children: React.ReactNode }) => (
+  <div style={{ display: 'flex', gap: 4, padding: 4, background: 'var(--bg-elevated)', borderRadius: 'var(--radius-lg)' }}>
     {children}
   </div>
 );
 
-export const TabsTrigger = ({ value, className, children }: { value: string; className?: string; children: React.ReactNode }) => {
+export const TabsTrigger = ({ value, children }: { value: string; children: React.ReactNode }) => {
   const ctx = useContext(TabsContext);
   if (!ctx) throw new Error('TabsTrigger must be used within Tabs');
   const isActive = ctx.value === value;
   return (
     <button
       onClick={() => ctx.onValueChange(value)}
-      className={clsx(
-        'flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200',
-        isActive
-          ? 'bg-accent text-white shadow-sm'
-          : 'text-text-secondary hover:text-text-primary hover:bg-bg-hover',
-        className
-      )}
+      style={{
+        flex: 1,
+        padding: '6px 12px',
+        fontSize: 12,
+        fontWeight: 500,
+        borderRadius: 'var(--radius-md)',
+        border: 'none',
+        cursor: 'pointer',
+        background: isActive ? 'var(--accent)' : 'transparent',
+        color: isActive ? '#fff' : 'var(--text-secondary)',
+        transition: 'all 200ms cubic-bezier(0.16, 1, 0.3, 1)',
+      }}
     >
       {children}
     </button>
@@ -49,5 +52,5 @@ export const TabsContent = ({ value, children }: { value: string; children: Reac
   const ctx = useContext(TabsContext);
   if (!ctx) throw new Error('TabsContent must be used within Tabs');
   if (ctx.value !== value) return null;
-  return <div className="mt-4">{children}</div>;
+  return <div style={{ marginTop: 16 }}>{children}</div>;
 };

@@ -1,22 +1,34 @@
-import React, { useState } from 'react';
-import { Plus, BookOpen, ChevronRight, Trash2, Edit2, X, BarChart3, Clock, Trophy, Calendar, Sparkles, AlertTriangle, Layers, Activity } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { 
+  BookOpen, Clock, List, Layers, Star, Plus,
+  Target, GraduationCap, ChevronRight, CheckCircle,
+  FileText, BrainCircuit, NotebookPen, ExternalLink,
+  Image as ImageIcon, Folder, X, Upload, MoreVertical
+} from 'lucide-react';
 import { useApp } from '../../store/AppContext';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 
-interface CursosProps {
-  onSelect: (view: string) => void;
-}
-
-export default function Cursos({ onSelect }: CursosProps) {
-  const { courses, tasks, addCourse, deleteCourse } = useApp();
-  const [selectedCourse, setSelectedCourse] = useState<string | null>(null);
-  const [showCreateModal, setShowCreateModal] = useState(false);
+export default function Cursos() {
+  const { courses, tasks, notes, addCourse } = useApp();
+  const [selectedCourseId, setSelectedCourseId] = useState<string>(courses[0]?.id || '');
+  const [activeTab, setActiveTab] = useState<'resumen' | 'repaso' | 'tareas' | 'notas'>('resumen');
+  const [showNewCourse, setShowNewCourse] = useState(false);
+  
+  // New course state
   const [newCourseName, setNewCourseName] = useState('');
-  const [newCourseColor, setNewCourseColor] = useState('#E11D48');
-  const [deletingCourse, setDeletingCourse] = useState<string | null>(null);
+  const [newCourseColor, setNewCourseColor] = useState('#8B5CF6');
 
-  const courseColors = [
-    '#E11D48', '#2563EB', '#059669', '#D97706', '#7C3AED', '#DB2777', '#0891B2', '#4B5563'
-  ];
+  const selectedCourse = courses.find(c => c.id === selectedCourseId) || courses[0];
+  const courseTasks = tasks.filter(t => t.course === selectedCourse?.name);
+  const courseNotes = notes.filter(n => n.course === selectedCourse?.name);
+  const completedTasks = courseTasks.filter(t => t.status === 'completado').length;
+  const progress = courseTasks.length > 0 ? (completedTasks / courseTasks.length) * 100 : 0;
+
+  // Aggregate files from course tasks
+  const courseFiles = useMemo(() => {
+    return courseTasks.flatMap(t => t.files);
+  }, [courseTasks]);
 
   const handleCreateCourse = () => {
     if (!newCourseName.trim()) return;
@@ -26,225 +38,276 @@ export default function Cursos({ onSelect }: CursosProps) {
       progress: 0,
       totalTasks: 0,
       completedTasks: 0,
-      hoursStudied: 0,
+      hoursStudied: 0
     });
     setNewCourseName('');
-    setShowCreateModal(false);
-  };
-
-  const handleDeleteCourse = (courseId: string) => {
-    deleteCourse(courseId);
-    setDeletingCourse(null);
-    if (selectedCourse === courses.find(c => c.id === courseId)?.name) {
-      setSelectedCourse(null);
-    }
+    setShowNewCourse(false);
   };
 
   return (
-    <div className="page-container">
+    <div style={{ display: 'flex', height: '100%', background: 'var(--bg-base)', overflow: 'hidden' }}>
       
-      {/* ARCHITECTURAL HEADER - REFINED */}
-      <header className="flex justify-between items-end mb-24 relative">
-        <div className="flex flex-col gap-4">
-          <div className="flex items-center gap-3">
-            <Layers size={20} className="text-accent" />
-            <span className="text-[11px] font-black text-tertiary uppercase tracking-[0.5em]">Estructura de Conocimiento</span>
-          </div>
-          <h1 className="text-8xl font-black text-primary tracking-tighter leading-none">
-            Sectores
-            <span className="text-accent">.</span>
-          </h1>
-          <p className="text-xl text-secondary font-medium tracking-tight opacity-60">
-            {courses.length} MATERIAS ACTIVAS EN EL PROTOCOLO
-          </p>
-        </div>
-        <button 
-          onClick={() => setShowCreateModal(true)}
-          className="px-12 h-20 rounded-[32px] bg-accent text-white font-black text-[11px] uppercase tracking-[0.3em] shadow-[0_20px_50px_rgba(225,29,72,0.4)] hover:scale-110 active:scale-95 transition-all flex items-center gap-4"
-        >
-          <Plus size={24} /> Nuevo Sector
-        </button>
-      </header>
+      {/* ── LEFT SIDEBAR (Course List) ── */}
+      <aside style={{ width: 72, borderRight: '1px solid rgba(255,255,255,0.04)', background: 'linear-gradient(180deg, #0d0d12 0%, #14141e 100%)', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '24px 0', gap: 16, boxShadow: '4px 0 32px rgba(0,0,0,0.2)', zIndex: 10 }}>
+         {courses.map(course => (
+           <button 
+             key={course.id} 
+             onClick={() => setSelectedCourseId(course.id)}
+             style={{ 
+               width: 44, height: 44, borderRadius: 12, background: selectedCourseId === course.id ? course.color : 'var(--bg-elevated)', 
+               display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', cursor: 'pointer', transition: 'all 200ms',
+               color: selectedCourseId === course.id ? '#fff' : 'var(--text-tertiary)',
+               boxShadow: selectedCourseId === course.id ? `0 4px 16px ${course.color}40` : 'none',
+               position: 'relative'
+             }}
+             title={course.name}
+           >
+              <div style={{ fontSize: 18, fontWeight: 600 }}>{course.name[0]}</div>
+              {selectedCourseId === course.id && (
+                <div style={{ position: 'absolute', left: -14, top: '50%', transform: 'translateY(-50%)', width: 4, height: 20, background: course.color, borderRadius: '0 4px 4px 0' }} />
+              )}
+           </button>
+         ))}
+         <div style={{ flex: 1 }} />
+         <button onClick={() => setShowNewCourse(true)} className="btn-ghost" style={{ width: 44, height: 44, borderRadius: 12, border: '1px dashed var(--border-default)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+            <Plus size={20} />
+         </button>
+      </aside>
 
-      {/* GRID - MASTERED SPACING */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-12">
-        {courses.map(course => {
-          const completed = tasks.filter(t => t.course === course.name && (t.status === 'completado' || t.status === 'simple_done')).length;
-          const progress = course.totalTasks > 0 ? Math.round((completed / course.totalTasks) * 100) : 0;
-          
-          return (
-            <div
-              key={course.id}
-              onClick={() => setSelectedCourse(course.name)}
-              className="bento-card group flex flex-col cursor-pointer transition-all duration-500 relative overflow-hidden p-12 hover:scale-[1.02] hover:border-accent/30"
-            >
-              <div className="absolute top-0 right-0 p-8 opacity-0 group-hover:opacity-100 transition-all">
-                <button 
-                  onClick={(e) => { e.stopPropagation(); setDeletingCourse(course.id); }}
-                  className="w-12 h-12 rounded-2xl bg-accent/5 text-accent flex items-center justify-center hover:bg-accent hover:text-white transition-all"
-                >
-                  <Trash2 size={20} />
-                </button>
+      {/* ── MAIN CONTENT ── */}
+      <main style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+         {selectedCourse ? (
+           <div className="fade-in-animation" style={{ display: 'flex', flex: 1, flexDirection: 'column' }}>
+              
+              {/* Header */}
+              <header style={{ padding: '32px 40px 0', flexShrink: 0 }}>
+                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 20 }}>
+                    <div>
+                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                         <div style={{ width: 8, height: 8, borderRadius: '50%', background: selectedCourse.color, boxShadow: `0 0 10px ${selectedCourse.color}` }} />
+                         <div style={{ fontSize: 11, fontWeight: 600, color: selectedCourse.color, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Módulo Académico</div>
+                       </div>
+                       <h1 style={{ fontSize: 32, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>{selectedCourse.name}</h1>
+                    </div>
+                    <div style={{ textAlign: 'right', background: 'var(--bg-surface)', padding: '10px 16px', borderRadius: 12, border: '1px solid var(--border-subtle)' }}>
+                       <div style={{ fontSize: 24, fontWeight: 700, color: selectedCourse.color }}>{Math.round(progress)}%</div>
+                       <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Progreso Total</div>
+                    </div>
+                 </div>
+                 
+                 {/* Tabs */}
+                 <div style={{ display: 'flex', gap: 24, borderBottom: '1px solid var(--border-subtle)', marginBottom: 24 }}>
+                    {[
+                      { id: 'resumen', label: 'Resumen', icon: Layers },
+                      { id: 'repaso', label: 'Repaso', icon: BrainCircuit },
+                      { id: 'tareas', label: 'Tareas', icon: List },
+                      { id: 'notas', label: 'Notas', icon: NotebookPen }
+                    ].map(tab => (
+                      <button 
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id as any)}
+                        style={{ 
+                          padding: '0 0 12px', background: 'transparent', border: 'none', borderBottom: `2px solid ${activeTab === tab.id ? selectedCourse.color : 'transparent'}`,
+                          color: activeTab === tab.id ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                          fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', transition: 'all 200ms'
+                        }}
+                      >
+                        <tab.icon size={16} style={{ color: activeTab === tab.id ? selectedCourse.color : 'currentColor' }} />
+                        {tab.label}
+                      </button>
+                    ))}
+                 </div>
+              </header>
+
+              {/* Layout for content + right sidebar */}
+              <div style={{ display: 'flex', flex: 1, minHeight: 0, padding: '0 40px 32px', gap: 32 }}>
+                
+                {/* Content Area */}
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflowY: 'auto', paddingRight: 8 }}>
+                  
+                  {activeTab === 'resumen' && (
+                    <div className="fade-in-animation" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+                         {[
+                           { label: 'Tareas Activas', val: courseTasks.filter(t => t.status !== 'completado').length, icon: Layers },
+                           { label: 'Horas de Estudio', val: `${(selectedCourse.hoursStudied || 0).toFixed(1)}h`, icon: Clock },
+                           { label: 'Notas Totales', val: courseNotes.length, icon: FileText }
+                         ].map((stat, i) => (
+                           <div key={i} className="bento-card" style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '16px 20px', background: 'var(--bg-deep)' }}>
+                              <div style={{ width: 44, height: 44, borderRadius: 12, background: `${selectedCourse.color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: selectedCourse.color }}>
+                                 <stat.icon size={22} />
+                              </div>
+                              <div>
+                                 <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{stat.label}</div>
+                                 <div style={{ fontSize: 20, fontWeight: 700, marginTop: 2 }}>{stat.val}</div>
+                              </div>
+                           </div>
+                         ))}
+                      </div>
+
+                      <div className="bento-card" style={{ padding: 24 }}>
+                        <div className="section-header" style={{ marginBottom: 16 }}>
+                           <Target size={16} className="text-accent" /> Tareas Recientes
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                           {courseTasks.slice(0, 5).map(task => (
+                              <div key={task.id} style={{ padding: '12px 16px', background: 'var(--bg-base)', borderRadius: 10, border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 12 }}>
+                                <div style={{ width: 14, height: 14, borderRadius: '50%', border: `2px solid ${selectedCourse.color}`, background: task.status === 'completado' ? selectedCourse.color : 'transparent', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  {task.status === 'completado' && <CheckCircle size={10} color="#fff" />}
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                   <div style={{ fontSize: 13, fontWeight: 500, color: task.status === 'completado' ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: task.status === 'completado' ? 'line-through' : 'none' }}>{task.title}</div>
+                                   <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{task.dueDate ? format(new Date(task.dueDate), 'd MMMM yyyy', { locale: es }) : 'Sin fecha'}</div>
+                                </div>
+                                <ChevronRight size={16} className="text-muted" />
+                             </div>
+                           ))}
+                           {courseTasks.length === 0 && (
+                             <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>No hay tareas para este curso</div>
+                           )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {activeTab === 'tareas' && (
+                    <div className="fade-in-animation">
+                      <div className="bento-card" style={{ padding: 24, minHeight: 400 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                          <div className="section-header" style={{ marginBottom: 0 }}>
+                            <List size={16} className="text-accent" /> Todas las Tareas
+                          </div>
+                          <button className="btn-primary" style={{ padding: '6px 12px', fontSize: 11 }}>+ Nueva Tarea</button>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                           {courseTasks.map(task => (
+                              <div key={task.id} style={{ padding: '12px 16px', background: 'var(--bg-base)', borderRadius: 10, border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 12 }}>
+                                <div style={{ width: 14, height: 14, borderRadius: '50%', border: `2px solid ${selectedCourse.color}`, background: task.status === 'completado' ? selectedCourse.color : 'transparent', flexShrink: 0 }} />
+                                <div style={{ flex: 1 }}>
+                                   <div style={{ fontSize: 13, fontWeight: 500 }}>{task.title}</div>
+                                   <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4, display: 'flex', gap: 12 }}>
+                                     <span>Vence: {task.dueDate ? format(new Date(task.dueDate), 'd MMM', { locale: es }) : 'N/A'}</span>
+                                     <span>Subtareas: {task.subtasks.length}</span>
+                                     <span>Archivos: {task.files.length}</span>
+                                   </div>
+                                </div>
+                             </div>
+                           ))}
+                           {courseTasks.length === 0 && (
+                             <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>Añade tu primera tarea para este curso desde la vista de Tareas</div>
+                           )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {activeTab === 'notas' && (
+                    <div className="fade-in-animation" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 16 }}>
+                      {courseNotes.map(note => (
+                        <div key={note.id} className="bento-card" style={{ padding: 16, cursor: 'pointer' }}>
+                          <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, color: 'var(--text-primary)' }}>{note.title}</h3>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                            {note.content.replace(/<[^>]*>?/gm, '')}
+                          </div>
+                          <div style={{ marginTop: 12, fontSize: 10, color: 'var(--text-tertiary)' }}>
+                            Actualizado: {format(new Date(note.updatedAt), 'd MMM yyyy', { locale: es })}
+                          </div>
+                        </div>
+                      ))}
+                      {courseNotes.length === 0 && (
+                        <div style={{ gridColumn: '1 / -1', padding: 40, textAlign: 'center', color: 'var(--text-muted)', fontSize: 12, background: 'var(--bg-surface)', borderRadius: 12, border: '1px dashed var(--border-subtle)' }}>
+                          No hay notas para este curso. Créalas en la vista de Notas.
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {activeTab === 'repaso' && (
+                    <div className="fade-in-animation bento-card" style={{ padding: 40, textAlign: 'center', minHeight: 400, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                      <BrainCircuit size={48} style={{ color: selectedCourse.color, opacity: 0.2, marginBottom: 16 }} />
+                      <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 8 }}>Módulo de Repaso</h3>
+                      <p style={{ fontSize: 12, color: 'var(--text-muted)', maxWidth: 300 }}>Este apartado está en construcción. Aquí podrás repasar conceptos clave usando tarjetas de memoria interactivas.</p>
+                    </div>
+                  )}
+
+                </div>
+
+                {/* Right Sidebar (Files & Shortcuts) */}
+                <div style={{ width: 280, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                   <div className="bento-card" style={{ padding: 20 }}>
+                      <div className="section-header" style={{ marginBottom: 16 }}>
+                         <Folder size={14} className="text-accent" /> Archivos & Accesos
+                      </div>
+                      
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+                         {courseFiles.slice(0, 8).map((f, i) => (
+                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', background: 'var(--bg-base)', borderRadius: 8, border: '1px solid var(--border-subtle)', cursor: 'pointer' }} className="hover-lift">
+                               <div style={{ width: 24, height: 24, borderRadius: 6, background: 'var(--bg-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                 {f.type === 'pdf' ? <FileText size={12} color="#EF4444" /> : f.type === 'image' ? <ImageIcon size={12} color="#3B82F6" /> : <ExternalLink size={12} color="#10B981" />}
+                               </div>
+                               <div style={{ flex: 1, minWidth: 0 }}>
+                                 <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.name}</div>
+                                 <div style={{ fontSize: 9, color: 'var(--text-tertiary)' }}>{f.type.toUpperCase()}</div>
+                               </div>
+                            </div>
+                         ))}
+                         {courseFiles.length === 0 && (
+                           <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', padding: '10px 0' }}>No hay archivos asociados a las tareas</div>
+                         )}
+                      </div>
+
+                      <button className="btn-secondary" style={{ width: '100%', fontSize: 11, padding: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                        <Plus size={14} /> Añadir acceso directo
+                      </button>
+                   </div>
+
+                   <div className="bento-card" style={{ padding: 20, background: `linear-gradient(135deg, color-mix(in srgb, ${selectedCourse.color} 10%, transparent), transparent)` }}>
+                      <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                         <Star size={14} style={{ color: selectedCourse.color }} /> Logros
+                      </h3>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                         <div style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 6 }}><CheckCircle size={10} color={selectedCourse.color} /> Curso iniciado</div>
+                         {completedTasks > 0 && (
+                           <div style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 6 }}><CheckCircle size={10} color={selectedCourse.color} /> {completedTasks} tareas completadas</div>
+                         )}
+                      </div>
+                   </div>
+                </div>
+
               </div>
+           </div>
+         ) : (
+           <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
+              <GraduationCap size={64} style={{ opacity: 0.1, marginBottom: 24 }} />
+              <p style={{ fontSize: 16, fontWeight: 500 }}>Selecciona un curso o crea uno nuevo</p>
+           </div>
+         )}
+      </main>
 
-              <div className="flex items-start justify-between mb-12">
-                <div 
-                  className="w-16 h-16 rounded-[28px] flex items-center justify-center text-white shadow-2xl group-hover:scale-110 transition-transform duration-500"
-                  style={{ background: `linear-gradient(135deg, ${course.color}, ${course.color}CC)` }}
-                >
-                  <BookOpen size={32} />
-                </div>
-              </div>
-
-              <div className="mb-10">
-                <h3 className="text-4xl font-black text-primary mb-3 tracking-tighter leading-none group-hover:translate-x-2 transition-transform duration-500">{course.name}</h3>
-                <div className="flex items-center gap-3 text-[10px] font-black text-muted uppercase tracking-widest">
-                  <Activity size={14} className="text-accent/50" />
-                  <span>Sincronizado</span>
-                </div>
-              </div>
-
-              <div className="mt-auto pt-10 border-t border-white/5">
-                <div className="flex justify-between items-end mb-4">
-                  <span className="text-[10px] font-black text-secondary uppercase tracking-[0.3em]">Eficiencia</span>
-                  <span className="text-2xl font-black text-primary tracking-tighter">{progress}%</span>
-                </div>
-                <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden">
-                  <div 
-                    className="h-full transition-all duration-1000 ease-out shadow-[0_0_15px_rgba(225,29,72,0.3)]" 
-                    style={{ width: `${progress}%`, backgroundColor: course.color }} 
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-8 mt-10">
-                <div className="flex flex-col">
-                  <span className="text-2xl font-black text-primary tracking-tighter">{completed}/{course.totalTasks || 0}</span>
-                  <span className="text-[10px] font-black text-muted uppercase tracking-[0.4em]">Hitos</span>
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-2xl font-black text-primary tracking-tighter">{course.hoursStudied || 0}h</span>
-                  <span className="text-[10px] font-black text-muted uppercase tracking-[0.4em]">Foco</span>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-
-        {/* ADD BUTTON - REFINED */}
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="bento-card border-dashed border-2 border-white/5 bg-transparent hover:border-accent hover:bg-accent/5 flex flex-col items-center justify-center gap-6 text-muted hover:text-accent transition-all min-h-[350px] group"
-        >
-          <div className="w-20 h-20 rounded-full border border-white/10 flex items-center justify-center group-hover:scale-110 group-hover:border-accent transition-all duration-500">
-            <Plus size={40} />
-          </div>
-          <span className="text-[11px] font-black uppercase tracking-[0.6em]">Añadir Sector</span>
-        </button>
-      </div>
-
-      {/* CREATE MODAL - REFINED */}
-      {showCreateModal && (
-        <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
-          <div className="bento-card max-w-2xl w-full p-16 bg-surface shadow-[0_60px_120px_rgba(0,0,0,0.9)] border-white/10 animate-fadeIn" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-start mb-16">
+      {/* ── NEW COURSE MODAL ── */}
+      {showNewCourse && (
+        <div role="dialog" style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }} onClick={() => setShowNewCourse(false)}>
+          <div className="bento-card" style={{ width: 400, padding: 24 }} onClick={e => e.stopPropagation()}>
+            <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <GraduationCap size={18} className="text-accent" /> Nuevo Curso
+            </h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div>
-                <h2 className="text-5xl font-black tracking-tighter mb-4">Nuevo Sector</h2>
-                <p className="text-[11px] font-black text-muted uppercase tracking-widest">Protocolo Académico</p>
+                <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6, display: 'block' }}>Nombre del Curso</label>
+                <input type="text" value={newCourseName} onChange={e => setNewCourseName(e.target.value)} placeholder="Ej. Matemáticas Avanzadas" className="input-base" autoFocus style={{ width: '100%', fontSize: 13, padding: '10px 14px', borderRadius: 8 }} />
               </div>
-              <button onClick={() => setShowCreateModal(false)} className="w-16 h-16 rounded-full flex items-center justify-center hover:bg-white/5 transition-all">
-                <X size={32} className="text-muted" />
-              </button>
-            </div>
-            
-            <div className="space-y-12">
-              <div className="flex flex-col gap-5">
-                <label className="text-[11px] font-black text-muted uppercase tracking-[0.3em]">Nombre del Sector</label>
-                <input
-                  autoFocus
-                  type="text"
-                  placeholder="Ej: Análisis de Algoritmos"
-                  className="w-full bg-white/[0.02] border border-white/10 p-8 rounded-[32px] text-primary font-black text-2xl focus:border-accent outline-none transition-all placeholder:text-white/5"
-                  value={newCourseName}
-                  onChange={(e) => setNewCourseName(e.target.value)}
-                />
-              </div>
-
-              <div className="flex flex-col gap-6">
-                <label className="text-[11px] font-black text-muted uppercase tracking-[0.3em]">Espectro Cromático</label>
-                <div className="flex gap-4 flex-wrap">
-                  {courseColors.map(color => (
-                    <button
-                      key={color}
-                      onClick={() => setNewCourseColor(color)}
-                      className={`w-14 h-14 rounded-2xl transition-all duration-500 transform hover:scale-125 ${
-                        newCourseColor === color ? 'ring-4 ring-accent ring-offset-8 ring-offset-bg-surface scale-110 shadow-2xl' : ''
-                      }`}
-                      style={{ background: color }}
-                    />
+              <div>
+                <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6, display: 'block' }}>Color Distintivo</label>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {['#EF4444', '#F97316', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6', '#EC4899', '#64748B'].map(color => (
+                    <button key={color} onClick={() => setNewCourseColor(color)} style={{ width: 24, height: 24, borderRadius: '50%', background: color, border: newCourseColor === color ? '2px solid #fff' : 'none', cursor: 'pointer', boxShadow: newCourseColor === color ? `0 0 10px ${color}` : 'none', transition: 'all 200ms' }} />
                   ))}
                 </div>
               </div>
-
-              <div className="flex gap-6 pt-8">
-                <button onClick={() => setShowCreateModal(false)} className="flex-1 py-6 rounded-[28px] font-black text-[11px] uppercase tracking-[0.3em] text-tertiary hover:bg-white/5 transition-all">Cancelar</button>
-                <button onClick={handleCreateCourse} className="flex-[2] py-6 rounded-[28px] bg-accent text-white font-black text-[11px] uppercase tracking-[0.3em] shadow-2xl hover:scale-105 active:scale-95 transition-all">Sincronizar</button>
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8 }}>
+                <button onClick={() => setShowNewCourse(false)} className="btn-secondary" style={{ fontSize: 12, padding: '8px 20px' }}>Cancelar</button>
+                <button onClick={handleCreateCourse} className="btn-primary" disabled={!newCourseName.trim()} style={{ fontSize: 12, padding: '8px 24px', opacity: newCourseName.trim() ? 1 : 0.5 }}>Crear</button>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* DELETE MODAL - REFINED */}
-      {deletingCourse && (
-        <div className="modal-overlay" onClick={() => setDeletingCourse(null)}>
-          <div className="bento-card max-w-lg w-full p-16 bg-surface border-accent/20 animate-fadeIn" onClick={e => e.stopPropagation()}>
-            <div className="flex flex-col items-center text-center">
-              <div className="w-32 h-32 rounded-[48px] bg-accent/5 flex items-center justify-center text-accent mb-12 border border-accent/20">
-                <AlertTriangle size={64} />
-              </div>
-              <h2 className="text-5xl font-black tracking-tighter mb-6">¿Purgar Sector?</h2>
-              <p className="text-secondary text-lg font-medium mb-16 opacity-60 leading-relaxed">Todos los registros y progresos asociados a este sector serán eliminados permanentemente.</p>
-              <div className="flex gap-6 w-full">
-                <button onClick={() => setDeletingCourse(null)} className="flex-1 py-6 rounded-[28px] bg-white/[0.02] border border-white/5 text-[11px] font-black uppercase tracking-widest hover:bg-white/5 transition-all">Abortar</button>
-                <button onClick={() => handleDeleteCourse(deletingCourse)} className="flex-1 py-6 rounded-[28px] bg-accent text-white text-[11px] font-black uppercase tracking-widest shadow-2xl hover:scale-105 transition-all">Confirmar</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* DETAIL MODAL - REFINED */}
-      {selectedCourse && (
-        <div className="modal-overlay" onClick={() => setSelectedCourse(null)}>
-          <div className="bento-card max-w-4xl w-full p-16 bg-surface shadow-[0_60px_120px_rgba(0,0,0,0.9)] border-white/10 animate-fadeIn" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-16 pb-12 border-b border-white/5">
-              <div>
-                <h2 className="text-6xl font-black tracking-tighter leading-none mb-4">{selectedCourse}</h2>
-                <p className="text-[11px] font-black text-accent uppercase tracking-[0.5em]">Registro de Actividades por Sector</p>
-              </div>
-              <button onClick={() => setSelectedCourse(null)} className="w-16 h-16 rounded-full flex items-center justify-center hover:bg-white/5 transition-all">
-                <X size={32} className="text-muted" />
-              </button>
-            </div>
-            <div className="max-h-[500px] overflow-y-auto pr-6 space-y-6">
-              {tasks.filter(t => t.course === selectedCourse).map(task => (
-                <div key={task.id} className="flex items-center gap-8 p-8 rounded-[40px] bg-white/[0.02] border border-white/5 group hover:border-accent/30 transition-all">
-                  <div className={`w-3 h-3 rounded-full ${task.status === 'completado' || task.status === 'simple_done' ? 'bg-accent shadow-[0_0_10px_var(--accent)]' : 'bg-white/10'}`} />
-                  <span className={`flex-1 text-2xl font-black tracking-tight ${task.status === 'completado' || task.status === 'simple_done' ? 'text-muted line-through' : 'text-primary'}`}>
-                    {task.title}
-                  </span>
-                  <span className="text-[11px] font-black text-tertiary uppercase tracking-widest px-6 py-2 bg-white/5 rounded-full border border-white/5">
-                    {task.priority.toUpperCase()}
-                  </span>
-                </div>
-              ))}
-              {tasks.filter(t => t.course === selectedCourse).length === 0 && (
-                <div className="text-center py-24 opacity-10">
-                  <Sparkles size={120} className="mx-auto mb-8" />
-                  <p className="font-black uppercase tracking-[0.8em]">Sector Despejado</p>
-                </div>
-              )}
             </div>
           </div>
         </div>
@@ -252,6 +315,4 @@ export default function Cursos({ onSelect }: CursosProps) {
 
     </div>
   );
-}
- );
 }

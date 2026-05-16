@@ -1,274 +1,411 @@
-import React, { useState, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Target, Clock, BookOpen, Trash2, X, Calendar as CalendarIcon, Sparkles, Layers, Activity, CalendarDays, Timer } from 'lucide-react';
+import React, { useState } from 'react';
+import { 
+  ChevronLeft, ChevronRight, Plus, 
+  Sparkles, Calendar, ListTodo, Upload, X, 
+  Clock, BookOpen, GraduationCap, Bot,
+  Layers, Check,
+} from 'lucide-react';
 import { useApp } from '../../store/AppContext';
-import { format, addDays, startOfWeek } from 'date-fns';
+import { 
+  format, addMonths, subMonths, startOfMonth, endOfMonth, 
+  startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, 
+  isSameDay, isToday, addDays, subDays, addWeeks, subWeeks,
+} from 'date-fns';
 import { es } from 'date-fns/locale';
+import toast from 'react-hot-toast';
 
-const DAYS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+type ViewMode = 'month' | 'week' | 'day';
+const DAY_HEADERS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+
+interface ScheduleBlock {
+  name: string;
+  time: string;
+  color: string;
+  day: string;
+}
 
 export default function Planificacion() {
-  const { schedule, tasks, courses, addScheduleBlock, deleteScheduleBlock, sessionTime } = useApp();
-  const [weekOffset, setWeekOffset] = useState(0);
-  const [selectedDay, setSelectedDay] = useState(new Date().getDay() === 0 ? 6 : new Date().getDay() - 1);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [newBlock, setNewBlock] = useState({
-    title: '',
-    course: courses[0]?.name || '',
-    startTime: '09:00',
-    endTime: '10:00',
-  });
+  const { tasks, events, addEvent } = useApp();
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedDay, setSelectedDay] = useState<Date>(new Date());
+  const [viewMode, setViewMode] = useState<ViewMode>('month');
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [showAIModal, setShowAIModal] = useState(false);
+  const [scheduleImage, setScheduleImage] = useState<string | null>(null);
+  const [aiPrompt, setAiPrompt] = useState('');
 
-  const today = new Date();
-  const startOfCurrentWeek = startOfWeek(today, { weekStartsOn: 1 });
-  const weekDates = useMemo(() => {
-    return Array.from({ length: 7 }).map((_, i) => addDays(startOfCurrentWeek, i + weekOffset * 7));
-  }, [weekOffset, startOfCurrentWeek]);
+  // Student schedule blocks
+  const [scheduleBlocks, setScheduleBlocks] = useState<ScheduleBlock[]>([
+    { name: 'Matemáticas', time: '08:00–09:30', color: '#E11D48', day: 'Lun' },
+    { name: 'Física', time: '09:45–11:15', color: '#3B82F6', day: 'Lun' },
+    { name: 'Programación', time: '11:30–13:00', color: '#22C55E', day: 'Lun' },
+    { name: 'Matemáticas', time: '08:00–09:30', color: '#E11D48', day: 'Mar' },
+    { name: 'Química', time: '09:45–11:15', color: '#A855F7', day: 'Mar' },
+    { name: 'Inglés', time: '11:30–13:00', color: '#F59E0B', day: 'Mar' },
+    { name: 'Física', time: '08:00–09:30', color: '#3B82F6', day: 'Mié' },
+    { name: 'Historia', time: '09:45–11:15', color: '#EC4899', day: 'Mié' },
+    { name: 'Programación', time: '11:30–13:00', color: '#22C55E', day: 'Mié' },
+    { name: 'Química', time: '08:00–09:30', color: '#A855F7', day: 'Jue' },
+    { name: 'Inglés', time: '09:45–11:15', color: '#F59E0B', day: 'Jue' },
+    { name: 'Historia', time: '08:00–09:30', color: '#EC4899', day: 'Vie' },
+  ]);
 
-  const dayBlocks = useMemo(() =>
-    schedule.filter(b => b.dayIndex === selectedDay).sort((a, b) => a.startTime.localeCompare(b.startTime)),
-    [schedule, selectedDay]
-  );
+  const monthStart = startOfMonth(currentDate);
+  const monthEnd = endOfMonth(monthStart);
+  const startDate = startOfWeek(monthStart, { weekStartsOn: 1 });
+  const endDate = endOfWeek(monthEnd, { weekStartsOn: 1 });
+  const calendarDays = eachDayOfInterval({ start: startDate, end: endDate });
 
-  const stats = useMemo(() => {
-    const pending = tasks.filter(t => t.status !== 'completado').length;
-    const todayHours = (sessionTime / 3600).toFixed(1);
-    return [
-      { label: 'Tiempo de Foco', value: `${todayHours}h`, icon: Clock, color: 'text-accent' },
-      { label: 'Operaciones', value: pending, icon: CheckCircle2, color: 'text-success' },
-      { label: 'Sectores', value: courses.length, icon: BookOpen, color: 'text-primary' },
-    ];
-  }, [tasks, courses, sessionTime]);
+  const weekRows: Date[][] = [];
+  for (let i = 0; i < calendarDays.length; i += 7) weekRows.push(calendarDays.slice(i, i + 7));
 
-  const handleAddBlock = () => {
-    if (!newBlock.title.trim()) return;
-    
-    const start = new Date(`2000-01-01T${newBlock.startTime}:00`);
-    const end = new Date(`2000-01-01T${newBlock.endTime}:00`);
-    
-    if (start >= end) return;
-    
-    const course = courses.find(c => c.name === newBlock.course);
-    addScheduleBlock({
-      dayIndex: selectedDay,
-      title: newBlock.title,
-      course: newBlock.course,
-      color: course?.color || '#E11D48',
-      startTime: newBlock.startTime,
-      endTime: newBlock.endTime,
-    });
-    setShowAddModal(false);
-    setNewBlock({ title: '', course: courses[0]?.name || '', startTime: '09:00', endTime: '10:00' });
+  // Week days for week view
+  const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
+  const weekDays = eachDayOfInterval({ start: weekStart, end: addDays(weekStart, 6) });
+  // Day view hours
+  const hours = Array.from({ length: 12 }, (_, i) => `${i + 7}:00`);
+
+  const selectedDayTasks = tasks.filter(t => t.dueDate && isSameDay(new Date(t.dueDate), selectedDay));
+  const selectedDayEvents = events.filter(e => isSameDay(new Date(e.date), selectedDay));
+
+  const handlePrev = () => {
+    if (viewMode === 'month') setCurrentDate(subMonths(currentDate, 1));
+    else if (viewMode === 'week') setCurrentDate(subWeeks(currentDate, 1));
+    else setCurrentDate(subDays(currentDate, 1));
+  };
+  const handleNext = () => {
+    if (viewMode === 'month') setCurrentDate(addMonths(currentDate, 1));
+    else if (viewMode === 'week') setCurrentDate(addWeeks(currentDate, 1));
+    else setCurrentDate(addDays(currentDate, 1));
+  };
+  const goToday = () => setCurrentDate(new Date());
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setScheduleImage(reader.result as string);
+    reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
+  const handleAIGenerate = () => {
+    if (!aiPrompt.trim()) return toast.error('Describe tu horario');
+    toast.success('Horario generado (simulado)');
+    setShowAIModal(false);
+    setAiPrompt('');
+    setScheduleImage(null);
+  };
+
+  // Questionnaire answers
+  const [qa, setQa] = useState<Record<string, string>>({});
+  const questions = [
+    { key: 'subjects', label: '¿Qué materias cursas?' },
+    { key: 'days', label: '¿Qué días tienes clase?' },
+    { key: 'times', label: '¿En qué horarios?' },
+    { key: 'teachers', label: '¿Nombres de profesores?' },
+  ];
+
   return (
-    <div className="page-container">
+    <div className="page-container" style={{ display: 'flex', height: '100%', overflow: 'hidden', gap: 24 }}>
       
-      {/* ARCHITECTURAL HEADER - REFINED */}
-      <header className="flex justify-between items-end mb-24 relative">
-        <div className="flex flex-col gap-4">
-          <div className="flex items-center gap-3">
-            <CalendarDays size={20} className="text-accent" />
-            <span className="text-[11px] font-black text-tertiary uppercase tracking-[0.5em]">Logística Temporal</span>
+      {/* ── Left: Calendar ── */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+
+        {/* Header */}
+        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexShrink: 0, paddingLeft: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button onClick={handlePrev} className="btn-ghost hover-lift" style={{ padding: 8, borderRadius: 8, cursor: 'pointer', display: 'flex', background: 'var(--bg-elevated)', border: '1px solid rgba(255,255,255,0.03)' }}><ChevronLeft size={16} /></button>
+            <h2 style={{ fontSize: 22, fontWeight: 700, minWidth: 200, textAlign: 'center', letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
+              {viewMode === 'month' && format(currentDate, 'MMMM yyyy', { locale: es as any }).charAt(0).toUpperCase() + format(currentDate, 'MMMM yyyy', { locale: es as any }).slice(1)}
+              {viewMode === 'week' && `Semana del ${format(weekStart, "d MMM", { locale: es as any })}`}
+              {viewMode === 'day' && format(currentDate, "d 'de' MMMM", { locale: es as any })}
+            </h2>
+            <button onClick={handleNext} className="btn-ghost hover-lift" style={{ padding: 8, borderRadius: 8, cursor: 'pointer', display: 'flex', background: 'var(--bg-elevated)', border: '1px solid rgba(255,255,255,0.03)' }}><ChevronRight size={16} /></button>
+            <button onClick={goToday} className="btn-secondary hover-lift" style={{ fontSize: 11, fontWeight: 600, padding: '6px 14px', cursor: 'pointer', marginLeft: 12, height: 'auto' }}>Hoy</button>
           </div>
-          <h1 className="text-8xl font-black text-primary tracking-tighter leading-none">
-            Agenda
-            <span className="text-accent">.</span>
-          </h1>
-          <p className="text-xl text-secondary font-medium tracking-tight opacity-60">
-            SEMANA DEL {format(weekDates[0], 'd MMM').toUpperCase()} AL {format(weekDates[6], 'd MMM YYYY', { locale: es }).toUpperCase()}
-          </p>
+          <div style={{ display: 'flex', gap: 6, background: 'var(--bg-deep)', padding: 6, borderRadius: 10, border: '1px solid rgba(255,255,255,0.03)' }}>
+            {(['month', 'week', 'day'] as ViewMode[]).map(m => (
+              <button key={m} onClick={() => setViewMode(m)} style={{
+                padding: '6px 14px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                border: 'none', background: viewMode === m ? 'var(--accent)' : 'transparent',
+                color: viewMode === m ? '#fff' : 'var(--text-tertiary)',
+                display: 'flex', alignItems: 'center', gap: 6,
+                transition: 'all 200ms',
+                boxShadow: viewMode === m ? '0 2px 8px rgba(225,29,72,0.3)' : 'none'
+              }}>
+                {m === 'month' ? <Calendar size={14} /> : m === 'week' ? <Layers size={14} /> : <ListTodo size={14} />}
+                {m.charAt(0).toUpperCase() + m.slice(1)}
+              </button>
+            ))}
+          </div>
+        </header>
+
+        {/* Calendar content */}
+        <div className="bento-card" style={{ flex: 1, padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', background: 'var(--bg-base)' }}>
+
+          {viewMode === 'month' && (
+            <>
+              {/* Day headers */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                {DAY_HEADERS.map(d => (
+                  <div key={d} style={{ padding: '8px 10px', textAlign: 'center', fontSize: 9, fontWeight: 500, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{d}</div>
+                ))}
+              </div>
+              <div style={{ flex: 1, overflowY: 'auto' }}>
+                {weekRows.map((week, wi) => (
+                  <div key={wi} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
+                      {week.map((day, di) => {
+                        const dayTasks = tasks.filter(t => t.dueDate && isSameDay(new Date(t.dueDate), day));
+                        const dayEvents = events.filter(e => isSameDay(new Date(e.date), day));
+                        const isSel = isSameDay(day, selectedDay);
+                        const isTodayDay = isToday(day);
+                        const isCurrentMonth = isSameMonth(day, monthStart);
+                        const allItems = [...dayTasks.map(t => ({ type: 'task' as const, title: t.title, color: t.courseColor })), ...dayEvents.map(e => ({ type: 'event' as const, title: e.title, color: e.color }))].slice(0, 3);
+                        return (
+                          <div key={di} onClick={() => { setSelectedDay(day); setCurrentDate(day); }} style={{
+                            padding: '4px 6px', minHeight: 80,
+                            borderRight: di < 6 ? '1px solid var(--border-subtle)' : 'none',
+                            background: isSel ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : 'transparent',
+                            cursor: 'pointer', transition: 'all 200ms',
+                            opacity: isCurrentMonth ? 1 : 0.2,
+                            position: 'relative',
+                          }}>
+                            <div style={{ width: 22, height: 22, borderRadius: 5, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: isTodayDay ? 700 : 500, marginBottom: 2, color: isTodayDay ? '#fff' : 'var(--text-primary)', background: isTodayDay ? 'var(--accent)' : isSel ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'transparent' }}>
+                              {format(day, 'd')}
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                              {allItems.map((item, ii) => (
+                                <div key={ii} style={{ fontSize: 8, fontWeight: 500, padding: '1px 4px', borderRadius: 2, background: `${item.color}18`, borderLeft: `1.5px solid ${item.color}`, color: item.color, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.2 }}>
+                                  {item.title}
+                                </div>
+                              ))}
+                              {dayTasks.length + dayEvents.length > 3 && (
+                                <div style={{ fontSize: 7, color: 'var(--text-tertiary)', paddingLeft: 3, fontWeight: 500 }}>
+                                  +{dayTasks.length + dayEvents.length - 3}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {viewMode === 'week' && (
+            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+              {/* Day headers */}
+              <div style={{ display: 'grid', gridTemplateColumns: '80px repeat(7, 1fr)', borderBottom: '1px solid var(--border-subtle)', position: 'sticky', top: 0, background: '#0d0d12', zIndex: 2 }}>
+                <div style={{ padding: 6 }} />
+                {weekDays.map((d, i) => (
+                  <div key={i} onClick={() => { setSelectedDay(d); setCurrentDate(d); }} style={{
+                    padding: '6px 8px', textAlign: 'center', cursor: 'pointer',
+                    background: isSameDay(d, selectedDay) ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'transparent',
+                    borderRadius: 0, borderLeft: i > 0 ? '1px solid var(--border-subtle)' : 'none',
+                  }}>
+                    <div style={{ fontSize: 8, fontWeight: 500, color: 'var(--text-tertiary)' }}>{format(d, 'EEEEE', { locale: es as any })}</div>
+                    <div style={{ width: 22, height: 22, borderRadius: 5, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: isToday(d) ? 700 : 500, color: isToday(d) ? '#fff' : 'var(--text-primary)', background: isToday(d) ? 'var(--accent)' : 'transparent', marginTop: 1 }}>
+                      {format(d, 'd')}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {/* Hour rows */}
+              <div style={{ flex: 1 }}>
+                 {hours.map((h, hi) => {
+                    return (
+                    <div key={hi} style={{ display: 'grid', gridTemplateColumns: '80px repeat(7, 1fr)', borderBottom: '1px solid var(--border-subtle)', minHeight: 48 }}>
+                      <div style={{ padding: '4px 8px', fontSize: 8, color: 'var(--text-tertiary)', fontWeight: 500, textAlign: 'right', borderRight: '1px solid var(--border-subtle)' }}>{h}</div>
+                      {weekDays.map((d, di) => {
+                        const cellEvents = events.filter(e => isSameDay(new Date(e.date), d) && e.startTime?.startsWith(h.split(':')[0]));
+                        return (
+                          <div key={di} onClick={() => { setSelectedDay(d); setCurrentDate(d); }} style={{
+                            padding: '2px 4px', borderLeft: di > 0 ? '1px solid var(--border-subtle)' : 'none',
+                            cursor: 'pointer', background: isSameDay(d, new Date()) && isToday(new Date()) ? 'color-mix(in srgb, var(--accent) 4%, transparent)' : 'transparent',
+                          }}>
+                            {cellEvents.map((e, ei) => (
+                              <div key={ei} style={{ fontSize: 7, padding: '1px 3px', borderRadius: 2, background: `${e.color}20`, color: e.color, marginBottom: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.title}</div>
+                            ))}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {viewMode === 'day' && (
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+              {hours.map((h, hi) => {
+                const dayEvents = events.filter(e => isSameDay(new Date(e.date), selectedDay) && e.startTime?.startsWith(h.split(':')[0]));
+                const dayTasks = tasks.filter(t => t.dueDate && isSameDay(new Date(t.dueDate), selectedDay));
+                return (
+                  <div key={hi} style={{ display: 'flex', borderBottom: '1px solid var(--border-subtle)', minHeight: 56 }}>
+                    <div style={{ width: 64, padding: '6px 8px', fontSize: 9, color: 'var(--text-tertiary)', fontWeight: 500, textAlign: 'right', borderRight: '1px solid var(--border-subtle)', flexShrink: 0 }}>{h}</div>
+                    <div style={{ flex: 1, padding: '4px 8px' }}>
+                      {dayEvents.map((e, ei) => (
+                        <div key={ei} style={{ fontSize: 10, padding: '4px 8px', borderRadius: 4, background: `${e.color}15`, borderLeft: `2px solid ${e.color}`, color: e.color, marginBottom: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <Clock size={10} /> <span style={{ fontWeight: 600 }}>{e.title}</span>
+                          {e.startTime && <span style={{ fontSize: 8, opacity: 0.6 }}>{e.startTime}–{e.endTime}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
         </div>
 
-        <div className="flex gap-8 items-center">
-          <div className="flex items-center gap-2 bg-white/[0.02] p-2 rounded-[28px] border border-white/5">
-            <button onClick={() => setWeekOffset(w => w - 1)} className="w-14 h-14 flex items-center justify-center hover:bg-white/5 rounded-2xl text-tertiary transition-all">
-              <ChevronLeft size={24} />
-            </button>
-            <div className="px-8 text-[11px] font-black text-primary uppercase tracking-[0.3em]">
-               Navegar
+        {/* Selected day detail */}
+        {(selectedDayTasks.length > 0 || selectedDayEvents.length > 0) && (
+          <div style={{ flexShrink: 0, padding: '8px 12px', marginTop: 8, background: 'var(--bg-elevated)', borderRadius: 8, display: 'flex', gap: 10, overflowX: 'auto', border: '1px solid var(--border-subtle)' }}>
+            <div style={{ fontSize: 8, fontWeight: 500, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', paddingTop: 4, flexShrink: 0 }}>
+              {format(selectedDay, "d MMM", { locale: es as any })}
             </div>
-            <button onClick={() => setWeekOffset(w => w + 1)} className="w-14 h-14 flex items-center justify-center hover:bg-white/5 rounded-2xl text-tertiary transition-all">
-              <ChevronRight size={24} />
-            </button>
+            {selectedDayTasks.map(t => (
+              <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 5, background: `${t.courseColor}10`, border: `1px solid ${t.courseColor}20`, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                <div style={{ width: 5, height: 5, borderRadius: '50%', background: t.courseColor }} />
+                <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-primary)' }}>{t.title}</span>
+                <button onClick={() => toast.success('Tarea marcada')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', padding: 0, display: 'flex' }}><Check size={10} /></button>
+              </div>
+            ))}
+            {selectedDayEvents.map(e => (
+              <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 5, background: `${e.color}10`, border: `1px solid ${e.color}25`, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                <Sparkles size={9} style={{ color: e.color }} />
+                <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-primary)' }}>{e.title}</span>
+                <span style={{ fontSize: 7, color: 'var(--text-tertiary)' }}>{e.startTime}–{e.endTime}</span>
+              </div>
+            ))}
           </div>
-          <button 
-            onClick={() => setShowAddModal(true)}
-            className="px-12 h-20 rounded-[32px] bg-accent text-white font-black text-[11px] uppercase tracking-[0.3em] shadow-[0_20px_50px_rgba(225,29,72,0.4)] hover:scale-110 active:scale-95 transition-all flex items-center gap-4"
-          >
-            <Plus size={24} /> Nuevo Bloque
+        )}
+      </div>
+
+      {/* ── Right: Schedule panel ── */}
+      <div style={{ width: 280, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 20, overflowY: 'auto', paddingRight: 4 }}>
+
+        <div className="bento-card" style={{ padding: '20px 24px', background: 'linear-gradient(180deg, #0d0d12 0%, #14141e 100%)', flex: 1, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+            <h3 style={{ fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, letterSpacing: '0.02em' }}>
+              <GraduationCap size={16} className="text-accent" /> Horario de Clases
+            </h3>
+            <button onClick={() => setShowScheduleModal(true)} className="btn-ghost hover-lift" style={{ padding: 6, cursor: 'pointer', display: 'flex', borderRadius: 8, background: 'var(--bg-elevated)' }}><Plus size={14} /></button>
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {['Lun', 'Mar', 'Mié', 'Jue', 'Vie'].map(day => {
+              const dayBlocks = scheduleBlocks.filter(b => b.day === day);
+              if (dayBlocks.length === 0) return null;
+              return (
+                <div key={day} style={{ marginBottom: 4 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8, paddingLeft: 2 }}>{day}</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {dayBlocks.map((b, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, background: `linear-gradient(90deg, ${b.color}15 0%, transparent 100%)`, border: `1px solid ${b.color}10`, borderLeft: `3px solid ${b.color}` }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.name}</div>
+                          <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 2, fontWeight: 500 }}>{b.time}</div>
+                        </div>
+                        <BookOpen size={14} style={{ color: b.color, opacity: 0.5, flexShrink: 0 }} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* AI Upload card */}
+        <div className="bento-card" style={{ padding: '20px 24px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, #1a1a2e 100%)', border: '1px solid rgba(99,102,241,0.2)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <h3 style={{ fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, letterSpacing: '0.02em' }}>
+              <Bot size={16} style={{ color: '#818CF8' }} /> IA Horario
+            </h3>
+          </div>
+          <p style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 16, lineHeight: 1.5, fontWeight: 500 }}>
+            Sube una foto de tu horario escolar y la IA lo procesará para añadirlo a tu calendario automáticamente.
+          </p>
+          <button onClick={() => setShowAIModal(true)} className="btn-primary hover-lift" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 600, height: 36, padding: '0 16px', width: '100%', justifyContent: 'center', background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)', boxShadow: '0 4px 12px rgba(99,102,241,0.3)' }}>
+            <Upload size={14} /> Subir Horario
           </button>
         </div>
-      </header>
 
-      {/* STATS - MASTERED SPACING */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-12 mb-24">
-        {stats.map(s => (
-          <div key={s.label} className="bento-card p-12 flex items-center gap-10">
-            <div className="w-24 h-24 rounded-[32px] bg-white/[0.02] border border-white/5 flex items-center justify-center group-hover:scale-110 transition-transform">
-              <s.icon size={36} className={s.color} />
-            </div>
-            <div>
-              <p className="text-[11px] font-black text-muted uppercase tracking-[0.4em] mb-3">{s.label}</p>
-              <p className="text-6xl font-black text-primary tracking-tighter leading-none">{s.value}</p>
-            </div>
-          </div>
-        ))}
       </div>
 
-      <div className="grid grid-cols-12 gap-16">
-        
-        {/* DAY SELECTOR - VERTICAL GRID */}
-        <div className="col-span-12 lg:col-span-3 flex flex-col gap-6">
-          {weekDates.map((date, idx) => (
-            <button
-              key={idx}
-              onClick={() => setSelectedDay(idx)}
-              className={`p-10 rounded-[40px] flex items-center justify-between transition-all duration-500 border relative overflow-hidden group ${
-                selectedDay === idx 
-                ? 'bg-elevated border-white/10 text-primary shadow-2xl scale-[1.08] z-10' 
-                : 'bg-surface/30 border-transparent text-tertiary hover:bg-white/[0.03] hover:translate-x-4'
-              }`}
-            >
-              <div className="flex flex-col gap-2 items-start">
-                <span className={`text-[11px] font-black uppercase tracking-[0.4em] ${selectedDay === idx ? 'text-accent' : 'text-muted'}`}>
-                  {DAYS[idx].substring(0, 3)}
-                </span>
-                <span className={`text-5xl font-black tracking-tighter ${selectedDay === idx ? 'text-primary' : 'text-secondary'}`}>
-                  {format(date, 'd')}
-                </span>
-              </div>
-              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all ${
-                selectedDay === idx ? 'bg-accent text-white shadow-xl shadow-accent/30' : 'bg-white/5 text-muted opacity-0 group-hover:opacity-100'
-              }`}>
-                <ChevronRight size={24} />
-              </div>
-            </button>
-          ))}
-        </div>
-
-        {/* SCHEDULE BLOCKS - MASTERED HIERARCHY */}
-        <div className="col-span-12 lg:col-span-9">
-          <div className="bento-card min-h-[800px] p-0 border-white/[0.02]">
-            <div className="p-16 border-b border-white/[0.03] flex justify-between items-center bg-white/[0.01]">
-              <div className="flex items-center gap-8">
-                <div className="w-20 h-20 rounded-[32px] bg-accent/5 flex items-center justify-center border border-accent/20">
-                   <Timer size={32} className="text-accent" />
-                </div>
-                <div>
-                  <h3 className="text-4xl font-black text-primary tracking-tight uppercase leading-none mb-3">
-                    {DAYS[selectedDay]} {format(weekDates[selectedDay], 'd', { locale: es })}
-                  </h3>
-                  <p className="text-[11px] font-black text-muted uppercase tracking-[0.4em]">Protocolo de Operaciones Diarias</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-6">
-                <span className="text-[11px] font-black text-accent uppercase tracking-widest px-8 py-4 bg-accent/10 rounded-full border border-accent/10">
-                  {dayBlocks.length} EVENTOS
-                </span>
-              </div>
+      {/* ── AI Modal ── */}
+      {showAIModal && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }} onClick={() => setShowAIModal(false)}>
+          <div className="bento-card" style={{ width: 440, maxHeight: '80vh', overflowY: 'auto', padding: 24 }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h2 style={{ fontSize: 16, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Bot size={18} style={{ color: '#818CF8' }} /> Subir Horario
+              </h2>
+              <button onClick={() => setShowAIModal(false)} className="btn-ghost" style={{ padding: 3, cursor: 'pointer', display: 'flex' }}><X size={16} /></button>
             </div>
 
-            <div className="p-16 space-y-8">
-              {dayBlocks.map((block) => (
-                <div 
-                  key={block.id}
-                  className="flex items-center gap-12 p-12 rounded-[48px] bg-white/[0.01] border border-white/[0.03] group hover:border-accent/30 hover:bg-white/[0.03] transition-all relative overflow-hidden"
-                >
-                  <div className="absolute left-0 top-0 bottom-0 w-2.5 bg-accent/10 group-hover:bg-accent group-hover:shadow-[0_0_20px_var(--accent)] transition-all" />
-                  
-                  <div className="w-32 text-left shrink-0">
-                    <p className="text-4xl font-black text-primary tracking-tighter leading-none mb-2">{block.startTime}</p>
-                    <p className="text-[11px] font-black text-muted uppercase tracking-widest">{block.endTime}</p>
-                  </div>
-                  
-                  <div className="w-px h-16 bg-white/5" />
-                  
-                  <div className="flex-1">
-                    <div className="flex items-center gap-4 mb-3">
-                      <span className="px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.25em] border border-white/5" style={{ color: block.color, backgroundColor: `${block.color}15` }}>{block.course}</span>
-                      <div className="w-1.5 h-1.5 rounded-full bg-accent/30" />
-                    </div>
-                    <h4 className="text-4xl font-black text-primary tracking-tighter group-hover:translate-x-4 transition-transform duration-500">{block.title}</h4>
-                  </div>
-
-                  <button 
-                    onClick={() => deleteScheduleBlock(block.id)}
-                    className="opacity-0 group-hover:opacity-100 w-16 h-16 rounded-[24px] bg-white/5 text-muted flex items-center justify-center transition-all hover:bg-accent/10 hover:text-accent hover:scale-110"
-                  >
-                    <Trash2 size={24} />
-                  </button>
+            {/* Image upload */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>Foto del horario</label>
+              {scheduleImage ? (
+                <div style={{ position: 'relative', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
+                  <img src={scheduleImage} alt="Horario" style={{ width: '100%', maxHeight: 200, objectFit: 'contain' }} />
+                  <button onClick={() => setScheduleImage(null)} style={{ position: 'absolute', top: 4, right: 4, background: 'rgba(0,0,0,0.7)', border: 'none', color: '#fff', borderRadius: 4, padding: 2, cursor: 'pointer', display: 'flex' }}><X size={12} /></button>
                 </div>
-              ))}
-
-              {dayBlocks.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-48 opacity-10">
-                  <Sparkles size={120} className="mb-12" />
-                  <p className="font-black uppercase tracking-[0.8em] text-center">Optimización Completa</p>
-                </div>
+              ) : (
+                <label className="btn-ghost" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '12px', borderRadius: 8, border: '1px dashed var(--border-subtle)', cursor: 'pointer', fontSize: 10, color: 'var(--text-tertiary)' }}>
+                  <Upload size={14} /> Haz clic para seleccionar imagen
+                  <input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} />
+                </label>
               )}
             </div>
-          </div>
-        </div>
 
-      </div>
-
-      {/* MODAL REFINED */}
-      {showAddModal && (
-        <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
-          <div className="bento-card max-w-2xl w-full p-16 bg-surface shadow-[0_60px_120px_rgba(0,0,0,0.9)] border-white/10 animate-fadeIn" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-start mb-16">
-              <div>
-                <h2 className="text-5xl font-black tracking-tighter mb-4">Añadir Actividad</h2>
-                <p className="text-[11px] font-black text-muted uppercase tracking-widest">Sincronización de Slot Temporal</p>
-              </div>
-              <button onClick={() => setShowAddModal(false)} className="w-16 h-16 rounded-full flex items-center justify-center hover:bg-white/5 transition-all">
-                <X size={32} className="text-muted" />
-              </button>
-            </div>
-            
-            <div className="space-y-12">
-              <div className="flex flex-col gap-5">
-                <label className="text-[11px] font-black text-muted uppercase tracking-[0.3em]">Descripción</label>
-                <input
-                  type="text"
-                  placeholder="Ej: Análisis Cuántico"
-                  className="w-full bg-white/[0.02] border border-white/10 p-8 rounded-[32px] text-primary font-black text-2xl focus:border-accent outline-none transition-all"
-                  value={newBlock.title}
-                  onChange={(e) => setNewBlock({ ...newBlock, title: e.target.value })}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-8">
-                <div className="flex flex-col gap-5">
-                  <label className="text-[11px] font-black text-muted uppercase tracking-[0.3em]">Inicio</label>
+            {/* Questionnaire */}
+            <div style={{ marginBottom: 16 }}>
+              <h3 style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 5 }}>
+                <ListTodo size={12} /> Cuestionario rápido
+              </h3>
+              {questions.map(q => (
+                <div key={q.key} style={{ marginBottom: 8 }}>
+                  <label style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-tertiary)', marginBottom: 3, display: 'block' }}>{q.label}</label>
                   <input
-                    type="time"
-                    className="w-full bg-white/[0.02] border border-white/10 p-8 rounded-[32px] text-primary font-black text-xl outline-none focus:border-accent transition-all cursor-pointer"
-                    value={newBlock.startTime}
-                    onChange={(e) => setNewBlock({ ...newBlock, startTime: e.target.value })}
+                    type="text"
+                    placeholder={q.label}
+                    value={qa[q.key] || ''}
+                    onChange={e => setQa(prev => ({ ...prev, [q.key]: e.target.value }))}
+                    className="input-base"
+                    style={{ fontSize: 10, height: 28, width: '100%' }}
                   />
                 </div>
-                <div className="flex flex-col gap-5">
-                  <label className="text-[11px] font-black text-muted uppercase tracking-[0.3em]">Fin</label>
-                  <input
-                    type="time"
-                    className="w-full bg-white/[0.02] border border-white/10 p-8 rounded-[32px] text-primary font-black text-xl outline-none focus:border-accent transition-all cursor-pointer"
-                    value={newBlock.endTime}
-                    onChange={(e) => setNewBlock({ ...newBlock, endTime: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-6 pt-8">
-                <button onClick={() => setShowAddModal(false)} className="flex-1 py-6 rounded-[28px] font-black text-[11px] uppercase tracking-[0.3em] text-tertiary hover:bg-white/5 transition-all">Cancelar</button>
-                <button onClick={handleAddBlock} className="flex-[2] py-6 rounded-[28px] bg-accent text-white font-black text-[11px] uppercase tracking-[0.3em] shadow-2xl hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-4">
-                  <Plus size={24} /> Confirmar Slot
-                </button>
-              </div>
+              ))}
             </div>
+
+            {/* Prompt */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4, display: 'block' }}>Indicación adicional</label>
+              <textarea
+                placeholder="Ej: Mi horario es de lunes a viernes de 8am a 1pm..."
+                value={aiPrompt}
+                onChange={e => setAiPrompt(e.target.value)}
+                className="input-base"
+                style={{ fontSize: 10, width: '100%', resize: 'vertical', minHeight: 60, padding: 8 }}
+              />
+            </div>
+
+            <button onClick={handleAIGenerate} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 600, height: 32, padding: '0 16px', width: '100%', justifyContent: 'center' }}>
+              <Bot size={14} /> Generar Horario
+            </button>
           </div>
         </div>
       )}
+
     </div>
   );
 }

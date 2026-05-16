@@ -1,241 +1,235 @@
-import React, { useState } from 'react';
-import { User, Palette, Bell, Moon, Sun, Monitor, Download, Upload, Trash2, Info, Laptop, Target, Clock, Shield, Sparkles } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import {
+  User, Bell, Palette, LogOut,
+  Moon, Sun, Type, Check,
+  Timer, Target, Zap, Clock, Brain, BookOpen,
+  Download, FolderOpen, Music
+} from 'lucide-react';
 import { useApp } from '../../store/AppContext';
 import toast from 'react-hot-toast';
+import { open } from '@tauri-apps/plugin-dialog';
+import { getDownloadPath, setDownloadPath } from '../../lib/musicApi';
 
 export default function Ajustes() {
   const { settings, updateSettings } = useApp();
-  const [showResetModal, setShowResetModal] = useState(false);
-  const [showAboutModal, setShowAboutModal] = useState(false);
 
-  const handleExportData = () => {
-    const data = localStorage.getItem('owa_studio_data');
-    if (data) {
-      const blob = new Blob([data], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `owa-studio-backup-${new Date().toISOString().split('T')[0]}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success('Configuración exportada correctamente');
-    }
-  };
+  const fonts = [
+    { name: 'Inter', family: "'Inter', sans-serif" },
+    { name: 'Outfit', family: "'Outfit', sans-serif" },
+    { name: 'JetBrains Mono', family: "'JetBrains Mono', monospace" },
+    { name: 'Roboto', family: "'Roboto', sans-serif" },
+  ];
 
-  const handleImportData = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
-    input.onchange = (e: any) => {
-      const file = e.target.files[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-          try {
-            const data = JSON.parse(ev.target?.result as string);
-            localStorage.setItem('owa_studio_data', JSON.stringify(data));
-            window.location.reload();
-          } catch (err) {
-            toast.error('Error al importar archivo');
-          }
-        };
-        reader.readAsText(file);
-      }
-    };
-    input.click();
-  };
+  const [downloadPath, setDownloadPathState] = useState('');
+  const [audioFormat, setAudioFormat] = useState<'mp3' | 'm4a'>('mp3');
 
-  const handleResetData = () => {
-    localStorage.removeItem('owa_studio_data');
-    setShowResetModal(false);
-    window.location.reload();
+  useEffect(() => {
+    getDownloadPath().then(setDownloadPathState).catch(() => { });
+  }, []);
+
+  const handleFontChange = (font: string) => {
+    updateSettings({ fontFamily: font });
+    document.documentElement.style.setProperty('--font-primary', font);
+    toast.success(`Tipografía cambiada`);
   };
 
   return (
-    <div className="page-container">
-      
-      {/* HEADER */}
-      <div className="flex justify-between items-end mb-12">
-        <div className="flex flex-col gap-1">
-          <span className="text-xs font-semibold text-tertiary uppercase tracking-widest">Preferencia</span>
-          <h1 className="text-5xl font-bold text-primary tracking-tight">Configuración</h1>
-          <p className="text-sm text-secondary font-medium">Personaliza tu espacio de trabajo editorial</p>
-        </div>
-      </div>
+  return (
+    <div className="page-container" style={{ overflowY: 'auto' }}>
 
-      <div className="grid grid-cols-12 gap-8">
-        
-        {/* LEFT COLUMN: SETTINGS */}
-        <div className="col-span-12 lg:col-span-8 flex flex-col gap-8">
-          
-          {/* PROFILE */}
-          <div className="bento-card">
-            <div className="flex items-center gap-3 mb-8">
-              <User size={18} className="text-accent" />
-              <span className="text-xs font-bold text-tertiary uppercase tracking-widest">Perfil de Usuario</span>
-            </div>
-            <div className="flex items-center gap-6">
-              <div className="w-20 h-20 rounded-2xl bg-accent/10 border border-accent/20 flex items-center justify-center text-3xl font-bold text-accent">
-                OS
+      <header style={{ marginBottom: 32 }}>
+        <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>Configuración</h1>
+        <p style={{ color: 'var(--text-tertiary)', fontSize: 13, marginTop: 4, fontWeight: 500 }}>Personaliza tu entorno de estudio</p>
+      </header>
+
+      <div style={{ maxWidth: 840 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 24 }}>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+            {/* ── Profile ── */}
+            <section className="bento-card" style={{ padding: '24px 28px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+              <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8, letterSpacing: '0.02em' }}>
+                <User size={18} className="text-accent" /> Perfil
+              </h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+                <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'linear-gradient(135deg, var(--accent), #0d0d12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, fontWeight: 700, flexShrink: 0, boxShadow: '0 0 20px var(--accent-glow)' }}>
+                  {settings.userName.charAt(0).toUpperCase()}
+                </div>
+                <input type="text" value={settings.userName} onChange={e => updateSettings({ userName: e.target.value })} className="input-base" style={{ flex: 1, padding: '12px 16px', fontSize: 14, fontWeight: 600 }} placeholder="Tu nombre" />
               </div>
-              <div>
-                <h3 className="text-xl font-bold text-primary">Usuario de Owa Studio</h3>
-                <p className="text-sm text-secondary font-medium">Plan Personal · v1.2.0</p>
-              </div>
-            </div>
-          </div>
+            </section>
 
-          {/* APPEARANCE */}
-          <div className="bento-card">
-            <div className="flex items-center gap-3 mb-8">
-              <Palette size={18} className="text-accent" />
-              <span className="text-xs font-bold text-tertiary uppercase tracking-widest">Sistema y Estilo</span>
-            </div>
-
-            <div className="space-y-10">
-              <div>
-                <label className="block text-[10px] font-bold text-tertiary uppercase tracking-widest mb-4">Interfaz Visual</label>
-                <div className="flex gap-3">
-                  {[
-                    { v: 'oscuro', i: Moon, label: 'Oscuro' },
-                    { v: 'claro', i: Sun, label: 'Claro' },
-                    { v: 'sistema', i: Monitor, label: 'Sistema' },
-                  ].map(t => (
-                    <button
-                      key={t.v}
-                      onClick={() => updateSettings({ theme: t.v as any })}
-                      className={`flex items-center gap-3 px-6 py-3.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all border ${
-                        settings.theme === t.v
-                          ? 'bg-elevated border-default text-primary shadow-sm'
-                          : 'bg-surface border-default text-tertiary hover:bg-hover hover:text-secondary'
-                      }`}
-                    >
-                      <t.i size={14} className={settings.theme === t.v ? 'text-accent' : ''} />
-                      <span>{t.label}</span>
+            {/* ── Appearance ── */}
+            <section className="bento-card" style={{ padding: '24px 28px' }}>
+              <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8, letterSpacing: '0.02em' }}>
+                <Palette size={18} className="text-accent" /> Apariencia
+              </h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>Modo Visual</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>Tema de la interfaz</div>
+                  </div>
+                  <div style={{ display: 'flex', background: 'var(--bg-deep)', padding: 4, borderRadius: 10, border: '1px solid rgba(255,255,255,0.03)' }}>
+                    <button onClick={() => updateSettings({ theme: 'oscuro' })} style={{ padding: '8px 16px', borderRadius: 8, background: settings.theme === 'oscuro' ? 'var(--bg-elevated)' : 'transparent', border: 'none', color: settings.theme === 'oscuro' ? 'var(--text-primary)' : 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, transition: 'all 200ms', boxShadow: settings.theme === 'oscuro' ? '0 2px 8px rgba(0,0,0,0.2)' : 'none' }}>
+                      <Moon size={14} /> Oscuro
                     </button>
-                  ))}
+                    <button onClick={() => updateSettings({ theme: 'claro' })} style={{ padding: '8px 16px', borderRadius: 8, background: settings.theme === 'claro' ? 'var(--bg-elevated)' : 'transparent', border: 'none', color: settings.theme === 'claro' ? 'var(--text-primary)' : 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, transition: 'all 200ms', boxShadow: settings.theme === 'claro' ? '0 2px 8px rgba(0,0,0,0.2)' : 'none' }}>
+                      <Sun size={14} /> Claro
+                    </button>
+                  </div>
                 </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-8">
                 <div>
-                  <label className="block text-[10px] font-bold text-tertiary uppercase tracking-widest mb-3">Meta Diaria (Minutos)</label>
-                  <input
-                    type="number"
-                    value={settings.dailyGoal}
-                    onChange={(e) => updateSettings({ dailyGoal: parseInt(e.target.value) || 240 })}
-                    className="w-full bg-elevated border border-default p-3 rounded-xl text-primary font-bold outline-none focus:border-accent"
-                  />
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Type size={14} className="text-accent" /> Tipografía Global
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+                    {fonts.map(font => (
+                      <button key={font.name} onClick={() => handleFontChange(font.family)} className="hover-lift" style={{ padding: '12px', borderRadius: 10, background: settings.fontFamily === font.family ? 'var(--accent)' : 'var(--bg-deep)', border: `1px solid ${settings.fontFamily === font.family ? 'var(--accent)' : 'rgba(255,255,255,0.05)'}`, color: settings.fontFamily === font.family ? '#fff' : 'var(--text-primary)', cursor: 'pointer', transition: 'all 200ms', textAlign: 'center' }}>
+                        <div style={{ fontSize: 16, fontWeight: 600, fontFamily: font.family }}>Aa</div>
+                        <div style={{ fontSize: 10, fontWeight: 600, marginTop: 4 }}>{font.name}</div>
+                      </button>
+                    ))}
+                  </div>
                 </div>
+
                 <div>
-                  <label className="block text-[10px] font-bold text-tertiary uppercase tracking-widest mb-3">Sesiones Objetivo</label>
-                  <input
-                    type="number"
-                    value={settings.pomodoroGoal || 4}
-                    onChange={(e) => updateSettings({ pomodoroGoal: parseInt(e.target.value) || 4 })}
-                    className="w-full bg-elevated border border-default p-3 rounded-xl text-primary font-bold outline-none focus:border-accent"
-                  />
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Color de Acento</div>
+                  <div style={{ display: 'flex', gap: 12 }}>
+                    {['#E11D48', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6'].map(color => (
+                      <div key={color} onClick={() => updateSettings({ accentColor: color })} className="hover-lift" style={{ width: 36, height: 36, borderRadius: '50%', background: color, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `2px solid ${settings.accentColor === color ? '#fff' : 'transparent'}`, boxShadow: settings.accentColor === color ? `0 0 16px ${color}80` : 'none', transition: 'all 200ms' }}>
+                        {settings.accentColor === color && <Check size={14} color="#fff" />}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
+            </section>
           </div>
 
-          {/* NOTIFICATIONS */}
-          <div className="bento-card">
-            <div className="flex items-center gap-3 mb-8">
-              <Bell size={18} className="text-accent" />
-              <span className="text-xs font-bold text-tertiary uppercase tracking-widest">Notificaciones</span>
-            </div>
-            
-            <div className="space-y-6">
-              <div className="flex justify-between items-center p-4 rounded-xl hover:bg-hover transition-colors">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+            {/* ── Study Configuration ── */}
+            <section className="bento-card" style={{ padding: '24px 28px' }}>
+              <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8, letterSpacing: '0.02em' }}>
+                <Brain size={18} className="text-accent" /> Configuración de Estudio
+              </h3>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
                 <div>
-                  <p className="text-sm font-bold text-primary">Alertas de Sistema</p>
-                  <p className="text-xs text-secondary">Recordatorios de tareas y sesiones</p>
+                  <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Timer size={12} /> Tiempo enfoque
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <input type="number" value={settings.pomodoroTime / 60} onChange={e => updateSettings({ pomodoroTime: parseInt(e.target.value) * 60 || 1500 })} className="input-base" style={{ fontSize: 13, padding: '8px 12px', width: '100%', fontWeight: 600 }} min="1" max="120" />
+                    <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>min</span>
+                  </div>
                 </div>
-                <input 
-                  type="checkbox" 
-                  className="w-5 h-5 rounded border-default bg-surface accent-accent"
-                  checked={settings.notifications}
-                  onChange={(e) => updateSettings({ notifications: e.target.checked })}
-                />
-              </div>
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Zap size={12} /> Descanso corto
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <input type="number" value={settings.shortBreakTime / 60} onChange={e => updateSettings({ shortBreakTime: parseInt(e.target.value) * 60 || 300 })} className="input-base" style={{ fontSize: 13, padding: '8px 12px', width: '100%', fontWeight: 600 }} min="1" max="30" />
+                    <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>min</span>
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Target size={12} /> Meta diaria
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <input type="number" value={settings.dailyGoal} onChange={e => updateSettings({ dailyGoal: parseInt(e.target.value) || 240 })} className="input-base" style={{ fontSize: 13, padding: '8px 12px', width: '100%', fontWeight: 600 }} min="1" />
+                    <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>min</span>
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <BookOpen size={12} /> Metas Pomo
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <input type="number" value={settings.pomodoroGoal} onChange={e => updateSettings({ pomodoroGoal: parseInt(e.target.value) || 4 })} className="input-base" style={{ fontSize: 13, padding: '8px 12px', width: '100%', fontWeight: 600 }} min="1" max="20" />
+                  </div>
+                </div>
+              </d          {/* ── Downloads ── */}
+              <section className="bento-card" style={{ padding: '24px 28px' }}>
+                <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8, letterSpacing: '0.02em' }}>
+                  <Download size={18} className="text-accent" /> Descargas
+                </h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Carpeta de destino</div>
+                    <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                      <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg-deep)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 10, padding: '10px 14px', minWidth: 0 }}>
+                        <FolderOpen size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                        <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{downloadPath || 'Descargas/OWA Music'}</span>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          try {
+                            const folder = await open({ directory: true, multiple: false, title: 'Carpeta de descargas' });
+                            if (folder) {
+                              setDownloadPathState(String(folder));
+                              await setDownloadPath(String(folder));
+                              toast.success('Carpeta de descarga actualizada');
+                            }
+                          } catch (e) { console.error(e); toast.error('No se pudo cambiar la carpeta'); }
+                        }}
+                        className="btn-secondary hover-lift"
+                        style={{ height: 42, padding: '0 16px', display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 600 }}
+                      >
+                        <FolderOpen size={14} /> Cambiar
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Formato de audio</div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      {['mp3', 'm4a'].map(f => (
+                        <button
+                          key={f}
+                          onClick={() => setAudioFormat(f as 'mp3' | 'm4a')}
+                          className="hover-lift"
+                          style={{
+                            padding: '6px 16px', borderRadius: 8, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em',
+                            background: audioFormat === f ? 'var(--accent)' : 'var(--bg-deep)',
+                            color: audioFormat === f ? '#fff' : 'var(--text-tertiary)',
+                            border: `1px solid ${audioFormat === f ? 'var(--accent)' : 'rgba(255,255,255,0.05)'}`,
+                            cursor: 'pointer', transition: 'all 200ms',
+                            boxShadow: audioFormat === f ? '0 4px 12px rgba(225,29,72,0.3)' : 'none'
+                          }}
+                        >{f}</button>
+                      ))}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8, fontWeight: 500 }}>
+                      MP3 recomendado para máxima compatibilidad
+                    </div>
+                  </div>
+                </div>
+              </section>
 
-              <div className="flex justify-between items-center p-4 rounded-xl hover:bg-hover transition-colors">
-                <div>
-                  <p className="text-sm font-bold text-primary">Efectos Sonoros</p>
-                  <p className="text-xs text-secondary">Feedback auditivo al completar objetivos</p>
+              {/* ── Notifications ── */}
+              <section className="bento-card" style={{ padding: '24px 28px' }}>
+                <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, letterSpacing: '0.02em' }}>
+                  <Bell size={18} className="text-accent" /> Notificaciones
+                </h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', padding: '8px 0' }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Alertas de temporizador</span>
+                    <input type="checkbox" checked={settings.notifications} onChange={e => updateSettings({ notifications: e.target.checked })} style={{ width: 18, height: 18, accentColor: 'var(--accent)', cursor: 'pointer' }} />
+                  </label>
+                  <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', padding: '8px 0' }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Efectos de sonido</span>
+                    <input type="checkbox" checked={settings.soundEffects} onChange={e => updateSettings({ soundEffects: e.target.checked })} style={{ width: 18, height: 18, accentColor: 'var(--accent)', cursor: 'pointer' }} />
+                  </label>
                 </div>
-                <input 
-                  type="checkbox" 
-                  className="w-5 h-5 rounded border-default bg-surface accent-accent"
-                  checked={settings.soundEffects}
-                  onChange={(e) => updateSettings({ soundEffects: e.target.checked })}
-                />
-              </div>
-            </div>
+              </section>
+
+              <button className="hover-lift" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 20px', borderRadius: 10, border: '1px solid rgba(239,68,68,0.2)', background: 'color-mix(in srgb, var(--error) 8%, transparent)', color: 'var(--error)', fontSize: 13, fontWeight: 600, cursor: 'pointer', width: 'fit-content', marginTop: 12 }}>
+                <LogOut size={16} /> Cerrar Sesión
+              </button>
+
           </div>
-
         </div>
-
-        {/* RIGHT COLUMN: ACTIONS & INFO */}
-        <div className="col-span-12 lg:col-span-4 flex flex-col gap-8">
-          
-          <div className="bento-card">
-            <div className="flex items-center gap-3 mb-8">
-              <Shield size={18} className="text-accent" />
-              <span className="text-xs font-bold text-tertiary uppercase tracking-widest">Gestión de Datos</span>
-            </div>
-            <div className="flex flex-col gap-3">
-              <button onClick={handleExportData} className="btn bg-surface border-default text-secondary hover:text-primary justify-start px-6">
-                <Download size={16} /> Exportar Backup
-              </button>
-              <button onClick={handleImportData} className="btn bg-surface border-default text-secondary hover:text-primary justify-start px-6">
-                <Upload size={16} /> Importar Datos
-              </button>
-              <button onClick={() => setShowResetModal(true)} className="btn bg-danger/10 text-danger hover:bg-danger/20 justify-start px-6 border-none">
-                <Trash2 size={16} /> Borrar Todo
-              </button>
-            </div>
-          </div>
-
-          <div className="bento-card flex flex-col items-center text-center p-10">
-            <div className="w-20 h-20 rounded-[2rem] bg-gradient-to-br from-accent to-accent-subtle flex items-center justify-center text-white shadow-2xl mb-6">
-              <Sparkles size={40} />
-            </div>
-            <h2 className="text-2xl font-bold text-primary mb-1">Owa Studio</h2>
-            <p className="text-xs font-bold text-tertiary uppercase tracking-widest mb-6">Professional Suite</p>
-            <p className="text-sm text-secondary leading-relaxed mb-8">
-              Diseñado para mentes ambiciosas que buscan un equilibrio entre estética y productividad extrema.
-            </p>
-            <button 
-              onClick={() => setShowAboutModal(true)}
-              className="text-[10px] font-bold text-accent uppercase tracking-widest hover:underline"
-            >
-              Documentación y Créditos
-            </button>
-          </div>
-
-        </div>
-
       </div>
-
-      {/* MODALS */}
-      {showResetModal && (
-        <div className="modal-overlay" onClick={() => setShowResetModal(false)}>
-          <div className="modal max-w-sm" onClick={e => e.stopPropagation()}>
-            <div className="p-8">
-              <h2 className="text-lg font-bold mb-2">¿Restablecer datos?</h2>
-              <p className="text-secondary text-sm leading-relaxed mb-8">Esta acción eliminará permanentemente todas tus notas, cursos y progreso. No hay vuelta atrás.</p>
-              <div className="flex justify-end gap-3">
-                <button onClick={() => setShowResetModal(false)} className="btn bg-transparent text-tertiary">Cancelar</button>
-                <button onClick={handleResetData} className="btn bg-danger text-white">Restablecer</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-    </div>
-  );
+      );
 }

@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+
+<html lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>OWA Studio - Tareas</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<style data-purpose="custom-config">
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            background: '#0e0e11',
+            sidebar: '#141419',
+            card: '#18181d',
+            primary: '#ff3344',
+            primaryHover: '#ff4d5a',
+            text: {
+              main: '#ffffff',
+              muted: '#8e8e99',
+              dark: '#555566'
+            },
+            status: {
+              success: '#00cc88',
+              warning: '#ffaa00',
+              danger: '#ff3344',
+              info: '#3388ff'
+            },
+            course: {
+              math: '#8855ff',
+              physics: '#00cc88',
+              history: '#ffaa00',
+              english: '#ff33aa',
+              computing: '#33aaee'
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </style>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+<style data-purpose="custom-styles">
+    body {
+      background-color: #0e0e11;
+      color: #ffffff;
+      font-family: 'Inter', sans-serif;
+    }
+    
+    /* Custom Scrollbar for sleek look */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #141419; 
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #333344; 
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #555566; 
+    }
+
+    .glass-effect {
+      background: rgba(24, 24, 29, 0.7);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+  </style>
+</head>
+<body class="h-screen flex overflow-hidden text-sm">
+<!-- BEGIN: Sidebar -->
+<aside class="w-64 bg-sidebar flex flex-col justify-between border-r border-gray-800 shrink-0">
+<div>
+<!-- Logo -->
+<div class="h-20 flex items-center px-6">
+<div class="flex items-center gap-3 text-white font-bold text-lg">
+<div class="w-6 h-6 rounded-sm bg-primary flex items-center justify-center transform rotate-45">
+<div class="w-2 h-2 bg-white rounded-sm transform -rotate-45"></div>
+</div>
+          OWA Studio
+        </div>
+</div>
+<!-- Main Navigation -->
+<nav class="px-3 py-2 space-y-1">
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-muted hover:text-white hover:bg-white/5 transition-colors group" href="#">
+<i class="fa-solid fa-house w-5 text-center group-hover:text-primary transition-colors"></i>
+<span>Inicio</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-muted hover:text-white hover:bg-white/5 transition-colors group" href="#">
+<i class="fa-solid fa-layer-group w-5 text-center group-hover:text-primary transition-colors"></i>
+<span>Estudio</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-white/5 text-white border-l-2 border-primary group" href="#">
+<i class="fa-solid fa-list-check w-5 text-center text-primary"></i>
+<span>Tareas</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-muted hover:text-white hover:bg-white/5 transition-colors group" href="#">
+<i class="fa-regular fa-note-sticky w-5 text-center group-hover:text-primary transition-colors"></i>
+<span>Notas</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-muted hover:text-white hover:bg-white/5 transition-colors group" href="#">
+<i class="fa-solid fa-music w-5 text-center group-hover:text-primary transition-colors"></i>
+<span>Música</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-muted hover:text-white hover:bg-white/5 transition-colors group" href="#">
+<i class="fa-regular fa-calendar w-5 text-center group-hover:text-primary transition-colors"></i>
+<span>Planificador</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-muted hover:text-white hover:bg-white/5 transition-colors group" href="#">
+<i class="fa-solid fa-graduation-cap w-5 text-center group-hover:text-primary transition-colors"></i>
+<span>Cursos</span>
+</a>
+</nav>
+<!-- Courses List -->
+<div class="mt-8 px-6">
+<h3 class="text-xs font-semibold text-text-dark tracking-wider mb-4 uppercase">Mis Cursos</h3>
+<div class="space-y-3">
+<div class="flex items-center gap-3 text-text-muted hover:text-white cursor-pointer transition-colors">
+<span class="w-2 h-2 rounded-full bg-course-math"></span>
+<span>Matemáticas</span>
+</div>
+<div class="flex items-center gap-3 text-text-muted hover:text-white cursor-pointer transition-colors">
+<span class="w-2 h-2 rounded-full bg-course-physics"></span>
+<span>Física</span>
+</div>
+<div class="flex items-center gap-3 text-text-muted hover:text-white cursor-pointer transition-colors">
+<span class="w-2 h-2 rounded-full bg-course-history"></span>
+<span>Historia</span>
+</div>
+<div class="flex items-center gap-3 text-text-muted hover:text-white cursor-pointer transition-colors">
+<span class="w-2 h-2 rounded-full bg-course-english"></span>
+<span>Inglés</span>
+</div>
+<div class="flex items-center gap-3 text-text-muted hover:text-white cursor-pointer transition-colors">
+<span class="w-2 h-2 rounded-full bg-course-computing"></span>
+<span>Computación</span>
+</div>
+<div class="flex items-center gap-3 text-text-dark hover:text-white cursor-pointer transition-colors mt-2 pt-2">
+<i class="fa-solid fa-plus w-2 text-center"></i>
+<span>Añadir curso</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Bottom Actions -->
+<div class="p-4 border-t border-gray-800">
+<!-- User Profile -->
+<div class="bg-card p-3 rounded-xl border border-gray-800 flex items-center justify-between mb-4 cursor-pointer hover:bg-white/5 transition-colors relative overflow-hidden">
+<div class="absolute bottom-0 left-0 w-full h-0.5 bg-gray-800">
+<div class="h-full bg-primary w-2/3"></div>
+</div>
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white font-semibold">
+            AV
+          </div>
+<div>
+<div class="font-medium text-white">Avery</div>
+<div class="text-xs text-text-muted">Enfoque máximo</div>
+</div>
+</div>
+<i class="fa-solid fa-chevron-down text-text-muted text-xs"></i>
+</div>
+<a class="flex items-center gap-3 px-3 py-2 text-text-muted hover:text-white transition-colors" href="#">
+<i class="fa-solid fa-gear w-5 text-center"></i>
+<span>Ajustes</span>
+</a>
+</div>
+</aside>
+<!-- END: Sidebar -->
+<!-- BEGIN: Main Content Area -->
+<main class="flex-1 flex flex-col overflow-hidden bg-background relative">
+<!-- Top Header -->
+<header class="h-20 px-8 flex items-center justify-between shrink-0">
+<div>
+<h1 class="text-2xl font-bold flex items-center gap-2 text-white">
+          Tareas <i class="fa-regular fa-circle-check text-text-muted text-xl ml-1"></i>
+</h1>
+<p class="text-text-muted text-sm mt-1">Organiza, prioriza y completa tus tareas.</p>
+</div>
+<div class="flex items-center gap-6">
+<!-- Status Indicator -->
+<div class="flex items-center gap-2 bg-[#1a2e22] px-3 py-1.5 rounded-full border border-[#234d35]">
+<div class="w-2 h-2 rounded-full bg-status-success shadow-[0_0_8px_#00cc88]"></div>
+<span class="text-xs text-white/90">Conectado</span>
+</div>
+<!-- Notifications -->
+<button class="w-9 h-9 rounded-full bg-card border border-gray-800 flex items-center justify-center text-text-muted hover:text-white hover:border-gray-600 transition-colors">
+<i class="fa-regular fa-bell"></i>
+</button>
+<!-- Clock -->
+<div class="text-right">
+<div class="text-3xl font-light text-primary tracking-wider flex items-baseline justify-end gap-1">
+            16:11<span class="text-sm font-normal text-text-dark">58</span>
+</div>
+<div class="text-xs text-text-muted">Sábado, 2 de mayo de 2025</div>
+</div>
+</div>
+</header>
+<!-- Content Scrollable Area -->
+<div class="flex-1 overflow-y-auto px-8 pb-8 flex gap-6">
+<!-- Left Column (Main Task List) -->
+<div class="flex-1 flex flex-col gap-6 min-w-0">
+<!-- Toolbar -->
+<div class="flex items-center justify-between">
+<!-- View Toggles -->
+<div class="flex bg-card rounded-lg p-1 border border-gray-800">
+<button class="px-4 py-1.5 rounded-md bg-white/10 text-white font-medium shadow-sm transition-colors">Lista</button>
+<button class="px-4 py-1.5 rounded-md text-text-muted hover:text-white hover:bg-white/5 transition-colors">Tablero</button>
+<button class="px-4 py-1.5 rounded-md text-text-muted hover:text-white hover:bg-white/5 transition-colors">Calendario</button>
+</div>
+<!-- Actions -->
+<div class="flex items-center gap-3">
+<div class="relative group">
+<i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-text-dark group-focus-within:text-white transition-colors"></i>
+<input class="bg-card border border-gray-800 rounded-lg pl-9 pr-12 py-2 text-sm text-white placeholder-text-dark focus:outline-none focus:border-gray-600 w-64 transition-colors" placeholder="Buscar tareas..." type="text"/>
+<div class="absolute right-2 top-1/2 transform -translate-y-1/2 flex gap-1">
+<span class="bg-gray-800 text-text-dark text-[10px] px-1.5 py-0.5 rounded border border-gray-700">⌘</span>
+<span class="bg-gray-800 text-text-dark text-[10px] px-1.5 py-0.5 rounded border border-gray-700">K</span>
+</div>
+</div>
+<button class="flex items-center gap-2 bg-card border border-gray-800 px-4 py-2 rounded-lg text-text-muted hover:text-white hover:border-gray-600 transition-colors">
+<i class="fa-solid fa-sliders"></i>
+<span>Filtros</span>
+</button>
+<button class="flex items-center gap-2 bg-primary hover:bg-primaryHover text-white px-4 py-2 rounded-lg font-medium transition-colors shadow-[0_0_15px_rgba(255,51,68,0.3)]">
+<i class="fa-solid fa-plus"></i>
+<span>Nueva tarea</span>
+</button>
+</div>
+</div>
+<!-- Summary Cards -->
+<div class="grid grid-cols-5 gap-4">
+<!-- Card 1 -->
+<div class="bg-card rounded-xl p-4 border border-gray-800 relative overflow-hidden group">
+<div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+<i class="fa-regular fa-square-check text-4xl text-white"></i>
+</div>
+<div class="text-xs font-semibold text-text-muted mb-2 tracking-wider">TAREAS TOTALES</div>
+<div class="text-3xl font-light text-white mb-1">24</div>
+<div class="text-xs text-text-dark">Este mes</div>
+<div class="absolute bottom-4 right-4 w-8 h-8 rounded-full bg-white/5 border border-gray-700 flex items-center justify-center text-text-muted">
+<i class="fa-regular fa-pen-to-square"></i>
+</div>
+</div>
+<!-- Card 2 -->
+<div class="bg-card rounded-xl p-4 border border-gray-800 relative overflow-hidden">
+<div class="text-xs font-semibold text-text-muted mb-2 tracking-wider">COMPLETADAS</div>
+<div class="text-3xl font-light text-white mb-1">16</div>
+<div class="text-xs text-text-dark">67% del total</div>
+<div class="absolute bottom-4 right-4 w-8 h-8 rounded-full bg-[#00cc88]/10 border border-[#00cc88]/30 flex items-center justify-center text-status-success">
+<i class="fa-solid fa-check"></i>
+</div>
+</div>
+<!-- Card 3 -->
+<div class="bg-card rounded-xl p-4 border border-gray-800 relative overflow-hidden">
+<div class="text-xs font-semibold text-text-muted mb-2 tracking-wider">PENDIENTES</div>
+<div class="text-3xl font-light text-white mb-1">8</div>
+<div class="text-xs text-text-dark">33% del total</div>
+<div class="absolute bottom-4 right-4 w-8 h-8 rounded-full bg-[#ffaa00]/10 border border-[#ffaa00]/30 flex items-center justify-center text-status-warning">
+<i class="fa-regular fa-clock"></i>
+</div>
+</div>
+<!-- Card 4 -->
+<div class="bg-card rounded-xl p-4 border border-gray-800 relative overflow-hidden">
+<div class="text-xs font-semibold text-text-muted mb-2 tracking-wider">EN PROGRESO</div>
+<div class="text-3xl font-light text-white mb-1">5</div>
+<div class="text-xs text-text-dark">21% del total</div>
+<div class="absolute bottom-4 right-4 w-8 h-8 rounded-full bg-[#3388ff]/10 border border-[#3388ff]/30 flex items-center justify-center text-status-info">
+<i class="fa-solid fa-spinner"></i>
+</div>
+</div>
+<!-- Card 5 -->
+<div class="bg-card rounded-xl p-4 border border-gray-800 relative overflow-hidden">
+<div class="text-xs font-semibold text-text-muted mb-2 tracking-wider">VENCIDAS</div>
+<div class="text-3xl font-light text-white mb-1 flex items-center gap-2">
+<span class="w-1.5 h-1.5 rounded-full bg-status-danger"></span>
+              2
+            </div>
+<div class="text-xs text-text-dark">Atención requerida</div>
+<div class="absolute bottom-4 right-4 w-8 h-8 rounded-full bg-[#ff3344]/10 border border-[#ff3344]/30 flex items-center justify-center text-status-danger">
+<i class="fa-solid fa-exclamation"></i>
+</div>
+</div>
+</div>
+<!-- Task List Section -->
+<div class="bg-card border border-gray-800 rounded-xl flex flex-col flex-1 min-h-0">
+<!-- Tabs & Sort -->
+<div class="flex items-center justify-between border-b border-gray-800 px-6">
+<div class="flex gap-6">
+<button class="py-4 text-white font-medium border-b-2 border-primary">Todas</button>
+<button class="py-4 text-text-muted hover:text-white transition-colors">Pendientes</button>
+<button class="py-4 text-text-muted hover:text-white transition-colors">En progreso</button>
+<button class="py-4 text-text-muted hover:text-white transition-colors">Completadas</button>
+<button class="py-4 text-text-muted hover:text-white transition-colors">Vencidas</button>
+</div>
+<div class="flex items-center gap-2 text-text-muted text-sm cursor-pointer hover:text-white transition-colors">
+<span>Ordenar: Prioridad</span>
+<i class="fa-solid fa-chevron-down text-[10px]"></i>
+</div>
+</div>
+<!-- List Header -->
+<div class="grid grid-cols-[auto_1fr_120px_100px_120px_120px_100px_auto] gap-4 px-6 py-3 border-b border-gray-800/50 text-[11px] font-semibold text-text-dark uppercase tracking-wider items-center">
+<div class="w-5"></div> <!-- Checkbox spacer -->
+<div>Tarea</div>
+<div>Curso</div>
+<div>Prioridad</div>
+<div>Fecha Límite</div>
+<div>Tiempo Estimado</div>
+<div>Estado</div>
+<div class="w-8"></div> <!-- Actions spacer -->
+</div>
+<!-- List Body -->
+<div class="overflow-y-auto flex-1">
+<!-- Task Item 1 -->
+<div class="group grid grid-cols-[auto_1fr_120px_100px_120px_120px_100px_auto] gap-4 px-6 py-3 border-b border-gray-800/30 hover:bg-white/[0.02] transition-colors items-center">
+<button class="w-5 h-5 rounded-full border-2 border-gray-600 flex items-center justify-center group-hover:border-primary transition-colors cursor-pointer"></button>
+<div>
+<div class="text-white font-medium group-hover:text-primary transition-colors cursor-pointer">Termodinámica - Problemas de aplicación</div>
+<div class="flex gap-3 text-xs text-text-dark mt-1">
+<span class="flex items-center gap-1"><i class="fa-solid fa-paperclip text-[10px]"></i></span>
+<span class="flex items-center gap-1"><i class="fa-regular fa-image text-[10px]"></i></span>
+<span class="flex items-center gap-1"><i class="fa-regular fa-file-lines text-[10px]"></i> 3</span>
+</div>
+</div>
+<div>
+<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs bg-course-physics/10 text-course-physics border border-course-physics/20">
+<span class="w-1.5 h-1.5 rounded-full bg-course-physics"></span> Física
+                </span>
+</div>
+<div>
+<span class="inline-flex items-center gap-1 text-xs text-status-danger">
+<i class="fa-solid fa-arrow-up text-[10px]"></i> Alta
+                </span>
+</div>
+<div class="text-status-danger text-xs">Hoy, 23:59</div>
+<div class="text-text-muted text-xs flex items-center gap-1.5">
+<i class="fa-regular fa-clock text-text-dark"></i> 1h 30m
+              </div>
+<div>
+<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-status-info/10 text-status-info border border-status-info/20">
+<i class="fa-solid fa-play text-[8px]"></i> En progreso
+                </span>
+</div>
+<button class="w-8 h-8 flex items-center justify-center text-text-dark hover:text-white rounded-md hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-all">
+<i class="fa-solid fa-ellipsis-vertical"></i>
+</button>
+</div>
+<!-- Task Item 2 -->
+<div class="group grid grid-cols-[auto_1fr_120px_100px_120px_120px_100px_auto] gap-4 px-6 py-3 border-b border-gray-800/30 hover:bg-white/[0.02] transition-colors items-center bg-white/[0.01]">
+<button class="w-5 h-5 rounded-full bg-primary border-2 border-primary flex items-center justify-center cursor-pointer">
+<i class="fa-solid fa-check text-white text-[10px]"></i>
+</button>
+<div>
+<div class="text-text-muted font-medium line-through">Mecánica Cuántica - Fundamentos</div>
+<div class="flex gap-3 text-xs text-text-dark mt-1">
+<span class="flex items-center gap-1"><i class="fa-solid fa-paperclip text-[10px]"></i> 2</span>
+<span class="flex items-center gap-1"><i class="fa-regular fa-comment text-[10px]"></i></span>
+</div>
+</div>
+<div>
+<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs bg-course-physics/10 text-course-physics border border-course-physics/20 opacity-50">
+<span class="w-1.5 h-1.5 rounded-full bg-course-physics"></span> Física
+                </span>
+</div>
+<div>
+<span class="inline-flex items-center gap-1 text-xs text-status-danger opacity-50">
+<i class="fa-solid fa-arrow-up text-[10px]"></i> Alta
+                </span>
+</div>
+<div class="text-text-muted text-xs opacity-50">Mañana, 23:59</div>
+<div class="text-text-muted text-xs flex items-center gap-1.5 opacity-50">
+<i class="fa-regular fa-clock text-text-dark"></i> 2h 00m
+              </div>
+<div>
+<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-status-warning/10 text-status-warning border border-status-warning/20">
+<i class="fa-solid fa-rotate-right text-[8px]"></i> Pendiente
+                </span>
+</div>
+<button class="w-8 h-8 flex items-center justify-center text-text-dark hover:text-white rounded-md hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-all">
+<i class="fa-solid fa-ellipsis-vertical"></i>
+</button>
+</div>
+<!-- Task Item 3 -->
+<div class="group grid grid-cols-[auto_1fr_120px_100px_120px_120px_100px_auto] gap-4 px-6 py-3 border-b border-gray-800/30 hover:bg-white/[0.02] transition-colors items-center">
+<button class="w-5 h-5 rounded-full border-2 border-gray-600 flex items-center justify-center group-hover:border-primary transition-colors cursor-pointer"></button>
+<div>
+<div class="text-white font-medium group-hover:text-primary transition-colors cursor-pointer">Química Orgánica - Mecanismos</div>
+<div class="flex gap-3 text-xs text-text-dark mt-1">
+<span class="flex items-center gap-1"><i class="fa-solid fa-paperclip text-[10px]"></i> 1</span>
+<span class="flex items-center gap-1"><i class="fa-regular fa-comment text-[10px]"></i> 1</span>
+</div>
+</div>
+<div>
+<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs bg-[#00cc88]/10 text-[#00cc88] border border-[#00cc88]/20">
+<span class="w-1.5 h-1.5 rounded-full bg-[#00cc88]"></span> Química
+                </span>
+</div>
+<div>
+<span class="inline-flex items-center gap-1 text-xs text-status-warning">
+<i class="fa-solid fa-arrow-up text-[10px] transform rotate-45"></i> Media
+                </span>
+</div>
+<div class="text-text-muted text-xs">5 May, 18:00</div>
+<div class="text-text-muted text-xs flex items-center gap-1.5">
+<i class="fa-regular fa-clock text-text-dark"></i> 1h 45m
+              </div>
+<div>
+<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-status-warning/10 text-status-warning border border-status-warning/20">
+<i class="fa-solid fa-rotate-right text-[8px]"></i> Pendiente
+                </span>
+</div>
+<button class="w-8 h-8 flex items-center justify-center text-text-dark hover:text-white rounded-md hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-all">
+<i class="fa-solid fa-ellipsis-vertical"></i>
+</button>
+</div>
+<!-- More List Items... (omitted for brevity, visually similar) -->
+</div>
+<!-- List Footer -->
+<div class="px-6 py-3 border-t border-gray-800 text-xs text-text-dark flex items-center justify-between">
+<span>Mostrando 1 a 7 de 8 tareas</span>
+<!-- Optional Pagination could go here -->
+</div>
+</div>
+<!-- Dashboard Widgets Row (Bottom) -->
+<div class="grid grid-cols-3 gap-6 h-48 shrink-0">
+<!-- Widget 1: Distribution -->
+<div class="bg-card border border-gray-800 rounded-xl p-5 flex flex-col">
+<h3 class="text-xs font-semibold text-text-muted mb-4 uppercase tracking-wider">Distribución por curso</h3>
+<div class="flex-1 flex items-center gap-6">
+<!-- Circular Chart Placeholder -->
+<div class="relative w-24 h-24 shrink-0 rounded-full border-8 border-gray-800 flex items-center justify-center">
+<!-- Inner circle to create donut effect -->
+<div class="text-center">
+<div class="text-xl font-bold text-white leading-none">24</div>
+<div class="text-[10px] text-text-dark mt-1">Total</div>
+</div>
+<!-- CSS or Canvas would draw the colored segments here -->
+<svg class="absolute inset-0 w-full h-full transform -rotate-90 pointer-events-none" viewbox="0 0 100 100">
+<circle class="transition-all duration-1000 ease-in-out" cx="50" cy="50" fill="transparent" r="40" stroke="#00cc88" stroke-dasharray="251.2" stroke-dashoffset="170" stroke-width="12"></circle>
+<circle class="transition-all duration-1000 ease-in-out" cx="50" cy="50" fill="transparent" r="40" stroke="#8855ff" stroke-dasharray="251.2" stroke-dashoffset="198" stroke-width="12"></circle>
+</svg>
+</div>
+<!-- Legend -->
+<div class="flex-1 flex flex-col gap-2 justify-center">
+<div class="flex items-center justify-between text-xs">
+<div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-course-physics"></span><span class="text-text-muted">Física</span></div>
+<div class="flex gap-4"><span class="text-white">8</span><span class="text-text-dark w-6 text-right">33%</span></div>
+</div>
+<div class="flex items-center justify-between text-xs">
+<div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-[#00cc88]"></span><span class="text-text-muted">Química</span></div>
+<div class="flex gap-4"><span class="text-white">5</span><span class="text-text-dark w-6 text-right">21%</span></div>
+</div>
+<div class="flex items-center justify-between text-xs">
+<div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-course-math"></span><span class="text-text-muted">Matemáticas</span></div>
+<div class="flex gap-4"><span class="text-white">4</span><span class="text-text-dark w-6 text-right">17%</span></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Widget 2: Workload -->
+<div class="bg-card border border-gray-800 rounded-xl p-5 flex flex-col">
+<h3 class="text-xs font-semibold text-text-muted mb-4 uppercase tracking-wider">Carga de trabajo semanal</h3>
+<div class="flex-1 flex items-end gap-2 pb-5 relative">
+<!-- Bar Chart Placeholder -->
+<div class="flex-1 flex items-end justify-around h-full border-b border-gray-800/50 pb-2">
+<div class="w-4 bg-primary rounded-t-sm h-[30%]"></div>
+<div class="w-4 bg-primary rounded-t-sm h-[60%] relative group">
+<div class="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none">3h 45m</div>
+</div>
+<div class="w-4 bg-primary rounded-t-sm h-[45%]"></div>
+<div class="w-4 bg-primary rounded-t-sm h-[20%]"></div>
+<div class="w-4 bg-primary rounded-t-sm h-[80%]"></div>
+<div class="w-4 bg-primary rounded-t-sm h-[15%] opacity-50"></div>
+<div class="w-4 bg-primary rounded-t-sm h-[10%] opacity-50"></div>
+</div>
+<!-- X Axis Labels -->
+<div class="absolute bottom-0 left-0 w-[calc(100%-120px)] flex justify-around text-[10px] text-text-dark">
+<span>L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span><span>D</span>
+</div>
+<!-- Stats -->
+<div class="w-28 shrink-0 flex flex-col justify-center gap-4 pl-4 border-l border-gray-800/50">
+<div>
+<div class="text-[10px] text-text-dark mb-0.5">Total estimado</div>
+<div class="text-lg text-white font-medium">10h 45m</div>
+</div>
+<div>
+<div class="text-[10px] text-text-dark mb-0.5">Promedio diario</div>
+<div class="text-lg text-white font-medium">1h 30m</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Widget 3: Task Status -->
+<div class="bg-card border border-gray-800 rounded-xl p-5 flex flex-col">
+<h3 class="text-xs font-semibold text-text-muted mb-4 uppercase tracking-wider">Estado de tareas</h3>
+<div class="flex-1 flex items-center gap-6">
+<!-- Circular Chart Placeholder -->
+<div class="relative w-24 h-24 shrink-0 rounded-full border-8 border-gray-800 flex items-center justify-center">
+<div class="text-center z-10 relative bg-card rounded-full w-full h-full flex flex-col items-center justify-center">
+<div class="text-xl font-bold text-white leading-none">67%</div>
+<div class="text-[8px] text-text-dark mt-1 leading-tight w-16">Tasa de completado</div>
+</div>
+<svg class="absolute inset-[-8px] w-[calc(100%+16px)] h-[calc(100%+16px)] transform -rotate-90 pointer-events-none" viewbox="0 0 100 100">
+<circle class="transition-all duration-1000 ease-in-out" cx="50" cy="50" fill="transparent" r="46" stroke="#00cc88" stroke-dasharray="289" stroke-dashoffset="95" stroke-width="8"></circle>
+</svg>
+</div>
+<!-- Legend -->
+<div class="flex-1 flex flex-col gap-3 justify-center">
+<div class="flex items-center justify-between text-xs">
+<div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-status-success"></span><span class="text-text-muted">Completadas</span></div>
+<span class="text-white font-medium">16</span>
+</div>
+<div class="flex items-center justify-between text-xs">
+<div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-status-warning"></span><span class="text-text-muted">Pendientes</span></div>
+<span class="text-white font-medium">6</span>
+</div>
+<div class="flex items-center justify-between text-xs">
+<div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-status-info"></span><span class="text-text-muted">En progreso</span></div>
+<span class="text-white font-medium">2</span>
+</div>
+<div class="flex items-center justify-between text-xs">
+<div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-status-danger"></span><span class="text-text-muted">Vencidas</span></div>
+<span class="text-white font-medium">2</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Column (Sidebar Widgets) -->
+<div class="w-[300px] shrink-0 flex flex-col gap-6">
+<!-- Calendar Widget -->
+<div class="bg-card border border-gray-800 rounded-xl p-5">
+<div class="flex items-center justify-between mb-4">
+<h3 class="text-xs font-semibold text-text-muted uppercase tracking-wider">Calendario</h3>
+</div>
+<!-- Month Navigation -->
+<div class="flex items-center justify-between mb-4">
+<button class="w-6 h-6 flex items-center justify-center text-text-dark hover:text-white transition-colors">
+<i class="fa-solid fa-chevron-left text-[10px]"></i>
+</button>
+<span class="text-white font-medium text-sm">Mayo 2025</span>
+<div class="flex gap-1">
+<button class="w-6 h-6 flex items-center justify-center text-text-dark hover:text-white transition-colors">
+<i class="fa-solid fa-chevron-right text-[10px]"></i>
+</button>
+</div>
+</div>
+<!-- Days Grid -->
+<div class="grid grid-cols-7 gap-y-2 text-center text-xs mb-4">
+<div class="text-text-dark font-medium mb-1">L</div>
+<div class="text-text-dark font-medium mb-1">M</div>
+<div class="text-text-dark font-medium mb-1">M</div>
+<div class="text-text-dark font-medium mb-1">J</div>
+<div class="text-text-dark font-medium mb-1">V</div>
+<div class="text-text-dark font-medium mb-1">S</div>
+<div class="text-text-dark font-medium mb-1">D</div>
+<div class="text-text-dark/50 py-1">28</div>
+<div class="text-text-dark/50 py-1">29</div>
+<div class="text-text-dark/50 py-1">30</div>
+<div class="text-white py-1 relative">1<span class="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-1 h-1 bg-primary rounded-full"></span></div>
+<div class="bg-primary text-white rounded-full py-1">2</div>
+<div class="text-white py-1">3</div>
+<div class="text-white py-1">4</div>
+<div class="text-white py-1">5</div>
+<div class="text-white py-1 relative">6<span class="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-1 h-1 bg-status-warning rounded-full"></span></div>
+<div class="text-white py-1">7</div>
+<div class="text-white py-1">8</div>
+<div class="text-white py-1">9</div>
+<div class="text-white py-1">10</div>
+<div class="text-white py-1">12</div>
+<div class="text-white py-1">19</div>
+<div class="text-white py-1">20</div>
+<div class="text-white py-1">21</div>
+<div class="text-white py-1">22</div>
+<div class="text-white py-1">23</div>
+<div class="text-white py-1">24</div>
+<div class="text-white py-1">25</div>
+</div>
+<button class="w-full py-2 bg-gray-800/50 hover:bg-gray-800 text-text-muted hover:text-white rounded-lg text-xs font-medium transition-colors">
+            Ver agenda completa
+          </button>
+</div>
+<!-- Upcoming Deliveries Widget -->
+<div class="bg-card border border-gray-800 rounded-xl p-5 flex-1 flex flex-col min-h-0">
+<h3 class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-4">Próximas Entregas</h3>
+<div class="flex-1 overflow-y-auto space-y-4 pr-2">
+<!-- Delivery Item 1 -->
+<div class="flex items-start gap-3 relative before:absolute before:left-[3px] before:top-4 before:bottom-[-16px] before:w-[1px] before:bg-gray-800 last:before:hidden">
+<div class="w-2 h-2 rounded-full bg-status-danger shrink-0 mt-1.5 relative z-10 shadow-[0_0_5px_#ff3344]"></div>
+<div class="flex-1 min-w-0">
+<div class="text-sm text-white font-medium truncate">Termodinámica - Problemas</div>
+<div class="text-xs text-text-dark">Hoy</div>
+</div>
+<div class="text-right shrink-0">
+<div class="text-xs text-status-warning">2 May</div>
+<div class="text-[10px] text-status-success">23:59</div>
+</div>
+</div>
+<!-- Delivery Item 2 -->
+<div class="flex items-start gap-3 relative before:absolute before:left-[3px] before:top-4 before:bottom-[-16px] before:w-[1px] before:bg-gray-800 last:before:hidden">
+<div class="w-2 h-2 rounded-full bg-status-warning shrink-0 mt-1.5 relative z-10"></div>
+<div class="flex-1 min-w-0">
+<div class="text-sm text-white font-medium truncate">Mecánica Cuántica - Fundamentos</div>
+<div class="text-xs text-text-dark">Física</div>
+</div>
+<div class="text-right shrink-0">
+<div class="text-xs text-status-warning">Mañana</div>
+<div class="text-[10px] text-status-success">23:59</div>
+</div>
+</div>
+<!-- Delivery Item 3 -->
+<div class="flex items-start gap-3 relative before:absolute before:left-[3px] before:top-4 before:bottom-[-16px] before:w-[1px] before:bg-gray-800 last:before:hidden">
+<div class="w-2 h-2 rounded-full bg-status-warning shrink-0 mt-1.5 relative z-10"></div>
+<div class="flex-1 min-w-0">
+<div class="text-sm text-white font-medium truncate">Química Orgánica - Mecanismos</div>
+<div class="text-xs text-[#00cc88]">Química</div>
+</div>
+<div class="text-right shrink-0">
+<div class="text-xs text-white">5 May</div>
+<div class="text-[10px] text-status-success">18:00</div>
+</div>
+</div>
+<!-- Delivery Item 4 -->
+<div class="flex items-start gap-3 relative before:absolute before:left-[3px] before:top-4 before:bottom-[-16px] before:w-[1px] before:bg-gray-800 last:before:hidden">
+<div class="w-2 h-2 rounded-full bg-course-math shrink-0 mt-1.5 relative z-10"></div>
+<div class="flex-1 min-w-0">
+<div class="text-sm text-white font-medium truncate">Integrales Triples</div>
+<div class="text-xs text-course-math">Matemáticas</div>
+</div>
+<div class="text-right shrink-0">
+<div class="text-xs text-white">6 May</div>
+<div class="text-[10px] text-status-danger">23:59</div>
+</div>
+</div>
+</div>
+<button class="w-full py-2 mt-4 bg-gray-800/50 hover:bg-gray-800 text-text-muted hover:text-white rounded-lg text-xs font-medium transition-colors shrink-0">
+            Ver todas
+          </button>
+</div>
+</div>
+</div>
+</main>
+<!-- END: Main Content Area -->
+</body></html>

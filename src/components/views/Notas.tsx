@@ -1,296 +1,221 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { Plus, Search, Trash2, Edit2, Pin, X, FileText, BookOpen, Clock, ArrowRight, Save, Sparkles, ChevronRight, Activity, Command, StickyNote, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { 
+  Search, Plus, Folder as FolderIcon, Pin, Trash2, 
+  ChevronLeft, FolderPlus, 
+  Star, FileText, Download,
+  Bold, Italic, Underline, List, Heading, Code,
+} from 'lucide-react';
 import { useApp, Note } from '../../store/AppContext';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import toast from 'react-hot-toast';
+
+function NoteCard({ note, onClick }: { note: Note; onClick: () => void }) {
+  return (
+    <div onClick={onClick} style={{
+      background: 'linear-gradient(180deg, #0d0d12 0%, #14141e 100%)',
+      borderRadius: 8,
+      border: '1px solid rgba(255,255,255,0.04)',
+      borderLeft: `3px solid ${note.courseColor}`,
+      cursor: 'pointer',
+      display: 'flex', flexDirection: 'column',
+      padding: '12px 14px',
+      boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+      transition: 'all 200ms cubic-bezier(0.16, 1, 0.3, 1)',
+      minHeight: 80,
+    }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = `${note.courseColor}40`; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.04)'; e.currentTarget.style.transform = 'translateY(0)'; }}>
+      <div style={{ fontSize: 8, fontWeight: 600, color: note.courseColor, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>{note.course}</div>
+      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', marginBottom: 'auto' }}>{note.title}</div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+        <span style={{ fontSize: 8, color: 'var(--text-muted)', fontWeight: 500 }}>{format(new Date(note.updatedAt), 'd MMM')}</span>
+        {note.isPinned && <Star size={10} fill="var(--accent)" color="var(--accent)" />}
+      </div>
+    </div>
+  );
+}
 
 export default function Notas() {
-  const { notes, courses, addNote, updateNote, deleteNote } = useApp();
+  const { notes, noteFolders, addNote, updateNote, deleteNote, addNoteFolder } = useApp();
+
+  const [activeFolderId, setActiveFolderId] = useState<string | 'all' | 'pinned'>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedNote, setSelectedNote] = useState<Note | null>(null);
-  const [editMode, setEditMode] = useState(false);
-  const [editTitle, setEditTitle] = useState('');
-  const [editContent, setEditContent] = useState('');
-  const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [showNewNoteModal, setShowNewNoteModal] = useState(false);
-  const [newNoteCourse, setNewNoteCourse] = useState(courses[0]?.name || 'General');
+  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
+  const [showFolderModal, setShowFolderModal] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+  
+  const editorRef = useRef<HTMLDivElement>(null);
+  const selectedNote = notes.find(n => n.id === selectedNoteId);
+
+  const handleBold = useCallback(() => document.execCommand('bold'), []);
+  const handleItalic = useCallback(() => document.execCommand('italic'), []);
+  const handleUnderline = useCallback(() => document.execCommand('underline'), []);
+  const handleBulletList = useCallback(() => document.execCommand('insertUnorderedList'), []);
+  const handleHeading = useCallback(() => document.execCommand('formatBlock', false, 'h3'), []);
+  const handleCode = useCallback(() => document.execCommand('insertHTML', false, '<code style="background:rgba(255,255,255,0.06);padding:2px 6px;border-radius:3px;font-size:0.9em">$1</code>'), []);
 
   useEffect(() => {
-    if (notes.length === 0) {
-      setSelectedNote(null);
-      return;
+    if (selectedNote && editorRef.current) {
+      editorRef.current.innerHTML = selectedNote.content;
     }
-    if (!selectedNote || !notes.find(n => n.id === selectedNote.id)) {
-      setSelectedNote(notes[0]);
-      setEditTitle(notes[0].title);
-      setEditContent(notes[0].content);
-      setEditMode(false);
-    }
-  }, [notes, selectedNote]);
+  }, [selectedNoteId]);
 
-  const filteredNotes = useMemo(() => {
-    return notes.filter(n =>
-      n.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      n.content.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [notes, searchQuery]);
+  const handleSave = () => {
+    if (!selectedNoteId || !selectedNote) return;
+    const content = editorRef.current?.innerHTML || '';
+    updateNote(selectedNote.id, { content });
+    toast.success('Nota guardada');
+  };
 
-  const selectNote = useCallback((note: Note) => {
-    setSelectedNote(note);
-    setEditTitle(note.title);
-    setEditContent(note.content);
-    setEditMode(false);
-  }, []);
+  const filteredNotes = notes.filter(n => {
+    const matchesSearch = n.title.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesFolder = activeFolderId === 'all' ? true :
+                         activeFolderId === 'pinned' ? n.isPinned :
+                         activeFolderId === 'borradores' ? n.content.length < 50 :
+                         n.folderId === activeFolderId;
+    return matchesSearch && matchesFolder;
+  });
 
-  const createNote = useCallback(() => {
-    const course = courses.find(c => c.name === newNoteCourse) || courses[0];
-    const newNoteData = {
-      title: 'Nueva Entrada',
-      content: '',
-      course: course?.name || 'General',
-      courseColor: course?.color || '#E11D48',
-      isPinned: false,
-    };
-    addNote(newNoteData);
-    setShowNewNoteModal(false);
-  }, [courses, newNoteCourse, addNote]);
-
-  const saveNote = useCallback(() => {
-    if (selectedNote) {
-      updateNote(selectedNote.id, { title: editTitle, content: editContent });
-      setEditMode(false);
-    }
-  }, [selectedNote, editTitle, editContent, updateNote]);
-
-  const handleDelete = useCallback(() => {
-    if (deleteId) {
-      deleteNote(deleteId);
-      setDeleteId(null);
-    }
-  }, [deleteId, deleteNote]);
+  const handleCreateFolder = () => {
+    if (!newFolderName.trim()) return;
+    addNoteFolder({ name: newFolderName.trim(), color: '#E11D48', isManual: true });
+    setNewFolderName('');
+    setShowFolderModal(false);
+    toast.success('Carpeta creada');
+  };
 
   return (
-    <div className="page-container">
+    <div style={{ display: 'flex', height: '100%', background: 'var(--bg-base)', overflow: 'hidden', position: 'relative' }}>
       
-      {/* ARCHITECTURAL HEADER - REFINED */}
-      <header className="flex justify-between items-end mb-24 relative">
-        <div className="flex flex-col gap-4">
-          <div className="flex items-center gap-3">
-            <StickyNote size={20} className="text-accent" />
-            <span className="text-[11px] font-black text-tertiary uppercase tracking-[0.5em]">Repositorio Documental</span>
-          </div>
-          <h1 className="text-8xl font-black text-primary tracking-tighter leading-none">
-            Apuntes
-            <span className="text-accent">.</span>
-          </h1>
-          <p className="text-xl text-secondary font-medium tracking-tight opacity-60">
-            {notes.length} ENTRADAS REGISTRADAS EN TU SISTEMA
-          </p>
-        </div>
-
-        <div className="flex gap-8 items-center">
-          <div className="relative group">
-            <Search size={24} className="absolute left-6 top-1/2 -translate-y-1/2 text-muted group-focus-within:text-accent transition-colors" />
-            <input
-              type="text"
-              placeholder="Buscar entradas..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-white/[0.02] border border-white/5 h-20 pl-16 pr-10 rounded-[32px] text-lg font-bold text-primary focus:border-accent outline-none transition-all w-96 placeholder:text-muted/30"
-            />
-          </div>
-          <button 
-            onClick={() => setShowNewNoteModal(true)}
-            className="px-12 h-20 rounded-[32px] bg-accent text-white font-black text-[11px] uppercase tracking-[0.3em] shadow-[0_20px_50px_rgba(225,29,72,0.4)] hover:scale-110 active:scale-95 transition-all flex items-center gap-4"
-          >
-            <Plus size={24} /> Nueva Entrada
-          </button>
-        </div>
-      </header>
-
-      <div className="bento-card p-0 flex h-[800px] overflow-hidden border-white/[0.02] relative">
-        <div className="absolute inset-0 bg-gradient-to-br from-accent/5 to-transparent pointer-events-none opacity-20" />
-        
-        {/* SIDEBAR - REFINED */}
-        <div className="w-[450px] flex flex-col bg-white/[0.01] backdrop-blur-3xl border-r border-white/[0.03] z-10">
-          <div className="p-12 border-b border-white/[0.03] flex justify-between items-center bg-white/[0.01]">
-            <span className="text-[11px] font-black text-tertiary uppercase tracking-[0.4em]">Directorio</span>
-            <div className="px-5 py-2 rounded-full bg-accent/10 border border-accent/20">
-               <span className="text-[10px] font-black text-accent uppercase tracking-widest">{filteredNotes.length} Ítems</span>
+      <aside style={{ width: 200, borderRight: '1px solid rgba(255,255,255,0.04)', background: 'linear-gradient(180deg, #0d0d12 0%, #14141e 100%)', padding: '16px 10px', display: 'flex', flexDirection: 'column', gap: 20, flexShrink: 0, boxShadow: '4px 0 24px rgba(0,0,0,0.15)' }}>
+         <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, padding: '0 4px' }}>
+               <h2 style={{ fontSize: 13, fontWeight: 600 }}>Notas</h2>
+               <button onClick={() => setShowFolderModal(true)} className="btn-ghost" style={{ padding: 3, cursor: 'pointer' }}><FolderPlus size={14} /></button>
             </div>
-          </div>
-          <div className="flex-1 overflow-y-auto p-6 space-y-4">
-            {filteredNotes.map(note => (
-              <div 
-                key={note.id}
-                onClick={() => selectNote(note)}
-                className={`p-10 rounded-[48px] border transition-all duration-500 relative group flex flex-col gap-4 ${
-                  selectedNote?.id === note.id 
-                  ? 'bg-elevated border-white/10 shadow-2xl scale-[1.02] z-10' 
-                  : 'bg-transparent border-transparent text-tertiary hover:bg-white/[0.03] hover:translate-x-2'
-                }`}
-              >
-                {selectedNote?.id === note.id && (
-                  <div className="absolute left-4 top-10 bottom-10 w-2 bg-accent rounded-full shadow-[0_0_15px_var(--accent)]" />
-                )}
-                <div className="flex justify-between items-center">
-                  <span className="text-[9px] font-black uppercase tracking-[0.3em] px-4 py-1.5 rounded-full border border-white/5" style={{ color: note.courseColor, backgroundColor: `${note.courseColor}15` }}>{note.course}</span>
-                  <span className="text-[10px] font-black text-muted uppercase tracking-widest">{format(new Date(note.updatedAt), 'dd MMM')}</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+               {[{ id: 'all', label: 'Todas', icon: FileText }, { id: 'pinned', label: 'Destacadas', icon: Star }].map(item => (
+                 <button key={item.id} onClick={() => setActiveFolderId(item.id as any)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 6, background: activeFolderId === item.id ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'transparent', border: 'none', color: activeFolderId === item.id ? 'var(--accent)' : 'var(--text-secondary)', fontSize: 11, fontWeight: 500, cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'all 200ms' }}>
+                   <item.icon size={14} /> {item.label}
+                 </button>
+               ))}
+            </div>
+         </div>
+         <div>
+            <h3 style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, padding: '0 4px' }}>Carpetas</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+               {noteFolders.map(folder => (
+                 <button key={folder.id} onClick={() => setActiveFolderId(folder.id)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 6, background: activeFolderId === folder.id ? 'var(--bg-elevated)' : 'transparent', border: 'none', color: activeFolderId === folder.id ? 'var(--text-primary)' : 'var(--text-secondary)', fontSize: 11, fontWeight: 500, cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'all 200ms' }}>
+                   <FolderIcon size={14} style={{ color: folder.color }} /> {folder.name}
+                 </button>
+               ))}
+            </div>
+         </div>
+      </aside>
+
+      <main style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        {!selectedNoteId ? (
+          <>
+            <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 24px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  <button onClick={() => setActiveFolderId('all')} style={{ padding: '4px 10px', borderRadius: 6, fontSize: 10, fontWeight: 600, cursor: 'pointer', border: 'none', background: activeFolderId === 'all' ? 'var(--accent)' : 'transparent', color: activeFolderId === 'all' ? '#fff' : 'var(--text-tertiary)' }}>Notas</button>
+                  <button onClick={() => setActiveFolderId('borradores')} style={{ padding: '4px 10px', borderRadius: 6, fontSize: 10, fontWeight: 600, cursor: 'pointer', border: 'none', background: activeFolderId === 'borradores' ? 'var(--accent)' : 'transparent', color: activeFolderId === 'borradores' ? '#fff' : 'var(--text-tertiary)' }}>Borradores</button>
                 </div>
-                <h3 className="text-3xl font-black text-primary truncate tracking-tighter">{note.title || 'Sin Título'}</h3>
-                <p className="text-[13px] text-secondary line-clamp-2 font-medium leading-relaxed opacity-40 group-hover:opacity-80 transition-opacity">{note.content || 'Sin contenido registrado...'}</p>
-                
-                <button 
-                  onClick={(e) => { e.stopPropagation(); setDeleteId(note.id); }}
-                  className="absolute top-10 right-8 w-12 h-12 rounded-2xl bg-accent/5 text-accent opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center hover:bg-accent/10 hover:scale-110"
-                >
-                  <Trash2 size={20} />
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <div style={{ position: 'relative', width: 200 }}>
+                  <Search size={12} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                  <input type="text" placeholder="Buscar..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="input-base" style={{ paddingLeft: 28, fontSize: 10, height: 28, width: '100%' }} />
+                </div>
+                <button onClick={() => {
+                  const newNote = addNote({ title: 'Nueva Nota', content: '', course: 'General', courseColor: '#E11D48', isPinned: false });
+                  if (newNote) setSelectedNoteId(newNote);
+                }} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, height: 28, padding: '0 12px' }}>
+                  <Plus size={13} /> Nueva
                 </button>
               </div>
-            ))}
-
-            {filteredNotes.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-48 opacity-10">
-                <FileText size={80} className="mb-6" />
-                <p className="font-black uppercase tracking-[0.4em] text-center">Sin Coincidencias</p>
+            </header>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
+                {filteredNotes.map(note => (
+                  <NoteCard key={note.id} note={note} onClick={() => setSelectedNoteId(note.id)} />
+                ))}
               </div>
-            )}
-          </div>
-        </div>
-
-        {/* EDITOR AREA - REFINED */}
-        <div className="flex-1 flex flex-col bg-white/[0.005] backdrop-blur-sm z-10">
-          {selectedNote ? (
-            <>
-              <div className="p-12 border-b border-white/[0.03] flex justify-between items-center bg-white/[0.01]">
-                <div className="flex items-center gap-8">
-                  <div className="w-16 h-16 rounded-[28px] bg-accent/5 flex items-center justify-center border border-accent/20">
-                    <Command size={28} className="text-accent" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-4 mb-2">
-                      <p className="text-[11px] font-black text-accent uppercase tracking-[0.4em]">{selectedNote.course}</p>
-                      <div className="w-1.5 h-1.5 rounded-full bg-white/10" />
-                      <p className="text-[11px] font-black text-muted uppercase tracking-widest">{format(new Date(selectedNote.updatedAt), 'dd MMMM, yyyy', { locale: es }).toUpperCase()}</p>
-                    </div>
-                    <p className="text-[10px] font-bold text-tertiary uppercase tracking-widest flex items-center gap-3">
-                      <Activity size={12} className="text-accent/50" /> Protocolo de Registro Activo
-                    </p>
-                  </div>
+              {filteredNotes.length === 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 0', color: 'var(--text-muted)' }}>
+                  <FileText size={40} style={{ opacity: 0.1, marginBottom: 12 }} />
+                  <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-tertiary)' }}>Sin notas aún</div>
+                  <div style={{ fontSize: 11, marginTop: 4 }}>Crea una nueva nota para empezar</div>
                 </div>
-                <div className="flex gap-6">
-                  {editMode ? (
-                    <button onClick={saveNote} className="px-10 h-16 rounded-[24px] bg-accent text-white font-black text-[11px] uppercase tracking-[0.3em] shadow-2xl hover:scale-105 active:scale-95 transition-all flex items-center gap-3">
-                      <Save size={20} /> Guardar Cambios
-                    </button>
-                  ) : (
-                    <button onClick={() => setEditMode(true)} className="px-10 h-16 rounded-[24px] bg-white/[0.03] border border-white/10 text-primary hover:bg-white/5 transition-all font-black text-[11px] uppercase tracking-[0.3em] flex items-center gap-3">
-                      <Edit2 size={20} /> Editar Entrada
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex-1 p-24 overflow-y-auto">
-                <div className="max-w-4xl mx-auto flex flex-col h-full relative">
-                  <div className="absolute -left-24 top-0 text-[180px] font-black text-accent/5 select-none pointer-events-none leading-none">"</div>
-                  {editMode ? (
-                    <div className="flex flex-col gap-16 h-full">
-                      <input
-                        type="text"
-                        value={editTitle}
-                        onChange={(e) => setEditTitle(e.target.value)}
-                        placeholder="Título de la entrada..."
-                        className="bg-transparent text-7xl font-black text-primary outline-none border-none tracking-tighter placeholder:text-white/5"
-                      />
-                      <textarea
-                        value={editContent}
-                        onChange={(e) => setEditContent(e.target.value)}
-                        placeholder="Inicia el registro de ideas..."
-                        className="flex-1 bg-transparent text-2xl text-secondary outline-none border-none resize-none leading-relaxed placeholder:text-white/5 font-medium font-inter opacity-80"
-                      />
-                    </div>
-                  ) : (
-                    <div className="flex flex-col gap-16 animate-fadeIn">
-                      <h2 className="text-8xl font-black text-primary tracking-tighter leading-none group relative">
-                        {selectedNote.title || 'Sin Título'}
-                        <span className="text-accent opacity-0 group-hover:opacity-100 transition-opacity absolute -right-8 bottom-0">.</span>
-                      </h2>
-                      <div className="text-3xl text-secondary leading-relaxed whitespace-pre-wrap font-medium pb-48 opacity-60 font-inter tracking-tight">
-                        {selectedNote.content || 'Este sector del repositorio no contiene datos registrados aún.'}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="flex-1 flex flex-col items-center justify-center opacity-10">
-              <Sparkles size={160} />
-              <p className="mt-12 font-black uppercase tracking-[0.8em] text-center">Repositorio Optimizado</p>
+              )}
             </div>
-          )}
-        </div>
-      </div>
+          </>
+        ) : null}
 
-      {/* MODALS - REFINED */}
-      {showNewNoteModal && (
-        <div className="modal-overlay" onClick={() => setShowNewNoteModal(false)}>
-          <div className="bento-card max-w-2xl w-full p-16 bg-surface shadow-[0_60px_120px_rgba(0,0,0,0.9)] border-white/10 animate-fadeIn" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-start mb-16">
-              <div>
-                <h2 className="text-5xl font-black tracking-tighter mb-4">Nueva Entrada</h2>
-                <p className="text-[11px] font-black text-muted uppercase tracking-widest">Protocolo de Documentación</p>
-              </div>
-              <button onClick={() => setShowNewNoteModal(false)} className="w-16 h-16 rounded-full flex items-center justify-center hover:bg-white/5 transition-all">
-                <X size={32} className="text-muted" />
+      {/* Editor panel — full screen if editing */}
+      {selectedNoteId && selectedNote && (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'linear-gradient(180deg, #0d0d12 0%, #14141e 100%)', overflow: 'hidden', minHeight: 0 }}>
+          <header style={{ padding: '10px 20px', borderBottom: '1px solid rgba(255,255,255,0.04)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button onClick={() => setSelectedNoteId(null)} className="btn-ghost" style={{ padding: 3, cursor: 'pointer', display: 'flex' }}><ChevronLeft size={18} /></button>
+              <input type="text" value={selectedNote.title} onChange={e => updateNote(selectedNote.id, { title: e.target.value })} style={{ background: 'transparent', border: 'none', fontSize: 18, fontWeight: 600, color: 'var(--text-primary)', outline: 'none', width: 400, padding: '2px 0' }} />
+              {selectedNote.content.length < 10 && <span style={{ fontSize: 9, color: 'var(--text-tertiary)', background: 'var(--bg-base)', padding: '2px 8px', borderRadius: 4 }}>Borrador</span>}
+            </div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button onClick={() => updateNote(selectedNote.id, { isPinned: !selectedNote.isPinned })} className="btn-ghost" style={{ color: selectedNote.isPinned ? 'var(--accent)' : 'var(--text-muted)', cursor: 'pointer', padding: 4, display: 'flex' }}><Pin size={15} /></button>
+              <button onClick={handleSave} className="btn-primary" style={{ fontSize: 10, height: 28, padding: '0 14px', display: 'flex', alignItems: 'center', gap: 4 }}>
+                Guardar
               </button>
+              <button onClick={() => {
+                const blob = new Blob([selectedNote.content], { type: 'text/html' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = `${selectedNote.title}.html`; a.click();
+                URL.revokeObjectURL(url);
+                toast.success('Nota descargada');
+              }} className="btn-ghost" style={{ color: 'var(--text-muted)', cursor: 'pointer', padding: 4, display: 'flex' }} title="Descargar">
+                <Download size={15} />
+              </button>
+              <button onClick={() => { deleteNote(selectedNote.id); setSelectedNoteId(null); }} className="btn-ghost" style={{ color: 'var(--error)', cursor: 'pointer', padding: 4, display: 'flex' }}><Trash2 size={15} /></button>
             </div>
-            
-            <div className="space-y-12">
-              <div className="flex flex-col gap-5">
-                <label className="text-[11px] font-black text-muted uppercase tracking-[0.3em]">Asignación de Sector</label>
-                <div className="relative">
-                  <select 
-                    className="w-full bg-white/[0.02] border border-white/10 p-8 rounded-[32px] text-primary font-black text-2xl outline-none appearance-none cursor-pointer focus:border-accent transition-all"
-                    value={newNoteCourse}
-                    onChange={(e) => setNewNoteCourse(e.target.value)}
-                  >
-                    {courses.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                  </select>
-                  <ChevronRight size={32} className="absolute right-8 top-1/2 -translate-y-1/2 text-muted pointer-events-none rotate-90" />
-                </div>
-              </div>
-              <div className="flex gap-6 pt-8">
-                <button onClick={() => setShowNewNoteModal(false)} className="flex-1 py-6 rounded-[28px] font-black text-[11px] uppercase tracking-[0.3em] text-tertiary hover:bg-white/5 transition-all">Cancelar</button>
-                <button onClick={createNote} className="flex-[2] py-6 rounded-[28px] bg-accent text-white font-black text-[11px] uppercase tracking-[0.3em] shadow-2xl hover:scale-105 active:scale-95 transition-all">Generar Ítem</button>
-              </div>
-            </div>
+          </header>
+
+          {/* Rich text toolbar */}
+          <div style={{ display: 'flex', gap: 2, padding: '6px 20px', borderBottom: '1px solid rgba(255,255,255,0.04)', background: 'rgba(255,255,255,0.02)', flexShrink: 0 }}>
+            {[
+              { icon: Bold, action: handleBold, label: 'Negrita' },
+              { icon: Italic, action: handleItalic, label: 'Itálica' },
+              { icon: Underline, action: handleUnderline, label: 'Subrayado' },
+              { icon: Heading, action: handleHeading, label: 'Título' },
+              { icon: List, action: handleBulletList, label: 'Lista' },
+              { icon: Code, action: handleCode, label: 'Código' },
+            ].map((btn, i) => (
+              <button key={i} onClick={btn.action} title={btn.label} style={{ padding: '5px 7px', borderRadius: 5, border: 'none', background: 'transparent', color: 'var(--text-tertiary)', cursor: 'pointer', display: 'flex', alignItems: 'center', transition: 'all 150ms' }} onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }} onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-tertiary)'; }}>
+                <btn.icon size={14} />
+              </button>
+            ))}
+          </div>
+
+          <div style={{ flex: 1, overflowY: 'auto', padding: '24px 40px' }}>
+            <div ref={editorRef} contentEditable style={{ minHeight: '100%', outline: 'none', fontSize: 15, color: 'var(--text-secondary)', lineHeight: 1.8, maxWidth: 800, margin: '0 auto' }} />
           </div>
         </div>
       )}
 
-      {deleteId && (
-        <div className="modal-overlay" onClick={() => setDeleteId(null)}>
-          <div className="bento-card max-w-lg w-full p-16 bg-surface border-accent/20 animate-fadeIn" onClick={e => e.stopPropagation()}>
-             <div className="flex flex-col items-center text-center">
-              <div className="w-32 h-32 rounded-[48px] bg-accent/5 flex items-center justify-center text-accent mb-12 border border-accent/20">
-                <AlertTriangle size={64} />
+      </main>
+
+      {showFolderModal && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }} onClick={() => setShowFolderModal(false)}>
+           <div className="bento-card" style={{ width: 320, padding: 20 }} onClick={e => e.stopPropagation()}>
+              <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>Nueva Carpeta</h3>
+              <input type="text" placeholder="Nombre de la carpeta" value={newFolderName} onChange={e => setNewFolderName(e.target.value)} className="input-base" autoFocus />
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 16 }}>
+                 <button onClick={() => setShowFolderModal(false)} className="btn-secondary" style={{ fontSize: 11, padding: '6px 14px' }}>Cancelar</button>
+                 <button onClick={handleCreateFolder} className="btn-primary" style={{ fontSize: 11, padding: '6px 14px' }}>Crear</button>
               </div>
-              <h2 className="text-5xl font-black tracking-tighter mb-6">¿Purgar Registro?</h2>
-              <p className="text-secondary text-lg font-medium mb-16 opacity-60 leading-relaxed">Esta entrada será eliminada permanentemente del repositorio central.</p>
-              
-              <div className="flex gap-6 w-full">
-                <button onClick={() => setDeleteId(null)} className="flex-1 py-6 rounded-[28px] bg-white/[0.02] border border-white/5 text-[11px] font-black uppercase tracking-widest hover:bg-white/5 transition-all">Abortar</button>
-                <button 
-                  onClick={handleDelete}
-                  className="flex-1 py-6 rounded-[28px] bg-accent text-white text-[11px] font-black uppercase tracking-widest shadow-2xl hover:scale-105 transition-all"
-                >
-                  Confirmar
-                </button>
-              </div>
-            </div>
-          </div>
+           </div>
         </div>
       )}
 

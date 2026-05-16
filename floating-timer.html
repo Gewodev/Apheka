@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OWA Studio - Timer Flotante</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #0a0a0f;
+      color: #e2e8f0;
+      height: 100vh;
+      overflow: hidden;
+      -webkit-app-region: drag;
+    }
+    #app {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      -webkit-app-region: drag;
+    }
+    .header {
+      height: 4px;
+      transition: background 0.3s ease;
+    }
+    .header.focus { background: #e11d48; }
+    .header.break { background: #10b981; }
+    .timer-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      -webkit-app-region: drag;
+    }
+    .timer {
+      font-size: 48px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.02em;
+      margin-bottom: 8px;
+      -webkit-app-region: drag;
+    }
+    .status {
+      font-size: 12px;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      -webkit-app-region: drag;
+    }
+    .controls {
+      display: flex;
+      gap: 8px;
+      padding: 12px 16px;
+      border-top: 1px solid rgba(255,255,255,0.05);
+      -webkit-app-region: no-drag;
+    }
+    .btn {
+      flex: 1;
+      padding: 8px;
+      border: none;
+      border-radius: 6px;
+      background: rgba(225,29,72,0.1);
+      color: #e11d48;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      -webkit-app-region: no-drag;
+    }
+    .btn:hover { background: rgba(225,29,72,0.2); }
+    .btn-border {
+      padding: 4px 8px;
+      background: rgba(255,255,255,0.05);
+      color: #94a3b8;
+      -webkit-app-region: no-drag;
+    }
+    .drag-area {
+      flex: 1;
+      -webkit-app-region: drag;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="header" class="header focus"></div>
+    <div class="drag-area"></div>
+    <div class="timer-container">
+      <div id="timer" class="timer">00:00</div>
+      <div id="status" class="status">Concentración</div>
+    </div>
+    <div class="controls">
+      <button id="btnBorder" class="btn btn-border">Ocultar Borde</button>
+    </div>
+  </div>
+
+  <script>
+    const { invoke, event } = window.__TAURI_INTERNALS__.invoke;
+    let isBorderVisible = true;
+    let currentTimer = '00:00';
+    let currentStatus = 'focus';
+
+    // Update timer display
+    function updateTimer(time) {
+      document.getElementById('timer').textContent = time;
+      currentTimer = time;
+    }
+
+    // Update status (focus/break)
+    function updateStatus(status) {
+      const header = document.getElementById('header');
+      const statusEl = document.getElementById('status');
+      header.className = 'header ' + (status === 'focus' ? 'focus' : 'break');
+      statusEl.textContent = status === 'focus' ? 'Concentración' : 'Descanso';
+      currentStatus = status;
+    }
+
+    // Toggle border visibility
+    document.getElementById('btnBorder').addEventListener('click', () => {
+      isBorderVisible = !isBorderVisible;
+      const btn = document.getElementById('btnBorder');
+      btn.textContent = isBorderVisible ? 'Ocultar Borde' : 'Mostrar Borde';
+      // Call Tauri to toggle border
+      if (window.__TAURI__) {
+        window.__TAURI__.window.getCurrentWindow().setDecorations(isBorderVisible);
+      }
+    });
+
+    // Listen for timer updates from main app
+    if (window.__TAURI__) {
+      window.__TAURI__.event.listen('timer-update', (event) => {
+        const { time, status } = event.payload;
+        updateTimer(time);
+        updateStatus(status);
+      });
+    }
+
+    // Initialize
+    updateTimer('00:00');
+    updateStatus('focus');
+  </script>
+</body>
+</html>

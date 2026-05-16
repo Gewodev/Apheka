@@ -1,6 +1,5 @@
 import React, { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
-import clsx from 'clsx';
 
 export interface ModalProps {
   isOpen: boolean;
@@ -12,11 +11,7 @@ export interface ModalProps {
   size?: 'sm' | 'md' | 'lg';
 }
 
-const sizeStyles = {
-  sm: 'max-w-sm',
-  md: 'max-w-md',
-  lg: 'max-w-lg',
-};
+const sizeWidths = { sm: 360, md: 480, lg: 600 };
 
 export const Modal = ({ isOpen, onClose, title, description, children, footer, size = 'md' }: ModalProps) => {
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -37,32 +32,33 @@ export const Modal = ({ isOpen, onClose, title, description, children, footer, s
   return (
     <div
       ref={overlayRef}
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in"
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
       onClick={(e) => e.target === overlayRef.current && onClose()}
     >
       <div
-        className={clsx(
-          'bg-bg-surface border border-border-default rounded-xl shadow-2xl w-full animate-slide-up overflow-hidden',
-          sizeStyles[size]
-        )}
+        style={{
+          width: '100%',
+          maxWidth: sizeWidths[size],
+          background: 'var(--bg-surface)',
+          border: '1px solid var(--border-default)',
+          borderRadius: 'var(--radius-xl)',
+          overflow: 'hidden',
+        }}
       >
         {(title || description) && (
-          <div className="flex items-center justify-between p-5 border-b border-border-subtle">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid var(--border-subtle)' }}>
             <div>
-              {title && <h2 className="text-base font-semibold text-text-primary">{title}</h2>}
-              {description && <p className="text-sm text-text-secondary mt-0.5">{description}</p>}
+              {title && <h2 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>{title}</h2>}
+              {description && <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>{description}</p>}
             </div>
-            <button
-              onClick={onClose}
-              className="p-1.5 rounded-lg hover:bg-bg-hover text-text-tertiary hover:text-text-primary transition-colors"
-            >
+            <button onClick={onClose} className="btn-ghost" style={{ padding: 6, borderRadius: 8, cursor: 'pointer' }}>
               <X size={18} />
             </button>
           </div>
         )}
-        <div className="p-5">{children}</div>
+        <div style={{ padding: 24 }}>{children}</div>
         {footer && (
-          <div className="flex items-center justify-end gap-2 p-4 border-t border-border-subtle bg-bg-elevated/50">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, padding: 16, borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }}>
             {footer}
           </div>
         )}

@@ -16,9 +16,21 @@
         "height": 800,
         "resizable": true,
         "fullscreen": false,
+        "decorations": true,
+        "transparent": false,
+        "center": true
+      },
+      {
+        "label": "floating-timer",
+        "title": "OWA Studio - Timer",
+        "width": 240,
+        "height": 120,
+        "resizable": false,
         "decorations": false,
         "transparent": true,
-        "center": true
+        "alwaysOnTop": true,
+        "visible": false,
+        "skipTaskbar": true
       }
     ],
     "security": {
@@ -29,11 +41,29 @@
     "active": true,
     "targets": "all",
     "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
+      "icons/icon-32.png",
+      "icons/icon-128.png",
+      "icons/icon-256.png",
+      "icons/icon-512.png",
       "icons/icon.ico"
-    ]
+    ],
+    "externalBin": [
+      "bin/yt-dlp",
+      "bin/ffmpeg",
+      "bin/ffprobe"
+    ],
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      },
+      "nsis": {
+        "installMode": "both"
+      }
+    }
+  },
+  "plugins": {
+    "shell": {
+      "open": true
+    }
   }
 }

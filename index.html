@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="es">
+<html lang="es" style="background-color: #0a0a0f; color-scheme: dark;">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/owa_logo.png" />
@@ -8,13 +8,35 @@
     <meta name="description" content="Tu espacio de estudio definitivo. OWA Studio - Productividad académica." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Manrope:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800;900&family=Poppins:wght@400;500;600;700;800&family=Playfair+Display:wght@400;700;900&family=Merriweather:wght@400;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800;900&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet" />
+    <style>
+      /* Critical styles to prevent white flash */
+      html, body {
+        background-color: #0a0a0f;
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+      }
+      #root:empty {
+        background-color: #0a0a0f;
+      }
+    </style>
     <script>
+      // Error logging to catch crashes
+      window.onerror = function(msg, url, line, col, error) {
+        const errDiv = document.createElement('div');
+        errDiv.style = 'position:fixed;top:0;left:0;width:100%;height:100%;background:black;color:red;padding:20px;z-index:9999;font-family:monospace;';
+        errDiv.innerHTML = '<h1>JS Error Detected</h1><p>' + msg + '</p><p>File: ' + url + '</p><p>Line: ' + line + '</p><pre>' + (error ? error.stack : '') + '</pre>';
+        document.body.appendChild(errDiv);
+      };
+
       // Early theme application to prevent flash (FOUC)
       (function() {
         try {
-          const config = JSON.parse(localStorage.getItem('scholar_config') || 'null');
-          const theme = config?.tema || 'claro';
+          const config = JSON.parse(localStorage.getItem('owa_studio_data') || 'null');
+          const theme = config?.settings?.theme || 'claro';
           const isDark = theme === 'oscuro' || (theme === 'sistema' && window.matchMedia('(prefers-color-scheme: dark)').matches);
           document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
           if (isDark) document.documentElement.classList.add('dark');

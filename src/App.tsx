@@ -1,208 +1,184 @@
-import { useState, useCallback, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  LayoutDashboard,
-  Settings,
-  Brain,
-  Music2,
-  ListTodo,
-  FileText,
-  Book,
-  Calendar,
-  Sparkles,
-  ChevronLeft,
-  Activity,
-  Terminal,
-  Layers,
-  Box
+  Home, BookOpen, Clock, ListTodo, Settings,
+  ChevronLeft, ChevronRight, Music,
+  Calendar, Layers, Plus,
+  Book, ChevronDown, ChevronUp
 } from 'lucide-react';
+import { AppProvider, useApp } from './store/AppContext';
+import ErrorBoundary from './components/ErrorBoundary';
 import { Toaster } from 'react-hot-toast';
 
-import { AppProvider, useApp } from './store/AppContext';
 import Inicio from './components/views/Inicio';
 import Estudio from './components/views/Estudio';
 import Tareas from './components/views/Tareas';
 import Notas from './components/views/Notas';
-import Cursos from './components/views/Cursos';
 import Musica from './components/views/Musica';
 import Planificacion from './components/views/Planificacion';
 import Ajustes from './components/views/Ajustes';
+import GlobalPlayer from './components/GlobalPlayer';
 
-function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const { settings } = useApp();
+type ViewId = 'inicio' | 'estudio' | 'tareas' | 'notas' | 'musica' | 'planificacion' | 'ajustes' | 'curso_detalle';
 
-  useEffect(() => {
-    document.documentElement.dataset.theme = settings.theme;
-  }, [settings.theme]);
-
-  return <>{children}</>;
+interface AppContentProps {
+  setGlobalView: (view: ViewId) => void;
 }
 
-export type ViewType = 'inicio' | 'estudio' | 'tareas' | 'notas' | 'cursos' | 'musica' | 'planificacion' | 'ajustes';
-
-const NAV_ITEMS: { id: ViewType; label: string; icon: React.ElementType }[] = [
-  { id: 'inicio', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'tareas', label: 'Operaciones', icon: ListTodo },
-  { id: 'estudio', label: 'Enfoque', icon: Brain },
-  { id: 'planificacion', label: 'Cronograma', icon: Calendar },
-  { id: 'notas', label: 'Archivo', icon: FileText },
-  { id: 'cursos', label: 'Sectores', icon: Book },
-  { id: 'musica', label: 'Ambiente', icon: Music2 },
-];
-
 function AppContent() {
-  const [activeView, setActiveView] = useState<ViewType>('inicio');
-  const [isCollapsed, setIsCollapsed] = useState(false);
-  const { incrementSessionTime } = useApp();
-  const [isTimerActive, setIsTimerActive] = useState(false);
-  const [timerMode, setTimerMode] = useState<'pomodoro' | 'break' | 'chrono'>('pomodoro');
-
-  const handleViewChange = useCallback((view: string) => {
-    const validViews = ['inicio', 'estudio', 'tareas', 'notas', 'cursos', 'musica', 'planificacion', 'ajustes'];
-    if (validViews.includes(view)) {
-      setActiveView(view as ViewType);
-      const contentArea = document.querySelector('.content-area');
-      if (contentArea) contentArea.scrollTop = 0;
-    }
-  }, []);
+  const { settings, courses, navigateTo, setNavigateTo } = useApp();
+  const [activeView, setActiveView] = useState<ViewId>('inicio');
 
   useEffect(() => {
-    let interval: number | undefined;
-    if (isTimerActive) {
-      interval = setInterval(() => {
-        incrementSessionTime();
-      }, 1000) as unknown as number;
+    if (navigateTo) {
+      setActiveView(navigateTo);
+      setNavigateTo(null);
     }
-    return () => { if (interval) clearInterval(interval); };
-  }, [isTimerActive, incrementSessionTime]);
+  }, [navigateTo, setNavigateTo]);
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [showCourses, setShowCourses] = useState(true);
+  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (settings.theme === 'claro') {
+      root.setAttribute('data-theme', 'claro');
+    } else if (settings.theme === 'oscuro') {
+      root.setAttribute('data-theme', 'oscuro');
+    } else {
+      const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      root.setAttribute('data-theme', isDark ? 'oscuro' : 'claro');
+    }
+    root.style.setProperty('--accent', settings.accentColor);
+    root.style.setProperty('--font-primary', settings.fontFamily);
+  }, [settings.theme, settings.accentColor, settings.fontFamily]);
+
+  const initials = settings.userName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+
+  const NAV_ITEMS = [
+    { id: 'inicio', label: 'Inicio', icon: Home },
+    { id: 'estudio', label: 'Estudio', icon: Clock },
+    { id: 'tareas', label: 'Tareas', icon: ListTodo },
+    { id: 'notas', label: 'Notas', icon: BookOpen },
+    { id: 'musica', label: 'Música', icon: Music },
+    { id: 'planificacion', label: 'Planificador', icon: Calendar },
+  ];
+
+  const handleCourseClick = (courseId: string) => {
+    setSelectedCourseId(courseId);
+    setActiveView('curso_detalle');
+  };
 
   return (
     <div className="app-layout">
-      {/* SIDEBAR - ARCHITECTURAL PRECISION */}
-      <aside className={`sidebar ${isCollapsed ? 'collapsed' : ''} border-r border-white/[0.03] bg-surface/80 backdrop-blur-3xl z-50`}>
-        <div className="sidebar-header p-12">
+      <aside className={`sidebar ${isCollapsed ? 'collapsed' : ''}`}>
+        <div style={{ padding: '24px 12px', display: 'flex', alignItems: 'center', justifyContent: isCollapsed ? 'center' : 'space-between' }}>
           {!isCollapsed && (
-            <div className="flex items-center gap-5 group cursor-default">
-              <div className="w-14 h-14 rounded-[24px] bg-accent flex items-center justify-center shadow-[0_20px_40px_rgba(225,29,72,0.3)] transition-transform duration-500 hover:rotate-12">
-                <Terminal size={28} className="text-white" />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Layers size={16} color="#fff" />
               </div>
-              <div className="flex flex-col">
-                <span className="font-black tracking-tighter text-3xl text-primary leading-none">OWA</span>
-                <span className="text-[10px] font-black text-accent uppercase tracking-[0.4em] mt-1.5">Studio</span>
-              </div>
+              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>OWA Studio</span>
             </div>
           )}
-          <button 
-            onClick={() => setIsCollapsed(!isCollapsed)} 
-            className={`w-12 h-12 flex items-center justify-center hover:bg-white/5 rounded-2xl transition-all text-muted hover:text-primary ${isCollapsed ? 'mx-auto' : ''}`}
-          >
-            <ChevronLeft size={24} className={isCollapsed ? "rotate-180 transition-transform" : "transition-transform"} />
+          <button onClick={() => setIsCollapsed(!isCollapsed)} className="btn-ghost" style={{ padding: 4, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
           </button>
         </div>
 
-        <div className="sidebar-nav px-8 py-10 flex flex-col gap-3 flex-1">
-          {!isCollapsed && (
-            <div className="flex items-center gap-3 mb-6 px-4">
-              <Layers size={12} className="text-accent" />
-              <span className="text-[10px] font-black text-tertiary uppercase tracking-[0.4em]">Sistemas</span>
-            </div>
-          )}
-          {NAV_ITEMS.map((item) => (
+        <nav style={{ flex: 1, padding: '0 8px', display: 'flex', flexDirection: 'column', gap: 2, overflowY: 'auto' }}>
+          {NAV_ITEMS.map(item => (
             <button
               key={item.id}
-              onClick={() => handleViewChange(item.id)}
-              className={`nav-btn group relative h-16 rounded-[20px] flex items-center gap-5 px-6 transition-all duration-300 ${
-                activeView === item.id 
-                ? 'active text-accent' 
-                : 'text-tertiary hover:bg-white/[0.03] hover:text-primary'
-              } ${isCollapsed ? 'justify-center px-0' : ''}`}
+              onClick={() => setActiveView(item.id as ViewId)}
+              className={`nav-btn ${activeView === item.id ? 'active' : ''}`}
               title={isCollapsed ? item.label : undefined}
+              style={isCollapsed ? { justifyContent: 'center', padding: '0 8px' } : {}}
             >
-              <item.icon size={22} className={`shrink-0 transition-transform duration-500 ${activeView === item.id ? 'scale-110' : 'group-hover:scale-110'}`} />
-              {!isCollapsed && (
-                <span className={`text-[11px] font-black uppercase tracking-[0.25em] transition-all duration-300 ${activeView === item.id ? 'opacity-100' : 'opacity-40 group-hover:opacity-100'}`}>
-                  {item.label}
-                </span>
-              )}
-              {activeView === item.id && (
-                <div className="absolute right-4 w-1.5 h-1.5 rounded-full bg-accent shadow-[0_0_10px_var(--accent)]" />
-              )}
+              <item.icon size={18} />
+              {!isCollapsed && <span>{item.label}</span>}
             </button>
           ))}
+
+          {!isCollapsed && (
+            <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column' }}>
+              <button
+                onClick={() => setShowCourses(!showCourses)}
+                className="btn-ghost"
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', width: '100%', borderRadius: 6 }}
+              >
+                Mis Cursos
+                {showCourses ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              </button>
+              {showCourses && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 4 }}>
+                  {courses.map(course => (
+                    <button
+                      key={course.id}
+                      onClick={() => handleCourseClick(course.id)}
+                      className="btn-ghost"
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, fontSize: 13, color: 'var(--text-secondary)', width: '100%', cursor: 'pointer' }}
+                    >
+                      <div style={{ width: 6, height: 6, borderRadius: '50%', background: course.color, flexShrink: 0 }} />
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{course.name}</span>
+                    </button>
+                  ))}
+                  <button className="nav-btn" style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4, gap: 8 }}>
+                    <Plus size={14} /> <span>Añadir Curso</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </nav>
 
-        <div className="sidebar-footer p-10">
-          <button
-            onClick={() => handleViewChange('ajustes')}
-            className={`nav-btn group relative h-16 rounded-[20px] flex items-center gap-5 px-6 transition-all ${
-              activeView === 'ajustes' 
-              ? 'active text-accent' 
-              : 'text-tertiary hover:bg-white/[0.03] hover:text-primary'
-            } ${isCollapsed ? 'justify-center px-0' : ''}`}
-            title="Configuración"
-          >
-            <Settings size={22} className={`shrink-0 transition-transform duration-500 ${activeView === 'ajustes' ? 'scale-110' : 'group-hover:scale-110'}`} />
-            {!isCollapsed && (
-              <span className={`text-[11px] font-black uppercase tracking-[0.25em] ${activeView === 'ajustes' ? 'opacity-100' : 'opacity-40 group-hover:opacity-100'}`}>
-                Ajustes
-              </span>
-            )}
+        <div style={{ padding: 12, borderTop: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <button onClick={() => setActiveView('ajustes')} className={`nav-btn ${activeView === 'ajustes' ? 'active' : ''}`}>
+            <Settings size={18} />
+            {!isCollapsed && <span>Ajustes</span>}
           </button>
+
+          {!isCollapsed && (
+            <div style={{ marginTop: 8, padding: 10, borderRadius: 10, background: 'var(--bg-elevated)', display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 600, color: '#fff', flexShrink: 0 }}>{initials}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{settings.userName}</p>
+              </div>
+            </div>
+          )}
         </div>
       </aside>
 
-      {/* MAIN CONTENT AREA - MASTERED SPACING */}
-      <main className="main-area relative">
-        <div className="bg-grid-pattern opacity-[0.03]" />
-        <div className="content-area" key={activeView}>
-          <div className="relative z-10">
-            {activeView === 'inicio' && <Inicio />}
-            {activeView === 'estudio' && <Estudio isActive={isTimerActive} setIsActive={setIsTimerActive} mode={timerMode} setTimerMode={setTimerMode} />}
-            {activeView === 'tareas' && <Tareas />}
-            {activeView === 'notas' && <Notas />}
-            {activeView === 'cursos' && <Cursos onSelect={handleViewChange} />}
-            {activeView === 'musica' && <Musica />}
-            {activeView === 'planificacion' && <Planificacion />}
-            {activeView === 'ajustes' && <Ajustes />}
-          </div>
+      <main className="main-area" style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+        <div key={activeView} className="fade-in-animation" style={{ height: '100%' }}>
+          {activeView === 'inicio' && <Inicio />}
+          {activeView === 'estudio' && <Estudio />}
+          {activeView === 'tareas' && <Tareas />}
+          {activeView === 'notas' && <Notas />}
+          {activeView === 'musica' && <Musica />}
+          {activeView === 'planificacion' && <Planificacion />}
+          {activeView === 'ajustes' && <Ajustes />}
+          {activeView === 'curso_detalle' && (
+            <div className="page-container">
+              <h1 style={{ fontSize: 24, fontWeight: 600, marginBottom: 8 }}>Detalle del Curso</h1>
+              <p style={{ color: 'var(--text-secondary)' }}>Contenido en desarrollo...</p>
+            </div>
+          )}
         </div>
+
+        <GlobalPlayer />
       </main>
+
+      <Toaster position="bottom-right" toastOptions={{ style: { background: 'var(--bg-elevated)', color: 'var(--text-primary)', border: '1px solid var(--border-default)', borderRadius: 12, fontSize: 13 } }} />
     </div>
   );
 }
 
-function App() {
+export default function App() {
   return (
-    <AppProvider>
-      <ThemeProvider>
+    <ErrorBoundary>
+      <AppProvider>
         <AppContent />
-        <Toaster
-          position="bottom-right"
-          toastOptions={{
-            duration: 5000,
-            style: {
-              background: '#08080A',
-              color: '#FFFFFF',
-              border: '1px solid rgba(255,255,255,0.05)',
-              borderRadius: '32px',
-              fontSize: '11px',
-              fontWeight: '900',
-              textTransform: 'uppercase',
-              letterSpacing: '0.3em',
-              padding: '24px 40px',
-              boxShadow: '0 40px 80px rgba(0,0,0,0.8)',
-              backdropFilter: 'blur(30px)',
-            },
-            success: {
-              iconTheme: {
-                primary: '#E11D48',
-                secondary: '#FFFFFF',
-              },
-            },
-          }}
-        />
-      </ThemeProvider>
-    </AppProvider>
+      </AppProvider>
+    </ErrorBoundary>
   );
 }
-
-export default App;
