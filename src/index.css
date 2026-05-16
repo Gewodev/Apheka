@@ -715,12 +715,3 @@ h3,
   background: var(--accent-soft);
   color: var(--text-primary);
 }
-}
-
-/* ══════════════════════════════════════════════════
-   SELECTION
-   ══════════════════════════════════════════════════ */
-::selection {
-  background: var(--accent-soft);
-  color: var(--text-primary);
-}
