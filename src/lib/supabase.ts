@@ -26,9 +26,6 @@ export function getSupabase(): SupabaseClient | null {
 }
 
 function nullFn() {}
-async function asyncNull() {}
-const stubHandler: ProxyHandler<object> = { get: () => chainableStub() };
-
 function chainableStub(): any {
   return new Proxy(async () => {}, {
     get: () => chainableStub(),
