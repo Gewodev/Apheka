@@ -1,13 +1,56 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { isTauri } from './tauri';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
+let supabaseInstance: SupabaseClient | null = null;
+
+export function initSupabase() {
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.warn('Supabase credentials missing — cloud sync disabled');
+    return false;
+  }
+  supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+    },
+  });
+  return true;
+}
+
+export function getSupabase(): SupabaseClient | null {
+  if (!supabaseInstance) initSupabase();
+  return supabaseInstance;
+}
+
+function nullFn() {}
+async function asyncNull() {}
+const stubHandler: ProxyHandler<object> = { get: () => chainableStub() };
+
+function chainableStub(): any {
+  return new Proxy(async () => {}, {
+    get: () => chainableStub(),
+    apply: async () => {},
+  });
+}
+
+const mockAuth = {
+  signInWithOAuth: async () => { console.warn('Supabase not initialized'); return { data: null, error: null }; },
+  signOut: async () => {},
+  getUser: async () => ({ data: { user: null }, error: null }),
+  onAuthStateChange: () => ({ data: { subscription: { unsubscribe: nullFn } } }),
+};
+
+export const supabase = new Proxy({} as SupabaseClient, {
+  get(_, prop) {
+    const s = getSupabase();
+    if (!s) {
+      if (prop === 'auth') return mockAuth;
+      return chainableStub();
+    }
+    return (s as any)[prop];
   },
 });
 
