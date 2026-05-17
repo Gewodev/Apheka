@@ -6,7 +6,9 @@ import {
   Brain, Link, Trash2, Star, ClipboardList,
   PenSquare, Bell, ChartPie, ChevronUp, ChevronDown, Check,
   Activity, ArrowRight, Quote, LineChart, BellOff,
-  Coffee, Edit3, Settings, HelpCircle, StopCircle
+  Coffee, Edit3, Settings, HelpCircle, StopCircle,
+  List, FileText, Calendar, TrendingUp,
+  ChevronRight, AlertTriangle, RefreshCw, Timer as TimerIcon,
 } from 'lucide-react';
 import { useApp } from '../../store/AppContext';
 import { format, subDays } from 'date-fns';
@@ -48,10 +50,11 @@ const maxTowerBlocks = 8;
 
 export default function Estudio() {
   const { 
-    tasks, sessionTime, isTimerActive, toggleTimer, resetTimer,
+    tasks, notes, sessionTime, isTimerActive, toggleTimer, resetTimer,
     activeTaskId, unlinkTaskFromTimer, settings, dailyStudyTime,
     pomodoroSessions, incrementPomodoroSessions, studySessions,
-    addStudySession, isRest, setIsRest, addTask, weeklyStudyTime
+    addStudySession, isRest, setIsRest, addTask, weeklyStudyTime,
+    googleConnected, triggerTasksSync, importGoogleTasks
   } = useApp();
 
   const [sessionType, setSessionType] = useState<'pomodoro' | 'chrono'>('pomodoro');
@@ -62,6 +65,7 @@ export default function Estudio() {
   const [tipIndex, setTipIndex] = useState(0);
   const [conceptIndex, setConceptIndex] = useState(0);
   const [owasClaimed, setOwasClaimed] = useState(false);
+  const [syncingTasks, setSyncingTasks] = useState(false);
   const restStartRef = useRef(0);
   const hasTriggeredRef = useRef(false);
   const tipTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -196,6 +200,16 @@ export default function Estudio() {
     toast.success('Nota convertida en tarea');
   }, [addTask]);
 
+  const handleTaskSync = useCallback(async () => {
+    setSyncingTasks(true);
+    try {
+      await triggerTasksSync();
+      const count = await importGoogleTasks();
+      toast.success(count > 0 ? `${count} tareas importadas de Google Tasks` : 'Tareas sincronizadas');
+    } catch { toast.error('Error al sincronizar tareas'); }
+    setSyncingTasks(false);
+  }, [triggerTasksSync, importGoogleTasks]);
+
   const handleClaimOwas = useCallback(() => {
     setOwasClaimed(true);
     toast.success(`🎉 ¡${owasToday} Owas reclamadas! Torre del conocimiento completa.`);
@@ -210,6 +224,45 @@ export default function Estudio() {
   const currentConcept = repasoConcepts[conceptIndex];
   const canWriteCache = isTimerActive && !isRest;
   const taskStudyTime = activeTask?.studyTime || 0;
+
+  const upTasks = useMemo(() =>
+    tasks.filter(t => t.status !== 'completado')
+      .sort((a, b) => { if (!a.dueDate) return 1; if (!b.dueDate) return -1; return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime(); })
+      .slice(0, 5), [tasks]
+  );
+
+  const rcNotes = useMemo(() =>
+    [...notes].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).slice(0, 5), [notes]
+  );
+
+  const heatmapColors = [
+    'var(--bg-hover)',
+    'color-mix(in srgb, var(--accent) 15%, transparent)',
+    'color-mix(in srgb, var(--accent) 40%, transparent)',
+    'color-mix(in srgb, var(--accent) 70%, transparent)',
+    'color-mix(in srgb, var(--accent) 95%, transparent)',
+  ];
+
+  const heatmap = useMemo(() => {
+    const labels = ['Sin actividad', 'Bajo', 'Medio', 'Alto', 'Máximo'];
+    return Array.from({ length: 30 }, (_, i) => {
+      const d = subDays(new Date(), 29 - i);
+      const secs = weeklyStudyTime[format(d, 'yyyy-MM-dd')] || 0;
+      const lvl = secs === 0 ? 0 : secs < 1800 ? 1 : secs < 3600 ? 2 : secs < 7200 ? 3 : 4;
+      return { lvl, tip: `${format(d, 'd/M')} — ${labels[lvl]}` };
+    });
+  }, [weeklyStudyTime]);
+
+  const totalMin = useMemo(() => Math.round(dailyStudyTime / 60), [dailyStudyTime]);
+  const GOAL_MIN = 240;
+  const goalProgress = useMemo(() => Math.min(100, Math.round((dailyStudyTime / (GOAL_MIN * 60)) * 100)), [dailyStudyTime]);
+  const weekTotal = useMemo(() => weekDayData.reduce((acc, d) => acc + d.minutes, 0), [weekDayData]);
+
+  const timerDisplayVal = useMemo(() => {
+    const total = settings.pomodoroTime || 1500;
+    const left = Math.max(0, total - Math.min(sessionTime, total));
+    return `${String(Math.floor(left / 60)).padStart(2, '0')}:${String(left % 60).padStart(2, '0')}`;
+  }, [sessionTime, settings.pomodoroTime]);
 
   return (
     <div className="h-full flex flex-col relative overflow-hidden bg-background">
@@ -534,6 +587,95 @@ export default function Estudio() {
           </div>
 
         </div>
+      </div>
+
+      {/* ═══ RACHA ═══ */}
+        <div className="rounded-xl p-5 bg-surface border border-borderDark flex flex-col">
+          <div className="flex items-center justify-between mb-4 shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-warning/10 text-warning">
+                <Flame size={16} strokeWidth={1.5} />
+              </div>
+              <span className="text-base font-semibold text-textMain">Racha</span>
+            </div>
+            <span className="text-lg font-semibold font-mono text-warning">{streak} días</span>
+          </div>
+
+          <div className="mb-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-medium text-textDim">Meta diaria</span>
+              <span className="text-xs font-semibold text-textMain">{totalMin} / {GOAL_MIN} min</span>
+            </div>
+            <div className="h-[3px] rounded-full bg-surface2 border border-borderDark/30 overflow-hidden">
+              <div className="h-full rounded-full bg-gradient-to-r from-accent/60 to-accent transition-all duration-500" style={{ width: `${goalProgress}%` }} />
+            </div>
+          </div>
+
+          <div className="mb-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <TrendingUp size={13} className="text-textDim" strokeWidth={1.5} />
+                <span className="text-xs font-medium text-textDim">Semanal</span>
+              </div>
+              <span className="text-[11px] font-semibold text-textDim">{weekTotal} min</span>
+            </div>
+            <div className="flex items-end gap-1 h-16">
+              {weekDayData.map((b, i) => {
+                const maxMin = Math.max(...weekDayData.map(d => d.minutes), 1);
+                const pct = Math.min(100, (b.minutes / maxMin) * 100);
+                return (
+                  <div key={i} className="flex-1 flex flex-col items-center gap-0.5 h-full justify-end group">
+                    <div
+                      className="w-full rounded-t-sm transition-all duration-300 cursor-pointer"
+                      style={{
+                        height: `${Math.max(3, pct)}%`,
+                        background: `linear-gradient(to top, ${pct > 60 ? 'var(--accent)' : pct > 30 ? 'color-mix(in srgb, var(--accent) 70%, transparent)' : 'color-mix(in srgb, var(--accent) 40%, transparent)'}, transparent)`,
+                      }}
+                    />
+                    <span className="text-[9px] font-medium text-textDim/60">{b.label}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="mb-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Calendar size={13} className="text-textDim" strokeWidth={1.5} />
+              <span className="text-xs font-medium text-textDim">Actividad</span>
+              <span className="text-[11px] font-semibold text-textDim ml-auto">{heatmap.filter(d => d.lvl > 0).length}/30</span>
+            </div>
+            <div className="grid grid-cols-10 gap-1">
+              {heatmap.map((d, i) => (
+                <div
+                  key={i}
+                  className="transition-all duration-150 hover:scale-125 hover:z-10 cursor-pointer rounded-[3px]"
+                  style={{ backgroundColor: heatmapColors[d.lvl], width: 12, height: 12 }}
+                  title={d.tip}
+                />
+              ))}
+            </div>
+            <div className="flex items-center justify-end gap-2 mt-2 text-[9px] font-medium text-textDim/50">
+              <span>Menos</span>
+              {[0, 1, 2, 3, 4].map(l => (
+                <div key={l} className="w-2 h-2 rounded-[2px]" style={{ backgroundColor: heatmapColors[l] }} />
+              ))}
+              <span>Más</span>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between p-3 rounded-xl bg-surface2/30 border border-borderDark/20">
+            <div className="flex items-center gap-2.5">
+              <div className={`p-2 rounded-lg ${isTimerActive ? 'bg-accent/10 text-accent' : 'bg-surface2 text-textDim'}`}>
+                <TimerIcon size={14} strokeWidth={1.5} />
+              </div>
+              <div>
+                <span className="text-xs font-medium text-textMain">Timer</span>
+                <p className="text-[11px] text-textDim">{isTimerActive ? 'En sesión' : 'Inactivo'}</p>
+              </div>
+            </div>
+            <span className={`text-base font-semibold font-mono ${isTimerActive ? 'text-accent' : 'text-textDim'}`}>{timerDisplayVal}</span>
+          </div>
       </div>
 
       {/* ── POMODORO COMPLETION DIALOG ── */}
