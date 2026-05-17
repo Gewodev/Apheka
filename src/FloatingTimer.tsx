@@ -29,8 +29,8 @@ export default function FloatingTimer() {
   };
 
   return (
-    <div className="w-full h-full bg-black text-white flex flex-col items-center justify-center p-4 overflow-hidden rounded-3xl border border-white/10">
-      <div className="text-4xl font-black tabular-nums mb-4 tracking-tighter">
+    <div className="w-full h-full bg-[#0a0a0c] text-white flex flex-col items-center justify-center p-4 overflow-hidden rounded-xl border border-white/10">
+      <div className="text-4xl font-semibold tabular-nums mb-4 tracking-tighter">
         {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}
       </div>
       <div className="flex gap-4">

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { emit } from '@tauri-apps/api/event';
+import toast from 'react-hot-toast';
 
 // ════════════════════════════════════════════════════
 //  CORE TYPES
@@ -70,6 +71,14 @@ export interface Course {
   coverImage?: string;  // base64 or blob url
   coverUrl?: string;
   sortOrder: number;
+  anchoredImages?: { id: string; name: string; url: string; date: string; tag: string }[];
+  resources?: { id: string; title: string; url: string; type: string; date: string }[];
+  flashcards?: { id: string; question: string; answer: string; difficulty: 'facil' | 'bueno' | 'dificil'; lastReviewed: string; nextReview: string }[];
+  description?: string;
+  level?: string;
+  credits?: string;
+  teacher?: string;
+  code?: string;
 }
 
 export interface ScheduleEvent {
@@ -180,9 +189,13 @@ interface AppState {
   musicProgress: number;
   // Downloads
   downloadQueue: DownloadItem[];
+  // Integrations
+  googleConnected: boolean;
+  calendarSyncEnabled: boolean;
+  lastCalendarSync: string | null;
 }
 
-type ViewId = 'inicio' | 'estudio' | 'tareas' | 'notas' | 'musica' | 'planificacion' | 'ajustes';
+type ViewId = 'inicio' | 'estudio' | 'tareas' | 'notas' | 'musica' | 'planificacion' | 'investigacion' | 'ajustes' | 'curso_detalle';
 
 interface AppContextType extends AppState {
   // Tasks
@@ -204,7 +217,7 @@ interface AppContextType extends AppState {
   addNoteFolder: (folder: Omit<NoteFolder, 'id'>) => void;
   deleteNoteFolder: (id: string) => void;
   // Courses
-  addCourse: (course: Omit<Course, 'id' | 'sortOrder'>) => void;
+  addCourse: (course: Omit<Course, 'id' | 'sortOrder'>) => string;
   updateCourse: (id: string, updates: Partial<Course>) => void;
   deleteCourse: (id: string) => void;
   reorderCourses: (courseIds: string[]) => void;
@@ -248,6 +261,25 @@ interface AppContextType extends AppState {
   setNavigateTo: (view: ViewId | null) => void;
   // Settings
   updateSettings: (updates: Partial<Settings>) => void;
+  // Integrations
+  setGoogleConnected: (v: boolean) => void;
+  setCalendarSyncEnabled: (v: boolean) => void;
+  setLastCalendarSync: (v: string | null) => void;
+  triggerCalendarSync: () => Promise<void>;
+  importGoogleEvents: () => Promise<number>;
+  triggerTasksSync: () => Promise<void>;
+  importGoogleTasks: () => Promise<number>;
+  searchYouTubeMusic: (query: string) => Promise<{ videoId: string; title: string; channel: string; thumbnail: string }[]>;
+  searchVideos: (query: string) => Promise<{ videoId: string; title: string; channel: string; thumbnail: string }[]>;
+  importClassroomCourses: () => Promise<void>;
+  exportNotesToGoogleDoc: () => Promise<string | null>;
+  exportStatsToGoogleSheets: () => Promise<string | null>;
+  loadGoogleProfile: () => Promise<{ displayName: string; givenName: string; photoUrl: string; email: string } | null>;
+  triggerDriveBackup: () => Promise<string | null>;
+  searchStudyResources: (topic: string) => Promise<{ title: string; url: string; description: string }[]>;
+  createStudyQuiz: (courseName: string, topics: string[]) => Promise<string | null>;
+  initFirebaseNotifications: () => Promise<string | null>;
+  syncAllToCloud: () => Promise<void>;
 }
 
 // ════════════════════════════════════════════════════
@@ -313,6 +345,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [musicProgress, setMusicProgress] = useState(0);
   const [downloadQueue, setDownloadQueue] = useState<DownloadItem[]>([]);
   const [navigateTo, setNavigateTo] = useState<ViewId | null>(null);
+  const [googleConnected, setGoogleConnected] = useState(false);
+  const [calendarSyncEnabled, setCalendarSyncEnabled] = useState(false);
+  const [lastCalendarSync, setLastCalendarSync] = useState<string | null>(null);
 
   // Load from localStorage
   useEffect(() => {
@@ -482,12 +517,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // ── COURSES ──
   const addCourse = useCallback((course: Omit<Course, 'id' | 'sortOrder'>) => {
+    const newId = Date.now().toString();
     setCourses(prev => {
-      const newCourse: Course = { ...course, id: Date.now().toString(), sortOrder: prev.length };
+      const newCourse: Course = { ...course, id: newId, sortOrder: prev.length };
       // Auto-create folder
       setNoteFolders(pf => [...pf, { id: `f-${newCourse.id}`, name: course.name, color: course.color, courseId: newCourse.id, isManual: false }]);
       return [...prev, newCourse];
     });
+    return newId;
   }, []);
 
   const updateCourse = useCallback((id: string, updates: Partial<Course>) => {
@@ -646,11 +683,166 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSettings(prev => ({ ...prev, ...updates }));
   }, []);
 
+  // ── INTEGRATIONS ──
+  const triggerCalendarSync = useCallback(async () => {
+    try {
+      const { syncAppEventsToGoogle } = await import('../lib/google/calendar');
+      const { synced } = await syncAppEventsToGoogle(
+        events.map(e => ({ id: e.id, title: e.title, description: e.description, date: e.date, startTime: e.startTime, endTime: e.endTime, color: e.color }))
+      );
+      setLastCalendarSync(new Date().toISOString());
+    } catch (e) {
+      console.error('Calendar sync failed:', e);
+    }
+  }, [events, setEvents]);
+
+  const triggerDriveBackup = useCallback(async (): Promise<string | null> => {
+    try {
+      const { backupAppData } = await import('../lib/google/drive');
+      const url = await backupAppData({
+        tasks, notes, noteFolders, courses, events, studySessions, settings,
+      });
+      return url;
+    } catch (e) {
+      console.error('Drive backup failed:', e);
+      return null;
+    }
+  }, [tasks, notes, noteFolders, courses, events, studySessions, settings]);
+
+  const importGoogleEventsCb = useCallback(async (): Promise<number> => {
+    try {
+      const { importGoogleEvents: importEvents } = await import('../lib/google/calendar');
+      const { imported } = await importEvents();
+      for (const ev of imported) {
+        addEvent({ title: ev.title, date: ev.date, startTime: ev.startTime, endTime: ev.endTime, color: ev.color, description: '', allDay: false, tags: [], files: [], recurring: 'none' });
+      }
+      return imported.length;
+    } catch (e) { console.error('Import events failed:', e); return 0; }
+  }, [addEvent]);
+
+  const triggerTasksSync = useCallback(async () => {
+    try {
+      const { syncAppTasksToGoogle } = await import('../lib/google/tasks');
+      const { synced } = await syncAppTasksToGoogle(
+        tasks.map(t => ({ id: t.id, title: t.title, description: t.notes || '', status: t.status === 'completado' ? 'completed' as const : t.status === 'progreso' ? 'in_progress' as const : 'pending' as const, dueDate: t.dueDate }))
+      );
+      if (synced > 0) toast.success(`${synced} tareas sincronizadas con Google Tasks`);
+    } catch (e) { console.error('Tasks sync failed:', e); }
+  }, [tasks]);
+
+  const importGoogleTasksCb = useCallback(async (): Promise<number> => {
+    try {
+      const { importGoogleTasks: importTasks } = await import('../lib/google/tasks');
+      const { imported } = await importTasks();
+      for (const t of imported) {
+        addTask({
+          title: t.title, course: '', courseColor: '', priority: 'medium',
+          urgent: false, important: false,
+          dueDate: t.dueDate,
+        });
+      }
+      return imported.length;
+    } catch (e) { console.error('Import tasks failed:', e); return 0; }
+  }, [addTask]);
+
+  const searchYouTubeMusicCb = useCallback(async (query: string) => {
+    try {
+      const { searchStudyMusic } = await import('../lib/google/youtube');
+      return await searchStudyMusic(query);
+    } catch (e) { console.error('YouTube search failed:', e); return []; }
+  }, []);
+
+  const searchVideosCb = useCallback(async (query: string) => {
+    try {
+      const { searchVideos } = await import('../lib/google/youtube');
+      return await searchVideos(query);
+    } catch (e) { console.error('Video search failed:', e); return []; }
+  }, []);
+
+  const importClassroomCoursesCb = useCallback(async () => {
+    try {
+      const { importClassroomCourses } = await import('../lib/google/classroom');
+      const { courses: imported } = await importClassroomCourses();
+      for (const c of imported) {
+        const exists = courses.find(x => x.id === c.id || x.name === c.name);
+        if (!exists) addCourse({ name: c.name, color: c.color || '#6366f1', progress: 0, totalTasks: 0, completedTasks: 0, hoursStudied: 0 });
+      }
+    } catch (e) { console.error('Classroom import failed:', e); }
+  }, [courses, addCourse]);
+
+  const exportNotesToGoogleDocCb = useCallback(async (): Promise<string | null> => {
+    try {
+      const { exportNotesToDoc } = await import('../lib/google/docs');
+      const url = await exportNotesToDoc(
+        notes.map(n => ({ title: n.title, content: n.content, folder: noteFolders.find(f => f.id === n.folderId)?.name }))
+      );
+      toast.success('Notas exportadas a Google Docs');
+      return url;
+    } catch (e) { console.error('Export notes failed:', e); return null; }
+  }, [notes, noteFolders]);
+
+  const exportStatsToGoogleSheetsCb = useCallback(async (): Promise<string | null> => {
+    try {
+      const { exportStatsToSheet } = await import('../lib/google/docs');
+      const headers = ['Día', 'Minutos Estudio', 'Tareas Completadas', 'Pomodoros'];
+      const today = new Date().toISOString().split('T')[0];
+      const data = [[today, Math.floor(sessionTime / 60), tasks.filter(t => t.status === 'completado').length, pomodoroSessions]];
+      const url = await exportStatsToSheet(headers, data);
+      toast.success('Estadísticas exportadas a Google Sheets');
+      return url;
+    } catch (e) { console.error('Export stats failed:', e); return null; }
+  }, [sessionTime, tasks, pomodoroSessions]);
+
+  const loadGoogleProfileCb = useCallback(async () => {
+    try {
+      const { getProfile } = await import('../lib/google/people');
+      return await getProfile();
+    } catch (e) { console.error('Load profile failed:', e); return null; }
+  }, []);
+
+  const searchStudyResourcesCb = useCallback(async (topic: string) => {
+    try {
+      const { searchStudyResources } = await import('../lib/google/customsearch');
+      return await searchStudyResources(topic);
+    } catch (e) { console.error('Search failed:', e); return []; }
+  }, []);
+
+  const createStudyQuizCb = useCallback(async (courseName: string, topics: string[]) => {
+    try {
+      const { createStudyQuiz } = await import('../lib/google/forms');
+      return await createStudyQuiz(courseName, topics);
+    } catch (e) { console.error('Create quiz failed:', e); return null; }
+  }, []);
+
+  const initFirebaseNotificationsCb = useCallback(async (): Promise<string | null> => {
+    try {
+      const { initFirebase, requestNotificationPermission } = await import('../lib/firebase');
+      const ok = initFirebase();
+      if (!ok) return null;
+      return await requestNotificationPermission();
+    } catch (e) { console.error('Firebase init failed:', e); return null; }
+  }, []);
+
+  const syncAllToCloudCb = useCallback(async () => {
+    try {
+      const { syncAllToSupabase } = await import('../lib/supabase');
+      const user = await (await import('../lib/supabase')).getCurrentUser();
+      if (!user) { console.log('No user, skipping sync'); return; }
+      await syncAllToSupabase({
+        tasks: tasks.map(t => ({ ...t })),
+        notes: notes.map(n => ({ ...n })),
+        events: events.map(e => ({ ...e })),
+        studySessions: studySessions.map(s => ({ ...s })),
+      });
+    } catch (e) { console.error('Cloud sync failed:', e); }
+  }, [tasks, notes, events, studySessions]);
+
   const value: AppContextType = {
     tasks, notes, noteFolders, courses, events, playlists, tracks, studySessions,
     settings, sessionTime, weeklyStudyTime, dailyStudyTime, pomodoroSessions,
     activeTaskId, timerLocked, isTimerActive,
     currentTrackId, isPlayingMusic, musicVolume, musicProgress, downloadQueue,
+    googleConnected, calendarSyncEnabled, lastCalendarSync,
     addTask, updateTask, deleteTask, toggleTaskStatus, clearAllTasks,
     addSubTask, toggleSubTask, deleteSubTask, addTaskFile, removeTaskFile, incrementTaskStudyTime,
     addNote, updateNote, deleteNote, addNoteFolder, deleteNoteFolder,
@@ -667,6 +859,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     toggleTimer, resetTimer, isRest, setIsRest,
     navigateTo, setNavigateTo,
     updateSettings: updateSettingsCb,
+    setGoogleConnected, setCalendarSyncEnabled, setLastCalendarSync,
+    triggerCalendarSync, importGoogleEvents: importGoogleEventsCb,
+    triggerTasksSync, importGoogleTasks: importGoogleTasksCb,
+    searchYouTubeMusic: searchYouTubeMusicCb, searchVideos: searchVideosCb, importClassroomCourses: importClassroomCoursesCb,
+    exportNotesToGoogleDoc: exportNotesToGoogleDocCb, exportStatsToGoogleSheets: exportStatsToGoogleSheetsCb,
+    loadGoogleProfile: loadGoogleProfileCb,
+    searchStudyResources: searchStudyResourcesCb,
+    createStudyQuiz: createStudyQuizCb,
+    initFirebaseNotifications: initFirebaseNotificationsCb,
+    syncAllToCloud: syncAllToCloudCb,
+    triggerDriveBackup,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

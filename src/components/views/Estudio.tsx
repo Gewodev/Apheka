@@ -90,6 +90,18 @@ export default function Estudio() {
   const pomodoroProgress = Math.min(pomodoroSessions, pomodoroGoal);
   const progressPercent = Math.round((pomodoroProgress / pomodoroGoal) * 100);
 
+  const weekDayData = useMemo(() => {
+    const today = new Date();
+    const days: { label: string; minutes: number }[] = [];
+    const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+    for (let i = 6; i >= 0; i--) {
+      const d = subDays(today, i);
+      const key = format(d, 'yyyy-MM-dd');
+      days.push({ label: dayNames[d.getDay()], minutes: weeklyStudyTime[key] || 0 });
+    }
+    return days;
+  }, [weeklyStudyTime]);
+
   const towerFilled = Math.min(pomodoroSessions, maxTowerBlocks);
   const isTowerComplete = towerFilled >= maxTowerBlocks;
   const owasToday = pomodoroSessions;
@@ -205,7 +217,7 @@ export default function Estudio() {
       <header className="h-20 flex items-center justify-between px-8 border-b border-borderDark/50 flex-shrink-0">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold tracking-wide text-textMain">Estudio</h1>
+            <h1 className="text-2xl font-semibold tracking-wide text-textMain">Estudio</h1>
             <button className="text-textDim hover:text-textMain transition-colors">
               <Edit3 size={18} />
             </button>
@@ -223,7 +235,7 @@ export default function Estudio() {
           </button>
           <div className="text-right">
             <div className="flex items-baseline gap-1">
-              <span className="text-3xl font-bold glow-red digital-font tracking-wider">
+              <span className="text-3xl font-semibold glow-red digital-font tracking-wider">
                 {format(new Date(), 'HH:mm')}
               </span>
               <span className="text-sm text-accent digital-font">
@@ -242,7 +254,7 @@ export default function Estudio() {
         <div className="flex-1 flex flex-col gap-6 min-w-0">
           
           {/* Timer Card */}
-          <div className="bg-surface2 rounded-2xl border border-borderDark p-8 flex flex-col items-center relative overflow-hidden flex-1 min-h-[400px]">
+          <div className="bg-surface2 rounded-xl border border-borderDark p-5 flex flex-col items-center relative overflow-hidden flex-1 min-h-[400px]">
             {/* Timer Modes */}
             <div className="flex space-x-2 bg-background p-1.5 rounded-xl border border-borderDark mb-8 w-full max-w-2xl justify-between">
               <button 
@@ -271,7 +283,7 @@ export default function Estudio() {
                 {isRest ? 'Descanso' : (sessionType === 'pomodoro' ? 'Enfoque' : 'Cronómetro')}
               </p>
               
-              <div className={`text-[8rem] md:text-[10rem] lg:text-[12rem] leading-none font-bold digital-font tracking-tight ${isRest ? 'glow-green' : 'glow-red'}`}>
+              <div className={`text-[8rem] md:text-[10rem] lg:text-[12rem] leading-none font-semibold digital-font tracking-tight ${isRest ? 'glow-green' : 'glow-red'}`}>
                 {isRest ? formatTime(restTimeLeft) : formatTime(displayTime)}
               </div>
 
@@ -338,15 +350,15 @@ export default function Estudio() {
             <div className="w-full flex justify-between px-10 mt-12 pt-6 border-t border-borderDark/50">
               <div className="text-center">
                 <p className="text-[10px] text-textDim uppercase tracking-wider mb-1 font-semibold">Ciclo</p>
-                <p className="text-xl font-bold text-textMain">{pomodoroProgress} <span className="text-textDim text-lg">/ {pomodoroGoal}</span></p>
+                <p className="text-xl font-semibold text-textMain">{pomodoroProgress} <span className="text-textDim text-lg">/ {pomodoroGoal}</span></p>
               </div>
               <div className="text-center">
                 <p className="text-[10px] text-textDim uppercase tracking-wider mb-1 font-semibold">Sesiones Hoy</p>
-                <p className="text-xl font-bold text-textMain">{pomodoroSessions}</p>
+                <p className="text-xl font-semibold text-textMain">{pomodoroSessions}</p>
               </div>
               <div className="text-center">
                 <p className="text-[10px] text-textDim uppercase tracking-wider mb-1 font-semibold">Tiempo Enfocado</p>
-                <p className="text-xl font-bold text-textMain">{Math.floor(dailyStudyTime / 60)}h {dailyStudyTime % 60}m</p>
+                <p className="text-xl font-semibold text-textMain">{Math.floor(dailyStudyTime / 60)}h {dailyStudyTime % 60}m</p>
               </div>
             </div>
           </div>
@@ -354,7 +366,7 @@ export default function Estudio() {
           {/* Bottom Left Widgets */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Distribucion de Tiempo */}
-            <div className="bg-surface2 rounded-2xl border border-borderDark p-6">
+            <div className="bg-surface2 rounded-xl border border-borderDark p-5">
               <div className="flex items-center gap-2 mb-6 text-sm text-textDim font-semibold uppercase tracking-wider">
                 <ChartPie size={16} /> Distribución de tiempo
               </div>
@@ -392,24 +404,25 @@ export default function Estudio() {
             </div>
 
             {/* Racha de Enfoque */}
-            <div className="bg-surface2 rounded-2xl border border-borderDark p-6 flex flex-col justify-between">
+            <div className="bg-surface2 rounded-xl border border-borderDark p-5 flex flex-col justify-between">
               <div>
                 <div className="flex items-center gap-2 mb-4 text-sm text-textDim font-semibold uppercase tracking-wider">
                   <Flame size={16} /> Racha de enfoque
                 </div>
                 <div className="flex items-end gap-2">
-                  <span className="text-3xl font-bold glow-red text-accent">{streak}</span>
+                  <span className="text-3xl font-semibold glow-red text-accent">{streak}</span>
                   <span className="text-lg text-accent mb-0.5">días</span>
                 </div>
               </div>
               <div className="flex items-end justify-between h-20 mt-4 gap-1">
-                {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((day, idx) => {
-                  const h = Math.random() * 80 + 10;
-                  const isActive = idx === new Date().getDay() - 1;
+                {weekDayData.map((day, idx) => {
+                  const maxMin = Math.max(...weekDayData.map(d => d.minutes), 1);
+                  const h = Math.max(8, (day.minutes / maxMin) * 80);
+                  const isActive = idx === 6;
                   return (
                     <div key={idx} className="flex flex-col items-center gap-2 w-full">
                       <div className={`w-full rounded-sm transition-all ${isActive ? 'bg-accent glow-red-box' : 'bg-accent opacity-50'}`} style={{ height: `${h}%` }}></div>
-                      <span className={`text-[10px] ${isActive ? 'text-white font-bold' : 'text-textDim'}`}>{day}</span>
+                      <span className={`text-[10px] ${isActive ? 'text-white font-semibold' : 'text-textDim'}`}>{day.label}</span>
                     </div>
                   )
                 })}
@@ -423,7 +436,7 @@ export default function Estudio() {
         <div className="w-full xl:w-96 flex flex-col gap-6 flex-shrink-0">
           
           {/* Metrics Cards */}
-          <div className="bg-surface2 rounded-2xl border border-borderDark p-6">
+          <div className="bg-surface2 rounded-xl border border-borderDark p-5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm text-textDim font-semibold uppercase tracking-wider flex items-center gap-2">
                 <LineChart size={16} /> Métricas de hoy
@@ -437,7 +450,7 @@ export default function Estudio() {
                   </div>
                   <p className="text-xs text-textDim">Tiempo enfocado</p>
                 </div>
-                <p className="text-xl font-bold text-textMain mb-1">{Math.floor(dailyStudyTime / 60)}h {dailyStudyTime % 60}m</p>
+                <p className="text-xl font-semibold text-textMain mb-1">{Math.floor(dailyStudyTime / 60)}h {dailyStudyTime % 60}m</p>
               </div>
               <div className="bg-background border border-borderDark rounded-xl p-4">
                 <div className="flex items-center gap-3 mb-2">
@@ -446,7 +459,7 @@ export default function Estudio() {
                   </div>
                   <p className="text-xs text-textDim">Sesiones</p>
                 </div>
-                <p className="text-xl font-bold text-textMain mb-1">{pomodoroSessions}</p>
+                <p className="text-xl font-semibold text-textMain mb-1">{pomodoroSessions}</p>
               </div>
               <div className="bg-background border border-borderDark rounded-xl p-4">
                 <div className="flex items-center gap-3 mb-2">
@@ -455,7 +468,7 @@ export default function Estudio() {
                   </div>
                   <p className="text-xs text-textDim">Tareas hechas</p>
                 </div>
-                <p className="text-xl font-bold text-textMain mb-1">{tasksCompletedToday}</p>
+                <p className="text-xl font-semibold text-textMain mb-1">{tasksCompletedToday}</p>
               </div>
               <div className="bg-background border border-borderDark rounded-xl p-4">
                 <div className="flex items-center gap-3 mb-2">
@@ -464,7 +477,7 @@ export default function Estudio() {
                   </div>
                   <p className="text-xs text-textDim">Owas</p>
                 </div>
-                <p className="text-xl font-bold text-warning mb-1">{owasToday}</p>
+                <p className="text-xl font-semibold text-warning mb-1">{owasToday}</p>
               </div>
             </div>
             
@@ -478,7 +491,7 @@ export default function Estudio() {
           </div>
 
           {/* Session History */}
-          <div className="bg-surface2 rounded-2xl border border-borderDark p-6 flex-1 flex flex-col min-h-[300px]">
+          <div className="bg-surface2 rounded-xl border border-borderDark p-5 flex-1 flex flex-col min-h-[300px]">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-sm text-textDim font-semibold uppercase tracking-wider flex items-center gap-2">
                 <RotateCcw size={16} /> Historial de sesiones
@@ -526,17 +539,17 @@ export default function Estudio() {
       {/* ── POMODORO COMPLETION DIALOG ── */}
       {showCompletion && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowCompletion(false)}>
-          <div className="bg-surface2 rounded-2xl border border-borderDark w-full max-w-md max-h-[85vh] overflow-y-auto p-8 shadow-2xl" onClick={e => e.stopPropagation()}>
+          <div className="bg-surface2 rounded-xl border border-borderDark w-full max-w-md max-h-[85vh] overflow-y-auto p-5 shadow-sm" onClick={e => e.stopPropagation()}>
             <div className="text-center mb-6">
               <div className="w-16 h-16 rounded-full bg-accent/15 flex items-center justify-center mx-auto mb-4">
                 <Sparkles size={32} className="text-accent" />
               </div>
-              <h2 className="text-2xl font-bold text-textMain">¡Enfoque Completado!</h2>
+              <h2 className="text-2xl font-semibold text-textMain">¡Enfoque Completado!</h2>
               <p className="text-sm text-textDim mt-2">Descansa {Math.floor(settings.shortBreakTime / 60)} min.</p>
             </div>
             <div className="flex justify-center gap-2 mb-6">
               {Array.from({ length: pomodoroGoal }).map((_, i) => (
-                <div key={i} className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold ${i < pomodoroProgress ? 'bg-accent text-white shadow-[0_0_10px_var(--accent)]' : 'bg-surface border border-borderDark text-transparent'}`}>
+                <div key={i} className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-semibold ${i < pomodoroProgress ? 'bg-accent text-white shadow-[0_0_10px_var(--accent)]' : 'bg-surface border border-borderDark text-transparent'}`}>
                   {i < pomodoroProgress ? '✓' : ''}
                 </div>
               ))}
@@ -545,7 +558,7 @@ export default function Estudio() {
               {pomodoroProgress}/{pomodoroGoal} pomodoros · {progressPercent}% de la meta
             </div>
             
-            <button onClick={handleCloseCompletion} className="w-full bg-surface border border-borderDark text-textMain py-3 rounded-xl font-medium hover:bg-surface2 transition-colors">
+            <button onClick={handleCloseCompletion} className="w-full bg-surface border border-borderDark text-textMain py-3 rounded-lg font-medium hover:bg-surface2 transition-colors">
               Cerrar
             </button>
           </div>

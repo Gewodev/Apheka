@@ -10,12 +10,13 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../store/AppContext';
 import toast from 'react-hot-toast';
-import { open } from '@tauri-apps/plugin-dialog';
+import { open, save } from '@tauri-apps/plugin-dialog';
 import {
   fetchMetadata, searchMusic, startDownload, cancelDownload,
   streamAudioUrl, getDownloadPath, setDownloadPath,
   onDownloadProgress, onDownloadComplete, onDownloadFile,
   detectUrlType, generateDownloadId, formatDuration, validateUrl,
+  exportToZip,
   type YouTubePlaylist, type YouTubeMetadata, type SearchResult,
   type DownloadProgress, type DownloadComplete,
 } from '../../lib/musicApi';
@@ -268,7 +269,7 @@ export default function Musica() {
         {/* Library Block */}
         <div style={{ background: 'var(--bg-elevated)', borderRadius: 8, flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <div style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)' }}>Colección</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>Colección</span>
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => setActiveTab('descargas')} className="btn-ghost" style={{ padding: 4, position: 'relative' }} title="Descargas">
                 <Download size={16} />
@@ -707,7 +708,7 @@ export default function Musica() {
                     <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8, color: 'rgba(255,255,255,0.6)' }}>
                       {isPlaylistView ? 'Playlist' : isMeGusta ? 'Playlist' : 'Colección'}
                     </div>
-                    <h1 style={{ fontSize: 64, fontWeight: 800, color: '#fff', marginBottom: 8, lineHeight: 1, letterSpacing: '-0.02em' }}>{viewTitle}</h1>
+                    <h1 style={{ fontSize: 28, fontWeight: 600, color: '#fff', marginBottom: 8, lineHeight: 1, letterSpacing: '-0.02em' }}>{viewTitle}</h1>
                     <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 500, marginTop: 16 }}>
                       <span style={{ color: '#fff', fontWeight: 600 }}>OWA Studio</span>
                       <span>•</span>
@@ -734,7 +735,7 @@ export default function Musica() {
                       if (viewTracks.length > 0) playTrack(viewTracks[0].id);
                     }}
                     style={{
-                      width: 56, height: 56, borderRadius: '50%', background: '#1DB954',
+                      width: 56, height: 56, borderRadius: '50%', background: 'var(--accent)',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       border: 'none', cursor: 'pointer', boxShadow: '0 8px 16px rgba(0,0,0,0.3)'
                     }}
@@ -773,6 +774,27 @@ export default function Musica() {
                     title="Descargar todo"
                   >
                     <Download size={24} />
+                  </button>
+                  <button
+                    onClick={async () => {
+                      const result = await save({
+                        filters: [{ name: 'ZIP', extensions: ['zip'] }],
+                        defaultPath: 'OWA_Music_Export.zip',
+                      });
+                      if (!result) return;
+                      const toastId = toast.loading('Creando ZIP...');
+                      try {
+                        const path = await exportToZip(result);
+                        toast.success(`ZIP creado: ${path}`, { id: toastId });
+                      } catch (e: any) {
+                        toast.error(String(e), { id: toastId });
+                      }
+                    }}
+                    className="btn-ghost"
+                    style={{ padding: 8, color: 'rgba(255,255,255,0.6)' }}
+                    title="Exportar como ZIP"
+                  >
+                    <FolderOpen size={24} />
                   </button>
                 </div>
 
@@ -829,11 +851,11 @@ export default function Musica() {
                           }}
                         >
                           <span style={{
-                            color: track.id === currentTrackId ? '#1DB954' : 'var(--text-tertiary)',
+                            color: track.id === currentTrackId ? 'var(--accent)' : 'var(--text-tertiary)',
                             fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center',
                           }}>
                             {track.id === currentTrackId && isPlayingMusic ? (
-                              <Activity size={14} style={{ color: '#1DB954' }} />
+                              <Activity size={14} style={{ color: 'var(--accent)' }} />
                             ) : (
                               i + 1
                             )}
@@ -845,7 +867,7 @@ export default function Musica() {
                             <div style={{ minWidth: 0 }}>
                               <div style={{
                                 fontSize: 14, fontWeight: 500,
-                                color: track.id === currentTrackId ? '#1DB954' : '#fff',
+                                color: track.id === currentTrackId ? 'var(--accent)' : '#fff',
                                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                                 marginBottom: 2
                               }}>
@@ -866,10 +888,10 @@ export default function Musica() {
                             <Heart
                               size={16}
                               style={{
-                                color: track.isFavorite ? '#1DB954' : 'var(--text-tertiary)',
+                                color: track.isFavorite ? 'var(--accent)' : 'var(--text-tertiary)',
                                 cursor: 'pointer',
                                 transition: 'all 150ms',
-                                fill: track.isFavorite ? '#1DB954' : 'transparent'
+                                fill: track.isFavorite ? 'var(--accent)' : 'transparent'
                               }}
                               onClick={(e) => {
                                 e.stopPropagation();

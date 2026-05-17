@@ -202,6 +202,10 @@ export async function setDownloadPath(path: string): Promise<void> {
   return invoke('set_download_path', { path });
 }
 
+export async function exportToZip(savePath: string): Promise<string> {
+  return invoke<string>('export_to_zip', { savePath });
+}
+
 // ── Event listeners ──
 
 export function onDownloadProgress(callback: (data: DownloadProgress) => void) {

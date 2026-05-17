@@ -116,7 +116,7 @@ export default function Planificacion() {
         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexShrink: 0, paddingLeft: 4 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <button onClick={handlePrev} className="btn-ghost hover-lift" style={{ padding: 8, borderRadius: 8, cursor: 'pointer', display: 'flex', background: 'var(--bg-elevated)', border: '1px solid rgba(255,255,255,0.03)' }}><ChevronLeft size={16} /></button>
-            <h2 style={{ fontSize: 22, fontWeight: 700, minWidth: 200, textAlign: 'center', letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
+            <h2 style={{ fontSize: 22, fontWeight: 600, minWidth: 200, textAlign: 'center', letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
               {viewMode === 'month' && format(currentDate, 'MMMM yyyy', { locale: es as any }).charAt(0).toUpperCase() + format(currentDate, 'MMMM yyyy', { locale: es as any }).slice(1)}
               {viewMode === 'week' && `Semana del ${format(weekStart, "d MMM", { locale: es as any })}`}
               {viewMode === 'day' && format(currentDate, "d 'de' MMMM", { locale: es as any })}
@@ -172,7 +172,7 @@ export default function Planificacion() {
                             opacity: isCurrentMonth ? 1 : 0.2,
                             position: 'relative',
                           }}>
-                            <div style={{ width: 22, height: 22, borderRadius: 5, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: isTodayDay ? 700 : 500, marginBottom: 2, color: isTodayDay ? '#fff' : 'var(--text-primary)', background: isTodayDay ? 'var(--accent)' : isSel ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'transparent' }}>
+                            <div style={{ width: 22, height: 22, borderRadius: 5, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: isTodayDay ? 600 : 500, marginBottom: 2, color: isTodayDay ? '#fff' : 'var(--text-primary)', background: isTodayDay ? 'var(--accent)' : isSel ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'transparent' }}>
                               {format(day, 'd')}
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -209,7 +209,7 @@ export default function Planificacion() {
                     borderRadius: 0, borderLeft: i > 0 ? '1px solid var(--border-subtle)' : 'none',
                   }}>
                     <div style={{ fontSize: 8, fontWeight: 500, color: 'var(--text-tertiary)' }}>{format(d, 'EEEEE', { locale: es as any })}</div>
-                    <div style={{ width: 22, height: 22, borderRadius: 5, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: isToday(d) ? 700 : 500, color: isToday(d) ? '#fff' : 'var(--text-primary)', background: isToday(d) ? 'var(--accent)' : 'transparent', marginTop: 1 }}>
+                    <div style={{ width: 22, height: 22, borderRadius: 5, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: isToday(d) ? 600 : 500, color: isToday(d) ? '#fff' : 'var(--text-primary)', background: isToday(d) ? 'var(--accent)' : 'transparent', marginTop: 1 }}>
                       {format(d, 'd')}
                     </div>
                   </div>
@@ -294,7 +294,7 @@ export default function Planificacion() {
 
         <div className="bento-card" style={{ padding: '20px 24px', background: 'linear-gradient(180deg, #0d0d12 0%, #14141e 100%)', flex: 1, display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-            <h3 style={{ fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, letterSpacing: '0.02em' }}>
+            <h3 style={{ fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8, letterSpacing: '0.02em' }}>
               <GraduationCap size={16} className="text-accent" /> Horario de Clases
             </h3>
             <button onClick={() => setShowScheduleModal(true)} className="btn-ghost hover-lift" style={{ padding: 6, cursor: 'pointer', display: 'flex', borderRadius: 8, background: 'var(--bg-elevated)' }}><Plus size={14} /></button>
@@ -305,7 +305,7 @@ export default function Planificacion() {
               if (dayBlocks.length === 0) return null;
               return (
                 <div key={day} style={{ marginBottom: 4 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8, paddingLeft: 2 }}>{day}</div>
+                  <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8, paddingLeft: 2 }}>{day}</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {dayBlocks.map((b, i) => (
                       <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, background: `linear-gradient(90deg, ${b.color}15 0%, transparent 100%)`, border: `1px solid ${b.color}10`, borderLeft: `3px solid ${b.color}` }}>
@@ -326,7 +326,7 @@ export default function Planificacion() {
         {/* AI Upload card */}
         <div className="bento-card" style={{ padding: '20px 24px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, #1a1a2e 100%)', border: '1px solid rgba(99,102,241,0.2)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <h3 style={{ fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, letterSpacing: '0.02em' }}>
+            <h3 style={{ fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8, letterSpacing: '0.02em' }}>
               <Bot size={16} style={{ color: '#818CF8' }} /> IA Horario
             </h3>
           </div>

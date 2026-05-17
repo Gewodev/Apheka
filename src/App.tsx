@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Home, BookOpen, Clock, ListTodo, Settings,
   ChevronLeft, ChevronRight, Music,
-  Calendar, Layers, Plus,
-  Book, ChevronDown, ChevronUp
+  Calendar, Layers, Plus, ChevronDown, Search,
 } from 'lucide-react';
 import { AppProvider, useApp } from './store/AppContext';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -16,9 +15,13 @@ import Notas from './components/views/Notas';
 import Musica from './components/views/Musica';
 import Planificacion from './components/views/Planificacion';
 import Ajustes from './components/views/Ajustes';
+import Cursos from './components/views/Cursos';
+import Investigacion from './components/views/Investigacion';
+import OAuthCallback from './components/OAuthCallback';
+import SupabaseCallback from './components/SupabaseCallback';
 import GlobalPlayer from './components/GlobalPlayer';
 
-type ViewId = 'inicio' | 'estudio' | 'tareas' | 'notas' | 'musica' | 'planificacion' | 'ajustes' | 'curso_detalle';
+type ViewId = 'inicio' | 'estudio' | 'tareas' | 'notas' | 'musica' | 'planificacion' | 'investigacion' | 'ajustes' | 'curso_detalle';
 
 interface AppContentProps {
   setGlobalView: (view: ViewId) => void;
@@ -36,6 +39,18 @@ function AppContent() {
   }, [navigateTo, setNavigateTo]);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [showCourses, setShowCourses] = useState(true);
+  const [isOAuthCallback, setIsOAuthCallback] = useState(false);
+  const [isSupabaseCallback, setIsSupabaseCallback] = useState(false);
+
+  useEffect(() => {
+    const path = window.location.pathname;
+    if (path.startsWith('/oauth/callback')) {
+      setIsOAuthCallback(true);
+    }
+    if (path.startsWith('/auth/callback')) {
+      setIsSupabaseCallback(true);
+    }
+  }, []);
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -61,6 +76,7 @@ function AppContent() {
     { id: 'notas', label: 'Notas', icon: BookOpen },
     { id: 'musica', label: 'Música', icon: Music },
     { id: 'planificacion', label: 'Planificador', icon: Calendar },
+    { id: 'investigacion', label: 'Investigar', icon: Search },
   ];
 
   const handleCourseClick = (courseId: string) => {
@@ -71,100 +87,104 @@ function AppContent() {
   return (
     <div className="app-layout">
       <aside className={`sidebar ${isCollapsed ? 'collapsed' : ''}`}>
-        <div style={{ padding: '24px 12px', display: 'flex', alignItems: 'center', justifyContent: isCollapsed ? 'center' : 'space-between' }}>
-          {!isCollapsed && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Layers size={16} color="#fff" />
-              </div>
-              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>OWA Studio</span>
-            </div>
-          )}
-          <button onClick={() => setIsCollapsed(!isCollapsed)} className="btn-ghost" style={{ padding: 4, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+
+        {/* ─── Logo / Home Anchor ─── */}
+        <div className="sidebar-logo">
+          <img src="/owa_logo.png" alt="OWA Studio" className="sidebar-logo-img" />
+          {!isCollapsed && <span className="sidebar-logo-text">OWA Studio</span>}
+          <button onClick={() => setIsCollapsed(!isCollapsed)} className="sidebar-collapse-btn">
             {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
           </button>
         </div>
 
-        <nav style={{ flex: 1, padding: '0 8px', display: 'flex', flexDirection: 'column', gap: 2, overflowY: 'auto' }}>
+        {/* ─── Navigation ─── */}
+        <nav className="sidebar-nav">
           {NAV_ITEMS.map(item => (
             <button
               key={item.id}
               onClick={() => setActiveView(item.id as ViewId)}
-              className={`nav-btn ${activeView === item.id ? 'active' : ''}`}
+              className={`sidebar-nav-btn ${activeView === item.id ? 'active' : ''}`}
               title={isCollapsed ? item.label : undefined}
-              style={isCollapsed ? { justifyContent: 'center', padding: '0 8px' } : {}}
             >
-              <item.icon size={18} />
-              {!isCollapsed && <span>{item.label}</span>}
+              <item.icon size={18} strokeWidth={1.75} />
+              {!isCollapsed && <span className="sidebar-nav-label">{item.label}</span>}
             </button>
           ))}
-
-          {!isCollapsed && (
-            <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column' }}>
-              <button
-                onClick={() => setShowCourses(!showCourses)}
-                className="btn-ghost"
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', width: '100%', borderRadius: 6 }}
-              >
-                Mis Cursos
-                {showCourses ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-              </button>
-              {showCourses && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 4 }}>
-                  {courses.map(course => (
-                    <button
-                      key={course.id}
-                      onClick={() => handleCourseClick(course.id)}
-                      className="btn-ghost"
-                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, fontSize: 13, color: 'var(--text-secondary)', width: '100%', cursor: 'pointer' }}
-                    >
-                      <div style={{ width: 6, height: 6, borderRadius: '50%', background: course.color, flexShrink: 0 }} />
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{course.name}</span>
-                    </button>
-                  ))}
-                  <button className="nav-btn" style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4, gap: 8 }}>
-                    <Plus size={14} /> <span>Añadir Curso</span>
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
         </nav>
 
-        <div style={{ padding: 12, borderTop: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <button onClick={() => setActiveView('ajustes')} className={`nav-btn ${activeView === 'ajustes' ? 'active' : ''}`}>
-            <Settings size={18} />
-            {!isCollapsed && <span>Ajustes</span>}
+        {/* ─── Mis Cursos ─── */}
+        {!isCollapsed && (
+          <div className="sidebar-cursos">
+            <div className="sidebar-cursos-header" onClick={() => setShowCourses(!showCourses)}>
+              <span className="sidebar-cursos-title">Mis Cursos</span>
+              <ChevronDown size={12} className={`sidebar-cursos-chevron ${showCourses ? 'open' : ''}`} />
+            </div>
+            {showCourses && (
+              <div className="sidebar-cursos-list">
+                {courses.map(course => (
+                  <button
+                    key={course.id}
+                    onClick={() => handleCourseClick(course.id)}
+                    className="sidebar-curso-btn"
+                  >
+                    <div className="sidebar-curso-dot" style={{ background: course.color }} />
+                    <span className="sidebar-curso-name">{course.name}</span>
+                  </button>
+                ))}
+                <button onClick={() => { setSelectedCourseId('NEW'); setActiveView('curso_detalle'); }} className="sidebar-curso-add">
+                  <Plus size={13} strokeWidth={2} />
+                  <span>Añadir curso</span>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ─── Spacer ─── */}
+        <div className="sidebar-spacer" />
+
+        {/* ─── User / Settings ─── */}
+        <div className="sidebar-footer">
+          <button onClick={() => setActiveView('ajustes')} className={`sidebar-nav-btn ${activeView === 'ajustes' ? 'active' : ''}`}>
+            <Settings size={18} strokeWidth={1.75} />
+            {!isCollapsed && <span className="sidebar-nav-label">Ajustes</span>}
           </button>
 
           {!isCollapsed && (
-            <div style={{ marginTop: 8, padding: 10, borderRadius: 10, background: 'var(--bg-elevated)', display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 600, color: '#fff', flexShrink: 0 }}>{initials}</div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{settings.userName}</p>
+            <div className="sidebar-user-card">
+              <div className="sidebar-user-avatar">{initials}</div>
+              <div className="sidebar-user-info">
+                <span className="sidebar-user-name">{settings.userName}</span>
+                <span className="sidebar-user-status">Productivo</span>
+              </div>
+              <div className="sidebar-user-progress">
+                <div className="sidebar-user-progress-track">
+                  <div className="sidebar-user-progress-fill" />
+                </div>
               </div>
             </div>
           )}
         </div>
       </aside>
 
-      <main className="main-area" style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-        <div key={activeView} className="fade-in-animation" style={{ height: '100%' }}>
-          {activeView === 'inicio' && <Inicio />}
-          {activeView === 'estudio' && <Estudio />}
-          {activeView === 'tareas' && <Tareas />}
-          {activeView === 'notas' && <Notas />}
-          {activeView === 'musica' && <Musica />}
-          {activeView === 'planificacion' && <Planificacion />}
-          {activeView === 'ajustes' && <Ajustes />}
-          {activeView === 'curso_detalle' && (
-            <div className="page-container">
-              <h1 style={{ fontSize: 24, fontWeight: 600, marginBottom: 8 }}>Detalle del Curso</h1>
-              <p style={{ color: 'var(--text-secondary)' }}>Contenido en desarrollo...</p>
-            </div>
-          )}
-        </div>
-
+      <main className="main-area">
+        {isSupabaseCallback ? (
+          <SupabaseCallback />
+        ) : isOAuthCallback ? (
+          <OAuthCallback />
+        ) : (
+          <div key={activeView} className="fade-in-animation" style={{ height: '100%' }}>
+            {activeView === 'inicio' && <Inicio />}
+            {activeView === 'estudio' && <Estudio />}
+            {activeView === 'tareas' && <Tareas />}
+            {activeView === 'notas' && <Notas />}
+            {activeView === 'musica' && <Musica />}
+            {activeView === 'planificacion' && <Planificacion />}
+            {activeView === 'investigacion' && <Investigacion />}
+            {activeView === 'ajustes' && <Ajustes />}
+          {activeView === 'curso_detalle' && <Cursos initialCourseId={selectedCourseId || undefined} />}
+          </div>
+        )}
         <GlobalPlayer />
       </main>
 

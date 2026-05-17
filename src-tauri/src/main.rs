@@ -1,7 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::collections::HashMap;
-use std::io::BufRead;
+use std::io::{BufRead, Write};
 use std::process::{Command, Stdio};
 use std::sync::Mutex;
 use tauri::{Emitter, Listener, Manager};
@@ -344,6 +344,51 @@ async fn get_system_stats(app_handle: tauri::AppHandle) -> Result<serde_json::Va
     Ok(serde_json::json!({ "cpu": cpu, "mem": mem }))
 }
 
+#[tauri::command]
+async fn export_to_zip(app_handle: tauri::AppHandle, save_path: String) -> Result<String, String> {
+    let state = app_handle.state::<DownloadState>();
+    let download_dir = state.path.lock().map_err(|e| e.to_string())?.clone();
+
+    let dir = std::path::Path::new(&download_dir);
+    if !dir.exists() {
+        return Err("Download directory does not exist".into());
+    }
+
+    let file = std::fs::File::create(&save_path)
+        .map_err(|e| format!("Cannot create ZIP file: {e}"))?;
+    let mut zip = zip::ZipWriter::new(file);
+
+    let mut entries: Vec<std::path::PathBuf> = Vec::new();
+    for entry in std::fs::read_dir(dir).map_err(|e| format!("Cannot read directory: {e}"))? {
+        let entry = entry.map_err(|e| format!("Cannot read entry: {e}"))?;
+        let path = entry.path();
+        if path.is_file() {
+            if let Some(ext) = path.extension() {
+                let ext_lower = ext.to_string_lossy().to_lowercase();
+                if ext_lower == "mp3" || ext_lower == "m4a" || ext_lower == "wav" || ext_lower == "flac" || ext_lower == "ogg" {
+                    entries.push(path);
+                }
+            }
+        }
+    }
+
+    if entries.is_empty() {
+        return Err("No audio files found in the download directory".into());
+    }
+
+    for entry in &entries {
+        let name = entry.file_name().unwrap().to_string_lossy().to_string();
+        zip.start_file(&name, zip::write::FileOptions::<()>::default())
+            .map_err(|e| format!("ZIP add file error: {e}"))?;
+        let data = std::fs::read(entry).map_err(|e| format!("Read error: {e}"))?;
+        zip.write_all(&data).map_err(|e| format!("Write error: {e}"))?;
+    }
+
+    zip.finish().map_err(|e| format!("ZIP finish error: {e}"))?;
+
+    Ok(save_path)
+}
+
 fn main() {
     let default_download_path = dirs::download_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
@@ -373,6 +418,7 @@ fn main() {
             get_download_path,
             set_download_path,
             get_system_stats,
+            export_to_zip,
         ])
         .setup(|app| {
             ensure_simple_binaries(app.handle());
