@@ -173,7 +173,7 @@ function AppContent() {
         ) : isOAuthCallback ? (
           <OAuthCallback />
         ) : (
-          <div key={activeView} className="fade-in-animation" style={{ height: '100%' }}>
+          <div key={activeView} className="fade-in-animation" style={{ height: '100%', paddingBottom: 80 }}>
             {activeView === 'inicio' && <Inicio />}
             {activeView === 'estudio' && <Estudio />}
             {activeView === 'tareas' && <Tareas />}

@@ -1,5 +1,7 @@
-import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { invoke, isTauri } from './tauri';
+
+// ── Re-export for convenience ──
+export { isTauri };
 
 // ── Types ──
 
@@ -60,25 +62,145 @@ export interface SearchResult {
 function parseDuration(duration: string | number | undefined): number {
   if (!duration) return 0;
   if (typeof duration === 'number') return duration;
-  const parts = duration.split(':').reverse();
-  return parts.reduce((acc, p, i) => acc + parseInt(p) * Math.pow(60, i), 0);
+  if (/^\d+$/.test(duration)) return parseInt(duration, 10);
+  const parts = duration.split(':').map(Number);
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  return parseInt(duration, 10) || 0;
 }
 
-function getThumbnail(entry: Record<string, unknown>): string {
-  if (entry.thumbnail && typeof entry.thumbnail === 'string') return entry.thumbnail;
-  if (entry.thumbnails && Array.isArray(entry.thumbnails) && entry.thumbnails.length > 0) {
-    return (entry.thumbnails[entry.thumbnails.length - 1] as Record<string, unknown>).url as string || '';
+function getThumbnail(data: Record<string, unknown>): string {
+  if (typeof data.thumbnail === 'string') return data.thumbnail;
+  if (data.thumbnails && Array.isArray(data.thumbnails)) {
+    const thumbs = data.thumbnails as Record<string, unknown>[];
+    const sorted = thumbs
+      .filter(t => typeof t.url === 'string')
+      .sort((a, b) => ((b.height as number) || 0) - ((a.height as number) || 0));
+    if (sorted.length > 0) return String(sorted[0].url);
   }
   return '';
+}
+
+const API_KEY = import.meta.env.VITE_GOOGLE_API_KEY || '';
+
+async function webSearchMusic(query: string): Promise<SearchResult[]> {
+  if (!API_KEY) return [];
+  try {
+    const r = await fetch(
+      `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoCategoryId=10&maxResults=20&q=${encodeURIComponent(query)}&key=${API_KEY}`
+    );
+    const data = await r.json();
+    return (data.items || []).map((item: any) => ({
+      id: item.id?.videoId || '',
+      title: item.snippet?.title || 'Unknown',
+      channel: item.snippet?.channelTitle || 'Unknown',
+      duration: 0,
+      thumbnail: item.snippet?.thumbnails?.high?.url || item.snippet?.thumbnails?.default?.url || '',
+      webpage_url: `https://www.youtube.com/watch?v=${item.id?.videoId}`,
+    }));
+  } catch { return []; }
+}
+
+async function webStreamUrl(videoId: string): Promise<string> {
+  return `https://www.youtube.com/watch?v=${videoId}`;
+}
+
+// Web download using multiple free conversion APIs
+async function webDownloadAudio(downloadId: string, ytUrl: string, format: string): Promise<void> {
+  const match = ytUrl.match(/(?:v=|youtu\.be\/)([\w-]{11})/);
+  if (!match) throw new Error('URL de YouTube inválida');
+  const videoId = match[1];
+
+  // 1) Try Cobalt API (api.cobalt.tools)
+  try {
+    const resp = await fetch('https://api.cobalt.tools/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({
+        url: ytUrl,
+        videoQuality: 'max',
+        audioFormat: format === 'mp3' ? 'mp3' : 'aac',
+        filenameStyle: 'basic',
+      }),
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.url) {
+        const a = document.createElement('a');
+        a.href = data.url;
+        a.download = `audio.${format}`;
+        a.click();
+        return;
+      }
+    }
+  } catch { /* try next */ }
+
+  // 2) Try direct download via y2mate API
+  try {
+    const resp = await fetch('https://www.y2mate.com/mates/en676/analyzeV2/ajax', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ k_query: ytUrl, k_page: 'home', hl: 'en', q_auto: '0' }),
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data?.links?.mp3?.['mp3128']?.url || data?.links?.mp4?.['mp4']?.url) {
+        const dlUrl = data.links.mp3['mp3128']?.url || data.links.mp4['mp4']?.url;
+        window.open(dlUrl, '_blank');
+        return;
+      }
+    }
+  } catch { /* try next */ }
+
+  // 3) Try loadingfem using public API
+  try {
+    const resp = await fetch(`https://yt-downloader-xi-six.vercel.app/api/download?url=${ytUrl}&format=${format}`, {
+      method: 'GET',
+    });
+    if (resp.ok) {
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${videoId}.${format}`;
+      a.click();
+      URL.revokeObjectURL(url);
+      return;
+    }
+  } catch { /* try next */ }
+
+  throw new Error('web-download-unavailable');
 }
 
 // ── Commands ──
 
 export async function streamAudioUrl(url: string): Promise<string> {
+  if (!isTauri()) {
+    const match = url.match(/(?:v=|youtu\.be\/)([\w-]{11})/);
+    if (match) return webStreamUrl(match[1]);
+    throw new Error('Streaming requires Tauri desktop app');
+  }
   return invoke<string>('stream_youtube_audio', { url });
 }
 
 export async function fetchMetadata(url: string): Promise<YouTubePlaylist | YouTubeMetadata> {
+  if (!isTauri()) {
+    const match = url.match(/(?:v=|youtu\.be\/)([\w-]{11})/);
+    if (match) {
+      const results = await webSearchMusic(match[1]);
+      if (results.length > 0) {
+        return {
+          id: results[0].id,
+          title: results[0].title,
+          thumbnail: results[0].thumbnail,
+          duration: results[0].duration,
+          channel: results[0].channel,
+          webpage_url: results[0].webpage_url,
+        } as YouTubeMetadata;
+      }
+    }
+    throw new Error('Metadata fetch requires Tauri desktop app');
+  }
   const raw = await invoke<string>('get_youtube_metadata', { url });
   const data: Record<string, unknown> = JSON.parse(raw);
 
@@ -102,43 +224,47 @@ export async function fetchMetadata(url: string): Promise<YouTubePlaylist | YouT
       id: String(data.id || ''),
       title: String(data.title || 'Playlist'),
       channel: String(data.channel || data.uploader || 'Unknown'),
-      thumbnail: getThumbnail(data),
+      thumbnail: getThumbnail(data as Record<string, unknown>),
       webpage_url: String(data.webpage_url || url),
       entries,
       playlist_count: playlistCount,
-      ...data,
+      ...(data as Record<string, unknown>),
     } as YouTubePlaylist;
   }
 
   return {
     id: String(data.id || ''),
     title: String(data.title || 'Unknown'),
-    thumbnail: getThumbnail(data),
+    thumbnail: getThumbnail(data as Record<string, unknown>),
     duration: parseDuration(data.duration as string | number | undefined),
     channel: String(data.channel || data.uploader || 'Unknown'),
     webpage_url: String(data.webpage_url || data.url || url),
-    ...data,
+    ...(data as Record<string, unknown>),
   } as YouTubeMetadata;
 }
 
 export async function searchMusic(query: string): Promise<SearchResult[]> {
-  const raw = await invoke<string>('search_youtube', { query });
-  const data = JSON.parse(raw);
-
-  if (!data.entries) return [];
-
-  return (data.entries as Record<string, unknown>[]).map(e => ({
-    id: String(e.id || ''),
-    title: String(e.title || 'Unknown'),
-    channel: String(e.channel || e.uploader || 'Unknown'),
-    duration: parseDuration(e.duration as string | number | undefined),
-    thumbnail: getThumbnail(e),
-    webpage_url: String(e.webpage_url || e.url || ''),
-    ...e,
-  })) as SearchResult[];
+  if (!isTauri()) return webSearchMusic(query);
+  try {
+    const raw = await invoke<string>('search_youtube', { query });
+    const data = JSON.parse(raw);
+    if (!data.entries) return [];
+    return (data.entries as Record<string, unknown>[]).map(e => ({
+      id: String(e.id || ''),
+      title: String(e.title || 'Unknown'),
+      channel: String(e.channel || e.uploader || 'Unknown'),
+      duration: parseDuration(e.duration as string | number | undefined),
+      thumbnail: getThumbnail(e),
+      webpage_url: String(e.webpage_url || e.url || ''),
+      ...e,
+    })) as SearchResult[];
+  } catch { return webSearchMusic(query); }
 }
 
 export async function validateUrl(url: string): Promise<YouTubePlaylist | YouTubeMetadata> {
+  if (!isTauri()) {
+    return fetchMetadata(url);
+  }
   const raw = await invoke<string>('validate_url', { url });
   const data = JSON.parse(raw);
 
@@ -182,96 +308,78 @@ export async function startDownload(
   outputDir?: string,
   format: string = 'mp3',
 ): Promise<void> {
+  if (!isTauri()) {
+    return webDownloadAudio(downloadId, url, format);
+  }
   return invoke('start_download', {
-    url,
-    downloadId,
+    url, downloadId,
     outputDir: outputDir || '',
     format,
   });
 }
 
 export async function cancelDownload(downloadId: string): Promise<void> {
+  if (!isTauri()) return;
   return invoke('cancel_download', { downloadId });
 }
 
 export async function getDownloadPath(): Promise<string> {
+  if (!isTauri()) return '';
   return invoke<string>('get_download_path');
 }
 
 export async function setDownloadPath(path: string): Promise<void> {
+  if (!isTauri()) return;
   return invoke('set_download_path', { path });
 }
 
-export async function exportToZip(savePath: string): Promise<string> {
-  return invoke<string>('export_to_zip', { savePath });
+export async function extractZip(zipPath: string): Promise<boolean> {
+  if (!isTauri()) return false;
+  try {
+    await invoke('extract_download_zip', { path: zipPath });
+    return true;
+  } catch { return false; }
 }
 
-// ── Event listeners ──
-
-export function onDownloadProgress(callback: (data: DownloadProgress) => void) {
-  return listen<DownloadProgress>('download:progress', (event) => callback(event.payload));
+// Event listeners
+export function onDownloadProgress(cb: (data: DownloadProgress) => void): Promise<() => void> {
+  if (!isTauri()) {
+    return Promise.resolve(() => {});
+  }
+  return import('@tauri-apps/api/event').then(m => m.listen<DownloadProgress>('download:progress', e => cb(e.payload)));
 }
 
-export function onDownloadFile(callback: (data: DownloadFile) => void) {
-  return listen<DownloadFile>('download:file', (event) => callback(event.payload));
+export function onDownloadFile(cb: (data: DownloadFile) => void): Promise<() => void> {
+  if (!isTauri()) return Promise.resolve(() => {});
+  return import('@tauri-apps/api/event').then(m => m.listen<DownloadFile>('download:file', e => cb(e.payload)));
 }
 
-export function onDownloadComplete(callback: (data: DownloadComplete) => void) {
-  return listen<DownloadComplete>('download:complete', (event) => callback(event.payload));
+export function onDownloadComplete(cb: (data: DownloadComplete) => void): Promise<() => void> {
+  if (!isTauri()) {
+    return Promise.resolve(() => {});
+  }
+  return import('@tauri-apps/api/event').then(m => m.listen<DownloadComplete>('download:complete', e => cb(e.payload)));
 }
 
-// ── URL type detection ──
-
-export type UrlType = 'youtube_video' | 'youtube_playlist' | 'spotify_track' | 'spotify_playlist' | 'unknown';
-
-export function detectUrlType(url: string): UrlType {
-  const trimmed = url.trim();
-  const u = trimmed.toLowerCase();
-
-  // YouTube video (watch, youtu.be, shorts, embed, m.youtube, music.youtube)
-  if (
-    /(?:www\.|m\.|music\.)?youtube\.com\/watch\?v=/i.test(u) ||
-    /youtu\.be\//i.test(u) ||
-    /(?:www\.|m\.)?youtube\.com\/shorts\//i.test(u) ||
-    /(?:www\.)?youtube\.com\/embed\//i.test(u)
-  ) {
-    return 'youtube_video';
-  }
-
-  // YouTube playlist
-  if (
-    /(?:www\.|m\.|music\.)?youtube\.com\/playlist\?list=/i.test(u)
-  ) {
-    return 'youtube_playlist';
-  }
-
-  // Spotify track
-  if (/open\.spotify\.com\/track\//i.test(u)) {
-    return 'spotify_track';
-  }
-
-  // Spotify playlist / album
-  if (
-    /open\.spotify\.com\/playlist\//i.test(u) ||
-    /open\.spotify\.com\/album\//i.test(u)
-  ) {
-    return 'spotify_playlist';
-  }
-
-  // If it contains youtube.com or youtu.be at all, treat as youtube
-  if (/(?:www\.|m\.|music\.)?youtube\.com/i.test(u) || /youtu\.be/i.test(u)) {
-    return 'youtube_video';
-  }
-
-  return 'unknown';
+// Format helpers
+export function detectUrlType(url: string): 'youtube' | 'spotify' | 'other' {
+  if (/youtube\.com|youtu\.be/i.test(url)) return 'youtube';
+  if (/spotify\.com/i.test(url)) return 'spotify';
+  return 'other';
 }
 
 export function generateDownloadId(): string {
-  return `dl_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+  return crypto.randomUUID();
 }
 
-export function formatDuration(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
+export function formatDuration(secs: number): string {
+  if (!secs || !isFinite(secs)) return '0:00';
+  const m = Math.floor(secs / 60);
+  const s = Math.floor(secs % 60);
   return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+export function exportToZip(savePath: string): Promise<string> {
+  if (!isTauri()) return Promise.reject(new Error('ZIP requires Tauri desktop app'));
+  return invoke<string>('export_to_zip', { savePath });
 }

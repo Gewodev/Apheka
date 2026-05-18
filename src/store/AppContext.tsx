@@ -161,6 +161,13 @@ export interface Settings {
   fontFamily: string;
 }
 
+export interface AppNotification {
+  id: string;
+  message: string;
+  type: 'success' | 'error' | 'info';
+  timestamp: number;
+}
+
 // ════════════════════════════════════════════════════
 //  APP STATE
 // ════════════════════════════════════════════════════
@@ -189,6 +196,12 @@ interface AppState {
   isPlayingMusic: boolean;
   musicVolume: number;
   musicProgress: number;
+  musicDuration: number;
+  shuffleMode: boolean;
+  repeatMode: 'none' | 'all' | 'one';
+  trackHistory: string[];
+  playCounts: Record<string, number>;
+  musicQueue: string[];
   // Downloads
   downloadQueue: DownloadItem[];
   // Integrations
@@ -231,7 +244,7 @@ interface AppContextType extends AppState {
   addPlaylist: (playlist: Omit<Playlist, 'id' | 'createdAt'>) => void;
   updatePlaylist: (id: string, updates: Partial<Playlist>) => void;
   deletePlaylist: (id: string) => void;
-  addTrack: (track: Omit<Track, 'id'>) => void;
+  addTrack: (track: Omit<Track, 'id'>) => string;
   updateTrack: (id: string, updates: Partial<Track>) => void;
   deleteTrack: (id: string) => void;
   toggleTrackFavorite: (id: string) => void;
@@ -240,6 +253,10 @@ interface AppContextType extends AppState {
   toggleMusicPlayback: () => void;
   setMusicVolume: (volume: number) => void;
   setMusicProgress: (progress: number) => void;
+  setShuffleMode: (mode: boolean) => void;
+  setRepeatMode: (mode: 'none' | 'all' | 'one') => void;
+  setMusicQueue: (queue: string[]) => void;
+  clearAllMusicData: () => void;
   // Timer / Study
   addStudySession: (session: Omit<StudySession, 'id'>) => void;
   incrementSessionTime: () => void;
@@ -282,6 +299,10 @@ interface AppContextType extends AppState {
   createStudyQuiz: (courseName: string, topics: string[]) => Promise<string | null>;
   initFirebaseNotifications: () => Promise<string | null>;
   syncAllToCloud: () => Promise<void>;
+  // Notifications
+  notifications: AppNotification[];
+  addNotification: (message: string, type?: 'success' | 'error' | 'info') => void;
+  clearNotifications: () => void;
 }
 
 // ════════════════════════════════════════════════════
@@ -345,7 +366,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [isPlayingMusic, setIsPlayingMusic] = useState(false);
   const [musicVolume, setMusicVolume] = useState(0.7);
   const [musicProgress, setMusicProgress] = useState(0);
+  const [musicDuration, setMusicDuration] = useState(0);
+  const [shuffleMode, _setShuffleMode] = useState(false);
+  const [repeatMode, _setRepeatMode] = useState<'none' | 'all' | 'one'>('none');
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const addNotification = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    const id = Date.now().toString();
+    setNotifications(prev => [...prev.slice(-49), { id, message, type, timestamp: Date.now() }]);
+  }, []);
+  const clearNotifications = useCallback(() => setNotifications([]), []);
+  const setShuffleMode = useCallback((mode: boolean) => {
+    _setShuffleMode(mode);
+    if (mode) _setRepeatMode('none');
+  }, []);
+  const setRepeatMode = useCallback((mode: 'none' | 'all' | 'one') => {
+    _setRepeatMode(mode);
+    if (mode !== 'none') _setShuffleMode(false);
+  }, []);
+  const [trackHistory, setTrackHistory] = useState<string[]>([]);
+  const [playCounts, setPlayCounts] = useState<Record<string, number>>({});
+  const [musicQueue, setMusicQueue] = useState<string[]>([]);
   const [downloadQueue, setDownloadQueue] = useState<DownloadItem[]>([]);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const currentTrackIdRef = useRef(currentTrackId);
+  currentTrackIdRef.current = currentTrackId;
+  const tracksRef = useRef(tracks);
+  tracksRef.current = tracks;
+  const shuffleModeRef = useRef(shuffleMode);
+  shuffleModeRef.current = shuffleMode;
+  const repeatModeRef = useRef(repeatMode);
+  repeatModeRef.current = repeatMode;
+  const musicQueueRef = useRef(musicQueue);
+  musicQueueRef.current = musicQueue;
+  const playTrackRef = useRef<(id: string) => void>(() => {});
   const [navigateTo, setNavigateTo] = useState<ViewId | null>(null);
   const [googleConnected, setGoogleConnected] = useState(false);
   const [calendarSyncEnabled, setCalendarSyncEnabled] = useState(false);
@@ -357,19 +410,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (stored) {
       try {
         const data = JSON.parse(stored);
+        if (data.playlists) setPlaylists(data.playlists);
+        if (data.tracks) setTracks(data.tracks);
+        if (data.trackHistory) setTrackHistory(data.trackHistory);
+        if (data.playCounts) setPlayCounts(data.playCounts);
+        if (data.musicQueue) setMusicQueue(data.musicQueue);
+        if (data.shuffleMode !== undefined) _setShuffleMode(data.shuffleMode);
+        if (data.repeatMode) _setRepeatMode(data.repeatMode);
         if (data.tasks) setTasks(data.tasks);
         if (data.notes) setNotes(data.notes);
         if (data.noteFolders) setNoteFolders(data.noteFolders);
         if (data.courses) setCourses(data.courses);
         if (data.events) setEvents(data.events);
-        if (data.playlists) setPlaylists(data.playlists);
-        if (data.tracks) setTracks(data.tracks);
         if (data.studySessions) setStudySessions(data.studySessions);
         if (data.settings) setSettings({ ...defaultSettings, ...data.settings });
         if (data.sessionTime) setSessionTime(data.sessionTime);
         if (data.weeklyStudyTime) setWeeklyStudyTime(data.weeklyStudyTime);
         if (data.dailyStudyTime) setDailyStudyTime(data.dailyStudyTime);
         if (data.pomodoroSessions) setPomodoroSessions(data.pomodoroSessions);
+        if (data.musicVolume !== undefined) setMusicVolume(data.musicVolume);
+        // Always start paused
+        setIsPlayingMusic(false);
       } catch (e) {
         console.error('Error loading data:', e);
       }
@@ -422,10 +483,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         tasks, notes, noteFolders, courses, events, playlists, tracks, studySessions,
         settings, sessionTime, weeklyStudyTime, dailyStudyTime, pomodoroSessions,
+        trackHistory, playCounts, musicQueue, musicVolume, shuffleMode, repeatMode,
       }));
     }, 300);
     return () => clearTimeout(t);
-  }, [tasks, notes, noteFolders, courses, events, playlists, tracks, studySessions, settings, sessionTime, weeklyStudyTime, dailyStudyTime, pomodoroSessions]);
+  }, [tasks, notes, noteFolders, courses, events, playlists, tracks, studySessions, settings, sessionTime, weeklyStudyTime, dailyStudyTime, pomodoroSessions, trackHistory, playCounts, musicQueue, musicVolume]);
+
+  // Pause audio when closing window
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
 
   // ── TASKS ──
   const addTask = useCallback((task: Omit<Task, 'id' | 'createdAt' | 'status' | 'subtasks' | 'files' | 'notes' | 'studyTime'>) => {
@@ -570,7 +644,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // ── MUSIC ──
   const addPlaylist = useCallback((playlist: Omit<Playlist, 'id' | 'createdAt'>) => {
-    setPlaylists(prev => [...prev, { ...playlist, id: Date.now().toString(), createdAt: new Date().toISOString() }]);
+    setPlaylists(prev => [...prev, { ...playlist, id: crypto.randomUUID(), createdAt: new Date().toISOString() }]);
   }, []);
 
   const updatePlaylist = useCallback((id: string, updates: Partial<Playlist>) => {
@@ -582,7 +656,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addTrack = useCallback((track: Omit<Track, 'id'>) => {
-    setTracks(prev => [...prev, { ...track, id: Date.now().toString() }]);
+    const id = crypto.randomUUID();
+    setTracks(prev => [...prev, { ...track, id }]);
+    return id;
   }, []);
 
   const updateTrack = useCallback((id: string, updates: Partial<Track>) => {
@@ -598,14 +674,125 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setTracks(prev => prev.map(t => t.id === id ? { ...t, isFavorite: !t.isFavorite } : t));
   }, []);
 
+  const clearAllMusicData = useCallback(() => {
+    setPlaylists([]);
+    setTracks([]);
+    setTrackHistory([]);
+    setPlayCounts({});
+    setMusicQueue([]);
+    setCurrentTrackId(null);
+    setIsPlayingMusic(false);
+    setMusicProgress(0);
+    setMusicDuration(0);
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = '';
+    }
+    localStorage.removeItem(STORAGE_KEY);
+  }, []);
+
   const playTrack = useCallback((id: string) => {
     setCurrentTrackId(id);
     setIsPlayingMusic(true);
+    setTrackHistory(prev => {
+      const next = [id, ...prev.filter(tid => tid !== id)].slice(0, 50);
+      return next;
+    });
+    setPlayCounts(prev => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
   }, []);
+  playTrackRef.current = playTrack;
 
   const toggleMusicPlayback = useCallback(() => {
     setIsPlayingMusic(prev => !prev);
   }, []);
+
+  const setMusicProgressCb = useCallback((progress: number) => {
+    setMusicProgress(progress);
+    if (audioRef.current && audioRef.current.duration && isFinite(progress)) {
+      audioRef.current.currentTime = progress * audioRef.current.duration;
+    }
+  }, []);
+
+  const setMusicVolumeCb = useCallback((volume: number) => {
+    setMusicVolume(volume);
+    if (audioRef.current) audioRef.current.volume = volume;
+  }, []);
+
+  // Music audio engine: init events
+  useEffect(() => {
+    if (!audioRef.current) {
+      audioRef.current = new Audio();
+      audioRef.current.volume = musicVolume;
+    }
+    const audio = audioRef.current;
+
+    const onTimeUpdate = () => {
+      if (audio.duration) setMusicProgress(audio.currentTime / audio.duration);
+    };
+    const onDurationChange = () => setMusicDuration(audio.duration || 0);
+    const onEnded = () => {
+      if (currentTrackIdRef.current && tracksRef.current.length > 0) {
+        const currentIdx = tracksRef.current.findIndex(t => t.id === currentTrackIdRef.current);
+        if (repeatModeRef.current === 'one') {
+          playTrackRef.current(currentTrackIdRef.current);
+          return;
+        }
+        let nextId: string | null = null;
+        if (shuffleModeRef.current) {
+          const others = tracksRef.current.filter(t => t.id !== currentTrackIdRef.current);
+          if (others.length > 0) nextId = others[Math.floor(Math.random() * others.length)].id;
+        } else if (repeatModeRef.current === 'all' || musicQueueRef.current.length > 0) {
+          if (musicQueueRef.current.length > 0) {
+            const [next] = musicQueueRef.current;
+            setMusicQueue(musicQueueRef.current.slice(1));
+            nextId = next;
+          } else if (currentIdx < tracksRef.current.length - 1) {
+            nextId = tracksRef.current[currentIdx + 1].id;
+          } else if (repeatModeRef.current === 'all') {
+            nextId = tracksRef.current[0].id;
+          }
+        } else {
+          if (currentIdx < tracksRef.current.length - 1) nextId = tracksRef.current[currentIdx + 1].id;
+        }
+        if (nextId) playTrackRef.current(nextId);
+        else setIsPlayingMusic(false);
+      } else {
+        setIsPlayingMusic(false);
+      }
+    };
+    const onError = () => { setIsPlayingMusic(false); };
+
+    audio.addEventListener('timeupdate', onTimeUpdate);
+    audio.addEventListener('durationchange', onDurationChange);
+    audio.addEventListener('ended', onEnded);
+    audio.addEventListener('error', onError);
+
+    return () => {
+      audio.removeEventListener('timeupdate', onTimeUpdate);
+      audio.removeEventListener('durationchange', onDurationChange);
+      audio.removeEventListener('ended', onEnded);
+      audio.removeEventListener('error', onError);
+    };
+  }, []);
+
+  // Play/pause + track switch
+  useEffect(() => {
+    if (!audioRef.current || !currentTrackId) return;
+    const track = tracks.find(t => t.id === currentTrackId);
+    if (!track) return;
+
+    if (isPlayingMusic) {
+      if (track.url) {
+        if (audioRef.current.src !== track.url) {
+          audioRef.current.src = track.url;
+          audioRef.current.load();
+        }
+        audioRef.current.play().catch(() => setIsPlayingMusic(false));
+      }
+    } else {
+      audioRef.current.pause();
+    }
+  }, [isPlayingMusic, currentTrackId, tracks]);
 
   // ── STUDY SESSIONS ──
   const addStudySession = useCallback((session: Omit<StudySession, 'id'>) => {
@@ -843,7 +1030,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     tasks, notes, noteFolders, courses, events, playlists, tracks, studySessions,
     settings, sessionTime, weeklyStudyTime, dailyStudyTime, pomodoroSessions,
     activeTaskId, timerLocked, isTimerActive,
-    currentTrackId, isPlayingMusic, musicVolume, musicProgress, downloadQueue,
+    currentTrackId, isPlayingMusic, musicVolume, musicProgress, musicDuration, shuffleMode, repeatMode,
+    trackHistory, playCounts, musicQueue, downloadQueue,
     googleConnected, calendarSyncEnabled, lastCalendarSync,
     addTask, updateTask, deleteTask, toggleTaskStatus, clearAllTasks,
     addSubTask, toggleSubTask, deleteSubTask, addTaskFile, removeTaskFile, incrementTaskStudyTime,
@@ -852,7 +1040,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addEvent, updateEvent, deleteEvent,
     addPlaylist, updatePlaylist, deletePlaylist,
     addTrack, updateTrack, deleteTrack, toggleTrackFavorite,
-    playTrack, toggleMusicPlayback, setMusicVolume, setMusicProgress,
+    playTrack, toggleMusicPlayback, setMusicVolume: setMusicVolumeCb, setMusicProgress: setMusicProgressCb,
+    setShuffleMode, setRepeatMode, setMusicQueue, clearAllMusicData,
     addToDownloadQueue, updateDownloadProgress, updateDownloadStatus,
     removeFromDownloadQueue, clearCompletedDownloads,
     addStudySession, incrementSessionTime, incrementDailyStudyTime,
@@ -872,6 +1061,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     initFirebaseNotifications: initFirebaseNotificationsCb,
     syncAllToCloud: syncAllToCloudCb,
     triggerDriveBackup,
+    notifications, addNotification, clearNotifications,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
