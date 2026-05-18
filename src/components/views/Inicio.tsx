@@ -4,6 +4,7 @@ import {
   Cpu, Gauge, Thermometer, HardDrive,
   FileText,
   List, Flame, X, Monitor, Clock, Zap, Battery,
+  CheckCircle, ChevronRight, Sparkles, TrendingUp, Calendar,
 } from 'lucide-react';
 import { useApp } from '../../store/AppContext';
 import { format, subDays, differenceInDays, differenceInHours, startOfDay } from 'date-fns';
@@ -20,13 +21,13 @@ function getDaysRemaining(dueDate: string): { text: string; color: string } {
   const now = new Date();
   const due = new Date(dueDate);
   const days = differenceInDays(startOfDay(due), startOfDay(now));
-  if (days > 0) return { text: `falta ${days} ${days === 1 ? 'día' : 'días'}`, color: 'var(--text-tertiary)' };
+  if (days > 0) return { text: `Falta ${days} ${days === 1 ? 'día' : 'días'}`, color: 'text-textDim' };
   if (days === 0) {
     const hours = differenceInHours(due, now);
-    if (hours > 0) return { text: `falta ${hours} h`, color: 'var(--warning)' };
-    return { text: 'contratiempo', color: 'var(--error)' };
+    if (hours > 0) return { text: `Falta ${hours} h`, color: 'text-warning' };
+    return { text: 'Hoy', color: 'text-accent' };
   }
-  return { text: 'contratiempo', color: 'var(--error)' };
+  return { text: 'Vencido', color: 'text-error' };
 }
 
 function calculateStreak(weeklyStudyTime: Record<string, number>): number {
@@ -117,7 +118,7 @@ export default function Inicio() {
 
   const timeStr = format(currentTime, 'HH:mm');
   const secondsStr = format(currentTime, 'ss');
-  const dateStr = format(currentTime, "EEEE, d 'de' MMMM", { locale: es as any });
+  const dateStr = format(currentTime, "EEEE, d 'de' MMMM, yyyy", { locale: es as any });
   const dateStrCapitalized = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
   const greeting = useMemo(() => getGreeting(currentTime.getHours(), settings.userName), [currentTime, settings.userName]);
 
@@ -125,6 +126,7 @@ export default function Inicio() {
   const hasActivityToday = (weeklyStudyTime[format(new Date(), 'yyyy-MM-dd')] || 0) > 0;
   const dailyGoalMinutes = 240; // 4 hours default
 
+  // Heatmap / Activity Data (30 days)
   const heatmapData = useMemo(() => {
     const cells = [];
     const now = new Date();
@@ -133,7 +135,7 @@ export default function Inicio() {
       const key = format(d, 'yyyy-MM-dd');
       const secs = weeklyStudyTime[key] || 0;
       const level = secs === 0 ? 0 : secs < 1800 ? 1 : secs < 3600 ? 2 : secs < 7200 ? 3 : 4;
-      cells.push({ level, date: key });
+      cells.push({ level, date: key, minutes: Math.round(secs / 60) });
     }
     return cells;
   }, [weeklyStudyTime]);
@@ -158,214 +160,310 @@ export default function Inicio() {
         if (!a.dueDate) return 1;
         if (!b.dueDate) return -1;
         return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-      }).slice(0, 3),
+      }).slice(0, 4),
     [tasks]
   );
 
   const recentNotes = useMemo(() =>
-    [...notes].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).slice(0, 3),
+    [...notes].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).slice(0, 4),
     [notes]
   );
 
   const taskStats = useMemo(() => ({
     active: tasks.filter(t => t.status !== 'completado').length,
     total: notes.length,
-    efficiency: '92%',
+    efficiency: '94%',
   }), [tasks, notes]);
-
-  const entries = [
-    { label: 'TAREAS ACTIVAS', val: taskStats.active, icon: List },
-    { label: 'NOTAS GUARDADAS', val: taskStats.total, icon: FileText },
-    { label: 'EFICIENCIA SEMANAL', val: taskStats.efficiency, icon: Activity }
-  ];
 
   const detailContent = detailStat ? statsList.find(s => s.id === detailStat) : null;
 
   return (
-    <div className="page-container" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto' }}>
+    <div className="page-container flex flex-col h-full overflow-y-auto custom-scroll pr-2">
 
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32, paddingTop: 8 }}>
+      {/* ── HEADER ── */}
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8 pb-6 border-b border-borderDark/60 pt-2">
         <div>
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+          <div className="flex items-center gap-2 text-xs font-bold text-accent uppercase tracking-widest mb-2">
+            <Sparkles size={14} />
             <span>{greeting}</span>
           </div>
-          <h1 style={{ fontSize: 32, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.15, letterSpacing: '-0.02em' }}>Todo listo para otra gran sesión.</h1>
-          <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 6, fontWeight: 500 }}>Mantén el enfoque, los resultados llegan.</p>
+          <h1 className="text-3xl md:text-4xl font-extrabold text-textMain tracking-tight leading-none mb-2">
+            Control Cognitivo Central.
+          </h1>
+          <p className="text-sm text-textDim font-medium">
+            Sistema operativo académico de alto rendimiento. Todo listo para tu sesión.
+          </p>
         </div>
-        <div style={{ textAlign: 'right', flexShrink: 0 }}>
-          <div className="led-container" style={{ padding: '10px 20px 8px', background: 'linear-gradient(180deg, #0d0d12 0%, #14141e 100%)', border: '1px solid rgba(255,255,255,0.06)' }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-              <div className="led-display led-time-md" style={{ fontSize: 32 }}>{timeStr}</div>
-              <div className="led-seconds" style={{ fontSize: 16 }}>{secondsStr}</div>
-            </div>
+
+        {/* Big LED Time & Date Display */}
+        <div className="flex flex-col items-end flex-shrink-0 bg-surface2 border border-accent/30 rounded-2xl p-5 shadow-[0_0_25px_rgba(225,29,72,0.15)] min-w-[260px]">
+          <div className="flex items-baseline gap-2 text-accent digital-font tracking-wider">
+            <span className="text-5xl font-bold leading-none">{timeStr}</span>
+            <span className="text-xl font-normal opacity-80">{secondsStr}</span>
           </div>
-          <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', marginTop: 8, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{dateStrCapitalized}</div>
+          <div className="mt-3 text-xs font-bold text-textDim uppercase tracking-widest border-t border-borderDark/80 pt-2 w-full text-right">
+            {dateStrCapitalized}
+          </div>
         </div>
       </header>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 24, flex: 1 }}>
+      {/* ── MAIN GRID ── */}
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 flex-1 items-start">
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+        {/* LEFT / CENTER CONTENT (8 COLS) */}
+        <div className="xl:col-span-8 flex flex-col gap-6">
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+          {/* 4 STATS CARDS */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { label: 'TAREAS ACTIVAS', val: taskStats.active, sub: 'Pendientes', icon: List, color: 'var(--accent)' },
-              { label: 'NOTAS GUARDADAS', val: taskStats.total, sub: 'En total', icon: FileText, color: '#3B82F6' },
-              { label: 'EFICIENCIA SEMANAL', val: taskStats.efficiency, sub: 'Excelente', icon: Activity, color: '#10B981' },
-              { label: 'RACHA ACTUAL', val: streak, sub: 'Días seguidos', icon: Flame, color: '#F59E0B' },
+              { label: 'TAREAS ACTIVAS', val: taskStats.active, sub: 'Pendientes de cierre', icon: List, color: 'var(--accent)' },
+              { label: 'NOTAS GUARDADAS', val: taskStats.total, sub: 'Base de conocimiento', icon: FileText, color: '#3B82F6' },
+              { label: 'EFICIENCIA GLOBAL', val: taskStats.efficiency, sub: 'Productividad óptima', icon: Activity, color: '#10B981' },
+              { label: 'RACHA DE ENFOQUE', val: `${streak} días`, sub: 'Hábito consolidado', icon: Flame, color: '#F59E0B' },
             ].map((s, i) => (
-              <div key={i} className="bento-card" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span className="stat-label" style={{ fontSize: 10 }}>{s.label}</span>
-                  <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div key={i} className="bg-surface2 rounded-xl border border-borderDark p-5 flex flex-col justify-between shadow-sm hover:border-borderDark/80 transition-all">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[11px] font-bold text-textDim uppercase tracking-wider">{s.label}</span>
+                  <div className="w-8 h-8 rounded-lg bg-surface border border-borderDark flex items-center justify-center shadow-inner">
                     <s.icon size={16} style={{ color: s.color }} />
                   </div>
                 </div>
                 <div>
-                  <div className="stat-value" style={{ fontSize: 28 }}>{s.val}</div>
-                  <div className="stat-subtext" style={{ fontSize: 11, marginTop: 2 }}>{s.sub}</div>
+                  <div className="text-2xl font-extrabold text-textMain tracking-tight mb-1">{s.val}</div>
+                  <div className="text-xs text-textDim font-medium">{s.sub}</div>
                 </div>
               </div>
             ))}
           </div>
 
-          <div className="bento-card" style={{ padding: '20px 24px', minHeight: 160, display: 'flex', flexDirection: 'column' }}>
-            <div className="section-header" style={{ marginBottom: 16, fontSize: 14 }}>Actividad (30 Días)</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: 10, flex: 1, alignContent: 'center' }}>
-              {heatmapData.map((d, i) => (
-                <div
-                  key={i}
-                  style={{
-                    background: heatmapColors[d.level],
-                    border: '1px solid rgba(255,255,255,0.02)',
-                    borderRadius: 6,
-                    height: 32,
-                    transition: 'all 200ms',
-                    boxShadow: d.level > 0 ? `0 4px 12px ${heatmapColors[d.level]}40` : 'none'
-                  }}
-                  title={d.date}
-                />
-              ))}
+          {/* CONSOLIDATED ACTIVITY & DAYS CHART (30 DAYS) */}
+          <div className="bg-surface2 rounded-xl border border-borderDark p-6 flex flex-col shadow-sm">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="text-sm font-bold text-textMain uppercase tracking-wider flex items-center gap-2">
+                  <Activity size={16} className="text-accent" /> Actividad Consolidada (Últimos 30 Días)
+                </h3>
+                <p className="text-xs text-textDim mt-1">Mapa de calor y distribución de minutos de estudio por jornada</p>
+              </div>
+              <div className="flex items-center gap-4 text-xs text-textDim font-medium">
+                <div className="flex items-center gap-1.5">
+                  <span>Menos</span>
+                  {[0, 1, 2, 3, 4].map(lvl => (
+                    <div key={lvl} className="w-3 h-3 rounded-sm" style={{ backgroundColor: heatmapColors[lvl] }} />
+                  ))}
+                  <span>Más</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Consolidated Bar + Heatmap Visualizer */}
+            <div className="grid grid-cols-10 sm:grid-cols-15 md:grid-cols-30 gap-1.5 items-end pt-8 pb-2 border-b border-borderDark/40 flex-1 min-h-[140px]">
+              {heatmapData.map((d, i) => {
+                const maxMin = Math.max(...heatmapData.map(x => x.minutes), 120);
+                const heightPct = Math.max(12, (d.minutes / maxMin) * 100);
+                const isTodayCell = i === heatmapData.length - 1;
+                return (
+                  <div key={i} className="flex flex-col items-center gap-2 w-full group relative">
+                    {/* Tooltip */}
+                    <div className="absolute bottom-full mb-2 hidden group-hover:flex flex-col items-center pointer-events-none z-30 bg-surface border border-borderDark px-2.5 py-1.5 rounded shadow-xl text-[10px] min-w-[90px] text-center">
+                      <span className="font-bold text-textMain">{d.minutes} min</span>
+                      <span className="text-textDim text-[9px]">{d.date}</span>
+                    </div>
+
+                    {/* Bar */}
+                    <div
+                      className={`w-full rounded-t transition-all duration-300 group-hover:brightness-125 ${isTodayCell ? 'border-t-2 border-accent shadow-[0_0_8px_var(--accent-glow)]' : ''}`}
+                      style={{
+                        height: `${heightPct}%`,
+                        backgroundColor: heatmapColors[d.level],
+                        opacity: d.level === 0 ? 0.4 : 1
+                      }}
+                    />
+
+                    {/* Date label for specific milestones */}
+                    {i % 5 === 0 && (
+                      <span className="text-[9px] font-medium text-textDim/70 hidden md:block absolute top-full mt-2 transform -rotate-45 origin-top-left">
+                        {format(new Date(d.date), 'd MMM', { locale: es as any })}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex justify-between items-center mt-8 text-xs text-textDim font-semibold">
+              <span>Hace 30 días</span>
+              <span className="text-accent flex items-center gap-1"><TrendingUp size={14} /> Jornada Actual</span>
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-            <div className="bento-card" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column' }}>
-              <div className="section-header" style={{ marginBottom: 12, fontSize: 13 }}>Próximas Tareas<span className="view-all">Ver todas</span></div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
+          {/* DEDICATED NOTION-STYLE DATABASE VIEWS (TAREAS & NOTAS) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            {/* Próximas Tareas */}
+            <div className="bg-surface2 rounded-xl border border-borderDark p-6 flex flex-col shadow-sm">
+              <div className="flex items-center justify-between mb-6 pb-3 border-b border-borderDark/60">
+                <h3 className="text-sm font-bold text-textMain uppercase tracking-wider flex items-center gap-2">
+                  <List size={16} className="text-accent" /> Próximas Tareas
+                </h3>
+                <span className="text-xs font-bold text-accent cursor-pointer hover:underline uppercase tracking-wider">Ver base</span>
+              </div>
+              <div className="flex flex-col gap-3 flex-1">
                 {upcomingTasks.length > 0 ? upcomingTasks.map(t => {
                   const remaining = t.dueDate ? getDaysRemaining(t.dueDate) : null;
                   return (
-                    <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-deep)', borderRadius: 8, border: '1px solid rgba(255,255,255,0.03)' }}>
-                      <div style={{ width: 6, height: 6, borderRadius: '50%', background: t.courseColor, flexShrink: 0 }} />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <span style={{ fontSize: 12, fontWeight: 500, display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.title}</span>
+                    <div key={t.id} className="flex items-center justify-between p-3.5 bg-surface rounded-xl border border-borderDark/60 hover:border-borderDark hover:bg-surface/80 transition-all group">
+                      <div className="flex items-center gap-3 min-w-0 flex-1 mr-4">
+                        <div className="w-2.5 h-2.5 rounded-full flex-shrink-0 shadow-sm" style={{ backgroundColor: t.courseColor }} />
+                        <span className="text-xs font-semibold text-textMain truncate group-hover:text-accent transition-colors">{t.title}</span>
                       </div>
                       {remaining && (
-                        <span style={{ fontSize: 10, fontWeight: 600, color: remaining.color, whiteSpace: 'nowrap', flexShrink: 0 }}>{remaining.text}</span>
+                        <span className={`text-[11px] font-bold px-2.5 py-1 rounded-md bg-surface2 border border-borderDark flex-shrink-0 ${remaining.color}`}>
+                          {remaining.text}
+                        </span>
                       )}
                     </div>
                   );
                 }) : (
-                  <div style={{ padding: '16px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12, margin: 'auto' }}>Sin tareas pendientes</div>
+                  <div className="flex flex-col items-center justify-center p-8 text-textDim text-xs font-medium border border-dashed border-borderDark rounded-xl my-auto">
+                    <CheckCircle size={24} className="mb-2 opacity-30" />
+                    Bandeja limpia. No hay tareas pendientes.
+                  </div>
                 )}
               </div>
             </div>
-            <div className="bento-card" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column' }}>
-              <div className="section-header" style={{ marginBottom: 12, fontSize: 13 }}>Notas Recientes<span className="view-all">Ver todas</span></div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
+
+            {/* Notas Recientes */}
+            <div className="bg-surface2 rounded-xl border border-borderDark p-6 flex flex-col shadow-sm">
+              <div className="flex items-center justify-between mb-6 pb-3 border-b border-borderDark/60">
+                <h3 className="text-sm font-bold text-textMain uppercase tracking-wider flex items-center gap-2">
+                  <FileText size={16} className="text-accent" /> Notas Recientes
+                </h3>
+                <span className="text-xs font-bold text-accent cursor-pointer hover:underline uppercase tracking-wider">Ver base</span>
+              </div>
+              <div className="flex flex-col gap-3 flex-1">
                 {recentNotes.length > 0 ? recentNotes.map(n => (
-                  <div key={n.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-deep)', borderRadius: 8, border: '1px solid rgba(255,255,255,0.03)' }}>
-                    <FileText size={14} className="text-accent" style={{ flexShrink: 0 }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <span style={{ fontSize: 12, fontWeight: 500, display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n.title}</span>
+                  <div key={n.id} className="flex items-center justify-between p-3.5 bg-surface rounded-xl border border-borderDark/60 hover:border-borderDark hover:bg-surface/80 transition-all group cursor-pointer">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <FileText size={16} className="text-textDim group-hover:text-accent transition-colors flex-shrink-0" />
+                      <span className="text-xs font-semibold text-textMain truncate group-hover:text-accent transition-colors">{n.title}</span>
                     </div>
+                    <ChevronRight size={16} className="text-textDim group-hover:text-textMain transition-colors flex-shrink-0 ml-2" />
                   </div>
                 )) : (
-                  <div style={{ padding: '16px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12, margin: 'auto' }}>Sin notas recientes</div>
+                  <div className="flex flex-col items-center justify-center p-8 text-textDim text-xs font-medium border border-dashed border-borderDark rounded-xl my-auto">
+                    <FileText size={24} className="mb-2 opacity-30" />
+                    Sin notas recientes registradas.
+                  </div>
                 )}
               </div>
             </div>
+
           </div>
+
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        {/* RIGHT COLUMN: METRICS, QUICK FOCUS & SYSTEM DIAGNOSTICS (4 COLS) */}
+        <div className="xl:col-span-4 flex flex-col gap-6">
 
-          {/* Progress Diario */}
-          <div className="bento-card" style={{ padding: '18px 20px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
-            <div className="section-header" style={{ marginBottom: 12, fontSize: 11 }}>
-              <Zap size={14} color="var(--accent)" />PROGRESO DIARIO
-              <span className="view-all">Hoy</span>
+          {/* PROGRESO DIARIO */}
+          <div className="bg-surface2 rounded-xl border border-borderDark p-6 flex flex-col shadow-sm">
+            <div className="flex items-center justify-between mb-6 pb-3 border-b border-borderDark/60">
+              <h3 className="text-sm font-bold text-textMain uppercase tracking-wider flex items-center gap-2">
+                <Zap size={16} className="text-accent" /> Progreso Diario
+              </h3>
+              <span className="text-xs font-bold text-accent uppercase tracking-wider">Meta 4h</span>
             </div>
-            <div style={{ fontSize: 36, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4, lineHeight: 1 }}>
-              {Math.round((dailyStudyTime / (dailyGoalMinutes * 60)) * 100)}<span style={{ fontSize: 20, color: 'var(--text-muted)' }}>%</span>
+            
+            <div className="flex items-baseline gap-2 mb-2">
+              <span className="text-4xl font-extrabold text-textMain tracking-tight">
+                {Math.round((dailyStudyTime / (dailyGoalMinutes * 60)) * 100)}
+              </span>
+              <span className="text-xl font-bold text-textDim">%</span>
             </div>
-            <div className="stat-subtext" style={{ marginBottom: 12, fontSize: 12 }}>de la meta diaria</div>
-            <div className="progress-track" style={{ height: 6, borderRadius: 3, marginBottom: 10 }}>
-              <div className="progress-fill" style={{ width: `${Math.min(100, Math.round((dailyStudyTime / (dailyGoalMinutes * 60)) * 100))}%`, borderRadius: 3, boxShadow: '0 0 10px var(--accent-glow)' }} />
+            <p className="text-xs text-textDim font-medium mb-6">Completado de la meta de estudio de hoy</p>
+
+            <div className="h-2.5 rounded-full bg-surface border border-borderDark overflow-hidden mb-6 p-0.5">
+              <div
+                className="h-full rounded-full bg-accent transition-all duration-500 shadow-[0_0_12px_var(--accent-glow)]"
+                style={{ width: `${Math.min(100, Math.round((dailyStudyTime / (dailyGoalMinutes * 60)) * 100))}%` }}
+              />
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
-              <div><div className="stat-label" style={{ fontSize: 10 }}>Tiempo actual</div><div style={{ fontSize: 13, fontWeight: 600 }}>{Math.floor(dailyStudyTime / 3600)}h {Math.floor((dailyStudyTime % 3600) / 60)}m</div></div>
-              <div style={{ textAlign: 'right' }}><div className="stat-label" style={{ fontSize: 10 }}>Meta diaria</div><div style={{ fontSize: 13, fontWeight: 600 }}>{Math.floor(dailyGoalMinutes / 60)}h {dailyGoalMinutes % 60}m</div></div>
+
+            <div className="grid grid-cols-2 gap-4 pt-4 border-t border-borderDark/60 bg-surface/50 p-4 rounded-xl border border-borderDark/40">
+              <div>
+                <span className="text-[10px] font-bold text-textDim uppercase tracking-wider block mb-1">Tiempo Actual</span>
+                <span className="text-sm font-extrabold text-textMain">{Math.floor(dailyStudyTime / 3600)}h {Math.floor((dailyStudyTime % 3600) / 60)}m</span>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] font-bold text-textDim uppercase tracking-wider block mb-1">Meta Diaria</span>
+                <span className="text-sm font-extrabold text-textMain">{Math.floor(dailyGoalMinutes / 60)}h {dailyGoalMinutes % 60}m</span>
+              </div>
             </div>
           </div>
 
-          {/* Enfoque Rápido */}
-          <div className="bento-card" style={{ padding: '20px 16px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <div className="section-header" style={{ justifyContent: 'center', marginBottom: 16, fontSize: 11, letterSpacing: '0.1em' }}>
-              <Clock size={14} color="var(--accent)" />ENFOQUE RÁPIDO
+          {/* ENFOQUE RÁPIDO */}
+          <div className="bg-surface2 rounded-xl border border-borderDark p-6 flex flex-col items-center text-center shadow-sm">
+            <div className="w-full flex items-center justify-between mb-6 pb-3 border-b border-borderDark/60">
+              <h3 className="text-sm font-bold text-textMain uppercase tracking-wider flex items-center gap-2">
+                <Clock size={16} className="text-accent" /> Enfoque Rápido
+              </h3>
+              <span className="text-xs font-bold text-textDim uppercase tracking-wider">Crono</span>
             </div>
-            <div className="led-container" style={{ padding: '20px 24px', marginBottom: 16, borderRadius: 12, width: '100%' }}>
-              <div className="led-display" style={{ fontSize: 42, fontWeight: 300, lineHeight: 1 }}>
+
+            <div className="bg-surface border border-borderDark rounded-2xl p-6 w-full mb-6 shadow-inner">
+              <div className="text-5xl font-bold text-accent digital-font tracking-wider mb-2">
                 {formatSessionTime(sessionTime)}
               </div>
-              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 8, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Iniciar sesión</div>
+              <span className="text-[11px] font-bold text-textDim uppercase tracking-widest block">
+                {isTimerActive ? 'Sesión en curso' : 'Temporizador inactivo'}
+              </span>
             </div>
-            <button onClick={toggleTimer} style={{
-              width: 56, height: 56, borderRadius: '50%', border: 'none',
-              background: isTimerActive ? 'rgba(255,23,68,0.15)' : 'var(--accent)',
-              color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: isTimerActive ? '0 0 20px rgba(255,23,68,0.4)' : '0 8px 16px rgba(0,0,0,0.3)',
-              transition: 'all 300ms',
-            }} className="hover-lift">
-              {isTimerActive ? <Pause size={24} fill="#fff" /> : <Play size={24} fill="#fff" style={{ marginLeft: 4 }} />}
+
+            <button
+              onClick={toggleTimer}
+              className={`w-16 h-16 rounded-full flex items-center justify-center text-white font-bold transition-all shadow-lg hover:scale-105 active:scale-95 ${
+                isTimerActive
+                  ? 'bg-red-900/40 border-2 border-accent text-accent shadow-[0_0_25px_rgba(225,29,72,0.3)]'
+                  : 'bg-accent shadow-[0_0_20px_var(--accent-glow)]'
+              }`}
+            >
+              {isTimerActive ? <Pause size={28} fill="currentColor" /> : <Play size={28} fill="currentColor" className="ml-1" />}
             </button>
           </div>
 
-          {/* Racha */}
-          <div className="bento-card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 16 }}>
-            <div style={{
-              width: 48, height: 48, borderRadius: 12,
-              background: hasActivityToday ? 'linear-gradient(135deg, rgba(99,102,241,0.2) 0%, transparent 100%)' : 'var(--bg-deep)',
-              border: `1px solid ${hasActivityToday ? 'rgba(99,102,241,0.4)' : 'var(--border-subtle)'}`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: hasActivityToday ? 'inset 0 0 12px rgba(99,102,241,0.2)' : 'none'
-            }}>
-              <Flame size={24} color={hasActivityToday ? 'var(--accent)' : 'var(--text-muted)'} fill={hasActivityToday ? 'var(--accent)' : 'transparent'} />
+          {/* ESTADO DEL SISTEMA (DIAGNÓSTICO EN TIEMPO REAL) */}
+          <div className="bg-surface2 rounded-xl border border-borderDark p-6 flex flex-col shadow-sm">
+            <div className="flex items-center justify-between mb-6 pb-3 border-b border-borderDark/60">
+              <h3 className="text-sm font-bold text-textMain uppercase tracking-wider flex items-center gap-2">
+                <Monitor size={16} className="text-accent" /> Estado del Sistema
+              </h3>
+              <span className="text-xs font-bold text-textDim uppercase tracking-wider">Tauri Backend</span>
             </div>
-            <div>
-              <div style={{ fontSize: 24, fontWeight: 700, lineHeight: 1, color: 'var(--text-primary)' }}>{streak}</div>
-              <div className="stat-label" style={{ marginTop: 4, fontSize: 11 }}>Racha de días</div>
-            </div>
-          </div>
 
-          {/* Sistema */}
-          <div className="bento-card" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div className="section-header" style={{ marginBottom: 4, fontSize: 11, letterSpacing: '0.05em' }}>
-              <Monitor size={12} />ESTADO DEL SISTEMA
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 6 }}>
+            <div className="flex flex-col gap-4">
               {statsList.map(s => (
-                <div key={s.id} onClick={() => setDetailStat(s.id)} style={{ background: 'var(--bg-deep)', padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.03)', cursor: 'pointer', transition: 'all 200ms' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <s.icon size={12} style={{ color: s.color }} />
-                      <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{s.label}</span>
+                <div
+                  key={s.id}
+                  onClick={() => setDetailStat(s.id)}
+                  className="bg-surface p-4 rounded-xl border border-borderDark/60 hover:border-borderDark hover:bg-surface/80 transition-all cursor-pointer group"
+                >
+                  <div className="flex items-center justify-between mb-2.5">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-6 h-6 rounded-md bg-surface2 border border-borderDark flex items-center justify-center group-hover:scale-105 transition-transform">
+                        <s.icon size={13} style={{ color: s.color }} />
+                      </div>
+                      <span className="text-xs font-bold text-textMain uppercase tracking-wider">{s.label}</span>
                     </div>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: s.color, fontFamily: 'var(--font-mono)' }}>{s.val}{s.unit}</span>
+                    <span className="text-xs font-bold digital-font tracking-wider" style={{ color: s.color }}>
+                      {s.val}{s.unit}
+                    </span>
                   </div>
-                  <div className="progress-track" style={{ height: 3, borderRadius: 2 }}>
-                    <div className="progress-fill" style={{ width: `${s.val}%`, background: s.color, borderRadius: 2 }} />
+
+                  <div className="h-1.5 rounded-full bg-surface2 border border-borderDark/40 overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{ width: `${s.val}%`, backgroundColor: s.color, boxShadow: `0 0 8px ${s.color}` }}
+                    />
                   </div>
                 </div>
               ))}
@@ -378,32 +476,36 @@ export default function Inicio() {
 
       {/* ── DETAIL MODAL ── */}
       {detailContent && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(10px)' }} onClick={() => setDetailStat(null)}>
-          <div className="bento-card" style={{ width: 380, maxHeight: '90vh', overflowY: 'auto', padding: 28 }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--bg-base)', border: `1px solid var(--border-default)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <detailContent.icon size={20} style={{ color: detailContent.color }} />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4" onClick={() => setDetailStat(null)}>
+          <div className="bg-surface2 border border-borderDark rounded-2xl w-full max-w-md p-8 shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-6 pb-4 border-b border-borderDark/60">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-surface border border-borderDark flex items-center justify-center shadow-inner">
+                  <detailContent.icon size={24} style={{ color: detailContent.color }} />
                 </div>
                 <div>
-                  <h2 style={{ fontSize: 18, fontWeight: 600 }}>{detailContent.label}</h2>
-                  <p style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Diagnóstico en tiempo real</p>
+                  <h2 className="text-lg font-extrabold text-textMain uppercase tracking-wider">{detailContent.label}</h2>
+                  <p className="text-xs text-textDim font-medium">Diagnóstico de hardware en tiempo real</p>
                 </div>
               </div>
-              <button onClick={() => setDetailStat(null)} className="btn-ghost" style={{ padding: 4, cursor: 'pointer' }}><X size={18} /></button>
+              <button onClick={() => setDetailStat(null)} className="w-8 h-8 rounded-lg bg-surface border border-borderDark flex items-center justify-center text-textDim hover:text-textMain transition-colors">
+                <X size={18} />
+              </button>
             </div>
 
-            <div style={{ fontSize: 48, fontWeight: 600, color: detailContent.color, textAlign: 'center', marginBottom: 8 }}>
-              {detailContent.val}<span style={{ fontSize: 20, fontWeight: 500 }}>{detailContent.unit}</span>
+            <div className="text-5xl font-extrabold text-center my-6 digital-font tracking-wider" style={{ color: detailContent.color }}>
+              {detailContent.val}<span className="text-2xl font-bold ml-1">{detailContent.unit}</span>
             </div>
 
-            <div className="progress-track" style={{ marginBottom: 24 }}>
-              <div className="progress-fill" style={{ width: `${detailContent.val}%`, background: detailContent.color }} />
+            <div className="h-3 rounded-full bg-surface border border-borderDark overflow-hidden mb-6 p-0.5 shadow-inner">
+              <div className="h-full rounded-full transition-all duration-500" style={{ width: `${detailContent.val}%`, backgroundColor: detailContent.color, boxShadow: `0 0 12px ${detailContent.color}` }} />
             </div>
 
-            <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: 20 }}>{detailContent.detail}</p>
+            <p className="text-xs text-textDim font-medium leading-relaxed mb-6 bg-surface p-4 rounded-xl border border-borderDark/40">
+              {detailContent.detail}
+            </p>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, borderTop: '1px solid var(--border-subtle)', paddingTop: 20 }}>
+            <div className="grid grid-cols-2 gap-3 pt-6 border-t border-borderDark/60">
               {detailContent.id === 'cpu' && (
                 <>
                   <DetailItem label="Frecuencia" value="3.6 GHz" />
@@ -438,7 +540,9 @@ export default function Inicio() {
               )}
             </div>
 
-            <button onClick={() => setDetailStat(null)} className="btn-secondary" style={{ width: '100%', justifyContent: 'center', marginTop: 20 }}>Cerrar</button>
+            <button onClick={() => setDetailStat(null)} className="mt-8 w-full py-3 rounded-xl bg-surface border border-borderDark text-xs font-bold text-textMain hover:bg-surface/80 transition-colors uppercase tracking-wider">
+              Cerrar Diagnóstico
+            </button>
           </div>
         </div>
       )}
@@ -449,9 +553,9 @@ export default function Inicio() {
 
 function DetailItem({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{ background: 'var(--bg-base)', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
-      <div style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{label}</div>
-      <div style={{ fontSize: 13, fontWeight: 600, marginTop: 2 }}>{value}</div>
+    <div className="bg-surface p-3.5 rounded-xl border border-borderDark/60 flex flex-col justify-between">
+      <div className="text-[10px] font-bold text-textDim uppercase tracking-wider mb-1">{label}</div>
+      <div className="text-xs font-extrabold text-textMain">{value}</div>
     </div>
   );
 }

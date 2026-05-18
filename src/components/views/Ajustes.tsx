@@ -6,8 +6,11 @@ import {
   FolderOpen, RefreshCw, ExternalLink, Shield,
   LogOut, Sliders, ListTodo, Music, GraduationCap, FileText, Sheet,
   PlayCircle, Calendar, Database, Upload, ArrowDownToLine, Search,
+  Wifi, CheckCircle
 } from 'lucide-react';
 import { useApp } from '../../store/AppContext';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 import toast from 'react-hot-toast';
 import { open } from '@tauri-apps/plugin-dialog';
 import { getDownloadPath, setDownloadPath } from '../../lib/musicApi';
@@ -31,7 +34,7 @@ const TABS: { id: SettingsTab; label: string; icon: React.ComponentType<{ size?:
   { id: 'estudio', label: 'Estudio', icon: Brain },
   { id: 'integraciones', label: 'Integraciones', icon: Cloud },
   { id: 'descargas', label: 'Descargas', icon: Download },
-  { id: 'notificaciones', label: 'Sonidos', icon: Bell },
+  { id: 'notificaciones', label: 'Sonidos y Alertas', icon: Bell },
 ];
 
 const FONTS = [
@@ -45,30 +48,52 @@ const ACCENT_COLORS = ['#E11D48', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6'];
 
 function Toggle({ checked, onChange, label, desc }: { checked: boolean; onChange: (v: boolean) => void; label: string; desc: string }) {
   return (
-    <label className="flex items-center justify-between p-4 bg-background border border-borderDark rounded-xl cursor-pointer hover:border-borderDark/80 transition-all group">
-      <div className="min-w-0">
-        <span className="text-sm font-medium text-textMain block">{label}</span>
-        <span className="text-[10px] text-textDim mt-0.5 block">{desc}</span>
+    <label className="bento-card hover-lift" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', cursor: 'pointer' }}>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', display: 'block' }}>{label}</span>
+        <span style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4, display: 'block', lineHeight: 1.5 }}>{desc}</span>
       </div>
-      <div className={`relative w-10 h-[22px] rounded-full transition-all duration-200 flex-shrink-0 ml-4 ${checked ? 'bg-accent' : 'bg-surface2 border border-borderDark'}`}>
-        <div className={`absolute top-0.5 w-[18px] h-[18px] rounded-full bg-white shadow-sm transition-all duration-200 ${checked ? 'left-[19px]' : 'left-[1px]'}`} />
-        <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} className="sr-only" />
+      <div style={{ position: 'relative', width: 44, height: 24, borderRadius: 12, background: checked ? 'var(--accent)' : 'var(--bg-deep)', border: '1px solid var(--border-default)', transition: 'all 200ms', flexShrink: 0, marginLeft: 16, display: 'flex', alignItems: 'center', padding: 2 }}>
+        <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#fff', transform: checked ? 'translateX(20px)' : 'translateX(0)', transition: 'all 200ms', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }} />
+        <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} style={{ display: 'none' }} />
       </div>
     </label>
+  );
+}
+
+function InputCard({
+  icon: Icon, label, value, unit, onChange, color, min, max,
+}: {
+  icon: React.ComponentType<any>;
+  label: string; value: number; unit: string;
+  onChange: (v: number) => void; color: string; min?: number; max?: number;
+}) {
+  return (
+    <div className="bento-card" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', padding: '20px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+        <Icon size={16} style={{ color }} />
+        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{label}</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <input type="number" value={value}
+          onChange={e => onChange(parseInt(e.target.value) || 0)}
+          className="input-base" style={{ width: '100%', height: 40, fontSize: 16, fontWeight: 700 }}
+          min={min} max={max} />
+        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)', flexShrink: 0 }}>{unit}</span>
+      </div>
+    </div>
   );
 }
 
 export default function Ajustes() {
   const {
     settings, updateSettings, googleConnected, setGoogleConnected,
-    setCalendarSyncEnabled,
-    lastCalendarSync, setLastCalendarSync,
+    setCalendarSyncEnabled, lastCalendarSync, setLastCalendarSync,
     triggerCalendarSync, importGoogleEvents,
     triggerTasksSync, importGoogleTasks,
     searchYouTubeMusic, importClassroomCourses,
     exportNotesToGoogleDoc, exportStatsToGoogleSheets,
-    loadGoogleProfile,
-    triggerDriveBackup,
+    loadGoogleProfile, triggerDriveBackup,
     events, tasks, notes, courses,
   } = useApp();
 
@@ -85,6 +110,18 @@ export default function Ajustes() {
   const [supabaseConnected, setSupabaseConnected] = useState(false);
   const [supabaseSyncing, setSupabaseSyncing] = useState(false);
 
+  // Real-time clock for header
+  const [currentTime, setCurrentTime] = useState(new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const timeStr = format(currentTime, 'HH:mm');
+  const secondsStr = format(currentTime, 'ss');
+  const dateStr = format(currentTime, "EEEE, d 'de' MMMM, yyyy", { locale: es as any });
+  const dateStrCapitalized = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
+
   useEffect(() => {
     getDownloadPath().then(setDownloadPathState).catch(() => {});
   }, []);
@@ -98,7 +135,6 @@ export default function Ajustes() {
     }
   }, [setGoogleConnected]);
 
-  // Handle OAuth redirect return (Tauri full-page flow)
   useEffect(() => {
     const success = localStorage.getItem('owa_auth_success');
     if (success === 'google') {
@@ -112,7 +148,7 @@ export default function Ajustes() {
             if (profile.givenName) updateSettings({ userName: profile.givenName });
             toast.success(`Bienvenido, ${profile.givenName || profile.displayName}`);
           } else {
-            toast.success('Google conectado');
+            toast.success('Google conectado exitosamente');
           }
         });
       }
@@ -122,14 +158,12 @@ export default function Ajustes() {
       localStorage.removeItem('owa_auth_error');
       toast.error(`Error de autenticación: ${error}`);
     }
-    // Supabase auth return detection
     const sbSuccess = localStorage.getItem('owa_supabase_auth_success');
     if (sbSuccess === 'true') {
       localStorage.removeItem('owa_supabase_auth_success');
       setSupabaseConnected(true);
-      toast.success('Supabase conectado');
+      toast.success('Supabase conectado exitosamente');
     }
-    // Check initial Supabase auth state
     getCurrentUser().then(user => setSupabaseConnected(!!user));
   }, [loadGoogleProfile, setGoogleConnected, updateSettings]);
 
@@ -144,7 +178,7 @@ export default function Ajustes() {
         if (profile.givenName) updateSettings({ userName: profile.givenName });
         toast.success(`Bienvenido, ${profile.givenName || profile.displayName}`);
       } else {
-        toast.success('Google conectado');
+        toast.success('Google conectado exitosamente');
       }
     } else if (!isTauri()) {
       toast.error('No se pudo conectar con Google');
@@ -159,7 +193,7 @@ export default function Ajustes() {
     try {
       await supabaseSignIn();
       setSupabaseConnected(true);
-      toast.success('Supabase conectado');
+      toast.success('Supabase conectado exitosamente');
     } catch {
       toast.error('No se pudo conectar con Supabase');
     }
@@ -168,7 +202,7 @@ export default function Ajustes() {
   const handleSupabaseSignOut = async () => {
     await signOutSupabase();
     setSupabaseConnected(false);
-    toast.success('Supabase desconectado');
+    toast.success('Supabase desconectado exitosamente');
   };
 
   const handleSupabaseSync = async () => {
@@ -180,15 +214,15 @@ export default function Ajustes() {
         events: events.map(e => ({ ...e, user_id: '' }) as unknown as Record<string, unknown>),
         studySessions: [],
       });
-      toast.success('Datos sincronizados con la nube');
-    } catch { toast.error('Error al sincronizar'); }
+      toast.success('Datos sincronizados con la nube exitosamente');
+    } catch { toast.error('Error al sincronizar con Supabase'); }
     setSupabaseSyncing(false);
   };
 
   const handleGoogleSignOut = () => {
     signOut(); setGoogleConnected(false); setCalendarSyncEnabled(false); setLastCalendarSync(null);
     setGoogleProfile(null); setDocsUrl(null); setSheetsUrl(null); setYtResults([]);
-    toast.success('Google desconectado');
+    toast.success('Google desconectado exitosamente');
   };
 
   const handleCalendarSync = async () => {
@@ -196,8 +230,8 @@ export default function Ajustes() {
     try {
       await triggerCalendarSync();
       const count = await importGoogleEvents();
-      toast.success(count > 0 ? `${count} eventos importados de Google Calendar` : 'Eventos sincronizados');
-    } catch { toast.error('Error de sincronización'); }
+      toast.success(count > 0 ? `${count} eventos importados de Google Calendar` : 'Eventos sincronizados exitosamente');
+    } catch { toast.error('Error de sincronización con Google Calendar'); }
     setSyncing(false);
   };
 
@@ -206,8 +240,8 @@ export default function Ajustes() {
     try {
       await triggerTasksSync();
       const count = await importGoogleTasks();
-      toast.success(count > 0 ? `${count} tareas importadas de Google Tasks` : 'Tareas sincronizadas');
-    } catch { toast.error('Error al sincronizar tareas'); }
+      toast.success(count > 0 ? `${count} tareas importadas de Google Tasks` : 'Tareas sincronizadas exitosamente');
+    } catch { toast.error('Error al sincronizar con Google Tasks'); }
     setSyncing(false);
   };
 
@@ -217,9 +251,9 @@ export default function Ajustes() {
     try {
       const results = await searchYouTubeMusic(ytSearch);
       setYtResults(results);
-      if (results.length === 0) toast.error('Sin resultados');
+      if (results.length === 0) toast.error('Sin resultados encontrados');
       else toast.success(`${results.length} resultados encontrados`);
-    } catch { toast.error('Error al buscar en YouTube'); }
+    } catch { toast.error('Error al buscar en YouTube Music'); }
     setSyncing(false);
   };
 
@@ -227,8 +261,8 @@ export default function Ajustes() {
     setSyncing(true);
     try {
       await importClassroomCourses();
-      toast.success('Cursos importados de Google Classroom');
-    } catch { toast.error('Error al importar cursos'); }
+      toast.success('Cursos importados de Google Classroom exitosamente');
+    } catch { toast.error('Error al importar de Google Classroom'); }
     setSyncing(false);
   };
 
@@ -236,8 +270,8 @@ export default function Ajustes() {
     setSyncing(true);
     try {
       const url = await exportNotesToGoogleDoc();
-      if (url) { setDocsUrl(url); }
-    } catch { toast.error('Error al exportar notas'); }
+      if (url) { setDocsUrl(url); toast.success('Notas exportadas a Google Docs'); }
+    } catch { toast.error('Error al exportar notas a Google Docs'); }
     setSyncing(false);
   };
 
@@ -245,8 +279,8 @@ export default function Ajustes() {
     setSyncing(true);
     try {
       const url = await exportStatsToGoogleSheets();
-      if (url) { setSheetsUrl(url); }
-    } catch { toast.error('Error al exportar estadísticas'); }
+      if (url) { setSheetsUrl(url); toast.success('Estadísticas exportadas a Google Sheets'); }
+    } catch { toast.error('Error al exportar estadísticas a Google Sheets'); }
     setSyncing(false);
   };
 
@@ -254,76 +288,106 @@ export default function Ajustes() {
     setSyncing(true);
     try {
       const url = await triggerDriveBackup();
-      if (url) { setBackupUrl(url); toast.success('Backup creado en Google Drive'); }
-    } catch { toast.error('Error al respaldar'); }
+      if (url) { setBackupUrl(url); toast.success('Backup creado en Google Drive exitosamente'); }
+    } catch { toast.error('Error al crear backup en Google Drive'); }
     setSyncing(false);
   };
 
   const handleFontChange = (font: string) => {
     updateSettings({ fontFamily: font });
     document.documentElement.style.setProperty('--font-primary', font);
-    toast.success('Tipografía cambiada');
+    toast.success('Tipografía actualizada exitosamente');
   };
 
   return (
-    <div className="h-full flex flex-col bg-background">
-      <header className="h-16 px-6 flex items-center justify-between shrink-0 border-b border-borderDark/40">
-        <h1 className="text-lg font-semibold text-textMain flex items-center gap-2.5">
-          <Sliders size={18} className="text-accent" /> Configuración
-        </h1>
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface border border-borderDark">
-          <div className="w-1.5 h-1.5 rounded-full bg-success" />
-          <span className="text-[10px] font-medium text-textDim">Activo</span>
+    <div className="page-container" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto' }}>
+      
+      {/* ── HEADER ── */}
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, paddingTop: 8 }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <h1 style={{ fontSize: 32, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.15, letterSpacing: '-0.02em' }}>Configuración</h1>
+            <Sliders size={26} style={{ color: 'var(--accent)' }} />
+          </div>
+          <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 6, fontWeight: 500 }}>Personaliza y optimiza tu entorno de estudio.</p>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: 'var(--bg-deep)', border: '1px solid var(--border-default)', borderRadius: 16, fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>
+              <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--success)', boxShadow: '0 0 8px var(--success)' }} />
+              Conectado
+            </div>
+            <button className="btn-ghost" style={{ padding: 8, borderRadius: '50%' }}><Wifi size={16} /></button>
+            <button className="btn-ghost" style={{ padding: 8, borderRadius: '50%' }}><Bell size={16} /></button>
+          </div>
+
+          <div style={{ textAlign: 'right', borderLeft: '1px solid var(--border-subtle)', paddingLeft: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, justifyContent: 'flex-end' }}>
+              <div className="led-display" style={{ fontSize: 28, fontWeight: 300, lineHeight: 1 }}>{timeStr}</div>
+              <div className="led-seconds" style={{ fontSize: 14 }}>{secondsStr}</div>
+            </div>
+            <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{dateStrCapitalized}</div>
+          </div>
         </div>
       </header>
 
-      <div className="flex flex-1 min-h-0">
-        {/* Sidebar */}
-        <nav className="w-48 shrink-0 border-r border-borderDark/40 p-2 flex flex-col gap-0.5">
+      {/* MAIN CONTENT AREA (SIDEBAR + SETTINGS PANELS) */}
+      <div style={{ display: 'flex', flex: 1, gap: 24, minHeight: 600, alignItems: 'flex-start' }}>
+        
+        {/* INNER SIDEBAR */}
+        <aside className="bento-card" style={{ width: 240, padding: '20px 16px', background: 'var(--bg-deep)', display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8, padding: '0 8px' }}>
+            Categorías
+          </div>
           {TABS.map(tab => {
             const Icon = tab.icon;
+            const active = activeTab === tab.id;
             return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-xs font-medium transition-all text-left ${
-                  activeTab === tab.id
-                    ? 'bg-surface text-textMain shadow-sm'
-                    : 'text-textDim hover:text-textMain hover:bg-surface/50'
-                }`}
-              >
-                <Icon size={15} />
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
+                display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 8,
+                background: active ? 'var(--accent)' : 'transparent',
+                border: 'none', color: active ? '#fff' : 'var(--text-secondary)',
+                fontSize: 13, fontWeight: 600, cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'all 200ms'
+              }}>
+                <Icon size={18} />
                 <span>{tab.label}</span>
               </button>
             );
           })}
-          <div className="flex-1" />
-          <button className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-xs font-medium text-textDim hover:text-danger hover:bg-danger/10 transition-all">
-            <LogOut size={15} /> Cerrar Sesión
+          <div style={{ borderTop: '1px solid var(--border-subtle)', margin: '16px 0 8px 0' }} />
+          <button onClick={() => toast.success('Sesión cerrada')} style={{
+            display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 8,
+            background: 'transparent', border: 'none', color: 'var(--error)',
+            fontSize: 13, fontWeight: 600, cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'all 200ms'
+          }}>
+            <LogOut size={18} />
+            <span>Cerrar Sesión</span>
           </button>
-        </nav>
+        </aside>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 custom-scroll">
-          <div className="max-w-2xl mx-auto">
+        {/* MAIN AREA */}
+        <main className="bento-card" style={{ flex: 1, background: 'var(--bg-deep)', padding: '32px 40px', minHeight: 600 }}>
+          <div style={{ maxWidth: 680, margin: '0 auto' }}>
 
             {/* ═══════════ PERFIL ═══════════ */}
             {activeTab === 'perfil' && (
-              <section>
-                <h2 className="text-base font-semibold text-textMain mb-1">Perfil</h2>
-                <p className="text-[11px] text-textDim mb-5">Tu identidad en OWA Studio</p>
-                <div className="bg-surface border border-borderDark rounded-xl p-5">
-                  <div className="flex items-center gap-5">
-                    <div className="w-14 h-14 rounded-full bg-accent/15 border border-accent/25 flex items-center justify-center text-xl font-semibold text-accent shrink-0">
-                      {settings.userName ? settings.userName.charAt(0).toUpperCase() : 'U'}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <label className="block text-[10px] text-textDim font-medium mb-1.5 uppercase tracking-wider">Nombre</label>
-                      <input type="text" value={settings.userName}
-                        onChange={e => updateSettings({ userName: e.target.value })}
-                        className="w-full h-9 px-3 rounded-lg bg-background border border-borderDark text-sm text-textMain placeholder:text-textDim outline-none focus:border-accent transition-colors"
-                        placeholder="Tu nombre" />
-                    </div>
+              <section style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                <div>
+                  <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>Perfil de Usuario</h2>
+                  <p style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>Tu identidad en OWA Studio</p>
+                </div>
+
+                <div className="bento-card" style={{ padding: '24px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 24 }}>
+                  <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--accent-dim)', border: '2px solid var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, fontWeight: 700, color: 'var(--accent)', flexShrink: 0 }}>
+                    {settings.userName ? settings.userName.charAt(0).toUpperCase() : 'U'}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Nombre de visualización</label>
+                    <input type="text" value={settings.userName}
+                      onChange={e => updateSettings({ userName: e.target.value })}
+                      className="input-base" style={{ width: '100%', height: 42, fontSize: 14, fontWeight: 600 }}
+                      placeholder="Tu nombre" />
                   </div>
                 </div>
               </section>
@@ -331,65 +395,68 @@ export default function Ajustes() {
 
             {/* ═══════════ APARIENCIA ═══════════ */}
             {activeTab === 'apariencia' && (
-              <section>
-                <h2 className="text-base font-semibold text-textMain mb-1">Apariencia</h2>
-                <p className="text-[11px] text-textDim mb-5">Personaliza el aspecto visual</p>
-                <div className="bg-surface border border-borderDark rounded-xl p-5 space-y-6">
-                  {/* Tema */}
-                  <div>
-                    <span className="text-xs font-medium text-textDim uppercase tracking-wider mb-3 block">Modo visual</span>
-                    <div className="flex gap-2">
-                      {[
-                        { id: 'oscuro' as const, label: 'Oscuro', icon: Moon },
-                        { id: 'claro' as const, label: 'Claro', icon: Sun },
-                      ].map(t => {
-                        const Icon = t.icon;
-                        const active = settings.theme === t.id;
-                        return (
-                          <button key={t.id} onClick={() => updateSettings({ theme: t.id })}
-                            className={`flex items-center gap-2 flex-1 px-4 py-2.5 rounded-lg text-xs font-semibold transition-all ${
-                              active ? 'bg-accent text-white shadow-sm' : 'bg-background border border-borderDark text-textDim hover:text-textMain'
-                            }`}>
-                            <Icon size={14} /> {t.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
+              <section style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+                <div>
+                  <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>Apariencia y Diseño</h2>
+                  <p style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>Personaliza el aspecto visual y los tokens de diseño</p>
+                </div>
 
-                  {/* Tipografía */}
-                  <div>
-                    <span className="text-xs font-medium text-textDim uppercase tracking-wider mb-3 block">Tipografía</span>
-                    <div className="grid grid-cols-4 gap-2">
-                      {FONTS.map(font => {
-                        const active = settings.fontFamily === font.family;
-                        return (
-                          <button key={font.name} onClick={() => handleFontChange(font.family)}
-                            className={`p-3 rounded-xl border transition-all ${
-                              active ? 'bg-accent text-white border-accent' : 'bg-background border-borderDark text-textMain hover:border-textDim/40'
-                            }`}>
-                            <div className="text-lg font-semibold mb-0.5 leading-none" style={{ fontFamily: font.family }}>Aa</div>
-                            <div className="text-[9px] font-medium opacity-70">{font.name}</div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Color acento */}
-                  <div>
-                    <span className="text-xs font-medium text-textDim uppercase tracking-wider mb-3 block">Color de acento</span>
-                    <div className="flex gap-3">
-                      {ACCENT_COLORS.map(color => (
-                        <button key={color} onClick={() => updateSettings({ accentColor: color })}
-                          className={`w-9 h-9 rounded-full flex items-center justify-center transition-all hover:scale-110 ${
-                            settings.accentColor === color ? 'ring-2 ring-white ring-offset-[2px] ring-offset-surface' : ''
-                          }`}
-                          style={{ backgroundColor: color }}>
-                          {settings.accentColor === color && <Check size={14} className="text-white" />}
+                {/* Tema */}
+                <div className="bento-card" style={{ padding: '24px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16, display: 'block' }}>Modo Visual</span>
+                  <div style={{ display: 'flex', gap: 16 }}>
+                    {[
+                      { id: 'oscuro' as const, label: 'Modo Oscuro', icon: Moon },
+                      { id: 'claro' as const, label: 'Modo Claro', icon: Sun },
+                    ].map(t => {
+                      const Icon = t.icon;
+                      const active = settings.theme === t.id;
+                      return (
+                        <button key={t.id} onClick={() => updateSettings({ theme: t.id })} className="hover-lift" style={{
+                          flex: 1, padding: '16px', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
+                          background: active ? 'var(--accent)' : 'var(--bg-deep)', border: '1px solid var(--border-default)',
+                          color: active ? '#fff' : 'var(--text-secondary)', fontSize: 14, fontWeight: 600, cursor: 'pointer'
+                        }}>
+                          <Icon size={18} /> {t.label}
                         </button>
-                      ))}
-                    </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Tipografía */}
+                <div className="bento-card" style={{ padding: '24px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16, display: 'block' }}>Familia Tipográfica</span>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+                    {FONTS.map(font => {
+                      const active = settings.fontFamily === font.family;
+                      return (
+                        <button key={font.name} onClick={() => handleFontChange(font.family)} className="hover-lift" style={{
+                          padding: '20px 16px', borderRadius: 12, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+                          background: active ? 'var(--accent)' : 'var(--bg-deep)', border: '1px solid var(--border-default)',
+                          color: active ? '#fff' : 'var(--text-primary)', cursor: 'pointer'
+                        }}>
+                          <div style={{ fontSize: 24, fontWeight: 700, fontFamily: font.family, lineHeight: 1 }}>Aa</div>
+                          <div style={{ fontSize: 12, fontWeight: 600, opacity: active ? 1 : 0.7 }}>{font.name}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Color Acento */}
+                <div className="bento-card" style={{ padding: '24px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16, display: 'block' }}>Color de Acento Principal</span>
+                  <div style={{ display: 'flex', gap: 20 }}>
+                    {ACCENT_COLORS.map(color => (
+                      <button key={color} onClick={() => updateSettings({ accentColor: color })} className="hover-lift" style={{
+                        width: 48, height: 48, borderRadius: '50%', background: color, border: settings.accentColor === color ? '3px solid #fff' : 'none',
+                        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        boxShadow: settings.accentColor === color ? `0 0 16px ${color}` : 'none'
+                      }}>
+                        {settings.accentColor === color && <Check size={20} color="#fff" strokeWidth={3} />}
+                      </button>
+                    ))}
                   </div>
                 </div>
               </section>
@@ -397,305 +464,266 @@ export default function Ajustes() {
 
             {/* ═══════════ ESTUDIO ═══════════ */}
             {activeTab === 'estudio' && (
-              <section>
-                <h2 className="text-base font-semibold text-textMain mb-1">Estudio</h2>
-                <p className="text-[11px] text-textDim mb-5">Configura tu método Pomodoro</p>
-                <div className="bg-surface border border-borderDark rounded-xl p-5">
-                  <div className="grid grid-cols-2 gap-4">
-                    <InputCard icon={Timer} label="Enfoque" value={settings.pomodoroTime / 60} unit="min"
-                      onChange={v => updateSettings({ pomodoroTime: v * 60 || 1500 })} color="var(--accent)" min={1} max={120} />
-                    <InputCard icon={Zap} label="Descanso" value={settings.shortBreakTime / 60} unit="min"
-                      onChange={v => updateSettings({ shortBreakTime: v * 60 || 300 })} color="#10B981" min={1} max={30} />
-                    <InputCard icon={Target} label="Meta diaria" value={settings.dailyGoal} unit="min"
-                      onChange={v => updateSettings({ dailyGoal: v || 240 })} color="#3B82F6" min={1} />
-                    <InputCard icon={BookOpen} label="Pomodoros" value={settings.pomodoroGoal} unit="ciclos"
-                      onChange={v => updateSettings({ pomodoroGoal: v || 4 })} color="#F59E0B" min={1} max={20} />
-                  </div>
+              <section style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                <div>
+                  <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>Tiempos y Metas de Estudio</h2>
+                  <p style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>Configura los intervalos de tu método Pomodoro y objetivos cognitivos</p>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 20 }}>
+                  <InputCard icon={Timer} label="Tiempo de Enfoque" value={settings.pomodoroTime / 60} unit="minutos"
+                    onChange={v => updateSettings({ pomodoroTime: v * 60 || 1500 })} color="var(--accent)" min={1} max={120} />
+                  <InputCard icon={Zap} label="Descanso Corto" value={settings.shortBreakTime / 60} unit="minutos"
+                    onChange={v => updateSettings({ shortBreakTime: v * 60 || 300 })} color="#10B981" min={1} max={30} />
+                  <InputCard icon={Target} label="Meta Diaria de Estudio" value={settings.dailyGoal} unit="minutos"
+                    onChange={v => updateSettings({ dailyGoal: v || 240 })} color="#3B82F6" min={1} />
+                  <InputCard icon={BookOpen} label="Objetivo Pomodoros" value={settings.pomodoroGoal} unit="ciclos"
+                    onChange={v => updateSettings({ pomodoroGoal: v || 4 })} color="#F59E0B" min={1} max={20} />
                 </div>
               </section>
             )}
 
             {/* ═══════════ INTEGRACIONES ═══════════ */}
             {activeTab === 'integraciones' && (
-              <section>
-                <h2 className="text-base font-semibold text-textMain mb-1">Integraciones</h2>
-                <p className="text-[11px] text-textDim mb-5">Conecta tus servicios externos</p>
+              <section style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                <div>
+                  <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>Integraciones en la Nube</h2>
+                  <p style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>Conecta tus servicios externos para sincronización y respaldo</p>
+                </div>
 
                 {!GOOGLE_CLIENT_ID && (
-                  <div className="p-4 rounded-xl bg-warning/10 border border-warning/20 mb-4">
-                    <p className="text-xs text-warning font-semibold mb-1">API Key requerida</p>
-                    <p className="text-[10px] text-textDim">Crea un archivo .env con VITE_GOOGLE_CLIENT_ID=tu_client_id para activar Google services.</p>
+                  <div style={{ padding: '16px 20px', background: 'var(--warning-dim)', border: '1px solid var(--warning)', borderRadius: 12 }}>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--warning)', marginBottom: 4 }}>Falta Clave de API de Google</p>
+                    <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Configura VITE_GOOGLE_CLIENT_ID en el archivo .env para activar los servicios de Google Calendar, Classroom y Drive.</p>
                   </div>
                 )}
 
-                <div className="space-y-3">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   {/* Cuenta Google */}
-                  <div className="bg-surface border border-borderDark rounded-xl p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${googleConnected ? 'bg-success/15' : 'bg-background border border-borderDark'}`}>
-                          <Shield size={16} className={googleConnected ? 'text-success' : 'text-textDim'} />
+                  <div className="bento-card" style={{ padding: '20px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                        <div style={{ width: 44, height: 44, borderRadius: 12, background: googleConnected ? 'var(--success-dim)' : 'var(--bg-deep)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Shield size={20} style={{ color: googleConnected ? 'var(--success)' : 'var(--text-tertiary)' }} />
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-textMain">Cuenta Google</p>
-                          <p className="text-[10px] text-textDim">
-                            {googleConnected
-                              ? (googleProfile?.email || 'Conectada')
-                              : 'Desconectada'}
+                          <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Cuenta de Google</p>
+                          <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                            {googleConnected ? (googleProfile?.email || 'Conectada exitosamente') : 'Desconectada'}
                           </p>
                         </div>
                       </div>
-                      <button onClick={googleConnected ? handleGoogleSignOut : handleGoogleSignIn}
-                        className={`px-4 py-1.5 rounded-lg text-[11px] font-semibold transition-all ${
-                          googleConnected
-                            ? 'bg-error/10 text-error border border-error/20 hover:bg-error/20'
-                            : 'bg-accent text-white hover:bg-accent/90'
-                        }`}>
-                        {googleConnected ? 'Desconectar' : 'Conectar'}
+                      <button onClick={googleConnected ? handleGoogleSignOut : handleGoogleSignIn} className={googleConnected ? 'btn-secondary' : 'btn-primary'} style={{ fontSize: 12, fontWeight: 600, padding: '0 16px', height: 36 }}>
+                        {googleConnected ? 'Desconectar' : 'Conectar Cuenta'}
                       </button>
                     </div>
                     {googleProfile && (
-                      <div className="flex items-center gap-3 mt-3 pt-3 border-t border-borderDark/40">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border-subtle)' }}>
                         {googleProfile.photoUrl ? (
-                          <img src={googleProfile.photoUrl} alt="" className="w-8 h-8 rounded-full" />
+                          <img src={googleProfile.photoUrl} alt="" style={{ width: 32, height: 32, borderRadius: '50%' }} />
                         ) : (
-                          <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center text-xs font-semibold text-accent">
+                          <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--accent-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, color: 'var(--accent)' }}>
                             {googleProfile.displayName.charAt(0)}
                           </div>
                         )}
-                        <div className="text-xs text-textDim">
-                          <span className="text-textMain font-medium block">{googleProfile.displayName}</span>
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                          <span style={{ fontWeight: 700, color: 'var(--text-primary)', display: 'block' }}>{googleProfile.displayName}</span>
                           {googleProfile.email}
                         </div>
                       </div>
                     )}
                   </div>
 
-                  {/* Supabase Cloud Sync */}
-                  <div className="bg-surface border border-borderDark rounded-xl p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${supabaseConnected ? 'bg-emerald-500/15' : 'bg-background border border-borderDark'}`}>
-                          <Database size={15} className={supabaseConnected ? 'text-emerald-400' : 'text-textDim'} />
+                  {/* Supabase Cloud */}
+                  <div className="bento-card" style={{ padding: '20px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                        <div style={{ width: 44, height: 44, borderRadius: 12, background: supabaseConnected ? 'var(--success-dim)' : 'var(--bg-deep)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Database size={20} style={{ color: supabaseConnected ? 'var(--success)' : 'var(--text-tertiary)' }} />
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-textMain">Supabase Cloud</p>
-                          <p className="text-[10px] text-textDim">
-                            {supabaseConnected ? 'Conectado' : 'Sincronización en la nube'}
+                          <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Supabase Cloud</p>
+                          <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                            {supabaseConnected ? 'Conectado a la base de datos' : 'Sincronización en la nube'}
                           </p>
                         </div>
                       </div>
-                      <div className="flex gap-2">
+                      <div style={{ display: 'flex', gap: 12 }}>
                         {supabaseConnected && (
-                          <button onClick={handleSupabaseSync} disabled={supabaseSyncing}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-400 text-[11px] font-semibold hover:bg-emerald-500/25 disabled:opacity-40 transition-all">
-                            {supabaseSyncing ? <div className="w-3 h-3 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" /> : <ArrowDownToLine size={12} />}
+                          <button onClick={handleSupabaseSync} disabled={supabaseSyncing} className="btn-secondary" style={{ fontSize: 12, fontWeight: 600, padding: '0 16px', height: 36, display: 'flex', alignItems: 'center', gap: 8 }}>
+                            {supabaseSyncing ? <RefreshCw size={14} className="animate-spin" /> : <ArrowDownToLine size={14} />}
                             Sincronizar
                           </button>
                         )}
-                        <button onClick={supabaseConnected ? handleSupabaseSignOut : handleSupabaseSignIn}
-                          className={`px-4 py-1.5 rounded-lg text-[11px] font-semibold transition-all ${
-                            supabaseConnected
-                              ? 'bg-error/10 text-error border border-error/20 hover:bg-error/20'
-                              : 'bg-accent text-white hover:bg-accent/90'
-                          }`}>
-                          {supabaseConnected ? 'Desconectar' : 'Conectar'}
+                        <button onClick={supabaseConnected ? handleSupabaseSignOut : handleSupabaseSignIn} className={supabaseConnected ? 'btn-secondary' : 'btn-primary'} style={{ fontSize: 12, fontWeight: 600, padding: '0 16px', height: 36 }}>
+                          {supabaseConnected ? 'Desconectar' : 'Conectar Supabase'}
                         </button>
                       </div>
                     </div>
                   </div>
 
                   {/* Google Calendar */}
-                  <div className="bg-surface border border-borderDark rounded-xl overflow-hidden">
-                    <div className="p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-lg bg-blue-500/15 flex items-center justify-center">
-                            <Calendar size={15} className="text-blue-400" />
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-textMain">Google Calendar</p>
-                            <p className="text-[10px] text-textDim">
-                              {lastCalendarSync
-                                ? `Última sincronización: ${new Date(lastCalendarSync).toLocaleString()}`
-                                : 'Sincroniza tus eventos de estudio'}
-                            </p>
-                          </div>
+                  <div className="bento-card" style={{ padding: '20px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                        <div style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--info-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Calendar size={20} style={{ color: 'var(--info)' }} />
+                        </div>
+                        <div>
+                          <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Google Calendar</p>
+                          <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                            {lastCalendarSync ? `Última sincronización: ${new Date(lastCalendarSync).toLocaleString()}` : 'Sincroniza tus eventos y planificador'}
+                          </p>
                         </div>
                       </div>
-                      <div className="flex gap-2">
-                        <button onClick={handleCalendarSync} disabled={!googleConnected || syncing}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500/15 text-blue-400 text-[11px] font-semibold hover:bg-blue-500/25 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
-                          {syncing ? <div className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" /> : <RefreshCw size={12} />}
-                          Sincronizar
-                        </button>
-                      </div>
                     </div>
+                    <button onClick={handleCalendarSync} disabled={!googleConnected || syncing} className="btn-secondary" style={{ fontSize: 12, fontWeight: 600, padding: '0 16px', height: 36, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {syncing ? <RefreshCw size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                      Sincronizar Eventos
+                    </button>
                   </div>
 
                   {/* Google Tasks */}
-                  <div className="bg-surface border border-borderDark rounded-xl overflow-hidden">
-                    <div className="p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-lg bg-yellow-500/15 flex items-center justify-center">
-                            <ListTodo size={15} className="text-yellow-400" />
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-textMain">Google Tasks</p>
-                            <p className="text-[10px] text-textDim">{tasks.length} tareas locales para sincronizar</p>
-                          </div>
+                  <div className="bento-card" style={{ padding: '20px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                        <div style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--warning-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <ListTodo size={20} style={{ color: 'var(--warning)' }} />
+                        </div>
+                        <div>
+                          <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Google Tasks</p>
+                          <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>{tasks.length} tareas locales disponibles</p>
                         </div>
                       </div>
-                      <button onClick={handleTasksSync} disabled={!googleConnected || syncing}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-yellow-500/15 text-yellow-400 text-[11px] font-semibold hover:bg-yellow-500/25 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
-                        {syncing ? <div className="w-3 h-3 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" /> : <RefreshCw size={12} />}
-                        Sincronizar tareas
-                      </button>
                     </div>
+                    <button onClick={handleTasksSync} disabled={!googleConnected || syncing} className="btn-secondary" style={{ fontSize: 12, fontWeight: 600, padding: '0 16px', height: 36, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {syncing ? <RefreshCw size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                      Sincronizar Tareas
+                    </button>
                   </div>
 
                   {/* YouTube Music */}
-                  <div className="bg-surface border border-borderDark rounded-xl overflow-hidden">
-                    <div className="p-4">
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="w-9 h-9 rounded-lg bg-red-500/15 flex items-center justify-center">
-                          <PlayCircle size={15} className="text-red-400" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-textMain">YouTube Music</p>
-                          <p className="text-[10px] text-textDim">Busca música de estudio / lofi</p>
-                        </div>
+                  <div className="bento-card" style={{ padding: '20px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
+                      <div style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--error-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <PlayCircle size={20} style={{ color: 'var(--error)' }} />
                       </div>
-                      <div className="flex gap-2 mb-3">
-                        <input type="text" value={ytSearch} onChange={e => setYtSearch(e.target.value)}
-                          placeholder="lofi hip hop, study music..."
-                          className="flex-1 h-9 px-3 rounded-lg bg-background border border-borderDark text-xs text-textMain placeholder:text-textDim outline-none focus:border-accent transition-colors"
-                          onKeyDown={e => e.key === 'Enter' && handleYouTubeSearch()} />
-                        <button onClick={handleYouTubeSearch} disabled={!googleConnected || syncing}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/15 text-red-400 text-[11px] font-semibold hover:bg-red-500/25 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
-                          <Search size={12} /> Buscar
-                        </button>
+                      <div>
+                        <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>YouTube Music</p>
+                        <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>Busca pistas de estudio y lofi para tu reproductor</p>
                       </div>
-                      {ytResults.length > 0 && (
-                        <div className="space-y-1.5 max-h-48 overflow-y-auto custom-scroll">
-                          {ytResults.map(r => (
-                            <a key={r.videoId} href={`https://youtube.com/watch?v=${r.videoId}`} target="_blank" rel="noopener noreferrer"
-                              className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-background transition-colors group">
-                              <img src={r.thumbnail} alt="" className="w-10 h-7 rounded object-cover shrink-0" />
-                              <div className="min-w-0 flex-1">
-                                <p className="text-[11px] font-medium text-textMain truncate">{r.title}</p>
-                                <p className="text-[9px] text-textDim">{r.channel}</p>
-                              </div>
-                              <ExternalLink size={10} className="text-textDim opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-                            </a>
-                          ))}
-                        </div>
-                      )}
                     </div>
+                    <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+                      <input type="text" value={ytSearch} onChange={e => setYtSearch(e.target.value)} placeholder="Ej. lofi hip hop beats..." className="input-base" style={{ flex: 1, height: 40, fontSize: 13 }} onKeyDown={e => e.key === 'Enter' && handleYouTubeSearch()} />
+                      <button onClick={handleYouTubeSearch} disabled={!googleConnected || syncing} className="btn-secondary" style={{ fontSize: 12, fontWeight: 600, padding: '0 20px', height: 40, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Search size={14} /> Buscar
+                      </button>
+                    </div>
+                    {ytResults.length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 200, overflowY: 'auto' }}>
+                        {ytResults.map(r => (
+                          <a key={r.videoId} href={`https://youtube.com/watch?v=${r.videoId}`} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 8, borderRadius: 8, background: 'var(--bg-deep)', textDecoration: 'none' }}>
+                            <img src={r.thumbnail} alt="" style={{ width: 56, height: 40, borderRadius: 6, objectFit: 'cover' }} />
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.title}</p>
+                              <p style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{r.channel}</p>
+                            </div>
+                            <ExternalLink size={14} style={{ color: 'var(--text-tertiary)', marginRight: 8 }} />
+                          </a>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* Google Classroom */}
-                  <div className="bg-surface border border-borderDark rounded-xl overflow-hidden">
-                    <div className="p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-lg bg-purple-500/15 flex items-center justify-center">
-                            <GraduationCap size={15} className="text-purple-400" />
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-textMain">Google Classroom</p>
-                            <p className="text-[10px] text-textDim">{courses.length} cursos en OWA Studio</p>
-                          </div>
+                  <div className="bento-card" style={{ padding: '20px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                        <div style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--accent-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <GraduationCap size={20} style={{ color: 'var(--accent)' }} />
+                        </div>
+                        <div>
+                          <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Google Classroom</p>
+                          <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>{courses.length} cursos configurados</p>
                         </div>
                       </div>
-                      <button onClick={handleClassroomImport} disabled={!googleConnected || syncing}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-500/15 text-purple-400 text-[11px] font-semibold hover:bg-purple-500/25 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
-                        {syncing ? <div className="w-3 h-3 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" /> : <Upload size={12} />}
-                        Importar cursos
-                      </button>
                     </div>
+                    <button onClick={handleClassroomImport} disabled={!googleConnected || syncing} className="btn-secondary" style={{ fontSize: 12, fontWeight: 600, padding: '0 16px', height: 36, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {syncing ? <RefreshCw size={14} className="animate-spin" /> : <Upload size={14} />}
+                      Importar Cursos
+                    </button>
                   </div>
 
                   {/* Google Docs */}
-                  <div className="bg-surface border border-borderDark rounded-xl overflow-hidden">
-                    <div className="p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-lg bg-indigo-500/15 flex items-center justify-center">
-                            <FileText size={15} className="text-indigo-400" />
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-textMain">Google Docs</p>
-                            <p className="text-[10px] text-textDim">{notes.length} notas para exportar</p>
-                          </div>
+                  <div className="bento-card" style={{ padding: '20px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                        <div style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--info-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <FileText size={20} style={{ color: 'var(--info)' }} />
+                        </div>
+                        <div>
+                          <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Google Docs</p>
+                          <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>{notes.length} notas locales para exportar</p>
                         </div>
                       </div>
-                      <button onClick={handleExportNotes} disabled={!googleConnected || syncing}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-500/15 text-indigo-400 text-[11px] font-semibold hover:bg-indigo-500/25 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
-                        {syncing ? <div className="w-3 h-3 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" /> : <Upload size={12} />}
-                        Exportar notas a Docs
-                      </button>
-                      {docsUrl && (
-                        <a href={docsUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 mt-2 text-[10px] text-indigo-400 hover:underline">
-                          <ExternalLink size={10} /> Abrir en Google Docs
-                        </a>
-                      )}
                     </div>
+                    <button onClick={handleExportNotes} disabled={!googleConnected || syncing} className="btn-secondary" style={{ fontSize: 12, fontWeight: 600, padding: '0 16px', height: 36, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {syncing ? <RefreshCw size={14} className="animate-spin" /> : <Upload size={14} />}
+                      Exportar Notas a Docs
+                    </button>
+                    {docsUrl && (
+                      <a href={docsUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 12, fontSize: 12, color: 'var(--info)', textDecoration: 'none', fontWeight: 600 }}>
+                        <ExternalLink size={14} /> Abrir documento generado
+                      </a>
+                    )}
                   </div>
 
                   {/* Google Sheets */}
-                  <div className="bg-surface border border-borderDark rounded-xl overflow-hidden">
-                    <div className="p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-lg bg-green-500/15 flex items-center justify-center">
-                            <Sheet size={15} className="text-green-400" />
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-textMain">Google Sheets</p>
-                            <p className="text-[10px] text-textDim">Exporta estadísticas de estudio</p>
-                          </div>
+                  <div className="bento-card" style={{ padding: '20px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                        <div style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--success-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Sheet size={20} style={{ color: 'var(--success)' }} />
+                        </div>
+                        <div>
+                          <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Google Sheets</p>
+                          <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>Exporta estadísticas e historial de estudio</p>
                         </div>
                       </div>
-                      <button onClick={handleExportStats} disabled={!googleConnected || syncing}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-500/15 text-green-400 text-[11px] font-semibold hover:bg-green-500/25 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
-                        {syncing ? <div className="w-3 h-3 border-2 border-green-400 border-t-transparent rounded-full animate-spin" /> : <Sheet size={12} />}
-                        Exportar estadísticas
-                      </button>
-                      {sheetsUrl && (
-                        <a href={sheetsUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 mt-2 text-[10px] text-green-400 hover:underline">
-                          <ExternalLink size={10} /> Abrir en Google Sheets
-                        </a>
-                      )}
                     </div>
+                    <button onClick={handleExportStats} disabled={!googleConnected || syncing} className="btn-secondary" style={{ fontSize: 12, fontWeight: 600, padding: '0 16px', height: 36, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {syncing ? <RefreshCw size={14} className="animate-spin" /> : <Sheet size={14} />}
+                      Exportar Estadísticas
+                    </button>
+                    {sheetsUrl && (
+                      <a href={sheetsUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 12, fontSize: 12, color: 'var(--success)', textDecoration: 'none', fontWeight: 600 }}>
+                        <ExternalLink size={14} /> Abrir hoja de cálculo
+                      </a>
+                    )}
                   </div>
 
                   {/* Google Drive Backup */}
-                  <div className="bg-surface border border-borderDark rounded-xl overflow-hidden">
-                    <div className="p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-lg bg-emerald-500/15 flex items-center justify-center">
-                            <Database size={15} className="text-emerald-400" />
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-textMain">Google Drive Backup</p>
-                            <p className="text-[10px] text-textDim">Respaldos completos en la nube</p>
-                          </div>
+                  <div className="bento-card" style={{ padding: '20px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                        <div style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--success-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Database size={20} style={{ color: 'var(--success)' }} />
+                        </div>
+                        <div>
+                          <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Respaldo en Google Drive</p>
+                          <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>Crea copias de seguridad completas de tu entorno</p>
                         </div>
                       </div>
-                      <button onClick={handleDriveBackup} disabled={!googleConnected || syncing}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-400 text-[11px] font-semibold hover:bg-emerald-500/25 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
-                        {syncing ? <div className="w-3 h-3 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" /> : <ArrowDownToLine size={12} />}
-                        Respaldar datos
-                      </button>
-                      {backupUrl && (
-                        <a href={backupUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 mt-2 text-[10px] text-emerald-400 hover:underline">
-                          <ExternalLink size={10} /> Ver en Google Drive
-                        </a>
-                      )}
                     </div>
+                    <button onClick={handleDriveBackup} disabled={!googleConnected || syncing} className="btn-secondary" style={{ fontSize: 12, fontWeight: 600, padding: '0 16px', height: 36, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {syncing ? <RefreshCw size={14} className="animate-spin" /> : <ArrowDownToLine size={14} />}
+                      Respaldar Datos
+                    </button>
+                    {backupUrl && (
+                      <a href={backupUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 12, fontSize: 12, color: 'var(--success)', textDecoration: 'none', fontWeight: 600 }}>
+                        <ExternalLink size={14} /> Ver archivo en Google Drive
+                      </a>
+                    )}
                   </div>
                 </div>
               </section>
@@ -703,35 +731,42 @@ export default function Ajustes() {
 
             {/* ═══════════ DESCARGAS ═══════════ */}
             {activeTab === 'descargas' && (
-              <section>
-                <h2 className="text-base font-semibold text-textMain mb-1">Descargas</h2>
-                <p className="text-[11px] text-textDim mb-5">Gestión de descargas de música</p>
-                <div className="bg-surface border border-borderDark rounded-xl p-5 space-y-5">
+              <section style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                <div>
+                  <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>Almacenamiento y Descargas</h2>
+                  <p style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>Gestiona los directorios locales de música y formato de archivos</p>
+                </div>
+
+                <div className="bento-card" style={{ padding: '24px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: 24 }}>
                   <div>
-                    <label className="block text-[10px] text-textDim font-medium uppercase tracking-wider mb-2">Carpeta de destino</label>
-                    <div className="flex gap-3">
-                      <div className="flex-1 flex items-center gap-3 bg-background border border-borderDark rounded-lg px-3.5 py-2.5 min-w-0">
-                        <FolderOpen size={14} className="text-textDim shrink-0" />
-                        <span className="text-xs font-medium text-textMain truncate">{downloadPath || 'Descargas/OWA Music'}</span>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>Directorio de Destino</label>
+                    <div style={{ display: 'flex', gap: 16 }}>
+                      <div className="input-base" style={{ flex: 1, height: 42, display: 'flex', alignItems: 'center', gap: 12, padding: '0 16px' }}>
+                        <FolderOpen size={16} style={{ color: 'var(--text-tertiary)' }} />
+                        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {downloadPath || 'Descargas/OWA Music'}
+                        </span>
                       </div>
                       <button onClick={async () => {
                         try {
-                          const folder = await open({ directory: true, multiple: false, title: 'Carpeta de descargas' });
-                          if (folder) { setDownloadPathState(String(folder)); await setDownloadPath(String(folder)); toast.success('Carpeta actualizada'); }
-                        } catch { toast.error('No se pudo cambiar la carpeta'); }
-                      }} className="bg-background border border-borderDark hover:bg-surface text-textMain px-4 py-2.5 rounded-lg text-xs font-medium transition-colors shrink-0">
-                        <FolderOpen size={14} />
+                          const folder = await open({ directory: true, multiple: false, title: 'Seleccionar carpeta de descargas' });
+                          if (folder) { setDownloadPathState(String(folder)); await setDownloadPath(String(folder)); toast.success('Directorio actualizado exitosamente'); }
+                        } catch { toast.error('No se pudo cambiar el directorio'); }
+                      }} className="btn-secondary hover-lift" style={{ padding: '0 20px', height: 42, fontSize: 13, fontWeight: 600 }}>
+                        Cambiar
                       </button>
                     </div>
                   </div>
+
                   <div>
-                    <label className="block text-[10px] text-textDim font-medium uppercase tracking-wider mb-2">Formato de audio</label>
-                    <div className="flex gap-2">
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>Formato de Compresión de Audio</label>
+                    <div style={{ display: 'flex', gap: 16 }}>
                       {['mp3', 'm4a'].map(f => (
-                        <button key={f} onClick={() => setAudioFormat(f as 'mp3' | 'm4a')}
-                          className={`px-5 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all ${
-                            audioFormat === f ? 'bg-accent text-white' : 'bg-background border border-borderDark text-textDim hover:text-textMain'
-                          }`}>
+                        <button key={f} onClick={() => setAudioFormat(f as any)} className="hover-lift" style={{
+                          padding: '12px 28px', borderRadius: 10, fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em',
+                          background: audioFormat === f ? 'var(--accent)' : 'var(--bg-deep)', border: '1px solid var(--border-default)',
+                          color: audioFormat === f ? '#fff' : 'var(--text-secondary)', cursor: 'pointer'
+                        }}>
                           {f}
                         </button>
                       ))}
@@ -743,44 +778,23 @@ export default function Ajustes() {
 
             {/* ═══════════ NOTIFICACIONES ═══════════ */}
             {activeTab === 'notificaciones' && (
-              <section>
-                <h2 className="text-base font-semibold text-textMain mb-1">Sonidos</h2>
-                <p className="text-[11px] text-textDim mb-5">Control de alertas y notificaciones</p>
-                <div className="space-y-2.5">
+              <section style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                <div>
+                  <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>Sonidos y Alertas de Sistema</h2>
+                  <p style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>Controla el comportamiento acústico y notificaciones del entorno</p>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   <Toggle checked={settings.notifications} onChange={v => updateSettings({ notifications: v })}
-                    label="Alertas de temporizador" desc="Notificar al completar ciclos de estudio o descansos" />
+                    label="Alertas de Temporizador Pomodoro" desc="Emitir notificación visual y acústica al finalizar ciclos de estudio o descansos programados." />
                   <Toggle checked={settings.soundEffects} onChange={v => updateSettings({ soundEffects: v })}
-                    label="Efectos de sonido" desc="Reproducir sonidos al interactuar con la interfaz" />
+                    label="Efectos de Sonido Hápticos" desc="Reproducir sutiles retroalimentaciones acústicas al interactuar con botones, pestañas y modales del sistema." />
                 </div>
               </section>
             )}
 
           </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function InputCard({
-  icon: Icon, label, value, unit, onChange, color, min, max,
-}: {
-  icon: React.ComponentType<any>;
-  label: string; value: number; unit: string;
-  onChange: (v: number) => void; color: string; min?: number; max?: number;
-}) {
-  return (
-    <div className="bg-background border border-borderDark rounded-xl p-3.5">
-      <div className="flex items-center gap-2 mb-3">
-        <Icon size={12} style={{ color }} />
-        <span className="text-[9px] font-semibold text-textDim uppercase tracking-wider">{label}</span>
-      </div>
-      <div className="flex items-center gap-1.5">
-        <input type="number" value={value}
-          onChange={e => onChange(parseInt(e.target.value) || 0)}
-          className="w-full bg-surface2 border border-borderDark rounded-lg px-3 py-1.5 text-sm text-textMain font-semibold outline-none focus:border-accent transition-colors"
-          min={min} max={max} />
-        <span className="text-[10px] text-textDim font-medium shrink-0">{unit}</span>
+        </main>
       </div>
     </div>
   );

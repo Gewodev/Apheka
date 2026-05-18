@@ -280,8 +280,8 @@ export default function Tareas() {
           {/* LED Clock */}
           <div className="flex flex-col items-end">
             <div className="flex items-baseline gap-1 bg-surface border border-borderDark px-4 py-1.5 rounded-lg shadow-inner">
-              <span className="led-display text-3xl font-light tracking-wider text-accent">{timeStr}</span>
-              <span className="led-seconds text-sm font-semibold text-accent/70">{secondsStr}</span>
+              <span className="led-display text-3xl tracking-wider">{timeStr}</span>
+              <span className="led-seconds text-sm font-semibold">{secondsStr}</span>
             </div>
             <span className="text-[10px] text-textDim mt-1 font-medium capitalize">{dateStr}</span>
           </div>

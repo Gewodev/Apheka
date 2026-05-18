@@ -50,6 +50,8 @@ export interface Note {
   createdAt: string;
   updatedAt: string;
   isPinned: boolean;
+  tags?: string[];
+  priority?: 'high' | 'medium' | 'low';
 }
 
 export interface NoteFolder {

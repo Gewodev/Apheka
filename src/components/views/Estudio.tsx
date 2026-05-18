@@ -7,7 +7,7 @@ import {
   PenSquare, Bell, ChartPie, ChevronUp, ChevronDown, Check,
   Activity, ArrowRight, Quote, LineChart, BellOff,
   Coffee, Edit3, Settings, HelpCircle, StopCircle,
-  List, FileText, Calendar, TrendingUp,
+  List, FileText, Calendar, TrendingUp, Music, CloudRain, TreePine, Waves,
   ChevronRight, AlertTriangle, RefreshCw, Timer as TimerIcon,
 } from 'lucide-react';
 import { useApp } from '../../store/AppContext';
@@ -48,6 +48,14 @@ const repasoConcepts = [
 
 const maxTowerBlocks = 8;
 
+const AMBIENT_SOUNDS = [
+  { id: 'ruido_blanco', name: 'Ruido blanco', desc: 'Frecuencia continua para aislamiento', icon: Activity, url: 'https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8b9195b4a.mp3' },
+  { id: 'lluvia', name: 'Lluvia suave', desc: 'Sonido ambiente natural de lluvia', icon: CloudRain, url: 'https://cdn.pixabay.com/download/audio/2021/08/09/audio_88447e769f.mp3' },
+  { id: 'cafe', name: 'Café parís', desc: 'Ambiente de cafetería tranquila', icon: Coffee, url: 'https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0a13f69d2.mp3' },
+  { id: 'bosque', name: 'Bosque nocturno', desc: 'Naturaleza y viento nocturno', icon: TreePine, url: 'https://cdn.pixabay.com/download/audio/2021/09/06/audio_0ab404526b.mp3' },
+  { id: 'olas', name: 'Olas del mar', desc: 'Marea calmada y constante', icon: Waves, url: 'https://cdn.pixabay.com/download/audio/2022/05/16/audio_dbb37712bd.mp3' },
+];
+
 export default function Estudio() {
   const { 
     tasks, notes, sessionTime, isTimerActive, toggleTimer, resetTimer,
@@ -66,6 +74,30 @@ export default function Estudio() {
   const [conceptIndex, setConceptIndex] = useState(0);
   const [owasClaimed, setOwasClaimed] = useState(false);
   const [syncingTasks, setSyncingTasks] = useState(false);
+  
+  const [activeAmbient, setActiveAmbient] = useState(AMBIENT_SOUNDS[1]); // Lluvia suave
+  const [isAmbientPlaying, setIsAmbientPlaying] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    if (!audioRef.current) {
+      audioRef.current = new Audio(activeAmbient.url);
+      audioRef.current.loop = true;
+    } else {
+      audioRef.current.src = activeAmbient.url;
+    }
+    if (isAmbientPlaying) {
+      audioRef.current.play().catch(() => {});
+    } else {
+      audioRef.current.pause();
+    }
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+    };
+  }, [activeAmbient, isAmbientPlaying]);
+
   const restStartRef = useRef(0);
   const hasTriggeredRef = useRef(false);
   const tipTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -483,6 +515,8 @@ export default function Estudio() {
             </div>
           </div>
 
+          {/* Espaciador inferior para mantener balance sin el bloque de ambiente */}
+          <div className="h-4"></div>
         </div>
 
         {/* Right Column */}
@@ -587,95 +621,6 @@ export default function Estudio() {
           </div>
 
         </div>
-      </div>
-
-      {/* ═══ RACHA ═══ */}
-        <div className="rounded-xl p-5 bg-surface border border-borderDark flex flex-col">
-          <div className="flex items-center justify-between mb-4 shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-warning/10 text-warning">
-                <Flame size={16} strokeWidth={1.5} />
-              </div>
-              <span className="text-base font-semibold text-textMain">Racha</span>
-            </div>
-            <span className="text-lg font-semibold font-mono text-warning">{streak} días</span>
-          </div>
-
-          <div className="mb-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-textDim">Meta diaria</span>
-              <span className="text-xs font-semibold text-textMain">{totalMin} / {GOAL_MIN} min</span>
-            </div>
-            <div className="h-[3px] rounded-full bg-surface2 border border-borderDark/30 overflow-hidden">
-              <div className="h-full rounded-full bg-gradient-to-r from-accent/60 to-accent transition-all duration-500" style={{ width: `${goalProgress}%` }} />
-            </div>
-          </div>
-
-          <div className="mb-4">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <TrendingUp size={13} className="text-textDim" strokeWidth={1.5} />
-                <span className="text-xs font-medium text-textDim">Semanal</span>
-              </div>
-              <span className="text-[11px] font-semibold text-textDim">{weekTotal} min</span>
-            </div>
-            <div className="flex items-end gap-1 h-16">
-              {weekDayData.map((b, i) => {
-                const maxMin = Math.max(...weekDayData.map(d => d.minutes), 1);
-                const pct = Math.min(100, (b.minutes / maxMin) * 100);
-                return (
-                  <div key={i} className="flex-1 flex flex-col items-center gap-0.5 h-full justify-end group">
-                    <div
-                      className="w-full rounded-t-sm transition-all duration-300 cursor-pointer"
-                      style={{
-                        height: `${Math.max(3, pct)}%`,
-                        background: `linear-gradient(to top, ${pct > 60 ? 'var(--accent)' : pct > 30 ? 'color-mix(in srgb, var(--accent) 70%, transparent)' : 'color-mix(in srgb, var(--accent) 40%, transparent)'}, transparent)`,
-                      }}
-                    />
-                    <span className="text-[9px] font-medium text-textDim/60">{b.label}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="mb-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Calendar size={13} className="text-textDim" strokeWidth={1.5} />
-              <span className="text-xs font-medium text-textDim">Actividad</span>
-              <span className="text-[11px] font-semibold text-textDim ml-auto">{heatmap.filter(d => d.lvl > 0).length}/30</span>
-            </div>
-            <div className="grid grid-cols-10 gap-1">
-              {heatmap.map((d, i) => (
-                <div
-                  key={i}
-                  className="transition-all duration-150 hover:scale-125 hover:z-10 cursor-pointer rounded-[3px]"
-                  style={{ backgroundColor: heatmapColors[d.lvl], width: 12, height: 12 }}
-                  title={d.tip}
-                />
-              ))}
-            </div>
-            <div className="flex items-center justify-end gap-2 mt-2 text-[9px] font-medium text-textDim/50">
-              <span>Menos</span>
-              {[0, 1, 2, 3, 4].map(l => (
-                <div key={l} className="w-2 h-2 rounded-[2px]" style={{ backgroundColor: heatmapColors[l] }} />
-              ))}
-              <span>Más</span>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between p-3 rounded-xl bg-surface2/30 border border-borderDark/20">
-            <div className="flex items-center gap-2.5">
-              <div className={`p-2 rounded-lg ${isTimerActive ? 'bg-accent/10 text-accent' : 'bg-surface2 text-textDim'}`}>
-                <TimerIcon size={14} strokeWidth={1.5} />
-              </div>
-              <div>
-                <span className="text-xs font-medium text-textMain">Timer</span>
-                <p className="text-[11px] text-textDim">{isTimerActive ? 'En sesión' : 'Inactivo'}</p>
-              </div>
-            </div>
-            <span className={`text-base font-semibold font-mono ${isTimerActive ? 'text-accent' : 'text-textDim'}`}>{timerDisplayVal}</span>
-          </div>
       </div>
 
       {/* ── POMODORO COMPLETION DIALOG ── */}

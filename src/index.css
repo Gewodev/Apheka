@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;600;700&family=Roboto:wght@300;400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;600;700&family=Roboto:wght@300;400;500;700&family=Share+Tech+Mono&family=Orbitron:wght@400;500;600;700;800;900&family=Chakra+Petch:wght@500;600;700&family=Wallpoet&family=Digital+Numbers&display=swap');
 @import "tailwindcss";
 
 @theme {
@@ -51,6 +51,7 @@
   --radius-full: 9999px;
 
   --font-primary: 'Inter', sans-serif;
+  --font-heading: 'Outfit', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 
   --heatmap-0: transparent;
@@ -593,54 +594,81 @@ body,
 }
 
 /* ══════════════════════════════════════════════════
-   LED DISPLAY SYSTEM
+   LED DISPLAY SYSTEM — Ultra Premium Digital Screen
    ══════════════════════════════════════════════════ */
+.digital-font {
+  font-family: 'Digital Numbers', 'Share Tech Mono', 'Orbitron', 'Wallpoet', var(--font-mono);
+  letter-spacing: 0.06em;
+  text-shadow: 0 0 10px var(--led-glow), 0 0 22px var(--led-glow), 0 0 35px rgba(255, 23, 68, 0.3);
+  animation: ledPulse 4s infinite;
+}
+
 .led-display {
-  font-family: var(--font-mono);
+  font-family: 'Digital Numbers', 'Share Tech Mono', 'Orbitron', 'Wallpoet', var(--font-mono);
   color: var(--led-color);
-  text-shadow: 0 0 8px var(--led-glow), 0 0 20px var(--led-glow);
-  letter-spacing: 0.04em;
+  text-shadow: 0 0 10px var(--led-glow), 0 0 20px var(--led-glow), 0 0 30px var(--led-glow);
+  letter-spacing: 0.06em;
+  font-weight: 700;
 }
 
 .led-time-lg {
-  font-size: 56px;
-  font-weight: 300;
+  font-size: 64px;
+  font-weight: 700;
   line-height: 0.85;
+  letter-spacing: 0.08em;
 }
 
 .led-time-md {
-  font-size: 36px;
-  font-weight: 300;
+  font-size: 40px;
+  font-weight: 700;
   line-height: 0.85;
+  letter-spacing: 0.06em;
 }
 
 .led-time-sm {
-  font-size: 18px;
-  font-weight: 400;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
 }
 
 .led-seconds {
-  font-size: 14px;
-  color: rgba(255, 23, 68, 0.45);
-  font-family: var(--font-mono);
-  margin-left: 2px;
+  font-size: 16px;
+  color: var(--led-color);
+  opacity: 0.85;
+  font-family: 'Digital Numbers', 'Share Tech Mono', var(--font-mono);
+  margin-left: 4px;
+  text-shadow: 0 0 8px var(--led-glow);
+  font-weight: 700;
 }
 
 .led-container {
-  background: var(--bg-deep);
+  background: #040406;
   border-radius: var(--radius-lg);
-  border: 1px solid rgba(255, 255, 255, 0.03);
-  padding: 12px 20px;
+  border: 2px solid rgba(255, 255, 255, 0.08);
+  padding: 16px 24px;
   position: relative;
   overflow: hidden;
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.8), inset 0 0 8px var(--led-dim), 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+/* Glass reflection and digital scanlines overlay */
+.led-container::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 45%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.005) 100%);
+  pointer-events: none;
+  z-index: 2;
 }
 
 .led-container::after {
   content: '';
   position: absolute;
   inset: 0;
-  background: radial-gradient(ellipse at center, rgba(255, 23, 68, 0.03) 0%, transparent 70%);
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.35) 50%), radial-gradient(ellipse at center, var(--led-dim) 0%, transparent 70%);
+  background-size: 100% 4px, 100% 100%;
   pointer-events: none;
+  z-index: 1;
 }
 
 /* ══════════════════════════════════════════════════
@@ -943,8 +971,11 @@ body,
 h1,
 h2,
 h3,
+h4,
+h5,
+h6,
 .font-outfit {
-  font-family: var(--font-primary);
+  font-family: var(--font-heading);
 }
 
 /* ══════════════════════════════════════════════════
