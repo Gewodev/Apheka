@@ -23,11 +23,11 @@
       {
         "label": "floating-timer",
         "title": "OWA Studio - Timer",
-        "width": 240,
-        "height": 120,
+        "width": 200,
+        "height": 170,
         "resizable": false,
-        "decorations": false,
-        "transparent": true,
+        "decorations": true,
+        "transparent": false,
         "alwaysOnTop": true,
         "visible": false,
         "skipTaskbar": true

@@ -66,10 +66,10 @@ fn open_floating_timer(app_handle: tauri::AppHandle) {
         tauri::WebviewUrl::App("index.html?window=timer".into()),
     )
     .title("OWA Studio - Timer")
-    .inner_size(240.0, 120.0)
+    .inner_size(200.0, 170.0)
     .resizable(false)
-    .decorations(false)
-    .transparent(true)
+    .decorations(true)
+    .transparent(false)
     .always_on_top(true)
     .skip_taskbar(true)
     .visible(false)

@@ -63,8 +63,24 @@ function AppContent() {
       const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
       root.setAttribute('data-theme', isDark ? 'oscuro' : 'claro');
     }
-    root.style.setProperty('--accent', settings.accentColor);
+    const c = settings.accentColor;
+    root.style.setProperty('--accent', c);
     root.style.setProperty('--font-primary', settings.fontFamily);
+    // Derive rgba variants from hex color
+    const h2r = (hex: string) => {
+      const r = parseInt(hex.slice(1, 3), 16);
+      const g = parseInt(hex.slice(3, 5), 16);
+      const b = parseInt(hex.slice(5, 7), 16);
+      return { r, g, b };
+    };
+    const { r, g, b } = h2r(c);
+    root.style.setProperty('--accent-soft', `rgba(${r},${g},${b},0.12)`);
+    root.style.setProperty('--accent-glow', `rgba(${r},${g},${b},0.30)`);
+    root.style.setProperty('--accent-dim', `rgba(${r},${g},${b},0.06)`);
+    root.style.setProperty('--led-color', c);
+    root.style.setProperty('--led-glow', `rgba(${r},${g},${b},0.45)`);
+    root.style.setProperty('--led-dim', `rgba(${r},${g},${b},0.08)`);
+    root.style.setProperty('--led-segment-off', `rgba(${r},${g},${b},0.06)`);
   }, [settings.theme, settings.accentColor, settings.fontFamily]);
 
   const initials = settings.userName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
@@ -173,7 +189,7 @@ function AppContent() {
         ) : isOAuthCallback ? (
           <OAuthCallback />
         ) : (
-          <div key={activeView} className="fade-in-animation" style={{ height: '100%', paddingBottom: 80 }}>
+          <div key={activeView} className="fade-in-animation" style={{ height: '100%' }}>
             {activeView === 'inicio' && <Inicio />}
             {activeView === 'estudio' && <Estudio />}
             {activeView === 'tareas' && <Tareas />}
@@ -185,7 +201,7 @@ function AppContent() {
           {activeView === 'curso_detalle' && <Cursos initialCourseId={selectedCourseId || undefined} />}
           </div>
         )}
-        <GlobalPlayer />
+        <GlobalPlayer isCollapsed={isCollapsed} />
       </main>
 
       <Toaster position="bottom-right" toastOptions={{ style: { background: 'var(--bg-elevated)', color: 'var(--text-primary)', border: '1px solid var(--border-default)', borderRadius: 12, fontSize: 13 } }} />

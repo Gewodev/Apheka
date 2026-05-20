@@ -1,6 +1,11 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode, Dispatch, SetStateAction } from 'react';
 import { emit } from '@tauri-apps/api/event';
+import { convertFileSrc } from '@tauri-apps/api/core';
+import { readFile } from '@tauri-apps/plugin-fs';
 import toast from 'react-hot-toast';
+
+const globalAudio = new Audio();
+globalAudio.volume = 0.7;
 
 // ════════════════════════════════════════════════════
 //  CORE TYPES
@@ -98,25 +103,18 @@ export interface ScheduleEvent {
   recurring?: 'none' | 'daily' | 'weekly' | 'monthly';
 }
 
-export interface Playlist {
-  id: string;
-  name: string;
-  coverImage?: string; // base64 or blob url
-  coverUrl?: string;
-  trackIds: string[];
-  createdAt: string;
-}
-
 export interface Track {
   id: string;
   title: string;
   artist: string;
+  collaborators?: string[];
   duration: number;   // seconds
   source: 'local' | 'youtube' | 'spotify';
-  url?: string;       // file blob url or youtube url
+  url?: string;       // file path or youtube url
   coverImage?: string;
   coverUrl?: string;
   isFavorite: boolean;
+  listenedTime: number; // seconds
 }
 
 export interface DownloadItem {
@@ -147,6 +145,8 @@ export interface StudySession {
 }
 
 export interface Settings {
+  // ...existing fields
+  chronoGoal: number; // seconds, default 25 * 60
   theme: 'claro' | 'oscuro' | 'sistema';
   accentColor: string;
   userName: string;
@@ -173,12 +173,13 @@ export interface AppNotification {
 // ════════════════════════════════════════════════════
 
 interface AppState {
+  roundsCompleted: number;
   tasks: Task[];
   notes: Note[];
   noteFolders: NoteFolder[];
   courses: Course[];
   events: ScheduleEvent[];
-  playlists: Playlist[];
+
   tracks: Track[];
   studySessions: StudySession[];
   settings: Settings;
@@ -191,28 +192,41 @@ interface AppState {
   isTimerActive: boolean;
   isRest: boolean;
   setIsRest: (val: boolean) => void;
+  sessionType: 'pomodoro' | 'chrono';
+  // Pause tracking and time distribution
+  accumulatedPauseTime: number;
+  pauseStartTime: number | null;
+  distractionCount: number;
+  focusPomodoroTime: number;
+  focusChronoTime: number;
+  breakTime: number;
   // Music Player
   currentTrackId: string | null;
+  youtubeVideoUrl: string | null;
   isPlayingMusic: boolean;
   musicVolume: number;
   musicProgress: number;
   musicDuration: number;
+  musicListeningTime: number;
   shuffleMode: boolean;
   repeatMode: 'none' | 'all' | 'one';
   trackHistory: string[];
   playCounts: Record<string, number>;
   musicQueue: string[];
+  artists: { id: string; name: string; profileImage?: string }[];
   // Downloads
   downloadQueue: DownloadItem[];
   // Integrations
   googleConnected: boolean;
   calendarSyncEnabled: boolean;
   lastCalendarSync: string | null;
+  showCompletion: boolean;
 }
 
 type ViewId = 'inicio' | 'estudio' | 'tareas' | 'notas' | 'musica' | 'planificacion' | 'investigacion' | 'ajustes' | 'curso_detalle';
 
 interface AppContextType extends AppState {
+  setSessionType: (val: 'pomodoro' | 'chrono') => void;
   // Tasks
   addTask: (task: Omit<Task, 'id' | 'createdAt' | 'status' | 'subtasks' | 'files' | 'notes' | 'studyTime'>) => void;
   clearAllTasks: () => void;
@@ -241,9 +255,6 @@ interface AppContextType extends AppState {
   updateEvent: (id: string, updates: Partial<ScheduleEvent>) => void;
   deleteEvent: (id: string) => void;
   // Music
-  addPlaylist: (playlist: Omit<Playlist, 'id' | 'createdAt'>) => void;
-  updatePlaylist: (id: string, updates: Partial<Playlist>) => void;
-  deletePlaylist: (id: string) => void;
   addTrack: (track: Omit<Track, 'id'>) => string;
   updateTrack: (id: string, updates: Partial<Track>) => void;
   deleteTrack: (id: string) => void;
@@ -251,12 +262,16 @@ interface AppContextType extends AppState {
   // Music Player
   playTrack: (id: string) => void;
   toggleMusicPlayback: () => void;
+  setIsPlayingMusic: (v: boolean | ((prev: boolean) => boolean)) => void;
   setMusicVolume: (volume: number) => void;
   setMusicProgress: (progress: number) => void;
   setShuffleMode: (mode: boolean) => void;
   setRepeatMode: (mode: 'none' | 'all' | 'one') => void;
   setMusicQueue: (queue: string[]) => void;
   clearAllMusicData: () => void;
+  addArtist: (name: string) => void;
+  updateArtist: (id: string, updates: { name?: string; profileImage?: string }) => void;
+  deleteArtist: (id: string) => void;
   // Timer / Study
   addStudySession: (session: Omit<StudySession, 'id'>) => void;
   incrementSessionTime: () => void;
@@ -269,6 +284,20 @@ interface AppContextType extends AppState {
   unlinkTaskFromTimer: () => void;
   toggleTimer: () => void;
   resetTimer: () => void;
+  setIsTimerActive: Dispatch<SetStateAction<boolean>>;
+  setSessionTime: Dispatch<SetStateAction<number>>;
+  setDailyStudyTime: Dispatch<SetStateAction<number>>;
+  setWeeklyStudyTime: Dispatch<SetStateAction<Record<string, number>>>;
+  setTasks: Dispatch<SetStateAction<Task[]>>;
+  setPomodoroSessions: Dispatch<SetStateAction<number>>;
+  setShowCompletion: Dispatch<SetStateAction<boolean>>;
+  setRoundsCompleted: Dispatch<SetStateAction<number>>;
+  setAccumulatedPauseTime: Dispatch<SetStateAction<number>>;
+  setPauseStartTime: Dispatch<SetStateAction<number | null>>;
+  setDistractionCount: Dispatch<SetStateAction<number>>;
+  setFocusPomodoroTime: Dispatch<SetStateAction<number>>;
+  setFocusChronoTime: Dispatch<SetStateAction<number>>;
+  setBreakTime: Dispatch<SetStateAction<number>>;
   // Downloads
   addToDownloadQueue: (item: Omit<DownloadItem, 'id' | 'progress' | 'status' | 'completedItems'>) => string;
   updateDownloadProgress: (id: string, progress: number) => void;
@@ -318,6 +347,7 @@ const defaultCourses: Course[] = [
 ];
 
 const defaultSettings: Settings = {
+  chronoGoal: 25 * 60,
   theme: 'oscuro',
   accentColor: '#E11D48',
   userName: 'MaxCB',
@@ -349,7 +379,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [noteFolders, setNoteFolders] = useState<NoteFolder[]>(defaultFolders);
   const [courses, setCourses] = useState<Course[]>(defaultCourses);
   const [events, setEvents] = useState<ScheduleEvent[]>([]);
-  const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [studySessions, setStudySessions] = useState<StudySession[]>([]);
   const [settings, setSettings] = useState<Settings>(defaultSettings);
@@ -361,8 +390,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [timerLocked, setTimerLocked] = useState(false);
   const [isTimerActive, setIsTimerActive] = useState(false);
   const [isRest, setIsRest] = useState(false);
+  const [sessionType, setSessionType] = useState<'pomodoro' | 'chrono'>('pomodoro');
+  const [showCompletion, setShowCompletion] = useState(false);
+  const [roundsCompleted, setRoundsCompleted] = useState(0);
+
+  // Pause tracking and time distribution
+  const [accumulatedPauseTime, setAccumulatedPauseTime] = useState(0);
+  const [pauseStartTime, setPauseStartTime] = useState<number | null>(null);
+  const [distractionCount, setDistractionCount] = useState(0);
+  const [focusPomodoroTime, setFocusPomodoroTime] = useState(0);
+  const [focusChronoTime, setFocusChronoTime] = useState(0);
+  const [breakTime, setBreakTime] = useState(0);
 
   const [currentTrackId, setCurrentTrackId] = useState<string | null>(null);
+  const [youtubeVideoUrl, setYoutubeVideoUrl] = useState<string | null>(null);
   const [isPlayingMusic, setIsPlayingMusic] = useState(false);
   const [musicVolume, setMusicVolume] = useState(0.7);
   const [musicProgress, setMusicProgress] = useState(0);
@@ -383,23 +424,55 @@ export function AppProvider({ children }: { children: ReactNode }) {
     _setRepeatMode(mode);
     if (mode !== 'none') _setShuffleMode(false);
   }, []);
-  const [trackHistory, setTrackHistory] = useState<string[]>([]);
-  const [playCounts, setPlayCounts] = useState<Record<string, number>>({});
+   const [trackPlayDurations, setTrackPlayDurations] = useState<Record<string, number>>({});
+   const [currentTrackStartTime, setCurrentTrackStartTime] = useState<number | null>(null);
+   const [artists, setArtists] = useState<{ id: string; name: string }[]>([]);
+   const [trackHistory, setTrackHistory] = useState<string[]>([]);
+   const [playCounts, setPlayCounts] = useState<Record<string, number>>({});
   const [musicQueue, setMusicQueue] = useState<string[]>([]);
   const [downloadQueue, setDownloadQueue] = useState<DownloadItem[]>([]);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const currentTrackIdRef = useRef(currentTrackId);
-  currentTrackIdRef.current = currentTrackId;
-  const tracksRef = useRef(tracks);
-  tracksRef.current = tracks;
-  const shuffleModeRef = useRef(shuffleMode);
-  shuffleModeRef.current = shuffleMode;
-  const repeatModeRef = useRef(repeatMode);
-  repeatModeRef.current = repeatMode;
-  const musicQueueRef = useRef(musicQueue);
-  musicQueueRef.current = musicQueue;
-  const playTrackRef = useRef<(id: string) => void>(() => {});
-  const [navigateTo, setNavigateTo] = useState<ViewId | null>(null);
+  const autoPlayRef = useRef(false);
+  const currentBlobUrlRef = useRef<string | null>(null);
+  const [musicListeningTime, setMusicListeningTime] = useState(0);
+  const [musicListeningDate, setMusicListeningDate] = useState(() => new Date().toISOString().slice(0, 10));
+
+  // Reset listening time daily
+  useEffect(() => {
+    const check = setInterval(() => {
+      const today = new Date().toISOString().slice(0, 10);
+      if (today !== musicListeningDate) {
+        setMusicListeningTime(0);
+        setMusicListeningDate(today);
+      }
+    }, 30000); // check every 30s
+    return () => clearInterval(check);
+  }, [musicListeningDate]);
+
+  // Increment listening time every second while music plays
+  useEffect(() => {
+    if (!isPlayingMusic) return;
+    const interval = setInterval(() => {
+      setMusicListeningTime(prev => prev + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isPlayingMusic]);
+
+   const currentTrackIdRef = useRef(currentTrackId);
+   const tracksRef = useRef(tracks);
+   const shuffleModeRef = useRef(shuffleMode);
+   const repeatModeRef = useRef(repeatMode);
+   const musicQueueRef = useRef(musicQueue);
+   const playTrackRef = useRef<(id: string) => void>(() => {});
+   const musicVolumeRef = useRef(musicVolume);
+
+   useEffect(() => { currentTrackIdRef.current = currentTrackId; }, [currentTrackId]);
+   useEffect(() => { tracksRef.current = tracks; }, [tracks]);
+   useEffect(() => { shuffleModeRef.current = shuffleMode; }, [shuffleMode]);
+   useEffect(() => { repeatModeRef.current = repeatMode; }, [repeatMode]);
+   useEffect(() => { musicQueueRef.current = musicQueue; }, [musicQueue]);
+   useEffect(() => { musicVolumeRef.current = musicVolume; }, [musicVolume]);
+
+   const [navigateTo, setNavigateTo] = useState<ViewId | null>(null);
   const [googleConnected, setGoogleConnected] = useState(false);
   const [calendarSyncEnabled, setCalendarSyncEnabled] = useState(false);
   const [lastCalendarSync, setLastCalendarSync] = useState<string | null>(null);
@@ -410,11 +483,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (stored) {
       try {
         const data = JSON.parse(stored);
-        if (data.playlists) setPlaylists(data.playlists);
         if (data.tracks) setTracks(data.tracks);
         if (data.trackHistory) setTrackHistory(data.trackHistory);
         if (data.playCounts) setPlayCounts(data.playCounts);
         if (data.musicQueue) setMusicQueue(data.musicQueue);
+        if (data.artists) setArtists(data.artists);
         if (data.shuffleMode !== undefined) _setShuffleMode(data.shuffleMode);
         if (data.repeatMode) _setRepeatMode(data.repeatMode);
         if (data.tasks) setTasks(data.tasks);
@@ -425,10 +498,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (data.studySessions) setStudySessions(data.studySessions);
         if (data.settings) setSettings({ ...defaultSettings, ...data.settings });
         if (data.sessionTime) setSessionTime(data.sessionTime);
+        if (data.sessionType) setSessionType(data.sessionType);
         if (data.weeklyStudyTime) setWeeklyStudyTime(data.weeklyStudyTime);
         if (data.dailyStudyTime) setDailyStudyTime(data.dailyStudyTime);
         if (data.pomodoroSessions) setPomodoroSessions(data.pomodoroSessions);
         if (data.musicVolume !== undefined) setMusicVolume(data.musicVolume);
+        if (data.currentTrackId) setCurrentTrackId(data.currentTrackId);
+        if (data.musicListeningTime !== undefined) {
+          const today = new Date().toISOString().slice(0, 10);
+          if (data.musicListeningDate === today) {
+            setMusicListeningTime(data.musicListeningTime);
+          }
+        }
+        if (data.accumulatedPauseTime !== undefined) setAccumulatedPauseTime(data.accumulatedPauseTime);
+        setPauseStartTime(null);
+        if (data.distractionCount !== undefined) setDistractionCount(data.distractionCount);
+        if (data.focusPomodoroTime !== undefined) setFocusPomodoroTime(data.focusPomodoroTime);
+        if (data.focusChronoTime !== undefined) setFocusChronoTime(data.focusChronoTime);
+        if (data.breakTime !== undefined) setBreakTime(data.breakTime);
         // Always start paused
         setIsPlayingMusic(false);
       } catch (e) {
@@ -442,6 +529,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
   activeTaskIdRef.current = activeTaskId;
   const sessionTimeRef = useRef(sessionTime);
   sessionTimeRef.current = sessionTime;
+  const isRestRef = useRef(isRest);
+  isRestRef.current = isRest;
+  const sessionTypeRef = useRef(sessionType);
+  sessionTypeRef.current = sessionType;
+  const accumulatedPauseTimeRef = useRef(accumulatedPauseTime);
+  accumulatedPauseTimeRef.current = accumulatedPauseTime;
+  const pauseStartTimeRef = useRef(pauseStartTime);
+  pauseStartTimeRef.current = pauseStartTime;
+  const distractionCountRef = useRef(distractionCount);
+  distractionCountRef.current = distractionCount;
+  const pomodoroSessionsRef = useRef(pomodoroSessions);
+  pomodoroSessionsRef.current = pomodoroSessions;
+  const sessionsCountRef = useRef(studySessions.length);
+  sessionsCountRef.current = studySessions.length;
 
   // Timer interval with sync
   useEffect(() => {
@@ -454,16 +555,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
             sessionTime: next,
             isTimerActive: true,
             activeTaskId: activeTaskIdRef.current,
+            isRest: isRestRef.current,
+            sessionType: sessionTypeRef.current,
+            pomodoroTime: settings.pomodoroTime,
+            shortBreakTime: settings.shortBreakTime,
+            accumulatedPauseTime: accumulatedPauseTimeRef.current,
+            pauseStartTime: pauseStartTimeRef.current,
+            distractionCount: distractionCountRef.current,
+            pomodoroSessions: pomodoroSessionsRef.current,
+            pomodoroGoal: settings.pomodoroGoal,
+            sessionsCount: sessionsCountRef.current,
           }));
           return next;
         });
-        setDailyStudyTime(prev => prev + 1);
-        const today = new Date().toISOString().split('T')[0];
-        setWeeklyStudyTime(prev => ({ ...prev, [today]: (prev[today] || 0) + 1 }));
 
-        const currentTaskId = activeTaskIdRef.current;
-        if (currentTaskId) {
-          setTasks(prev => prev.map(t => t.id === currentTaskId ? { ...t, studyTime: t.studyTime + 1 } : t));
+        const rest = isRestRef.current;
+        const type = sessionTypeRef.current;
+
+        if (rest) {
+          setBreakTime(prev => prev + 1);
+        } else {
+          setDailyStudyTime(prev => prev + 1);
+          const today = new Date().toISOString().split('T')[0];
+          setWeeklyStudyTime(prev => ({ ...prev, [today]: (prev[today] || 0) + 1 }));
+
+          if (type === 'pomodoro') {
+            setFocusPomodoroTime(prev => prev + 1);
+          } else {
+            setFocusChronoTime(prev => prev + 1);
+          }
+
+          const currentTaskId = activeTaskIdRef.current;
+          if (currentTaskId) {
+            setTasks(prev => prev.map(t => t.id === currentTaskId ? { ...t, studyTime: t.studyTime + 1 } : t));
+          }
         }
       }, 1000);
       return () => clearInterval(interval);
@@ -472,30 +597,89 @@ export function AppProvider({ children }: { children: ReactNode }) {
         sessionTime: sessionTimeRef.current,
         isTimerActive: false,
         activeTaskId: activeTaskIdRef.current,
-        isRest: false,
+        isRest: isRestRef.current,
+        sessionType: sessionTypeRef.current,
+        pomodoroTime: settings.pomodoroTime,
+        shortBreakTime: settings.shortBreakTime,
+        accumulatedPauseTime: accumulatedPauseTimeRef.current,
+        pauseStartTime: pauseStartTimeRef.current,
+        distractionCount: distractionCountRef.current,
+        pomodoroSessions: pomodoroSessionsRef.current,
+        pomodoroGoal: settings.pomodoroGoal,
+        sessionsCount: sessionsCountRef.current,
       }));
     }
-  }, [isTimerActive]);
+  }, [isTimerActive, settings.pomodoroTime, settings.shortBreakTime]);
+
+  // Sync timer state instantly when isRest, isTimerActive, or sessionType changes
+  useEffect(() => {
+    emit('timer:sync', JSON.stringify({
+      sessionTime: sessionTimeRef.current,
+      isTimerActive: isTimerActive,
+      activeTaskId: activeTaskIdRef.current,
+      isRest: isRest,
+      sessionType: sessionType,
+      pomodoroTime: settings.pomodoroTime,
+      shortBreakTime: settings.shortBreakTime,
+      accumulatedPauseTime: accumulatedPauseTime,
+      pauseStartTime: pauseStartTime,
+      distractionCount: distractionCount,
+      pomodoroSessions: pomodoroSessions,
+      pomodoroGoal: settings.pomodoroGoal,
+      sessionsCount: studySessions.length,
+    }));
+  }, [isRest, isTimerActive, sessionType, settings.pomodoroTime, settings.shortBreakTime, accumulatedPauseTime, pauseStartTime, distractionCount, pomodoroSessions, settings.pomodoroGoal, studySessions.length]);
+
+  const prevIsTimerActiveRef = useRef(isTimerActive);
+  useEffect(() => {
+    if (prevIsTimerActiveRef.current !== isTimerActive) {
+      if (!isTimerActive) {
+        // Active -> Paused
+        setPauseStartTime(Date.now());
+      } else {
+        // Paused -> Active
+        if (pauseStartTime) {
+          const pauseSecs = Math.floor((Date.now() - pauseStartTime) / 1000);
+          if (pauseSecs > 0) {
+            setAccumulatedPauseTime(prev => prev + pauseSecs);
+            if (pauseSecs > 600) {
+              setDistractionCount(prev => prev + 1);
+              addNotification('Distracción detectada (pausa mayor a 10 min)', 'info');
+            }
+          }
+        }
+        setPauseStartTime(null);
+      }
+      prevIsTimerActiveRef.current = isTimerActive;
+    }
+  }, [isTimerActive, pauseStartTime, addNotification]);
 
   // Debounced save
   useEffect(() => {
     const t = setTimeout(() => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        tasks, notes, noteFolders, courses, events, playlists, tracks, studySessions,
-        settings, sessionTime, weeklyStudyTime, dailyStudyTime, pomodoroSessions,
-        trackHistory, playCounts, musicQueue, musicVolume, shuffleMode, repeatMode,
+        tasks, notes, noteFolders, courses, events, tracks, studySessions,
+        settings, sessionTime, sessionType, weeklyStudyTime, dailyStudyTime, pomodoroSessions,
+        trackHistory, playCounts, musicQueue, musicVolume, shuffleMode, repeatMode, artists,
+        currentTrackId, musicListeningTime, musicListeningDate,
+        accumulatedPauseTime, pauseStartTime, distractionCount,
+        focusPomodoroTime, focusChronoTime, breakTime,
       }));
     }, 300);
     return () => clearTimeout(t);
-  }, [tasks, notes, noteFolders, courses, events, playlists, tracks, studySessions, settings, sessionTime, weeklyStudyTime, dailyStudyTime, pomodoroSessions, trackHistory, playCounts, musicQueue, musicVolume]);
+  }, [
+    tasks, notes, noteFolders, courses, events, tracks, studySessions, settings, sessionTime,
+    weeklyStudyTime, dailyStudyTime, pomodoroSessions, trackHistory, playCounts, musicQueue,
+    musicVolume, artists, musicListeningTime, musicListeningDate,
+    accumulatedPauseTime, pauseStartTime, distractionCount,
+    focusPomodoroTime, focusChronoTime, breakTime,
+  ]);
 
   // Pause audio when closing window
   useEffect(() => {
     const handleBeforeUnload = () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.src = '';
-      }
+      globalAudio.pause();
+      globalAudio.src = '';
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
@@ -643,18 +827,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // ── MUSIC ──
-  const addPlaylist = useCallback((playlist: Omit<Playlist, 'id' | 'createdAt'>) => {
-    setPlaylists(prev => [...prev, { ...playlist, id: crypto.randomUUID(), createdAt: new Date().toISOString() }]);
-  }, []);
-
-  const updatePlaylist = useCallback((id: string, updates: Partial<Playlist>) => {
-    setPlaylists(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
-  }, []);
-
-  const deletePlaylist = useCallback((id: string) => {
-    setPlaylists(prev => prev.filter(p => p.id !== id));
-  }, []);
-
   const addTrack = useCallback((track: Omit<Track, 'id'>) => {
     const id = crypto.randomUUID();
     setTracks(prev => [...prev, { ...track, id }]);
@@ -667,7 +839,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteTrack = useCallback((id: string) => {
     setTracks(prev => prev.filter(t => t.id !== id));
-    setPlaylists(prev => prev.map(p => ({ ...p, trackIds: p.trackIds.filter(tid => tid !== id) })));
   }, []);
 
   const toggleTrackFavorite = useCallback((id: string) => {
@@ -675,61 +846,182 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const clearAllMusicData = useCallback(() => {
-    setPlaylists([]);
     setTracks([]);
     setTrackHistory([]);
     setPlayCounts({});
     setMusicQueue([]);
+    setArtists([]);
     setCurrentTrackId(null);
     setIsPlayingMusic(false);
     setMusicProgress(0);
     setMusicDuration(0);
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.src = '';
+    setMusicListeningTime(0);
+    if (globalAudio) {
+      globalAudio.pause();
+      globalAudio.src = '';
     }
     localStorage.removeItem(STORAGE_KEY);
   }, []);
 
   const playTrack = useCallback((id: string) => {
+    globalAudio.pause();
+    if (currentTrackStartTime !== null && currentTrackId) {
+      const endTime = Date.now() / 1000;
+      const durationPlayed = endTime - currentTrackStartTime;
+      setTrackPlayDurations(prev => {
+        const currentDuration = prev[currentTrackId!] || 0;
+        return { ...prev, [currentTrackId!]: currentDuration + durationPlayed };
+      });
+    }
     setCurrentTrackId(id);
+    setCurrentTrackStartTime(Date.now() / 1000);
     setIsPlayingMusic(true);
-    setTrackHistory(prev => {
-      const next = [id, ...prev.filter(tid => tid !== id)].slice(0, 50);
-      return next;
+
+    const track = tracks.find(t => t.id === id);
+    if (!track || !track.url) {
+      setYoutubeVideoUrl(null);
+      setIsPlayingMusic(false);
+      return;
+    }
+
+    // YouTube → ReactPlayer
+    if (track.url.includes('youtube.com/') || track.url.includes('youtu.be/')) {
+      setYoutubeVideoUrl(track.url);
+      setTrackHistory(prev => [id, ...prev.filter(tid => tid !== id)].slice(0, 50));
+      setPlayCounts(prev => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
+      return;
+    }
+    setYoutubeVideoUrl(null);
+
+    // Direct audio: local files use readFile + Blob URL, remote files use url directly
+    const setupAudio = async () => {
+      try {
+        if (track.source === 'local' && track.url) {
+          // Revoke previous blob URL to avoid memory leak
+          if (currentBlobUrlRef.current) {
+            URL.revokeObjectURL(currentBlobUrlRef.current);
+            currentBlobUrlRef.current = null;
+          }
+          const data = await readFile(track.url);
+          const blob = new Blob([data]);
+          const blobUrl = URL.createObjectURL(blob);
+          currentBlobUrlRef.current = blobUrl;
+          globalAudio.src = blobUrl;
+        } else {
+          globalAudio.src = track.url || '';
+        }
+        globalAudio.load();
+        autoPlayRef.current = true;
+      } catch {
+        setIsPlayingMusic(false);
+      }
+    };
+    setupAudio();
+
+    // Auto-populate musicQueue when empty (fill with remaining tracks in library order)
+    setMusicQueue(prev => {
+      if (prev.length > 0) return prev;
+      const currentIdx = tracks.findIndex(t => t.id === id);
+      if (currentIdx === -1) return prev;
+      return tracks.slice(currentIdx + 1).map(t => t.id);
     });
+
+    setTrackHistory(prev => [id, ...prev.filter(tid => tid !== id)].slice(0, 50));
     setPlayCounts(prev => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
-  }, []);
-  playTrackRef.current = playTrack;
+  }, [tracks, currentTrackId, currentTrackStartTime, setTrackPlayDurations, setIsPlayingMusic, setTrackHistory, setPlayCounts, setMusicQueue]);
+
+  useEffect(() => { playTrackRef.current = playTrack; }, [playTrack]);
 
   const toggleMusicPlayback = useCallback(() => {
-    setIsPlayingMusic(prev => !prev);
-  }, []);
+    const currentTrack = currentTrackIdRef.current ? tracksRef.current.find(t => t.id === currentTrackIdRef.current) : null;
+    const isYouTubeTrack = currentTrack && (currentTrack.url?.includes('youtube.com/') || currentTrack.url?.includes('youtu.be/'));
+
+    if (isYouTubeTrack) {
+      if (!youtubeVideoUrl) setYoutubeVideoUrl(currentTrack!.url!);
+      setIsPlayingMusic(prev => !prev);
+      return;
+    }
+
+    // Cancel any pending canplay auto-play
+    autoPlayRef.current = false;
+
+    if (globalAudio.paused) {
+      setIsPlayingMusic(true);
+      setCurrentTrackStartTime(Date.now() / 1000);
+      // Fade in from 0 to target volume over ~100ms
+      const targetVol = musicVolumeRef.current;
+      globalAudio.volume = 0;
+      globalAudio.play().then(() => {
+        const steps = 8;
+        const stepMs = 12;
+        let i = 0;
+        const ramp = setInterval(() => {
+          i++;
+          globalAudio.volume = Math.min(targetVol, (i / steps) * targetVol);
+          if (i >= steps) clearInterval(ramp);
+        }, stepMs);
+      }).catch(() => setIsPlayingMusic(false));
+    } else {
+      if (currentTrackStartTime !== null && currentTrackIdRef.current) {
+        const endTime = Date.now() / 1000;
+        const durationPlayed = endTime - currentTrackStartTime;
+        setTrackPlayDurations(prev => {
+          const cid = currentTrackIdRef.current;
+          if (!cid) return prev;
+          const currentDuration = prev[cid] || 0;
+          return { ...prev, [cid]: currentDuration + durationPlayed };
+        });
+      }
+      setCurrentTrackStartTime(null);
+      // Fade out from current volume to 0 over ~100ms, then pause
+      const steps = 8;
+      const stepMs = 12;
+      const startVol = globalAudio.volume;
+      let i = 0;
+      const ramp = setInterval(() => {
+        i++;
+        globalAudio.volume = Math.max(0, startVol * (1 - i / steps));
+        if (i >= steps) {
+          clearInterval(ramp);
+          globalAudio.pause();
+          globalAudio.volume = musicVolumeRef.current; // reset for next play
+          setIsPlayingMusic(false);
+        }
+      }, stepMs);
+    }
+  }, [youtubeVideoUrl, currentTrackId, currentTrackStartTime, musicVolume, setTrackPlayDurations, setIsPlayingMusic]);
 
   const setMusicProgressCb = useCallback((progress: number) => {
     setMusicProgress(progress);
-    if (audioRef.current && audioRef.current.duration && isFinite(progress)) {
-      audioRef.current.currentTime = progress * audioRef.current.duration;
+    if (globalAudio.duration && isFinite(progress)) {
+      globalAudio.currentTime = progress * globalAudio.duration;
     }
   }, []);
 
   const setMusicVolumeCb = useCallback((volume: number) => {
     setMusicVolume(volume);
-    if (audioRef.current) audioRef.current.volume = volume;
+    globalAudio.volume = volume;
   }, []);
 
   // Music audio engine: init events
   useEffect(() => {
-    if (!audioRef.current) {
-      audioRef.current = new Audio();
-      audioRef.current.volume = musicVolume;
-    }
-    const audio = audioRef.current;
+    globalAudio.volume = musicVolume;
+    const audio = globalAudio;
+    let canplayTimeout: any = null;
 
     const onTimeUpdate = () => {
       if (audio.duration) setMusicProgress(audio.currentTime / audio.duration);
     };
-    const onDurationChange = () => setMusicDuration(audio.duration || 0);
+    const onDurationChange = () => {
+      const dur = audio.duration;
+      if (isFinite(dur) && dur > 0) {
+        setMusicDuration(dur);
+        const cid = currentTrackIdRef.current;
+        if (cid) {
+          setTracks(prev => prev.map(t => t.id === cid ? { ...t, duration: Math.round(dur) } : t));
+        }
+      }
+    };
     const onEnded = () => {
       if (currentTrackIdRef.current && tracksRef.current.length > 0) {
         const currentIdx = tracksRef.current.findIndex(t => t.id === currentTrackIdRef.current);
@@ -761,38 +1053,63 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     };
     const onError = () => { setIsPlayingMusic(false); };
+    const onCanPlay = () => {
+      if (canplayTimeout) { clearTimeout(canplayTimeout); canplayTimeout = null; }
+      if (autoPlayRef.current && audio.paused) {
+        autoPlayRef.current = false;
+        const targetVol = musicVolumeRef.current;
+        audio.volume = 0;
+        audio.play().then(() => {
+          const steps = 8;
+          const stepMs = 12;
+          let i = 0;
+          const ramp = setInterval(() => {
+            i++;
+            audio.volume = Math.min(targetVol, (i / steps) * targetVol);
+            if (i >= steps) clearInterval(ramp);
+          }, stepMs);
+        }).catch(() => setIsPlayingMusic(false));
+      }
+      autoPlayRef.current = false;
+    };
 
     audio.addEventListener('timeupdate', onTimeUpdate);
     audio.addEventListener('durationchange', onDurationChange);
     audio.addEventListener('ended', onEnded);
     audio.addEventListener('error', onError);
+    audio.addEventListener('canplay', onCanPlay);
+
+    // canplay timeout fallback: if src was set but canplay doesn't fire in 3s, try play anyway
+    const srcObserver = setInterval(() => {
+      if (autoPlayRef.current && audio.src && audio.paused) {
+        if (audio.readyState >= 2) { // HAVE_CURRENT_DATA or higher
+          autoPlayRef.current = false;
+          const targetVol = musicVolumeRef.current;
+          audio.volume = 0;
+          audio.play().then(() => {
+            const steps = 8;
+            const stepMs = 12;
+            let i = 0;
+            const ramp = setInterval(() => {
+              i++;
+              audio.volume = Math.min(targetVol, (i / steps) * targetVol);
+              if (i >= steps) clearInterval(ramp);
+            }, stepMs);
+          }).catch(() => setIsPlayingMusic(false));
+        }
+      }
+    }, 500);
 
     return () => {
+      if (canplayTimeout) clearTimeout(canplayTimeout);
+      clearInterval(srcObserver);
       audio.removeEventListener('timeupdate', onTimeUpdate);
       audio.removeEventListener('durationchange', onDurationChange);
       audio.removeEventListener('ended', onEnded);
       audio.removeEventListener('error', onError);
+      audio.removeEventListener('canplay', onCanPlay);
     };
   }, []);
-
-  // Play/pause + track switch
-  useEffect(() => {
-    if (!audioRef.current || !currentTrackId) return;
-    const track = tracks.find(t => t.id === currentTrackId);
-    if (!track) return;
-
-    if (isPlayingMusic) {
-      if (track.url) {
-        if (audioRef.current.src !== track.url) {
-          audioRef.current.src = track.url;
-          audioRef.current.load();
-        }
-        audioRef.current.play().catch(() => setIsPlayingMusic(false));
-      }
-    } else {
-      audioRef.current.pause();
-    }
-  }, [isPlayingMusic, currentTrackId, tracks]);
 
   // ── STUDY SESSIONS ──
   const addStudySession = useCallback((session: Omit<StudySession, 'id'>) => {
@@ -835,6 +1152,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setIsTimerActive(false);
     setSessionTime(0);
     setIsRest(false);
+    setAccumulatedPauseTime(0);
+    setPauseStartTime(null);
+    setDistractionCount(0);
   }, []);
 
   // ── DOWNLOADS ──
@@ -1027,27 +1347,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [tasks, notes, events, studySessions]);
 
   const value: AppContextType = {
-    tasks, notes, noteFolders, courses, events, playlists, tracks, studySessions,
-    settings, sessionTime, weeklyStudyTime, dailyStudyTime, pomodoroSessions,
-    activeTaskId, timerLocked, isTimerActive,
-    currentTrackId, isPlayingMusic, musicVolume, musicProgress, musicDuration, shuffleMode, repeatMode,
-    trackHistory, playCounts, musicQueue, downloadQueue,
+    tasks, notes, noteFolders, courses, events, tracks, studySessions,
+    settings, sessionTime, sessionType, weeklyStudyTime, dailyStudyTime, pomodoroSessions,
+    activeTaskId, timerLocked, isTimerActive, roundsCompleted, showCompletion,
+    currentTrackId, youtubeVideoUrl, isPlayingMusic, musicVolume, musicProgress, musicDuration, musicListeningTime, shuffleMode, repeatMode,
+    trackHistory, playCounts, musicQueue, downloadQueue, artists,
     googleConnected, calendarSyncEnabled, lastCalendarSync,
     addTask, updateTask, deleteTask, toggleTaskStatus, clearAllTasks,
     addSubTask, toggleSubTask, deleteSubTask, addTaskFile, removeTaskFile, incrementTaskStudyTime,
     addNote, updateNote, deleteNote, addNoteFolder, deleteNoteFolder,
     addCourse, updateCourse, deleteCourse, reorderCourses,
     addEvent, updateEvent, deleteEvent,
-    addPlaylist, updatePlaylist, deletePlaylist,
     addTrack, updateTrack, deleteTrack, toggleTrackFavorite,
-    playTrack, toggleMusicPlayback, setMusicVolume: setMusicVolumeCb, setMusicProgress: setMusicProgressCb,
+    playTrack, toggleMusicPlayback, setIsPlayingMusic, setMusicVolume: setMusicVolumeCb, setMusicProgress: setMusicProgressCb,
     setShuffleMode, setRepeatMode, setMusicQueue, clearAllMusicData,
+    addArtist: useCallback((name: string) => {
+      setArtists(prev => {
+        if (prev.some(a => a.name.toLowerCase() === name.toLowerCase())) return prev;
+        return [...prev, { id: Date.now().toString(), name }];
+      });
+    }, []),
+    updateArtist: useCallback((id: string, updates: { name?: string; profileImage?: string }) => {
+      setArtists(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
+    }, []),
+    deleteArtist: useCallback((id: string) => {
+      setArtists(prev => prev.filter(a => a.id !== id));
+    }, []),
     addToDownloadQueue, updateDownloadProgress, updateDownloadStatus,
     removeFromDownloadQueue, clearCompletedDownloads,
     addStudySession, incrementSessionTime, incrementDailyStudyTime,
-    incrementPomodoroSessions, resetPomodoroSessions,
-    setActiveTaskId, setTimerLocked, linkTaskToTimer, unlinkTaskFromTimer,
-    toggleTimer, resetTimer, isRest, setIsRest,
+    incrementPomodoroSessions, resetPomodoroSessions, setActiveTaskId, setTimerLocked,
+    linkTaskToTimer, unlinkTaskFromTimer, toggleTimer, resetTimer,
+    setIsTimerActive, setSessionTime, setDailyStudyTime, setWeeklyStudyTime,
+    setTasks, setPomodoroSessions, setShowCompletion, setRoundsCompleted, isRest, setIsRest,
+    setSessionType,
     navigateTo, setNavigateTo,
     updateSettings: updateSettingsCb,
     setGoogleConnected, setCalendarSyncEnabled, setLastCalendarSync,

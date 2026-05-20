@@ -1,27 +1,16 @@
 {
-  "permissions": {
-    "allow": [
-      "Bash(npx tsc:*)",
-      "Bash(mv Configuracion_temp.tsx Configuracion.tsx)",
-      "Bash(sed:*)",
-      "Bash(npm run:*)",
-      "Bash(npx vite:*)",
-      "Bash(curl -s http://127.0.0.1:5173)",
-      "Bash(ls:*)",
-      "Bash(grep -n \"const \\\\\\\\[musicExpanded\" src/components/Estudio.tsx)",
-      "Bash(grep -n \"const { tracks, addTrack, deleteTrack }\" src/components/Estudio.tsx)",
-      "Bash(netstat -ano)",
-      "Bash(tasklist)",
-      "Bash(curl -s http://localhost:1420/)",
-      "Bash(kill 26860)",
-      "Bash(curl:*)",
-      "Bash(touch:*)",
-      "Bash(npm list:*)",
-      "Bash(grep -rE \"var\\\\\\(--[^\\)]+\\\\\\)/\\(25|42|45|55|5|40\\)\" src/components/*.tsx)",
-      "Bash(grep -rE \"var\\\\\\(--[^\\)]+\\\\\\)/\\([0-9]+\\)\" src/components/*.tsx)",
-      "Bash(grep:*)",
-      "Bash(find src:*)",
-      "Bash(npm install:*)"
-    ]
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://opencode-proxy.maxcerronbarrial.workers.dev",
+    "ANTHROPIC_AUTH_TOKEN": "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|sk-g8VkL1HP5xOilDlCkXGFO4ic5WX3jY4NBWOdrEWdRTJf4ySwNzDeIgo1K4lxVdm8",
+    "ANTHROPIC_API_KEY": "",
+    "ANTHROPIC_MODEL": "openrouter/free",
+    "CLAUDE_GATEWAY_MODEL_DISCOVERY": "1",
+    "CLAUDE_CODE_SKIP_FAST_MODE_ORG_CHECK": "1",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+    "DISABLE_TELEMETRY": "1",
+    "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "32000",
+    "CLAUDE_CODE_RETRY_COUNT": "8",
+    "BASH_DEFAULT_TIMEOUT_MS": "1200000",
+    "NODE_OPTIONS": "--max-old-space-size=8192"
   }
 }

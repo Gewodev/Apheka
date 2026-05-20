@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   Play, Pause, SkipBack, SkipForward, Volume2, VolumeX,
-  Music, Heart, ListMusic, ChevronUp, ChevronDown,
-  Shuffle, Repeat, Disc3,
+  Heart, ChevronUp, ChevronDown,
+  Shuffle, Repeat, Disc3, ListMusic
 } from 'lucide-react';
 import { useApp } from '../store/AppContext';
+import ReactPlayer from 'react-player';
+const Player = ReactPlayer as any;
 
 function formatTime(secs: number) {
   if (!secs || !isFinite(secs)) return '0:00';
@@ -13,57 +15,42 @@ function formatTime(secs: number) {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-export default function GlobalPlayer() {
+export default function GlobalPlayer({ isCollapsed }: { isCollapsed: boolean }) {
   const {
-    currentTrackId, isPlayingMusic, toggleMusicPlayback,
-    tracks, musicVolume, setMusicVolume, musicProgress, setMusicProgress,
-    musicDuration, shuffleMode, setShuffleMode, repeatMode, setRepeatMode, musicQueue, setMusicQueue,
-    playTrack, toggleTrackFavorite,
+    currentTrackId, isPlayingMusic, toggleMusicPlayback, setIsPlayingMusic,
+    tracks, musicVolume, setMusicVolume, setMusicProgress, musicProgress,
+    musicDuration, shuffleMode, setShuffleMode, repeatMode, setRepeatMode,
+    musicQueue, setMusicQueue, playTrack, toggleTrackFavorite, settings, youtubeVideoUrl, updateTrack
   } = useApp();
 
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [showVolume, setShowVolume] = useState(false);
+  // Precise second-by-second listening time tracking
+  useEffect(() => {
+    let interval: any;
+    if (isPlayingMusic && currentTrackId) {
+      interval = setInterval(() => {
+        const track = tracks.find(t => t.id === currentTrackId);
+        if (track) {
+          updateTrack(currentTrackId, { listenedTime: (track.listenedTime || 0) + 1 });
+        }
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [isPlayingMusic, currentTrackId, tracks, updateTrack]);
+
+  const progressRef = useRef<HTMLDivElement>(null);
   const [isSeeking, setIsSeeking] = useState(false);
   const [seekValue, setSeekValue] = useState(0);
-  const [showQueue, setShowQueue] = useState(false);
-  const progressRef = useRef<HTMLDivElement>(null);
-  const [showCollapsedHint, setShowCollapsedHint] = useState(false);
-  const collapseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [showVolume, setShowVolume] = useState(false);
+  const [isHovered, setIsHovered] = useState(false); // For the tiny hover zone
+  const [isExpanded, setIsExpanded] = useState(false);
 
   const currentTrack = tracks.find(t => t.id === currentTrackId);
-  const queue = musicQueue.map(id => tracks.find(t => t.id === id)).filter((t): t is NonNullable<typeof t> => t != null);
-
   const hasTrack = !!currentTrack;
 
+  // Show player when a track is loaded (even when paused); hide when no track
   useEffect(() => {
-    if (currentTrackId) setIsExpanded(true);
+    setIsExpanded(!!currentTrackId);
   }, [currentTrackId]);
-
-  const handleHoverZoneEnter = () => {
-    if (isExpanded) return;
-    if (collapseTimeoutRef.current) {
-      clearTimeout(collapseTimeoutRef.current);
-      collapseTimeoutRef.current = null;
-    }
-    setShowCollapsedHint(true);
-  };
-
-  const handleHoverZoneLeave = () => {
-    collapseTimeoutRef.current = setTimeout(() => {
-      setShowCollapsedHint(false);
-    }, 300);
-  };
-
-  useEffect(() => {
-    return () => {
-      if (collapseTimeoutRef.current) clearTimeout(collapseTimeoutRef.current);
-    };
-  }, []);
-
-  const displayProgress = isSeeking ? seekValue : musicProgress;
-  const duration = (musicDuration || currentTrack?.duration || 0);
-  const currentTime = displayProgress * duration;
-  const isFavorited = currentTrack?.isFavorite ?? false;
 
   const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!progressRef.current) return;
@@ -84,272 +71,402 @@ export default function GlobalPlayer() {
   };
 
   return (
-    <>
-      {/* Hover zone at bottom - always captures mouse */}
-      <div
-        onMouseEnter={handleHoverZoneEnter}
-        onMouseLeave={handleHoverZoneLeave}
-        onClick={() => { if (!isExpanded) { setIsExpanded(true); setShowCollapsedHint(false); } }}
-        style={{
-          position: 'fixed', bottom: 0, left: 220, right: 0, zIndex: 99,
-          height: isExpanded ? 0 : 80, cursor: isExpanded ? 'default' : 'pointer',
-          pointerEvents: 'auto',
-        }}
-      >
-        {/* Floating arrow - only visual, no interaction */}
-        <div style={{
-          position: 'absolute', bottom: 4, left: '50%', transform: 'translateX(-50%)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-          opacity: isExpanded ? 0 : (showCollapsedHint ? 1 : 0),
-          transition: 'opacity 300ms cubic-bezier(0.16, 1, 0.3, 1)',
-        }}>
-          <div style={{ width: 40, height: 2, background: 'linear-gradient(90deg, transparent, var(--accent))', opacity: 0.3 }} />
-          <ChevronUp size={20} style={{ color: 'var(--accent)', opacity: 0.6 }} />
-          <div style={{ width: 40, height: 2, background: 'linear-gradient(90deg, var(--accent), transparent)', opacity: 0.3 }} />
-        </div>
-      </div>
-
-      {/* Expanded player */}
-      <div
-        style={{
-          position: 'fixed', bottom: 0, left: 220, right: 0, zIndex: 100,
-          transform: isExpanded ? 'translateY(0)' : 'translateY(100%)',
-          transition: 'transform 500ms cubic-bezier(0.16, 1, 0.3, 1)',
-          pointerEvents: 'auto',
-        }}
-      >
-        <div style={{
-          background: 'rgba(8, 8, 10, 0.96)',
-          backdropFilter: 'blur(32px)',
-          borderRadius: '14px 14px 0 0',
-          boxShadow: '0 -8px 48px rgba(0,0,0,0.5)',
-          overflow: 'hidden',
-        }}>
-          {/* Progress bar */}
-          <div
-            ref={progressRef}
-            onMouseDown={(e) => { if (hasTrack) { setIsSeeking(true); setSeekValue(musicProgress); handleProgressClick(e); } }}
-            onMouseMove={handleProgressDrag}
-            onMouseUp={() => { if (isSeeking) { setMusicProgress(seekValue); setIsSeeking(false); } }}
-            onMouseLeave={() => { if (isSeeking) { setMusicProgress(seekValue); setIsSeeking(false); } }}
-            style={{
-              height: 3, background: 'rgba(255,255,255,0.03)', cursor: hasTrack ? 'pointer' : 'default',
-              position: 'relative', width: '100%', overflow: 'hidden',
+    <div style={{
+      position: 'fixed',
+      bottom: 0,
+      left: window.innerWidth > 768 ? (isCollapsed ? 64 : 220) : 0,
+      right: 0,
+      height: 'auto', // Parent container for player and hover zone
+      zIndex: 1000,
+      pointerEvents: 'none', // Allow clicks through, handled by children below
+      transition: 'left 300ms cubic-bezier(0.2, 0.8, 0.2, 1)',
+    }}>
+      {youtubeVideoUrl && (
+        <div style={{ display: 'none' }}>
+          <Player
+            url={youtubeVideoUrl}
+            playing={isPlayingMusic}
+            volume={musicVolume}
+            controls={false}
+            width={0}
+            height={0}
+            onProgress={(state: any) => {
+              if (!isSeeking && musicDuration > 0) {
+                setMusicProgress(state.playedSeconds / musicDuration);
+              }
             }}
-          >
-            <div style={{
-              height: '100%', width: hasTrack ? `${displayProgress * 100}%` : '0%',
-              background: 'linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 60%, #fff))',
-              transition: isSeeking ? 'none' : 'width 200ms',
-              position: 'relative',
-            }}>
-              <div style={{
-                position: 'absolute', right: -4, top: -3.5, width: 10, height: 10,
-                borderRadius: '50%', background: '#fff', opacity: isSeeking ? 1 : 0,
-                transition: 'opacity 200ms',
-                boxShadow: '0 0 6px rgba(0,0,0,0.4)',
-              }} />
-            </div>
-          </div>
-
-          <div style={{
-            padding: '10px 24px', display: 'flex', alignItems: 'center',
-            justifyContent: 'space-between', height: 76,
+            onEnded={() => {
+              if (tracks.length > 0 && currentTrackId) {
+                const idx = tracks.findIndex(t => t.id === currentTrackId);
+                let nextId: string | null = null;
+                if (shuffleMode) {
+                  const others = tracks.filter(t => t.id !== currentTrackId);
+                  if (others.length > 0) nextId = others[Math.floor(Math.random() * others.length)].id;
+                } else if (repeatMode === 'all' || musicQueue.length > 0) {
+                  if (musicQueue.length > 0) {
+                    const [next] = musicQueue;
+                    setMusicQueue(musicQueue.slice(1));
+                    nextId = next;
+                  } else if (idx < tracks.length - 1) {
+                    nextId = tracks[idx + 1].id;
+                  } else if (repeatMode === 'all') {
+                    nextId = tracks[0].id;
+                  }
+                } else if (idx < tracks.length - 1) {
+                  nextId = tracks[idx + 1].id;
+                }
+                if (nextId) playTrack(nextId);
+                else { setIsExpanded(false); setIsPlayingMusic(false); }
+              }
+            }}
+          />
+        </div>
+      )}
+      {/* Main player container - slides in/out */}
+      <div style={{
+        position: 'relative',
+        width: '100%',
+        height: isExpanded ? 90 : 0, // Full height when expanded, zero when collapsed
+        overflow: 'hidden',
+        background: settings.theme === 'claro' ? 'rgba(255, 255, 255, 0.95)' : 'rgba(18, 18, 20, 0.95)',
+        backdropFilter: 'blur(20px)',
+        borderTop: `1px solid ${settings.theme === 'claro' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)'}`,
+        transform: `translateY(${isExpanded ? 0 : 100}%)`, // Animate transform
+        transition: 'transform 300ms cubic-bezier(0.2, 0.8, 0.2, 1), height 300ms cubic-bezier(0.2, 0.8, 0.2, 1)',
+        pointerEvents: isExpanded ? 'auto' : 'none', // Active only when expanded
+      }}>
+        {!hasTrack && (
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            height: '100%',
+            color: settings.theme === 'claro' ? '#666' : '#ccc',
+            fontSize: 14
           }}>
-            {/* Left: Track info */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, width: '28%', minWidth: 0 }}>
-              <div style={{
-                width: 48, height: 48, borderRadius: 8,
-                background: 'var(--bg-base)', flexShrink: 0, overflow: 'hidden',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+            <Disc3 size={20} style={{ opacity: 0.5 }} />
+            <span>No hay pista seleccionada</span>
+          </div>
+        )}
+        
+        {hasTrack && (
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'space-between',
+            height: '100%',
+            padding: '0 20px'
+          }}>
+            {/* Track Info */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+              <div style={{ 
+                width: 56, height: 56, borderRadius: 12, overflow: 'hidden', 
+                background: 'var(--bg-deep)', flexShrink: 0,
+                boxShadow: '0 8px 24px var(--accent-glow)'
               }}>
-                {currentTrack?.coverImage ? (
-                  <img src={currentTrack.coverImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                {currentTrack?.coverUrl || currentTrack?.coverImage ? (
+                  <img src={currentTrack.coverUrl || currentTrack.coverImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 ) : (
-                  <Disc3 size={18} style={{ color: 'var(--text-muted)', opacity: 0.4 }} />
+                  <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--accent-dim)' }}>
+                    <Disc3 size={24} style={{ color: 'var(--accent)' }} className={isPlayingMusic ? 'spin-slow' : ''} />
+                  </div>
                 )}
               </div>
-              <div style={{ minWidth: 0 }}>
-                {hasTrack ? (
-                  <>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.3 }}>{currentTrack.title}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 1 }}>{currentTrack.artist}</div>
-                  </>
-                ) : (
-                  <>
-                    <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-tertiary)' }}>Sin reproducción</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>Busca o sube música</div>
-                  </>
-                )}
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <div style={{ 
+                  fontSize: 14, 
+                  fontWeight: 600, 
+                  color: settings.theme === 'claro' ? '#000' : '#fff',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  maxWidth: 180
+                }}>
+                  {currentTrack.title}
+                </div>
+                <div style={{ 
+                  fontSize: 12, 
+                  color: settings.theme === 'claro' ? '#666' : '#999',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  maxWidth: 180
+                }}>
+                  {currentTrack.artist}
+                </div>
               </div>
-              {hasTrack && (
-                <button onClick={() => toggleTrackFavorite(currentTrack.id)} className="btn-ghost" style={{ padding: 6, display: 'flex', flexShrink: 0, borderRadius: '50%' }}>
-                  <Heart size={15} fill={isFavorited ? 'var(--accent)' : 'none'} color={isFavorited ? 'var(--accent)' : 'var(--text-muted)'} />
-                </button>
-              )}
             </div>
 
-            {/* Center: Controls */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flex: 1, maxWidth: 460 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+            {/* Center Controls and Progress */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, flex: 1, maxWidth: 600 }}>
+              {/* Playback Controls */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 32 }}>
                 <button
                   onClick={() => setShuffleMode(!shuffleMode)}
-                  className="btn-ghost"
-                  style={{ padding: 6, display: 'flex', borderRadius: '50%', color: shuffleMode ? 'var(--accent)' : 'var(--text-tertiary)', opacity: hasTrack ? 1 : 0.25 }}
+                  style={{ 
+                    background: 'none', 
+                    border: 'none', 
+                    padding: 8, 
+                    cursor: 'pointer',
+                    color: shuffleMode ? 'var(--accent)' : (settings.theme === 'claro' ? '#666' : '#999'),
+                    transition: 'color 0.2s' }}
                   disabled={!hasTrack}
                 >
-                  <Shuffle size={16} />
+                  <Shuffle size={18} />
                 </button>
 
                 <button
-                  onClick={() => { if (hasTrack) { const idx = tracks.findIndex(t => t.id === currentTrackId); if (idx > 0) playTrack(tracks[idx - 1].id); } }}
-                  className="btn-ghost"
-                  style={{ padding: 6, display: 'flex', borderRadius: '50%', color: 'var(--text-secondary)', opacity: hasTrack ? 1 : 0.25 }}
+                  onClick={() => { 
+                    if (hasTrack) { 
+                      const idx = tracks.findIndex(t => t.id === currentTrackId);
+                      if (idx > 0) {
+                        playTrack(tracks[idx - 1].id);
+                      }
+                    }
+                  }}
+                  style={{ 
+                    background: 'none', 
+                    border: 'none', 
+                    padding: 8, 
+                    cursor: 'pointer',
+                    color: hasTrack ? (settings.theme === 'claro' ? '#000' : '#fff') : (settings.theme === 'claro' ? '#666' : '#999'),
+                    opacity: hasTrack ? 1 : 0.5
+                  }}
                   disabled={!hasTrack}
                 >
-                  <SkipBack size={18} />
+                  <SkipBack size={20} />
                 </button>
 
                 <button
                   onClick={hasTrack ? toggleMusicPlayback : undefined}
                   style={{
-                    width: 40, height: 40, borderRadius: '50%', background: hasTrack ? '#fff' : 'rgba(255,255,255,0.06)',
-                    color: hasTrack ? '#000' : 'var(--text-muted)',
-                    border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    cursor: hasTrack ? 'pointer' : 'default', transition: 'all 200ms',
-                    boxShadow: hasTrack ? '0 4px 20px rgba(225,29,72,0.3)' : 'none',
+                    width: 40,
+                    height: 40,
+                    borderRadius: '50%', 
+                    background: hasTrack ? 'var(--accent)' : 'transparent',
+                    color: settings.theme === 'claro' ? '#fff' : '#000',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: hasTrack ? 'pointer' : 'default',
+                    transition: 'transform 0.15s',
+                    border: 'none'
                   }}
-                  onMouseEnter={e => { if (hasTrack) { e.currentTarget.style.transform = 'scale(1.06)'; e.currentTarget.style.boxShadow = '0 6px 24px rgba(225,29,72,0.4)'; } }}
-                  onMouseLeave={e => { if (hasTrack) { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '0 4px 20px rgba(225,29,72,0.3)'; } }}
+                  onMouseEnter={e => { if (hasTrack) { e.currentTarget.style.transform = 'scale(1.08)'; } }}
+                  onMouseLeave={e => { if (hasTrack) e.currentTarget.style.transform = 'scale(1)'; }}
                 >
-                  {isPlayingMusic ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" style={{ marginLeft: 2 }} />}
+                  {isPlayingMusic ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" style={{ marginLeft: 2 }} />}
                 </button>
 
                 <button
-                  onClick={() => { if (hasTrack) { const idx = tracks.findIndex(t => t.id === currentTrackId); if (idx < tracks.length - 1) playTrack(tracks[idx + 1].id); else if (repeatMode === 'all' && tracks.length > 0) playTrack(tracks[0].id); } }}
-                  className="btn-ghost"
-                  style={{ padding: 6, display: 'flex', borderRadius: '50%', color: 'var(--text-secondary)', opacity: hasTrack ? 1 : 0.25 }}
-                  disabled={!hasTrack}
-                >
-                  <SkipForward size={18} />
-                </button>
+                  onClick={() => { 
+                    if (hasTrack) { 
+                      const idx = tracks.findIndex(t => t.id === currentTrackId);
+                      if (idx < tracks.length - 1) {
+                        playTrack(tracks[idx + 1].id);
+                      } else if (repeatMode === 'all' && tracks.length > 0) {
+                        playTrack(tracks[0].id);
+                      }
+                    }
+                  }}
+              style={{ 
+                background: 'none', 
+                border: 'none', 
+                padding: 8, 
+                cursor: 'pointer',
+                color: hasTrack ? (settings.theme === 'claro' ? '#000' : '#fff') : (settings.theme === 'claro' ? '#666' : '#999'),
+                opacity: hasTrack ? 1 : 0.5
+              }}
+              disabled={!hasTrack}
+            >
+              <SkipForward size={20} />
+            </button>
 
                 <button
-                  onClick={() => { if (hasTrack) { const next = repeatMode === 'none' ? 'all' : repeatMode === 'all' ? 'one' : 'none'; setRepeatMode(next); } }}
-                  className="btn-ghost"
-                  style={{ padding: 6, display: 'flex', borderRadius: '50%', color: repeatMode !== 'none' ? 'var(--accent)' : 'var(--text-tertiary)', opacity: hasTrack ? 1 : 0.25, position: 'relative' }}
-                  disabled={!hasTrack}
-                >
-                  <Repeat size={16} />
-                  {repeatMode === 'one' && <span style={{ position: 'absolute', fontSize: 7, fontWeight: 700, top: 1, right: 1, color: 'var(--accent)' }}>1</span>}
-                </button>
+                  onClick={() => { 
+                    if (hasTrack) { 
+                      const next = repeatMode === 'none' ? 'all' : repeatMode === 'all' ? 'one' : 'none';
+                      setRepeatMode(next);
+                    }
+                  }}
+                  style={{ 
+                    background: 'none', 
+                    border: 'none', 
+                  padding: 8, 
+                  cursor: 'pointer',
+                  color: repeatMode !== 'none' ? 'var(--accent)' : (settings.theme === 'claro' ? '#666' : '#999'),
+                  position: 'relative'
+                }}
+                disabled={!hasTrack}
+              >
+                <Repeat size={18} />
+                {repeatMode === 'one' && <span style={{ position: 'absolute', fontSize: 10, fontWeight: 700, top: -4, right: -4, color: 'var(--accent)' }}>1</span>}
+              </button>
               </div>
-              {hasTrack && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
-                  <span style={{ fontSize: 10, color: 'var(--text-tertiary)', minWidth: 32, textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{formatTime(currentTime)}</span>
-                  <div style={{ flex: 1, height: 2, background: 'rgba(255,255,255,0.05)', borderRadius: 4, position: 'relative', overflow: 'hidden' }}>
-                    <div style={{ width: `${displayProgress * 100}%`, height: '100%', background: 'linear-gradient(90deg, rgba(255,255,255,0.25), rgba(255,255,255,0.45))', borderRadius: 4, transition: isSeeking ? 'none' : 'width 200ms' }} />
+              
+              {/* Progress Bar and Time Display */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%' }}>
+                <span style={{ 
+                  fontSize: 11, 
+                  color: 'var(--accent)', 
+                  minWidth: 40, 
+                  textAlign: 'right', 
+                  fontFamily: 'monospace',
+                  padding: '2px 6px',
+                  background: 'var(--accent-dim)',
+                  borderRadius: 4,
+                  boxShadow: '0 0 8px var(--accent-glow)',
+                  fontWeight: 600
+                }}>{formatTime(musicProgress * (musicDuration || 0))}</span>
+                <div 
+                  ref={progressRef}
+                  onClick={handleProgressClick}
+                  onMouseDown={(e) => { if (hasTrack) { setIsSeeking(true); setSeekValue(musicProgress); handleProgressClick(e); } }}
+                  onMouseMove={handleProgressDrag}
+                  onMouseUp={() => { if (isSeeking) { setMusicProgress(seekValue); setIsSeeking(false); } }}
+                  onMouseLeave={() => { if (isSeeking) { setMusicProgress(seekValue); setIsSeeking(false); } }}
+                  style={{ flex: 1, height: 6, background: settings.theme === 'claro' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)', borderRadius: 3, cursor: hasTrack ? 'pointer' : 'default', position: 'relative', overflow: 'hidden' }}
+                >
+                  <div style={{ 
+                    width: `${(isSeeking ? seekValue : musicProgress) * 100}%`, 
+                    height: '100%', 
+                    background: 'var(--accent)',
+                    position: 'relative'
+                  }}>
+                    <div style={{
+                      position: 'absolute',
+                      right: 0,
+                      top: '50%',
+                      width: 10,
+                      height: 10,
+                      borderRadius: '50%',
+                      background: 'var(--accent)',
+                      transform: 'translate(50%, -50%)',
+                      boxShadow: '0 0 8px var(--accent)'
+                    }} />
                   </div>
-                  <span style={{ fontSize: 10, color: 'var(--text-tertiary)', minWidth: 32, fontFamily: 'var(--font-mono)' }}>{formatTime(duration)}</span>
                 </div>
-              )}
+                <span style={{ fontSize: 11, color: settings.theme === 'claro' ? '#666' : '#999', minWidth: 35, textAlign: 'left', fontFamily: 'monospace' }}>{formatTime(musicDuration || 0)}</span>
+              </div>
             </div>
 
-            {/* Right: Volume + Queue + Minimize */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'flex-end', width: '28%' }}>
-              <div
-                style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-                onMouseEnter={() => setShowVolume(true)}
-                onMouseLeave={() => setShowVolume(false)}
-              >
-                <button className="btn-ghost" style={{ padding: 6, display: 'flex', borderRadius: '50%' }} onClick={() => setMusicVolume(musicVolume > 0 ? 0 : 0.7)}>
-                  {musicVolume === 0 ? <VolumeX size={16} style={{ color: 'var(--text-muted)' }} /> : <Volume2 size={16} style={{ color: 'var(--text-muted)' }} />}
-                </button>
-                <div style={{
-                  width: showVolume ? 64 : 0, overflow: 'hidden', transition: 'width 200ms cubic-bezier(0.16, 1, 0.3, 1)',
-                  display: 'flex', alignItems: 'center',
-                }}>
-                  <input
-                    type="range"
-                    min="0" max="1" step="0.01"
-                    value={musicVolume}
-                    onChange={handleVolumeChange}
-                    style={{ width: 64, height: 3, WebkitAppearance: 'none', appearance: 'none', background: 'rgba(255,255,255,0.08)', borderRadius: 4, outline: 'none', cursor: 'pointer' }}
-                  />
-                </div>
-              </div>
-
-              <div style={{ position: 'relative' }}>
-                <button onClick={() => setShowQueue(!showQueue)} className="btn-ghost" style={{ padding: 6, display: 'flex', borderRadius: '50%' }} title="Cola">
-                  <ListMusic size={16} style={{ color: showQueue ? 'var(--accent)' : 'var(--text-muted)' }} />
-                  {queue.length > 0 && (
-                    <span style={{ position: 'absolute', top: 0, right: 0, width: 13, height: 13, borderRadius: '50%', background: 'var(--accent)', color: '#fff', fontSize: 7, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{queue.length}</span>
-                  )}
-                </button>
-                {showQueue && (
-                  <div style={{
-                    position: 'absolute', bottom: '100%', right: 0, width: 260, maxHeight: 300,
-                    background: 'rgba(8,8,10,0.98)', backdropFilter: 'blur(24px)',
-                    border: '1px solid var(--border-subtle)', borderRadius: 12,
-                    boxShadow: '0 -12px 48px rgba(0,0,0,0.6)',
-                    display: 'flex', flexDirection: 'column', overflow: 'hidden', marginBottom: 8,
-                  }}>
-                    <div style={{ padding: '8px 14px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Cola</span>
-                      <button onClick={() => setMusicQueue([])} className="btn-ghost" style={{ padding: 2, fontSize: 9, color: 'var(--text-muted)' }}>Limpiar</button>
-                    </div>
-                    <div style={{ overflowY: 'auto', flex: 1 }}>
-                      {queue.map((t, i) => (
-                        <div key={t.id || i} onClick={() => playTrack(t.id)} style={{
-                          display: 'flex', alignItems: 'center', gap: 10, padding: '6px 14px', cursor: 'pointer',
-                          background: t.id === currentTrackId ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : 'transparent',
-                          transition: 'background 150ms',
-                        }} onMouseEnter={e => e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 6%, transparent)'} onMouseLeave={e => e.currentTarget.style.background = t.id === currentTrackId ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : 'transparent'}>
-                          <div style={{ width: 26, height: 26, borderRadius: 4, background: 'var(--bg-base)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                            {t.coverImage ? <img src={t.coverImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={10} style={{ color: 'var(--text-muted)' }} />}
-                          </div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 10, fontWeight: 500, color: t.id === currentTrackId ? 'var(--accent)' : 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.title}</div>
-                            <div style={{ fontSize: 8, color: 'var(--text-tertiary)' }}>{t.artist}</div>
-                          </div>
-                          {t.id === currentTrackId && (
-                            <div style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--accent)', flexShrink: 0 }} />
-                          )}
-                        </div>
-                      ))}
-                      {queue.length === 0 && (
-                        <div style={{ padding: 16, textAlign: 'center', fontSize: 10, color: 'var(--text-tertiary)' }}>
-                          <ListMusic size={20} style={{ margin: '0 auto 6px', opacity: 0.15 }} />
-                          Cola vacía
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-
+            {/* Volume Controls */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
               <button
-                onClick={() => setIsExpanded(false)}
-                className="btn-ghost"
-                style={{ padding: 6, display: 'flex', borderRadius: '50%' }}
-                title="Minimizar"
+                onClick={() => setMusicVolume(musicVolume > 0 ? 0 : 0.7)}
+                style={{ 
+                  background: 'none', 
+                  border: 'none', 
+                  padding: 6, 
+                  cursor: 'pointer',
+                  color: settings.theme === 'claro' ? '#666' : '#999'
+                }}
               >
-                <ChevronDown size={16} style={{ color: 'var(--text-muted)' }} />
+                {musicVolume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
               </button>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={musicVolume}
+                onChange={handleVolumeChange}
+                style={{
+                  width: 80,
+                  height: 4,
+                  WebkitAppearance: 'none',
+                  background: settings.theme === 'claro' ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.2)',
+                  borderRadius: 2,
+                  outline: 'none'
+                }}
+              />
+            </div>
+
+            {/* Minimize Button */}
+            <button
+              onClick={() => setIsExpanded(false)}
+              style={{ 
+                padding: 4, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: 'var(--accent)',
+                background: 'transparent',
+                border: 'none',
+                opacity: 0.6
+              }}
+            >
+              <ChevronDown size={16} />
+            </button>
+          </div>
+        )}
+      </div>
+      
+      {/* Hover zone to expand player when collapsed */}
+      <div
+        onMouseEnter={() => { if (!isExpanded) setIsHovered(true); }}
+        onMouseLeave={() => { setIsHovered(false); }}
+        onClick={() => { if (!isExpanded) { setIsExpanded(true); setIsHovered(false); } }}
+        style={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: hasTrack ? 20 : 0, // Visible height when collapsed, if there's a track
+          background: 'transparent',
+          pointerEvents: isExpanded ? 'none' : 'auto', // Active only when collapsed
+          cursor: 'pointer',
+          zIndex: 1001 // Above main player container when collapsed
+        }}
+      >
+        {/* Hover detection zone - wider and more sensitive */}
+        <div 
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+          onClick={() => hasTrack && setIsExpanded(true)}
+          style={{
+            position: 'absolute',
+            bottom: 0,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: '60%',
+            height: 80,
+            cursor: hasTrack ? 'pointer' : 'default',
+            pointerEvents: 'auto',
+            zIndex: 5
+          }}
+        />
+
+        {/* Visual hint (arrow) - Remastered with LED style lines */}
+        <div style={{
+          position: 'absolute',
+          bottom: 30,
+          left: '50%',
+          transform: `translateX(-50%) translateY(${isHovered ? '0' : '10px'})`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 20,
+          opacity: isExpanded ? 0 : (isHovered && hasTrack ? 1 : 0),
+          transition: 'all 400ms cubic-bezier(0.16, 1, 0.3, 1)',
+          pointerEvents: 'none'
+        }}>
+          <div style={{ width: 140, height: 1, background: 'linear-gradient(90deg, transparent, var(--accent))', opacity: 0.4, boxShadow: '0 0 8px var(--accent-glow)' }} />
+          
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+            {/* Main Point Up */}
+            <div style={{ display: 'flex', gap: -6, marginBottom: -4 }}>
+              <div style={{ width: 18, height: 3, background: 'var(--accent)', borderRadius: 4, transform: 'rotate(-35deg) translateX(4px)', boxShadow: '0 0 12px var(--accent)' }} />
+              <div style={{ width: 18, height: 3, background: 'var(--accent)', borderRadius: 4, transform: 'rotate(35deg) translateX(-4px)', boxShadow: '0 0 12px var(--accent)' }} />
+            </div>
+            {/* Mini Below */}
+            <div style={{ display: 'flex', gap: -4, opacity: 0.8 }}>
+              <div style={{ width: 10, height: 2, background: 'var(--accent)', borderRadius: 4, transform: 'rotate(-35deg) translateX(2px)', boxShadow: '0 0 8px var(--accent)' }} />
+              <div style={{ width: 10, height: 2, background: 'var(--accent)', borderRadius: 4, transform: 'rotate(35deg) translateX(-2px)', boxShadow: '0 0 8px var(--accent)' }} />
             </div>
           </div>
 
-          <style>{`
-            input[type=range]::-webkit-slider-thumb {
-              -webkit-appearance: none; width: 10px; height: 10px; border-radius: 50%; background: #fff; cursor: pointer; box-shadow: 0 0 4px rgba(0,0,0,0.3);
-            }
-            input[type=range]::-moz-range-thumb {
-              width: 10px; height: 10px; border-radius: 50%; background: #fff; cursor: pointer; border: none;
-            }
-          `}</style>
+          <div style={{ width: 140, height: 1, background: 'linear-gradient(90deg, var(--accent), transparent)', opacity: 0.4, boxShadow: '0 0 8px var(--accent-glow)' }} />
         </div>
       </div>
-    </>
+    </div>
   );
-}
+} 

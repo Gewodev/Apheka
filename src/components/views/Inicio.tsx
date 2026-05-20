@@ -1,643 +1,473 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  Activity, Play, Pause,
-  Cpu, Gauge, Thermometer, HardDrive,
-  FileText,
-  List, Flame, X, Monitor, Clock, Zap, Battery,
-  CheckCircle, ChevronRight, Sparkles, TrendingUp, Calendar,
-  Search, Wifi, Bell, ChevronDown, RotateCcw, CheckSquare
+  Monitor, Wifi, Music, CheckSquare, FileText, Flame
 } from 'lucide-react';
 import { useApp } from '../../store/AppContext';
-import { format, subDays, differenceInDays, differenceInHours, startOfDay } from 'date-fns';
+import { format, subDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { invoke } from '@tauri-apps/api/core';
+import { getWeeklyPhrase } from '../../data/phrases';
 
-function getGreeting(hour: number, name: string): string {
-  if (hour < 12) return `Buenos días, ${name}`;
-  if (hour < 18) return `Buenas tardes, ${name}`;
-  return `Buenas noches, ${name}`;
-}
+const dailyGoalMinutes = 240;
 
-function getDaysRemaining(dueDate: string): { text: string; color: string } {
-  const now = new Date();
-  const due = new Date(dueDate);
-  const days = differenceInDays(startOfDay(due), startOfDay(now));
-  if (days > 0) return { text: `Falta ${days} ${days === 1 ? 'día' : 'días'}`, color: 'text-textDim' };
-  if (days === 0) {
-    const hours = differenceInHours(due, now);
-    if (hours > 0) return { text: `Falta ${hours} h`, color: 'text-warning' };
-    return { text: 'Hoy', color: 'text-accent' };
-  }
-  return { text: 'Vencido', color: 'text-error' };
-}
-
-function calculateStreak(weeklyStudyTime: Record<string, number>): number {
-  let streak = 0;
-  const today = new Date();
+function calculateStreak(w: Record<string, number>): number {
+  let s = 0;
   for (let i = 0; i < 365; i++) {
-    const d = subDays(today, i);
-    const key = format(d, 'yyyy-MM-dd');
-    if ((weeklyStudyTime[key] || 0) > 0) streak++;
-    else break;
+    const d = subDays(new Date(), i);
+    if ((w[format(d, 'yyyy-MM-dd')] || 0) > 0) s++; else break;
   }
-  return streak;
+  return s;
 }
 
-interface SysStats {
-  cpu: number;
-  ram: number;
-  ramTotal: number;
-  ramUsed: number;
-  disk: number;
-  temp: number;
-  uptime: string;
-  processes: number;
-  battery: number;
-}
+interface SysStats { cpu: number; ram: number; ramTotal: number; ramUsed: number; disk: number; temp: number; battery: number; }
 
-function generateMockStats(): SysStats {
-  return {
-    cpu: 23,
-    ram: 42,
-    ramTotal: 16384,
-    ramUsed: 6963, // ~6.8 GB
-    disk: 42,
-    temp: 45,
-    uptime: `4h 12m`,
-    processes: 142,
-    battery: 87,
-  };
-}
+const mockStats = (): SysStats => ({ cpu: 23, ram: 42, ramTotal: 16384, ramUsed: 6963, disk: 42, temp: 45, battery: 87 });
+
+const heatmap = [
+  [0,0,1,0,0,0,2,3,4,1,0,0,2,1,0,0],[0,1,3,1,0,0,3,4,2,0,1,0,3,2,0,1],
+  [0,2,4,0,0,0,2,4,3,1,0,2,4,1,0,0],[1,3,1,0,0,1,4,2,1,0,1,3,2,0,1,2],
+  [0,1,4,0,0,2,3,1,0,0,2,4,1,0,0,0],[0,0,0,0,0,1,2,0,0,1,3,2,0,0,1,0],
+  [0,0,2,0,0,0,3,1,0,0,2,1,0,0,0,1],
+];
+
+const hl = (l: number) =>
+  l === 0 ? 'var(--bg-deep)' : l === 1 ? 'var(--accent-dim)' : l === 2 ? 'color-mix(in srgb, var(--accent) 35%, transparent)' : l === 3 ? 'color-mix(in srgb, var(--accent) 65%, transparent)' : 'var(--accent)';
+
+const sampleTasks = [
+  { title: 'Termodinámica - Problemas de aplicación', course: 'Física III', priority: 'HIGH' as const, date: '2 May' },
+  { title: 'Química Orgánica - Mecanismos', course: 'Química Orgánica', priority: 'MEDIUM' as const, date: '3 May' },
+  { title: 'Repaso de Cálculo - Integrales', course: 'Cálculo III', priority: 'LOW' as const, date: '4 May' },
+  { title: 'Ejercicios de Programación', course: 'Computación', priority: 'MEDIUM' as const, date: '5 May' },
+];
+
+const sampleNotes = [
+  { title: 'Mecánica Cuántica - Fundamentos', course: 'Física Moderna', time: 'Hace 1h' },
+  { title: 'Reacciones SN1 y SN2', course: 'Química Orgánica', time: 'Hace 3h' },
+  { title: 'Integrales Triples', course: 'Cálculo III', time: 'Hace 5h' },
+  { title: 'Estructuras de Datos', course: 'Computación', time: 'Hace 1d' },
+];
+
+const pc: Record<string, string> = { HIGH: '#E11D48', MEDIUM: '#F59E0B', LOW: '#10B981' };
 
 export default function Inicio() {
-  const {
-    tasks, notes, sessionTime, settings, dailyStudyTime,
-    weeklyStudyTime, toggleTimer, isTimerActive
-  } = useApp();
-
-  const [currentTime, setCurrentTime] = useState(new Date());
-  const [sysStats, setSysStats] = useState<SysStats>(generateMockStats());
+  const { tasks, notes, sessionTime, settings, dailyStudyTime, weeklyStudyTime, toggleTimer, isTimerActive, tracks, trackHistory } = useApp();
+  const [ct, setCt] = useState(new Date());
+  const [ss, setSs] = useState<SysStats>(mockStats());
   const [detailStat, setDetailStat] = useState<string | null>(null);
 
   useEffect(() => {
-    const timeInterval = setInterval(() => setCurrentTime(new Date()), 1000);
-    const statsInterval = setInterval(async () => {
+    const ti = setInterval(() => setCt(new Date()), 1000);
+    const si = setInterval(async () => {
       try {
         const raw: any = await invoke('get_system_stats');
         const cpu = Math.round(raw.cpu || 0);
-        let ramPct = 42, ramTotal = 16384, ramUsed = 6963;
-        if (raw.mem && raw.mem.Total) {
-          ramTotal = Math.round(parseInt(raw.mem.Total) / 1024);
-          const ramFree = Math.round(parseInt(raw.mem.Free) / 1024);
-          ramUsed = ramTotal - ramFree;
-          ramPct = Math.round((ramUsed / ramTotal) * 100);
+        let rp = 42, rt = 16384, ru = 6963;
+        if (raw.mem?.Total) {
+          rt = Math.round(parseInt(raw.mem.Total) / 1024);
+          ru = rt - Math.round(parseInt(raw.mem.Free) / 1024);
+          rp = Math.round((ru / rt) * 100);
         }
-        setSysStats(prev => ({
-          cpu,
-          ram: ramPct,
-          ramTotal,
-          ramUsed,
-          disk: prev.disk || 42,
-          temp: prev.temp || 45,
-          uptime: prev.uptime || '4h 12m',
-          processes: prev.processes || 142,
-          battery: prev.battery || 87,
-        }));
-      } catch {
-        setSysStats(generateMockStats());
-      }
+        setSs(p => ({ cpu, ram: rp, ramTotal: rt, ramUsed: ru, disk: p.disk || 42, temp: p.temp || 45, battery: p.battery || 87 }));
+      } catch { setSs(mockStats()); }
     }, 3000);
-    return () => { clearInterval(timeInterval); clearInterval(statsInterval); };
+    return () => { clearInterval(ti); clearInterval(si); };
   }, []);
 
   const statsList = useMemo(() => [
-    { id: 'cpu', label: 'CPU', val: sysStats.cpu, unit: '%', color: '#3B82F6', icon: Cpu, detail: `Carga actual del procesador. ${sysStats.cpu}% de uso.` },
-    { id: 'ram', label: 'RAM', val: sysStats.ram, unit: '%', color: '#10B981', icon: Gauge, detail: `${(sysStats.ramUsed / 1024).toFixed(1)} GB / ${(sysStats.ramTotal / 1024).toFixed(0)} GB usados. ${sysStats.ram}% en uso.` },
-    { id: 'disk', label: 'DISCO', val: sysStats.disk, unit: '%', color: '#8B5CF6', icon: HardDrive, detail: `Almacenamiento. ${sysStats.disk}% ocupado del disco principal.` },
-    { id: 'temp', label: 'TEMP', val: sysStats.temp, unit: '°C', color: '#F59E0B', icon: Thermometer, detail: `Temperatura del sistema. ${sysStats.temp}°C — dentro del rango normal.` },
-  ], [sysStats]);
+    { id: 'cpu', label: 'CPU', val: ss.cpu, unit: '%', color: '#3B82F6', detail: `Carga del procesador: ${ss.cpu}%.` },
+    { id: 'ram', label: 'RAM', val: ss.ram, unit: '%', color: '#10B981', detail: `${(ss.ramUsed / 1024).toFixed(1)} GB / ${(ss.ramTotal / 1024).toFixed(0)} GB usados.` },
+    { id: 'disk', label: 'DISCO', val: ss.disk, unit: '%', color: '#8B5CF6', detail: `Almacenamiento: ${ss.disk}% ocupado.` },
+    { id: 'temp', label: 'TEMP', val: ss.temp, unit: '°C', color: '#F59E0B', detail: `Temperatura: ${ss.temp}°C.` },
+  ], [ss]);
 
-  const timeStr = format(currentTime, 'HH:mm');
-  const dateStr = format(currentTime, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es as any });
-  const dateStrCapitalized = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
+  const timeStr = format(ct, 'HH:mm');
+  const secStr = format(ct, 'ss');
+  const dateStr = format(ct, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es as any });
+  const dateCap = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
 
   const streak = useMemo(() => calculateStreak(weeklyStudyTime) || 23, [weeklyStudyTime]);
-  const dailyGoalMinutes = 240; // 4 hours default
+  const phrase = useMemo(() => getWeeklyPhrase(), []);
 
-  // Heatmap Matrix exactly matching the screenshot (7 rows x 16 cols)
-  const heatmapMatrix = useMemo(() => {
-    return [
-      [0, 0, 1, 0, 0, 0, 2, 3, 4, 1, 0, 0, 2, 1, 0, 0], // L
-      [0, 1, 3, 1, 0, 0, 3, 4, 2, 0, 1, 0, 3, 2, 0, 1], // M
-      [0, 2, 4, 0, 0, 0, 2, 4, 3, 1, 0, 2, 4, 1, 0, 0], // M
-      [1, 3, 1, 0, 0, 1, 4, 2, 1, 0, 1, 3, 2, 0, 1, 2], // J
-      [0, 1, 4, 0, 0, 2, 3, 1, 0, 0, 2, 4, 1, 0, 0, 0], // V
-      [0, 0, 0, 0, 0, 1, 2, 0, 0, 1, 3, 2, 0, 0, 1, 0], // S
-      [0, 0, 2, 0, 0, 0, 3, 1, 0, 0, 2, 1, 0, 0, 0, 1], // D
-    ];
-  }, []);
-
-  const formatSessionTime = (secs: number) => {
-    const m = Math.floor(secs / 60);
-    const s = secs % 60;
-    return `${m}:${s.toString().padStart(2, '0')}`;
-  };
-
-  const taskStats = useMemo(() => ({
+  const ts = useMemo(() => ({
     active: tasks.filter(t => t.status !== 'completado').length || 8,
     total: notes.length || 146,
-    efficiency: '92%',
   }), [tasks, notes]);
 
-  const detailContent = detailStat ? statsList.find(s => s.id === detailStat) : null;
+  const dailyPct = useMemo(() => Math.min(100, Math.round((dailyStudyTime / (dailyGoalMinutes * 60)) * 100) || 73), [dailyStudyTime]);
+  const dc = detailStat && detailStat !== 'all' ? statsList.find(s => s.id === detailStat) : null;
+
+  const recentTracks = useMemo(() => {
+    const seen = new Set<string>();
+    const result: typeof tracks = [];
+    for (const id of trackHistory) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const t = tracks.find(track => track.id === id);
+      if (t) result.push(t);
+      if (result.length >= 4) break;
+    }
+    return result;
+  }, [trackHistory, tracks]);
+
+  const timerM = Math.floor(sessionTime / 60);
+  const timerS = sessionTime % 60;
+  const timerStr = sessionTime > 0
+    ? `${timerM.toString().padStart(2, '0')}:${timerS.toString().padStart(2, '0')}`
+    : '25:00';
 
   return (
-    <div className="page-container flex flex-col h-full overflow-y-auto custom-scroll pr-2" style={{ gap: 28 }}>
+    <div className="page-container flex flex-col h-full overflow-y-auto custom-scroll" style={{ gap: 20 }}>
 
       {/* ── HEADER ── */}
-      <header className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 pb-6 border-b border-borderDark/60 pt-2">
-        {/* Left: Greeting & Titles */}
-        <div>
-          <div className="text-sm font-semibold mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-            Buenas tardes, <span className="font-bold" style={{ color: 'var(--accent)' }}>{settings.userName || 'Avery'}</span>
+      <header className="flex justify-between items-end gap-6 pt-1" style={{ paddingBottom: 4, marginBottom: 4 }}>
+        <div className="flex-1 min-w-0">
+          <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 6, color: 'var(--text-tertiary)' }}>
+            {(() => {
+              const h = ct.getHours();
+              return h < 12 ? 'Buenos días' : h < 18 ? 'Buenas tardes' : 'Buenas noches';
+            })()}, <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{settings.userName || 'Avery'}</span>
           </div>
-          <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight leading-none mb-2" style={{ color: 'var(--text-primary)' }}>
-            Todo listo para otra gran sesión.
+          <h1 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 300, fontSize: 32, lineHeight: 1.4, letterSpacing: '0.02em', color: 'var(--text-primary)' }}>
+            {phrase}
           </h1>
-          <p className="text-sm font-medium" style={{ color: 'var(--text-tertiary)' }}>
-            Mantén el enfoque, los resultados llegan.
-          </p>
         </div>
 
-        {/* Center: Search Bar */}
-        <div className="flex-1 max-w-md w-full">
-          <div className="flex items-center gap-3 bg-surface border border-borderDark rounded-xl px-4 py-2.5 w-full shadow-inner transition-all hover:border-borderDark/80 focus-within:border-accent">
-            <Search size={16} style={{ color: 'var(--text-tertiary)' }} />
-            <input 
-              type="text" 
-              placeholder="Buscar en OWA Studio..." 
-              className="bg-transparent border-none outline-none w-full text-xs font-medium text-textMain placeholder:text-textDim/60"
-            />
-            <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded border border-borderDark text-textDim" style={{ background: 'var(--bg-deep)' }}>⌘K</span>
-          </div>
-        </div>
-
-        {/* Right: Status Badges & Digital Clock */}
-        <div className="flex flex-col items-end flex-shrink-0 min-w-[220px]">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="flex items-center gap-2 bg-surface border border-borderDark rounded-full px-3 py-1 text-[11px] font-bold text-textDim uppercase tracking-wider shadow-sm">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span style={{ color: 'var(--text-secondary)' }}>Conectado</span>
+        <div className="flex items-center gap-4 flex-shrink-0" style={{ 
+          paddingLeft: 16, 
+          borderLeft: '1px solid var(--border-subtle)',
+          position: 'relative'
+        }}>
+          {/* Clock background illumination */}
+          <div style={{ 
+            position: 'absolute', 
+            top: '50%', 
+            right: 0, 
+            width: 150, 
+            height: 100, 
+            background: 'radial-gradient(circle at center, var(--accent-dim) 0%, transparent 70%)', 
+            opacity: 0.4, 
+            transform: 'translateY(-50%)',
+            pointerEvents: 'none',
+            zIndex: 0
+          }} />
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#10B981', boxShadow: '0 0 8px rgba(16,185,129,0.5)', position: 'relative', zIndex: 1 }} />
+          <div style={{ textAlign: 'right', position: 'relative', zIndex: 1 }}>
+            <div className="flex items-baseline gap-2 justify-end">
+              <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: 68, fontWeight: 200, lineHeight: 0.9, color: 'var(--accent)', letterSpacing: '0.02em', textShadow: '0 0 20px var(--accent-glow)' }}>
+                {timeStr}
+              </span>
+              <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: 22, fontWeight: 200, color: 'var(--accent)', opacity: 0.7, letterSpacing: '0.02em' }}>
+                {secStr}
+              </span>
             </div>
-            <div className="w-8 h-8 rounded-xl bg-surface border border-borderDark flex items-center justify-center text-textDim hover:text-textMain cursor-pointer transition-colors shadow-sm">
-              <Wifi size={15} style={{ color: 'var(--text-secondary)' }} />
+            <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.12em', marginTop: 6 }}>
+              {dateCap}
             </div>
-            <div className="w-8 h-8 rounded-xl bg-surface border border-borderDark flex items-center justify-center text-textDim hover:text-textMain cursor-pointer transition-colors shadow-sm">
-              <Bell size={15} style={{ color: 'var(--text-secondary)' }} />
-            </div>
-          </div>
-          <div className="text-4xl font-black digital-font tracking-wider text-right" style={{ color: 'var(--accent)', textShadow: '0 0 20px var(--accent-glow)' }}>
-            {timeStr}
-          </div>
-          <div className="text-[11px] font-bold uppercase tracking-widest text-right mt-1" style={{ color: 'var(--text-tertiary)' }}>
-            {dateStrCapitalized}
           </div>
         </div>
       </header>
 
-      {/* ── ROW 1: STATS ROW (4 BENTO CARDS) ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* ── ROW 1: 3 STATS + TIMER ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { label: 'TAREAS ACTIVAS', val: taskStats.active, sub: 'Pendientes', icon: CheckSquare, color: 'var(--accent)' },
-          { label: 'NOTAS GUARDADAS', val: taskStats.total, sub: 'En total', icon: FileText, color: 'var(--accent)' },
-          { label: 'EFICIENCIA SEMANAL', val: taskStats.efficiency, sub: 'Excelente', icon: Activity, color: 'var(--accent)' },
-          { label: 'RACHA ACTUAL', val: streak, sub: 'días', icon: Flame, color: 'var(--accent)' },
+          { label: 'TAREAS', val: ts.active, sub: 'Pendientes', color: '#3B82F6', icon: CheckSquare },
+          { label: 'NOTAS', val: ts.total, sub: 'Guardadas', color: '#10B981', icon: FileText },
+          { label: 'RACHA', val: streak, sub: 'días', color: '#F59E0B', icon: Flame },
         ].map((s, i) => (
-          <div key={i} className="bento-card hover-lift" style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 16 }}>
+          <div key={i}
+            style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 10, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span className="stat-label" style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: '0.05em' }}>{s.label}</span>
-              <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--accent-soft)', border: '1px solid var(--accent-glow)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <s.icon size={16} style={{ color: s.color }} />
-              </div>
+              <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em' }}>{s.label}</span>
+              <s.icon size={16} style={{ color: s.color, opacity: 0.8 }} />
             </div>
             <div>
-              <div className="stat-value" style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.1 }}>{s.val}</div>
-              <div className="stat-subtext" style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-tertiary)', marginTop: 4 }}>{s.sub}</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1 }}>{s.val}</div>
+              <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 1 }}>{s.sub}</div>
             </div>
           </div>
         ))}
+
+        {/* TIMER - Digital Pixel Clock */}
+        <div
+          onClick={toggleTimer}
+          style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 10, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: `1px solid ${isTimerActive ? 'var(--accent-glow)' : 'var(--border-subtle)'}`, borderRadius: 12, cursor: 'pointer', transition: 'all 200ms' }}
+          className="hover:border-accent/30"
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ width: 6, height: 6, borderRadius: '50%', background: isTimerActive ? 'var(--accent)' : 'var(--text-muted)', boxShadow: isTimerActive ? '0 0 8px var(--accent)' : 'none' }} />
+            <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em' }}>ENFOQUE</span>
+          </div>
+          <div style={{ fontFamily: "'Digital Numbers', 'Share Tech Mono', monospace", fontSize: 32, fontWeight: 600, lineHeight: 1, color: 'var(--text-primary)', letterSpacing: '0.08em', textAlign: 'center' }}>
+            {timerStr.split('').map((ch, i) => (
+              <span key={i} style={{
+                display: 'inline-block',
+                background: ch === ':' ? 'transparent' : 'linear-gradient(180deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.06) 50%, transparent 51%, transparent 100%)',
+                padding: ch === ':' ? '0 2px' : '0 1px',
+                margin: '0 0.5px',
+                borderRadius: 2,
+                color: ch === ':' ? 'var(--text-tertiary)' : 'var(--text-primary)',
+                textShadow: ch !== ':' ? '0 0 8px rgba(255,255,255,0.1)' : 'none',
+              }}>{ch}</span>
+            ))}
+          </div>
+        </div>
       </div>
 
-      {/* ── ROW 2: MAIN GRID (3 COLUMNS) ── */}
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-        
-        {/* CARD 1: ACTIVIDAD DE LOS ÚLTIMOS 32 DÍAS (5 COLS) */}
-        <div className="xl:col-span-5 bento-card" style={{ padding: '24px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 16, display: 'flex', flexDirection: 'column', height: '100%' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: '0.05em' }}>ACTIVIDAD DE LOS ÚLTIMOS 32 DÍAS</span>
-          </div>
-          
-          <div style={{ display: 'flex', gap: 12, flex: 1, alignItems: 'center', justifyContent: 'center', margin: '12px 0' }}>
-            {/* Day labels L M M J V S D */}
-            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: 160, paddingRight: 4, color: 'var(--text-tertiary)', fontSize: 11, fontWeight: 600 }}>
-              <span>L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span><span>D</span>
-            </div>
-            {/* Grid of 7 rows x 16 cols */}
-            <div style={{ display: 'grid', gridTemplateRows: 'repeat(7, 1fr)', gridTemplateColumns: 'repeat(16, 1fr)', gap: 6, flex: 1, height: 160 }}>
-              {heatmapMatrix.flatMap((row, r) => row.map((level, c) => (
-                <div 
-                  key={`${r}-${c}`} 
-                  style={{ 
-                    width: '100%', 
-                    height: '100%', 
-                    borderRadius: 4, 
-                    background: level === 0 ? 'var(--bg-deep)' : level === 1 ? 'rgba(225,29,72,0.2)' : level === 2 ? 'rgba(225,29,72,0.4)' : level === 3 ? 'rgba(225,29,72,0.7)' : 'var(--accent)',
-                    boxShadow: level >= 3 ? '0 0 8px var(--accent-glow)' : 'none',
-                    transition: 'all 150ms'
-                  }} 
-                  className="hover:scale-110 cursor-pointer"
-                  title={`Nivel de actividad: ${level}`}
-                />
+      {/* ── ROW 2: HEATMAP + RECIENTES ── */}
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-stretch">
+
+        {/* HEATMAP */}
+        <div className="xl:col-span-6" style={{ padding: '18px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 12 }}>
+          <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em' }}>ACTIVIDAD</span>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 14 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: 130, color: 'var(--text-tertiary)', fontSize: 9, fontWeight: 600 }}><span>L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span><span>D</span></div>
+            <div style={{ display: 'grid', gridTemplateRows: 'repeat(7, 1fr)', gridTemplateColumns: 'repeat(16, 1fr)', gap: 4, flex: 1, height: 130 }}>
+              {heatmap.flatMap((r, ri) => r.map((l, ci) => (
+                <div key={`${ri}-${ci}`} style={{ borderRadius: 2, background: hl(l), boxShadow: l >= 3 ? '0 0 6px var(--accent-glow)' : 'none', transition: 'all 120ms' }} className="hover:scale-110 cursor-pointer" />
               )))}
             </div>
           </div>
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6, marginTop: 'auto', paddingTop: 16, borderTop: '1px solid var(--border-soft)', fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600 }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 4, marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border-soft)', fontSize: 9, color: 'var(--text-tertiary)', fontWeight: 600 }}>
             <span>Menos</span>
-            <div style={{ display: 'flex', gap: 4 }}>
-              {[0, 1, 2, 3, 4].map(lvl => (
-                <div 
-                  key={lvl} 
-                  style={{ 
-                    width: 12, 
-                    height: 12, 
-                    borderRadius: 3, 
-                    background: lvl === 0 ? 'var(--bg-deep)' : lvl === 1 ? 'rgba(225,29,72,0.2)' : lvl === 2 ? 'rgba(225,29,72,0.4)' : lvl === 3 ? 'rgba(225,29,72,0.7)' : 'var(--accent)' 
-                  }} 
-                />
-              ))}
-            </div>
+            {[0,1,2,3,4].map(l => <div key={l} style={{ width: 10, height: 10, borderRadius: 2, background: hl(l) }} />)}
             <span>Más</span>
           </div>
         </div>
-        
-        {/* CARD 2: PROGRESO DIARIO (4 COLS) */}
-        <div className="xl:col-span-4 bento-card" style={{ padding: '24px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 16, display: 'flex', flexDirection: 'column', height: '100%' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: '0.05em' }}>PROGRESO DIARIO</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer' }}>
-              <span>Hoy</span>
-              <ChevronDown size={12} />
-            </div>
-          </div>
 
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-            <span style={{ fontSize: 36, fontWeight: 800, color: 'var(--accent)', lineHeight: 1 }}>{Math.round((dailyStudyTime / (dailyGoalMinutes * 60)) * 100 || 73)}%</span>
+        {/* RECIENTES: Canciones */}
+        <div className="xl:col-span-6" style={{ padding: '18px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 12, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+            <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em' }}>RECIENTES</span>
+            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--accent)', cursor: 'pointer' }} className="hover:opacity-80">Ir a música →</span>
           </div>
-          <div style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 500, marginTop: 4 }}>de la meta diaria</div>
-
-          <div style={{ height: 10, borderRadius: 5, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', overflow: 'hidden', margin: '24px 0 20px 0', padding: 1 }}>
-            <div 
-              style={{ 
-                height: '100%', 
-                borderRadius: 4, 
-                background: 'var(--accent)', 
-                width: `${Math.min(100, Math.round((dailyStudyTime / (dailyGoalMinutes * 60)) * 100 || 73))}%`,
-                boxShadow: '0 0 12px var(--accent-glow)',
-                transition: 'width 500ms'
-              }} 
-            />
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <div>
-              <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', display: 'block', marginBottom: 2 }}>Tiempo actual</span>
-              <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)' }}>{Math.floor(dailyStudyTime / 3600) || 2}h {Math.floor((dailyStudyTime % 3600) / 60) || 56}m</span>
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', display: 'block', marginBottom: 2 }}>Meta diaria</span>
-              <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)' }}>{Math.floor(dailyGoalMinutes / 60)}h {dailyGoalMinutes % 60}m</span>
-            </div>
-          </div>
-
-          {/* Beautiful mini curved line chart */}
-          <div style={{ marginTop: 'auto', paddingTop: 12, borderTop: '1px solid var(--border-soft)' }}>
-            <svg className="w-full h-14 overflow-visible" viewBox="0 0 300 60" preserveAspectRatio="none">
-              <defs>
-                <linearGradient id="redGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.3" />
-                  <stop offset="100%" stopColor="var(--accent)" stopOpacity="0.0" />
-                </linearGradient>
-              </defs>
-              <path d="M0,50 Q50,45 100,40 T200,25 T300,10 L300,60 L0,60 Z" fill="url(#redGrad)" />
-              <path d="M0,50 Q50,45 100,40 T200,25 T300,10" stroke="var(--accent)" strokeWidth="2.5" fill="none" style={{ filter: 'drop-shadow(0 4px 6px var(--accent-glow))' }} />
-            </svg>
-          </div>
-        </div>
-
-        {/* CARD 3: ENFOQUE RÁPIDO (3 COLS) */}
-        <div className="xl:col-span-3 bento-card" style={{ padding: '24px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 16, display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%' }}>
-          <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: '0.05em' }}>ENFOQUE RÁPIDO</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer' }}>
-              <span>Pomodoro</span>
-              <ChevronDown size={12} />
-            </div>
-          </div>
-
-          <div style={{ position: 'relative', width: 170, height: 170, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 28 }}>
-            <svg className="w-full h-full transform -rotate-90" viewBox="0 0 180 180">
-              <circle cx="90" cy="90" r="76" stroke="var(--bg-deep)" strokeWidth="10" fill="none" />
-              <circle 
-                cx="90" 
-                cy="90" 
-                r="76" 
-                stroke="var(--accent)" 
-                strokeWidth="10" 
-                strokeDasharray="477.5" 
-                strokeDashoffset={isTimerActive ? "150" : "0"} 
-                strokeLinecap="round" 
-                fill="none" 
-                style={{ filter: 'drop-shadow(0 0 10px var(--accent-glow))', transition: 'stroke-dashoffset 1s linear' }} 
-              />
-            </svg>
-            <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-              <span style={{ fontSize: 32, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '0.02em', lineHeight: 1 }}>{sessionTime > 0 ? formatSessionTime(sessionTime) : '25:00'}</span>
-              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', marginTop: 4 }}>Iniciar sesión</span>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginTop: 'auto' }}>
-            <button 
-              onClick={toggleTimer}
-              style={{ 
-                width: 54, 
-                height: 54, 
-                borderRadius: 27, 
-                background: isTimerActive ? 'transparent' : 'var(--accent)', 
-                border: isTimerActive ? '2px solid var(--accent)' : 'none',
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center', 
-                boxShadow: isTimerActive ? '0 0 20px var(--accent-glow)' : '0 6px 20px var(--accent-glow)',
-                cursor: 'pointer',
-                transition: 'all 200ms'
-              }}
-              className="hover:scale-105 active:scale-95"
-            >
-              {isTimerActive ? <Pause size={24} fill="var(--accent)" style={{ color: 'var(--accent)' }} /> : <Play size={24} fill="#fff" style={{ color: '#fff', marginLeft: 3 }} />}
-            </button>
-            <button 
-              onClick={() => {}} 
-              style={{ width: 36, height: 36, borderRadius: 18, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-tertiary)', cursor: 'pointer', transition: 'all 200ms' }}
-              className="hover:text-white hover:border-borderDark"
-              title="Reiniciar temporizador"
-            >
-              <RotateCcw size={16} />
-            </button>
+          
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', 
+            gap: 12, 
+            flex: 1,
+            justifyContent: 'center',
+            alignItems: 'start'
+          }}>
+            {recentTracks.length > 0 ? (
+              recentTracks.slice(0, 4).map((track) => (
+                <div key={track.id} style={{ 
+                  background: 'var(--bg-deep)', 
+                  borderRadius: 10, 
+                  border: '1px solid var(--border-subtle)', 
+                  padding: 8,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8,
+                  maxWidth: '160px',
+                  margin: '0 auto',
+                  width: '100%'
+                }}>
+                  <div style={{ width: '100%', aspectRatio: '1/1', borderRadius: 6, overflow: 'hidden', background: 'var(--bg-surface)' }}>
+                    {track.coverImage ? (
+                      <img src={track.coverImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                        <Music size={20} style={{ color: 'var(--text-muted)', opacity: 0.3 }} />
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ textAlign: 'center', overflow: 'hidden' }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{track.title}</div>
+                    <div style={{ fontSize: 9, color: 'var(--text-tertiary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{track.artist}</div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} style={{ 
+                  background: 'var(--bg-deep)', 
+                  borderRadius: 10, 
+                  border: '1px dashed var(--border-subtle)', 
+                  aspectRatio: '1/1',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  opacity: 0.4,
+                  maxWidth: '160px',
+                  margin: '0 auto',
+                  width: '100%'
+                }}>
+                  <Music size={20} style={{ color: 'var(--text-muted)', opacity: 0.2 }} />
+                  <span style={{ fontSize: 8, marginTop: 4, color: 'var(--text-tertiary)' }}>Vacío</span>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>
 
-      {/* ── ROW 3: SECONDARY GRID (3 COLUMNS) ── */}
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start mb-6">
-        {/* PRÓXIMAS TAREAS (4 COLS) */}
-        <div className="xl:col-span-4 bento-card" style={{ padding: '24px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 16, display: 'flex', flexDirection: 'column', height: '100%' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid var(--border-soft)' }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: '0.05em' }}>PRÓXIMAS TAREAS</span>
-            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', cursor: 'pointer' }} className="hover:underline">Ver todas</span>
+      {/* ── ROW 3: TASKS + NOTES + SYSTEM ── */}
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 mb-2">
+
+        {/* TASKS */}
+        <div className="xl:col-span-4" style={{ padding: '18px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 12, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 12, borderBottom: '1px solid var(--border-soft)' }}>
+            <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em' }}>TAREAS</span>
+            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--accent)', cursor: 'pointer' }} className="hover:opacity-80">Ver todas</span>
           </div>
-          
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, flex: 1 }}>
-            {[
-              { title: 'Termodinámica - Problemas de aplicación', course: 'Física III', priority: 'HIGH', date: '2 May', color: '#E11D48' },
-              { title: 'Química Orgánica - Mecanismos', course: 'Química Orgánica', priority: 'MEDIUM', date: '3 May', color: '#F59E0B' },
-              { title: 'Repaso de Cálculo - Integrales', course: 'Cálculo III', priority: 'LOW', date: '4 May', color: '#10B981' },
-              { title: 'Ejercicios de Programación', course: 'Computación', priority: 'MEDIUM', date: '5 May', color: '#F59E0B' },
-            ].map((t, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', borderRadius: 12, transition: 'all 150ms' }} className="hover:border-borderDark group">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0, flex: 1, marginRight: 16 }}>
-                  <div style={{ width: 16, height: 16, borderRadius: 8, border: '2px solid var(--border-subtle)', transition: 'border-color 150ms' }} className="group-hover:border-accent cursor-pointer flex-shrink-0" />
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.title}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>{t.course}</div>
-                  </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {sampleTasks.map((t, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', borderRadius: 8, transition: 'all 150ms' }} className="hover:border-borderDark/60 group">
+                <div style={{ width: 12, height: 12, borderRadius: 6, border: '2px solid var(--border-subtle)', transition: 'border-color 150ms' }} className="group-hover:border-accent/60 cursor-pointer flex-shrink-0" />
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.title}</div>
+                  <div style={{ fontSize: 9, color: 'var(--text-tertiary)', marginTop: 1 }}>{t.course}</div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
-                  <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 6, background: t.priority === 'HIGH' ? 'rgba(225,29,72,0.15)' : t.priority === 'MEDIUM' ? 'rgba(245,158,11,0.15)' : 'rgba(16,185,129,0.15)', color: t.priority === 'HIGH' ? '#E11D48' : t.priority === 'MEDIUM' ? '#F59E0B' : '#10B981', border: `1px solid ${t.priority === 'HIGH' ? 'rgba(225,29,72,0.3)' : t.priority === 'MEDIUM' ? 'rgba(245,158,11,0.3)' : 'rgba(16,185,129,0.3)'}` }}>
-                    ◆ {t.priority}
-                  </span>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)' }}>{t.date}</span>
-                </div>
+                <span style={{ fontSize: 8, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: `${pc[t.priority]}20`, color: pc[t.priority] }}>{t.priority}</span>
               </div>
             ))}
           </div>
         </div>
 
-        {/* NOTAS RECIENTES (4 COLS) */}
-        <div className="xl:col-span-4 bento-card" style={{ padding: '24px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 16, display: 'flex', flexDirection: 'column', height: '100%' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid var(--border-soft)' }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: '0.05em' }}>NOTAS RECIENTES</span>
-            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', cursor: 'pointer' }} className="hover:underline">Ver todas</span>
+        {/* NOTES */}
+        <div className="xl:col-span-4" style={{ padding: '18px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 12, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 12, borderBottom: '1px solid var(--border-soft)' }}>
+            <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em' }}>NOTAS</span>
+            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--accent)', cursor: 'pointer' }} className="hover:opacity-80">Ver todas</span>
           </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, flex: 1 }}>
-            {[
-              { title: 'Mecánica Cuántica - Fundamentos', course: 'Física Moderna', time: 'Hace 1h' },
-              { title: 'Reacciones SN1 y SN2', course: 'Química Orgánica', time: 'Hace 3h' },
-              { title: 'Integrales Triples', course: 'Cálculo III', time: 'Hace 5h' },
-              { title: 'Estructuras de Datos', course: 'Computación', time: 'Hace 1d' },
-            ].map((n, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', borderRadius: 12, transition: 'all 150ms', cursor: 'pointer' }} className="hover:border-borderDark group">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0, flex: 1, marginRight: 16 }}>
-                  <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-tertiary)' }} className="group-hover:text-accent flex-shrink-0">
-                    <FileText size={16} />
-                  </div>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n.title}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>{n.course}</div>
-                  </div>
-                </div>
-                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', flexShrink: 0 }}>{n.time}</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {sampleNotes.map((n, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', borderRadius: 8, cursor: 'pointer', transition: 'all 150ms' }} className="hover:border-borderDark/60 group">
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n.title}</div>
+                <span style={{ fontSize: 9, color: 'var(--text-tertiary)', flexShrink: 0 }}>{n.time}</span>
               </div>
             ))}
           </div>
         </div>
 
-        {/* ESTADO DEL SISTEMA (4 COLS) */}
-        <div className="xl:col-span-4 bento-card" style={{ padding: '24px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 16, display: 'flex', flexDirection: 'column', height: '100%' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid var(--border-soft)' }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: '0.05em' }}>ESTADO DEL SISTEMA</span>
+        {/* SYSTEM STATUS */}
+        <div className="xl:col-span-4" style={{ padding: '18px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 12, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 10, borderBottom: '1px solid var(--border-soft)' }}>
+            <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em' }}>SISTEMA</span>
+            <span style={{ fontSize: 9, fontFamily: "'Share Tech Mono', monospace", color: '#3B82F6' }}>{'\u25CF'} En vivo</span>
           </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, flex: 1 }}>
-            {/* CPU */}
-            <div onClick={() => setDetailStat('cpu')} className="cursor-pointer group">
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, fontWeight: 700, marginBottom: 6 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)' }}>
-                  <Cpu size={14} style={{ color: '#3B82F6' }} />
-                  <span>CPU</span>
+          <div style={{ display: 'flex', gap: 16, flex: 1 }}>
+            {/* Combined gauge */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, width: 110, flexShrink: 0 }}>
+              <div style={{ position: 'relative', width: 90, height: 90 }}>
+                <svg viewBox="0 0 120 120" style={{ width: '100%', height: '100%' }}>
+                  <circle cx="60" cy="60" r="50" fill="none" stroke="var(--bg-deep)" strokeWidth="8" />
+                  {(() => {
+                    const combined = Math.round((ss.cpu + ss.ram + ss.disk) / 3);
+                    const circ = 2 * Math.PI * 50;
+                    return (
+                      <circle cx="60" cy="60" r="50" fill="none" stroke="var(--accent)" strokeWidth="8" strokeDasharray={`${(combined / 100) * circ} ${circ}`} strokeLinecap="round" transform="rotate(-90 60 60)" style={{ filter: 'drop-shadow(0 0 16px var(--accent-glow))', transition: 'stroke-dasharray 500ms' }} />
+                    );
+                  })()}
+                </svg>
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Monitor size={32} style={{ color: 'var(--text-secondary)' }} />
                 </div>
-                <span style={{ color: 'var(--text-primary)', fontWeight: 800 }}>{sysStats.cpu}%</span>
               </div>
-              <div style={{ height: 6, borderRadius: 3, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
-                <div style={{ height: '100%', background: '#3B82F6', width: `${sysStats.cpu}%`, borderRadius: 3, boxShadow: '0 0 8px #3B82F6', transition: 'width 500ms' }} />
-              </div>
+              <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.04em', fontFamily: "'Share Tech Mono', monospace" }}>GENERAL</span>
             </div>
-
-            {/* RAM */}
-            <div onClick={() => setDetailStat('ram')} className="cursor-pointer group">
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, fontWeight: 700, marginBottom: 6 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)' }}>
-                  <Gauge size={14} style={{ color: '#10B981' }} />
-                  <span>RAM</span>
+            {/* Metrics in 2x2 grid */}
+            <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              {[
+                { label: 'CPU', val: ss.cpu, unit: '%', color: '#E11D48' },
+                { label: 'RAM', val: ss.ram, unit: '%', color: '#F59E0B' },
+                { label: 'DISCO', val: ss.disk, unit: '%', color: '#8B5CF6' },
+                { label: 'TEMP', val: ss.temp, unit: '°C', color: '#3B82F6' },
+              ].map(m => (
+                <div key={m.label} style={{ background: 'var(--bg-deep)', borderRadius: 8, padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 4, border: '1px solid var(--border-subtle)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.04em' }}>{m.label}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: m.color, fontFamily: "'Share Tech Mono', monospace" }}>{m.label === 'TEMP' ? `${m.val}°C` : `${m.val}%`}</span>
+                  </div>
+                  <div style={{ height: 4, borderRadius: 2, background: 'var(--bg-base)', overflow: 'hidden' }}>
+                    <div style={{ height: '100%', borderRadius: 2, background: m.color, width: `${m.label === 'TEMP' ? Math.round((m.val / 80) * 100) : m.val}%`, boxShadow: `0 0 6px ${m.color}40`, transition: 'width 600ms cubic-bezier(0.16, 1, 0.3, 1)' }} />
+                  </div>
                 </div>
-                <span style={{ color: 'var(--text-primary)', fontWeight: 800 }}>{(sysStats.ramUsed / 1024).toFixed(1)} GB / {(sysStats.ramTotal / 1024).toFixed(0)} GB</span>
-              </div>
-              <div style={{ height: 6, borderRadius: 3, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
-                <div style={{ height: '100%', background: '#10B981', width: `${sysStats.ram}%`, borderRadius: 3, boxShadow: '0 0 8px #10B981', transition: 'width 500ms' }} />
-              </div>
+              ))}
             </div>
-
-            {/* ALMACENAMIENTO */}
-            <div onClick={() => setDetailStat('disk')} className="cursor-pointer group">
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, fontWeight: 700, marginBottom: 6 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)' }}>
-                  <HardDrive size={14} style={{ color: '#8B5CF6' }} />
-                  <span>Almacenamiento</span>
-                </div>
-                <span style={{ color: 'var(--text-primary)', fontWeight: 800 }}>{sysStats.disk}% / 1 TB</span>
-              </div>
-              <div style={{ height: 6, borderRadius: 3, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
-                <div style={{ height: '100%', background: '#8B5CF6', width: `${sysStats.disk}%`, borderRadius: 3, boxShadow: '0 0 8px #8B5CF6', transition: 'width 500ms' }} />
-              </div>
-            </div>
-
-            {/* TEMPERATURA */}
-            <div onClick={() => setDetailStat('temp')} className="cursor-pointer group">
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, fontWeight: 700, marginBottom: 6 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)' }}>
-                  <Thermometer size={14} style={{ color: '#F59E0B' }} />
-                  <span>Temperatura</span>
-                </div>
-                <span style={{ color: 'var(--text-primary)', fontWeight: 800 }}>{sysStats.temp}°C</span>
-              </div>
-              <div style={{ height: 6, borderRadius: 3, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
-                <div style={{ height: '100%', background: '#F59E0B', width: `${Math.min(100, Math.round((sysStats.temp / 80) * 100))}%`, borderRadius: 3, boxShadow: '0 0 8px #F59E0B', transition: 'width 500ms' }} />
-              </div>
-            </div>
-
-            {/* BOTTOM ROW: RED & BATERÍA */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, marginTop: 'auto', paddingTop: 8 }}>
-              <div style={{ padding: '12px 14px', background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', borderRadius: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(16,185,129,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10B981', flexShrink: 0 }}>
-                  <Wifi size={14} />
-                </div>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 2 }}>Red</div>
-                  <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Conectado</div>
-                  <div style={{ fontSize: 10, color: '#10B981', fontWeight: 600, marginTop: 1 }}>42.4 Mbps</div>
-                </div>
-              </div>
-
-              <div style={{ padding: '12px 14px', background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', borderRadius: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(16,185,129,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10B981', flexShrink: 0 }}>
-                  <Battery size={14} />
-                </div>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 2 }}>Batería</div>
-                  <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>87%</div>
-                  <div style={{ fontSize: 10, color: '#10B981', fontWeight: 600, marginTop: 1 }}>Cargando</div>
-                </div>
-              </div>
-            </div>
-
+          </div>
+          <div onClick={() => setDetailStat('all')} style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--border-soft)', cursor: 'pointer', transition: 'all 150ms' }}>
+            <Wifi size={12} style={{ color: '#3B82F6' }} />
+            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)' }}>Conectado · 42.4 Mbps</span>
+            <span style={{ marginLeft: 'auto', fontSize: 9, color: 'var(--text-tertiary)', fontFamily: "'Share Tech Mono', monospace" }}>Ver detalles →</span>
           </div>
         </div>
       </div>
 
       {/* ── DETAIL MODAL ── */}
-      {detailContent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4" onClick={() => setDetailStat(null)}>
-          <div className="bg-surface2 border border-borderDark rounded-2xl w-full max-w-md p-8 shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-6 pb-4 border-b border-borderDark/60">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl bg-surface border border-borderDark flex items-center justify-center shadow-inner">
-                  <detailContent.icon size={24} style={{ color: detailContent.color }} />
+      {detailStat === 'all' && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', padding: 16 }} onClick={() => setDetailStat(null)}>
+          <div style={{ background: 'var(--surface-elevated)', border: '1px solid var(--border-default)', borderRadius: 16, width: '100%', maxWidth: 400, padding: 24 }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, paddingBottom: 14, borderBottom: '1px solid var(--border-soft)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ width: 40, height: 40, borderRadius: 8, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Monitor size={20} style={{ color: 'var(--accent)' }} />
                 </div>
                 <div>
-                  <h2 className="text-lg font-extrabold text-textMain uppercase tracking-wider">{detailContent.label}</h2>
-                  <p className="text-xs text-textDim font-medium">Diagnóstico de hardware en tiempo real</p>
+                  <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Sistema</h2>
+                  <p style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>Diagnóstico en tiempo real</p>
                 </div>
               </div>
-              <button onClick={() => setDetailStat(null)} className="w-8 h-8 rounded-lg bg-surface border border-borderDark flex items-center justify-center text-textDim hover:text-textMain transition-colors">
-                <X size={18} />
-              </button>
+              <button onClick={() => setDetailStat(null)} style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-tertiary)', cursor: 'pointer' }}><span style={{ fontSize: 14 }}>✕</span></button>
             </div>
-
-            <div className="text-5xl font-extrabold text-center my-6 digital-font tracking-wider" style={{ color: detailContent.color }}>
-              {detailContent.val}<span className="text-2xl font-bold ml-1">{detailContent.unit}</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+              {statsList.map(s => (
+                <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'var(--bg-surface)', borderRadius: 8, border: '1px solid var(--border-soft)' }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 6, background: `${s.color}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <span style={{ fontSize: 10, fontWeight: 800, color: s.color }}>{s.label.slice(0, 2)}</span>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)' }}>{s.label}</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: s.color, fontFamily: "'Share Tech Mono', monospace" }}>{s.val}{s.unit}</span>
+                    </div>
+                    <div style={{ height: 4, borderRadius: 2, background: 'var(--bg-deep)', marginTop: 4, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', borderRadius: 2, background: s.color, width: `${s.val}%`, boxShadow: `0 0 6px ${s.color}60`, transition: 'width 500ms' }} />
+                    </div>
+                    <div style={{ fontSize: 9, color: 'var(--text-tertiary)', marginTop: 3 }}>{s.detail}</div>
+                  </div>
+                </div>
+              ))}
             </div>
-
-            <div className="h-3 rounded-full bg-surface border border-borderDark overflow-hidden mb-6 p-0.5 shadow-inner">
-              <div className="h-full rounded-full transition-all duration-500" style={{ width: `${detailContent.val}%`, backgroundColor: detailContent.color, boxShadow: `0 0 12px ${detailContent.color}` }} />
-            </div>
-
-            <p className="text-xs text-textDim font-medium leading-relaxed mb-6 bg-surface p-4 rounded-xl border border-borderDark/40">
-              {detailContent.detail}
-            </p>
-
-            <div className="grid grid-cols-2 gap-3 pt-6 border-t border-borderDark/60">
-              {detailContent.id === 'cpu' && (
-                <>
-                  <DetailItem label="Frecuencia" value="3.6 GHz" />
-                  <DetailItem label="Núcleos" value="8 lógicos" />
-                  <DetailItem label="Procesos" value={`${sysStats.processes} activos`} />
-                  <DetailItem label="Arquitectura" value="x64" />
-                </>
-              )}
-              {detailContent.id === 'ram' && (
-                <>
-                  <DetailItem label="Total" value={`${Math.round(sysStats.ramTotal / 1024)} GB`} />
-                  <DetailItem label="En uso" value={`${Math.round(sysStats.ramUsed / 1024)} GB`} />
-                  <DetailItem label="Disponible" value={`${Math.round((sysStats.ramTotal - sysStats.ramUsed) / 1024)} GB`} />
-                  <DetailItem label="Tipo" value="DDR4" />
-                </>
-              )}
-              {detailContent.id === 'disk' && (
-                <>
-                  <DetailItem label="Capacidad" value="256 GB" />
-                  <DetailItem label="Usado" value={`${Math.round(sysStats.disk * 2.56)} GB`} />
-                  <DetailItem label="Disponible" value={`${256 - Math.round(sysStats.disk * 2.56)} GB`} />
-                  <DetailItem label="Tipo" value="SSD NVMe" />
-                </>
-              )}
-              {detailContent.id === 'temp' && (
-                <>
-                  <DetailItem label="CPU" value={`${sysStats.temp}°C`} />
-                  <DetailItem label="GPU" value={`${Math.round(sysStats.temp * 0.85)}°C`} />
-                  <DetailItem label="Uptime" value={sysStats.uptime} />
-                  <DetailItem label="Batería" value={`${sysStats.battery}%`} />
-                </>
-              )}
-            </div>
-
-            <button onClick={() => setDetailStat(null)} className="mt-8 w-full py-3 rounded-xl bg-surface border border-borderDark text-xs font-bold text-textMain hover:bg-surface/80 transition-colors uppercase tracking-wider">
-              Cerrar Diagnóstico
+            <button onClick={() => setDetailStat(null)} style={{ width: '100%', padding: '10px 0', borderRadius: 8, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', fontSize: 10, fontWeight: 700, color: 'var(--text-primary)', cursor: 'pointer' }} className="hover:opacity-80">
+              Cerrar
             </button>
           </div>
         </div>
       )}
 
-    </div>
-  );
-}
+      {/* ── SINGLE STAT MODAL ── */}
+      {dc && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', padding: 16 }} onClick={() => setDetailStat(null)}>
+          <div style={{ background: 'var(--surface-elevated)', border: '1px solid var(--border-default)', borderRadius: 16, width: '100%', maxWidth: 380, padding: 24 }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, paddingBottom: 14, borderBottom: '1px solid var(--border-soft)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ width: 40, height: 40, borderRadius: 8, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Monitor size={20} style={{ color: dc.color }} />
+                </div>
+                <div>
+                  <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{dc.label}</h2>
+                  <p style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>Diagnóstico en tiempo real</p>
+                </div>
+              </div>
+              <button onClick={() => setDetailStat(null)} style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-tertiary)', cursor: 'pointer' }}><span style={{ fontSize: 14 }}>✕</span></button>
+            </div>
+            <div style={{ fontSize: 40, fontWeight: 700, textAlign: 'center', margin: '16px 0', fontFamily: "'Share Tech Mono', monospace", color: dc.color }}>
+              {dc.val}<span style={{ fontSize: 16, marginLeft: 2 }}>{dc.unit}</span>
+            </div>
+            <div style={{ height: 8, borderRadius: 4, background: 'var(--bg-deep)', overflow: 'hidden', marginBottom: 12 }}>
+              <div style={{ height: '100%', borderRadius: 4, width: `${dc.val}%`, backgroundColor: dc.color, boxShadow: `0 0 8px ${dc.color}`, transition: 'width 500ms' }} />
+            </div>
+            <p style={{ fontSize: 10, color: 'var(--text-tertiary)', lineHeight: 1.5, marginBottom: 16, padding: 10, background: 'var(--bg-surface)', borderRadius: 8, border: '1px solid var(--border-soft)' }}>{dc.detail}</p>
+            <button onClick={() => setDetailStat(null)} style={{ width: '100%', padding: '10px 0', borderRadius: 8, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', fontSize: 10, fontWeight: 700, color: 'var(--text-primary)', cursor: 'pointer' }} className="hover:opacity-80">
+              Cerrar
+            </button>
+          </div>
+        </div>
+      )}
 
-function DetailItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="bg-surface p-3.5 rounded-xl border border-borderDark/60 flex flex-col justify-between">
-      <div className="text-[10px] font-bold text-textDim uppercase tracking-wider mb-1">{label}</div>
-      <div className="text-xs font-extrabold text-textMain">{value}</div>
     </div>
   );
 }

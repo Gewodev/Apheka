@@ -1,0 +1,1 @@
+- [OWA Studio Design Guidelines](owa_design.md) — reference: comprehensive UI/UX design system and product philosophy.

@@ -94,7 +94,7 @@ export default function Ajustes() {
     searchYouTubeMusic, importClassroomCourses,
     exportNotesToGoogleDoc, exportStatsToGoogleSheets,
     loadGoogleProfile, triggerDriveBackup,
-    events, tasks, notes, courses,
+    events, tasks, notes, courses, clearAllMusicData
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<SettingsTab>('perfil');
@@ -322,12 +322,27 @@ export default function Ajustes() {
             <button className="btn-ghost" style={{ padding: 8, borderRadius: '50%' }}><Bell size={16} /></button>
           </div>
 
-          <div style={{ textAlign: 'right', borderLeft: '1px solid var(--border-subtle)', paddingLeft: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, justifyContent: 'flex-end' }}>
-              <div className="led-display" style={{ fontSize: 28, fontWeight: 300, lineHeight: 1 }}>{timeStr}</div>
-              <div className="led-seconds" style={{ fontSize: 14 }}>{secondsStr}</div>
+          <div style={{ textAlign: 'right', borderLeft: '1px solid var(--border-subtle)', paddingLeft: 16, position: 'relative' }}>
+            {/* Clock background illumination */}
+            <div style={{ 
+              position: 'absolute', 
+              top: '50%', 
+              right: 0, 
+              width: 120, 
+              height: 80, 
+              background: 'radial-gradient(circle at center, var(--accent-dim) 0%, transparent 70%)', 
+              opacity: 0.4, 
+              transform: 'translateY(-50%)',
+              pointerEvents: 'none',
+              zIndex: 0
+            }} />
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, justifyContent: 'flex-end', position: 'relative', zIndex: 1 }}>
+              <div className="led-display" style={{ fontSize: 28, lineHeight: 1, color: 'var(--accent)', textShadow: '0 0 15px var(--accent-glow)' }}>{timeStr}</div>
+              <div className="led-seconds" style={{ fontSize: 14, color: 'var(--accent)', opacity: 0.8 }}>{secondsStr}</div>
             </div>
-            <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{dateStrCapitalized}</div>
+            <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: 4, position: 'relative', zIndex: 1 }}>
+              {dateStrCapitalized}
+            </div>
           </div>
         </div>
       </header>
@@ -388,6 +403,27 @@ export default function Ajustes() {
                       onChange={e => updateSettings({ userName: e.target.value })}
                       className="input-base" style={{ width: '100%', height: 42, fontSize: 14, fontWeight: 600 }}
                       placeholder="Tu nombre" />
+                  </div>
+                </div>
+
+                <div className="bento-card" style={{ padding: '24px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', marginTop: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>Datos de Música</h3>
+                      <p style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>Borra todas las canciones, artistas e historial de reproducción</p>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        if (confirm('¿Estás seguro de que deseas borrar TODA tu música? Esta acción no se puede deshacer.')) {
+                          clearAllMusicData();
+                          toast.success('Todos los datos de música han sido borrados');
+                        }
+                      }}
+                      className="btn-primary" 
+                      style={{ background: 'var(--error)', borderColor: 'var(--error)', padding: '0 20px', height: 40, fontSize: 13 }}
+                    >
+                      Borrar todas las canciones
+                    </button>
                   </div>
                 </div>
               </section>
