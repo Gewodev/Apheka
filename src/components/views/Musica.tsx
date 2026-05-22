@@ -1043,11 +1043,17 @@ export default function Musica() {
                 <p style={{ fontSize: 13, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{currentTrack.artist}</p>
               </div>
 
-              {/* Progress Bar */}
-              <div style={{ width: '100%', marginBottom: 20 }}>
-                <div className="progress-track" style={{ height: 4, marginBottom: 8, background: 'var(--bg-deep)', borderRadius: 2, overflow: 'hidden' }}>
-                  <div className="progress-fill" style={{ width: `${musicProgress * 100}%`, background: 'var(--accent)', boxShadow: '0 0 8px var(--accent-glow)' }} />
-                </div>
+            {/* Progress Bar with seek */}
+            <div style={{ width: '100%', marginBottom: 20 }}>
+              <div className="progress-track" style={{ height: 4, marginBottom: 8, background: 'var(--bg-deep)', borderRadius: 2, overflow: 'hidden', cursor: 'pointer', position: 'relative' }}
+                onClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const x = (e.clientX - rect.left) / rect.width;
+                  setMusicProgress(Math.max(0, Math.min(1, x)));
+                }}
+              >
+                <div className="progress-fill" style={{ width: `${musicProgress * 100}%`, background: 'var(--accent)', boxShadow: '0 0 8px var(--accent-glow)' }} />
+              </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
                   <span>{formatTime(musicProgress * (musicDuration || currentTrack.duration || 0))}</span>
                   <span>{formatTime(musicDuration || currentTrack.duration || 0)}</span>
