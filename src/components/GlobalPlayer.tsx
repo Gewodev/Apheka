@@ -97,23 +97,23 @@ export default function GlobalPlayer({ isCollapsed }: { isCollapsed: boolean }) 
             }}
             onEnded={() => {
               if (tracks.length > 0 && currentTrackId) {
-                const idx = tracks.findIndex(t => t.id === currentTrackId);
+                if (repeatMode === 'one') {
+                  playTrack(currentTrackId);
+                  return;
+                }
                 let nextId: string | null = null;
-                if (shuffleMode) {
-                  const others = tracks.filter(t => t.id !== currentTrackId);
-                  if (others.length > 0) nextId = others[Math.floor(Math.random() * others.length)].id;
-                } else if (repeatMode === 'all' || musicQueue.length > 0) {
-                  if (musicQueue.length > 0) {
-                    const [next] = musicQueue;
-                    setMusicQueue(musicQueue.slice(1));
-                    nextId = next;
-                  } else if (idx < tracks.length - 1) {
-                    nextId = tracks[idx + 1].id;
-                  } else if (repeatMode === 'all') {
-                    nextId = tracks[0].id;
+                const q = musicQueue;
+                if (q.length > 0) {
+                  const [next] = q;
+                  setMusicQueue(q.slice(1));
+                  nextId = next;
+                } else if (shuffleMode || repeatMode === 'all') {
+                  const rest = tracks.filter(t => t.id !== currentTrackId).map(t => t.id);
+                  const refilled = shuffleMode ? [...rest].sort(() => Math.random() - 0.5) : rest;
+                  if (refilled.length > 0) {
+                    setMusicQueue(refilled.slice(1));
+                    nextId = refilled[0];
                   }
-                } else if (idx < tracks.length - 1) {
-                  nextId = tracks[idx + 1].id;
                 }
                 if (nextId) playTrack(nextId);
                 else { setIsExpanded(false); setIsPlayingMusic(false); }
@@ -151,9 +151,9 @@ export default function GlobalPlayer({ isCollapsed }: { isCollapsed: boolean }) 
         
         {hasTrack && (
           <div style={{ 
-            display: 'flex', 
+            display: 'grid', 
+            gridTemplateColumns: 'minmax(200px, 1fr) auto minmax(200px, 1fr)',
             alignItems: 'center', 
-            justifyContent: 'space-between',
             height: '100%',
             padding: '0 20px'
           }}>
@@ -350,52 +350,52 @@ export default function GlobalPlayer({ isCollapsed }: { isCollapsed: boolean }) 
               </div>
             </div>
 
-            {/* Volume Controls */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
+            {/* Right Section: Volume + Minimize */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, justifySelf: 'end' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                <button
+                  onClick={() => setMusicVolume(musicVolume > 0 ? 0 : 0.7)}
+                  style={{ 
+                    background: 'none', 
+                    border: 'none', 
+                    padding: 6, 
+                    cursor: 'pointer',
+                    color: settings.theme === 'claro' ? '#666' : '#999'
+                  }}
+                >
+                  {musicVolume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
+                </button>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={musicVolume}
+                  onChange={handleVolumeChange}
+                  style={{
+                    width: 80,
+                    height: 4,
+                    WebkitAppearance: 'none',
+                    background: settings.theme === 'claro' ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.2)',
+                    borderRadius: 2,
+                    outline: 'none'
+                  }}
+                />
+              </div>
               <button
-                onClick={() => setMusicVolume(musicVolume > 0 ? 0 : 0.7)}
+                onClick={() => setIsExpanded(false)}
                 style={{ 
-                  background: 'none', 
-                  border: 'none', 
-                  padding: 6, 
-                  cursor: 'pointer',
-                  color: settings.theme === 'claro' ? '#666' : '#999'
+                  padding: 4, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: 'var(--accent)',
+                  background: 'transparent',
+                  border: 'none',
+                  opacity: 0.6
                 }}
               >
-                {musicVolume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
+                <ChevronDown size={16} />
               </button>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.01"
-                value={musicVolume}
-                onChange={handleVolumeChange}
-                style={{
-                  width: 80,
-                  height: 4,
-                  WebkitAppearance: 'none',
-                  background: settings.theme === 'claro' ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.2)',
-                  borderRadius: 2,
-                  outline: 'none'
-                }}
-              />
             </div>
-
-            {/* Minimize Button */}
-            <button
-              onClick={() => setIsExpanded(false)}
-              style={{ 
-                padding: 4, cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: 'var(--accent)',
-                background: 'transparent',
-                border: 'none',
-                opacity: 0.6
-              }}
-            >
-              <ChevronDown size={16} />
-            </button>
           </div>
         )}
       </div>
@@ -428,7 +428,7 @@ export default function GlobalPlayer({ isCollapsed }: { isCollapsed: boolean }) 
             left: '50%',
             transform: 'translateX(-50%)',
             width: '60%',
-            height: 80,
+            height: 50,
             cursor: hasTrack ? 'pointer' : 'default',
             pointerEvents: 'auto',
             zIndex: 5

@@ -23,8 +23,8 @@
       {
         "label": "floating-timer",
         "title": "OWA Studio - Timer",
-        "width": 200,
-        "height": 170,
+        "width": 140,
+        "height": 65,
         "resizable": false,
         "decorations": true,
         "transparent": false,
@@ -63,6 +63,7 @@
   "plugins": {
     "shell": {
       "open": true
-    }
+    },
+    "fs": {}
   }
 }

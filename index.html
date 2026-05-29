@@ -27,12 +27,22 @@
       }
     </style>
     <script>
-      // Error logging to catch crashes
+      // Error logging to catch crashes (non-intrusive)
+      window._owaErrorShown = false;
       window.onerror = function(msg, url, line, col, error) {
-        const errDiv = document.createElement('div');
-        errDiv.style = 'position:fixed;top:0;left:0;width:100%;height:100%;background:black;color:red;padding:20px;z-index:9999;font-family:monospace;';
-        errDiv.innerHTML = '<h1>JS Error Detected</h1><p>' + msg + '</p><p>File: ' + url + '</p><p>Line: ' + line + '</p><pre>' + (error ? error.stack : '') + '</pre>';
-        document.body.appendChild(errDiv);
+        if (window._owaErrorShown) return;
+        window._owaErrorShown = true;
+        try {
+          const errDiv = document.createElement('div');
+          errDiv.id = 'owa-error-overlay';
+          errDiv.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:black;color:red;padding:20px;z-index:9999;font-family:monospace;';
+          errDiv.innerHTML = '<h1>JS Error Detected</h1><p>' + msg + '</p><p>File: ' + url + '</p><p>Line: ' + line + '</p><pre>' + (error ? error.stack : '') + '</pre>';
+          const root = document.getElementById('root');
+          if (root && root.parentNode) root.parentNode.insertBefore(errDiv, root.nextSibling);
+          else document.body.appendChild(errDiv);
+        } catch(e) {
+          console.error('Error handler failed:', e);
+        }
       };
 
       // Early theme application to prevent flash (FOUC)

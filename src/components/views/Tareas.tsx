@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+﻿import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import {
   Plus, Search, Check, Trash2,
   ChevronRight, CalendarDays,
@@ -8,15 +8,18 @@ import {
   ClipboardList, ChevronLeft, Timer,
   Paperclip, StickyNote,
   Zap, Circle, CheckCircle, Loader,
-  Bell, MoreVertical, AlertTriangle,
+  MoreVertical, AlertTriangle,
   ArrowUp, ArrowDown, CheckSquare,
   LayoutGrid, Calendar, Play, Activity,
   TrendingUp, Flame, ListTodo,
 } from 'lucide-react';
 import { useApp, Task } from '../../store/AppContext';
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, isToday, addMonths, subMonths } from 'date-fns';
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, isToday, addMonths, subMonths, addWeeks, subWeeks } from 'date-fns';
 import { es } from 'date-fns/locale';
-import toast from 'react-hot-toast';
+import { isSignedIn, signIn, signOut, onAuthChange } from '../../lib/google';
+import { importGoogleTasks } from '../../lib/google/tasks';
+import NotificationBell from '../ui/NotificationBell';
+import { importClassroomCourses, importClassroomAssignments } from '../../lib/google/classroom';
 
 const s = {
   flex: (v: number) => ({ flex: v }),
@@ -45,7 +48,7 @@ function getTimeRemaining(dueDate: string): string {
   const days = diff / (1000 * 60 * 60 * 24);
   if (days < 1) { const h = Math.floor(diff / (1000 * 60 * 60)); return h <= 0 ? 'Hoy 23:59' : `Hoy ${format(parsed, 'HH:mm')}`; }
   const d = Math.floor(days);
-  return d === 1 ? 'Mañana' : format(parsed, "d MMM", { locale: es });
+  return d === 1 ? 'MaÃ±ana' : format(parsed, "d MMM", { locale: es });
 }
 
 function getFileIcon(type: string, size = 14) {
@@ -54,12 +57,15 @@ function getFileIcon(type: string, size = 14) {
     case 'video': return <Video size={size} style={{ color: '#8B5CF6' }} />;
     case 'image': return <File size={size} style={{ color: '#3B82F6' }} />;
     case 'link': return <Link size={size} style={{ color: '#10B981' }} />;
+    case 'drive': return (
+      <svg viewBox="0 0 24 24" style={{ width: size, height: size }}><path fill="#FFD04B" d="M19 13h-6v6h6v-6z"/><path fill="#4285F4" d="M13 19h-6v-6h6v6z"/><path fill="#0F9D58" d="M7 13h6V7H7v6z"/><path fill="#DB4437" d="M19 7h-6v6h6V7z"/></svg>
+    );
     default: return <File size={size} style={{ color: 'var(--text-tertiary)' }} />;
   }
 }
 
 export default function Tareas() {
-  const { tasks, courses, addTask, updateTask, toggleTaskStatus, deleteTask, addSubTask, toggleSubTask, deleteSubTask, addTaskFile, removeTaskFile, clearAllTasks } = useApp();
+  const { tasks, courses, addTask, updateTask, toggleTaskStatus, deleteTask, addSubTask, toggleSubTask, deleteSubTask, addTaskFile, removeTaskFile, clearAllTasks, addNotification } = useApp();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -71,18 +77,28 @@ export default function Tareas() {
   const [sortBy, setSortBy] = useState<'prioridad' | 'fecha' | 'curso'>('prioridad');
   const [calendarDate, setCalendarDate] = useState(new Date());
   const [calendarSelectedDay, setCalendarSelectedDay] = useState<Date>(new Date());
+  const [calendarSubMode, setCalendarSubMode] = useState<'semana' | 'mes' | 'ano'>('mes');
+  const [isDetailExpanded, setIsDetailExpanded] = useState(false);
+  const [activePreviewUrl, setActivePreviewUrl] = useState<string | null>(null);
+  const [quickTitle, setQuickTitle] = useState('');
+  const [quickCourse, setQuickCourse] = useState('');
+  const [quickPriority, setQuickPriority] = useState<'high' | 'medium' | 'low'>('medium');
   const [courseFilter, setCourseFilter] = useState<string | null>(null);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [showAddMaterial, setShowAddMaterial] = useState(false);
-  const [newMaterialType, setNewMaterialType] = useState<'pdf' | 'video' | 'link' | 'other'>('pdf');
+  const [newMaterialType, setNewMaterialType] = useState<'pdf' | 'video' | 'link' | 'other' | 'drive'>('pdf');
   const [newMaterialName, setNewMaterialName] = useState('');
   const [newMaterialPath, setNewMaterialPath] = useState('');
   const [newMaterialFile, setNewMaterialFile] = useState<File | null>(null);
+  const [googleConnected, setGoogleConnected] = useState(isSignedIn());
+  const [syncing, setSyncing] = useState<'classroom' | 'tasks' | null>(null);
 
   const notificationCount = useMemo(() => tasks.filter(t => t.dueDate && new Date(t.dueDate).getTime() < Date.now() && t.status !== 'completado').length, [tasks]);
 
   useEffect(() => { const timer = setInterval(() => setCurrentTime(new Date()), 1000); return () => clearInterval(timer); }, []);
+
+  useEffect(() => { return onAuthChange(connected => setGoogleConnected(connected)); }, []);
 
   const stats = useMemo(() => {
     const total = tasks.length;
@@ -118,6 +134,54 @@ export default function Tareas() {
     return () => window.removeEventListener('keydown', onKey);
   }, [pdfPreviewUrl, selectedTaskId, showNewModal]);
 
+  const handleDragStart = (e: React.DragEvent, taskId: string) => {
+    e.dataTransfer.setData('text/plain', taskId);
+  };
+  const handleDrop = (e: React.DragEvent, targetDate: Date) => {
+    e.preventDefault();
+    const taskId = e.dataTransfer.getData('text/plain');
+    if (taskId) {
+      updateTask(taskId, { dueDate: targetDate.toISOString().split('T')[0] });
+    }
+  };
+
+  const handleQuickAdd = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickTitle.trim()) return;
+    const activeCourse = quickCourse || (courses[0]?.name || 'General');
+    const color = courses.find(c => c.name === activeCourse)?.color || '#3B82F6';
+    addTask({
+      title: quickTitle.trim(),
+      course: activeCourse,
+      courseColor: color,
+      priority: quickPriority,
+      urgent: false,
+      important: false,
+      dueDate: calendarSelectedDay ? calendarSelectedDay.toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+      estimatedMinutes: 60,
+    });
+    setQuickTitle('');
+  };
+
+  const handlePrevPeriod = () => {
+    if (calendarSubMode === 'ano') {
+      setCalendarDate(prev => subMonths(prev, 12));
+    } else if (calendarSubMode === 'semana') {
+      setCalendarDate(prev => subWeeks(prev, 1));
+    } else {
+      setCalendarDate(prev => subMonths(prev, 1));
+    }
+  };
+  const handleNextPeriod = () => {
+    if (calendarSubMode === 'ano') {
+      setCalendarDate(prev => addMonths(prev, 12));
+    } else if (calendarSubMode === 'semana') {
+      setCalendarDate(prev => addWeeks(prev, 1));
+    } else {
+      setCalendarDate(prev => addMonths(prev, 1));
+    }
+  };
+
   const handleToggle = useCallback((e: React.MouseEvent, id: string) => { e.stopPropagation(); e.preventDefault(); toggleTaskStatus(id); }, [toggleTaskStatus]);
   const handleOpenDetail = useCallback((id: string) => setSelectedTaskId(id), []);
 
@@ -127,12 +191,11 @@ export default function Tareas() {
     const prioritySelect = document.getElementById('new-task-priority') as HTMLSelectElement;
     const dueDateInput = document.getElementById('new-task-duedate') as HTMLInputElement;
     const estimatedInput = document.getElementById('new-task-estimated') as HTMLInputElement;
-    if (!title) { toast.error('Ingresa un título'); return; }
+    if (!title) { addNotification('Ingresa un tÃ­tulo', 'error'); return; }
     const courseName = courseSelect?.value || 'General';
     const course = courses.find(c => c.name === courseName);
     addTask({ title, course: courseName, courseColor: course?.color || '#E11D48', priority: (prioritySelect?.value as any) || 'medium', urgent: prioritySelect?.value === 'high', important: prioritySelect?.value === 'high', dueDate: dueDateInput?.value || undefined, estimatedMinutes: estimatedInput?.value ? parseInt(estimatedInput.value) : 60 });
     setShowNewModal(false);
-    toast.success('Tarea creada');
   }, [addTask, courses]);
 
   const handleAddSubtask = useCallback(() => { if (!selectedTask || !newSubtaskTitle.trim()) return; addSubTask(selectedTask.id, newSubtaskTitle.trim()); setNewSubtaskTitle(''); }, [selectedTask, newSubtaskTitle, addSubTask]);
@@ -149,16 +212,165 @@ export default function Tareas() {
 
   const handleAddMaterial = useCallback(() => {
     if (!selectedTask || !newMaterialName.trim()) return;
-    const useUrl = newMaterialType === 'video' || newMaterialType === 'link';
+    const useUrl = newMaterialType === 'video' || newMaterialType === 'link' || newMaterialType === 'drive';
     const path = useUrl ? newMaterialPath.trim() : newMaterialPath;
-    if (!path) { toast.error('Selecciona o ingresa la URL'); return; }
+    if (!path) { addNotification('Selecciona o ingresa la URL', 'error'); return; }
     const size = newMaterialFile?.size;
     const ext = newMaterialFile?.name.split('.').pop()?.toLowerCase() || '';
     const typeMap: Record<string, string> = { pdf: 'pdf', png: 'image', jpg: 'image', jpeg: 'image', gif: 'image', webp: 'image', mp4: 'video', doc: 'doc', docx: 'doc' };
     addTaskFile(selectedTask.id, { name: newMaterialName.trim(), path, type: useUrl ? newMaterialType : (typeMap[ext] || 'other'), size });
     setNewMaterialName(''); setNewMaterialPath(''); setNewMaterialFile(null); setShowAddMaterial(false);
-    toast.success('Material añadido');
   }, [selectedTask, newMaterialName, newMaterialPath, newMaterialFile, newMaterialType, addTaskFile]);
+
+  const handleSyncClassroom = useCallback(async () => {
+    if (!googleConnected) { const ok = await signIn(); if (!ok) { addNotification('No se pudo conectar con Google', 'error'); return; } setGoogleConnected(true); }
+    setSyncing('classroom');
+    try {
+      const { courses: clsCourses } = await importClassroomCourses();
+      let imported = 0;
+      for (const course of clsCourses) {
+        const { assignments } = await importClassroomAssignments(course.id);
+        for (const a of assignments) {
+          addTask({
+            title: a.title,
+            course: course.name,
+            courseColor: course.color || '#3B82F6',
+            priority: 'medium',
+            dueDate: a.dueDate || undefined,
+            urgent: false,
+            important: false,
+            estimatedMinutes: 60,
+            notes: a.description || '',
+          });
+          imported++;
+        }
+      }
+      addNotification(`${imported} tareas importadas de Google Classroom`, 'success');
+    } catch { addNotification('Error al sincronizar Classroom', 'error'); }
+    setSyncing(null);
+  }, [googleConnected, addTask]);
+
+  const handleSyncTasks = useCallback(async () => {
+    if (!googleConnected) { const ok = await signIn(); if (!ok) { addNotification('No se pudo conectar con Google', 'error'); return; } setGoogleConnected(true); }
+    setSyncing('tasks');
+    try {
+      const { imported } = await importGoogleTasks();
+      for (const t of imported) {
+        addTask({
+          title: t.title,
+          course: 'General',
+          courseColor: '#3B82F6',
+          priority: 'medium',
+          dueDate: t.dueDate || undefined,
+          urgent: false,
+          important: false,
+          estimatedMinutes: 30,
+          notes: t.description || '',
+        });
+      }
+      addNotification(`${imported.length} tareas importadas de Google Tasks`, 'success');
+    } catch { addNotification('Error al sincronizar Tasks', 'error'); }
+    setSyncing(null);
+  }, [googleConnected, addTask]);
+
+  const renderMaterials = () => {
+    if (!selectedTask) return null;
+    return (
+      <div className="bento-card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingBottom: 8, borderBottom: '1px solid var(--border-subtle)' }}>
+          <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 5 }}><Paperclip size={13} style={{ color: 'var(--accent)' }} /> Materiales</span>
+          <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-secondary)' }}>{selectedTask.files.length}</span>
+        </div>
+        {selectedTask.files.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
+            {selectedTask.files.map(f => {
+              const isYouTube = f.type === 'video' || (f.type === 'link' && (f.path.includes('youtube.com') || f.path.includes('youtu.be')));
+              const isDrive = f.path.includes('drive.google.com') || f.type === 'drive';
+              
+              let embedUrl = '';
+              if (isYouTube) {
+                if (f.path.includes('youtube.com/watch?v=')) {
+                  embedUrl = f.path.replace('watch?v=', 'embed/');
+                } else if (f.path.includes('youtu.be/')) {
+                  embedUrl = f.path.replace('youtu.be/', 'youtube.com/embed/');
+                }
+              }
+
+              return (
+                <div key={f.id} style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '5px 8px', borderRadius: 6, background: 'var(--bg-hover)', border: '1px solid var(--border-subtle)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {getFileIcon(f.type, 13)}
+                    <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
+                    <div style={{ display: 'flex', gap: 2 }}>
+                      {f.type === 'pdf' && <button onClick={() => { setPdfPreviewUrl(f.path); if (isDetailExpanded) setActivePreviewUrl(f.path); }} style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', padding: 3 }}><Eye size={11} /></button>}
+                      {isYouTube && <button onClick={() => { if (embedUrl) { setPdfPreviewUrl(embedUrl); if (isDetailExpanded) setActivePreviewUrl(embedUrl); } }} style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', padding: 3 }}><Play size={11} /></button>}
+                      <button onClick={() => removeTaskFile(selectedTask.id, f.id)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 3 }}><X size={10} /></button>
+                    </div>
+                  </div>
+
+                  {isYouTube && embedUrl && (
+                    <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', borderRadius: 6, overflow: 'hidden', background: '#000', cursor: 'pointer' }} onClick={() => { setPdfPreviewUrl(embedUrl); if (isDetailExpanded) setActivePreviewUrl(embedUrl); }}>
+                      <img src={`https://img.youtube.com/vi/${embedUrl.split('/embed/')[1]?.split('?')[0]}/0.jpg`} style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.6 }} alt="Youtube Cover" />
+                      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(239, 68, 68, 0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Play size={14} fill="#fff" style={{ color: '#fff', marginLeft: 2 }} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {isDrive && (
+                    <a href={f.path} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.2)', borderRadius: 6, textDecoration: 'none' }} className="hover:bg-blue-500/20">
+                      <div style={{ padding: 3, borderRadius: 4, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <svg viewBox="0 0 24 24" style={{ width: 12, height: 12 }}><path fill="#FFD04B" d="M19 13h-6v6h6v-6z"/><path fill="#4285F4" d="M13 19h-6v-6h6v6z"/><path fill="#0F9D58" d="M7 13h6V7H7v6z"/><path fill="#DB4437" d="M19 7h-6v6h6V7z"/></svg>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                        <span style={{ fontSize: 8, fontWeight: 700, color: 'var(--text-primary)' }}>Abrir en Drive</span>
+                      </div>
+                    </a>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {showAddMaterial ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 8, border: '1px solid var(--border-default)' }}>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {(['pdf', 'video', 'link', 'drive', 'other'] as const).map(type => (
+                <button key={type} onClick={() => setNewMaterialType(type)}
+                  style={{ flex: 1, padding: '5px 0', borderRadius: 5, fontSize: 8, fontWeight: 700, cursor: 'pointer', border: 'none', textTransform: 'uppercase', background: newMaterialType === type ? 'var(--accent)' : 'var(--bg-surface)', color: newMaterialType === type ? '#fff' : 'var(--text-secondary)' }}>{type}</button>
+              ))}
+            </div>
+            <input value={newMaterialName} onChange={e => setNewMaterialName(e.target.value)} placeholder="Nombre del material..."
+              style={{ width: '100%', padding: '6px 10px', background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 6, fontSize: 10, color: 'var(--text-primary)', outline: 'none' }} />
+            {(newMaterialType === 'video' || newMaterialType === 'link' || newMaterialType === 'drive') && (
+              <input value={newMaterialPath} onChange={e => setNewMaterialPath(e.target.value)} placeholder={newMaterialType === 'video' ? 'URL de YouTube...' : newMaterialType === 'drive' ? 'URL de Google Drive...' : 'URL del enlace...'}
+                style={{ width: '100%', padding: '6px 10px', background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 6, fontSize: 10, color: 'var(--text-primary)', outline: 'none' }} />
+            )}
+            {(newMaterialType === 'pdf' || newMaterialType === 'other') && (
+              <button onClick={() => fileInputRef.current?.click()} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '6px 0', borderRadius: 6, fontSize: 9, fontWeight: 600, cursor: 'pointer', border: '1px dashed var(--border-default)', background: 'transparent', color: 'var(--text-secondary)' }}>
+                <Upload size={11} /> Subir archivo
+              </button>
+            )}
+            <input type="file" ref={fileInputRef} onChange={handleFileSelected} style={{ display: 'none' }} accept={newMaterialType === 'pdf' ? '.pdf' : newMaterialType === 'video' ? '.mp4,.webm' : undefined} />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, paddingTop: 6, borderTop: '1px solid var(--border-subtle)' }}>
+              <button onClick={() => { setShowAddMaterial(false); setNewMaterialName(''); setNewMaterialPath(''); setNewMaterialFile(null); }}
+                style={{ padding: '5px 12px', borderRadius: 6, fontSize: 9, fontWeight: 600, cursor: 'pointer', border: '1px solid var(--border-default)', background: 'transparent', color: 'var(--text-secondary)' }}>Cancelar</button>
+              <button onClick={handleAddMaterial} disabled={!newMaterialName.trim()}
+                style={{ padding: '5px 14px', borderRadius: 6, fontSize: 9, fontWeight: 700, cursor: 'pointer', border: 'none', background: 'var(--accent)', color: '#fff', opacity: newMaterialName.trim() ? 1 : 0.3 }}>
+                <Plus size={11} /> AÃ±adir
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button onClick={() => setShowAddMaterial(true)} style={{ width: '100%', padding: '8px 0', borderRadius: 6, fontSize: 9, fontWeight: 600, cursor: 'pointer', border: '1px dashed var(--border-default)', background: 'transparent', color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+            <Plus size={12} /> AÃ±adir material
+          </button>
+        )}
+      </div>
+    );
+  };
 
   const monthStart = startOfMonth(calendarDate);
   const monthEnd = endOfMonth(monthStart);
@@ -199,7 +411,7 @@ export default function Tareas() {
   const totalStatus = statusData.reduce((a, s) => a + s.val, 0);
 
   return (
-    <div className="page-container h-full flex flex-col overflow-y-auto custom-scroll" style={{ gap: 0 }}>
+    <div className="page-container flex flex-col overflow-y-auto custom-scroll" style={{ gap: 0, minHeight: '100%' }}>
 
       {/* HEADER */}
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14, paddingTop: 8, flexShrink: 0 }}>
@@ -213,7 +425,7 @@ export default function Tareas() {
               <div style={{ width: 3, height: 12, background: 'var(--text-tertiary)', borderRadius: 2 }} />
             </div>
             <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)', marginTop: 4 }}>
-              {stats.total} tareas · {stats.completadasPct}% completado
+              {stats.total} tareas Â· {stats.completadasPct}% completado
             </span>
           </div>
         </div>
@@ -222,10 +434,7 @@ export default function Tareas() {
             <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#10B981', boxShadow: '0 0 6px rgba(16,185,129,0.5)' }} />
             SYS
           </div>
-          <button style={{ ...s.btn('1px solid var(--border-default)', 'var(--bg-elevated)', 'var(--text-secondary)'), padding: '0 10px', height: 36, position: 'relative' }} onClick={() => { if (notificationCount > 0) setSubTab('vencidas'); }}>
-            <Bell size={15} />
-            {notificationCount > 0 && <span style={{ position: 'absolute', top: -4, right: -4, width: 18, height: 18, borderRadius: '50%', background: '#EF4444', color: '#fff', fontSize: 8, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid var(--bg-base)' }}>{notificationCount}</span>}
-          </button>
+          <NotificationBell />
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, background: 'var(--bg-deep)', padding: '6px 14px', borderRadius: 12, border: '1px solid var(--border-default)' }}>
             <span className="led-display" style={{ fontSize: 24, fontWeight: 700, lineHeight: 1 }}>{timeStr}</span>
             <span className="led-seconds" style={{ fontSize: 12, fontWeight: 600 }}>{secondsStr}</span>
@@ -259,10 +468,7 @@ export default function Tareas() {
               style={{ width: '100%', height: 34, paddingLeft: 32, fontSize: 11, background: 'var(--bg-elevated)', borderRadius: 8, border: '1px solid var(--border-subtle)', color: 'var(--text-primary)', outline: 'none' }} />
             {searchQuery && <button onClick={() => setSearchQuery('')} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', padding: 2 }}><X size={11} /></button>}
           </div>
-          <select value={courseFilter || ''} onChange={e => setCourseFilter(e.target.value || null)} style={{ height: 34, padding: '0 10px', fontSize: 10, fontWeight: 600, background: 'var(--bg-elevated)', borderRadius: 8, border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', outline: 'none', cursor: 'pointer' }}>
-            <option value="">Todos los cursos</option>
-            {courses.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-          </select>
+
           <select value={sortBy} onChange={e => setSortBy(e.target.value as any)} style={{ height: 34, padding: '0 10px', fontSize: 10, fontWeight: 600, background: 'var(--bg-elevated)', borderRadius: 8, border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', outline: 'none', cursor: 'pointer' }}>
             <option value="prioridad">Prioridad</option>
             <option value="fecha">Fecha</option>
@@ -271,10 +477,13 @@ export default function Tareas() {
           <button onClick={() => setShowNewModal(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 16px', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: 'none', background: 'var(--accent)', color: '#fff', transition: 'all 200ms' }}>
             <Plus size={14} /> Nueva tarea
           </button>
+
+
         </div>
       </div>
 
       {/* SUB-TABS */}
+      {viewMode === 'list' && (
       <div style={{ display: 'flex', gap: 2, marginBottom: 12, flexShrink: 0 }}>
         {[
           { id: 'todas', label: 'Todas', count: stats.total },
@@ -290,9 +499,10 @@ export default function Tareas() {
           </button>
         ))}
       </div>
+      )}
 
       {/* MAIN GRID */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 14, flex: 1, minHeight: 0 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: viewMode === 'calendar' ? '1fr' : '1fr 280px', gap: 14, flex: 1, minHeight: 0 }}>
 
         {/* LEFT COLUMN */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0 }}>
@@ -312,38 +522,117 @@ export default function Tareas() {
                 {filteredTasks.map(task => {
                   const isOverdue = task.dueDate && new Date(task.dueDate).getTime() < Date.now() && task.status !== 'completado';
                   const isDone = task.status === 'completado';
+                  
+                  let rowBg = 'rgba(255,255,255,0.02)';
+                  let rowBorderColor = isOverdue ? 'rgba(239, 68, 68, 0.25)' : 'var(--border-subtle)';
+                  if (task.status === 'inicio') {
+                    rowBg = 'linear-gradient(90deg, color-mix(in srgb, var(--accent) 8%, transparent) 0%, color-mix(in srgb, var(--accent) 8%, transparent) 33.3%, rgba(255,255,255,0.02) 33.3%, rgba(255,255,255,0.02) 100%)';
+                  } else if (task.status === 'progreso') {
+                    rowBg = 'linear-gradient(90deg, color-mix(in srgb, var(--accent) 15%, transparent) 0%, color-mix(in srgb, var(--accent) 15%, transparent) 66.6%, rgba(255,255,255,0.02) 66.6%, rgba(255,255,255,0.02) 100%)';
+                  } else if (isDone) {
+                    rowBg = 'rgba(16, 185, 129, 0.08)';
+                    rowBorderColor = 'rgba(16, 185, 129, 0.25)';
+                  }
+
                   return (
-                    <div key={task.id} onClick={() => handleOpenDetail(task.id)}
-                      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 8px', borderRadius: 8, cursor: 'pointer', transition: 'all 150ms', background: isDone ? 'var(--bg-elevated)' : 'var(--bg-hover)', border: `1px solid ${isOverdue ? 'rgba(239,68,68,0.25)' : 'transparent'}`, opacity: isDone ? 0.55 : 1 }}
-                      className={!isDone ? 'hover:bg-white/[0.03]' : ''}>
-                      <button onClick={e => handleToggle(e, task.id)}
-                        style={{ width: 18, height: 18, borderRadius: '50%', border: `2px solid ${isDone ? '#10B981' : 'var(--border-strong)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer', background: isDone ? '#10B981' : 'transparent', transition: 'all 200ms' }}>
-                        {isDone && <Check size={10} strokeWidth={3} style={{ color: '#fff' }} />}
-                      </button>
-                      <span style={{ flex: 3, fontSize: 11, fontWeight: 600, color: isDone ? 'var(--text-tertiary)' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: isDone ? 'line-through' : 'none' }}>{task.title}</span>
-                      <span style={{ flex: 1.2, textAlign: 'center', fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 4, background: `${task.courseColor}15`, color: task.courseColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.course}</span>
-                      <span style={{ flex: 1, textAlign: 'center', fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3, color: task.priority === 'high' ? '#EF4444' : task.priority === 'medium' ? '#F59E0B' : '#10B981' }}>
-                        {task.priority === 'high' ? <ArrowUp size={10} /> : task.priority === 'medium' ? <ArrowUp size={10} style={{ transform: 'rotate(45deg)' }} /> : <ArrowDown size={10} />}
-                      </span>
-                      <span style={{ flex: 1.2, textAlign: 'center', fontSize: 9, fontWeight: 600, color: isOverdue ? '#EF4444' : 'var(--text-tertiary)' }}>
-                        {task.dueDate ? getTimeRemaining(task.dueDate) : '—'}
-                      </span>
-                      <div style={{ flex: 1, textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                        <div style={{ width: 6, height: 6, borderRadius: '50%', background: isDone ? '#10B981' : task.status === 'progreso' ? '#3B82F6' : '#F59E0B', boxShadow: task.status === 'progreso' ? '0 0 6px rgba(59,130,246,0.5)' : 'none' }} />
-                        <span style={{ fontSize: 8, fontWeight: 600, color: isDone ? '#10B981' : task.status === 'progreso' ? '#3B82F6' : '#F59E0B' }}>
-                          {isDone ? 'Hecho' : task.status === 'progreso' ? 'Curso' : 'Pend'}
+                    <div key={task.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'stretch',
+                        borderRadius: 8,
+                        background: rowBg,
+                        border: `1px solid ${rowBorderColor}`,
+                        opacity: isDone ? 0.75 : 1,
+                        minHeight: 42,
+                        overflow: 'hidden',
+                        transition: 'all 150ms'
+                      }}>
+                      
+                      {/* LEFT SIDE: TOGGLE STATE */}
+                      <div
+                        onClick={(e) => handleToggle(e, task.id)}
+                        style={{
+                          flex: 1.2,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 10,
+                          padding: '8px 12px',
+                          cursor: 'pointer',
+                          transition: 'background 150ms',
+                          minWidth: 0
+                        }}
+                        className="hover:bg-white/[0.04]">
+                        <div
+                          style={{
+                            width: 18,
+                            height: 18,
+                            borderRadius: '50%',
+                            border: `2px solid ${isDone ? '#10B981' : 'var(--border-strong)'}`,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                            background: isDone ? '#10B981' : 'transparent',
+                            transition: 'all 200ms'
+                          }}>
+                          {isDone && <Check size={10} strokeWidth={3} style={{ color: '#fff' }} />}
+                        </div>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: isDone ? 'var(--text-tertiary)' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: isDone ? 'line-through' : 'none' }}>
+                          {task.title}
                         </span>
                       </div>
-                      <button onClick={e => { e.stopPropagation(); handleOpenDetail(task.id); }} style={{ width: 28, height: 28, borderRadius: 6, background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <MoreVertical size={13} />
-                      </button>
+
+                      {/* MIDDLE DIVIDER */}
+                      <div style={{ width: 1, background: 'var(--border-subtle)', alignSelf: 'stretch' }} />
+
+                      {/* RIGHT SIDE: VIEW DETAIL */}
+                      <div
+                        onClick={() => handleOpenDetail(task.id)}
+                        style={{
+                          flex: 1,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: 8,
+                          padding: '8px 12px',
+                          cursor: 'pointer',
+                          transition: 'background 150ms',
+                          minWidth: 0
+                        }}
+                        className="hover:bg-white/[0.04]">
+                        
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
+                          <span style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 4, background: `${task.courseColor}15`, color: task.courseColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {task.course}
+                          </span>
+                          <span style={{ fontSize: 9, fontWeight: 700, color: task.priority === 'high' ? '#EF4444' : task.priority === 'medium' ? '#F59E0B' : '#10B981', flexShrink: 0 }}>
+                            {task.priority === 'high' ? 'Alta' : task.priority === 'medium' ? 'Media' : 'Baja'}
+                          </span>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                          <span style={{ fontSize: 9, fontWeight: 600, color: isOverdue ? '#EF4444' : 'var(--text-tertiary)' }}>
+                            {task.dueDate ? getTimeRemaining(task.dueDate) : 'â€”'}
+                          </span>
+                          
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <div style={{ width: 6, height: 6, borderRadius: '50%', background: isDone ? '#10B981' : task.status === 'progreso' ? '#3B82F6' : '#F59E0B', boxShadow: task.status === 'progreso' ? '0 0 6px rgba(59,130,246,0.5)' : 'none' }} />
+                            <span style={{ fontSize: 8, fontWeight: 600, color: isDone ? '#10B981' : task.status === 'progreso' ? '#3B82F6' : '#F59E0B' }}>
+                              {isDone ? 'Hecho' : task.status === 'progreso' ? 'Curso' : 'Pend'}
+                            </span>
+                          </div>
+
+                          <ChevronRight size={13} style={{ color: 'var(--text-tertiary)' }} />
+                        </div>
+                      </div>
+
                     </div>
                   );
                 })}
                 {filteredTasks.length === 0 && (
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 8, padding: '40px 0', color: 'var(--text-muted)' }}>
                     <CheckSquare size={28} style={{ opacity: 0.15 }} />
-                    <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>Sin tareas en esta categoría</span>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>Sin tareas en esta categorÃ­a</span>
                   </div>
                 )}
               </div>
@@ -360,26 +649,26 @@ export default function Tareas() {
               ].map(col => {
                 const colTasks = tasks.filter(t => t.status === col.status);
                 return (
-                  <div key={col.status} className="bento-card" style={{ flex: 1, minWidth: 240, padding: '12px 14px', display: 'flex', flexDirection: 'column', background: 'linear-gradient(135deg, var(--bg-elevated), var(--bg-base))' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingBottom: 8, borderBottom: `1px solid ${col.color}20` }}>
+                  <div key={col.status} className="bento-card" style={{ flex: 1, minWidth: 220, maxWidth: 'calc(100% / 3)', padding: '12px 14px', display: 'flex', flexDirection: 'column', background: 'linear-gradient(135deg, var(--bg-elevated), var(--bg-base))', overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingBottom: 8, borderBottom: `1px solid ${col.color}20`, flexShrink: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <div style={{ width: 8, height: 8, borderRadius: '50%', background: col.color }} />
                         <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-primary)' }}>{col.label}</span>
                       </div>
                       <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: `${col.color}15`, color: col.color }}>{colTasks.length}</span>
                     </div>
-                    <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4, minHeight: 0 }} className="custom-scroll">
                       {colTasks.map(task => (
                         <div key={task.id} onClick={() => handleOpenDetail(task.id)}
-                          style={{ padding: '8px 10px', borderRadius: 8, background: 'var(--bg-hover)', border: '1px solid var(--border-subtle)', cursor: 'pointer', transition: 'all 150ms' }}
+                          style={{ padding: '8px 10px', borderRadius: 8, background: 'var(--bg-hover)', border: '1px solid var(--border-subtle)', cursor: 'pointer', transition: 'all 150ms', minHeight: 56, maxHeight: 80, flexShrink: 0, overflow: 'hidden' }}
                           className="hover:border-white/10">
                           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
                             <button onClick={e => handleToggle(e, task.id)}
                               style={{ marginTop: 1, width: 14, height: 14, borderRadius: '50%', border: `2px solid ${task.status === 'completado' ? '#10B981' : 'var(--border-strong)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer', background: task.status === 'completado' ? '#10B981' : 'transparent' }}>
                               {task.status === 'completado' && <Check size={8} strokeWidth={3} style={{ color: '#fff' }} />}
                             </button>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', textDecoration: task.status === 'completado' ? 'line-through' : 'none' }}>{task.title}</span>
+                            <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+                              <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', maxWidth: '100%', textDecoration: task.status === 'completado' ? 'line-through' : 'none' }}>{task.title}</span>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
                                 <span style={{ fontSize: 8, fontWeight: 600, padding: '1px 4px', borderRadius: 3, background: `${task.courseColor}15`, color: task.courseColor }}>{task.course}</span>
                                 {task.dueDate && <span style={{ fontSize: 8, color: 'var(--text-tertiary)' }}>{getTimeRemaining(task.dueDate)}</span>}
@@ -406,69 +695,185 @@ export default function Tareas() {
             </div>
           )}
 
-          {/* CALENDAR VIEW */}
+          {/* CALENDAR VIEW â€” Google Calendar Style */}
           {viewMode === 'calendar' && (
-            <div className="bento-card" style={{ flex: 1, padding: '16px 18px', display: 'flex', flexDirection: 'column' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <button onClick={() => setCalendarDate(subMonths(calendarDate, 1))} style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><ChevronLeft size={13} /></button>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Outfit', sans-serif", textTransform: 'capitalize' }}>{format(calendarDate, 'MMMM yyyy', { locale: es })}</span>
-                  <button onClick={() => setCalendarDate(addMonths(calendarDate, 1))} style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><ChevronRight size={13} /></button>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative' }}>
+              {/* Calendar Header */}
+              <div className="bento-card" style={{ padding: '12px 20px', marginBottom: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: '12px 12px 0 0', flexShrink: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <button onClick={() => setCalendarDate(new Date())} style={{ fontSize: 11, fontWeight: 700, padding: '6px 16px', borderRadius: 8, background: 'var(--accent)', color: '#fff', border: 'none', cursor: 'pointer', letterSpacing: '0.02em' }}>Hoy</button>
+                  <div style={{ display: 'flex', gap: 2 }}>
+                    <button onClick={() => setCalendarDate(subMonths(calendarDate, 1))} style={{ width: 32, height: 32, borderRadius: 8, background: 'transparent', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}><ChevronLeft size={16} /></button>
+                    <button onClick={() => setCalendarDate(addMonths(calendarDate, 1))} style={{ width: 32, height: 32, borderRadius: 8, background: 'transparent', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}><ChevronRight size={16} /></button>
+                  </div>
+                  <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Outfit', sans-serif", textTransform: 'capitalize', margin: 0, letterSpacing: '-0.01em' }}>{format(calendarDate, 'MMMM yyyy', { locale: es })}</h2>
                 </div>
-                <button onClick={() => setCalendarDate(new Date())} style={{ fontSize: 9, fontWeight: 700, padding: '4px 12px', borderRadius: 6, background: 'var(--accent-soft)', color: 'var(--accent)', border: '1px solid var(--accent-glow)', cursor: 'pointer' }}>Hoy</button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)' }}>{tasks.filter(t => t.status !== 'completado').length} pendientes</span>
+                </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1, marginBottom: 8, textAlign: 'center', fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                {dayHeaders.map(d => <div key={d} style={{ padding: '4px 0' }}>{d}</div>)}
+
+              {/* Day Headers Row */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderLeft: '1px solid var(--border-subtle)', flexShrink: 0 }}>
+                {['Lun', 'Mar', 'MiÃ©', 'Jue', 'Vie', 'SÃ¡b', 'Dom'].map(d => (
+                  <div key={d} style={{ padding: '8px 0', textAlign: 'center', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', borderRight: '1px solid var(--border-subtle)', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>{d}</div>
+                ))}
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1, marginBottom: 14 }}>
+
+              {/* Calendar Grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gridTemplateRows: `repeat(${weekRows.length}, 1fr)`, flex: 1, minHeight: 0, borderLeft: '1px solid var(--border-subtle)' }}>
                 {weekRows.map((week, wi) => (
                   <React.Fragment key={wi}>
                     {week.map((day, di) => {
-                      const dayTasks = tasks.filter(t => t.dueDate && isSameDay(new Date(t.dueDate), day) && t.status !== 'completado');
+                      const dayTasks = tasks.filter(t => t.dueDate && isSameDay(new Date(t.dueDate), day));
+                      const activeTasks = dayTasks.filter(t => t.status !== 'completado');
                       const isTodayDay = isToday(day);
                       const isCurrentMonth = isSameMonth(day, monthStart);
                       const isSel = isSameDay(day, calendarSelectedDay);
+                      const maxVisible = 3;
+                      const visibleTasks = dayTasks.slice(0, maxVisible);
+                      const overflow = dayTasks.length - maxVisible;
                       return (
                         <div key={di} onClick={() => setCalendarSelectedDay(day)}
-                          style={{ aspectRatio: '1', borderRadius: 8, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 150ms', background: isTodayDay ? 'var(--accent)' : isSel ? 'var(--bg-elevated)' : 'transparent', border: isSel && !isTodayDay ? '1px solid var(--border-default)' : '1px solid transparent', color: isTodayDay ? '#fff' : isCurrentMonth ? 'var(--text-primary)' : 'var(--text-muted)', fontWeight: isTodayDay ? 700 : 600, fontSize: 11 }}>
-                          <span>{format(day, 'd')}</span>
-                          {dayTasks.length > 0 && !isTodayDay && <div style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--accent)', marginTop: 2 }} />}
+                          style={{
+                            borderRight: '1px solid var(--border-subtle)',
+                            borderBottom: '1px solid var(--border-subtle)',
+                            padding: '4px 6px',
+                            cursor: 'pointer',
+                            transition: 'background 120ms',
+                            background: isSel ? 'var(--bg-elevated)' : isTodayDay ? 'rgba(99,102,241,0.04)' : !isCurrentMonth ? 'var(--bg-deep)' : 'var(--bg-surface)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            minHeight: 0,
+                            overflow: 'hidden',
+                            position: 'relative',
+                          }}>
+                          {/* Day Number */}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 3, flexShrink: 0 }}>
+                            <span style={{
+                              fontSize: 12,
+                              fontWeight: isTodayDay ? 800 : 600,
+                              color: isTodayDay ? '#fff' : isCurrentMonth ? 'var(--text-primary)' : 'var(--text-muted)',
+                              width: isTodayDay ? 24 : 'auto',
+                              height: isTodayDay ? 24 : 'auto',
+                              borderRadius: '50%',
+                              background: isTodayDay ? 'var(--accent)' : 'transparent',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              lineHeight: 1,
+                            }}>{format(day, 'd')}</span>
+                          </div>
+                          {/* Task Event Bars */}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, minHeight: 0, overflow: 'hidden' }}>
+                            {visibleTasks.map(task => {
+                              const isDone = task.status === 'completado';
+                              const isOverdue = task.dueDate && new Date(task.dueDate).getTime() < Date.now() && !isDone;
+                              return (
+                                <div key={task.id} onClick={(e) => { e.stopPropagation(); handleOpenDetail(task.id); }}
+                                  style={{
+                                    borderRadius: 4,
+                                    padding: '2px 6px',
+                                    fontSize: 10,
+                                    fontWeight: 600,
+                                    color: isDone ? 'var(--text-muted)' : '#fff',
+                                    background: isDone ? 'var(--bg-hover)' : (isOverdue ? 'rgba(239,68,68,0.85)' : task.courseColor),
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                    lineHeight: '18px',
+                                    textDecoration: isDone ? 'line-through' : 'none',
+                                    opacity: isDone ? 0.5 : 1,
+                                    cursor: 'pointer',
+                                    transition: 'opacity 120ms',
+                                    flexShrink: 0,
+                                  }}>
+                                  {task.title}
+                                </div>
+                              );
+                            })}
+                            {overflow > 0 && (
+                              <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', padding: '1px 6px', cursor: 'pointer', flexShrink: 0 }}>+{overflow} mÃ¡s</div>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
                   </React.Fragment>
                 ))}
               </div>
-              <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 10 }}>
-                <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 8 }}>{format(calendarSelectedDay, "d 'de' MMMM", { locale: es })}</span>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  {tasks.filter(t => t.dueDate && isSameDay(new Date(t.dueDate), calendarSelectedDay)).map(task => {
-                    const isOverdue = new Date(task.dueDate!).getTime() < Date.now() && task.status !== 'completado';
-                    const isDone = task.status === 'completado';
-                    return (
-                      <div key={task.id} onClick={() => handleOpenDetail(task.id)}
-                        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', borderRadius: 6, cursor: 'pointer', background: isDone ? 'var(--bg-elevated)' : 'var(--bg-hover)', border: `1px solid ${isOverdue ? 'rgba(239,68,68,0.2)' : 'transparent'}`, opacity: isDone ? 0.5 : 1 }}>
-                        <div style={{ width: 4, height: 4, borderRadius: '50%', background: task.courseColor, flexShrink: 0 }} />
-                        <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: isDone ? 'line-through' : 'none' }}>{task.title}</span>
-                        {isOverdue && <AlertTriangle size={10} style={{ color: '#EF4444', flexShrink: 0 }} />}
+
+              {/* Selected Day Sidebar Overlay */}
+              {(() => {
+                const selDayTasks = tasks.filter(t => t.dueDate && isSameDay(new Date(t.dueDate), calendarSelectedDay));
+                return selDayTasks.length > 0 ? (
+                  <div style={{
+                    position: 'absolute',
+                    top: 56,
+                    right: 0,
+                    width: 300,
+                    maxHeight: 'calc(100% - 56px)',
+                    overflowY: 'auto',
+                    background: 'var(--bg-surface)',
+                    border: '1px solid var(--border-default)',
+                    borderRadius: 12,
+                    boxShadow: '0 8px 32px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.3)',
+                    padding: '16px 18px',
+                    zIndex: 20,
+                    backdropFilter: 'blur(16px)',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, paddingBottom: 10, borderBottom: '1px solid var(--border-subtle)' }}>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Outfit', sans-serif", textTransform: 'capitalize' }}>{format(calendarSelectedDay, "EEEE", { locale: es })}</div>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)' }}>{format(calendarSelectedDay, "d 'de' MMMM, yyyy", { locale: es })}</div>
                       </div>
-                    );
-                  })}
-                  {tasks.filter(t => t.dueDate && isSameDay(new Date(t.dueDate), calendarSelectedDay)).length === 0 && (
-                    <div style={{ padding: '12px 0', textAlign: 'center', fontSize: 10, color: 'var(--text-tertiary)' }}>Sin tareas</div>
-                  )}
-                </div>
-              </div>
+                      <button onClick={(e) => { e.stopPropagation(); setCalendarSelectedDay(new Date(0)); }} style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', color: 'var(--text-tertiary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={14} /></button>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {selDayTasks.map(task => {
+                        const isDone = task.status === 'completado';
+                        const isOverdue = task.dueDate && new Date(task.dueDate).getTime() < Date.now() && !isDone;
+                        const st = statusConfig[task.status] || statusConfig.inicio;
+                        return (
+                          <div key={task.id} onClick={() => handleOpenDetail(task.id)}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'flex-start',
+                              gap: 10,
+                              padding: '10px 12px',
+                              borderRadius: 8,
+                              cursor: 'pointer',
+                              background: 'var(--bg-elevated)',
+                              border: `1px solid ${isOverdue ? 'rgba(239,68,68,0.25)' : 'var(--border-subtle)'}`,
+                              opacity: isDone ? 0.55 : 1,
+                              transition: 'all 150ms',
+                            }}>
+                            <div style={{ width: 4, borderRadius: 2, background: task.courseColor, alignSelf: 'stretch', flexShrink: 0 }} />
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', textDecoration: isDone ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                                <span style={{ fontSize: 9, fontWeight: 700, color: st.color, background: `${st.color}18`, padding: '2px 6px', borderRadius: 4 }}>{st.label}</span>
+                                <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)' }}>{task.course}</span>
+                                {isOverdue && <AlertTriangle size={10} style={{ color: '#EF4444' }} />}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null;
+              })()}
             </div>
           )}
 
         </div>
 
         {/* RIGHT PANEL */}
+        {viewMode !== 'calendar' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto' }}>
 
           {/* Mini Calendar */}
-          {viewMode !== 'calendar' && (
             <div className="bento-card" style={{ padding: '12px 14px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                 <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Calendario</span>
@@ -500,13 +905,12 @@ export default function Tareas() {
                 ))}
               </div>
             </div>
-          )}
 
           {/* Upcoming */}
           <div className="bento-card" style={{ padding: '12px 14px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingBottom: 8, borderBottom: '1px solid var(--border-subtle)' }}>
               <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'flex', alignItems: 'center', gap: 5 }}>
-                <Clock size={12} style={{ color: 'var(--accent)' }} /> Próximas
+                <Clock size={12} style={{ color: 'var(--accent)' }} /> PrÃ³ximas
               </span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -517,7 +921,7 @@ export default function Tareas() {
                   <span style={{ fontSize: 8, fontWeight: 600, color: '#F59E0B', flexShrink: 0 }}>{getTimeRemaining(t.dueDate!)}</span>
                 </div>
               ))}
-              {tasks.filter(t => t.status !== 'completado' && t.dueDate).length === 0 && <div style={{ padding: '8px 0', textAlign: 'center', fontSize: 9, color: 'var(--text-tertiary)' }}>Todo al día</div>}
+              {tasks.filter(t => t.status !== 'completado' && t.dueDate).length === 0 && <div style={{ padding: '8px 0', textAlign: 'center', fontSize: 9, color: 'var(--text-tertiary)' }}>Todo al dÃ­a</div>}
             </div>
           </div>
 
@@ -540,7 +944,7 @@ export default function Tareas() {
 
           {/* Distribution */}
           <div className="bento-card" style={{ padding: '12px 14px' }}>
-            <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 10, paddingBottom: 8, borderBottom: '1px solid var(--border-subtle)' }}>Distribución</span>
+            <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 10, paddingBottom: 8, borderBottom: '1px solid var(--border-subtle)' }}>DistribuciÃ³n</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{ position: 'relative', width: 64, height: 64, flexShrink: 0 }}>
                 <svg viewBox="0 0 36 36" style={{ width: '100%', height: '100%', transform: 'rotate(-90deg)' }}>
@@ -605,6 +1009,7 @@ export default function Tareas() {
           </div>
 
         </div>
+        )}
       </div>
 
       {/* NEW TASK MODAL */}
@@ -619,8 +1024,8 @@ export default function Tareas() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
-                <label style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 4 }}>Título</label>
-                <input id="new-task-title" type="text" placeholder="Ej. Resolver problemas de física..." style={{ width: '100%', padding: '10px 14px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12, color: 'var(--text-primary)', outline: 'none' }} autoFocus />
+                <label style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 4 }}>TÃ­tulo</label>
+                <input id="new-task-title" type="text" placeholder="Ej. Resolver problemas de fÃ­sica..." style={{ width: '100%', padding: '10px 14px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12, color: 'var(--text-primary)', outline: 'none' }} autoFocus />
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
@@ -641,7 +1046,7 @@ export default function Tareas() {
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
-                  <label style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 4 }}>Fecha límite</label>
+                  <label style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 4 }}>Fecha lÃ­mite</label>
                   <input id="new-task-duedate" type="date" style={{ width: '100%', padding: '10px 14px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12, color: 'var(--text-primary)', outline: 'none', colorScheme: 'dark' }} />
                 </div>
                 <div>
@@ -670,9 +1075,9 @@ export default function Tareas() {
                 <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Detalle</span>
               </div>
               <div style={{ display: 'flex', gap: 6 }}>
-                <button onClick={() => { if (selectedTask) { const cs = statusConfig[selectedTask.status]; toggleTaskStatus(selectedTask.id); toast.success(`Tarea movida a: ${cs.label}`); } }}
+                <button onClick={() => { if (selectedTask) { toggleTaskStatus(selectedTask.id); } }}
                   style={{ padding: '6px 12px', borderRadius: 8, fontSize: 9, fontWeight: 700, cursor: 'pointer', border: 'none', background: statusConfig[selectedTask.status]?.color + '20', color: statusConfig[selectedTask.status]?.color }}>
-                  {statusConfig[selectedTask.status]?.label} → {statusConfig[statusConfig[selectedTask.status]?.next]?.label}
+                  {statusConfig[selectedTask.status]?.label} â†’ {statusConfig[statusConfig[selectedTask.status]?.next]?.label}
                 </button>
                 <button onClick={() => { deleteTask(selectedTask.id); setSelectedTaskId(null); }} style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#EF4444', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Trash2 size={14} />
@@ -760,7 +1165,8 @@ export default function Tareas() {
                         <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
                         <div style={{ display: 'flex', gap: 2 }}>
                           {f.type === 'pdf' && <button onClick={() => setPdfPreviewUrl(f.path)} style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', padding: 3 }}><Eye size={11} /></button>}
-                          {f.type === 'video' && f.path.startsWith('http') && <a href={f.path} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-tertiary)', padding: 3 }}><ExternalLink size={11} /></a>}
+                          {(f.type === 'video' && f.path.startsWith('http')) && <a href={f.path} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-tertiary)', padding: 3 }}><ExternalLink size={11} /></a>}
+                          {(f.type === 'drive' || f.path.includes('drive.google.com')) && <a href={f.path} target="_blank" rel="noopener noreferrer" style={{ color: '#4285F4', padding: 3 }}><ExternalLink size={11} /></a>}
                           <button onClick={() => removeTaskFile(selectedTask.id, f.id)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 3 }}><X size={10} /></button>
                         </div>
                       </div>
@@ -770,15 +1176,15 @@ export default function Tareas() {
                 {showAddMaterial ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 8, border: '1px solid var(--border-default)' }}>
                     <div style={{ display: 'flex', gap: 4 }}>
-                      {(['pdf', 'video', 'link', 'other'] as const).map(type => (
+                      {(['pdf', 'video', 'link', 'drive', 'other'] as const).map(type => (
                         <button key={type} onClick={() => setNewMaterialType(type)}
                           style={{ flex: 1, padding: '5px 0', borderRadius: 5, fontSize: 8, fontWeight: 700, cursor: 'pointer', border: 'none', textTransform: 'uppercase', background: newMaterialType === type ? 'var(--accent)' : 'var(--bg-surface)', color: newMaterialType === type ? '#fff' : 'var(--text-secondary)' }}>{type}</button>
                       ))}
                     </div>
                     <input value={newMaterialName} onChange={e => setNewMaterialName(e.target.value)} placeholder="Nombre del material..."
                       style={{ width: '100%', padding: '6px 10px', background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 6, fontSize: 10, color: 'var(--text-primary)', outline: 'none' }} />
-                    {(newMaterialType === 'video' || newMaterialType === 'link') && (
-                      <input value={newMaterialPath} onChange={e => setNewMaterialPath(e.target.value)} placeholder={newMaterialType === 'video' ? 'URL de YouTube...' : 'URL del enlace...'}
+                    {(newMaterialType === 'video' || newMaterialType === 'link' || newMaterialType === 'drive') && (
+                      <input value={newMaterialPath} onChange={e => setNewMaterialPath(e.target.value)} placeholder={newMaterialType === 'video' ? 'URL de YouTube...' : newMaterialType === 'drive' ? 'URL de Google Drive...' : 'URL del enlace...'}
                         style={{ width: '100%', padding: '6px 10px', background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 6, fontSize: 10, color: 'var(--text-primary)', outline: 'none' }} />
                     )}
                     {(newMaterialType === 'pdf' || newMaterialType === 'other') && (
@@ -792,13 +1198,13 @@ export default function Tareas() {
                         style={{ padding: '5px 12px', borderRadius: 6, fontSize: 9, fontWeight: 600, cursor: 'pointer', border: '1px solid var(--border-default)', background: 'transparent', color: 'var(--text-secondary)' }}>Cancelar</button>
                       <button onClick={handleAddMaterial} disabled={!newMaterialName.trim()}
                         style={{ padding: '5px 14px', borderRadius: 6, fontSize: 9, fontWeight: 700, cursor: 'pointer', border: 'none', background: 'var(--accent)', color: '#fff', opacity: newMaterialName.trim() ? 1 : 0.3 }}>
-                        <Plus size={11} /> Añadir
+                        <Plus size={11} /> AÃ±adir
                       </button>
                     </div>
                   </div>
                 ) : (
                   <button onClick={() => setShowAddMaterial(true)} style={{ width: '100%', padding: '8px 0', borderRadius: 6, fontSize: 9, fontWeight: 600, cursor: 'pointer', border: '1px dashed var(--border-default)', background: 'transparent', color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                    <Plus size={12} /> Añadir material
+                    <Plus size={12} /> AÃ±adir material
                   </button>
                 )}
               </div>
@@ -807,7 +1213,7 @@ export default function Tareas() {
                 <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 5, marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid var(--border-subtle)' }}>
                   <StickyNote size={13} style={{ color: 'var(--accent)' }} /> Notas
                 </span>
-                <textarea value={selectedTask.notes || ''} onChange={e => updateTask(selectedTask.id, { notes: e.target.value })} placeholder="Escribe notas, resúmenes o recordatorios..."
+                <textarea value={selectedTask.notes || ''} onChange={e => updateTask(selectedTask.id, { notes: e.target.value })} placeholder="Escribe notas, resÃºmenes o recordatorios..."
                   style={{ width: '100%', height: 80, padding: '8px 10px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 6, fontSize: 10, color: 'var(--text-primary)', outline: 'none', resize: 'vertical' }} />
               </div>
             </div>
@@ -842,3 +1248,4 @@ export default function Tareas() {
     </div>
   );
 }
+

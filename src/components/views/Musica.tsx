@@ -1,5 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import toast from 'react-hot-toast';
+﻿import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   Play, Pause, SkipBack, SkipForward, Volume2, Search,
   Music, Download, Trash2, X, ListMusic, Upload,
@@ -7,8 +6,8 @@ import {
   ArrowLeft, ArrowRight, ChevronDown, ChevronUp,
   ExternalLink, FolderOpen, Plus,
   Disc3, Activity, Heart, Copy, Clock,
-  User, Wifi, Bell, Sliders, Repeat, Shuffle, BarChart2,
-  Edit2, Grid, List,
+  User, Wifi, Sliders, Repeat, Shuffle, BarChart2,
+  Edit2, Grid, List, Image,
 } from 'lucide-react';
 import { useApp } from '../../store/AppContext';
 import { open, save } from '@tauri-apps/plugin-dialog';
@@ -25,6 +24,7 @@ import {
   type DownloadProgress, type DownloadComplete,
 } from '../../lib/musicApi';
 import { extractMp3Metadata } from '../../lib/mp3Metadata';
+import NotificationBell from '../ui/NotificationBell';
 
 type TabId = 'biblioteca' | 'artistas' | 'favoritas' | 'explorar';
 
@@ -42,13 +42,14 @@ export default function Musica() {
     tracks, currentTrackId, isPlayingMusic, toggleMusicPlayback,
     playTrack, musicVolume, setMusicVolume, setMusicProgress, musicProgress, musicDuration,
     shuffleMode, repeatMode, musicQueue, setMusicQueue, setShuffleMode, setRepeatMode,
-    addTrack, addToDownloadQueue, musicListeningTime,
+    addTrack, addToDownloadQueue, musicListeningTime, dailyMusicTime,
     updateDownloadProgress, updateDownloadStatus, toggleTrackFavorite,
     downloadQueue, removeFromDownloadQueue, clearCompletedDownloads,
     updateTrack, deleteTrack,
     trackHistory, playCounts, studySessions, artists, addArtist, deleteArtist, updateArtist,
     clearAllMusicData,
     addNotification,
+    importLocalTracks,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<TabId>('biblioteca');
@@ -61,11 +62,13 @@ export default function Musica() {
   const [showAllLibrary, setShowAllLibrary] = useState(false);
   const [showAllRecents, setShowAllRecents] = useState(false);
   const [audioFormat, setAudioFormat] = useState<'mp3' | 'm4a'>('mp3');
+  const [includeCover, setIncludeCover] = useState(true);
   const [selectedArtist, setSelectedArtist] = useState<string | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const [searchMode, setSearchMode] = useState<'link' | 'query'>('link');
   const [currentTime, setCurrentTime] = useState(new Date());
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [confirmDeleteText, setConfirmDeleteText] = useState('');
   const [statsPeriod, setStatsPeriod] = useState<'week' | 'month'>('week');
   const [chartTooltip, setChartTooltip] = useState<{ text: string; date: string; x: number; y: number } | null>(null);
   const [editingArtistId, setEditingArtistId] = useState<string | null>(null);
@@ -101,6 +104,13 @@ export default function Musica() {
     return `${m}:${s.toString().padStart(2, '0')}`;
   }, []);
 
+  const formatHm = useCallback((secs: number) => {
+    if (!secs || !isFinite(secs)) return '0h 0m';
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    return `${h}h ${m}m`;
+  }, []);
+
   useEffect(() => {
     getDownloadPath().then(setDownloadPathState).catch(() => { });
   }, []);
@@ -124,7 +134,7 @@ export default function Musica() {
           if (input.files && input.files.length > 0) {
             const path = input.files[0].webkitRelativePath.split('/')[0];
             setDownloadPathState(path || 'Descargas/OWA Music');
-            addNotification('Carpeta seleccionada (solo visible en esta sesión)', 'success');
+            addNotification('Carpeta seleccionada (solo visible en esta sesiÃ³n)', 'success');
           }
         });
         document.body.appendChild(input);
@@ -180,7 +190,7 @@ export default function Musica() {
       const results = await searchMusic(q);
       setSearchResults(results);
     } catch {
-      toast.error('Error al buscar');
+      addNotification('Error al buscar', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -204,13 +214,13 @@ export default function Musica() {
 
       updateDownloadStatus(dlItemId, 'downloading');
       try {
-        await startDownload(entry.webpage_url, dlItemId, path, audioFormat);
+        await startDownload(entry.webpage_url, dlItemId, path, audioFormat, includeCover);
         updateDownloadStatus(dlItemId, 'completed');
       } catch (e) {
         const msg = String(e);
         if (msg.includes('web-download-unavailable')) {
           updateDownloadStatus(dlItemId, 'error', 'Solo disponible en la app de escritorio');
-          toast.error('Descargar requiere la app de escritorio. Usa "npm run tauri dev"');
+          addNotification('Descargar requiere la app de escritorio. Usa "npm run tauri dev"', 'error');
         } else {
           updateDownloadStatus(dlItemId, 'error', 'Error al descargar');
         }
@@ -231,14 +241,14 @@ export default function Musica() {
 
     updateDownloadStatus(dlItemId, 'downloading');
     try {
-      await startDownload(entry.webpage_url, dlItemId, downloadPath, audioFormat);
+      await startDownload(entry.webpage_url, dlItemId, downloadPath, audioFormat, includeCover);
       updateDownloadStatus(dlItemId, 'completed');
-      toast.success(`"${entry.title}" descargada`);
+      addNotification(`"${entry.title}" descargada`, 'success');
     } catch (e) {
       const msg = String(e);
       if (msg.includes('web-download-unavailable')) {
         updateDownloadStatus(dlItemId, 'error', 'Solo disponible en la app de escritorio');
-        toast.error('Descargar requiere la app de escritorio. Usa "npm run tauri dev"');
+        addNotification('Descargar requiere la app de escritorio. Usa "npm run tauri dev"', 'error');
       } else {
         updateDownloadStatus(dlItemId, 'error', 'Error al descargar');
       }
@@ -271,7 +281,7 @@ export default function Musica() {
         listenedTime: 0
       });
     });
-    toast.success(`Importado a biblioteca: ${entries.length} temas`);
+    addNotification(`Importado a biblioteca: ${entries.length} temas`, 'success');
     setActiveTab('biblioteca');
   };
 
@@ -341,11 +351,11 @@ export default function Musica() {
   return (
     <div className="page-container" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto' }}>
 
-      {/* ── HEADER ── */}
+      {/* â”€â”€ HEADER â”€â”€ */}
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, paddingTop: 8 }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <h1 style={{ fontSize: 32, fontWeight: 700, color: 'var(--accent)', lineHeight: 1.15, letterSpacing: '-0.02em', fontFamily: "'Outfit', sans-serif", textShadow: '0 0 20px var(--accent-glow)' }}>Música</h1>
+            <h1 style={{ fontSize: 32, fontWeight: 700, color: 'var(--accent)', lineHeight: 1.15, letterSpacing: '-0.02em', fontFamily: "'Outfit', sans-serif", textShadow: '0 0 20px var(--accent-glow)' }}>MÃºsica</h1>
             <div style={{ display: 'flex', alignItems: 'center', gap: 3, color: 'var(--text-tertiary)' }}>
               <div style={{ width: 3, height: 12, background: 'var(--text-secondary)', borderRadius: 2 }} />
               <div style={{ width: 3, height: 18, background: 'var(--accent)', borderRadius: 2 }} />
@@ -353,17 +363,17 @@ export default function Musica() {
               <div style={{ width: 3, height: 14, background: 'var(--text-tertiary)', borderRadius: 2 }} />
             </div>
           </div>
-          <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 6, fontWeight: 500 }}>Tu música, tu enfoque.</p>
+          <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 6, fontWeight: 500 }}>Tu mÃºsica, tu enfoque.</p>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: 'var(--bg-deep)', border: '1px solid var(--border-default)', borderRadius: 16, fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', border: '1px solid var(--border-default)', borderRadius: 16, fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>
               <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--success)', boxShadow: '0 0 8px var(--success)' }} />
               Conectado
             </div>
             <button className="btn-ghost" style={{ padding: 8, borderRadius: '50%' }}><Wifi size={16} /></button>
-            <button className="btn-ghost" style={{ padding: 8, borderRadius: '50%' }}><Bell size={16} /></button>
+            <NotificationBell />
           </div>
 
           <div className="flex items-center gap-4 flex-shrink-0" style={{
@@ -402,7 +412,7 @@ export default function Musica() {
         </div>
       </header>
 
-      {/* ── NAVIGATION TABS & SEARCH BAR ── */}
+      {/* â”€â”€ NAVIGATION TABS & SEARCH BAR â”€â”€ */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28, borderBottom: '1px solid var(--border-subtle)', paddingBottom: 16, gap: 16 }}>
         <div style={{ display: 'flex', gap: 24, flexShrink: 0 }}>
           {(['biblioteca', 'artistas', 'favoritas', 'explorar'] as const).map(tab => (
@@ -434,7 +444,7 @@ export default function Musica() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="input-base"
-              style={{ width: '100%', height: 38, paddingLeft: 36, fontSize: 12, background: 'var(--bg-deep)', borderRadius: 10, border: '1px solid var(--border-subtle)' }}
+              style={{ width: '100%', height: 38, paddingLeft: 36, fontSize: 12, borderRadius: 10, border: '1px solid var(--border-subtle)' }}
             />
           </div>
 
@@ -446,29 +456,16 @@ export default function Musica() {
                   filters: [{ name: 'Audio', extensions: ['mp3', 'wav', 'ogg', 'm4a', 'flac'] }]
                 });
                 if (selected && Array.isArray(selected)) {
-                  for (const path of selected) {
-                    const name = path.split(/[/\\]/).pop() || 'Unknown';
-                    const meta = path.toLowerCase().endsWith('.mp3') ? await extractMp3Metadata(path) : { duration: 0, collaborators: [] as string[] };
-                    addTrack({
-                      title: meta.title || name.replace(/\.[^/.]+$/, ""),
-                      artist: meta.artist || 'Artista Local',
-                      collaborators: meta.collaborators || [],
-                      duration: meta.duration,
-                      source: 'local',
-                      url: path,
-                      coverImage: meta.coverUrl || undefined,
-                      isFavorite: false,
-                      listenedTime: 0
-                    });
-                  }
-                  toast.success(`${selected.length} audio(s) local(es) subido(s)`);
+                  await importLocalTracks(selected);
+                } else if (selected && typeof selected === 'string') {
+                  await importLocalTracks([selected]);
                 }
               }}
               className="btn-secondary hover-glow"
               style={{
                 display: 'flex', alignItems: 'center', gap: 8, height: 38, borderRadius: 10,
                 fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '0 18px',
-                background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)',
+                border: '1px solid var(--border-subtle)',
                 color: 'var(--text-secondary)', transition: 'all 200ms'
               }}
             >
@@ -476,29 +473,29 @@ export default function Musica() {
             </button>
 
             <button onClick={() => setActiveTab('explorar')} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 8, height: 38, borderRadius: 10, fontSize: 12, fontWeight: 700, padding: '0 18px', boxShadow: '0 4px 15px var(--accent-dim)' }}>
-              <Plus size={16} /> Añadir <ChevronDown size={12} style={{ marginLeft: 2 }} />
+              <Plus size={16} /> AÃ±adir <ChevronDown size={12} style={{ marginLeft: 2 }} />
             </button>
           </div>
         </div>
       </div>
 
-      {/* ── MAIN CONTENT AREA (GRID 1fr 320px) ── */}
+      {/* â”€â”€ MAIN CONTENT AREA (GRID 1fr 320px) â”€â”€ */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 24, flex: 1, alignItems: 'flex-start' }}>
 
         {/* LEFT COLUMN */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
 
-          {/* ── STATS ROW (3 CARDS) ── */}
+          {/* â”€â”€ STATS ROW (3 CARDS) â”€â”€ */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
             {[
               { label: 'Canciones', val: tracks.length, sub: 'en tu biblioteca', icon: Music, color: 'var(--accent)' },
               { label: 'Favoritas', val: tracks.filter(t => t.isFavorite).length, sub: 'guardadas', icon: Heart, color: '#10B981' },
-              { label: 'Hoy', val: formatTime(studySessions.reduce((sum, s) => sum + s.duration, 0)), sub: 'escuchando música', icon: Activity, color: '#F59E0B' },
+              { label: 'Hoy', val: formatHm(musicListeningTime), sub: 'escuchando mÃºsica', icon: Activity, color: '#F59E0B' },
             ].map((s, i) => (
               <div key={i} className="bento-card" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <span className="stat-label" style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{s.label}</span>
-                  <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <s.icon size={16} style={{ color: s.color }} />
                   </div>
                 </div>
@@ -525,7 +522,7 @@ export default function Musica() {
                     {artists.map(artist => {
                       const artistTracks = tracks.filter(t => t.artist === artist.name);
                       return (
-                        <div key={artist.id} className="bento-card hover-lift" style={{ padding: 20, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', transition: 'all 200ms', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, position: 'relative' }}>
+                        <div key={artist.id} className="bento-card hover-lift" style={{ padding: 20, border: '1px solid var(--border-subtle)', transition: 'all 200ms', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, position: 'relative' }}>
                           <div onClick={() => setSelectedArtist(artist.name)} style={{ width: 80, height: 80, borderRadius: '50%', background: artist.profileImage ? 'var(--bg-surface)' : 'linear-gradient(135deg, var(--accent), #3B82F6)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 24, fontWeight: 700, boxShadow: '0 4px 12px rgba(0,0,0,0.3)', cursor: 'pointer', overflow: 'hidden' }}>
                             {artist.profileImage ? <img src={artist.profileImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : artist.name.slice(0, 2).toUpperCase()}
                           </div>
@@ -535,15 +532,15 @@ export default function Musica() {
                           </div>
                           <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 4 }}>
                             <button onClick={(e) => { e.stopPropagation(); setEditingArtistId(artist.id); setEditArtistName(artist.name); setEditArtistImage(artist.profileImage || ''); }} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: '50%', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-tertiary)', cursor: 'pointer' }}><Edit2 size={12} /></button>
-                            <button onClick={(e) => { e.stopPropagation(); if (confirm(`¿Borrar artista "${artist.name}"?`)) deleteArtist(artist.id); }} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: '50%', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--error)', cursor: 'pointer' }}><Trash2 size={12} /></button>
+                            <button onClick={(e) => { e.stopPropagation(); if (confirm(`Â¿Borrar artista "${artist.name}"?`)) deleteArtist(artist.id); }} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: '50%', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--error)', cursor: 'pointer' }}><Trash2 size={12} /></button>
                           </div>
                         </div>
                       );
                     })}
                     {artists.length === 0 && (
-                      <div style={{ gridColumn: '1 / -1', padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)', background: 'var(--bg-deep)', borderRadius: 12, border: '1px dashed var(--border-subtle)' }}>
+                      <div style={{ gridColumn: '1 / -1', padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)', borderRadius: 12, border: '1px dashed var(--border-subtle)' }}>
                         <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)' }}>No tienes artistas guardados</div>
-                        <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>Puedes agregar artistas desde el modal de Editar Canción.</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>Puedes agregar artistas desde el modal de Editar CanciÃ³n.</div>
                       </div>
                     )}
                   </div>
@@ -552,7 +549,7 @@ export default function Musica() {
                 const artistTracks = tracks.filter(t => t.artist === selectedArtist);
                 return (
                   <div style={{ position: 'relative', borderRadius: 16, overflow: 'hidden' }}>
-                    <div style={{ position: 'relative', padding: '28px', background: 'var(--bg-deep)', borderRadius: 16 }}>
+                    <div style={{ position: 'relative', padding: '28px', borderRadius: 16 }}>
                       <button onClick={() => setSelectedArtist(null)} className="btn-ghost" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 16, padding: '6px 12px', borderRadius: 8 }}>
                         <ArrowLeft size={14} /> Volver a artistas
                       </button>
@@ -615,7 +612,7 @@ export default function Musica() {
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16 }}>
                 {recentTracks.length > 0 ? recentTracks.slice(0, showAllRecents ? 10 : 5).map((track, i) => (
-                  <div key={track.id} onClick={() => playTrack(track.id)} className="bento-card" style={{ padding: 12, background: 'var(--bg-deep)', cursor: 'pointer', transition: 'all 200ms' }} onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-4px)'} onMouseLeave={e => e.currentTarget.style.transform = ''}>
+                  <div key={track.id} onClick={() => playTrack(track.id)} className="bento-card" style={{ padding: 12, cursor: 'pointer', transition: 'all 200ms' }} onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-4px)'} onMouseLeave={e => e.currentTarget.style.transform = ''}>
                     <div style={{ width: '100%', aspectRatio: '1/1', borderRadius: 8, overflow: 'hidden', marginBottom: 12, position: 'relative', boxShadow: '0 4px 12px rgba(0,0,0,0.5)', background: 'var(--bg-surface)' }}>
                       {track.coverImage ? <img src={track.coverImage} alt={track.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={24} style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', color: 'var(--text-muted)', opacity: 0.3 }} />}
                       <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)', opacity: 0, transition: 'opacity 200ms', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onMouseEnter={e => e.currentTarget.style.opacity = '1'} onMouseLeave={e => e.currentTarget.style.opacity = '0'}>
@@ -628,10 +625,10 @@ export default function Musica() {
                     <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{track.artist}</div>
                   </div>
                 )) : (
-                  <div style={{ gridColumn: '1 / -1', padding: '30px 20px', textAlign: 'center', color: 'var(--text-muted)', background: 'var(--bg-deep)', borderRadius: 12, border: '1px dashed var(--border-subtle)' }}>
+                  <div style={{ gridColumn: '1 / -1', padding: '30px 20px', textAlign: 'center', color: 'var(--text-muted)', borderRadius: 12, border: '1px dashed var(--border-subtle)' }}>
                     <Music size={28} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
-                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>No hay canciones aún</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>Sube música desde "Explorar" o "Subir audio local"</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>No hay canciones aÃºn</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>Sube mÃºsica desde "Explorar" o "Subir audio local"</div>
                   </div>
                 )}
               </div>
@@ -655,7 +652,7 @@ export default function Musica() {
                       {showAllLibrary ? 'Ver menos' : `Ver todo (${libraryTracks.length})`}
                     </button>
                   )}
-                  <div style={{ display: 'flex', gap: 6, background: 'var(--bg-deep)', padding: 4, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+                  <div style={{ display: 'flex', gap: 6, padding: 4, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
                     <select
                       value={selectedArtist || ''}
                       onChange={(e) => setSelectedArtist(e.target.value || null)}
@@ -680,12 +677,11 @@ export default function Musica() {
 
               {viewMode === 'lista' ? (
                 <>
-                  <div style={{ display: 'grid', gridTemplateColumns: '40px 60px 2fr 20px 2fr 180px', padding: '0 12px 12px', borderBottom: '1px solid var(--border-subtle)', fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '40px 3.5fr 1.5fr 80px 130px', padding: '0 12px 12px', borderBottom: '1px solid var(--border-subtle)', fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
                     <span></span>
-                    <span>Duración</span>
+                    <span>TÃ­tulo</span>
                     <span>Artista</span>
-                    <span></span>
-                    <span>Título</span>
+                    <span>DuraciÃ³n</span>
                     <span style={{ textAlign: 'right' }}>Acciones</span>
                   </div>
 
@@ -697,7 +693,7 @@ export default function Musica() {
                           key={track.id}
                           onClick={() => playTrack(track.id)}
                           style={{
-                            display: 'grid', gridTemplateColumns: '40px 60px 2fr 20px 2fr 180px', padding: '10px 12px',
+                            display: 'grid', gridTemplateColumns: '40px 3.5fr 1.5fr 80px 130px', padding: '10px 12px',
                             borderRadius: 8, alignItems: 'center', cursor: 'pointer', transition: 'all 150ms',
                             background: isPlaying ? 'var(--accent-dim)' : 'transparent',
                             border: isPlaying ? '1px solid var(--accent-glow)' : '1px solid transparent',
@@ -715,14 +711,8 @@ export default function Musica() {
                             )}
                           </div>
 
-                          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>{formatTime(track.duration)}</div>
-
-                          <div style={{ fontSize: 12, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{track.artist}</div>
-
-                          <div></div>
-
                           <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-                            <div style={{ width: 36, height: 36, borderRadius: 6, background: 'var(--bg-deep)', flexShrink: 0, overflow: 'hidden', position: 'relative' }}>
+                            <div style={{ width: 36, height: 36, borderRadius: 6, flexShrink: 0, overflow: 'hidden', position: 'relative' }}>
                               {track.coverImage ? <img src={track.coverImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={14} style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', color: 'var(--text-muted)', opacity: 0.3 }} />}
                             </div>
                             <div style={{ minWidth: 0 }}>
@@ -730,8 +720,12 @@ export default function Musica() {
                             </div>
                           </div>
 
+                          <div style={{ fontSize: 12, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{track.artist}</div>
+
+                          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)', whiteSpace: 'nowrap', textAlign: 'left' }}>{formatTime(track.duration)}</div>
+
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
-                            <button onClick={(e) => { e.stopPropagation(); toggleTrackFavorite(track.id); }} className="btn-ghost" style={{ padding: 6, color: track.isFavorite ? 'var(--accent)' : 'var(--text-tertiary)' }} title={track.isFavorite ? 'Quitar de favoritos' : 'Añadir a favoritos'}>
+                            <button onClick={(e) => { e.stopPropagation(); toggleTrackFavorite(track.id); }} className="btn-ghost" style={{ padding: 6, color: track.isFavorite ? 'var(--accent)' : 'var(--text-tertiary)' }} title={track.isFavorite ? 'Quitar de favoritos' : 'AÃ±adir a favoritos'}>
                               <Heart size={16} style={{ fill: track.isFavorite ? 'var(--accent)' : 'transparent' }} />
                             </button>
 
@@ -741,13 +735,13 @@ export default function Musica() {
                               setEditTitle(track.title);
                               setEditArtist(track.artist);
                               setEditCover(track.coverImage || '');
-                            }} className="btn-ghost" style={{ padding: 6, color: 'var(--text-tertiary)' }} title="Editar canción">
+                            }} className="btn-ghost" style={{ padding: 6, color: 'var(--text-tertiary)' }} title="Editar canciÃ³n">
                               <Edit2 size={14} />
                             </button>
                             <button onClick={(e) => {
                               e.stopPropagation();
                               setConfirmDelete(track.id);
-                            }} className="btn-ghost" style={{ padding: 6, color: 'var(--text-tertiary)' }} title="Eliminar canción">
+                            }} className="btn-ghost" style={{ padding: 6, color: 'var(--text-tertiary)' }} title="Eliminar canciÃ³n">
                               <Trash2 size={14} />
                             </button>
                           </div>
@@ -757,7 +751,7 @@ export default function Musica() {
                       <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
                         <Music size={32} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
                         <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)' }}>No hay canciones</div>
-                        <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>Añade música desde Explorar o sube audio local</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>AÃ±ade mÃºsica desde Explorar o sube audio local</div>
                       </div>
                     )}
                   </div>
@@ -787,10 +781,10 @@ export default function Musica() {
                         </div>
                         <div>
                           <div style={{ fontSize: 14, fontWeight: 600, color: isPlaying ? 'var(--accent)' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{track.title}</div>
-                          <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>{track.artist} · {formatTime(track.duration)}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>{track.artist} Â· {formatTime(track.duration)}</div>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-subtle)', paddingTop: 12, marginTop: 'auto' }}>
-                          <button onClick={(e) => { e.stopPropagation(); toggleTrackFavorite(track.id); }} className="btn-ghost" style={{ padding: 6, color: track.isFavorite ? 'var(--accent)' : 'var(--text-tertiary)' }} title={track.isFavorite ? 'Quitar de favoritos' : 'Añadir a favoritos'}>
+                          <button onClick={(e) => { e.stopPropagation(); toggleTrackFavorite(track.id); }} className="btn-ghost" style={{ padding: 6, color: track.isFavorite ? 'var(--accent)' : 'var(--text-tertiary)' }} title={track.isFavorite ? 'Quitar de favoritos' : 'AÃ±adir a favoritos'}>
                             <Heart size={16} style={{ fill: track.isFavorite ? 'var(--accent)' : 'transparent' }} />
                           </button>
                           <div style={{ display: 'flex', gap: 4 }}>
@@ -801,13 +795,13 @@ export default function Musica() {
                               setEditTitle(track.title);
                               setEditArtist(track.artist);
                               setEditCover(track.coverImage || '');
-                            }} className="btn-ghost" style={{ padding: 6, color: 'var(--text-tertiary)' }} title="Editar canción">
+                            }} className="btn-ghost" style={{ padding: 6, color: 'var(--text-tertiary)' }} title="Editar canciÃ³n">
                               <Edit2 size={14} />
                             </button>
                             <button onClick={(e) => {
                               e.stopPropagation();
                               setConfirmDelete(track.id);
-                            }} className="btn-ghost" style={{ padding: 6, color: 'var(--text-tertiary)' }} title="Eliminar canción">
+                            }} className="btn-ghost" style={{ padding: 6, color: 'var(--text-tertiary)' }} title="Eliminar canciÃ³n">
                               <Trash2 size={14} />
                             </button>
                           </div>
@@ -818,7 +812,7 @@ export default function Musica() {
                     <div style={{ gridColumn: '1 / -1', padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
                       <Music size={32} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
                       <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)' }}>No hay canciones</div>
-                      <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>Añade música desde Explorar o sube audio local</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>AÃ±ade mÃºsica desde Explorar o sube audio local</div>
                     </div>
                   )}
                 </div>
@@ -831,7 +825,7 @@ export default function Musica() {
             <div className="bento-card" style={{ padding: '24px 28px', border: '1px solid var(--accent-glow)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                 <div>
-                  <div className="section-header" style={{ marginBottom: 4, fontSize: 14, color: 'var(--text-primary)' }}>Explorar & Descargar Música</div>
+                  <div className="section-header" style={{ marginBottom: 4, fontSize: 14, color: 'var(--text-primary)' }}>Explorar & Descargar MÃºsica</div>
                   <p style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Importa canciones o playlists completas desde YouTube mediante Owa Downloader.</p>
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
@@ -843,7 +837,7 @@ export default function Musica() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 8, marginBottom: 16 }}>
                   <AlertCircle size={18} style={{ color: '#F59E0B', flexShrink: 0 }} />
                   <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                    <strong>Las descargas requieren la app de escritorio.</strong> Estás en modo web. Para descargar canciones con yt-dlp, ejecuta <code style={{ background: 'rgba(0,0,0,0.3)', padding: '2px 6px', borderRadius: 4, fontSize: 11 }}>npm run tauri dev</code>
+                    <strong>Las descargas requieren la app de escritorio.</strong> EstÃ¡s en modo web. Para descargar canciones con yt-dlp, ejecuta <code style={{ background: 'rgba(0,0,0,0.3)', padding: '2px 6px', borderRadius: 4, fontSize: 11 }}>npm run tauri dev</code>
                   </div>
                 </div>
               )}
@@ -861,7 +855,7 @@ export default function Musica() {
               {/* URL Input Bar */}
               {searchMode === 'link' && (
                 <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
-                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg-deep)', border: '1px solid var(--border-default)', borderRadius: 8, padding: '0 14px' }}>
+                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, border: '1px solid var(--border-default)', borderRadius: 8, padding: '0 14px' }}>
                     <Link size={16} style={{ color: 'var(--text-muted)' }} />
                     <input
                       ref={urlInputRef}
@@ -886,7 +880,7 @@ export default function Musica() {
               {/* Search Bar */}
               {searchMode === 'query' && (
                 <div style={{ display: 'flex', gap: 12, marginBottom: 16, animation: 'fadeIn 200ms' }}>
-                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg-deep)', border: '1px solid var(--border-default)', borderRadius: 8, padding: '0 14px' }}>
+                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, border: '1px solid var(--border-default)', borderRadius: 8, padding: '0 14px' }}>
                     <Search size={16} style={{ color: 'var(--text-muted)' }} />
                     <input
                       type="text"
@@ -904,10 +898,10 @@ export default function Musica() {
                 </div>
               )}
 
-              {/* Format Selector + Destination */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: 'var(--bg-deep)', borderRadius: 8, border: '1px solid var(--border-subtle)', marginBottom: 20 }}>
+              {/* Format Selector + Cover toggle + Destination */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderRadius: 8, border: '1px solid var(--border-subtle)', marginBottom: 20 }}>
                 <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                  <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Formato de Audio:</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Formato:</span>
                   {(['mp3', 'm4a'] as const).map(f => (
                     <button
                       key={f}
@@ -920,6 +914,17 @@ export default function Musica() {
                       }}
                     >{f}</button>
                   ))}
+                  <div style={{ width: 1, height: 24, background: 'var(--border-subtle)' }} />
+                  <button
+                    onClick={() => setIncludeCover(!includeCover)}
+                    style={{
+                      padding: '4px 12px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                      background: includeCover ? 'var(--accent)' : 'var(--bg-surface)',
+                      color: includeCover ? '#fff' : 'var(--text-secondary)',
+                      border: '1px solid var(--border-default)', cursor: 'pointer', transition: 'all 200ms',
+                      display: 'flex', alignItems: 'center', gap: 6,
+                    }}
+                  ><Image size={12} /> {includeCover ? 'Con portada' : 'Sin portada'}</button>
                 </div>
 
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -946,17 +951,17 @@ export default function Musica() {
               {searchResults.length > 0 && !isLoading && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Resultados de Búsqueda ({searchResults.length})</div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Resultados de BÃºsqueda ({searchResults.length})</div>
                     <button onClick={() => setSearchResults([])} className="btn-ghost" style={{ padding: 4 }}><X size={14} /></button>
                   </div>
                   {searchResults.map((r, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '10px 14px', background: 'var(--bg-deep)', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
                       <div style={{ width: 48, height: 36, borderRadius: 6, background: 'var(--bg-surface)', overflow: 'hidden', flexShrink: 0 }}>
                         {r.thumbnail ? <img src={r.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={16} />}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title}</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>{r.channel} · {formatDuration(r.duration)}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>{r.channel} Â· {formatDuration(r.duration)}</div>
                       </div>
                       <div style={{ display: 'flex', gap: 6 }}>
                         <button onClick={() => window.open(r.webpage_url, '_blank')} className="btn-secondary" style={{ padding: '6px 12px', height: 32, fontSize: 11, display: 'flex', alignItems: 'center', gap: 6 }}><Play size={12} /> YouTube</button>
@@ -969,7 +974,7 @@ export default function Musica() {
 
               {/* Preview Area */}
               {preview && !isLoading && (
-                <div style={{ background: 'var(--bg-deep)', padding: 20, borderRadius: 12, border: '1px solid var(--border-default)', position: 'relative' }}>
+                <div style={{ padding: 20, borderRadius: 12, border: '1px solid var(--border-default)', position: 'relative' }}>
                   <button onClick={() => setPreview(null)} className="btn-ghost" style={{ position: 'absolute', top: 12, right: 12, padding: 6, zIndex: 1 }}><X size={16} /></button>
                   <div style={{ display: 'flex', alignItems: 'flex-end', gap: 24, marginBottom: 20 }}>
                     <div style={{ width: 120, height: 120, borderRadius: 8, background: 'linear-gradient(135deg, var(--accent), #8B1A3B)', overflow: 'hidden', flexShrink: 0, boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}>
@@ -977,7 +982,7 @@ export default function Musica() {
                     </div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--accent)', marginBottom: 6 }}>{isPlaylist(preview) ? 'Playlist de YouTube' : 'Video de YouTube'}</div>
-                      <h3 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>{preview.title || 'Sin título'}</h3>
+                      <h3 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>{preview.title || 'Sin tÃ­tulo'}</h3>
                       <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>{preview.channel}</div>
                       <div style={{ display: 'flex', gap: 12 }}>
                         <button onClick={handleDownloadAll} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, height: 36 }}>
@@ -1015,7 +1020,7 @@ export default function Musica() {
 
         </div>
 
-        {/* RIGHT COLUMN (REPRODUCIENDO, COLA, ESTADÍSTICAS) */}
+        {/* RIGHT COLUMN (REPRODUCIENDO, COLA, ESTADÃSTICAS) */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
 
           {/* REPRODUCIENDO CARD */}
@@ -1043,22 +1048,21 @@ export default function Musica() {
                 <p style={{ fontSize: 13, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{currentTrack.artist}</p>
               </div>
 
-            {/* Progress Bar with seek */}
-            <div style={{ width: '100%', marginBottom: 20 }}>
-              <div className="progress-track" style={{ height: 4, marginBottom: 8, background: 'var(--bg-deep)', borderRadius: 2, overflow: 'hidden', cursor: 'pointer', position: 'relative' }}
-                onClick={(e) => {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const x = (e.clientX - rect.left) / rect.width;
-                  setMusicProgress(Math.max(0, Math.min(1, x)));
-                }}
-              >
-                <div className="progress-fill" style={{ width: `${musicProgress * 100}%`, background: 'var(--accent)', boxShadow: '0 0 8px var(--accent-glow)' }} />
-              </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
-                  <span>{formatTime(musicProgress * (musicDuration || currentTrack.duration || 0))}</span>
-                  <span>{formatTime(musicDuration || currentTrack.duration || 0)}</span>
+                <div style={{ width: '100%', marginBottom: 20 }}>
+                  <div className="progress-track" style={{ height: 4, marginBottom: 8, borderRadius: 2, overflow: 'hidden', cursor: 'pointer', position: 'relative' }}
+                    onClick={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const x = (e.clientX - rect.left) / rect.width;
+                      setMusicProgress(Math.max(0, Math.min(1, x)));
+                    }}
+                  >
+                    <div className="progress-fill" style={{ width: `${musicProgress * 100}%`, background: 'var(--accent)', boxShadow: '0 0 8px var(--accent-glow)' }} />
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+                    <span>{formatTime(musicProgress * (musicDuration || currentTrack.duration || 0))}</span>
+                    <span>{formatTime(musicDuration || currentTrack.duration || 0)}</span>
+                  </div>
                 </div>
-              </div>
 
               {/* Player Controls */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '0 12px' }}>
@@ -1071,9 +1075,9 @@ export default function Musica() {
                 }} className="btn-ghost" style={{ padding: 8 }}>
                   <SkipBack size={20} style={{ color: 'var(--text-primary)' }} />
                 </button>
-              <button onClick={toggleMusicPlayback} style={{ width: 42, height: 42, borderRadius: '50%', background: 'var(--accent)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', cursor: 'pointer', transition: 'transform 0.15s' }} onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.08)'} onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}>
-                {isPlayingMusic ? <Pause size={18} fill="#fff" /> : <Play size={18} fill="#fff" style={{ marginLeft: 2 }} />}
-              </button>
+                <button onClick={toggleMusicPlayback} style={{ width: 42, height: 42, borderRadius: '50%', background: 'var(--accent)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', cursor: 'pointer', transition: 'transform 0.15s' }} onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.08)'} onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}>
+                  {isPlayingMusic ? <Pause size={18} fill="#fff" /> : <Play size={18} fill="#fff" style={{ marginLeft: 2 }} />}
+                </button>
                 <button onClick={() => {
                   const idx = tracks.findIndex(t => t.id === currentTrack.id);
                   if (idx < tracks.length - 1) playTrack(tracks[idx + 1].id);
@@ -1084,8 +1088,9 @@ export default function Musica() {
                 <button onClick={() => {
                   const next = repeatMode === 'none' ? 'all' : repeatMode === 'all' ? 'one' : 'none';
                   setRepeatMode(next);
-                }} className="btn-ghost" style={{ padding: 8, color: repeatMode !== 'none' ? 'var(--accent)' : 'var(--text-tertiary)' }}>
+                }} className="btn-ghost" style={{ padding: 8, position: 'relative', color: repeatMode !== 'none' ? 'var(--accent)' : 'var(--text-tertiary)' }} title={repeatMode === 'none' ? 'Sin bucle' : repeatMode === 'all' ? 'Repetir lista' : 'Repetir una'}>
                   <Repeat size={16} />
+                  {repeatMode === 'one' && <span style={{ position: 'absolute', top: 2, right: 2, fontSize: 8, fontWeight: 900, background: 'var(--bg-surface)', padding: '0 3px', borderRadius: 4, border: '1px solid var(--accent)' }}>1</span>}
                 </button>
               </div>
             </div>
@@ -1095,18 +1100,18 @@ export default function Musica() {
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)' }}>Tiempo hoy</div>
                 <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-primary)', marginTop: 4 }}>{formatTime(musicListeningTime)}</div>
-                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>de estudio con música</div>
+                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>de estudio con mÃºsica</div>
               </div>
               <div style={{ width: '100%', borderTop: '1px solid var(--border-subtle)', paddingTop: 16, textAlign: 'center', fontSize: 11, color: 'var(--text-tertiary)' }}>
-                Selecciona una canción para empezar
+                Selecciona una canciÃ³n para empezar
               </div>
             </div>
           )}
 
-          {/* COLA DE REPRODUCCIÓN */}
+          {/* COLA DE REPRODUCCIÃ“N */}
           <div className="bento-card" style={{ padding: '20px', border: '1px solid var(--border-subtle)', position: 'relative', overflow: 'hidden' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <span className="section-header" style={{ marginBottom: 0, fontSize: 12, color: 'var(--text-primary)' }}>Cola de reproducción</span>
+              <span className="section-header" style={{ marginBottom: 0, fontSize: 12, color: 'var(--text-primary)' }}>Cola de reproducciÃ³n</span>
               {musicQueue.length > 0 && (
                 <span onClick={() => setMusicQueue([])} style={{ fontSize: 11, color: 'var(--text-tertiary)', cursor: 'pointer' }} className="hover:text-white">Borrar</span>
               )}
@@ -1152,11 +1157,11 @@ export default function Musica() {
             )}
           </div>
 
-          {/* ESTADÍSTICAS DE ESCUCHA */}
+          {/* ESTADÃSTICAS DE ESCUCHA */}
           <div className="bento-card" style={{ padding: '20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <span className="section-header" style={{ marginBottom: 0, fontSize: 12, color: 'var(--text-primary)' }}>Estadísticas de escucha</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, background: 'var(--bg-deep)', padding: '3px', borderRadius: 6, border: '1px solid var(--border-subtle)' }}>
+              <span className="section-header" style={{ marginBottom: 0, fontSize: 12, color: 'var(--text-primary)' }}>EstadÃ­sticas de escucha</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '3px', borderRadius: 6, border: '1px solid var(--border-subtle)' }}>
                 <button onClick={() => setStatsPeriod('week')} style={{ padding: '3px 8px', borderRadius: 4, border: 'none', background: statsPeriod === 'week' ? 'var(--accent)' : 'transparent', color: statsPeriod === 'week' ? '#fff' : 'var(--text-tertiary)', cursor: 'pointer', fontSize: 10, fontWeight: 600 }}>Semana</button>
                 <button onClick={() => setStatsPeriod('month')} style={{ padding: '3px 8px', borderRadius: 4, border: 'none', background: statsPeriod === 'month' ? 'var(--accent)' : 'transparent', color: statsPeriod === 'month' ? '#fff' : 'var(--text-tertiary)', cursor: 'pointer', fontSize: 10, fontWeight: 600 }}>Mes</button>
               </div>
@@ -1178,8 +1183,7 @@ export default function Musica() {
                   const date = new Date();
                   date.setDate(date.getDate() - (days - 1 - idx));
                   const dayStr = date.toISOString().slice(0, 10);
-                  const isToday = dayStr === new Date().toISOString().slice(0, 10);
-                  const val = isToday ? musicListeningTime : 0;
+                  const val = dailyMusicTime[dayStr] || 0;
                   setChartTooltip({ text: formatTime(val), date: dayStr, x: e.clientX - rect.left, y: e.clientY - rect.top });
                 }}
                 onMouseLeave={() => setChartTooltip(null)}
@@ -1194,12 +1198,12 @@ export default function Musica() {
                   const days = statsPeriod === 'week' ? 7 : 30;
                   const now = new Date();
                   const todayStr = now.toISOString().slice(0, 10);
+                  const maxSecs = 14400; // 4 hours = max bar
                   const vals = Array.from({ length: days }, (_, i) => {
                     const date = new Date(now);
                     date.setDate(date.getDate() - (days - 1 - i));
                     const dayStr = date.toISOString().slice(0, 10);
-                    const totalSecs = dayStr === todayStr ? musicListeningTime : 0;
-                    const maxSecs = 14400; // 4 hours = max bar
+                    const totalSecs = dailyMusicTime[dayStr] || 0;
                     return Math.max(2, Math.min(67, (totalSecs / maxSecs) * 67));
                   });
                   const points = vals.map((v, i) => `${(i / (days - 1 || 1)) * 300},${72 - v}`).join(' ');
@@ -1220,8 +1224,7 @@ export default function Musica() {
                                 const date = new Date(now);
                                 date.setDate(date.getDate() - (days - 1 - i));
                                 const dayStr = date.toISOString().slice(0, 10);
-                                const isToday = dayStr === todayStr;
-                                const val = isToday ? musicListeningTime : 0;
+                                const val = dailyMusicTime[dayStr] || 0;
                                 setChartTooltip({ text: formatTime(val), date: dayStr, x: parseFloat(e.currentTarget.getAttribute('cx') || '0') * 300 / 300 * 300, y: parseFloat(e.currentTarget.getAttribute('cy') || '0') });
                               }}
                             />
@@ -1244,11 +1247,11 @@ export default function Musica() {
 
             {/* Micro Stats Grid */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, borderTop: '1px solid var(--border-subtle)', paddingTop: 16 }}>
-              <div style={{ textAlign: 'center', background: 'var(--bg-deep)', padding: '8px 4px', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+              <div style={{ textAlign: 'center', padding: '8px 4px', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
                 <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginBottom: 2 }}>Hoy</div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{formatTime(musicListeningTime)}</div>
               </div>
-              <div style={{ textAlign: 'center', background: 'var(--bg-deep)', padding: '8px 4px', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+              <div style={{ textAlign: 'center', padding: '8px 4px', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
                 <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginBottom: 2 }}>Favoritas</div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{tracks.filter(t => t.isFavorite).length}</div>
               </div>
@@ -1260,30 +1263,52 @@ export default function Musica() {
             <div className="bento-card" style={{ padding: '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                 <span className="section-header" style={{ marginBottom: 0, fontSize: 12, color: 'var(--text-primary)' }}>Descargas</span>
-                {completedDownloads.length > 0 && (
-                  <button onClick={clearCompletedDownloads} className="btn-ghost" style={{ fontSize: 10, padding: '2px 6px' }}>Limpiar</button>
-                )}
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>
+                    {downloadQueue.filter(d => d.status === 'queued').length} en cola
+                    {downloadQueue.some(d => d.status === 'downloading') ? ` Â· ${Math.round(downloadQueue.filter(d => d.status === 'downloading').reduce((a, d) => a + d.progress * 100, 0) / Math.max(1, downloadQueue.filter(d => d.status === 'downloading').length))}%` : ''}
+                  </span>
+                  {completedDownloads.length > 0 && (
+                    <button onClick={clearCompletedDownloads} className="btn-ghost" style={{ fontSize: 10, padding: '2px 6px', color: 'var(--text-tertiary)' }}>Limpiar</button>
+                  )}
+                </div>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 200, overflowY: 'auto' }}>
-                {downloadQueue.map(item => (
-                  <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{ width: 28, height: 28, borderRadius: 4, background: 'var(--bg-surface)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      {item.thumbnail ? <img src={item.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={12} />}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
-                      <div className="progress-track" style={{ height: 3, marginTop: 4 }}>
-                        <div className="progress-fill" style={{ width: `${item.progress * 100}%`, background: item.status === 'completed' ? 'var(--success)' : item.status === 'error' ? 'var(--error)' : 'var(--accent)' }} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 220, overflowY: 'auto' }}>
+                {downloadQueue.map(item => {
+                  const statusIcon = item.status === 'downloading' ? <Loader size={12} style={{ animation: 'spin 1s linear infinite', color: 'var(--accent)' }} />
+                    : item.status === 'completed' ? <CheckCircle size={12} style={{ color: 'var(--success)' }} />
+                      : item.status === 'error' ? <AlertCircle size={12} style={{ color: 'var(--error)' }} />
+                        : <Clock size={12} style={{ color: 'var(--text-tertiary)' }} />;
+                  return (
+                    <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 8px', borderRadius: 6, background: item.status === 'error' ? 'rgba(239,68,68,0.08)' : 'transparent' }}>
+                      <div style={{ width: 28, height: 28, borderRadius: 4, background: 'var(--bg-surface)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        {item.thumbnail ? <img src={item.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={12} />}
                       </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {statusIcon}
+                          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                          <div className="progress-track" style={{ flex: 1, height: 3, borderRadius: 2 }}>
+                            <div className="progress-fill" style={{ width: `${item.progress * 100}%`, height: '100%', borderRadius: 2, background: item.status === 'completed' ? 'var(--success)' : item.status === 'error' ? 'var(--error)' : 'var(--accent)', transition: 'width 300ms' }} />
+                          </div>
+                          <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-tertiary)', minWidth: 28, textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
+                            {item.status === 'downloading' ? `${Math.round(item.progress * 100)}%` : item.status === 'queued' ? 'Cola' : item.status === 'completed' ? '100%' : 'Error'}
+                          </span>
+                        </div>
+                        {item.errorMessage && item.status === 'error' && (
+                          <div style={{ fontSize: 9, color: 'var(--error)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.errorMessage}</div>
+                        )}
+                      </div>
+                      {(item.status === 'downloading' || item.status === 'queued') && (
+                        <button onClick={() => handleCancelDownload(item.id)} style={{ padding: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', opacity: 0.6, transition: 'opacity 150ms' }} onMouseEnter={e => e.currentTarget.style.opacity = '1'} onMouseLeave={e => e.currentTarget.style.opacity = '0.6'} title="Cancelar descarga">
+                          <X size={12} />
+                        </button>
+                      )}
                     </div>
-                    <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-tertiary)', minWidth: 30, textAlign: 'right' }}>
-                      {item.status === 'downloading' ? `${Math.round(item.progress * 100)}%` : item.status === 'completed' ? '✓' : item.status === 'error' ? '✗' : ''}
-                    </span>
-                    {(item.status === 'downloading' || item.status === 'queued') && (
-                      <button onClick={() => handleCancelDownload(item.id)} className="btn-ghost" style={{ padding: 2 }}><X size={10} /></button>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -1302,10 +1327,10 @@ export default function Musica() {
           background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
         }} onClick={() => setEditingTrackId(null)}>
           <div className="bento-card" style={{ padding: 28, width: 340, maxWidth: '90vw' }} onClick={e => e.stopPropagation()}>
-            <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 16 }}>Editar Canción</h3>
+            <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 16 }}>Editar CanciÃ³n</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>Título</label>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>TÃ­tulo</label>
                 <input value={editTitle} onChange={e => setEditTitle(e.target.value)} className="input-base" style={{ width: '100%', height: 38, fontSize: 12 }} />
               </div>
               <div>
@@ -1313,7 +1338,7 @@ export default function Musica() {
                 <div style={{ display: 'flex', gap: 8, flexDirection: 'column' }}>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <input value={editArtist} onChange={e => setEditArtist(e.target.value)} className="input-base" placeholder="Nuevo artista o elige de la lista..." style={{ flex: 1, height: 38, fontSize: 12 }} />
-                    <button onClick={() => { if (editArtist.trim()) { addArtist(editArtist.trim()); toast.success('Artista añadido a predeterminados'); } }} className="btn-secondary" style={{ padding: '0 12px' }} title="Guardar a predeterminados"><Plus size={14} /></button>
+                    <button onClick={() => { if (editArtist.trim()) { addArtist(editArtist.trim()); } }} className="btn-secondary" style={{ padding: '0 12px' }} title="Guardar a predeterminados"><Plus size={14} /></button>
                   </div>
                   {(artists || []).length > 0 && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
@@ -1342,7 +1367,6 @@ export default function Musica() {
                           if (file && typeof file === 'string') {
                             // Convert to base64 if possible or use local path
                             setEditCover(file);
-                            toast.success('Imagen seleccionada');
                           }
                         } catch {
                           const input = document.createElement('input');
@@ -1377,7 +1401,6 @@ export default function Musica() {
               <button onClick={() => setEditingTrackId(null)} className="btn-secondary" style={{ height: 38, padding: '0 20px', fontSize: 12 }}>Cancelar</button>
               <button onClick={() => {
                 updateTrack(editingTrackId, { title: editTitle, artist: editArtist, coverImage: editCover || undefined });
-                toast.success('Canción actualizada');
                 setEditingTrackId(null);
               }} className="btn-primary" style={{ height: 38, padding: '0 20px', fontSize: 12 }}>Guardar</button>
             </div>
@@ -1445,7 +1468,6 @@ export default function Musica() {
                       if (t.artist === oldName) updateTrack(t.id, { artist: editArtistName.trim() });
                     });
                   }
-                  toast.success('Artista actualizado');
                 }
                 setEditingArtistId(null);
               }} className="btn-primary" style={{ height: 38, padding: '0 20px', fontSize: 12 }}>Guardar</button>
@@ -1460,26 +1482,30 @@ export default function Musica() {
           position: 'fixed', inset: 0, zIndex: 1000,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
-        }} onClick={() => setConfirmDelete(null)}>
-          <div className="bento-card" style={{ padding: 28, width: 320, maxWidth: '90vw' }} onClick={e => e.stopPropagation()}>
-            <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>¿Eliminar?</h3>
-            <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginBottom: 24 }}>
+        }} onClick={() => { setConfirmDelete(null); setConfirmDeleteText(''); }}>
+          <div className="bento-card" style={{ padding: 28, width: 340, maxWidth: '90vw' }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>Confirmar eliminacion</h3>
+            <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginBottom: 16 }}>
               {tracks.find(t => t.id === confirmDelete)
-                ? `Se eliminará "${tracks.find(t => t.id === confirmDelete)?.title}" de tu biblioteca.`
-                : 'Se eliminará esta playlist de tu biblioteca.'}
+                ? `Se eliminara "${tracks.find(t => t.id === confirmDelete)?.title}" de tu biblioteca.`
+                : 'Se eliminara esta playlist de tu biblioteca.'}
             </p>
+            <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
+              Escribe <strong style={{ color: 'var(--error)' }}>Deseoeliminartodo</strong> para confirmar:
+            </p>
+            <input type="text" value={confirmDeleteText} onChange={e => setConfirmDeleteText(e.target.value)}
+              placeholder="Escribe Deseoeliminartodo"
+              style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-deep)', color: 'var(--text-primary)', fontSize: 12, outline: 'none', marginBottom: 16 }} />
             <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-              <button onClick={() => setConfirmDelete(null)} className="btn-secondary" style={{ height: 38, padding: '0 20px', fontSize: 12 }}>
+              <button onClick={() => { setConfirmDelete(null); setConfirmDeleteText(''); }} className="btn-secondary" style={{ height: 38, padding: '0 20px', fontSize: 12 }}>
                 Cancelar
               </button>
               <button onClick={() => {
-                const track = tracks.find(t => t.id === confirmDelete);
-                if (track) {
-                  deleteTrack(confirmDelete);
-                  toast.success(`"${track.title}" eliminada`);
-                }
+                if (confirmDeleteText !== 'Deseoeliminartodo') return;
+                deleteTrack(confirmDelete);
                 setConfirmDelete(null);
-              }} className="btn-primary" style={{ height: 38, padding: '0 20px', fontSize: 12, background: 'var(--error)', borderColor: 'var(--error)' }}>
+                setConfirmDeleteText('');
+              }} className="btn-primary" style={{ height: 38, padding: '0 20px', fontSize: 12, background: confirmDeleteText === 'Deseoeliminartodo' ? 'var(--error)' : 'var(--bg-deep)', borderColor: confirmDeleteText === 'Deseoeliminartodo' ? 'var(--error)' : 'var(--border-default)', opacity: confirmDeleteText === 'Deseoeliminartodo' ? 1 : 0.4, cursor: confirmDeleteText === 'Deseoeliminartodo' ? 'pointer' : 'not-allowed' }}>
                 Eliminar
               </button>
             </div>
@@ -1490,3 +1516,4 @@ export default function Musica() {
     </div>
   );
 }
+

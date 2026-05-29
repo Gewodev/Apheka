@@ -1,18 +1,17 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+﻿import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { 
   Search, Plus, Folder as FolderIcon, Pin, Trash2, 
   ChevronLeft, FolderPlus, Star, FileText, Download,
   Bold, Italic, Underline, List, Heading, Code, BookOpen,
-  Wifi, Bell, CheckCircle, Tag, ArrowUp, ArrowDown, Clock, Eye
+  CheckCircle, Clock
 } from 'lucide-react';
 import { useApp, Note } from '../../store/AppContext';
+import NotificationBell from '../ui/NotificationBell';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import toast from 'react-hot-toast';
-
 const AVAILABLE_TAGS = [
-  'Examen', 'Resumen', 'Fórmula', 'Proyecto', 
-  'Investigación', 'Lectura', 'Ideas', 'Importante'
+  'Examen', 'Resumen', 'FÃ³rmula', 'Proyecto', 
+  'InvestigaciÃ³n', 'Lectura', 'Ideas', 'Importante'
 ];
 
 function NoteCard({ note, onClick }: { note: Note; onClick: () => void }) {
@@ -51,7 +50,7 @@ function NoteCard({ note, onClick }: { note: Note; onClick: () => void }) {
       </div>
 
       <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', marginBottom: 8 }}>
-        {note.title || 'Sin título'}
+        {note.title || 'Sin tÃ­tulo'}
       </div>
 
       <div style={{ fontSize: 12, color: 'var(--text-tertiary)', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', display: '-webkit-box', marginBottom: 'auto', lineHeight: 1.5 }}
@@ -62,7 +61,7 @@ function NoteCard({ note, onClick }: { note: Note; onClick: () => void }) {
       {note.tags && note.tags.length > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 12, marginBottom: 4 }}>
           {note.tags.slice(0, 3).map(t => (
-            <span key={t} style={{ fontSize: 9, background: 'var(--bg-deep)', color: 'var(--text-secondary)', padding: '2px 8px', borderRadius: 10, border: '1px solid var(--border-subtle)' }}>
+            <span key={t} style={{ fontSize: 9, color: 'var(--text-secondary)', padding: '2px 8px', borderRadius: 10, border: '1px solid var(--border-subtle)' }}>
               #{t}
             </span>
           ))}
@@ -74,14 +73,23 @@ function NoteCard({ note, onClick }: { note: Note; onClick: () => void }) {
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border-subtle)' }}>
         <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600 }}>{format(new Date(note.updatedAt || Date.now()), "d MMM yyyy", { locale: es })}</span>
-        <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', background: 'var(--bg-deep)', padding: '2px 8px', borderRadius: 6 }}>Nota</span>
+        <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', padding: '2px 8px', borderRadius: 6 }}>Nota</span>
       </div>
     </div>
   );
 }
 
 export default function Notas() {
-  const { notes, noteFolders, courses, addNote, updateNote, deleteNote, addNoteFolder } = useApp();
+  const app = useApp();
+  const {
+    notes = [],
+    noteFolders = [],
+    courses = [],
+    addNote,
+    updateNote,
+    deleteNote,
+    addNoteFolder,
+  } = app || {};
 
   const [activeFolderId, setActiveFolderId] = useState<string | 'all' | 'pinned' | 'borradores'>('all');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
@@ -125,7 +133,6 @@ export default function Notas() {
     if (!selectedNoteId || !selectedNote) return;
     const content = editorRef.current?.innerHTML || '';
     updateNote(selectedNote.id, { content });
-    toast.success('Nota guardada exitosamente');
   };
 
   const filteredNotes = useMemo(() => {
@@ -145,7 +152,6 @@ export default function Notas() {
     addNoteFolder({ name: newFolderName.trim(), color: '#8B5CF6', isManual: true });
     setNewFolderName('');
     setShowFolderModal(false);
-    toast.success('Carpeta creada exitosamente');
   };
 
   const toggleNoteTag = (tag: string) => {
@@ -181,11 +187,11 @@ export default function Notas() {
   return (
     <div className="page-container" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto' }}>
       
-      {/* ── HEADER ── */}
+      {/* â”€â”€ HEADER â”€â”€ */}
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, paddingTop: 8, flexShrink: 0 }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <h1 style={{ fontSize: 32, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.15, letterSpacing: '-0.02em' }}>Notas</h1>
+            <h1 style={{ fontSize: 32, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.15, letterSpacing: '-0.02em', fontFamily: "'Outfit', sans-serif" }}>Notas</h1>
             <BookOpen size={26} style={{ color: 'var(--accent)' }} />
           </div>
           <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 6, fontWeight: 500 }}>
@@ -193,22 +199,14 @@ export default function Notas() {
           </p>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: 'var(--bg-deep)', border: '1px solid var(--border-default)', borderRadius: 16, fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>
-              <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--success)', boxShadow: '0 0 8px var(--success)' }} />
-              Conectado
-            </div>
-            <button className="btn-ghost" style={{ padding: 8, borderRadius: '50%' }}><Wifi size={16} /></button>
-            <button className="btn-ghost" style={{ padding: 8, borderRadius: '50%' }}><Bell size={16} /></button>
-          </div>
-
-          <div style={{ textAlign: 'right', borderLeft: '1px solid var(--border-subtle)', paddingLeft: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <NotificationBell />
+        <div style={{ textAlign: 'right' }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, justifyContent: 'flex-end' }}>
-              <div className="led-display" style={{ fontSize: 28, lineHeight: 1 }}>{timeStr}</div>
-              <div className="led-seconds" style={{ fontSize: 14 }}>{secondsStr}</div>
+              <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: 28, fontWeight: 300, color: 'var(--text-secondary)', letterSpacing: '0.02em', lineHeight: 1 }}>{timeStr}</span>
+              <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: 14, fontWeight: 300, color: 'var(--text-tertiary)', opacity: 0.5 }}>{secondsStr}</span>
             </div>
-            <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{dateStrCapitalized}</div>
+            <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', marginTop: 2, letterSpacing: '0.04em' }}>{dateStrCapitalized}</div>
           </div>
         </div>
       </header>
@@ -217,10 +215,10 @@ export default function Notas() {
       <div style={{ display: 'flex', flex: 1, gap: 24, minHeight: 600, alignItems: 'flex-start' }}>
         
         {/* INNER SIDEBAR */}
-        <aside className="bento-card" style={{ width: 250, padding: '20px 16px', background: 'var(--bg-deep)', display: 'flex', flexDirection: 'column', gap: 24, flexShrink: 0 }}>
+        <aside className="bento-card" style={{ width: 250, padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 24, flexShrink: 0 }}>
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, padding: '0 4px' }}>
-              <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Navegación</h2>
+              <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>NavegaciÃ³n</h2>
               <button onClick={() => setShowFolderModal(true)} className="btn-ghost" style={{ padding: 6, borderRadius: 8 }}><FolderPlus size={16} /></button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -268,7 +266,7 @@ export default function Notas() {
                       <FolderIcon size={16} style={{ color: folder.color || 'var(--accent)' }} />
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 120 }}>{folder.name}</span>
                     </div>
-                    <span style={{ fontSize: 11, background: 'var(--bg-deep)', padding: '2px 8px', borderRadius: 10 }}>
+                    <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10 }}>
                       {count}
                     </span>
                   </button>
@@ -282,10 +280,10 @@ export default function Notas() {
             </div>
           </div>
 
-          {/* ETIQUETAS / CARACTERÍSTICAS */}
+          {/* ETIQUETAS / CARACTERÃSTICAS */}
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, padding: '0 4px' }}>
-              <h3 style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Características</h3>
+              <h3 style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>CaracterÃ­sticas</h3>
               {selectedTag && (
                 <button onClick={() => setSelectedTag(null)} className="btn-ghost" style={{ fontSize: 10, color: 'var(--accent)', padding: '2px 6px' }}>Limpiar</button>
               )}
@@ -314,7 +312,7 @@ export default function Notas() {
         </aside>
 
         {/* MAIN AREA */}
-        <main className="bento-card" style={{ flex: 1, background: 'var(--bg-deep)', display: 'flex', flexDirection: 'column', minHeight: 600 }}>
+        <main className="bento-card" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 600 }}>
           {!selectedNoteId ? (
             <>
               {/* TOOLBAR */}
@@ -334,7 +332,7 @@ export default function Notas() {
                     <input type="text" placeholder="Buscar en notas..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="input-base" style={{ paddingLeft: 40, fontSize: 13, height: 40, width: '100%' }} />
                   </div>
                   <button onClick={() => {
-                    const newId = addNote({ title: 'Nueva Nota', content: '<p>Escribe aquí tu contenido...</p>', course: 'General', courseColor: '#8B5CF6', isPinned: false, tags: selectedTag ? [selectedTag] : [], priority: 'medium' });
+                    const newId = addNote({ title: 'Nueva Nota', content: '<p>Escribe aquÃ­ tu contenido...</p>', course: 'General', courseColor: '#8B5CF6', isPinned: false, tags: selectedTag ? [selectedTag] : [], priority: 'medium' });
                     if (newId) setSelectedNoteId(newId);
                   }} className="btn-primary hover-lift" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, height: 40, padding: '0 20px', fontWeight: 600 }}>
                     <Plus size={16} /> Nueva Nota
@@ -353,21 +351,21 @@ export default function Notas() {
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '120px 0', color: 'var(--text-muted)' }}>
                     <FileText size={64} style={{ opacity: 0.2, marginBottom: 16 }} />
                     <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-secondary)' }}>No se encontraron notas</div>
-                    <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 6 }}>Crea una nueva nota o cambia los filtros de búsqueda</div>
+                    <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 6 }}>Crea una nueva nota o cambia los filtros de bÃºsqueda</div>
                   </div>
                 )}
               </div>
             </>
           ) : (
             /* EDITOR PANEL */
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg-deep)', overflow: 'hidden', borderRadius: 12 }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 12 }}>
               <header style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0, background: 'var(--bg-surface)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                  <button onClick={() => setSelectedNoteId(null)} className="btn-ghost hover-lift" style={{ padding: 8, borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-default)' }}>
+                  <button onClick={() => setSelectedNoteId(null)} className="btn-ghost hover-lift" style={{ padding: 8, borderRadius: 8, border: '1px solid var(--border-default)' }}>
                     <ChevronLeft size={18} />
                   </button>
-                  <input type="text" value={selectedNote?.title || ''} onChange={e => updateNote(selectedNote!.id, { title: e.target.value })} style={{ background: 'transparent', border: 'none', fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', outline: 'none', width: 400, padding: '4px 0' }} placeholder="Título de la nota..." />
-                  {(selectedNote?.content?.length ?? 0) < 50 && <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', background: 'var(--bg-deep)', padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border-subtle)' }}>Borrador</span>}
+                  <input type="text" value={selectedNote?.title || ''} onChange={e => updateNote(selectedNote!.id, { title: e.target.value })} style={{ background: 'transparent', border: 'none', fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', outline: 'none', width: 400, padding: '4px 0' }} placeholder="TÃ­tulo de la nota..." />
+                  {(selectedNote?.content?.length ?? 0) < 50 && <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border-subtle)' }}>Borrador</span>}
                 </div>
 
                 <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
@@ -383,11 +381,10 @@ export default function Notas() {
                     const a = document.createElement('a');
                     a.href = url; a.download = `${selectedNote!.title}.html`; a.click();
                     URL.revokeObjectURL(url);
-                    toast.success('Nota descargada exitosamente');
                   }} className="btn-ghost" style={{ color: 'var(--text-secondary)', cursor: 'pointer', padding: 8, borderRadius: 8 }} title="Descargar HTML">
                     <Download size={18} />
                   </button>
-                  <button onClick={() => { deleteNote(selectedNote!.id); setSelectedNoteId(null); toast.success('Nota eliminada'); }} className="btn-ghost" style={{ color: 'var(--error)', cursor: 'pointer', padding: 8, borderRadius: 8 }} title="Eliminar nota">
+                  <button onClick={() => { deleteNote(selectedNote!.id); setSelectedNoteId(null); }} className="btn-ghost" style={{ color: 'var(--error)', cursor: 'pointer', padding: 8, borderRadius: 8 }} title="Eliminar nota">
                     <Trash2 size={18} />
                   </button>
                 </div>
@@ -404,7 +401,7 @@ export default function Notas() {
                       const course = courses.find(c => c.name === e.target.value);
                       updateNote(selectedNote!.id, { course: e.target.value, courseColor: course?.color || '#8B5CF6' });
                     }}
-                    style={{ background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', outline: 'none', cursor: 'pointer' }}
+                    style={{ border: '1px solid var(--border-subtle)', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', outline: 'none', cursor: 'pointer' }}
                   >
                     {courses.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                     <option value="General">General</option>
@@ -417,7 +414,7 @@ export default function Notas() {
                   <select
                     value={selectedNote?.priority || 'medium'}
                     onChange={e => updateNote(selectedNote!.id, { priority: e.target.value as any })}
-                    style={{ background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', outline: 'none', cursor: 'pointer' }}
+                    style={{ border: '1px solid var(--border-subtle)', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', outline: 'none', cursor: 'pointer' }}
                   >
                     <option value="high">Alta</option>
                     <option value="medium">Media</option>
@@ -425,9 +422,9 @@ export default function Notas() {
                   </select>
                 </div>
 
-                {/* Etiquetas / Características */}
+                {/* Etiquetas / CaracterÃ­sticas */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, overflowX: 'auto' }}>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Características:</span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>CaracterÃ­sticas:</span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     {AVAILABLE_TAGS.map(tag => {
                       const active = selectedNote?.tags?.includes(tag);
@@ -454,20 +451,20 @@ export default function Notas() {
                     value={customTagInput}
                     onChange={e => setCustomTagInput(e.target.value)}
                     onKeyDown={handleAddCustomTag}
-                    style={{ background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', borderRadius: 10, padding: '4px 10px', fontSize: 10, color: 'var(--text-primary)', outline: 'none', width: 120 }}
+                    style={{ border: '1px solid var(--border-subtle)', borderRadius: 10, padding: '4px 10px', fontSize: 10, color: 'var(--text-primary)', outline: 'none', width: 120 }}
                   />
                 </div>
               </div>
 
               {/* RICH TEXT TOOLBAR */}
-              <div style={{ display: 'flex', gap: 6, padding: '10px 24px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', flexShrink: 0 }}>
+              <div style={{ display: 'flex', gap: 6, padding: '10px 24px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
                 {[
                   { icon: Bold, action: handleBold, label: 'Negrita' },
-                  { icon: Italic, action: handleItalic, label: 'Itálica' },
+                  { icon: Italic, action: handleItalic, label: 'ItÃ¡lica' },
                   { icon: Underline, action: handleUnderline, label: 'Subrayado' },
-                  { icon: Heading, action: handleHeading, label: 'Subtítulo' },
-                  { icon: List, action: handleBulletList, label: 'Lista con viñetas' },
-                  { icon: Code, action: handleCode, label: 'Bloque de código' },
+                  { icon: Heading, action: handleHeading, label: 'SubtÃ­tulo' },
+                  { icon: List, action: handleBulletList, label: 'Lista con viÃ±etas' },
+                  { icon: Code, action: handleCode, label: 'Bloque de cÃ³digo' },
                 ].map((btn, i) => (
                   <button key={i} onClick={btn.action} title={btn.label} className="btn-ghost hover-lift" style={{ padding: '8px 12px', borderRadius: 8, background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600 }}>
                     <btn.icon size={16} />
@@ -500,10 +497,10 @@ export default function Notas() {
       {/* NEW FOLDER MODAL */}
       {showFolderModal && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(12px)' }} onClick={() => setShowFolderModal(false)}>
-          <div className="bento-card" style={{ width: 400, padding: 28, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)' }} onClick={e => e.stopPropagation()}>
+          <div className="bento-card" style={{ width: 400, padding: 28, border: '1px solid var(--border-subtle)' }} onClick={e => e.stopPropagation()}>
             <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 20 }}>Nueva Carpeta</h3>
             <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Nombre de la carpeta</label>
-            <input type="text" placeholder="Ej. Proyectos, Exámenes..." value={newFolderName} onChange={e => setNewFolderName(e.target.value)} className="input-base" style={{ width: '100%', height: 40, fontSize: 13 }} autoFocus />
+            <input type="text" placeholder="Ej. Proyectos, ExÃ¡menes..." value={newFolderName} onChange={e => setNewFolderName(e.target.value)} className="input-base" style={{ width: '100%', height: 40, fontSize: 13 }} autoFocus />
             <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 24 }}>
               <button onClick={() => setShowFolderModal(false)} className="btn-secondary" style={{ fontSize: 13, padding: '0 20px', height: 40, fontWeight: 600 }}>Cancelar</button>
               <button onClick={handleCreateFolder} disabled={!newFolderName.trim()} className="btn-primary hover-lift" style={{ fontSize: 13, padding: '0 24px', height: 40, fontWeight: 600 }}>Crear carpeta</button>
@@ -515,3 +512,4 @@ export default function Notas() {
     </div>
   );
 }
+

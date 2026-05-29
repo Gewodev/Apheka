@@ -1,14 +1,13 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import toast from 'react-hot-toast';
+﻿import { useState, useEffect, useRef, useCallback } from 'react';
 import { useApp } from '../store/AppContext';
 
 /**
  * Hook encapsulating the timer logic for the Estudio view.
- * Handles pomodoro & chrono modes, short breaks, round counting and side‑effects
+ * Handles pomodoro & chrono modes, short breaks, round counting and sideâ€‘effects
  * (toasts, session persistence, pomodoro increment, etc.).
  */
 export function useTimer() {
-  // Global app state needed for side‑effects
+  // Global app state needed for sideâ€‘effects
   const {
     settings,
     incrementPomodoroSessions,
@@ -34,18 +33,19 @@ export function useTimer() {
     showCompletion,
     setShowCompletion,
     resetTimer,
+    addNotification,
   } = useApp();
 
   // Local UI state
   const [chronoRoundCounted, setChronoRoundCounted] = useState(false);
   const [chronoRounds, setChronoRounds] = useState(0);
-  const chronoGoal = settings.chronoGoal ?? 25 * 60; // seconds, default 25 min
+  const chronoGoal = settings.chronoGoal ?? 25 * 60; // seconds, default 25â€¯min
 
   const hasTriggeredRef = useRef(false);
   const restStartRef = useRef(0);
 
   // ---------------------------------------------------------------------------
-  // Timer side‑effects – runs when the timer is active
+  // Timer sideâ€‘effects â€“ runs when the timer is active
   // ---------------------------------------------------------------------------
   useEffect(() => {
     // Pomodoro completion
@@ -63,7 +63,7 @@ export function useTimer() {
       setShowCompletion(true);
     }
 
-    // Cronómetro round detection – count a round when the goal is reached
+    // CronÃ³metro round detection â€“ count a round when the goal is reached
     if (
       isTimerActive &&
       sessionType === 'chrono' &&
@@ -72,7 +72,7 @@ export function useTimer() {
     ) {
       setChronoRounds((prev) => prev + 1);
       setChronoRoundCounted(true);
-      toast.success(`¡Ronda de ${chronoGoal / 60} min completada!`);
+      addNotification(`Ronda de ${chronoGoal / 60} min completada`, 'success');
     }
 
     // Reset helpers when timer stops or mode changes
@@ -118,15 +118,19 @@ export function useTimer() {
   const currentProgress = isRest ? restProgressPct : progressPct;
 
   // ---------------------------------------------------------------------------
-  // UI event handlers – thin wrappers that also keep the global context in sync
+  // UI event handlers â€“ thin wrappers that also keep the global context in sync
   // ---------------------------------------------------------------------------
   const handleToggle = useCallback(() => {
     setIsTimerActive((prev) => !prev);
   }, [setIsTimerActive]);
 
   const handleReset = useCallback(() => {
-    // Persist the session if it was long enough (>= 10 min) – same rule as original
-    if (sessionTime >= 600) {
+    if (isTimerActive) {
+      addNotification('Pausa el temporizador antes de reiniciar', 'error');
+      return;
+    }
+    // Persist the session if it was long enough (>= 10s)
+    if (sessionTime >= 10) {
       addStudySession({
         type: sessionType,
         startedAt: new Date(Date.now() - sessionTime * 1000).toISOString(),
@@ -139,12 +143,16 @@ export function useTimer() {
     }
     // Reset timer state
     resetTimer();
-  }, [sessionTime, sessionType, activeTaskId, addStudySession, resetTimer]);
+  }, [sessionTime, sessionType, activeTaskId, addStudySession, resetTimer, isTimerActive]);
 
   const handleTypeChange = useCallback(
     (type: 'pomodoro' | 'chrono') => {
-      // If a long session is running, persist it before switching
-      if (sessionTime >= 600) {
+      if (isTimerActive) {
+        addNotification('Pausa el temporizador antes de cambiar de modo', 'error');
+        return;
+      }
+      // If a session is running >= 10s, persist it before switching
+      if (sessionTime >= 10) {
         handleReset();
       } else {
         // Simple reset without persisting
@@ -152,7 +160,7 @@ export function useTimer() {
       }
       setSessionType(type);
     },
-    [sessionTime, handleReset, resetTimer, setSessionType],
+    [sessionTime, handleReset, resetTimer, setSessionType, isTimerActive],
   );
 
   // ---------------------------------------------------------------------------
@@ -189,3 +197,6 @@ export function useTimer() {
     conceptIndex: 0,
   };
 }
+
+
+

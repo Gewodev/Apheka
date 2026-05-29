@@ -66,7 +66,7 @@ fn open_floating_timer(app_handle: tauri::AppHandle) {
         tauri::WebviewUrl::App("index.html?window=timer".into()),
     )
     .title("OWA Studio - Timer")
-    .inner_size(200.0, 170.0)
+    .inner_size(140.0, 65.0)
     .resizable(false)
     .decorations(true)
     .transparent(false)
@@ -137,6 +137,7 @@ async fn start_download(
     download_id: String,
     output_dir: String,
     format: String,
+    include_cover: bool,
 ) -> Result<(), String> {
     let state = app_handle.state::<DownloadState>();
     let download_path = state.path.lock().map_err(|e| e.to_string())?;
@@ -151,53 +152,50 @@ async fn start_download(
     let yt_bin = resolve_binary(&app_handle, "yt-dlp")?;
     let ffmpeg_bin = resolve_binary(&app_handle, "ffmpeg")?;
     let ffmpeg_dir = ffmpeg_bin.parent().unwrap_or(std::path::Path::new("."));
+    let ffmpeg_dir_str = ffmpeg_dir.to_string_lossy().to_string();
     let out_template = format!("{}\\%(title)s.%(ext)s", out_dir);
 
+    let mut args = vec![
+        "--ffmpeg-location",
+        &ffmpeg_dir_str,
+        "--yes-playlist",
+        "--ignore-errors",
+        "-x",
+        "--audio-format",
+        audio_format,
+        "--audio-quality",
+        "0",
+        "--no-warnings",
+        "--newline",
+        "--replace-in-metadata",
+        "title",
+        r" \(Official.*\)",
+        "--replace-in-metadata",
+        "title",
+        r" \[Official.*\]",
+        "--replace-in-metadata",
+        "title",
+        r" \(.*Video\)",
+        "--replace-in-metadata",
+        "title",
+        r" \(.*Audio\)",
+        "--replace-in-metadata",
+        "title",
+        r" \(.*Lyrics\)",
+        "--replace-in-metadata",
+        "title",
+        r" \(.*Remaster.*\)",
+        "--output",
+        &out_template,
+    ];
+
+    if include_cover {
+        args.push("--embed-metadata");
+        args.push("--embed-thumbnail");
+    }
+
     let mut child = Command::new(&yt_bin)
-        .args([
-            "--ffmpeg-location",
-            &ffmpeg_dir.to_string_lossy(),
-            "--yes-playlist",
-            "--ignore-errors",
-            "-x",
-            "--audio-format",
-            audio_format,
-            "--audio-quality",
-            "0",
-            "--embed-metadata",
-            "--embed-thumbnail",
-            "--no-warnings",
-            "--newline",
-            "--replace-in-metadata",
-            "title",
-            r" \(Official.*\)",
-            "",
-            "--replace-in-metadata",
-            "title",
-            r" \(Video.*\)",
-            "",
-            "--replace-in-metadata",
-            "title",
-            r" \(Audio.*\)",
-            "",
-            "--replace-in-metadata",
-            "title",
-            r" \(Lyrics.*\)",
-            "",
-            "--replace-in-metadata",
-            "title",
-            r" \(Letra.*\)",
-            "",
-            "--replace-in-metadata",
-            "title",
-            r" \[.*?\]",
-            "",
-            "--parse-metadata",
-            "title:%(artist)s - %(title)s",
-            "-o",
-            &out_template,
-            &url,
-        ])
+        .args(&args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()

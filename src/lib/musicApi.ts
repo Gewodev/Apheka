@@ -307,6 +307,7 @@ export async function startDownload(
   downloadId: string,
   outputDir?: string,
   format: string = 'mp3',
+  includeCover: boolean = true,
 ): Promise<void> {
   if (!isTauri()) {
     return webDownloadAudio(downloadId, url, format);
@@ -315,6 +316,7 @@ export async function startDownload(
     url, downloadId,
     outputDir: outputDir || '',
     format,
+    includeCover,
   });
 }
 
