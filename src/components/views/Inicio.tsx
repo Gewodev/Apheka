@@ -93,18 +93,18 @@ const hl = (l: number) =>
   l === 0 ? 'var(--bg-deep)' : l === 1 ? 'var(--accent-dim)' : l === 2 ? 'color-mix(in srgb, var(--accent) 35%, transparent)' : l === 3 ? 'color-mix(in srgb, var(--accent) 65%, transparent)' : 'var(--accent)';
 
 const sampleTasks = [
-  { title: 'TermodinÃ¡mica - Problemas de aplicaciÃ³n', course: 'FÃ­sica III', priority: 'HIGH' as const, date: '2 May' },
-  { title: 'QuÃ­mica OrgÃ¡nica - Mecanismos', course: 'QuÃ­mica OrgÃ¡nica', priority: 'MEDIUM' as const, date: '3 May' },
-  { title: 'Repaso de CÃ¡lculo - Integrales', course: 'CÃ¡lculo III', priority: 'LOW' as const, date: '4 May' },
-  { title: 'Ejercicios de ProgramaciÃ³n', course: 'ComputaciÃ³n', priority: 'MEDIUM' as const, date: '5 May' },
+  { title: 'Termodinámica - Problemas de Aplicación', course: 'Física III', priority: 'HIGH' as const, date: '2 May' },
+  { title: 'Química Orgánica - Mecanismos', course: 'Química Orgánica', priority: 'MEDIUM' as const, date: '3 May' },
+  { title: 'Repaso de Cálculo - Integrales', course: 'Cálculo III', priority: 'LOW' as const, date: '4 May' },
+  { title: 'Ejercicios de Programación', course: 'Computación', priority: 'MEDIUM' as const, date: '5 May' },
 ];
 
 const sampleNotes = [
-  { title: 'MecÃ¡nica CuÃ¡ntica - Fundamentos', course: 'FÃ­sica Moderna', time: 'Hace 1h' },
-  { title: 'Reacciones SN1 y SN2', course: 'QuÃ­mica OrgÃ¡nica', time: 'Hace 3h' },
-  { title: 'Integrales Triples', course: 'CÃ¡lculo III', time: 'Hace 5h' },
-  { title: 'Estructuras de Datos', course: 'ComputaciÃ³n', time: 'Hace 1d' },
-  { title: 'Ecuaciones Diferenciales', course: 'MatemÃ¡ticas Avanzadas', time: 'Hace 2d' },
+  { title: 'Mecánica Cuántica - Fundamentos', course: 'Física Moderna', time: 'Hace 1h' },
+  { title: 'Reacciones SN1 y SN2', course: 'Química Orgánica', time: 'Hace 3h' },
+  { title: 'Integrales Triples', course: 'Cálculo III', time: 'Hace 5h' },
+  { title: 'Estructuras de Datos', course: 'Computación', time: 'Hace 1d' },
+  { title: 'Ecuaciones Diferenciales', course: 'Matemáticas Avanzadas', time: 'Hace 2d' },
 ];
 
 const pc: Record<string, string> = { HIGH: '#E11D48', MEDIUM: '#F59E0B', LOW: '#10B981' };
@@ -152,7 +152,7 @@ export default function Inicio() {
     { id: 'cpu', label: 'CPU', val: ss.cpu, unit: '%', color: '#3B82F6', detail: `Carga del procesador: ${ss.cpu}%.` },
     { id: 'ram', label: 'RAM', val: ss.ram, unit: '%', color: '#10B981', detail: `${(ss.ramUsed / 1024).toFixed(1)} GB / ${(ss.ramTotal / 1024).toFixed(0)} GB usados.` },
     { id: 'disk', label: 'DISCO', val: ss.disk, unit: '%', color: '#8B5CF6', detail: `Almacenamiento: ${ss.disk}% ocupado.` },
-    { id: 'temp', label: 'TEMP', val: ss.temp, unit: 'Â°C', color: '#F59E0B', detail: `Temperatura: ${ss.temp}Â°C.` },
+    { id: 'temp', label: 'TEMP', val: ss.temp, unit: '°C', color: '#F59E0B', detail: `Temperatura: ${ss.temp}°C.` },
   ], [ss]);
 
   const timeStr = format(ct, 'HH:mm');
@@ -212,7 +212,7 @@ export default function Inicio() {
         const minutesStudied = Math.floor(secondsStudied / 60);
         
         const tooltip = isFuture 
-          ? `${dateFormatted}: DÃ­a futuro`
+          ? `${dateFormatted}: Día futuro`
           : `${dateFormatted}: ${minutesStudied}m / ${goalForDay}m (${Math.round(pct * 100)}%) ${met ? 'âœ“ Meta cumplida' : ''}`;
           
         rowCells.push({ level, tooltip });
@@ -259,10 +259,10 @@ export default function Inicio() {
           <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 6, color: 'var(--text-tertiary)' }}>
             {(() => {
               const h = ct.getHours();
-              return h < 12 ? 'Buenos dÃ­as' : h < 18 ? 'Buenas tardes' : 'Buenas noches';
+              return h < 12 ? 'Buenos días' : h < 18 ? 'Buenas tardes' : 'Buenas noches';
             })()}, <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{settings.userName || 'Avery'}</span>
           </div>
-          <h1 style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 300, fontSize: 32, lineHeight: 1.4, letterSpacing: '0.02em', color: 'var(--text-primary)' }}>
+          <h1 style={{ fontFamily: "'Inter Tight', sans-serif", fontWeight: 300, fontSize: 32, lineHeight: 1.4, letterSpacing: '0.02em', color: 'var(--text-primary)' }}>
             {phrase}
           </h1>
         </div>
@@ -289,10 +289,10 @@ export default function Inicio() {
           <NotificationBell />
           <div style={{ textAlign: 'right', position: 'relative', zIndex: 1 }}>
             <div className="flex items-baseline gap-2 justify-end">
-              <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: 68, fontWeight: 200, lineHeight: 0.9, color: 'var(--accent)', letterSpacing: '0.02em', textShadow: '0 0 20px var(--accent-glow)' }}>
+              <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 68, fontWeight: 200, lineHeight: 0.9, color: 'var(--accent)', letterSpacing: '0.02em', textShadow: '0 0 20px var(--accent-glow)' }}>
                 {timeStr}
               </span>
-              <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: 22, fontWeight: 200, color: 'var(--accent)', opacity: 0.7, letterSpacing: '0.02em' }}>
+              <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 22, fontWeight: 200, color: 'var(--accent)', opacity: 0.7, letterSpacing: '0.02em' }}>
                 {secStr}
               </span>
             </div>
@@ -308,7 +308,7 @@ export default function Inicio() {
         {[
           { label: 'TAREAS', val: ts.active, sub: 'Pendientes', color: '#3B82F6', icon: CheckSquare },
           { label: 'NOTAS', val: ts.total, sub: 'Guardadas', color: '#10B981', icon: FileText },
-          { label: 'RACHA', val: streak, sub: 'dÃ­as', color: '#F59E0B', icon: Flame },
+          { label: 'RACHA', val: streak, sub: 'días', color: '#F59E0B', icon: Flame },
         ].map((s, i) => (
           <div key={i}
             style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 10, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 12 }}>
@@ -372,7 +372,7 @@ export default function Inicio() {
           <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 4, marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border-soft)', fontSize: 9, color: 'var(--text-tertiary)', fontWeight: 600 }}>
             <span>Menos</span>
             {[0,1,2,3,4].map(l => <div key={l} style={{ width: 10, height: 10, borderRadius: 2, background: hl(l) }} />)}
-            <span>MÃ¡s</span>
+            <span>Más</span>
           </div>
         </div>
 
@@ -380,7 +380,7 @@ export default function Inicio() {
         <div className="xl:col-span-6" style={{ padding: '18px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 12, display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
             <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em' }}>RECIENTES</span>
-            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--accent)', cursor: 'pointer' }} className="hover:opacity-80">Ir a mÃºsica â†’</span>
+            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--accent)', cursor: 'pointer' }} className="hover:opacity-80">Ir a Música â†’</span>
           </div>
           
           <div style={{ 
@@ -437,7 +437,7 @@ export default function Inicio() {
                   width: '100%'
                 }}>
                   <Music size={20} style={{ color: 'var(--text-muted)', opacity: 0.2 }} />
-                  <span style={{ fontSize: 8, marginTop: 4, color: 'var(--text-tertiary)' }}>VacÃ­o</span>
+                  <span style={{ fontSize: 8, marginTop: 4, color: 'var(--text-tertiary)' }}>Vacío</span>
                 </div>
               ))
             )}
@@ -516,12 +516,12 @@ export default function Inicio() {
                 { label: 'CPU', val: ss.cpu, unit: '%', color: '#E11D48' },
                 { label: 'RAM', val: ss.ram, unit: '%', color: '#F59E0B' },
                 { label: 'DISCO', val: ss.disk, unit: '%', color: '#8B5CF6' },
-                { label: 'TEMP', val: ss.temp, unit: 'Â°C', color: '#3B82F6' },
+                { label: 'TEMP', val: ss.temp, unit: '°C', color: '#3B82F6' },
               ].map(m => (
                 <div key={m.label} style={{ background: 'var(--bg-deep)', borderRadius: 8, padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 4, border: '1px solid var(--border-subtle)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.04em' }}>{m.label}</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: m.color, fontFamily: "'Share Tech Mono', monospace" }}>{m.label === 'TEMP' ? `${m.val}Â°C` : `${m.val}%`}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: m.color, fontFamily: "'Share Tech Mono', monospace" }}>{m.label === 'TEMP' ? `${m.val}°C` : `${m.val}%`}</span>
                   </div>
                   <div style={{ height: 4, borderRadius: 2, background: 'var(--bg-base)', overflow: 'hidden' }}>
                     <div style={{ height: '100%', borderRadius: 2, background: m.color, width: `${m.label === 'TEMP' ? Math.round((m.val / 80) * 100) : m.val}%`, boxShadow: `0 0 6px ${m.color}40`, transition: 'width 600ms cubic-bezier(0.16, 1, 0.3, 1)' }} />
@@ -532,7 +532,7 @@ export default function Inicio() {
           </div>
           <div onClick={() => setDetailStat('all')} style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--border-soft)', cursor: 'pointer', transition: 'all 150ms' }}>
             <Wifi size={12} style={{ color: '#3B82F6' }} />
-            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)' }}>Conectado Â· 42.4 Mbps</span>
+            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)' }}>Conectado · 42.4 Mbps</span>
             <span style={{ marginLeft: 'auto', fontSize: 9, color: 'var(--text-tertiary)', fontFamily: "'Share Tech Mono', monospace" }}>Ver detalles â†’</span>
           </div>
         </div>
@@ -549,7 +549,7 @@ export default function Inicio() {
                 </div>
                 <div>
                   <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Sistema</h2>
-                  <p style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>DiagnÃ³stico en tiempo real</p>
+                  <p style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>Diagnóstico en tiempo real</p>
                 </div>
               </div>
               <button onClick={() => setDetailStat(null)} style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-tertiary)', cursor: 'pointer' }}><span style={{ fontSize: 14 }}>âœ•</span></button>
@@ -591,7 +591,7 @@ export default function Inicio() {
                 </div>
                 <div>
                   <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{dc.label}</h2>
-                  <p style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>DiagnÃ³stico en tiempo real</p>
+                  <p style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>Diagnóstico en tiempo real</p>
                 </div>
               </div>
               <button onClick={() => setDetailStat(null)} style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-tertiary)', cursor: 'pointer' }}><span style={{ fontSize: 14 }}>âœ•</span></button>

@@ -50,6 +50,7 @@ export default function Musica() {
     clearAllMusicData,
     addNotification,
     importLocalTracks,
+    downloadPath: persistentDownloadPath, setDownloadPathCtx,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<TabId>('biblioteca');
@@ -58,7 +59,6 @@ export default function Musica() {
   const [isLoading, setIsLoading] = useState(false);
   const [preview, setPreview] = useState<YouTubePlaylist | YouTubeMetadata | null>(null);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
-  const [downloadPath, setDownloadPathState] = useState('');
   const [showAllLibrary, setShowAllLibrary] = useState(false);
   const [showAllRecents, setShowAllRecents] = useState(false);
   const [audioFormat, setAudioFormat] = useState<'mp3' | 'm4a'>('mp3');
@@ -69,6 +69,7 @@ export default function Musica() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [confirmDeleteText, setConfirmDeleteText] = useState('');
+  const [showClearAllConfirm, setShowClearAllConfirm] = useState(false);
   const [statsPeriod, setStatsPeriod] = useState<'week' | 'month'>('week');
   const [chartTooltip, setChartTooltip] = useState<{ text: string; date: string; x: number; y: number } | null>(null);
   const [editingArtistId, setEditingArtistId] = useState<string | null>(null);
@@ -111,16 +112,11 @@ export default function Musica() {
     return `${h}h ${m}m`;
   }, []);
 
-  useEffect(() => {
-    getDownloadPath().then(setDownloadPathState).catch(() => { });
-  }, []);
-
   const handleSelectFolder = useCallback(async () => {
     try {
       const folder = await open({ directory: true, multiple: false, title: 'Carpeta de descargas' });
       if (folder) {
-        setDownloadPathState(String(folder));
-        await setDownloadPath(String(folder));
+        setDownloadPathCtx(String(folder));
         addNotification('Carpeta de descarga actualizada', 'success');
       }
     } catch {
@@ -133,8 +129,8 @@ export default function Musica() {
         input.addEventListener('change', () => {
           if (input.files && input.files.length > 0) {
             const path = input.files[0].webkitRelativePath.split('/')[0];
-            setDownloadPathState(path || 'Descargas/OWA Music');
-            addNotification('Carpeta seleccionada (solo visible en esta sesiÃ³n)', 'success');
+            setDownloadPathCtx(path || 'Descargas/OWA Music');
+            addNotification('Carpeta seleccionada (solo visible en esta sesión)', 'success');
           }
         });
         document.body.appendChild(input);
@@ -199,7 +195,7 @@ export default function Musica() {
   const handleDownloadAll = async () => {
     if (!preview) return;
     const entries = getEntries(preview);
-    const path = downloadPath;
+    const path = persistentDownloadPath;
 
     for (const entry of entries) {
       const dlItemId = addToDownloadQueue({
@@ -241,7 +237,7 @@ export default function Musica() {
 
     updateDownloadStatus(dlItemId, 'downloading');
     try {
-      await startDownload(entry.webpage_url, dlItemId, downloadPath, audioFormat, includeCover);
+      await startDownload(entry.webpage_url, dlItemId, persistentDownloadPath, audioFormat, includeCover);
       updateDownloadStatus(dlItemId, 'completed');
       addNotification(`"${entry.title}" descargada`, 'success');
     } catch (e) {
@@ -355,7 +351,7 @@ export default function Musica() {
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, paddingTop: 8 }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <h1 style={{ fontSize: 32, fontWeight: 700, color: 'var(--accent)', lineHeight: 1.15, letterSpacing: '-0.02em', fontFamily: "'Outfit', sans-serif", textShadow: '0 0 20px var(--accent-glow)' }}>MÃºsica</h1>
+            <h1 style={{ fontSize: 32, fontWeight: 700, color: 'var(--accent)', lineHeight: 1.15, letterSpacing: '-0.02em', fontFamily: "'Inter Tight', sans-serif", textShadow: '0 0 20px var(--accent-glow)' }}>Música</h1>
             <div style={{ display: 'flex', alignItems: 'center', gap: 3, color: 'var(--text-tertiary)' }}>
               <div style={{ width: 3, height: 12, background: 'var(--text-secondary)', borderRadius: 2 }} />
               <div style={{ width: 3, height: 18, background: 'var(--accent)', borderRadius: 2 }} />
@@ -363,7 +359,7 @@ export default function Musica() {
               <div style={{ width: 3, height: 14, background: 'var(--text-tertiary)', borderRadius: 2 }} />
             </div>
           </div>
-          <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 6, fontWeight: 500 }}>Tu mÃºsica, tu enfoque.</p>
+          <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 6, fontWeight: 500 }}>Tu Música, tu enfoque.</p>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -397,10 +393,10 @@ export default function Musica() {
             <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#10B981', boxShadow: '0 0 8px rgba(16,185,129,0.5)', position: 'relative', zIndex: 1 }} />
             <div style={{ textAlign: 'right', position: 'relative', zIndex: 1 }}>
               <div className="flex items-baseline gap-2 justify-end">
-                <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: 68, fontWeight: 200, lineHeight: 0.9, color: 'var(--accent)', letterSpacing: '0.02em', textShadow: '0 0 20px var(--accent-glow)' }}>
+                <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 68, fontWeight: 200, lineHeight: 0.9, color: 'var(--accent)', letterSpacing: '0.02em', textShadow: '0 0 20px var(--accent-glow)' }}>
                   {timeStr}
                 </span>
-                <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: 22, fontWeight: 200, color: 'var(--accent)', opacity: 0.7, letterSpacing: '0.02em' }}>
+                <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 22, fontWeight: 200, color: 'var(--accent)', opacity: 0.7, letterSpacing: '0.02em' }}>
                   {secondsStr}
                 </span>
               </div>
@@ -473,7 +469,7 @@ export default function Musica() {
             </button>
 
             <button onClick={() => setActiveTab('explorar')} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 8, height: 38, borderRadius: 10, fontSize: 12, fontWeight: 700, padding: '0 18px', boxShadow: '0 4px 15px var(--accent-dim)' }}>
-              <Plus size={16} /> AÃ±adir <ChevronDown size={12} style={{ marginLeft: 2 }} />
+              <Plus size={16} /> Añadir <ChevronDown size={12} style={{ marginLeft: 2 }} />
             </button>
           </div>
         </div>
@@ -490,7 +486,7 @@ export default function Musica() {
             {[
               { label: 'Canciones', val: tracks.length, sub: 'en tu biblioteca', icon: Music, color: 'var(--accent)' },
               { label: 'Favoritas', val: tracks.filter(t => t.isFavorite).length, sub: 'guardadas', icon: Heart, color: '#10B981' },
-              { label: 'Hoy', val: formatHm(musicListeningTime), sub: 'escuchando mÃºsica', icon: Activity, color: '#F59E0B' },
+              { label: 'Hoy', val: formatHm(musicListeningTime), sub: 'escuchando Música', icon: Activity, color: '#F59E0B' },
             ].map((s, i) => (
               <div key={i} className="bento-card" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -511,7 +507,7 @@ export default function Musica() {
           {activeTab === 'artistas' && (
             <div>
               {!selectedArtist ? (
-                <div className="bento-card" style={{ padding: '24px' }}>
+                <div className="bento-card" style={{ padding: '24px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                     <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>Tus Artistas</h3>
                     <div style={{ display: 'flex', gap: 8 }}>
@@ -522,7 +518,7 @@ export default function Musica() {
                     {artists.map(artist => {
                       const artistTracks = tracks.filter(t => t.artist === artist.name);
                       return (
-                        <div key={artist.id} className="bento-card hover-lift" style={{ padding: 20, border: '1px solid var(--border-subtle)', transition: 'all 200ms', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, position: 'relative' }}>
+                        <div key={artist.id} className="bento-card hover-lift" style={{ padding: 20, border: '1px solid var(--border-subtle)', transition: 'all 200ms', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, position: 'relative', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
                           <div onClick={() => setSelectedArtist(artist.name)} style={{ width: 80, height: 80, borderRadius: '50%', background: artist.profileImage ? 'var(--bg-surface)' : 'linear-gradient(135deg, var(--accent), #3B82F6)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 24, fontWeight: 700, boxShadow: '0 4px 12px rgba(0,0,0,0.3)', cursor: 'pointer', overflow: 'hidden' }}>
                             {artist.profileImage ? <img src={artist.profileImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : artist.name.slice(0, 2).toUpperCase()}
                           </div>
@@ -532,7 +528,7 @@ export default function Musica() {
                           </div>
                           <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 4 }}>
                             <button onClick={(e) => { e.stopPropagation(); setEditingArtistId(artist.id); setEditArtistName(artist.name); setEditArtistImage(artist.profileImage || ''); }} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: '50%', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-tertiary)', cursor: 'pointer' }}><Edit2 size={12} /></button>
-                            <button onClick={(e) => { e.stopPropagation(); if (confirm(`Â¿Borrar artista "${artist.name}"?`)) deleteArtist(artist.id); }} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: '50%', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--error)', cursor: 'pointer' }}><Trash2 size={12} /></button>
+                            <button onClick={(e) => { e.stopPropagation(); if (confirm(`¿Borrar artista "${artist.name}"?`)) deleteArtist(artist.id); }} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: '50%', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--error)', cursor: 'pointer' }}><Trash2 size={12} /></button>
                           </div>
                         </div>
                       );
@@ -540,7 +536,7 @@ export default function Musica() {
                     {artists.length === 0 && (
                       <div style={{ gridColumn: '1 / -1', padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)', borderRadius: 12, border: '1px dashed var(--border-subtle)' }}>
                         <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)' }}>No tienes artistas guardados</div>
-                        <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>Puedes agregar artistas desde el modal de Editar CanciÃ³n.</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>Puedes agregar artistas desde el modal de Editar Canción.</div>
                       </div>
                     )}
                   </div>
@@ -604,7 +600,7 @@ export default function Musica() {
 
           {/* RECIENTES ALBUMS GRID */}
           {(activeTab === 'biblioteca' || activeTab === 'favoritas') && (
-            <div className="bento-card" style={{ padding: '20px 24px' }}>
+            <div className="bento-card" style={{ padding: '20px 24px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                 <div className="section-header" style={{ marginBottom: 0, fontSize: 13, color: 'var(--text-primary)' }}>Recientes</div>
                 <span onClick={() => setShowAllRecents(!showAllRecents)} className="text-accent" style={{ fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{showAllRecents ? 'Ver menos' : 'Ver todo'}</span>
@@ -612,7 +608,7 @@ export default function Musica() {
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16 }}>
                 {recentTracks.length > 0 ? recentTracks.slice(0, showAllRecents ? 10 : 5).map((track, i) => (
-                  <div key={track.id} onClick={() => playTrack(track.id)} className="bento-card" style={{ padding: 12, cursor: 'pointer', transition: 'all 200ms' }} onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-4px)'} onMouseLeave={e => e.currentTarget.style.transform = ''}>
+                  <div key={track.id} onClick={() => playTrack(track.id)} className="bento-card" style={{ padding: 12, cursor: 'pointer', transition: 'all 200ms', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }} onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-4px)'} onMouseLeave={e => e.currentTarget.style.transform = ''}>
                     <div style={{ width: '100%', aspectRatio: '1/1', borderRadius: 8, overflow: 'hidden', marginBottom: 12, position: 'relative', boxShadow: '0 4px 12px rgba(0,0,0,0.5)', background: 'var(--bg-surface)' }}>
                       {track.coverImage ? <img src={track.coverImage} alt={track.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={24} style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', color: 'var(--text-muted)', opacity: 0.3 }} />}
                       <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)', opacity: 0, transition: 'opacity 200ms', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onMouseEnter={e => e.currentTarget.style.opacity = '1'} onMouseLeave={e => e.currentTarget.style.opacity = '0'}>
@@ -627,8 +623,8 @@ export default function Musica() {
                 )) : (
                   <div style={{ gridColumn: '1 / -1', padding: '30px 20px', textAlign: 'center', color: 'var(--text-muted)', borderRadius: 12, border: '1px dashed var(--border-subtle)' }}>
                     <Music size={28} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
-                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>No hay canciones aÃºn</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>Sube mÃºsica desde "Explorar" o "Subir audio local"</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>No hay canciones Aún</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>Sube Música desde "Explorar" o "Subir audio local"</div>
                   </div>
                 )}
               </div>
@@ -637,7 +633,7 @@ export default function Musica() {
 
           {/* SONGS TABLE / CARDS GRID */}
           {(activeTab === 'biblioteca' || activeTab === 'favoritas') && (
-            <div className="bento-card" style={{ padding: '20px 24px' }}>
+            <div className="bento-card" style={{ padding: '20px 24px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                 <span className="section-header" style={{ marginBottom: 0, fontSize: 14, color: 'var(--text-primary)' }}>
                   {activeTab === 'favoritas' ? 'Tus Canciones Favoritas' : 'Biblioteca de Canciones'} ({displayTracks.length})
@@ -679,9 +675,9 @@ export default function Musica() {
                 <>
                   <div style={{ display: 'grid', gridTemplateColumns: '40px 3.5fr 1.5fr 80px 130px', padding: '0 12px 12px', borderBottom: '1px solid var(--border-subtle)', fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
                     <span></span>
-                    <span>TÃ­tulo</span>
+                    <span>Título</span>
                     <span>Artista</span>
-                    <span>DuraciÃ³n</span>
+                    <span>Duración</span>
                     <span style={{ textAlign: 'right' }}>Acciones</span>
                   </div>
 
@@ -725,7 +721,7 @@ export default function Musica() {
                           <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)', whiteSpace: 'nowrap', textAlign: 'left' }}>{formatTime(track.duration)}</div>
 
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
-                            <button onClick={(e) => { e.stopPropagation(); toggleTrackFavorite(track.id); }} className="btn-ghost" style={{ padding: 6, color: track.isFavorite ? 'var(--accent)' : 'var(--text-tertiary)' }} title={track.isFavorite ? 'Quitar de favoritos' : 'AÃ±adir a favoritos'}>
+                            <button onClick={(e) => { e.stopPropagation(); toggleTrackFavorite(track.id); }} className="btn-ghost" style={{ padding: 6, color: track.isFavorite ? 'var(--accent)' : 'var(--text-tertiary)' }} title={track.isFavorite ? 'Quitar de favoritos' : 'Añadir a favoritos'}>
                               <Heart size={16} style={{ fill: track.isFavorite ? 'var(--accent)' : 'transparent' }} />
                             </button>
 
@@ -735,13 +731,13 @@ export default function Musica() {
                               setEditTitle(track.title);
                               setEditArtist(track.artist);
                               setEditCover(track.coverImage || '');
-                            }} className="btn-ghost" style={{ padding: 6, color: 'var(--text-tertiary)' }} title="Editar canciÃ³n">
+                            }} className="btn-ghost" style={{ padding: 6, color: 'var(--text-tertiary)' }} title="Editar canción">
                               <Edit2 size={14} />
                             </button>
                             <button onClick={(e) => {
                               e.stopPropagation();
                               setConfirmDelete(track.id);
-                            }} className="btn-ghost" style={{ padding: 6, color: 'var(--text-tertiary)' }} title="Eliminar canciÃ³n">
+                            }} className="btn-ghost" style={{ padding: 6, color: 'var(--text-tertiary)' }} title="Eliminar canción">
                               <Trash2 size={14} />
                             </button>
                           </div>
@@ -751,7 +747,7 @@ export default function Musica() {
                       <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
                         <Music size={32} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
                         <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)' }}>No hay canciones</div>
-                        <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>AÃ±ade mÃºsica desde Explorar o sube audio local</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>Añade Música desde Explorar o sube audio local</div>
                       </div>
                     )}
                   </div>
@@ -781,10 +777,10 @@ export default function Musica() {
                         </div>
                         <div>
                           <div style={{ fontSize: 14, fontWeight: 600, color: isPlaying ? 'var(--accent)' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{track.title}</div>
-                          <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>{track.artist} Â· {formatTime(track.duration)}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>{track.artist} · {formatTime(track.duration)}</div>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-subtle)', paddingTop: 12, marginTop: 'auto' }}>
-                          <button onClick={(e) => { e.stopPropagation(); toggleTrackFavorite(track.id); }} className="btn-ghost" style={{ padding: 6, color: track.isFavorite ? 'var(--accent)' : 'var(--text-tertiary)' }} title={track.isFavorite ? 'Quitar de favoritos' : 'AÃ±adir a favoritos'}>
+                          <button onClick={(e) => { e.stopPropagation(); toggleTrackFavorite(track.id); }} className="btn-ghost" style={{ padding: 6, color: track.isFavorite ? 'var(--accent)' : 'var(--text-tertiary)' }} title={track.isFavorite ? 'Quitar de favoritos' : 'Añadir a favoritos'}>
                             <Heart size={16} style={{ fill: track.isFavorite ? 'var(--accent)' : 'transparent' }} />
                           </button>
                           <div style={{ display: 'flex', gap: 4 }}>
@@ -795,13 +791,13 @@ export default function Musica() {
                               setEditTitle(track.title);
                               setEditArtist(track.artist);
                               setEditCover(track.coverImage || '');
-                            }} className="btn-ghost" style={{ padding: 6, color: 'var(--text-tertiary)' }} title="Editar canciÃ³n">
+                            }} className="btn-ghost" style={{ padding: 6, color: 'var(--text-tertiary)' }} title="Editar canción">
                               <Edit2 size={14} />
                             </button>
                             <button onClick={(e) => {
                               e.stopPropagation();
                               setConfirmDelete(track.id);
-                            }} className="btn-ghost" style={{ padding: 6, color: 'var(--text-tertiary)' }} title="Eliminar canciÃ³n">
+                            }} className="btn-ghost" style={{ padding: 6, color: 'var(--text-tertiary)' }} title="Eliminar canción">
                               <Trash2 size={14} />
                             </button>
                           </div>
@@ -812,7 +808,7 @@ export default function Musica() {
                     <div style={{ gridColumn: '1 / -1', padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
                       <Music size={32} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
                       <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)' }}>No hay canciones</div>
-                      <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>AÃ±ade mÃºsica desde Explorar o sube audio local</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>Añade Música desde Explorar o sube audio local</div>
                     </div>
                   )}
                 </div>
@@ -822,10 +818,10 @@ export default function Musica() {
 
           {/* EXPLORAR & DESCARGAR SECTION (CUSTOM YT/SPOTIFY SCRAPER) */}
           {activeTab === 'explorar' && (
-            <div className="bento-card" style={{ padding: '24px 28px', border: '1px solid var(--accent-glow)' }}>
+            <div className="bento-card" style={{ padding: '24px 28px', border: '1px solid var(--accent-glow)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                 <div>
-                  <div className="section-header" style={{ marginBottom: 4, fontSize: 14, color: 'var(--text-primary)' }}>Explorar & Descargar MÃºsica</div>
+                  <div className="section-header" style={{ marginBottom: 4, fontSize: 14, color: 'var(--text-primary)' }}>Explorar & Descargar Música</div>
                   <p style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Importa canciones o playlists completas desde YouTube mediante Owa Downloader.</p>
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
@@ -837,7 +833,7 @@ export default function Musica() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 8, marginBottom: 16 }}>
                   <AlertCircle size={18} style={{ color: '#F59E0B', flexShrink: 0 }} />
                   <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                    <strong>Las descargas requieren la app de escritorio.</strong> EstÃ¡s en modo web. Para descargar canciones con yt-dlp, ejecuta <code style={{ background: 'rgba(0,0,0,0.3)', padding: '2px 6px', borderRadius: 4, fontSize: 11 }}>npm run tauri dev</code>
+                    <strong>Las descargas requieren la app de escritorio.</strong> Estás en modo web. Para descargar canciones con yt-dlp, ejecuta <code style={{ background: 'rgba(0,0,0,0.3)', padding: '2px 6px', borderRadius: 4, fontSize: 11 }}>npm run tauri dev</code>
                   </div>
                 </div>
               )}
@@ -929,7 +925,7 @@ export default function Musica() {
 
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                   <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Destino:</span>
-                  <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>{downloadPath || 'Descargas/OWA Music'}</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>{persistentDownloadPath || 'Descargas/OWA Music'}</span>
                   <button
                     onClick={handleSelectFolder}
                     className="btn-ghost" style={{ padding: 6, background: 'var(--bg-surface)', borderRadius: 6, border: '1px solid var(--border-default)' }}
@@ -951,7 +947,7 @@ export default function Musica() {
               {searchResults.length > 0 && !isLoading && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Resultados de BÃºsqueda ({searchResults.length})</div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Resultados de Búsqueda ({searchResults.length})</div>
                     <button onClick={() => setSearchResults([])} className="btn-ghost" style={{ padding: 4 }}><X size={14} /></button>
                   </div>
                   {searchResults.map((r, i) => (
@@ -961,7 +957,7 @@ export default function Musica() {
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title}</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>{r.channel} Â· {formatDuration(r.duration)}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>{r.channel} · {formatDuration(r.duration)}</div>
                       </div>
                       <div style={{ display: 'flex', gap: 6 }}>
                         <button onClick={() => window.open(r.webpage_url, '_blank')} className="btn-secondary" style={{ padding: '6px 12px', height: 32, fontSize: 11, display: 'flex', alignItems: 'center', gap: 6 }}><Play size={12} /> YouTube</button>
@@ -982,7 +978,7 @@ export default function Musica() {
                     </div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--accent)', marginBottom: 6 }}>{isPlaylist(preview) ? 'Playlist de YouTube' : 'Video de YouTube'}</div>
-                      <h3 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>{preview.title || 'Sin tÃ­tulo'}</h3>
+                      <h3 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>{preview.title || 'Sin título'}</h3>
                       <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>{preview.channel}</div>
                       <div style={{ display: 'flex', gap: 12 }}>
                         <button onClick={handleDownloadAll} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, height: 36 }}>
@@ -1020,12 +1016,12 @@ export default function Musica() {
 
         </div>
 
-        {/* RIGHT COLUMN (REPRODUCIENDO, COLA, ESTADÃSTICAS) */}
+        {/* RIGHT COLUMN (REPRODUCIENDO, COLA, ESTADÍSTICAS) */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
 
           {/* REPRODUCIENDO CARD */}
           {currentTrack ? (
-            <div className="bento-card" style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', border: isPlayingMusic ? '1px solid var(--accent)' : '1px solid var(--border-default)', boxShadow: isPlayingMusic ? '0 8px 32px var(--accent-glow)' : 'none', transition: 'all 300ms' }}>
+            <div className="bento-card" style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', border: isPlayingMusic ? '1px solid var(--accent)' : '1px solid var(--border-default)', boxShadow: isPlayingMusic ? '0 8px 32px var(--accent-glow)' : 'none', transition: 'all 300ms', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
               <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <div style={{ width: 8, height: 8, borderRadius: '50%', background: isPlayingMusic ? 'var(--accent)' : 'var(--text-muted)', boxShadow: isPlayingMusic ? '0 0 8px var(--accent)' : 'none', animation: isPlayingMusic ? 'pulseGlow 1.5s infinite' : 'none' }} />
@@ -1095,23 +1091,23 @@ export default function Musica() {
               </div>
             </div>
           ) : (
-            <div className="bento-card" style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, border: '1px dashed var(--border-subtle)' }}>
+            <div className="bento-card" style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, border: '1px dashed var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
               <Music size={32} style={{ color: 'var(--text-muted)', opacity: 0.4 }} />
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)' }}>Tiempo hoy</div>
                 <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-primary)', marginTop: 4 }}>{formatTime(musicListeningTime)}</div>
-                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>de estudio con mÃºsica</div>
+                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>de estudio con Música</div>
               </div>
               <div style={{ width: '100%', borderTop: '1px solid var(--border-subtle)', paddingTop: 16, textAlign: 'center', fontSize: 11, color: 'var(--text-tertiary)' }}>
-                Selecciona una canciÃ³n para empezar
+                Selecciona una canción para empezar
               </div>
             </div>
           )}
 
           {/* COLA DE REPRODUCCIÃ“N */}
-          <div className="bento-card" style={{ padding: '20px', border: '1px solid var(--border-subtle)', position: 'relative', overflow: 'hidden' }}>
+          <div className="bento-card" style={{ padding: '20px', border: '1px solid var(--border-subtle)', position: 'relative', overflow: 'hidden', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <span className="section-header" style={{ marginBottom: 0, fontSize: 12, color: 'var(--text-primary)' }}>Cola de reproducciÃ³n</span>
+              <span className="section-header" style={{ marginBottom: 0, fontSize: 12, color: 'var(--text-primary)' }}>Cola de Reproducción</span>
               {musicQueue.length > 0 && (
                 <span onClick={() => setMusicQueue([])} style={{ fontSize: 11, color: 'var(--text-tertiary)', cursor: 'pointer' }} className="hover:text-white">Borrar</span>
               )}
@@ -1157,10 +1153,10 @@ export default function Musica() {
             )}
           </div>
 
-          {/* ESTADÃSTICAS DE ESCUCHA */}
-          <div className="bento-card" style={{ padding: '20px' }}>
+          {/* ESTADÍSTICAS DE ESCUCHA */}
+          <div className="bento-card" style={{ padding: '20px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <span className="section-header" style={{ marginBottom: 0, fontSize: 12, color: 'var(--text-primary)' }}>EstadÃ­sticas de escucha</span>
+              <span className="section-header" style={{ marginBottom: 0, fontSize: 12, color: 'var(--text-primary)' }}>Estadísticas de escucha</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '3px', borderRadius: 6, border: '1px solid var(--border-subtle)' }}>
                 <button onClick={() => setStatsPeriod('week')} style={{ padding: '3px 8px', borderRadius: 4, border: 'none', background: statsPeriod === 'week' ? 'var(--accent)' : 'transparent', color: statsPeriod === 'week' ? '#fff' : 'var(--text-tertiary)', cursor: 'pointer', fontSize: 10, fontWeight: 600 }}>Semana</button>
                 <button onClick={() => setStatsPeriod('month')} style={{ padding: '3px 8px', borderRadius: 4, border: 'none', background: statsPeriod === 'month' ? 'var(--accent)' : 'transparent', color: statsPeriod === 'month' ? '#fff' : 'var(--text-tertiary)', cursor: 'pointer', fontSize: 10, fontWeight: 600 }}>Mes</button>
@@ -1260,13 +1256,13 @@ export default function Musica() {
 
           {/* DOWNLOADS CARD */}
           {downloadQueue.length > 0 && (
-            <div className="bento-card" style={{ padding: '16px' }}>
+            <div className="bento-card" style={{ padding: '16px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                 <span className="section-header" style={{ marginBottom: 0, fontSize: 12, color: 'var(--text-primary)' }}>Descargas</span>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>
                     {downloadQueue.filter(d => d.status === 'queued').length} en cola
-                    {downloadQueue.some(d => d.status === 'downloading') ? ` Â· ${Math.round(downloadQueue.filter(d => d.status === 'downloading').reduce((a, d) => a + d.progress * 100, 0) / Math.max(1, downloadQueue.filter(d => d.status === 'downloading').length))}%` : ''}
+                    {downloadQueue.some(d => d.status === 'downloading') ? ` · ${Math.round(downloadQueue.filter(d => d.status === 'downloading').reduce((a, d) => a + d.progress * 100, 0) / Math.max(1, downloadQueue.filter(d => d.status === 'downloading').length))}%` : ''}
                   </span>
                   {completedDownloads.length > 0 && (
                     <button onClick={clearCompletedDownloads} className="btn-ghost" style={{ fontSize: 10, padding: '2px 6px', color: 'var(--text-tertiary)' }}>Limpiar</button>
@@ -1326,11 +1322,11 @@ export default function Musica() {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
         }} onClick={() => setEditingTrackId(null)}>
-          <div className="bento-card" style={{ padding: 28, width: 340, maxWidth: '90vw' }} onClick={e => e.stopPropagation()}>
-            <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 16 }}>Editar CanciÃ³n</h3>
+          <div className="bento-card" style={{ padding: 28, width: 340, maxWidth: '90vw', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 16 }}>Editar Canción</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>TÃ­tulo</label>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>Título</label>
                 <input value={editTitle} onChange={e => setEditTitle(e.target.value)} className="input-base" style={{ width: '100%', height: 38, fontSize: 12 }} />
               </div>
               <div>
@@ -1415,7 +1411,7 @@ export default function Musica() {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
         }} onClick={() => setEditingArtistId(null)}>
-          <div className="bento-card" style={{ padding: 28, width: 340, maxWidth: '90vw' }} onClick={e => e.stopPropagation()}>
+          <div className="bento-card" style={{ padding: 28, width: 340, maxWidth: '90vw', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }} onClick={e => e.stopPropagation()}>
             <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 20 }}>Editar Artista</h3>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -1483,7 +1479,7 @@ export default function Musica() {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
         }} onClick={() => { setConfirmDelete(null); setConfirmDeleteText(''); }}>
-          <div className="bento-card" style={{ padding: 28, width: 340, maxWidth: '90vw' }} onClick={e => e.stopPropagation()}>
+          <div className="bento-card" style={{ padding: 28, width: 340, maxWidth: '90vw', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }} onClick={e => e.stopPropagation()}>
             <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>Confirmar eliminacion</h3>
             <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginBottom: 16 }}>
               {tracks.find(t => t.id === confirmDelete)
@@ -1491,21 +1487,21 @@ export default function Musica() {
                 : 'Se eliminara esta playlist de tu biblioteca.'}
             </p>
             <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
-              Escribe <strong style={{ color: 'var(--error)' }}>Deseoeliminartodo</strong> para confirmar:
+              Escribe <strong style={{ color: 'var(--error)' }}>Deseoborrartodo</strong> para confirmar:
             </p>
             <input type="text" value={confirmDeleteText} onChange={e => setConfirmDeleteText(e.target.value)}
-              placeholder="Escribe Deseoeliminartodo"
+              placeholder="Escribe Deseoborrartodo"
               style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-deep)', color: 'var(--text-primary)', fontSize: 12, outline: 'none', marginBottom: 16 }} />
             <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
               <button onClick={() => { setConfirmDelete(null); setConfirmDeleteText(''); }} className="btn-secondary" style={{ height: 38, padding: '0 20px', fontSize: 12 }}>
                 Cancelar
               </button>
               <button onClick={() => {
-                if (confirmDeleteText !== 'Deseoeliminartodo') return;
+                if (confirmDeleteText !== 'Deseoborrartodo') return;
                 deleteTrack(confirmDelete);
                 setConfirmDelete(null);
                 setConfirmDeleteText('');
-              }} className="btn-primary" style={{ height: 38, padding: '0 20px', fontSize: 12, background: confirmDeleteText === 'Deseoeliminartodo' ? 'var(--error)' : 'var(--bg-deep)', borderColor: confirmDeleteText === 'Deseoeliminartodo' ? 'var(--error)' : 'var(--border-default)', opacity: confirmDeleteText === 'Deseoeliminartodo' ? 1 : 0.4, cursor: confirmDeleteText === 'Deseoeliminartodo' ? 'pointer' : 'not-allowed' }}>
+              }} className="btn-primary" style={{ height: 38, padding: '0 20px', fontSize: 12, background: confirmDeleteText === 'Deseoborrartodo' ? 'var(--error)' : 'var(--bg-deep)', borderColor: confirmDeleteText === 'Deseoborrartodo' ? 'var(--error)' : 'var(--border-default)', opacity: confirmDeleteText === 'Deseoborrartodo' ? 1 : 0.4, cursor: confirmDeleteText === 'Deseoborrartodo' ? 'pointer' : 'not-allowed' }}>
                 Eliminar
               </button>
             </div>

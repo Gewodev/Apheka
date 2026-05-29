@@ -73,9 +73,9 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
   };
 
   // Course custom local state or fallbacks if not in Course interface
-  const courseDescription = selectedCourse?.description || 'DescripciÃ³n breve del curso, objetivos principales y lo que aprenderÃ¡s durante el semestre.';
+  const courseDescription = selectedCourse?.description || 'Descripción breve del curso, objetivos principales y lo que aprenderás durante el semestre.';
   const courseLevel = selectedCourse?.level || 'Nivel Intermedio';
-  const courseCredits = selectedCourse?.credits || '5 CrÃ©ditos';
+  const courseCredits = selectedCourse?.credits || '5 Créditos';
   const courseCode = selectedCourse?.code || 'MAT-401';
   const courseTeacher = selectedCourse?.teacher || 'Dr. Alexander Wright';
 
@@ -90,24 +90,24 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
   // Anchored images array matching the screenshot exactly
   const anchoredImages = selectedCourse?.anchoredImages || [
     { id: '1', name: 'Esquema_Estructural_01.png', url: 'https://images.unsplash.com/photo-1544383835-bda2bc66a55d?q=80&w=600&auto=format&fit=crop', date: '2 May 2025', tag: 'Tema 1 - Cabecera' },
-    { id: '2', name: 'Tabla_Formulas_Avanzadas.webp', url: 'https://images.unsplash.com/photo-1509062522246-3755977927d7?q=80&w=600&auto=format&fit=crop', date: '28 Abr 2025', tag: 'FÃ³rmulas Clave' },
+    { id: '2', name: 'Tabla_Formulas_Avanzadas.webp', url: 'https://images.unsplash.com/photo-1509062522246-3755977927d7?q=80&w=600&auto=format&fit=crop', date: '28 Abr 2025', tag: 'Fórmulas Clave' },
     { id: '3', name: 'Diagrama_Flujo_Proyecto.jpg', url: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=600&auto=format&fit=crop', date: '15 Abr 2025', tag: 'Anexo B - Laboratorio' }
   ];
 
   // Resources list matching the screenshot exactly
   const defaultResources = [
-    { id: 'r1', title: 'PÃ¡gina del curso oficial', url: 'https://miscurso.edu/matematica', type: 'link', date: 'Hoy, 14:30' },
+    { id: 'r1', title: 'Página del curso oficial', url: 'https://miscurso.edu/matematica', type: 'link', date: 'Hoy, 14:30' },
     { id: 'r2', title: 'Documentos y Normativas oficiales', url: 'https://docs.miscurso.edu', type: 'doc', date: 'Ayer, 18:45' },
     { id: 'r3', title: 'Biblioteca digital y Repositorio', url: 'https://biblio.miscurso.edu', type: 'link', date: '2 May, 16:20' },
-    { id: 'r4', title: 'Foro de dudas y discusiÃ³n grupal', url: 'https://foro.miscurso.edu', type: 'link', date: '1 May, 20:10' },
+    { id: 'r4', title: 'Foro de dudas y discusión grupal', url: 'https://foro.miscurso.edu', type: 'link', date: '1 May, 20:10' },
   ];
   const resourcesList = selectedCourse?.resources || defaultResources;
 
   // Flashcards / Repaso list matching the screenshot exactly
   const defaultFlashcards = [
-    { id: 'fc1', question: 'Â¿CuÃ¡l es la derivada de e^(2x)?', answer: '2e^(2x)', difficulty: 'bueno' as const, lastReviewed: 'Ayer', nextReview: '4 May' },
-    { id: 'fc2', question: 'Teorema Fundamental del CÃ¡lculo (Parte 1)', answer: 'La integral de la derivada de una funciÃ³n es la funciÃ³n original evaluada en los lÃ­mites.', difficulty: 'dificil' as const, lastReviewed: 'Hace 3 dÃ­as', nextReview: '5 May' },
-    { id: 'fc3', question: 'DefiniciÃ³n de LÃ­mite de una funciÃ³n', answer: 'Para todo Îµ > 0 existe un Î´ > 0 tal que si 0 < |x - c| < Î´ entonces |f(x) - L| < Îµ.', difficulty: 'facil' as const, lastReviewed: 'Hace 5 dÃ­as', nextReview: '10 May' },
+    { id: 'fc1', question: '¿Cuál es la derivada de e^(2x)?', answer: '2e^(2x)', difficulty: 'bueno' as const, lastReviewed: 'Ayer', nextReview: '4 May' },
+    { id: 'fc2', question: 'Teorema Fundamental del Cálculo (Parte 1)', answer: 'La integral de la derivada de una función es la función original evaluada en los límites.', difficulty: 'dificil' as const, lastReviewed: 'Hace 3 días', nextReview: '5 May' },
+    { id: 'fc3', question: 'Definición de Límite de una función', answer: 'Para todo ε > 0 existe un δ > 0 tal que si 0 < |x - c| < δ entonces |f(x) - L| < ε.', difficulty: 'facil' as const, lastReviewed: 'Hace 5 días', nextReview: '10 May' },
   ];
   const flashcards = selectedCourse?.flashcards || defaultFlashcards;
 
@@ -126,9 +126,9 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
   // Sync Edit Form with Selected Course
   useEffect(() => {
     if (selectedCourse) {
-      setEditDesc(selectedCourse.description || 'DescripciÃ³n breve del curso, objetivos principales y lo que aprenderÃ¡s durante el semestre.');
+      setEditDesc(selectedCourse.description || 'Descripción breve del curso, objetivos principales y lo que aprenderás durante el semestre.');
       setEditLevel(selectedCourse.level || 'Nivel Intermedio');
-      setEditCredits(selectedCourse.credits || '5 CrÃ©ditos');
+      setEditCredits(selectedCourse.credits || '5 Créditos');
       setActiveFlashcardIndex(0);
       setShowFlashcardAnswer(false);
     }
@@ -187,7 +187,7 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
   };
 
   const handleCreateTask = () => {
-    if (!newTaskTitle.trim()) { addNotification('Ingresa un tÃ­tulo para la tarea', 'error'); return; }
+    if (!newTaskTitle.trim()) { addNotification('Ingresa un título para la tarea', 'error'); return; }
     addTask({
       title: newTaskTitle.trim(),
       course: selectedCourse.name,
@@ -204,7 +204,7 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
   };
 
   const handleCreateNote = () => {
-    if (!newNoteTitle.trim()) { addNotification('Ingresa el tÃ­tulo de la nota', 'error'); return; }
+    if (!newNoteTitle.trim()) { addNotification('Ingresa el título de la nota', 'error'); return; }
     addNote({
       title: newNoteTitle.trim(),
       content: newNoteContent.trim() || '<p>Contenido de la nota...</p>',
@@ -246,7 +246,7 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
 
   const handleAddAnchoredImage = () => {
     if (!newImgName.trim() || !newImgUrl.trim() || !newImgTag.trim()) {
-      addNotification('Completa el nombre, la etiqueta de posiciÃ³n y selecciona una imagen', 'error');
+      addNotification('Completa el nombre, la etiqueta de posición y selecciona una imagen', 'error');
       return;
     }
     const updatedImages = [{
@@ -270,14 +270,14 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
   };
 
   const handleCreateFlashcard = () => {
-    if (!newFcQuestion.trim() || !newFcAnswer.trim()) { addNotification('Ingresa pregunta y respuesta', 'error'); return; }
+    if (!newFcQuestion.trim() || !newFcAnswer.trim()) { addNotification('Ingresa Pregunta y Respuesta', 'error'); return; }
     const newFc = {
       id: Date.now().toString(),
       question: newFcQuestion.trim(),
       answer: newFcAnswer.trim(),
       difficulty: 'bueno' as const,
       lastReviewed: 'Nunca',
-      nextReview: 'MaÃ±ana'
+      nextReview: 'Mañana'
     };
     updateCourse(selectedCourse.id, { flashcards: [...flashcards, newFc] });
     setNewFcQuestion('');
@@ -290,7 +290,7 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
       ...fc,
       difficulty: rating,
       lastReviewed: 'Hoy',
-      nextReview: rating === 'facil' ? 'En 5 dÃ­as' : rating === 'bueno' ? 'En 3 dÃ­as' : 'MaÃ±ana'
+      nextReview: rating === 'facil' ? 'En 5 días' : rating === 'bueno' ? 'En 3 días' : 'Mañana'
     } : fc);
     updateCourse(selectedCourse.id, { flashcards: updatedFcs });
     setShowFlashcardAnswer(false);
@@ -304,7 +304,7 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, paddingTop: 8 }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <h1 style={{ fontSize: 32, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.15, letterSpacing: '-0.02em', fontFamily: "'Outfit', sans-serif" }}>Cursos</h1>
+            <h1 style={{ fontSize: 32, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.15, letterSpacing: '-0.02em', fontFamily: "'Inter Tight', sans-serif" }}>Cursos</h1>
             <GraduationCap size={26} style={{ color: 'var(--accent)' }} />
           </div>
           <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 6, fontWeight: 500 }}>Gestiona tu aprendizaje, domina tu carrera.</p>
@@ -382,9 +382,9 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
                     
                     {/* Progreso */}
-                    <div className="bento-card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div className="bento-card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
                       <div>
-                        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Progreso</div>
+                        <div className="block-title" style={{ marginBottom: 6 }}>Progreso</div>
                         <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-primary)', marginTop: 4 }}>{progressPct}%</div>
                         <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>Completado</div>
                       </div>
@@ -394,9 +394,9 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
                     </div>
 
                     {/* Tareas */}
-                    <div className="bento-card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div className="bento-card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
                       <div>
-                        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Tareas</div>
+                        <div className="block-title" style={{ marginBottom: 6 }}>Tareas</div>
                         <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-primary)', marginTop: 4 }}>{courseTasks.length || 12}</div>
                         <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>{pendingTasksCount || 3} pendientes</div>
                       </div>
@@ -406,9 +406,9 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
                     </div>
 
                     {/* Notas */}
-                    <div className="bento-card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div className="bento-card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
                       <div>
-                        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Notas</div>
+                        <div className="block-title" style={{ marginBottom: 6 }}>Notas</div>
                         <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-primary)', marginTop: 4 }}>{courseNotes.length || 8}</div>
                         <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>Guardadas</div>
                       </div>
@@ -418,9 +418,9 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
                     </div>
 
                     {/* Horas */}
-                    <div className="bento-card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div className="bento-card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
                       <div>
-                        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Horas</div>
+                        <div className="block-title" style={{ marginBottom: 6 }}>Horas</div>
                         <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-primary)', marginTop: 4 }}>24h 30m</div>
                         <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>Estudiadas</div>
                       </div>
@@ -431,20 +431,20 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
 
                   </div>
 
-                  {/* ImÃ¡genes Ancladas Section matching screenshot */}
-                  <div className="bento-card" style={{ padding: '24px 20px', background: 'var(--bg-deep)' }}>
+                  {/* Imágenes Ancladas Section matching screenshot */}
+                  <div className="bento-card" style={{ padding: '24px 20px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                       <h3 style={{ fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-primary)' }}>
-                        <ImageIcon size={20} className="text-accent" /> ImÃ¡genes Ancladas
+                        <ImageIcon size={20} className="text-accent" /> Imágenes Ancladas
                       </h3>
                       <button onClick={() => setShowNewImage(true)} className="btn-secondary hover-lift" style={{ fontSize: 12, fontWeight: 600, padding: '6px 14px', height: 34 }}>
-                        + AÃ±adir
+                        + Añadir
                       </button>
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
                       {anchoredImages.map(img => (
-                        <div key={img.id} className="bento-card" style={{ padding: 12, border: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        <div key={img.id} className="bento-card" style={{ padding: 12, border: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: 10, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
                           <div onClick={() => setPreviewImageUrl(img.url)} style={{ width: '100%', height: 140, borderRadius: 8, overflow: 'hidden', cursor: 'pointer', position: 'relative' }}>
                             <img src={img.url} alt={img.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                             <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 200ms' }} onMouseEnter={e => e.currentTarget.style.opacity = '1'} onMouseLeave={e => e.currentTarget.style.opacity = '0'}>
@@ -464,29 +464,29 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
                   </div>
 
                   {/* Recursos del Curso Section matching screenshot */}
-                  <div className="bento-card" style={{ padding: '24px 20px', background: 'var(--bg-deep)' }}>
+                  <div className="bento-card" style={{ padding: '24px 20px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                       <h3 style={{ fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-primary)' }}>
                         <Globe size={20} className="text-accent" /> Recursos del Curso
                       </h3>
                       <button onClick={() => setShowNewResource(true)} className="btn-secondary hover-lift" style={{ fontSize: 12, fontWeight: 600, padding: '6px 14px', height: 34 }}>
-                        + AÃ±adir
+                        + Añadir
                       </button>
                     </div>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                       {resourcesList.map(res => (
-                        <a key={res.id} href={res.url} target="_blank" rel="noopener noreferrer" className="bento-card" style={{ padding: '14px 16px', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', textDecoration: 'none' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                        <a key={res.id} href={res.url} target="_blank" rel="noopener noreferrer" className="bento-card" style={{ padding: '14px 16px', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', textDecoration: 'none', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0 }}>
                             <div style={{ width: 36, height: 36, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)' }}>
                               {res.type === 'pdf' ? <FileText size={18} className="text-error" /> : res.type === 'doc' ? <File size={18} className="text-info" /> : <Globe size={18} />}
                             </div>
-                            <div>
-                              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{res.title}</div>
-                              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>{res.url}</div>
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{res.title}</div>
+                              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{res.url}</div>
                             </div>
                           </div>
-                          <ExternalLink size={16} style={{ color: 'var(--text-tertiary)' }} />
+                          <ExternalLink size={16} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
                         </a>
                       ))}
                     </div>
@@ -496,14 +496,14 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
 
               {/* TAREAS TAB */}
               {activeTab === 'tareas' && (
-                <div className="bento-card" style={{ padding: '24px 20px', minHeight: 500 }}>
+                <div className="bento-card" style={{ padding: '24px 20px', minHeight: 500, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                       <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--accent-dim)', border: '1px solid var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)' }}>
                         <CheckSquare size={20} />
                       </div>
                       <div>
-                        <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>GestiÃ³n de Tareas</h2>
+                        <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>Gestión de Tareas</h2>
                         <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>Administra las tareas y asignaciones de {selectedCourse.name}</p>
                       </div>
                     </div>
@@ -516,14 +516,14 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
                     {courseTasks.map(task => {
                       const isDone = task.status === 'completado';
                       return (
-                        <div key={task.id} className="bento-card" style={{ padding: '16px', background: isDone ? 'var(--bg-surface)' : 'var(--bg-base)', border: '1px solid var(--border-subtle)', opacity: isDone ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div key={task.id} className="bento-card" style={{ padding: '16px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', borderLeft: '3px solid ' + (task.priority === 'high' ? 'var(--error)' : task.priority === 'medium' ? 'var(--warning)' : 'var(--success)'), display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                             <button onClick={() => toggleTaskStatus(task.id)} style={{ width: 24, height: 24, borderRadius: '50%', border: isDone ? 'none' : '2px solid var(--border-default)', background: isDone ? 'var(--success)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
                               {isDone && <Check size={14} color="#fff" />}
                             </button>
                             <div>
                               <div style={{ fontSize: 14, fontWeight: 600, color: isDone ? 'var(--text-tertiary)' : 'var(--text-primary)', textDecoration: isDone ? 'line-through' : 'none' }}>{task.title}</div>
-                              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>Fecha lÃ­mite: {task.dueDate ? format(new Date(task.dueDate), "d MMMM yyyy", { locale: es }) : 'Sin fecha'}</div>
+                              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>Fecha límite: {task.dueDate ? format(new Date(task.dueDate), "d MMMM yyyy", { locale: es }) : 'Sin fecha'}</div>
                             </div>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -547,7 +547,7 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
 
               {/* NOTAS TAB */}
               {activeTab === 'notas' && (
-                <div className="bento-card" style={{ padding: '24px 20px', minHeight: 500 }}>
+                <div className="bento-card" style={{ padding: '24px 20px', minHeight: 500, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                       <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--accent-dim)', border: '1px solid var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)' }}>
@@ -555,7 +555,7 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
                       </div>
                       <div>
                         <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>Apuntes y Notas</h2>
-                        <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>Registra resÃºmenes, ideas y apuntes de clase de {selectedCourse.name}</p>
+                        <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>Registra resúmenes, ideas y apuntes de clase de {selectedCourse.name}</p>
                       </div>
                     </div>
                     <button onClick={() => setShowNewNote(true)} className="btn-primary hover-lift" style={{ fontSize: 12, fontWeight: 600, padding: '0 16px', height: 38, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -565,7 +565,7 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
                     {courseNotes.map(note => (
-                      <div key={note.id} className="bento-card" style={{ padding: 20, border: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      <div key={note.id} className="bento-card" style={{ padding: 20, border: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: 12, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>{note.title}</h3>
                           <button onClick={() => deleteNote(note.id)} className="btn-ghost" style={{ padding: 4, borderRadius: 6 }}><Trash2 size={14} /></button>
@@ -588,25 +588,25 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
 
               {/* RECURSOS TAB */}
               {activeTab === 'recursos' && (
-                <div className="bento-card" style={{ padding: '24px 20px', minHeight: 500 }}>
+                <div className="bento-card" style={{ padding: '24px 20px', minHeight: 500, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                       <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--accent-dim)', border: '1px solid var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)' }}>
                         <Globe size={20} />
                       </div>
                       <div>
-                        <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>Recursos y BibliografÃ­a</h2>
+                        <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>Recursos y Bibliografía</h2>
                         <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>Enlaces web, bibliotecas digitales y documentos de consulta de {selectedCourse.name}</p>
                       </div>
                     </div>
                     <button onClick={() => setShowNewResource(true)} className="btn-primary hover-lift" style={{ fontSize: 12, fontWeight: 600, padding: '0 16px', height: 38, display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <Plus size={16} /> AÃ±adir recurso
+                      <Plus size={16} /> Añadir recurso
                     </button>
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                     {resourcesList.map(res => (
-                      <div key={res.id} className="bento-card" style={{ padding: '16px', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div key={res.id} className="bento-card" style={{ padding: '16px', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                           <div style={{ width: 40, height: 40, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)' }}>
                             {res.type === 'pdf' ? <FileText size={20} className="text-error" /> : res.type === 'doc' ? <File size={20} className="text-info" /> : <Globe size={20} />}
@@ -630,7 +630,7 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
 
               {/* REPASO TAB */}
               {activeTab === 'repasos' && (
-                <div className="bento-card" style={{ padding: '24px 20px', minHeight: 500 }}>
+                <div className="bento-card" style={{ padding: '24px 20px', minHeight: 500, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                       <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--accent-dim)', border: '1px solid var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)' }}>
@@ -638,7 +638,7 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
                       </div>
                       <div>
                         <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>Repaso Activo (Flashcards)</h2>
-                        <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>Sistema de repeticiÃ³n espaciada para consolidar el aprendizaje de {selectedCourse.name}</p>
+                        <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>Sistema de Repetición espaciada para consolidar el aprendizaje de {selectedCourse.name}</p>
                       </div>
                     </div>
                     <button onClick={() => setShowNewRepaso(true)} className="btn-primary hover-lift" style={{ fontSize: 12, fontWeight: 600, padding: '0 16px', height: 38, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -653,7 +653,7 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
                         <span style={{ color: 'var(--accent)' }}>Dificultad: {flashcards[activeFlashcardIndex]?.difficulty?.toUpperCase() || 'BUENO'}</span>
                       </div>
 
-                      <div onClick={() => setShowFlashcardAnswer(!showFlashcardAnswer)} className="bento-card" style={{ width: '100%', height: 320, border: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 32, cursor: 'pointer', position: 'relative' }}>
+                      <div onClick={() => setShowFlashcardAnswer(!showFlashcardAnswer)} className="bento-card" style={{ width: '100%', height: 320, border: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 32, cursor: 'pointer', position: 'relative', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
                         <div style={{ position: 'absolute', top: 16, right: 16, fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', padding: '6px 12px', borderRadius: 12 }}>
                           Clic para voltear
                         </div>
@@ -674,11 +674,11 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
 
                       {showFlashcardAnswer && (
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, width: '100%' }}>
-                          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)' }}>Â¿QuÃ© tan fÃ¡cil fue recordar la respuesta?</span>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)' }}>¿Qué tan Fácil fue recordar la Respuesta?</span>
                           <div style={{ display: 'flex', gap: 16, width: '100%' }}>
-                            <button onClick={() => handleRateFlashcard('dificil')} style={{ flex: 1, padding: 12, borderRadius: 10, background: 'var(--error-dim)', border: '1px solid var(--error)', color: 'var(--error)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>DifÃ­cil</button>
+                            <button onClick={() => handleRateFlashcard('dificil')} style={{ flex: 1, padding: 12, borderRadius: 10, background: 'var(--error-dim)', border: '1px solid var(--error)', color: 'var(--error)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Difícil</button>
                             <button onClick={() => handleRateFlashcard('bueno')} style={{ flex: 1, padding: 12, borderRadius: 10, background: 'var(--warning-dim)', border: '1px solid var(--warning)', color: 'var(--warning)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Bueno</button>
-                            <button onClick={() => handleRateFlashcard('facil')} style={{ flex: 1, padding: 12, borderRadius: 10, background: 'var(--success-dim)', border: '1px solid var(--success)', color: 'var(--success)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>FÃ¡cil</button>
+                            <button onClick={() => handleRateFlashcard('facil')} style={{ flex: 1, padding: 12, borderRadius: 10, background: 'var(--success-dim)', border: '1px solid var(--success)', color: 'var(--success)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Fácil</button>
                           </div>
                         </div>
                       )}
@@ -702,19 +702,19 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
             {/* RIGHT COLUMN matching screenshot */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
               
-              {/* InformaciÃ³n del Curso Card */}
-              <div className="bento-card" style={{ padding: '24px 20px', background: 'var(--bg-deep)' }}>
+              {/* Información del Curso Card */}
+              <div className="bento-card" style={{ padding: '24px 20px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                  <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>InformaciÃ³n del Curso</h3>
+                  <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>Información del Curso</h3>
                   <button onClick={() => setShowEditCourse(true)} className="btn-ghost" style={{ padding: 6, borderRadius: 8 }}><Edit3 size={16} /></button>
                 </div>
                 <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 20 }}>
                   {courseDescription}
                 </p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }}>
-                  <span style={{ fontSize: 10, fontWeight: 700, padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', letterSpacing: '0.08em' }}>ASIGNATURA</span>
-                  <span style={{ fontSize: 10, fontWeight: 700, padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', letterSpacing: '0.08em' }}>{courseLevel.toUpperCase()}</span>
-                  <span style={{ fontSize: 10, fontWeight: 700, padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', letterSpacing: '0.08em' }}>{courseCredits.toUpperCase()}</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', letterSpacing: '0.08em', background: 'var(--bg-deep)' }}>ASIGNATURA</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', letterSpacing: '0.08em', background: 'var(--bg-deep)' }}>{courseLevel.toUpperCase()}</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', letterSpacing: '0.08em', background: 'var(--bg-deep)' }}>{courseCredits.toUpperCase()}</span>
                 </div>
                 <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{courseTeacher}</div>
@@ -723,7 +723,7 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
               </div>
 
               {/* Tarjetas de Repaso Card matching screenshot */}
-              <div className="bento-card" style={{ padding: '24px 20px', background: 'var(--bg-deep)' }}>
+              <div className="bento-card" style={{ padding: '24px 20px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                   <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>Tarjetas de Repaso</h3>
                   <button onClick={() => setShowNewRepaso(true)} className="btn-ghost" style={{ padding: 6, borderRadius: 8 }}><Plus size={16} /></button>
@@ -731,7 +731,7 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
 
                 {flashcards.length > 0 ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                    <div style={{ padding: '20px 16px', border: '1px solid var(--border-subtle)', borderRadius: 12, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+                    <div style={{ padding: '20px 16px', border: '1px solid var(--border-subtle)', borderRadius: 12, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
                       <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{flashcards[activeFlashcardIndex]?.question}</span>
                       {showFlashcardAnswer && (
                         <div style={{ padding: '12px', borderRadius: 8, fontSize: 12, color: 'var(--success)', fontWeight: 600, width: '100%', marginTop: 8 }}>
@@ -746,9 +746,9 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
                       </button>
                     ) : (
                       <div style={{ display: 'flex', gap: 8 }}>
-                        <button onClick={() => handleRateFlashcard('dificil')} style={{ flex: 1, padding: '8px', borderRadius: 8, background: 'var(--error-dim)', border: '1px solid var(--error)', color: 'var(--error)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>DIFÃCIL</button>
+                        <button onClick={() => handleRateFlashcard('dificil')} style={{ flex: 1, padding: '8px', borderRadius: 8, background: 'var(--error-dim)', border: '1px solid var(--error)', color: 'var(--error)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>DIFÍCIL</button>
                         <button onClick={() => handleRateFlashcard('bueno')} style={{ flex: 1, padding: '8px', borderRadius: 8, background: 'var(--warning-dim)', border: '1px solid var(--warning)', color: 'var(--warning)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>BUENO</button>
-                        <button onClick={() => handleRateFlashcard('facil')} style={{ flex: 1, padding: '8px', borderRadius: 8, background: 'var(--success-dim)', border: '1px solid var(--success)', color: 'var(--success)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>FÃCIL</button>
+                        <button onClick={() => handleRateFlashcard('facil')} style={{ flex: 1, padding: '8px', borderRadius: 8, background: 'var(--success-dim)', border: '1px solid var(--success)', color: 'var(--success)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>FÁCIL</button>
                       </div>
                     )}
                   </div>
@@ -777,7 +777,7 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
       {/* NEW COURSE MODAL */}
       {showNewCourse && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(12px)' }} onClick={() => setShowNewCourse(false)}>
-          <div className="bento-card" style={{ width: 440, padding: 28, border: '1px solid var(--border-subtle)' }} onClick={e => e.stopPropagation()}>
+          <div className="bento-card" style={{ width: 440, padding: 28, border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-primary)' }}>
                 <GraduationCap size={22} className="text-accent" /> Nuevo Curso
@@ -788,7 +788,7 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               <div>
                 <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Nombre del Curso</label>
-                <input type="text" value={newCourseName} onChange={e => setNewCourseName(e.target.value)} placeholder="Ej. Ãlgebra Lineal Avanzada" className="input-base" style={{ width: '100%', height: 40, fontSize: 13 }} autoFocus />
+                <input type="text" value={newCourseName} onChange={e => setNewCourseName(e.target.value)} placeholder="Ej. Álgebra Lineal Avanzada" className="input-base" style={{ width: '100%', height: 40, fontSize: 13 }} autoFocus />
               </div>
 
               <div>
@@ -812,29 +812,29 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
       {/* EDIT COURSE MODAL */}
       {showEditCourse && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(12px)' }} onClick={() => setShowEditCourse(false)}>
-          <div className="bento-card" style={{ width: 440, padding: 28, border: '1px solid var(--border-subtle)' }} onClick={e => e.stopPropagation()}>
+          <div className="bento-card" style={{ width: 440, padding: 28, border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-primary)' }}>
-                <Edit3 size={22} className="text-accent" /> Editar InformaciÃ³n
+                <Edit3 size={22} className="text-accent" /> Editar Información
               </h2>
               <button onClick={() => setShowEditCourse(false)} className="btn-ghost" style={{ padding: 6, borderRadius: '50%' }}><X size={18} /></button>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>DescripciÃ³n del curso</label>
-                <textarea value={editDesc} onChange={e => setEditDesc(e.target.value)} placeholder="DescripciÃ³n breve..." className="input-base" style={{ width: '100%', height: 80, fontSize: 13, padding: 12 }} />
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Descripción del curso</label>
+                <textarea value={editDesc} onChange={e => setEditDesc(e.target.value)} placeholder="Descripción breve..." className="input-base" style={{ width: '100%', height: 80, fontSize: 13, padding: 12 }} />
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Nivel AcadÃ©mico</label>
+                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Nivel Académico</label>
                   <input type="text" value={editLevel} onChange={e => setEditLevel(e.target.value)} placeholder="Ej. Nivel Intermedio" className="input-base" style={{ width: '100%', height: 40, fontSize: 13 }} />
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>CrÃ©ditos</label>
-                  <input type="text" value={editCredits} onChange={e => setEditCredits(e.target.value)} placeholder="Ej. 5 CrÃ©ditos" className="input-base" style={{ width: '100%', height: 40, fontSize: 13 }} />
+                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Créditos</label>
+                  <input type="text" value={editCredits} onChange={e => setEditCredits(e.target.value)} placeholder="Ej. 5 Créditos" className="input-base" style={{ width: '100%', height: 40, fontSize: 13 }} />
                 </div>
               </div>
 
@@ -850,7 +850,7 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
       {/* NEW TASK MODAL */}
       {showNewTask && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(12px)' }} onClick={() => setShowNewTask(false)}>
-          <div className="bento-card" style={{ width: 440, padding: 28, border: '1px solid var(--border-subtle)' }} onClick={e => e.stopPropagation()}>
+          <div className="bento-card" style={{ width: 440, padding: 28, border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-primary)' }}>
                 <CheckSquare size={22} className="text-accent" /> Nueva Tarea
@@ -860,8 +860,8 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>TÃ­tulo de la tarea</label>
-                <input type="text" value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} placeholder="Ej. Resolver guÃ­a de ejercicios..." className="input-base" style={{ width: '100%', height: 40, fontSize: 13 }} autoFocus />
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Título de la tarea</label>
+                <input type="text" value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} placeholder="Ej. Resolver guía de ejercicios..." className="input-base" style={{ width: '100%', height: 40, fontSize: 13 }} autoFocus />
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
@@ -875,7 +875,7 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Fecha lÃ­mite</label>
+                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Fecha límite</label>
                   <input type="date" value={newTaskDueDate} onChange={e => setNewTaskDueDate(e.target.value)} className="input-base" style={{ width: '100%', height: 40, fontSize: 13 }} />
                 </div>
               </div>
@@ -892,7 +892,7 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
       {/* NEW NOTE MODAL */}
       {showNewNote && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(12px)' }} onClick={() => setShowNewNote(false)}>
-          <div className="bento-card" style={{ width: 480, padding: 28, border: '1px solid var(--border-subtle)' }} onClick={e => e.stopPropagation()}>
+          <div className="bento-card" style={{ width: 480, padding: 28, border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-primary)' }}>
                 <NotebookPen size={22} className="text-accent" /> Nueva Nota
@@ -902,13 +902,13 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>TÃ­tulo de la nota</label>
-                <input type="text" value={newNoteTitle} onChange={e => setNewNoteTitle(e.target.value)} placeholder="Ej. Resumen CapÃ­tulo 4..." className="input-base" style={{ width: '100%', height: 40, fontSize: 13 }} autoFocus />
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Título de la nota</label>
+                <input type="text" value={newNoteTitle} onChange={e => setNewNoteTitle(e.target.value)} placeholder="Ej. Resumen Capítulo 4..." className="input-base" style={{ width: '100%', height: 40, fontSize: 13 }} autoFocus />
               </div>
 
               <div>
                 <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Contenido / Apuntes</label>
-                <textarea value={newNoteContent} onChange={e => setNewNoteContent(e.target.value)} placeholder="Escribe tus apuntes, ideas o resÃºmenes aquÃ­..." className="input-base" style={{ width: '100%', height: 160, fontSize: 13, padding: 12 }} />
+                <textarea value={newNoteContent} onChange={e => setNewNoteContent(e.target.value)} placeholder="Escribe tus apuntes, ideas o resúmenes aquí..." className="input-base" style={{ width: '100%', height: 160, fontSize: 13, padding: 12 }} />
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 12 }}>
@@ -923,10 +923,10 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
       {/* NEW RESOURCE MODAL */}
       {showNewResource && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(12px)' }} onClick={() => setShowNewResource(false)}>
-          <div className="bento-card" style={{ width: 440, padding: 28, border: '1px solid var(--border-subtle)' }} onClick={e => e.stopPropagation()}>
+          <div className="bento-card" style={{ width: 440, padding: 28, border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-primary)' }}>
-                <Globe size={22} className="text-accent" /> AÃ±adir Recurso
+                <Globe size={22} className="text-accent" /> Añadir Recurso
               </h2>
               <button onClick={() => setShowNewResource(false)} className="btn-ghost" style={{ padding: 6, borderRadius: '50%' }}><X size={18} /></button>
             </div>
@@ -944,8 +944,8 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>TÃ­tulo del recurso</label>
-                <input type="text" value={newResTitle} onChange={e => setNewResTitle(e.target.value)} placeholder="Ej. Repositorio de exÃ¡menes pasados..." className="input-base" style={{ width: '100%', height: 40, fontSize: 13 }} autoFocus />
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Título del recurso</label>
+                <input type="text" value={newResTitle} onChange={e => setNewResTitle(e.target.value)} placeholder="Ej. Repositorio de exámenes pasados..." className="input-base" style={{ width: '100%', height: 40, fontSize: 13 }} autoFocus />
               </div>
 
               <div>
@@ -955,7 +955,7 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 12 }}>
                 <button onClick={() => setShowNewResource(false)} className="btn-secondary" style={{ padding: '0 20px', height: 40, fontSize: 13, fontWeight: 600 }}>Cancelar</button>
-                <button onClick={handleCreateResource} disabled={!newResTitle.trim() || !newResUrl.trim()} className="btn-primary hover-lift" style={{ padding: '0 24px', height: 40, fontSize: 13, fontWeight: 600 }}>AÃ±adir recurso</button>
+                <button onClick={handleCreateResource} disabled={!newResTitle.trim() || !newResUrl.trim()} className="btn-primary hover-lift" style={{ padding: '0 24px', height: 40, fontSize: 13, fontWeight: 600 }}>Añadir recurso</button>
               </div>
             </div>
           </div>
@@ -965,10 +965,10 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
       {/* NEW ANCHORED IMAGE MODAL */}
       {showNewImage && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(12px)' }} onClick={() => setShowNewImage(false)}>
-          <div className="bento-card" style={{ width: 440, padding: 28, border: '1px solid var(--border-subtle)' }} onClick={e => e.stopPropagation()}>
+          <div className="bento-card" style={{ width: 440, padding: 28, border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-primary)' }}>
-                <ImageIcon size={22} className="text-accent" /> AÃ±adir Imagen Anclada
+                <ImageIcon size={22} className="text-accent" /> Añadir Imagen Anclada
               </h2>
               <button onClick={() => setShowNewImage(false)} className="btn-ghost" style={{ padding: 6, borderRadius: '50%' }}><X size={18} /></button>
             </div>
@@ -1007,7 +1007,7 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
       {/* NEW FLASHCARD MODAL */}
       {showNewRepaso && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(12px)' }} onClick={() => setShowNewRepaso(false)}>
-          <div className="bento-card" style={{ width: 440, padding: 28, border: '1px solid var(--border-subtle)' }} onClick={e => e.stopPropagation()}>
+          <div className="bento-card" style={{ width: 440, padding: 28, border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-primary)' }}>
                 <BrainCircuit size={22} className="text-accent" /> Crear Tarjeta de Repaso
@@ -1018,11 +1018,11 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               <div>
                 <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Pregunta o Concepto</label>
-                <input type="text" value={newFcQuestion} onChange={e => setNewFcQuestion(e.target.value)} placeholder="Ej. Â¿CuÃ¡l es la fÃ³rmula de la velocidad de escape?" className="input-base" style={{ width: '100%', height: 40, fontSize: 13 }} autoFocus />
+                <input type="text" value={newFcQuestion} onChange={e => setNewFcQuestion(e.target.value)} placeholder="Ej. ¿Cuál es la fórmula de la velocidad de escape?" className="input-base" style={{ width: '100%', height: 40, fontSize: 13 }} autoFocus />
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Respuesta o ExplicaciÃ³n</label>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Respuesta o Explicación</label>
                 <textarea value={newFcAnswer} onChange={e => setNewFcAnswer(e.target.value)} placeholder="Ej. v = âˆš(2GM/R)..." className="input-base" style={{ width: '100%', height: 100, fontSize: 13, padding: 12 }} />
               </div>
 

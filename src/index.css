@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;600;700&family=Roboto:wght@300;400;500;700&family=Share+Tech+Mono&family=Orbitron:wght@400;500;600;700;800;900&family=Chakra+Petch:wght@500;600;700&family=Wallpoet&family=Digital+Numbers&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Inter+Tight:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;600;700&family=Roboto:wght@300;400;500;700&family=Share+Tech+Mono&family=Orbitron:wght@400;500;600;700;800;900&family=Chakra+Petch:wght@500;600;700&family=Wallpoet&family=Digital+Numbers&display=swap');
 @import "tailwindcss";
 
 @theme {
@@ -29,6 +29,8 @@
   --accent-soft: rgba(225, 29, 72, 0.12);
   --accent-glow: rgba(225, 29, 72, 0.30);
   --accent-dim: rgba(225, 29, 72, 0.06);
+  --theme-secondary: #3B82F6;
+  --theme-tertiary: #10B981;
 
   --text-primary: rgba(255, 255, 255, 0.92);
   --text-secondary: rgba(255, 255, 255, 0.55);
@@ -51,7 +53,7 @@
   --radius-full: 9999px;
 
   --font-primary: 'Inter', sans-serif;
-  --font-heading: 'Outfit', sans-serif;
+  --font-heading: 'Inter Tight', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 
   --heatmap-0: transparent;
@@ -939,6 +941,11 @@ body,
   }
 }
 
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .fade-in-animation {
   animation: fadeIn 400ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
@@ -1021,6 +1028,28 @@ h6,
   border: 1px solid rgba(255, 255, 255, 0.04);
 }
 
+/* Gradient card — standard block with subtle gradient */
+.card-grad {
+  background: linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+/* Accent left border line for list items */
+.accent-line {
+  border-left: 3px solid var(--accent);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+/* Unified block title style */
+.block-title {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
 /* ══════════════════════════════════════════════════
    SELECTION
    ══════════════════════════════════════════════════ */
@@ -1063,4 +1092,12 @@ h6,
   outline: 2px solid var(--accent);
   outline-offset: 2px;
   border-radius: 8px;
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }

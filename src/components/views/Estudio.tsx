@@ -13,6 +13,7 @@ import { es } from 'date-fns/locale';
 import { notifySessionComplete, notifyBreakOver } from '../../lib/notifications';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import NotificationBell from '../ui/NotificationBell';
+import AnalyticsDrawer from '../ui/AnalyticsDrawer';
 
 function calculateStreak(w: Record<string, number>, dailyGoalMin: number, dailyGoalHistory?: Record<string, number>): number {
   const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -43,8 +44,8 @@ function calculateStreak(w: Record<string, number>, dailyGoalMin: number, dailyG
   return s;
 }
 
-const TomatoIcon = ({ size = 24, color = 'currentColor' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+const TomatoIcon = ({ size = 24, color = 'currentColor', style }: { size?: number; color?: string; style?: React.CSSProperties }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={style}>
     <path d="M12 2v2" />
     <path d="M10 3a2 2 0 0 0 4 0" />
     <path d="M17 6c-2-1-5-1-7-1s-5 0-7 1c-1.5.5-2.5 2-2.5 4 0 4.5 3 11 11.5 11S23.5 14.5 23.5 10c0-2-1-3.5-2.5-4Z" />
@@ -113,9 +114,10 @@ function LEDTime({ time, color, digitWidth = 112, digitHeight = 184, colonWidth 
 
 interface ActivityEntry {
   id: string;
-  type: 'pomodoro' | 'corto' | 'largo' | 'chrono';
+  type: 'pomodoro' | 'corto' | 'largo' | 'chrono' | 'break';
   label: string;
   startedAt: string;
+  endedAt?: string;
   duration: number;
   status: 'completado' | 'mitad' | 'interrumpido' | 'ronda';
   meta?: string;
@@ -141,9 +143,10 @@ export default function Estudio() {
     tasks, courses, addSubTask, settings, dailyStudyTime, activeTaskId, setActiveTaskId,
     pomodoroSessions, incrementPomodoroSessions, studySessions,
     addStudySession, weeklyStudyTime,
-    accumulatedPauseTime, pauseStartTime, distractionCount,
-    focusPomodoroTime, focusChronoTime, breakTime,
-    addNotification,
+
+    focusPomodoroTime, focusChronoTime, dailyBreakTime, dailyFocusPomodoro, dailyFocusChrono,
+    accumulatedPauseTime, distractionCount,
+    addNotification, updateTask, setAccumulatedPauseTime,
   } = useApp();
 
   const {
@@ -154,11 +157,13 @@ export default function Estudio() {
   } = useTimer();
 
   const [showAllActivity, setShowAllActivity] = useState(false);
+  const [showAnalytics, setShowAnalytics] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
 
   const restStartRef = useRef(0);
   const hasTriggeredRef = useRef(false);
   const lastChronoRoundRef = useRef(0);
+  const lastPauseTimeRef = useRef(0);
 
   const activeTask = tasks.find(t => t.id === activeTaskId);
   const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -202,10 +207,16 @@ export default function Estudio() {
         taskId: activeTaskId || undefined,
         courseId: undefined,
         pauseCount: distractionCount,
+        pauseDuration: accumulatedPauseTime - lastPauseTimeRef.current,
       });
+      lastPauseTimeRef.current = accumulatedPauseTime;
+      if (activeTaskId) {
+        const task = tasks.find(t => t.id === activeTaskId);
+        if (task) updateTask(activeTaskId, { studyTime: (task.studyTime || 0) + Math.round(sessionTime / 60) });
+      }
     }
     if (isRest || !isTimerActive || sessionType !== 'pomodoro') hasTriggeredRef.current = false;
-  }, [sessionTime, isTimerActive, sessionType, isRest, settings.pomodoroTime, distractionCount]);
+  }, [sessionTime, isTimerActive, sessionType, isRest, settings.pomodoroTime, distractionCount, activeTaskId, tasks, updateTask]);
 
   useEffect(() => {
     if (isTimerActive && sessionType === 'chrono' && chronoGoal > 0) {
@@ -222,7 +233,13 @@ export default function Estudio() {
           taskId: activeTaskId || undefined,
           courseId: undefined,
           pauseCount: distractionCount,
+          pauseDuration: accumulatedPauseTime - lastPauseTimeRef.current,
         });
+        lastPauseTimeRef.current = accumulatedPauseTime;
+        if (activeTaskId) {
+          const task = tasks.find(t => t.id === activeTaskId);
+          if (task) updateTask(activeTaskId, { studyTime: (task.studyTime || 0) + Math.round(chronoGoal / 60) });
+        }
       }
     }
   }, [sessionTime, isTimerActive, sessionType, chronoGoal, distractionCount]);
@@ -230,6 +247,20 @@ export default function Estudio() {
   useEffect(() => {
     if (sessionType === 'chrono' && !isTimerActive && sessionTime === 0) lastChronoRoundRef.current = 0;
   }, [sessionType, isTimerActive, sessionTime]);
+
+  // Read linked task from localStorage (set by Tareas "Estudiar esta tarea" button)
+  useEffect(() => {
+    const taskId = localStorage.getItem('owa_study_task_id');
+    if (taskId) {
+      const found = tasks.find(t => t.id === taskId);
+      if (found) {
+        setActiveTaskId(taskId);
+        addNotification(`Estudiando: ${found.title}`, 'success');
+      }
+      localStorage.removeItem('owa_study_task_id');
+      localStorage.removeItem('owa_study_task_title');
+    }
+  }, []);
 
   useEffect(() => {
     if (isRest && restElapsed >= settings.shortBreakTime) {
@@ -274,7 +305,7 @@ export default function Estudio() {
 
   const activityFeed: ActivityEntry[] = useMemo(() => {
     const entries: ActivityEntry[] = [];
-    const sortedSessions = [...studySessions].sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+    const sortedSessions = [...studySessions].sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()).slice(0, 15);
     
     for (const s of sortedSessions) {
       const isFull = s.type === 'pomodoro' ? s.duration >= settings.pomodoroTime : s.duration > 0;
@@ -292,6 +323,7 @@ export default function Estudio() {
         type: s.type as any,
         label,
         startedAt: s.startedAt,
+        endedAt: s.endedAt,
         duration: s.duration,
         status: status as any,
         meta: completionTime,
@@ -314,31 +346,35 @@ export default function Estudio() {
     else document.exitFullscreen();
   };
 
-  // Daily donut: real-time, resets each day
-  const todaySessions = useMemo(() => studySessions.filter(s => s.startedAt.startsWith(todayStr)), [studySessions, todayStr]);
-  const todayPomodoro = todaySessions.filter(s => s.type === 'pomodoro').reduce((a, s) => a + s.duration, 0);
-  const todayChrono = todaySessions.filter(s => s.type === 'chrono').reduce((a, s) => a + s.duration, 0);
-  const todayPauses = todaySessions.reduce((a, s) => a + (s.pauseCount || 0), 0);
-  const livePomodoro = todayPomodoro + (isTimerActive && sessionType === 'pomodoro' && !isRest ? sessionTime : 0);
-  const liveChrono = todayChrono + (isTimerActive && sessionType === 'chrono' && !isRest ? sessionTime : 0);
-  const todayBreaks = breakTime;
+  // Weekly donut: tracks REAL accumulated time per type per day
+  const now = new Date();
+  const dayOfWeek = now.getDay();
+  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  const weekStart = new Date(now); weekStart.setDate(now.getDate() + mondayOffset);
+  const weekStartStr = format(weekStart, 'yyyy-MM-dd');
+  const weekPomodoro = Object.entries(dailyFocusPomodoro).filter(([k]) => k >= weekStartStr).reduce((a, [,v]) => a + v, 0);
+  const weekChrono = Object.entries(dailyFocusChrono).filter(([k]) => k >= weekStartStr).reduce((a, [,v]) => a + v, 0);
+  const weekBreaks = Object.entries(dailyBreakTime).filter(([k]) => k >= weekStartStr).reduce((a, [,v]) => a + v, 0);
+  const livePomodoro = weekPomodoro + (sessionType === 'pomodoro' && !isRest ? sessionTime : 0);
+  const liveChrono = weekChrono + (sessionType === 'chrono' && !isRest ? sessionTime : 0);
+  const liveBreaks = weekBreaks + (isRest ? sessionTime : 0);
   const donutDataRaw = [
     { name: 'Pomodoro', value: livePomodoro, color: focusColor },
     { name: 'Cronómetro', value: liveChrono, color: chronoColor },
-    { name: 'Descanso', value: todayBreaks, color: breakColor },
-    { name: 'Pausas', value: todayPauses, color: '#F59E0B' },
+    { name: 'Descanso', value: liveBreaks, color: breakColor },
   ];
   const totalDonut = donutDataRaw.reduce((a,b) => a + b.value, 0);
   const donutData = totalDonut > 0 ? donutDataRaw.filter(d => d.value > 0) : [{ name: 'Sin Actividad', value: 1, color: 'var(--bg-hover)' }];
 
   return (
-    <div className="page-container h-full flex flex-col overflow-y-auto custom-scroll" style={{ gap: 0, paddingBottom: 16, position: 'relative' }}>
+    <div className="page-container h-full flex flex-col" style={{ position: 'relative', overflow: 'hidden' }}>
+      <div className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', gap: 0, padding: '0 0 16px 0' }}>
 
-      {/* NEW ELEGANT HEADER (Musica.tsx style) */}
+      {/* HEADER */}
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, paddingTop: 8 }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <h1 style={{ fontSize: 40, fontWeight: 200, color: 'var(--text-primary)', lineHeight: 1, letterSpacing: '-0.03em', fontFamily: "'Outfit', sans-serif", textShadow: '0 0 20px var(--accent-glow)' }}>Estudio</h1>
+            <h1 style={{ fontSize: 40, fontWeight: 200, color: 'var(--text-primary)', lineHeight: 1, letterSpacing: '-0.03em', fontFamily: "'Inter Tight', sans-serif", textShadow: '0 0 20px var(--accent-glow)' }}>Estudio</h1>
           </div>
           <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4, fontWeight: 400, letterSpacing: '0.02em' }}>Tu concentración, tu ritmo.</p>
         </div>
@@ -359,10 +395,10 @@ export default function Estudio() {
             <NotificationBell />
             <div style={{ textAlign: 'right', position: 'relative', zIndex: 1 }}>
               <div className="flex items-baseline gap-2 justify-end">
-                <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: 68, fontWeight: 200, lineHeight: 0.9, color: 'var(--text-secondary)', letterSpacing: '0.02em', transition: 'color 300ms' }}>
+                <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 68, fontWeight: 200, lineHeight: 0.9, color: 'var(--text-secondary)', letterSpacing: '0.02em', transition: 'color 300ms' }}>
                   {format(currentTime, 'HH:mm')}
                 </span>
-                <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: 22, fontWeight: 200, color: 'var(--text-tertiary)', opacity: 0.7, letterSpacing: '0.02em', transition: 'color 300ms' }}>
+                <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 22, fontWeight: 200, color: 'var(--text-tertiary)', opacity: 0.7, letterSpacing: '0.02em', transition: 'color 300ms' }}>
                   {format(currentTime, 'ss')}
                 </span>
               </div>
@@ -381,7 +417,7 @@ export default function Estudio() {
         <div style={{ flex: 1.6, display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
           
           {/* TIMER PANEL (Slightly more compact vertically) */}
-          <div className="bento-card" style={{ padding: '24px 32px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative', border: '1px solid var(--border-subtle)', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
+          <div className="bento-card" style={{ padding: '24px 32px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative', border: '1px solid var(--border-subtle)', boxShadow: '0 8px 32px rgba(0,0,0,0.2)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
             
             {/* Mode Type Header */}
             <div style={{ display: 'flex', gap: 6, padding: 4, borderRadius: 12, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', marginBottom: 8 }}>
@@ -462,7 +498,7 @@ export default function Estudio() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             
             {/* Donut Chart - distribution */}
-            <div className="bento-card" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column' }}>
+            <div className="bento-card" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
               <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-primary)', letterSpacing: '0.12em', textTransform: 'uppercase', fontFamily: "'Inter', sans-serif", marginBottom: 10 }}>Distribución</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                 <div style={{ width: 120, height: 120, position: 'relative', flexShrink: 0 }}>
@@ -477,27 +513,31 @@ export default function Estudio() {
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  {donutDataRaw.map(d => (
-                    <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: d.color, boxShadow: `0 0 4px ${d.color}60`, flexShrink: 0 }} />
-                      <span style={{ fontSize: 11, color: 'var(--text-primary)', fontWeight: 500 }}>{d.name}</span>
-                    </div>
-                  ))}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  {donutDataRaw.map(d => {
+                    const pct = totalDonut > 0 ? Math.round((d.value / totalDonut) * 100) : 0;
+                    return (
+                      <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: d.color, boxShadow: `0 0 4px ${d.color}60`, flexShrink: 0 }} />
+                        <span style={{ fontSize: 11, color: 'var(--text-primary)', fontWeight: 500 }}>{d.name}</span>
+                        <span style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 400, marginLeft: 'auto' }}>{pct}%</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
 
             {/* Progress today */}
-            <div className="bento-card" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <div className="bento-card" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', justifyContent: 'center', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                 <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-primary)', letterSpacing: '0.12em', textTransform: 'uppercase', fontFamily: "'Inter', sans-serif" }}>Progreso de Hoy</span>
                 <span style={{ fontSize: 9, fontWeight: 700, color: dailyStudyTime >= (settings?.dailyGoal || 240) * 60 ? '#10B981' : 'var(--text-secondary)' }}>
-                  {dailyStudyTime >= (settings?.dailyGoal || 240) * 60 ? '✓ META' : `${Math.min(100, Math.round((dailyStudyTime / ((settings?.dailyGoal || 240) * 60)) * 100))}%`}
+                  {dailyStudyTime >= (settings?.dailyGoal || 240) * 60 ? (<><Check size={10} style={{ marginRight: 2 }} /> META</>) : `${Math.min(100, Math.round((dailyStudyTime / ((settings?.dailyGoal || 240) * 60)) * 100))}%`}
                 </span>
               </div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6 }}>
-                <span style={{ fontSize: 22, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Outfit', sans-serif" }}>
+                <span style={{ fontSize: 22, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>
                   {Math.floor(dailyStudyTime / 3600)}h {Math.floor((dailyStudyTime % 3600) / 60)}m
                 </span>
                 <span style={{ fontSize: 8, color: 'var(--text-tertiary)' }}>/ {(settings?.dailyGoal || 240)}min</span>
@@ -518,7 +558,7 @@ export default function Estudio() {
         <div style={{ flex: 1.2, display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
           
           {/* 4 ELEGANT SIDEBAR METRICS CARD */}
-          <div className="bento-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div className="bento-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 20, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
             <span style={{ fontSize: 11, fontWeight: 300, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.15em', display: 'flex', alignItems: 'center', gap: 8, fontFamily: "'Inter', sans-serif" }}>
               Resumen Operativo
             </span>
@@ -528,34 +568,34 @@ export default function Estudio() {
               <div style={{ background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', borderRadius: 16, padding: '20px', display: 'flex', flexDirection: 'column', gap: 8, position: 'relative', overflow: 'hidden' }}>
                 <Clock size={80} style={{ position: 'absolute', bottom: -20, right: -20, color: statusColor, opacity: 0.15 }} />
                 <span style={{ fontSize: 10, fontWeight: 300, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', zIndex: 1 }}>Estudio Puro</span>
-                <span style={{ fontSize: 26, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Outfit', sans-serif", zIndex: 1 }}>{studyFormatted}</span>
+                <span style={{ fontSize: 26, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", zIndex: 1 }}>{studyFormatted}</span>
               </div>
 
               {/* Metric 2: Completed Sessions */}
               <div style={{ background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', borderRadius: 16, padding: '20px', display: 'flex', flexDirection: 'column', gap: 8, position: 'relative', overflow: 'hidden' }}>
                 <CheckCircle size={80} style={{ position: 'absolute', bottom: -20, right: -20, color: '#8B5CF6', opacity: 0.15 }} />
                 <span style={{ fontSize: 10, fontWeight: 300, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', zIndex: 1 }}>Sesiones</span>
-                <span style={{ fontSize: 26, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Outfit', sans-serif", zIndex: 1 }}>{studySessions.length}</span>
+                <span style={{ fontSize: 26, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", zIndex: 1 }}>{studySessions.length}</span>
               </div>
 
               {/* Metric 3: Efficiency % */}
               <div style={{ background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', borderRadius: 16, padding: '20px', display: 'flex', flexDirection: 'column', gap: 8, position: 'relative', overflow: 'hidden' }}>
                 <Zap size={80} style={{ position: 'absolute', bottom: -20, right: -20, color: '#F59E0B', opacity: 0.15 }} />
                 <span style={{ fontSize: 10, fontWeight: 300, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', zIndex: 1 }}>Eficiencia</span>
-                <span style={{ fontSize: 26, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Outfit', sans-serif", zIndex: 1 }}>{efficiencyPct}%</span>
+                <span style={{ fontSize: 26, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", zIndex: 1 }}>{efficiencyPct}%</span>
               </div>
 
               {/* Metric 4: Distractions */}
               <div style={{ background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', borderRadius: 16, padding: '20px', display: 'flex', flexDirection: 'column', gap: 8, position: 'relative', overflow: 'hidden' }}>
                 <AlertTriangle size={80} style={{ position: 'absolute', bottom: -20, right: -20, color: '#EF4444', opacity: 0.15 }} />
                 <span style={{ fontSize: 10, fontWeight: 300, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', zIndex: 1 }}>Distracciones</span>
-                <span style={{ fontSize: 26, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Outfit', sans-serif", zIndex: 1 }}>{distractionCount}</span>
+                <span style={{ fontSize: 26, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", zIndex: 1 }}>{distractionCount}</span>
               </div>
             </div>
           </div>
 
           {/* DETAILED ACTIVITY HISTORY CARD (Max 5) */}
-          <div className="bento-card" style={{ flex: 1, padding: '20px', display: 'flex', flexDirection: 'column', minHeight: 300 }}>
+          <div className="bento-card" style={{ flex: 1, padding: '20px', display: 'flex', flexDirection: 'column', minHeight: 300, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
                 HISTORIAL
@@ -567,37 +607,38 @@ export default function Estudio() {
               )}
             </div>
             
-            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }} className="custom-scroll">
+            <div className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
               {activityFeed.length > 0 ? (
-                activityFeed.slice(0, 5).map((entry, i) => {
+                activityFeed.slice(0, 4).map((entry, i) => {
                   const isPomo = entry.type === 'pomodoro';
                   const isChrono = entry.type === 'chrono';
-                  const c = isPomo ? (settings.accentColor || '#E11D48') : '#3B82F6';
-                  const Icon = isPomo ? TomatoIcon : Timer;
+                  const isBreakEntry = entry.type === 'break';
+                  const c = isPomo ? (settings.accentColor || '#E11D48') : isBreakEntry ? '#10B981' : '#3B82F6';
+                  const Icon = isPomo ? TomatoIcon : isBreakEntry ? Coffee : Timer;
                   const mins = Math.floor(entry.duration / 60);
                   const secs = entry.duration % 60;
                   const timeStr = entry.endedAt ? format(new Date(entry.endedAt), 'HH:mm') : '—';
                   const statusLabels: Record<string, string> = { completado: 'Hecho', mitad: 'Parcial', fallido: 'Fallido' };
                   const statusColors: Record<string, string> = { completado: 'var(--success)', mitad: '#F59E0B', fallido: 'var(--error)' };
                   const status = entry.meta ?? '';
-                  const barW = Math.min(100, (entry.duration / Math.max(...activityFeed.slice(0, 5).map(e => e.duration), 1)) * 100);
+                  const barW = Math.min(100, (entry.duration / Math.max(...activityFeed.slice(0, 4).map(e => e.duration), 1)) * 100);
                   return (
                     <div key={entry.id || i} style={{ display: 'flex', gap: 12, padding: '10px 12px', borderRadius: 10, transition: 'all 150ms' }} className="hover:bg-surfaceElevated">
                       {/* Timeline accent */}
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, flexShrink: 0 }}>
                         <div style={{ width: 8, height: 8, borderRadius: '50%', background: c, boxShadow: `0 0 6px ${c}60` }} />
-                        {i < Math.min(activityFeed.length, 5) - 1 && <div style={{ width: 1, flex: 1, background: 'var(--border-subtle)' }} />}
+                        {i < Math.min(activityFeed.length, 4) - 1 && <div style={{ width: 1, flex: 1, background: 'var(--border-subtle)' }} />}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
                             <Icon size={11} color={c} />
-                            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Outfit', sans-serif", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{entry.label}</span>
+                            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{entry.label}</span>
                           </div>
                           <span style={{ fontSize: 9, color: 'var(--text-tertiary)', fontWeight: 500, whiteSpace: 'nowrap' }}>{timeStr}</span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                          <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Outfit', sans-serif", minWidth: 40 }}>{mins > 0 ? `${mins}m` : ''}{secs > 0 ? ` ${secs}s` : ''}</span>
+                          <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", minWidth: 40 }}>{mins > 0 ? `${mins}m` : ''}{secs > 0 ? ` ${secs}s` : ''}</span>
                           <div style={{ flex: 1, height: 3, borderRadius: 2, background: 'var(--bg-deep)', overflow: 'hidden' }}>
                             <div style={{ height: '100%', borderRadius: 2, width: `${barW}%`, background: c, transition: 'width 300ms' }} />
                           </div>
@@ -646,7 +687,7 @@ export default function Estudio() {
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, paddingBottom: 12, borderBottom: '1px solid var(--border-subtle)' }}>
                 <div>
-                  <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Outfit', sans-serif" }}>Actividad</span>
+                  <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>Actividad</span>
                   <span style={{ fontSize: 11, color: 'var(--text-tertiary)', marginLeft: 8, fontWeight: 500 }}>{activityFeed.length} sesiones</span>
                 </div>
                 <button onClick={() => setShowAllActivity(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4, display: 'flex' }} className="hover:text-white">
@@ -656,11 +697,12 @@ export default function Estudio() {
 
               <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 1 }} className="custom-scroll">
                 {activityFeed.length > 0 ? (
-                  activityFeed.slice(0, 30).map((entry, i) => {
+                  activityFeed.slice(0, 15).map((entry, i) => {
                     const isPomo = entry.type === 'pomodoro';
                     const isChrono = entry.type === 'chrono';
-                    const c = isPomo ? (settings.accentColor || '#E11D48') : '#3B82F6';
-                    const Icon = isPomo ? TomatoIcon : Timer;
+                    const isBreakEntry = entry.type === 'break';
+                    const c = isPomo ? (settings.accentColor || '#E11D48') : isBreakEntry ? '#10B981' : '#3B82F6';
+                    const Icon = isPomo ? TomatoIcon : isBreakEntry ? Coffee : Timer;
                     const mins = Math.floor(entry.duration / 60);
                     const secs = entry.duration % 60;
                     const timeStr = entry.endedAt ? format(new Date(entry.endedAt), 'HH:mm') : '—';
@@ -668,18 +710,18 @@ export default function Estudio() {
                     const statusLabels: Record<string, string> = { completado: 'Hecho', mitad: 'Parcial', fallido: 'Fallido' };
                     const statusColors: Record<string, string> = { completado: 'var(--success)', mitad: '#F59E0B', fallido: 'var(--error)' };
                     const status = entry.meta ?? '';
-                    const barW = Math.min(100, (entry.duration / Math.max(...activityFeed.slice(0, 30).map(e => e.duration), 1)) * 100);
+                    const barW = Math.min(100, (entry.duration / Math.max(...activityFeed.slice(0, 15).map(e => e.duration), 1)) * 100);
                     return (
                       <div key={entry.id || i} style={{ display: 'flex', gap: 12, padding: '8px 10px', borderRadius: 8, transition: 'background 150ms' }} className="hover:bg-surfaceElevated">
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, flexShrink: 0, width: 10 }}>
                           <div style={{ width: 6, height: 6, borderRadius: '50%', background: c }} />
-                          {i < Math.min(activityFeed.length, 30) - 1 && <div style={{ width: 1, flex: 1, background: 'var(--border-subtle)' }} />}
+                          {i < Math.min(activityFeed.length, 15) - 1 && <div style={{ width: 1, flex: 1, background: 'var(--border-subtle)' }} />}
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
                               <Icon size={10} color={c} />
-                              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Outfit', sans-serif", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{entry.label}</span>
+                              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{entry.label}</span>
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
                               <span style={{ fontSize: 9, color: 'var(--text-tertiary)', fontWeight: 500 }}>{timeStr}</span>
@@ -690,7 +732,7 @@ export default function Estudio() {
                             </div>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
-                            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', fontFamily: "'Outfit', sans-serif", minWidth: 32 }}>{mins > 0 ? `${mins}m` : ''}{secs > 0 ? ` ${secs}s` : ''}</span>
+                            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', fontFamily: "'Inter Tight', sans-serif", minWidth: 32 }}>{mins > 0 ? `${mins}m` : ''}{secs > 0 ? ` ${secs}s` : ''}</span>
                             <div style={{ flex: 1, height: 2, borderRadius: 1, background: 'var(--bg-deep)', overflow: 'hidden' }}>
                               <div style={{ height: '100%', borderRadius: 1, width: `${barW}%`, background: c, transition: 'width 300ms' }} />
                             </div>
@@ -711,6 +753,16 @@ export default function Estudio() {
         )}
 
       </div>
+      </div>
+
+      {/* Analytics Drawer */}
+      <AnalyticsDrawer
+        isOpen={showAnalytics}
+        onClose={() => setShowAnalytics(!showAnalytics)}
+        studySessions={studySessions as any}
+        tasks={tasks as any}
+        settings={settings}
+      />
 
     </div>
   );

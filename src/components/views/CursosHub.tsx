@@ -126,7 +126,7 @@ export default function CursosHub({ onSelectCourse }: CursosHubProps) {
     <div className="page-container" style={{ height: '100%', overflowY: 'auto', padding: '24px 28px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
         <div>
-          <h1 style={{ fontSize: 30, fontWeight: 200, color: 'var(--text-primary)', letterSpacing: '-0.03em', display: 'flex', alignItems: 'center', gap: 12, fontFamily: "'Outfit', sans-serif" }}>
+          <h1 style={{ fontSize: 30, fontWeight: 200, color: 'var(--text-primary)', letterSpacing: '-0.03em', display: 'flex', alignItems: 'center', gap: 12, fontFamily: "'Inter Tight', sans-serif" }}>
             <Layers size={22} style={{ color: 'var(--accent)' }} />
             Mis Cursos
           </h1>
@@ -142,8 +142,8 @@ export default function CursosHub({ onSelectCourse }: CursosHubProps) {
           <NotificationBell />
           <div style={{ textAlign: 'right', borderLeft: '1px solid var(--border-subtle)', paddingLeft: 16 }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, justifyContent: 'flex-end' }}>
-              <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: 28, fontWeight: 300, lineHeight: 1, color: 'var(--text-secondary)', letterSpacing: '0.02em' }}>{timeStr}</span>
-              <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: 14, fontWeight: 300, color: 'var(--text-tertiary)', opacity: 0.5 }}>{secondsStr}</span>
+              <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 28, fontWeight: 300, lineHeight: 1, color: 'var(--text-secondary)', letterSpacing: '0.02em' }}>{timeStr}</span>
+              <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 14, fontWeight: 300, color: 'var(--text-tertiary)', opacity: 0.5 }}>{secondsStr}</span>
             </div>
             <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', marginTop: 2, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{dateStrCapitalized}</div>
           </div>
@@ -153,18 +153,19 @@ export default function CursosHub({ onSelectCourse }: CursosHubProps) {
       {courses.length === 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 20px', textAlign: 'center' }}>
           <BookOpen size={48} style={{ color: 'var(--text-muted)', marginBottom: 16, opacity: 0.3 }} />
-          <h3 style={{ fontSize: 16, fontWeight: 400, color: 'var(--text-secondary)', fontFamily: "'Outfit', sans-serif", marginBottom: 8 }}>AÃºn no tienes cursos</h3>
+          <h3 style={{ fontSize: 16, fontWeight: 400, color: 'var(--text-secondary)', fontFamily: "'Inter Tight', sans-serif", marginBottom: 8 }}>Aún no tienes cursos</h3>
           <p style={{ fontSize: 12, color: 'var(--text-tertiary)', maxWidth: 360, lineHeight: 1.6, fontWeight: 300 }}>Crea tu primer curso para empezar a organizar tus tareas, apuntes y horarios de estudio.</p>
         </div>
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 18 }}>
         {courses.map(course => (
-          <div key={course.id} className="bento-card" style={{ padding: 0, overflow: 'hidden', cursor: 'pointer', transition: 'all 250ms cubic-bezier(0.16,1,0.3,1)', position: 'relative' }}
+          <div key={course.id} className="bento-card" style={{ padding: 0, overflow: 'hidden', cursor: 'pointer', transition: 'all 250ms cubic-bezier(0.16,1,0.3,1)', position: 'relative', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}
             onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-3px)'}
             onMouseLeave={e => { e.currentTarget.style.transform = ''; setMenuOpenId(null); }}
           >
-            <div style={{ height: 110, position: 'relative', overflow: 'hidden', background: `linear-gradient(135deg, ${course.color}44 0%, ${course.color}11 100%)` }}
+            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: course.color, zIndex: 2 }} />
+            <div style={{ height: 100, position: 'relative', overflow: 'hidden', background: `linear-gradient(135deg, ${course.color}44 0%, ${course.color}11 100%)`, marginLeft: 3, borderRadius: '0 0 0 0' }}
               onClick={() => onSelectCourse(course.id)}>
               {course.coverUrl ? (
                 <img src={course.coverUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.9 }} />
@@ -173,11 +174,10 @@ export default function CursosHub({ onSelectCourse }: CursosHubProps) {
                   <GraduationCap size={32} style={{ color: 'rgba(255,255,255,0.15)' }} />
                 </div>
               )}
-              <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 2, background: course.color }} />
             </div>
 
             {/* Three-dots menu */}
-            <div style={{ position: 'absolute', top: 118, right: 12, zIndex: 10 }}>
+            <div style={{ position: 'absolute', top: 106, right: 12, zIndex: 10 }}>
               <button onClick={e => { e.stopPropagation(); setMenuOpenId(menuOpenId === course.id ? null : course.id); }}
                 style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-tertiary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(8px)', transition: 'all 150ms' }}>
                 <MoreHorizontal size={14} />
@@ -201,9 +201,9 @@ export default function CursosHub({ onSelectCourse }: CursosHubProps) {
 
             <div style={{ padding: '16px 18px 18px' }}>
               <div style={{ flex: 1, minWidth: 0 }} onClick={() => onSelectCourse(course.id)}>
-                <h3 style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)', letterSpacing: '-0.01em', fontFamily: "'Outfit', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2 }}>{course.name}</h3>
+                <h3 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em', fontFamily: "'Inter Tight', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2 }}>{course.name}</h3>
                 {course.teacher && (
-                  <p style={{ fontSize: 11, fontWeight: 300, color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 8 }}>
+                  <p style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 8 }}>
                     <User size={9} /> {course.teacher}
                   </p>
                 )}
@@ -211,12 +211,12 @@ export default function CursosHub({ onSelectCourse }: CursosHubProps) {
 
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }} onClick={() => onSelectCourse(course.id)}>
                 {course.credits && (
-                  <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-tertiary)', background: 'var(--bg-deep)', padding: '2px 8px', borderRadius: 4, letterSpacing: '0.02em' }}>
-                    {course.credits} crÃ©ditos
+                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', background: 'var(--bg-deep)', padding: '2px 8px', borderRadius: 4, letterSpacing: '0.02em' }}>
+                    {course.credits} Créditos
                   </span>
                 )}
                 {course.level && (
-                  <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-tertiary)', background: 'var(--bg-deep)', padding: '2px 8px', borderRadius: 4, letterSpacing: '0.02em' }}>
+                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', background: 'var(--bg-deep)', padding: '2px 8px', borderRadius: 4, letterSpacing: '0.02em' }}>
                     {course.level}
                   </span>
                 )}
@@ -224,7 +224,7 @@ export default function CursosHub({ onSelectCourse }: CursosHubProps) {
 
               {course.totalTasks > 0 && (
                 <div style={{ marginTop: 12 }} onClick={() => onSelectCourse(course.id)}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-tertiary)', marginBottom: 4, fontWeight: 300 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-tertiary)', marginBottom: 4 }}>
                     <span>{course.completedTasks}/{course.totalTasks} tareas</span>
                     <span>{Math.round((course.completedTasks / course.totalTasks) * 100)}%</span>
                   </div>
@@ -235,7 +235,7 @@ export default function CursosHub({ onSelectCourse }: CursosHubProps) {
               )}
 
               {course.hoursStudied > 0 && (
-                <div style={{ fontSize: 10, fontWeight: 300, color: 'var(--text-tertiary)', marginTop: 8, display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => onSelectCourse(course.id)}>
+                <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 8, display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => onSelectCourse(course.id)}>
                   <BookOpen size={9} /> {Math.round(course.hoursStudied * 10) / 10}h estudiadas
                 </div>
               )}
@@ -248,9 +248,9 @@ export default function CursosHub({ onSelectCourse }: CursosHubProps) {
       {showNew && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}
           onClick={() => { resetNewForm(); setShowNew(false); }}>
-          <div className="bento-card" style={{ width: 480, maxHeight: '90vh', overflowY: 'auto', padding: 32 }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-              <h3 style={{ fontSize: 18, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Outfit', sans-serif", letterSpacing: '-0.01em', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div className="bento-card" style={{ width: 480, maxHeight: '90vh', overflowY: 'auto', padding: 32, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, paddingBottom: 14, borderBottom: '1px solid var(--border-subtle)' }}>
+              <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em', display: 'flex', alignItems: 'center', gap: 10 }}>
                 <Plus size={16} style={{ color: 'var(--accent)' }} /> Nuevo Curso
               </h3>
               <button onClick={() => { resetNewForm(); setShowNew(false); }} className="btn-ghost" style={{ padding: 6 }}><X size={16} /></button>
@@ -259,7 +259,7 @@ export default function CursosHub({ onSelectCourse }: CursosHubProps) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div>
                 <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Nombre *</label>
-                <input value={newName} onChange={e => setNewName(e.target.value)} className="input-base" style={{ width: '100%', height: 40, fontSize: 13 }} placeholder="Ej: CÃ¡lculo Diferencial" />
+                <input value={newName} onChange={e => setNewName(e.target.value)} className="input-base" style={{ width: '100%', height: 40, fontSize: 13 }} placeholder="Ej: Cálculo Diferencial" />
               </div>
 
               <div>
@@ -279,7 +279,7 @@ export default function CursosHub({ onSelectCourse }: CursosHubProps) {
                   <input value={newTeacher} onChange={e => setNewTeacher(e.target.value)} className="input-base" style={{ width: '100%', height: 38, fontSize: 12 }} placeholder="Nombre del profesor" />
                 </div>
                 <div>
-                  <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>CrÃ©ditos</label>
+                  <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Créditos</label>
                   <input value={newCredits} onChange={e => setNewCredits(e.target.value)} className="input-base" style={{ width: '100%', height: 38, fontSize: 12 }} placeholder="Ej: 4" />
                 </div>
               </div>
@@ -308,8 +308,8 @@ export default function CursosHub({ onSelectCourse }: CursosHubProps) {
               </div>
 
               <div>
-                <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>DescripciÃ³n</label>
-                <textarea value={newDesc} onChange={e => setNewDesc(e.target.value)} className="input-base" style={{ width: '100%', minHeight: 60, fontSize: 12, resize: 'vertical', padding: '8px 10px' }} placeholder="Breve descripciÃ³n del curso..." />
+                <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Descripción</label>
+                <textarea value={newDesc} onChange={e => setNewDesc(e.target.value)} className="input-base" style={{ width: '100%', minHeight: 60, fontSize: 12, resize: 'vertical', padding: '8px 10px' }} placeholder="Breve Descripción del curso..." />
               </div>
             </div>
 
@@ -327,9 +327,9 @@ export default function CursosHub({ onSelectCourse }: CursosHubProps) {
       {editId && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}
           onClick={() => resetEditForm()}>
-          <div className="bento-card" style={{ width: 480, maxHeight: '90vh', overflowY: 'auto', padding: 32 }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-              <h3 style={{ fontSize: 18, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Outfit', sans-serif", letterSpacing: '-0.01em', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div className="bento-card" style={{ width: 480, maxHeight: '90vh', overflowY: 'auto', padding: 32, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, paddingBottom: 14, borderBottom: '1px solid var(--border-subtle)' }}>
+              <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em', display: 'flex', alignItems: 'center', gap: 10 }}>
                 <Edit3 size={16} style={{ color: 'var(--accent)' }} /> Editar Curso
               </h3>
               <button onClick={() => resetEditForm()} className="btn-ghost" style={{ padding: 6 }}><X size={16} /></button>
@@ -358,7 +358,7 @@ export default function CursosHub({ onSelectCourse }: CursosHubProps) {
                   <input value={editTeacher} onChange={e => setEditTeacher(e.target.value)} className="input-base" style={{ width: '100%', height: 38, fontSize: 12 }} />
                 </div>
                 <div>
-                  <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>CrÃ©ditos</label>
+                  <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Créditos</label>
                   <input value={editCredits} onChange={e => setEditCredits(e.target.value)} className="input-base" style={{ width: '100%', height: 38, fontSize: 12 }} />
                 </div>
               </div>
@@ -387,7 +387,7 @@ export default function CursosHub({ onSelectCourse }: CursosHubProps) {
               </div>
 
               <div>
-                <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>DescripciÃ³n</label>
+                <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Descripción</label>
                 <textarea value={editDesc} onChange={e => setEditDesc(e.target.value)} className="input-base" style={{ width: '100%', minHeight: 60, fontSize: 12, resize: 'vertical', padding: '8px 10px' }} />
               </div>
             </div>
@@ -405,13 +405,13 @@ export default function CursosHub({ onSelectCourse }: CursosHubProps) {
       {confirmDeleteId && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}
           onClick={() => setConfirmDeleteId(null)}>
-          <div className="bento-card" style={{ width: 320, padding: 28, textAlign: 'center', border: '1px solid rgba(239,68,68,0.25)' }} onClick={e => e.stopPropagation()}>
+          <div className="bento-card" style={{ width: 320, padding: 28, textAlign: 'center', border: '1px solid rgba(239,68,68,0.25)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }} onClick={e => e.stopPropagation()}>
             <div style={{ width: 42, height: 42, borderRadius: '50%', background: 'rgba(239,68,68,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
               <Trash2 size={18} style={{ color: '#ef4444' }} />
             </div>
-            <h3 style={{ fontSize: 16, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Outfit', sans-serif", marginBottom: 6 }}>Â¿Eliminar curso?</h3>
+            <h3 style={{ fontSize: 16, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", marginBottom: 6 }}>¿Eliminar curso?</h3>
             <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 20, lineHeight: 1.5, fontWeight: 300 }}>
-              Esta acciÃ³n eliminarÃ¡ el curso y se perderÃ¡n las tareas y notas asociadas.
+              Esta acción eliminará el curso y se perderán las tareas y notas asociadas.
             </p>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
               <button onClick={() => setConfirmDeleteId(null)} className="btn-secondary" style={{ height: 36, padding: '0 16px', fontSize: 12 }}>Cancelar</button>

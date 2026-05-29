@@ -1,12 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   Play, Pause, SkipBack, SkipForward, Volume2, VolumeX,
-  Heart, ChevronUp, ChevronDown,
-  Shuffle, Repeat, Disc3, ListMusic
+  ChevronUp, ChevronDown, X,
+  Shuffle, Repeat, Disc3
 } from 'lucide-react';
 import { useApp } from '../store/AppContext';
-import ReactPlayer from 'react-player';
-const Player = ReactPlayer as any;
 
 function formatTime(secs: number) {
   if (!secs || !isFinite(secs)) return '0:00';
@@ -20,7 +18,7 @@ export default function GlobalPlayer({ isCollapsed }: { isCollapsed: boolean }) 
     currentTrackId, isPlayingMusic, toggleMusicPlayback, setIsPlayingMusic,
     tracks, musicVolume, setMusicVolume, setMusicProgress, musicProgress,
     musicDuration, shuffleMode, setShuffleMode, repeatMode, setRepeatMode,
-    musicQueue, setMusicQueue, playTrack, toggleTrackFavorite, settings, youtubeVideoUrl, updateTrack
+    musicQueue, setMusicQueue, playTrack, toggleTrackFavorite, settings, updateTrack, clearCurrentTrack
   } = useApp();
 
   // Precise second-by-second listening time tracking
@@ -40,17 +38,18 @@ export default function GlobalPlayer({ isCollapsed }: { isCollapsed: boolean }) 
   const progressRef = useRef<HTMLDivElement>(null);
   const [isSeeking, setIsSeeking] = useState(false);
   const [seekValue, setSeekValue] = useState(0);
-  const [showVolume, setShowVolume] = useState(false);
-  const [isHovered, setIsHovered] = useState(false); // For the tiny hover zone
+  const [isHovered, setIsHovered] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
 
   const currentTrack = tracks.find(t => t.id === currentTrackId);
   const hasTrack = !!currentTrack;
 
-  // Show player when a track is loaded (even when paused); hide when no track
   useEffect(() => {
     setIsExpanded(!!currentTrackId);
   }, [currentTrackId]);
+
+  // Don't render anything when no track
+  if (!hasTrack) return null;
 
   const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!progressRef.current) return;
@@ -76,52 +75,11 @@ export default function GlobalPlayer({ isCollapsed }: { isCollapsed: boolean }) 
       bottom: 0,
       left: window.innerWidth > 768 ? (isCollapsed ? 64 : 220) : 0,
       right: 0,
-      height: 'auto', // Parent container for player and hover zone
+      height: 'auto',
       zIndex: 1000,
-      pointerEvents: 'none', // Allow clicks through, handled by children below
+      pointerEvents: 'none',
       transition: 'left 300ms cubic-bezier(0.2, 0.8, 0.2, 1)',
     }}>
-      {youtubeVideoUrl && (
-        <div style={{ display: 'none' }}>
-          <Player
-            url={youtubeVideoUrl}
-            playing={isPlayingMusic}
-            volume={musicVolume}
-            controls={false}
-            width={0}
-            height={0}
-            onProgress={(state: any) => {
-              if (!isSeeking && musicDuration > 0) {
-                setMusicProgress(state.playedSeconds / musicDuration);
-              }
-            }}
-            onEnded={() => {
-              if (tracks.length > 0 && currentTrackId) {
-                if (repeatMode === 'one') {
-                  playTrack(currentTrackId);
-                  return;
-                }
-                let nextId: string | null = null;
-                const q = musicQueue;
-                if (q.length > 0) {
-                  const [next] = q;
-                  setMusicQueue(q.slice(1));
-                  nextId = next;
-                } else if (shuffleMode || repeatMode === 'all') {
-                  const rest = tracks.filter(t => t.id !== currentTrackId).map(t => t.id);
-                  const refilled = shuffleMode ? [...rest].sort(() => Math.random() - 0.5) : rest;
-                  if (refilled.length > 0) {
-                    setMusicQueue(refilled.slice(1));
-                    nextId = refilled[0];
-                  }
-                }
-                if (nextId) playTrack(nextId);
-                else { setIsExpanded(false); setIsPlayingMusic(false); }
-              }
-            }}
-          />
-        </div>
-      )}
       {/* Main player container - slides in/out */}
       <div style={{
         position: 'relative',
@@ -135,20 +93,6 @@ export default function GlobalPlayer({ isCollapsed }: { isCollapsed: boolean }) 
         transition: 'transform 300ms cubic-bezier(0.2, 0.8, 0.2, 1), height 300ms cubic-bezier(0.2, 0.8, 0.2, 1)',
         pointerEvents: isExpanded ? 'auto' : 'none', // Active only when expanded
       }}>
-        {!hasTrack && (
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center',
-            height: '100%',
-            color: settings.theme === 'claro' ? '#666' : '#ccc',
-            fontSize: 14
-          }}>
-            <Disc3 size={20} style={{ opacity: 0.5 }} />
-            <span>No hay pista seleccionada</span>
-          </div>
-        )}
-        
         {hasTrack && (
           <div style={{ 
             display: 'grid', 
@@ -392,81 +336,77 @@ export default function GlobalPlayer({ isCollapsed }: { isCollapsed: boolean }) 
                   border: 'none',
                   opacity: 0.6
                 }}
+                title="Minimizar"
               >
                 <ChevronDown size={16} />
+              </button>
+              <button
+                onClick={clearCurrentTrack}
+                style={{ 
+                  padding: 4, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: settings.theme === 'claro' ? '#999' : '#666',
+                  background: 'transparent',
+                  border: 'none',
+                  opacity: 0.4
+                }}
+                title="Cerrar reproductor"
+              >
+                <X size={14} />
               </button>
             </div>
           </div>
         )}
       </div>
       
-      {/* Hover zone to expand player when collapsed */}
-      <div
-        onMouseEnter={() => { if (!isExpanded) setIsHovered(true); }}
-        onMouseLeave={() => { setIsHovered(false); }}
-        onClick={() => { if (!isExpanded) { setIsExpanded(true); setIsHovered(false); } }}
-        style={{
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: hasTrack ? 20 : 0, // Visible height when collapsed, if there's a track
-          background: 'transparent',
-          pointerEvents: isExpanded ? 'none' : 'auto', // Active only when collapsed
-          cursor: 'pointer',
-          zIndex: 1001 // Above main player container when collapsed
-        }}
-      >
-        {/* Hover detection zone - wider and more sensitive */}
-        <div 
+      {/* Persistent expander bar when collapsed */}
+      {!isExpanded && hasTrack && (
+        <div
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
-          onClick={() => hasTrack && setIsExpanded(true)}
           style={{
             position: 'absolute',
             bottom: 0,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            width: '60%',
-            height: 50,
-            cursor: hasTrack ? 'pointer' : 'default',
-            pointerEvents: 'auto',
-            zIndex: 5
+            left: 0,
+            right: 0,
+            height: 36,
+            background: settings.theme === 'claro' ? 'rgba(255,255,255,0.85)' : 'rgba(18,18,20,0.85)',
+            backdropFilter: 'blur(16px)',
+            borderTop: `1px solid ${settings.theme === 'claro' ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)'}`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            zIndex: 1001,
+            transition: 'background 200ms',
           }}
-        />
-
-        {/* Visual hint (arrow) - Remastered with LED style lines */}
-        <div style={{
-          position: 'absolute',
-          bottom: 30,
-          left: '50%',
-          transform: `translateX(-50%) translateY(${isHovered ? '0' : '10px'})`,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 20,
-          opacity: isExpanded ? 0 : (isHovered && hasTrack ? 1 : 0),
-          transition: 'all 400ms cubic-bezier(0.16, 1, 0.3, 1)',
-          pointerEvents: 'none'
-        }}>
-          <div style={{ width: 140, height: 1, background: 'linear-gradient(90deg, transparent, var(--accent))', opacity: 0.4, boxShadow: '0 0 8px var(--accent-glow)' }} />
-          
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-            {/* Main Point Up */}
-            <div style={{ display: 'flex', gap: -6, marginBottom: -4 }}>
-              <div style={{ width: 18, height: 3, background: 'var(--accent)', borderRadius: 4, transform: 'rotate(-35deg) translateX(4px)', boxShadow: '0 0 12px var(--accent)' }} />
-              <div style={{ width: 18, height: 3, background: 'var(--accent)', borderRadius: 4, transform: 'rotate(35deg) translateX(-4px)', boxShadow: '0 0 12px var(--accent)' }} />
-            </div>
-            {/* Mini Below */}
-            <div style={{ display: 'flex', gap: -4, opacity: 0.8 }}>
-              <div style={{ width: 10, height: 2, background: 'var(--accent)', borderRadius: 4, transform: 'rotate(-35deg) translateX(2px)', boxShadow: '0 0 8px var(--accent)' }} />
-              <div style={{ width: 10, height: 2, background: 'var(--accent)', borderRadius: 4, transform: 'rotate(35deg) translateX(-2px)', boxShadow: '0 0 8px var(--accent)' }} />
-            </div>
+        >
+          <div onClick={() => { setIsExpanded(true); setIsHovered(false); }} style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            opacity: isHovered ? 1 : 0.5,
+            transition: 'opacity 200ms',
+            color: 'var(--accent)',
+            fontSize: 11,
+            fontWeight: 600,
+            letterSpacing: '0.04em',
+            textTransform: 'uppercase',
+            cursor: 'pointer',
+          }}>
+            <ChevronUp size={14} />
+            Reproductor
+            <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)', boxShadow: isPlayingMusic ? '0 0 8px var(--accent-glow)' : 'none' }} />
           </div>
-
-          <div style={{ width: 140, height: 1, background: 'linear-gradient(90deg, var(--accent), transparent)', opacity: 0.4, boxShadow: '0 0 8px var(--accent-glow)' }} />
+          <button onClick={clearCurrentTrack} style={{
+            position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+            background: 'none', border: 'none', color: settings.theme === 'claro' ? '#999' : '#666',
+            cursor: 'pointer', padding: 4, opacity: 0.4, display: 'flex',
+          }} title="Cerrar reproductor">
+            <X size={14} />
+          </button>
         </div>
-      </div>
+      )}
     </div>
   );
 } 

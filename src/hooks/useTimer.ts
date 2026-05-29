@@ -63,7 +63,7 @@ export function useTimer() {
       setShowCompletion(true);
     }
 
-    // CronÃ³metro round detection â€“ count a round when the goal is reached
+    // Cronómetro round detection â€“ count a round when the goal is reached
     if (
       isTimerActive &&
       sessionType === 'chrono' &&
@@ -121,8 +121,20 @@ export function useTimer() {
   // UI event handlers â€“ thin wrappers that also keep the global context in sync
   // ---------------------------------------------------------------------------
   const handleToggle = useCallback(() => {
-    setIsTimerActive((prev) => !prev);
-  }, [setIsTimerActive]);
+    if (isTimerActive && sessionTime >= 10) {
+      addStudySession({
+        type: isRest ? 'break' : sessionType,
+        startedAt: new Date(Date.now() - sessionTime * 1000).toISOString(),
+        endedAt: new Date().toISOString(),
+        duration: sessionTime,
+        taskId: activeTaskId ?? undefined,
+        courseId: undefined,
+        pauseCount: 0,
+        pauseDuration: 0,
+      });
+    }
+    setIsTimerActive(prev => !prev);
+  }, [isTimerActive, sessionTime, sessionType, isRest, activeTaskId, addStudySession, setIsTimerActive]);
 
   const handleReset = useCallback(() => {
     if (isTimerActive) {
@@ -139,6 +151,7 @@ export function useTimer() {
         taskId: activeTaskId ?? undefined,
         courseId: undefined,
         pauseCount: 0,
+        pauseDuration: 0,
       });
     }
     // Reset timer state
@@ -151,16 +164,10 @@ export function useTimer() {
         addNotification('Pausa el temporizador antes de cambiar de modo', 'error');
         return;
       }
-      // If a session is running >= 10s, persist it before switching
-      if (sessionTime >= 10) {
-        handleReset();
-      } else {
-        // Simple reset without persisting
-        resetTimer();
-      }
       setSessionType(type);
+      setSessionTime(0);
     },
-    [sessionTime, handleReset, resetTimer, setSessionType, isTimerActive],
+    [isTimerActive, setSessionType, setSessionTime, addNotification],
   );
 
   // ---------------------------------------------------------------------------

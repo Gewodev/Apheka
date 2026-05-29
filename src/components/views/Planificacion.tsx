@@ -2,7 +2,7 @@
  * Planificacion.tsx â€” Enterprise Academic Planner
  *
  * Architecture:
- *  - 4 views: Semana | DÃ­a | Mes | Horario (fixed schedule / cronogram)
+ *  - 4 views: Semana | Día | Mes | Horario (fixed schedule / cronogram)
  *  - Events are stored locally, strongly typed, linked to courses
  *  - Drag-and-drop rescheduling inside week grid
  *  - Right sidebar: today's agenda + upcoming deadlines only
@@ -28,7 +28,7 @@ import NotificationBell from '../ui/NotificationBell';
 const H_START = 7;
 const H_END   = 22;
 const H_PX    = 56;       // px per hour
-const DAY_LABELS = ['Lun','Mar','MiÃ©','Jue','Vie','SÃ¡b','Dom'];
+const DAY_LABELS = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
 
 // â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 type PlanView = 'week' | 'day' | 'month' | 'schedule';
@@ -251,7 +251,7 @@ export default function Planificacion() {
       <header style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:18, paddingTop:6, flexShrink:0 }}>
         <div>
           <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-            <h1 style={{ fontSize:28, fontWeight:700, color:'var(--accent)', letterSpacing:'-0.025em', fontFamily:"'Outfit', sans-serif", textShadow:'0 0 20px var(--accent-glow)', lineHeight:1 }}>
+            <h1 style={{ fontSize:28, fontWeight:700, color:'var(--accent)', letterSpacing:'-0.025em', fontFamily:"'Inter Tight', sans-serif", textShadow:'0 0 20px var(--accent-glow)', lineHeight:1 }}>
               Planificador
             </h1>
           </div>
@@ -266,8 +266,8 @@ export default function Planificacion() {
           <div style={{ textAlign:'right', paddingRight:2, position:'relative' }}>
             <div style={{ position:'absolute', right:-4, top:'50%', transform:'translateY(-50%)', width:120, height:80, background:'radial-gradient(circle, var(--accent-dim) 0%, transparent 70%)', pointerEvents:'none', opacity:0.6 }}/>
             <div style={{ display:'flex', alignItems:'baseline', gap:3, justifyContent:'flex-end', position:'relative' }}>
-              <span style={{ fontFamily:"'Outfit', sans-serif", fontSize:52, fontWeight:200, lineHeight:0.9, color:'var(--accent)', textShadow:'0 0 20px var(--accent-glow)', letterSpacing:'0.02em' }}>{timeStr}</span>
-              <span style={{ fontFamily:"'Outfit', sans-serif", fontSize:18, fontWeight:200, color:'var(--accent)', opacity:0.6 }}>{secsStr}</span>
+              <span style={{ fontFamily:"'Inter Tight', sans-serif", fontSize:52, fontWeight:200, lineHeight:0.9, color:'var(--accent)', textShadow:'0 0 20px var(--accent-glow)', letterSpacing:'0.02em' }}>{timeStr}</span>
+              <span style={{ fontFamily:"'Inter Tight', sans-serif", fontSize:18, fontWeight:200, color:'var(--accent)', opacity:0.6 }}>{secsStr}</span>
             </div>
           </div>
 
@@ -275,7 +275,7 @@ export default function Planificacion() {
           <button
             onClick={() => { setModalDefaults({ date: todayISO }); setEditingEvent(null); setShowEventModal(true); }}
             className="btn-primary hover-lift"
-            style={{ display:'flex', alignItems:'center', gap:6, fontSize:13, fontWeight:600, padding:'9px 18px', boxShadow:'0 0 18px var(--accent-glow)', fontFamily:"'Outfit', sans-serif", whiteSpace:'nowrap' }}
+            style={{ display:'flex', alignItems:'center', gap:6, fontSize:13, fontWeight:600, padding:'9px 18px', boxShadow:'0 0 18px var(--accent-glow)', fontFamily:"'Inter Tight', sans-serif", whiteSpace:'nowrap' }}
           >
             <Plus size={14}/> Nuevo evento
           </button>
@@ -286,13 +286,13 @@ export default function Planificacion() {
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14, flexShrink:0 }}>
         {/* View tabs */}
         <div style={{ display:'flex', borderRadius:9, padding:3, border:'1px solid var(--border-default)', gap:2 }}>
-          {([['week','Semana'],['day','DÃ­a'],['month','Mes'],['schedule','Horario']] as [PlanView,string][]).map(([v,label])=>(
+          {([['week','Semana'],['day','Día'],['month','Mes'],['schedule','Horario']] as [PlanView,string][]).map(([v,label])=>(
             <button key={v} onClick={()=>setPlanView(v)} style={{
               padding:'6px 18px', borderRadius:7, fontSize:12, fontWeight:600, cursor:'pointer', border:'none', transition:'all 200ms',
               background: planView===v ? 'var(--accent)' : 'transparent',
               color: planView===v ? '#fff' : 'var(--text-secondary)',
               boxShadow: planView===v ? '0 0 12px var(--accent-glow)' : 'none',
-              fontFamily:"'Outfit', sans-serif",
+              fontFamily:"'Inter Tight', sans-serif",
             }}>{label}</button>
           ))}
         </div>
@@ -389,7 +389,7 @@ export default function Planificacion() {
                           return (
                             <div key={cls.id} title={`${cls.title}\n${cls.startTime} â€“ ${cls.endTime}`} style={{ position:'absolute', top, left:2, right:2, height:h, borderRadius:5, padding:'3px 6px', overflow:'hidden', background:`${cls.color}14`, borderLeft:`3px solid ${cls.color}55`, pointerEvents:'none', zIndex:1, display:'flex', flexDirection:'column', gap:1 }}>
                               <span style={{ fontSize:9, fontWeight:700, color:cls.color, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', lineHeight:1.3 }}>{cls.title}</span>
-                              {h>30 && <span style={{ fontSize:8, color:'var(--text-muted)' }}>{cls.startTime} â€“ {cls.endTime}{cls.room?` Â· ${cls.room}`:''}</span>}
+                              {h>30 && <span style={{ fontSize:8, color:'var(--text-muted)' }}>{cls.startTime} â€“ {cls.endTime}{cls.room?` · ${cls.room}`:''}</span>}
                             </div>
                           );
                         })}
@@ -476,7 +476,7 @@ export default function Planificacion() {
                       const top=(timeToFrac(cls.startTime)-H_START)*H_PX, h=(timeToFrac(cls.endTime)-timeToFrac(cls.startTime))*H_PX-2;
                       return <div key={cls.id} style={{ position:'absolute', top, left:8, right:8, height:h, borderRadius:8, padding:'6px 12px', background:`${cls.color}14`, borderLeft:`4px solid ${cls.color}`, zIndex:1, pointerEvents:'none' }}>
                         <div style={{ fontSize:12, fontWeight:700, color:cls.color }}>{cls.title}</div>
-                        <div style={{ fontSize:10, color:'var(--text-muted)', marginTop:2 }}>{cls.startTime} â€“ {cls.endTime}{cls.room?` Â· ${cls.room}`:''}</div>
+                        <div style={{ fontSize:10, color:'var(--text-muted)', marginTop:2 }}>{cls.startTime} â€“ {cls.endTime}{cls.room?` · ${cls.room}`:''}</div>
                         {cls.teacher && <div style={{ fontSize:10, color:'var(--text-muted)' }}>{cls.teacher}</div>}
                       </div>;
                     })}
@@ -525,7 +525,7 @@ export default function Planificacion() {
                           <div style={{ width:24,height:24,borderRadius:6,display:'flex',alignItems:'center',justifyContent:'center',marginBottom:4, fontSize:12,fontWeight:tod?700:500, background:tod?'var(--accent)':'transparent', color:tod?'#fff':'var(--text-primary)', boxShadow:tod?'0 0 12px var(--accent-glow)':'none', fontFamily:"'Outfit',sans-serif" }}>{format(day,'d')}</div>
                           {dayEvs.slice(0,2).map((ev,ei)=><div key={ei} style={{ fontSize:9,padding:'1px 5px',borderRadius:3,marginBottom:2,background:`${ev.color}20`,borderLeft:`2px solid ${ev.color}`,color:ev.color,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',fontWeight:600 }}>{ev.title}</div>)}
                           {dayTasks.slice(0,2).map((t,ti)=><div key={ti} style={{ fontSize:9,padding:'1px 5px',borderRadius:3,marginBottom:2,background:`${t.courseColor}18`,borderLeft:`2px solid ${t.courseColor}`,color:t.courseColor,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',fontWeight:600 }}>ðŸ“… {t.title}</div>)}
-                          {(dayEvs.length+dayTasks.length)>4&&<div style={{ fontSize:8,color:'var(--text-muted)',fontWeight:600 }}>+{dayEvs.length+dayTasks.length-4} mÃ¡s</div>}
+                          {(dayEvs.length+dayTasks.length)>4&&<div style={{ fontSize:8,color:'var(--text-muted)',fontWeight:600 }}>+{dayEvs.length+dayTasks.length-4} más</div>}
                         </div>
                       );
                     })}
@@ -555,7 +555,7 @@ export default function Planificacion() {
         <div style={{ width:264, flexShrink:0, display:'flex', flexDirection:'column', gap:12, overflowY:'auto' }}>
 
           {/* Today's Agenda */}
-          <div className="bento-card" style={{ padding:'14px 16px',  }}>
+          <div className="bento-card" style={{ padding:'14px 16px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
             <div style={{ fontSize:10, fontWeight:700, color:'var(--text-tertiary)', textTransform:'uppercase', letterSpacing:'0.09em', marginBottom:12, display:'flex', alignItems:'center', gap:5 }}>
               <Clock size={11} style={{ color:'var(--accent)' }}/> Agenda de hoy
             </div>
@@ -565,7 +565,7 @@ export default function Planificacion() {
                 {todayEvents.allDay.map(ev=>(
                   <div key={ev.id} onClick={()=>{setEditingEvent(ev);setShowEventModal(true);}} style={{ padding:'5px 10px', borderRadius:7, marginBottom:5, background:`${ev.color}15`, borderLeft:`3px solid ${ev.color}`, cursor:'pointer', display:'flex', alignItems:'center', gap:6 }}>
                     <span style={{ fontSize:11, fontWeight:600, color:ev.color }}>{ev.title}</span>
-                    <span style={{ fontSize:9, color:'var(--text-muted)', marginLeft:'auto' }}>Todo el dÃ­a</span>
+                    <span style={{ fontSize:9, color:'var(--text-muted)', marginLeft:'auto' }}>Todo el día</span>
                   </div>
                 ))}
               </div>
@@ -601,9 +601,9 @@ export default function Planificacion() {
           </div>
 
           {/* Upcoming deadlines */}
-          <div className="bento-card" style={{ padding:'14px 16px', flex:1 }}>
+          <div className="bento-card" style={{ padding:'14px 16px', flex:1, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
             <div style={{ fontSize:10, fontWeight:700, color:'var(--text-tertiary)', textTransform:'uppercase', letterSpacing:'0.09em', marginBottom:12, display:'flex', alignItems:'center', gap:5 }}>
-              <GraduationCap size={11} style={{ color:'var(--warning)' }}/> PrÃ³ximas entregas
+              <GraduationCap size={11} style={{ color:'var(--warning)' }}/> Próximas entregas
             </div>
             {upcomingDeadlines.length === 0 ? (
               <div style={{ textAlign:'center', padding:'16px 0', color:'var(--text-muted)' }}>
@@ -615,7 +615,7 @@ export default function Planificacion() {
                 {upcomingDeadlines.map(t => {
                   const diff = t.dueDate ? Math.ceil((new Date(t.dueDate+'T00:00:00').getTime() - Date.now()) / 86400000) : 999;
                   const uc   = diff <= 0 ? '#ef4444' : diff === 1 ? '#f97316' : diff <= 3 ? '#f59e0b' : 'var(--text-muted)';
-                  const dl   = diff < 0 ? 'Vencida' : diff === 0 ? 'Hoy' : diff === 1 ? 'MaÃ±ana' : `${diff}d`;
+                  const dl   = diff < 0 ? 'Vencida' : diff === 0 ? 'Hoy' : diff === 1 ? 'Mañana' : `${diff}d`;
                   return (
                     <div key={t.id} style={{ display:'flex', alignItems:'flex-start', gap:8 }}>
                       <div style={{ width:3, height:'100%', minHeight:30, borderRadius:2, background:t.courseColor, flexShrink:0, marginTop:3 }}/>
@@ -623,7 +623,7 @@ export default function Planificacion() {
                         <div style={{ fontSize:11, fontWeight:600, color:'var(--text-primary)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{t.title}</div>
                         <div style={{ display:'flex', alignItems:'center', gap:4, marginTop:2 }}>
                           <span style={{ fontSize:9, color:'var(--text-muted)', fontWeight:500 }}>{t.course}</span>
-                          {t.dueDate && <span style={{ fontSize:9, color:'var(--text-muted)' }}>Â· {format(new Date(t.dueDate+'T12:00:00'),'d MMM',{locale:es as any})}</span>}
+                          {t.dueDate && <span style={{ fontSize:9, color:'var(--text-muted)' }}>· {format(new Date(t.dueDate+'T12:00:00'),'d MMM',{locale:es as any})}</span>}
                         </div>
                       </div>
                       <span style={{ fontSize:9, fontWeight:700, color:uc, padding:'2px 7px', borderRadius:4, background:`${uc === 'var(--text-muted)' ? 'rgba(255,255,255,0.06)' : `${uc}18`}`, flexShrink:0 }}>{dl}</span>
@@ -700,7 +700,7 @@ interface ScheduleViewProps {
 function ScheduleView({ classes, courses, onUpdateClasses, scheduleImageUrl, onSetScheduleImage, imgInputRef, scheduleTab, onSetScheduleTab, addNotification }: ScheduleViewProps) {
   const [showAddClass, setShowAddClass] = useState(false);
   const [newClass, setNewClass] = useState<Partial<ScheduleClass>>({ dayOfWeek:0, startTime:'08:00', endTime:'09:30', color:'#6366f1' });
-  const DAY_NAMES = ['Lunes','Martes','MiÃ©rcoles','Jueves','Viernes','SÃ¡bado','Domingo'];
+  const DAY_NAMES = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
   const SCHED_H_START = 7, SCHED_H_END = 21, SCHED_H_PX = 50;
   const schedHours = Array.from({ length: SCHED_H_END - SCHED_H_START + 1 }, (_,i) => SCHED_H_START+i);
 
@@ -767,7 +767,7 @@ function ScheduleView({ classes, courses, onUpdateClasses, scheduleImageUrl, onS
                 <Image size={40} style={{ color:'var(--text-muted)', opacity:0.5 }}/>
                 <div style={{ textAlign:'center' }}>
                   <div style={{ fontSize:14, fontWeight:600, color:'var(--text-secondary)', marginBottom:6 }}>Sube una foto de tu horario</div>
-                  <div style={{ fontSize:11, color:'var(--text-muted)' }}>PNG, JPG Â· foto de la pantalla, impresiÃ³n, captura</div>
+                  <div style={{ fontSize:11, color:'var(--text-muted)' }}>PNG, JPG · foto de la pantalla, impresión, captura</div>
                 </div>
               </div>
           }
@@ -794,7 +794,7 @@ function ScheduleView({ classes, courses, onUpdateClasses, scheduleImageUrl, onS
                 <div style={{ borderBottom:'1px solid var(--border-subtle)', borderRight:'1px solid var(--border-subtle)' }}/>
                 {[0,1,2,3,4].map(di=>(
                   <div key={di} style={{ padding:'10px 0', textAlign:'center', borderBottom:'1px solid var(--border-subtle)', borderLeft:'1px solid var(--border-subtle)', background: di===((new Date().getDay()+6)%7) ? 'rgba(225,29,72,0.04)':'transparent' }}>
-                    <div style={{ fontSize:10, fontWeight:700, color:'var(--text-tertiary)', textTransform:'uppercase', letterSpacing:'0.07em' }}>{'LunMarMiÃ©JueVie'.slice(di*3,di*3+3)}</div>
+                    <div style={{ fontSize:10, fontWeight:700, color:'var(--text-tertiary)', textTransform:'uppercase', letterSpacing:'0.07em' }}>{'LunMarMiéJueVie'.slice(di*3,di*3+3)}</div>
                   </div>
                 ))}
                 {/* Body */}
@@ -842,7 +842,7 @@ function ScheduleView({ classes, courses, onUpdateClasses, scheduleImageUrl, onS
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12 }}>
                 <div>
                   <label style={{ fontSize:11, fontWeight:600, color:'var(--text-secondary)', display:'block', marginBottom:5 }}>Nombre *</label>
-                  <input autoFocus type="text" placeholder="Ej: CÃ¡lculo I" value={newClass.title||''} onChange={e=>setNewClass(p=>({...p,title:e.target.value}))} className="input-base" style={{ width:'100%', fontSize:13, height:38 }}/>
+                  <input autoFocus type="text" placeholder="Ej: Cálculo I" value={newClass.title||''} onChange={e=>setNewClass(p=>({...p,title:e.target.value}))} className="input-base" style={{ width:'100%', fontSize:13, height:38 }}/>
                 </div>
                 <div>
                   <label style={{ fontSize:11, fontWeight:600, color:'var(--text-secondary)', display:'block', marginBottom:5 }}>Materia (vinculada)</label>
@@ -854,9 +854,9 @@ function ScheduleView({ classes, courses, onUpdateClasses, scheduleImageUrl, onS
               </div>
               <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12, marginBottom:12 }}>
                 <div>
-                  <label style={{ fontSize:11, fontWeight:600, color:'var(--text-secondary)', display:'block', marginBottom:5 }}>DÃ­a</label>
+                  <label style={{ fontSize:11, fontWeight:600, color:'var(--text-secondary)', display:'block', marginBottom:5 }}>Día</label>
                   <select value={newClass.dayOfWeek??0} onChange={e=>setNewClass(p=>({...p,dayOfWeek:Number(e.target.value)}))} className="input-base" style={{ width:'100%', fontSize:12, height:38 }}>
-                    {['Lunes','Martes','MiÃ©rcoles','Jueves','Viernes','SÃ¡bado','Domingo'].map((d,i)=><option key={i} value={i}>{d}</option>)}
+                    {['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'].map((d,i)=><option key={i} value={i}>{d}</option>)}
                   </select>
                 </div>
                 <div>
@@ -930,7 +930,7 @@ function EventModal({ event, defaults, courses, tasks, onClose, onSave, onDelete
   for(let h=0;h<=23;h++){ timeOptions.push(`${String(h).padStart(2,'0')}:00`); timeOptions.push(`${String(h).padStart(2,'0')}:30`); }
 
   function save() {
-    if(!title.trim()){ addNotification('El tÃ­tulo es obligatorio', 'error'); return; }
+    if(!title.trim()){ addNotification('El título es obligatorio', 'error'); return; }
     const ev: PlanEvent = {
       id: event?.id || crypto.randomUUID(),
       title: title.trim(),
@@ -946,7 +946,7 @@ function EventModal({ event, defaults, courses, tasks, onClose, onSave, onDelete
 
   return (
     <div style={{ position:'fixed', inset:0, zIndex:1500, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(0,0,0,0.72)', backdropFilter:'blur(14px)' }} onClick={onClose}>
-      <div className="bento-card" style={{ width:440, maxHeight:'92vh', overflowY:'auto', padding:26, background:'var(--bg-elevated)', border:'1px solid var(--border-subtle)' }} onClick={e=>e.stopPropagation()}>
+      <div className="bento-card" style={{ width:440, maxHeight:'92vh', overflowY:'auto', padding:26, background:'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border:'1px solid var(--border-subtle)' }} onClick={e=>e.stopPropagation()}>
         {/* Header */}
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
           <div style={{ display:'flex', alignItems:'center', gap:8 }}>
@@ -961,7 +961,7 @@ function EventModal({ event, defaults, courses, tasks, onClose, onSave, onDelete
 
         {/* Title */}
         <div style={{ marginBottom:14 }}>
-          <label style={{ fontSize:11, fontWeight:600, color:'var(--text-secondary)', display:'block', marginBottom:5 }}>TÃ­tulo *</label>
+          <label style={{ fontSize:11, fontWeight:600, color:'var(--text-secondary)', display:'block', marginBottom:5 }}>Título *</label>
           <input autoFocus type="text" value={title} onChange={e=>setTitle(e.target.value)} onKeyDown={e=>e.key==='Enter'&&save()} placeholder="Nombre del evento" className="input-base" style={{ width:'100%', fontSize:13, height:40 }}/>
         </div>
 
@@ -970,7 +970,7 @@ function EventModal({ event, defaults, courses, tasks, onClose, onSave, onDelete
           <button onClick={()=>setAllDay(p=>!p)} style={{ width:38, height:20, borderRadius:10, border:'none', cursor:'pointer', position:'relative', transition:'background 200ms', background:allDay?'var(--accent)':'var(--bg-surface)', flexShrink:0 }}>
             <div style={{ width:14, height:14, borderRadius:'50%', background:'#fff', position:'absolute', top:3, transition:'left 200ms', left:allDay?21:3, boxShadow:'0 1px 4px rgba(0,0,0,0.3)' }}/>
           </button>
-          <span style={{ fontSize:12, color:'var(--text-secondary)', fontWeight:500 }}>Todo el dÃ­a</span>
+          <span style={{ fontSize:12, color:'var(--text-secondary)', fontWeight:500 }}>Todo el día</span>
         </div>
 
         {/* Date */}
@@ -1026,7 +1026,7 @@ function EventModal({ event, defaults, courses, tasks, onClose, onSave, onDelete
           <div>
             <label style={{ fontSize:11, fontWeight:600, color:'var(--text-secondary)', display:'block', marginBottom:5 }}>Repetir</label>
             <select value={repeat} onChange={e=>setRepeat(e.target.value as 'none'|'weekly')} className="input-base" style={{ width:'100%', fontSize:12, height:40 }}>
-              <option value="none">Sin repeticiÃ³n</option>
+              <option value="none">Sin Repetición</option>
               <option value="weekly">Cada semana</option>
             </select>
           </div>
@@ -1035,7 +1035,7 @@ function EventModal({ event, defaults, courses, tasks, onClose, onSave, onDelete
         {/* Description */}
         <div style={{ marginBottom:22 }}>
           <label style={{ fontSize:11, fontWeight:600, color:'var(--text-secondary)', display:'block', marginBottom:5 }}>Notas (opcional)</label>
-          <textarea value={desc} onChange={e=>setDesc(e.target.value)} placeholder="DescripciÃ³n, tema, detallesâ€¦" className="input-base" style={{ width:'100%', fontSize:12, resize:'vertical', minHeight:60, padding:'8px 10px' }}/>
+          <textarea value={desc} onChange={e=>setDesc(e.target.value)} placeholder="Descripción, tema, detallesâ€¦" className="input-base" style={{ width:'100%', fontSize:12, resize:'vertical', minHeight:60, padding:'8px 10px' }}/>
         </div>
 
         <div style={{ display:'flex', gap:10 }}>
@@ -1053,12 +1053,12 @@ function EventModal({ event, defaults, courses, tasks, onClose, onSave, onDelete
 function ConfirmDeleteModal({ onCancel, onConfirm }: { onCancel:()=>void; onConfirm:()=>void }) {
   return (
     <div style={{ position:'fixed', inset:0, zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(0,0,0,0.7)', backdropFilter:'blur(10px)' }} onClick={onCancel}>
-      <div className="bento-card" style={{ width:300, padding:'26px 26px', textAlign:'center', background:'var(--bg-elevated)', border:'1px solid rgba(239,68,68,0.25)' }} onClick={e=>e.stopPropagation()}>
+      <div className="bento-card" style={{ width:300, padding:'26px 26px', textAlign:'center', background:'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border:'1px solid rgba(239,68,68,0.25)' }} onClick={e=>e.stopPropagation()}>
         <div style={{ width:42, height:42, borderRadius:'50%', background:'rgba(239,68,68,0.1)', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 14px' }}>
           <Trash2 size={18} style={{ color:'#ef4444' }}/>
         </div>
-        <div style={{ fontSize:15, fontWeight:700, color:'var(--text-primary)', marginBottom:8, fontFamily:"'Outfit',sans-serif" }}>Â¿Eliminar evento?</div>
-        <div style={{ fontSize:12, color:'var(--text-secondary)', marginBottom:22 }}>Esta acciÃ³n no se puede deshacer.</div>
+        <div style={{ fontSize:15, fontWeight:700, color:'var(--text-primary)', marginBottom:8, fontFamily:"'Outfit',sans-serif" }}>¿Eliminar evento?</div>
+        <div style={{ fontSize:12, color:'var(--text-secondary)', marginBottom:22 }}>Esta acción no se puede deshacer.</div>
         <div style={{ display:'flex', gap:10 }}>
           <button onClick={onCancel} className="btn-secondary" style={{ flex:1, height:36, fontSize:12 }}>Cancelar</button>
           <button onClick={onConfirm} style={{ flex:1, height:36, borderRadius:8, border:'none', background:'#ef4444', color:'#fff', cursor:'pointer', fontSize:12, fontWeight:700 }}>Eliminar</button>

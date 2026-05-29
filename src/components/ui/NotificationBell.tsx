@@ -3,7 +3,7 @@ import { Bell, X, Check, Info, AlertTriangle, CheckCircle, AlertCircle } from 'l
 import { useApp } from '../../store/AppContext';
 
 export default function NotificationBell() {
-  const { notifications, addNotification, clearNotifications } = useApp();
+  const { notifications, removeNotification, clearNotifications } = useApp();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -38,10 +38,10 @@ export default function NotificationBell() {
       {open && (
         <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 8, width: 340, maxHeight: 400, background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 12, boxShadow: '0 16px 48px rgba(0,0,0,0.5)', overflow: 'hidden', zIndex: 100, display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: '1px solid var(--border-subtle)' }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Outfit', sans-serif" }}>Notificaciones</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>Notificaciones</span>
             <div style={{ display: 'flex', gap: 6 }}>
               {notifications.length > 0 && (
-                <button onClick={clearNotifications} style={{ padding: '4px 10px', borderRadius: 6, fontSize: 10, fontWeight: 500, background: 'var(--bg-deep)', border: '1px solid var(--border-default)', color: 'var(--text-tertiary)', cursor: 'pointer' }}>
+                <button onClick={() => { if (confirm('¿Limpiar todas las notificaciones?')) clearNotifications(); }} style={{ padding: '4px 10px', borderRadius: 6, fontSize: 10, fontWeight: 500, background: 'var(--bg-deep)', border: '1px solid var(--border-default)', color: 'var(--text-tertiary)', cursor: 'pointer' }}>
                   Limpiar
                 </button>
               )}
@@ -62,7 +62,7 @@ export default function NotificationBell() {
                       {new Date(n.timestamp).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
-                  <X size={10} style={{ color: 'var(--text-muted)', cursor: 'pointer', flexShrink: 0, marginTop: 2 }} />
+                  <X size={10} style={{ color: 'var(--text-muted)', cursor: 'pointer', flexShrink: 0, marginTop: 2 }} onClick={() => removeNotification(n.id)} />
                 </div>
               ))
             )}

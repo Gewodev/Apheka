@@ -19,6 +19,8 @@ import CursosHub from './components/views/CursosHub';
 import OAuthCallback from './components/OAuthCallback';
 import SupabaseCallback from './components/SupabaseCallback';
 import GlobalPlayer from './components/GlobalPlayer';
+import ReactPlayer from 'react-player';
+const Player = ReactPlayer as any;
 
 type ViewId = 'inicio' | 'estudio' | 'tareas' | 'notas' | 'musica' | 'planificacion' | 'cursos' | 'ajustes' | 'curso_detalle';
 
@@ -27,8 +29,11 @@ interface AppContentProps {
 }
 
 function AppContent() {
-  const { settings, courses, navigateTo, setNavigateTo, importState, updateSettings } = useApp();
+  const { settings, courses, navigateTo, setNavigateTo, importState, updateSettings, toastMessage, deleteOldCompletedTasks, youtubeVideoUrl, isPlayingMusic, musicVolume, musicProgress, musicDuration, setMusicProgress, setIsPlayingMusic, playTrack, musicQueue, setMusicQueue, shuffleMode, repeatMode, tracks, currentTrackId, setRepeatMode } = useApp();
   const [activeView, setActiveView] = useState<ViewId>('inicio');
+
+  // Auto-clean completed tasks older than 2 months on startup
+  useEffect(() => { deleteOldCompletedTasks(); }, []);
 
   useEffect(() => {
     if (navigateTo) {
@@ -213,7 +218,20 @@ function AppContent() {
         </div>
       </aside>
 
-      <main className="main-area">
+      <main className="main-area" style={{ position: 'relative' }}>
+        {toastMessage && (
+          <div style={{
+            position: 'absolute', top: 16, left: '50%', transform: 'translateX(-50%)', zIndex: 9999,
+            padding: '12px 24px', borderRadius: 12, backdropFilter: 'blur(16px)',
+            background: toastMessage.type === 'error' ? 'rgba(239,68,68,0.15)' : toastMessage.type === 'success' ? 'rgba(16,185,129,0.15)' : 'rgba(59,130,246,0.15)',
+            border: toastMessage.type === 'error' ? '1px solid rgba(239,68,68,0.3)' : toastMessage.type === 'success' ? '1px solid rgba(16,185,129,0.3)' : '1px solid rgba(59,130,246,0.3)',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.3)', color: '#fff',
+            fontSize: 13, fontWeight: 500, fontFamily: "'Inter Tight', sans-serif",
+            pointerEvents: 'none', animation: 'fadeInDown 300ms ease-out',
+          }}>
+            {toastMessage.message}
+          </div>
+        )}
         {isSupabaseCallback ? (
           <SupabaseCallback />
         ) : isOAuthCallback ? (
@@ -231,6 +249,26 @@ function AppContent() {
           {activeView === 'curso_detalle' && <Cursos initialCourseId={selectedCourseId || undefined} />}
           </div>
         )}
+        {youtubeVideoUrl && <div style={{ display: 'none' }}>
+          <Player url={youtubeVideoUrl} playing={isPlayingMusic} volume={musicVolume} controls={false} width={0} height={0}
+            onProgress={(state: any) => { if (musicDuration > 0) setMusicProgress(state.playedSeconds / musicDuration); }}
+            onEnded={() => {
+              if (tracks.length > 0 && currentTrackId) {
+                if (repeatMode === 'one') { playTrack(currentTrackId); return; }
+                let nextId: string | null = null;
+                const q = musicQueue;
+                if (q.length > 0) { const [n] = q; setMusicQueue(q.slice(1)); nextId = n; }
+                else if (shuffleMode || repeatMode === 'all') {
+                  const rest = tracks.filter(t => t.id !== currentTrackId).map(t => t.id);
+                  const refilled = shuffleMode ? [...rest].sort(() => Math.random() - 0.5) : rest;
+                  if (refilled.length > 0) { setMusicQueue(refilled.slice(1)); nextId = refilled[0]; }
+                }
+                if (nextId) playTrack(nextId);
+                else { setIsPlayingMusic(false); }
+              }
+            }}
+          />
+        </div>}
         <GlobalPlayer isCollapsed={isCollapsed} />
       </main>
 

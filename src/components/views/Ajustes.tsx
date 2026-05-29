@@ -6,7 +6,7 @@ import {
   FolderOpen, RefreshCw, ExternalLink, Shield,
   LogOut, Sliders, ListTodo, Music, GraduationCap, FileText, Sheet,
   PlayCircle, Calendar, Database, Upload, ArrowDownToLine, Search,
-  Wifi, CheckCircle, Image, Coffee
+  Wifi, CheckCircle, Image, Coffee, X
 } from 'lucide-react';
 import { useApp } from '../../store/AppContext';
 import { format } from 'date-fns';
@@ -28,19 +28,19 @@ import {
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 const GOOGLE_CLIENT_SECRET = import.meta.env.VITE_GOOGLE_CLIENT_SECRET || '';
 
-type SettingsTab = 'perfil' | 'apariencia' | 'estudio' | 'notificaciones';
+type SettingsTab = 'perfil' | 'Apariencia' | 'estudio' | 'Notificaciones';
 
 const TABS: { id: SettingsTab; label: string; icon: React.ComponentType<{ size?: number }> }[] = [
   { id: 'perfil', label: 'Perfil', icon: User },
-  { id: 'apariencia', label: 'Apariencia', icon: Palette },
+  { id: 'Apariencia', label: 'Apariencia', icon: Palette },
   { id: 'estudio', label: 'Estudio', icon: Brain },
 
-  { id: 'notificaciones', label: 'Sonidos y Alertas', icon: Bell },
+  { id: 'Notificaciones', label: 'Sonidos y Alertas', icon: Bell },
 ];
 
 const FONTS = [
   { name: 'Inter', family: "'Inter', sans-serif" },
-  { name: 'Outfit', family: "'Outfit', sans-serif" },
+  { name: 'Inter Tight', family: "'Inter Tight', sans-serif" },
   { name: 'JetBrains Mono', family: "'JetBrains Mono', monospace" },
   { name: 'Roboto', family: "'Roboto', sans-serif" },
   { name: 'Space Grotesk', family: "'Space Grotesk', sans-serif" },
@@ -54,22 +54,25 @@ const FONTS = [
 ];
 
 const THEME_PRESETS = [
-  { name: 'ClÃ¡sico', colors: ['#E11D48', '#3B82F6', '#10B981'], desc: 'Rojo acento clÃ¡sico' },
-  { name: 'TecnolÃ³gico', colors: ['#06B6D4', '#3B82F6', '#8B5CF6'], desc: 'Cian, azul y violeta' },
+  { name: 'Clásico', colors: ['#E11D48', '#3B82F6', '#10B981'], desc: 'Rojo acento clásico' },
+  { name: 'Tecnológico', colors: ['#06B6D4', '#3B82F6', '#8B5CF6'], desc: 'Cian, azul y violeta' },
   { name: 'One Piece', colors: ['#0EA5E9', '#FBBF24', '#EF4444'], desc: 'Azul, amarillo y rojo' },
   { name: 'Marvel', colors: ['#E11D48', '#3B82F6', '#F59E0B'], desc: 'Rojo, azul y dorado' },
   { name: 'Naturaleza', colors: ['#10B981', '#84CC16', '#14B8A6'], desc: 'Verde esmeralda y lima' },
-  { name: 'Galaxia', colors: ['#8B5CF6', '#D946EF', '#6366F1'], desc: 'PÃºrpura, rosa e Ã­ndigo' },
-  { name: 'Ocaso', colors: ['#F97316', '#EC4899', '#F59E0B'], desc: 'Naranja, rosa y Ã¡mbar' },
+  { name: 'Galaxia', colors: ['#8B5CF6', '#D946EF', '#6366F1'], desc: 'Púrpura, rosa e índigo' },
+  { name: 'Ocaso', colors: ['#F97316', '#EC4899', '#F59E0B'], desc: 'Naranja, rosa y ámbar' },
   { name: 'Minimal', colors: ['#ffffff', '#94A3B8', '#64748B'], desc: 'Blanco y grises' },
-  { name: 'EnergÃ­a', colors: ['#EF4444', '#F59E0B', '#10B981'], desc: 'Rojo, Ã¡mbar y verde' },
+  { name: 'Energía', colors: ['#EF4444', '#F59E0B', '#10B981'], desc: 'Rojo, ámbar y verde' },
+  { name: 'Oscuro', colors: ['#1E1E2E', '#CBA6F7', '#89B4FA'], desc: 'Violeta, lavanda y azul' },
+  { name: 'Retro', colors: ['#FF6B6B', '#FFE66D', '#4ECDC4'], desc: 'Rojo pastel, amarillo y turquesa' },
+  { name: 'Otoño', colors: ['#D35400', '#E67E22', '#F39C12'], desc: 'Naranja, calabaza y ámbar' },
 ];
 
-const ACCENT_COLORS = ['#E11D48', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6'];
+const ACCENT_COLORS = ['#E11D48', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#06B6D4', '#EC4899', '#F97316', '#84CC16', '#D946EF', '#14B8A6', '#6366F1'];
 
 function Toggle({ checked, onChange, label, desc }: { checked: boolean; onChange: (v: boolean) => void; label: string; desc: string }) {
   return (
-    <label className="bento-card hover-lift" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px', border: '1px solid var(--border-subtle)', cursor: 'pointer' }}>
+    <label className="bento-card hover-lift" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px', border: '1px solid var(--border-subtle)', cursor: 'pointer', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
       <div style={{ minWidth: 0, flex: 1 }}>
         <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', display: 'block' }}>{label}</span>
         <span style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4, display: 'block', lineHeight: 1.5 }}>{desc}</span>
@@ -109,13 +112,14 @@ export default function Ajustes() {
     setCalendarSyncEnabled, lastCalendarSync, setLastCalendarSync,
     triggerCalendarSync, importGoogleEvents,
     triggerTasksSync, importGoogleTasks,
-    searchYouTubeMusic, importClassroomCourses,
+    searchYouTubeMusic, importClassroomCourses, importClassroomAssignments,
     exportNotesToGoogleDoc, exportStatsToGoogleSheets,
     loadGoogleProfile, triggerDriveBackup,
-    events, tasks, notes, courses, clearAllMusicData, addNotification
+    events, tasks, notes, courses, clearAllMusicData, addNotification, deleteCompletedTasks
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<SettingsTab>('perfil');
+  const [selectedTheme, setSelectedTheme] = useState<string | null>(null);
   const [downloadPath, setDownloadPathState] = useState('');
   const [audioFormat, setAudioFormat] = useState<'mp3' | 'm4a'>('mp3');
   const [syncing, setSyncing] = useState(false);
@@ -127,6 +131,26 @@ export default function Ajustes() {
   const [googleProfile, setGoogleProfile] = useState<{ displayName: string; givenName: string; photoUrl: string; email: string } | null>(null);
   const [supabaseConnected, setSupabaseConnected] = useState(false);
   const [supabaseSyncing, setSupabaseSyncing] = useState(false);
+  const [showGoogleModal, setShowGoogleModal] = useState(false);
+  const [showClearAllMusic, setShowClearAllMusic] = useState(false);
+  const [clearAllMusicText, setClearAllMusicText] = useState('');
+
+  // Load theme colors from saved settings on mount
+  useEffect(() => {
+    const saved = settings.accentColor;
+    if (saved) {
+      const match = THEME_PRESETS.find(t => t.colors[0] === saved);
+      if (match) {
+        setSelectedTheme(match.name);
+        if (match.colors[1]) document.documentElement.style.setProperty('--theme-secondary', match.colors[1]);
+        if (match.colors[2]) document.documentElement.style.setProperty('--theme-tertiary', match.colors[2]);
+      } else {
+        setSelectedTheme(null);
+        document.documentElement.style.setProperty('--theme-secondary', saved);
+        document.documentElement.style.setProperty('--theme-tertiary', saved);
+      }
+    }
+  }, []);
 
   // Real-time clock for header
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -174,7 +198,7 @@ export default function Ajustes() {
     const error = localStorage.getItem('owa_auth_error');
     if (error) {
       localStorage.removeItem('owa_auth_error');
-      addNotification(`Error de autenticaciÃ³n: ${error}`, 'error');
+      addNotification(`Error de Autenticación: ${error}`, 'error');
     }
     const sbSuccess = localStorage.getItem('owa_supabase_auth_success');
     if (sbSuccess === 'true') {
@@ -249,7 +273,7 @@ export default function Ajustes() {
       await triggerCalendarSync();
       const count = await importGoogleEvents();
       addNotification(count > 0 ? `${count} eventos importados de Google Calendar` : 'Eventos sincronizados exitosamente', 'success');
-    } catch { addNotification('Error de sincronizaciÃ³n con Google Calendar', 'error'); }
+    } catch { addNotification('Error de Sincronización con Google Calendar', 'error'); }
     setSyncing(false);
   };
 
@@ -264,7 +288,7 @@ export default function Ajustes() {
   };
 
   const handleYouTubeSearch = async () => {
-    if (!ytSearch.trim()) { addNotification('Escribe un tÃ©rmino de bÃºsqueda', 'error'); return; }
+    if (!ytSearch.trim()) { addNotification('Escribe un término de búsqueda', 'error'); return; }
     setSyncing(true);
     try {
       const results = await searchYouTubeMusic(ytSearch);
@@ -279,7 +303,8 @@ export default function Ajustes() {
     setSyncing(true);
     try {
       await importClassroomCourses();
-      addNotification('Cursos importados de Google Classroom exitosamente', 'success');
+      const count = await importClassroomAssignments();
+      addNotification(count > 0 ? `${count} tareas importadas de Classroom` : 'Classroom sincronizado exitosamente', 'success');
     } catch { addNotification('Error al importar de Google Classroom', 'error'); }
     setSyncing(false);
   };
@@ -297,8 +322,8 @@ export default function Ajustes() {
     setSyncing(true);
     try {
       const url = await exportStatsToGoogleSheets();
-      if (url) { setSheetsUrl(url); addNotification('EstadÃ­sticas exportadas a Google Sheets', 'success'); }
-    } catch { addNotification('Error al exportar estadÃ­sticas a Google Sheets', 'error'); }
+      if (url) { setSheetsUrl(url); addNotification('Estadísticas exportadas a Google Sheets', 'success'); }
+    } catch { addNotification('Error al exportar estadísticas a Google Sheets', 'error'); }
     setSyncing(false);
   };
 
@@ -323,7 +348,7 @@ export default function Ajustes() {
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, paddingTop: 8 }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <h1 style={{ fontSize: 32, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.15, letterSpacing: '-0.02em', fontFamily: "'Outfit', sans-serif" }}>ConfiguraciÃ³n</h1>
+            <h1 style={{ fontSize: 32, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.15, letterSpacing: '-0.02em', fontFamily: "'Inter Tight', sans-serif" }}>Configuración</h1>
             <Sliders size={26} style={{ color: 'var(--accent)' }} />
           </div>
           <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 6, fontWeight: 500 }}>Personaliza y optimiza tu entorno de estudio.</p>
@@ -368,9 +393,9 @@ export default function Ajustes() {
       <div style={{ display: 'flex', flex: 1, gap: 24, minHeight: 600, alignItems: 'flex-start' }}>
         
         {/* INNER SIDEBAR */}
-        <aside className="bento-card" style={{ width: 240, padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
+        <aside className="bento-card" style={{ width: 240, padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8, padding: '0 8px' }}>
-            CategorÃ­as
+            Categorías
           </div>
           {TABS.map(tab => {
             const Icon = tab.icon;
@@ -391,24 +416,24 @@ export default function Ajustes() {
         </aside>
 
         {/* MAIN AREA */}
-        <main className="bento-card" style={{ flex: 1, padding: '32px 40px', minHeight: 600 }}>
+        <main className="bento-card" style={{ flex: 1, padding: '32px 40px', minHeight: 600, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
           <div style={{ maxWidth: 680, margin: '0 auto' }}>
 
             {/* â•â•â•â•â•â•â•â•â•â•â• PERFIL â•â•â•â•â•â•â•â•â•â•â• */}
             {activeTab === 'perfil' && (
               <section style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
                 <div>
-                  <h2 style={{ fontSize: 20, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Outfit', sans-serif", letterSpacing: '-0.02em', marginBottom: 4 }}>Perfil de Usuario</h2>
+                  <h2 style={{ fontSize: 20, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em', marginBottom: 4 }}>Perfil de Usuario</h2>
                   <p style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 300, letterSpacing: '0.02em' }}>Tu identidad y conexiones en OWA Studio</p>
                 </div>
 
                 {/* Avatar + Name + Photo URL */}
-                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 24 }}>
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 24, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
                   <div style={{ position: 'relative', flexShrink: 0 }}>
                     {settings.profilePhoto ? (
                       <img src={settings.profilePhoto} alt="" style={{ width: 72, height: 72, borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--accent)' }} />
                     ) : (
-                      <div style={{ width: 72, height: 72, borderRadius: '50%', background: 'var(--accent-dim)', border: '2px solid var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, fontWeight: 300, color: 'var(--accent)', fontFamily: "'Outfit', sans-serif" }}>
+                      <div style={{ width: 72, height: 72, borderRadius: '50%', background: 'var(--accent-dim)', border: '2px solid var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, fontWeight: 300, color: 'var(--accent)', fontFamily: "'Inter Tight', sans-serif" }}>
                         {settings.userName ? settings.userName.charAt(0).toUpperCase() : 'O'}
                       </div>
                     )}
@@ -428,8 +453,8 @@ export default function Ajustes() {
                 </div>
 
                 {/* Connected Services */}
-                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
-                  <h3 style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Outfit', sans-serif", letterSpacing: '-0.01em', marginBottom: 16 }}>Servicios Vinculados</h3>
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                  <h3 style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em', marginBottom: 16 }}>Servicios Vinculados</h3>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {/* Google */}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)' }}>
@@ -442,7 +467,7 @@ export default function Ajustes() {
                         </svg>
                         <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>Google</span>
                       </div>
-                      <button onClick={googleConnected ? handleGoogleSignOut : handleGoogleSignIn} className={googleConnected ? 'btn-secondary' : 'btn-primary'} style={{ fontSize: 10, fontWeight: 600, padding: '0 12px', height: 28 }}>
+                      <button onClick={() => { if (googleConnected) { handleGoogleSignOut(); } else { setShowGoogleModal(true); } }} className={googleConnected ? 'btn-secondary' : 'btn-primary'} style={{ fontSize: 10, fontWeight: 600, padding: '0 12px', height: 28 }}>
                         {googleConnected ? 'Desconectar' : 'Conectar'}
                       </button>
                     </div>
@@ -511,46 +536,78 @@ export default function Ajustes() {
                 </div>
 
                 {/* Logout */}
-                <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
+                <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <button onClick={() => setShowClearAllMusic(true)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 8, fontSize: 12, fontWeight: 500, background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)', color: '#EF4444', cursor: 'pointer', transition: 'all 200ms' }}>
+                    <Music size={14} /> Borrar toda la música
+                  </button>
                   <button onClick={() => {
-                    if (confirm('Â¿Cerrar sesiÃ³n? Se perderÃ¡n las conexiones activas.')) {
+                    if (confirm('¿Cerrar sesión? Se perderán las conexiones activas.')) {
                       handleGoogleSignOut();
                       handleSupabaseSignOut();
                     }
                   }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 8, fontSize: 12, fontWeight: 500, background: 'transparent', border: '1px solid rgba(239,68,68,0.2)', color: '#EF4444', cursor: 'pointer', transition: 'all 200ms' }}>
-                    <LogOut size={14} /> Cerrar SesiÃ³n
+                    <LogOut size={14} /> Cerrar Sesión
                   </button>
                 </div>
 
-                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid rgba(239,68,68,0.2)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
-                      <h3 style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Outfit', sans-serif", marginBottom: 4 }}>Datos de MÃºsica</h3>
-                      <p style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 300 }}>Borra todas las canciones, artistas e historial de reproducciÃ³n</p>
+                      <h3 style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", marginBottom: 4 }}>Datos de Tareas</h3>
+                      <p style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 300 }}>Borra todas las tareas completadas. Las tareas antiguas (&gt;2 meses) se eliminan automáticamente al iniciar.</p>
                     </div>
                     <button onClick={() => {
-                      if (confirm('Â¿EstÃ¡s seguro de que deseas borrar TODA tu mÃºsica? Esta acciÃ³n no se puede deshacer.')) {
-                        clearAllMusicData();
-                        addNotification('Todos los datos de mÃºsica han sido borrados', 'success');
+                      const completedCount = tasks.filter(t => t.status === 'completado').length;
+                      if (completedCount === 0) { addNotification('No hay tareas completadas para eliminar', 'info'); return; }
+                      if (confirm(`¿Eliminar ${completedCount} tarea${completedCount !== 1 ? 's' : ''} completada${completedCount !== 1 ? 's' : ''}? Esta acción no se puede deshacer.`)) {
+                        deleteCompletedTasks();
                       }
-                    }} style={{ padding: '0 20px', height: 38, borderRadius: 8, fontSize: 12, fontWeight: 500, background: 'var(--error)', border: 'none', color: '#fff', cursor: 'pointer' }}>
-                      Borrar todas las canciones
+                    }} style={{ padding: '0 20px', height: 38, borderRadius: 8, fontSize: 12, fontWeight: 500, background: '#EF4444', border: 'none', color: '#fff', cursor: 'pointer' }}>
+                      Borrar completadas
                     </button>
+                  </div>
+                </div>
+
+                {/* Floating Timer Customization */}
+                <div className="bento-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 12, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Timer Flotante</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)' }}>Color de fondo</span>
+                      <input type="color" value={settings.floatingBgColor || '#020203'} onChange={e => updateSettings({ floatingBgColor: e.target.value })}
+                        style={{ width: 32, height: 32, borderRadius: 6, border: '1px solid var(--border-default)', cursor: 'pointer', background: 'transparent', padding: 0 }} />
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)' }}>Estilo de reloj</span>
+                      <select value={settings.floatingClockType || 'led'} onChange={e => updateSettings({ floatingClockType: e.target.value as any })}
+                        style={{ padding: '6px 10px', borderRadius: 6, fontSize: 10, background: 'var(--bg-deep)', border: '1px solid var(--border-default)', color: 'var(--text-primary)', cursor: 'pointer', outline: 'none' }}>
+                        <option value="led">LED Digital</option>
+                        <option value="digital">Texto Simple</option>
+                      </select>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)' }}>Animación en pausa</span>
+                      <button onClick={() => updateSettings({ floatingShowAnimation: !settings.floatingShowAnimation })}
+                        style={{ padding: '6px 14px', borderRadius: 6, fontSize: 10, fontWeight: 600, cursor: 'pointer', border: 'none', background: settings.floatingShowAnimation ? 'var(--accent)' : 'var(--bg-deep)', color: settings.floatingShowAnimation ? '#fff' : 'var(--text-secondary)', transition: 'all 150ms' }}>
+                        {settings.floatingShowAnimation ? 'Activado' : 'Desactivado'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </section>
             )}
 
-            {/* â•â•â•â•â•â•â•â•â•â•â• APARIENCIA â•â•â•â•â•â•â•â•â•â•â• */}
-            {activeTab === 'apariencia' && (
+            {/* Apariencia */}
+            {activeTab === 'Apariencia' && (
               <section style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
                 <div>
-                  <h2 style={{ fontSize: 20, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Outfit', sans-serif", letterSpacing: '-0.02em', marginBottom: 4 }}>Apariencia y DiseÃ±o</h2>
+                  <h2 style={{ fontSize: 20, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em', marginBottom: 4 }}>Apariencia y Diseño</h2>
                   <p style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 300, letterSpacing: '0.02em' }}>Personaliza cada aspecto visual de OWA Studio</p>
                 </div>
 
                 {/* Modo Visual */}
-                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
                   <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16, display: 'block' }}>Modo Visual</span>
                   <div style={{ display: 'flex', gap: 16 }}>
                     {[
@@ -573,15 +630,15 @@ export default function Ajustes() {
                 </div>
 
                 {/* Temas Predefinidos */}
-                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
                   <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16, display: 'block' }}>Temas de Color</span>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
                     {THEME_PRESETS.map(theme => {
-                      const active = settings.accentColor === theme.colors[0];
+                      const active = selectedTheme === theme.name;
                       return (
                         <button key={theme.name} onClick={() => {
+                          setSelectedTheme(theme.name);
                           updateSettings({ accentColor: theme.colors[0] });
-                          // Set secondary colors as CSS variables for full theme
                           if (theme.colors[1]) document.documentElement.style.setProperty('--theme-secondary', theme.colors[1]);
                           if (theme.colors[2]) document.documentElement.style.setProperty('--theme-tertiary', theme.colors[2]);
                         }} style={{
@@ -593,7 +650,7 @@ export default function Ajustes() {
                               <div key={i} style={{ flex: 1, height: 16, borderRadius: 4, background: c, boxShadow: i === 0 && active ? `0 0 8px ${c}` : 'none' }} />
                             ))}
                           </div>
-                          <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', display: 'block', fontFamily: "'Outfit', sans-serif" }}>{theme.name}</span>
+                          <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', display: 'block', fontFamily: "'Inter Tight', sans-serif" }}>{theme.name}</span>
                           <span style={{ fontSize: 10, fontWeight: 300, color: 'var(--text-tertiary)', display: 'block', marginTop: 2 }}>{theme.desc}</span>
                         </button>
                       );
@@ -601,9 +658,9 @@ export default function Ajustes() {
                   </div>
                 </div>
 
-                {/* TipografÃ­a */}
-                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
-                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16, display: 'block' }}>Familia TipogrÃ¡fica</span>
+                {/* Tipografía */}
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16, display: 'block' }}>Familia Tipográfica</span>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
                     {FONTS.map(font => {
                       const active = settings.fontFamily === font.family;
@@ -621,8 +678,8 @@ export default function Ajustes() {
                   </div>
                 </div>
 
-                {/* Fondo de la AplicaciÃ³n y Paneles */}
-                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
+                {/* Fondo de la Aplicación y Paneles */}
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
                   <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16, display: 'block' }}>Fondo y Apariencia de Paneles</span>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                     {settings.backgroundImage && (
@@ -637,7 +694,7 @@ export default function Ajustes() {
                       try {
                         const selected = await open({
                           multiple: false,
-                          filters: [{ name: 'ImÃ¡genes', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'svg', 'avif', 'tiff', 'heic'] }]
+                          filters: [{ name: 'Imágenes', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'svg', 'avif', 'tiff', 'heic'] }]
                         });
                         if (selected && typeof selected === 'string') {
                           try {
@@ -725,20 +782,22 @@ export default function Ajustes() {
                 </div>
 
                 {/* Color Acento */}
-                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
                   <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16, display: 'block' }}>Color de Acento Principal</span>
-                  <div style={{ display: 'flex', gap: 20 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14, justifyItems: 'center' }}>
                     {ACCENT_COLORS.map(color => (
                       <button key={color} onClick={() => {
+                        setSelectedTheme(null);
                         updateSettings({ accentColor: color });
                         document.documentElement.style.setProperty('--theme-secondary', color);
                         document.documentElement.style.setProperty('--theme-tertiary', color);
                       }} className="hover-lift" style={{
-                        width: 48, height: 48, borderRadius: '50%', background: color, border: settings.accentColor === color ? '3px solid #fff' : 'none',
+                        width: 56, height: 56, borderRadius: '50%', background: color, border: settings.accentColor === color ? '3px solid #fff' : '2px solid transparent',
                         cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        boxShadow: settings.accentColor === color ? `0 0 16px ${color}` : 'none'
+                        boxShadow: settings.accentColor === color ? `0 0 20px ${color}` : '0 2px 8px rgba(0,0,0,0.3)',
+                        transition: 'all 200ms'
                       }}>
-                        {settings.accentColor === color && <Check size={20} color="#fff" strokeWidth={3} />}
+                        {settings.accentColor === color && <Check size={22} color="#fff" strokeWidth={3} />}
                       </button>
                     ))}
                   </div>
@@ -750,15 +809,15 @@ export default function Ajustes() {
             {activeTab === 'estudio' && (
               <section style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
                 <div>
-                  <h2 style={{ fontSize: 20, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Outfit', sans-serif", letterSpacing: '-0.02em', marginBottom: 4 }}>Tiempos y Metas de Estudio</h2>
-                  <p style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 300, letterSpacing: '0.02em' }}>Configura los intervalos de tu mÃ©todo Pomodoro y objetivos</p>
+                  <h2 style={{ fontSize: 20, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em', marginBottom: 4 }}>Tiempos y Metas de Estudio</h2>
+                  <p style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 300, letterSpacing: '0.02em' }}>Configura los intervalos de tu método Pomodoro y objetivos</p>
                 </div>
 
-                <div className="bento-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div className="bento-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 16, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
                     <RangeSlider label="Enfoque" value={settings.pomodoroTime / 60} min={10} max={120} unit="min" onChange={v => updateSettings({ pomodoroTime: v * 60 })} color="#E11D48" />
                     <RangeSlider label="Descanso Corto" value={settings.shortBreakTime / 60} min={1} max={30} unit="min" onChange={v => updateSettings({ shortBreakTime: v * 60 })} color="#10B981" />
-                    <RangeSlider label="CronÃ³metro (meta por ronda)" value={(settings.chronoGoal || 1500) / 60} min={25} max={180} unit="min" onChange={v => updateSettings({ chronoGoal: v * 60 })} color="#3B82F6" />
+                    <RangeSlider label="Cronómetro (meta por ronda)" value={(settings.chronoGoal || 1500) / 60} min={25} max={180} unit="min" onChange={v => updateSettings({ chronoGoal: v * 60 })} color="#3B82F6" />
                     <RangeSlider label="Meta Diaria" value={settings.dailyGoal} min={30} max={600} unit="min" onChange={v => updateSettings({ dailyGoal: v })} color="#8B5CF6" />
                   </div>
                   <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 16, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
@@ -768,7 +827,7 @@ export default function Ajustes() {
                 </div>
 
                 {/* Timer Colors */}
-                <div className="bento-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div className="bento-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 12, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
                   <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Colores de Temporizadores</span>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -782,7 +841,7 @@ export default function Ajustes() {
                         style={{ width: '100%', height: 36, borderRadius: 8, border: 'none', cursor: 'pointer', background: 'transparent' }} />
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-muted)' }}>CronÃ³metro</span>
+                      <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-muted)' }}>Cronómetro</span>
                       <input type="color" value={settings.timerChronoColor || '#3B82F6'} onChange={e => updateSettings({ timerChronoColor: e.target.value })}
                         style={{ width: '100%', height: 36, borderRadius: 8, border: 'none', cursor: 'pointer', background: 'transparent' }} />
                     </div>
@@ -793,19 +852,19 @@ export default function Ajustes() {
 
 
 
-            {/* â•â•â•â•â•â•â•â•â•â•â• NOTIFICACIONES â•â•â•â•â•â•â•â•â•â•â• */}
-            {activeTab === 'notificaciones' && (
+            {/* â•â•â•â•â•â•â•â•â•â•â• Notificaciones â•â•â•â•â•â•â•â•â•â•â• */}
+            {activeTab === 'Notificaciones' && (
               <section style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
                 <div>
                   <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>Sonidos y Alertas de Sistema</h2>
-                  <p style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>Controla el comportamiento acÃºstico y notificaciones del entorno</p>
+                  <p style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>Controla el comportamiento acústico y Notificaciones del entorno</p>
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   <Toggle checked={settings.notifications} onChange={v => updateSettings({ notifications: v })}
-                    label="Alertas de Temporizador Pomodoro" desc="Emitir notificaciÃ³n visual y acÃºstica al finalizar ciclos de estudio o descansos programados." />
+                    label="Alertas de Temporizador Pomodoro" desc="Emitir notificación visual y acústica al finalizar ciclos de estudio o descansos programados." />
                   <Toggle checked={settings.soundEffects} onChange={v => updateSettings({ soundEffects: v })}
-                    label="Efectos de Sonido HÃ¡pticos" desc="Reproducir sutiles retroalimentaciones acÃºsticas al interactuar con botones, pestaÃ±as y modales del sistema." />
+                    label="Efectos de Sonido Hápticos" desc="Reproducir sutiles retroalimentaciones acústicas al interactuar con botones, pestañas y modales del sistema." />
                 </div>
               </section>
             )}
@@ -813,6 +872,98 @@ export default function Ajustes() {
           </div>
         </main>
       </div>
+
+      {/* Google Connect Modal */}
+      {showGoogleModal && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={() => setShowGoogleModal(false)}>
+          <div className="bento-card" style={{ width: '100%', maxWidth: 420, padding: '28px 32px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", display: 'flex', alignItems: 'center', gap: 10 }}>
+                <svg viewBox="0 0 24 24" style={{ width: 22, height: 22 }}>
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/>
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                </svg>
+                Conectar con Google
+              </h2>
+              <button onClick={() => setShowGoogleModal(false)} style={{ width: 28, height: 28, borderRadius: 6, background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer' }}><X size={16} /></button>
+            </div>
+
+            {googleProfile ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', borderRadius: 10, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
+                  {googleProfile.photoUrl ? (
+                    <img src={googleProfile.photoUrl} alt="" style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover' }} />
+                  ) : (
+                    <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'var(--accent-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 700, color: 'var(--accent)' }}>{googleProfile.givenName?.[0]}</div>
+                  )}
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{googleProfile.displayName}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{googleProfile.email}</div>
+                  </div>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#10B981', marginLeft: 'auto', boxShadow: '0 0 6px rgba(16,185,129,0.5)' }} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <button onClick={() => { handleTasksSync(); }} style={{ padding: '8px', borderRadius: 8, fontSize: 10, fontWeight: 600, cursor: 'pointer', border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}>
+                    Sincronizar Tasks
+                  </button>
+                  <button onClick={() => { handleClassroomImport(); }} style={{ padding: '8px', borderRadius: 8, fontSize: 10, fontWeight: 600, cursor: 'pointer', border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}>
+                    Sincronizar Classroom
+                  </button>
+                </div>
+                <button onClick={handleGoogleSignOut} style={{ width: '100%', padding: '10px', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: '1px solid rgba(239,68,68,0.2)', background: 'rgba(239,68,68,0.06)', color: '#EF4444' }}>
+                  Desconectar Google
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <p style={{ fontSize: 13, color: 'var(--text-tertiary)', lineHeight: 1.5 }}>
+                  Conecta tu cuenta de Google para sincronizar tareas, calendario, Classroom y acceder a Google Drive desde OWA Studio.
+                </p>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  {['Calendar', 'Tasks', 'Classroom', 'Drive', 'YouTube'].map(s => (
+                    <div key={s} style={{ flex: 1, padding: '6px 0', borderRadius: 6, background: 'var(--bg-deep)', textAlign: 'center', fontSize: 8, fontWeight: 600, color: 'var(--text-muted)' }}>{s}</div>
+                  ))}
+                </div>
+                <button onClick={handleGoogleSignIn} style={{ width: '100%', padding: '12px', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer', border: 'none', background: '#4285F4', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                  <svg viewBox="0 0 24 24" style={{ width: 18, height: 18 }}><path fill="#fff" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/></svg>
+                  Iniciar sesión con Google
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      {/* Clear All Music Confirmation */}
+      {showClearAllMusic && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={() => { setShowClearAllMusic(false); setClearAllMusicText(''); }}>
+          <div className="bento-card" style={{ padding: 28, width: 360, maxWidth: '90vw', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8, fontFamily: "'Inter Tight', sans-serif" }}>Eliminar toda la biblioteca de música</h3>
+            <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginBottom: 16 }}>
+              Se eliminarán todas las canciones, playlists y descargas. Esta acción no se puede deshacer.
+            </p>
+            <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
+              Escribe <strong style={{ color: 'var(--error)' }}>Deseoborrartodo</strong> para confirmar:
+            </p>
+            <input type="text" value={clearAllMusicText} onChange={e => setClearAllMusicText(e.target.value)}
+              placeholder="Escribe Deseoborrartodo"
+              style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-deep)', color: 'var(--text-primary)', fontSize: 12, outline: 'none', marginBottom: 16 }} />
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+              <button onClick={() => { setShowClearAllMusic(false); setClearAllMusicText(''); }} className="btn-secondary" style={{ height: 38, padding: '0 20px', fontSize: 12 }}>Cancelar</button>
+              <button onClick={() => {
+                if (clearAllMusicText !== 'Deseoborrartodo') return;
+                clearAllMusicData();
+                setShowClearAllMusic(false);
+                setClearAllMusicText('');
+                addNotification('Biblioteca de música eliminada por completo', 'success');
+              }} className="btn-primary" style={{ height: 38, padding: '0 20px', fontSize: 12, background: clearAllMusicText === 'Deseoborrartodo' ? 'var(--error)' : 'var(--bg-deep)', borderColor: clearAllMusicText === 'Deseoborrartodo' ? 'var(--error)' : 'var(--border-default)', opacity: clearAllMusicText === 'Deseoborrartodo' ? 1 : 0.4, cursor: clearAllMusicText === 'Deseoborrartodo' ? 'pointer' : 'not-allowed' }}>
+                Eliminar todo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

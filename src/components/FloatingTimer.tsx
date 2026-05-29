@@ -1,5 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
+import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { Monitor, MonitorOff } from 'lucide-react';
+import { useApp } from '../store/AppContext';
 
 interface TimerSync {
   sessionTime: number;
@@ -28,7 +31,7 @@ const segPolys: [number,number][][] = [
   [[10,60],[18,56],[54,56],[62,60],[54,64],[18,64]],
 ];
 
-function DigitSVG({ d, color, width = 36, height = 58 }: { d: string; color: string; width?: number; height?: number }) {
+function DigitSVG({ d, color, width = 42, height = 68 }: { d: string; color: string; width?: number; height?: number }) {
   const s = segs[d] || segs['0'];
   return (
     <svg width={width} height={height} viewBox="0 0 72 120" style={{ display: 'block' }}>
@@ -45,7 +48,7 @@ function DigitSVG({ d, color, width = 36, height = 58 }: { d: string; color: str
   );
 }
 
-function ColonSVG({ color, width = 14, height = 58 }: { color: string; width?: number; height?: number }) {
+function ColonSVG({ color, width = 16, height = 68 }: { color: string; width?: number; height?: number }) {
   return (
     <svg width={width} height={height} viewBox="0 0 24 120" style={{ display: 'block' }}>
       <rect x={8} y={38} width={8} height={8} rx={4} ry={4} fill={color}
@@ -57,10 +60,12 @@ function ColonSVG({ color, width = 14, height = 58 }: { color: string; width?: n
 }
 
 export default function FloatingTimer() {
+  const { settings } = useApp();
   const [timer, setTimer] = useState<TimerSync>({
     sessionTime: 0, isTimerActive: false, isRest: false,
     sessionType: 'pomodoro', pomodoroTime: 1500, shortBreakTime: 300,
   });
+  const [alwaysOnTop, setAlwaysOnTop] = useState(true);
   const lastSyncRef = useRef(Date.now());
   const displayRef = useRef(timer);
   displayRef.current = timer;
@@ -102,41 +107,65 @@ export default function FloatingTimer() {
     else displaySec = Math.max(0, pomodoroTime - sessionTime);
   }
   const timeStr = `${Math.floor(displaySec / 60).toString().padStart(2, '0')}:${(displaySec % 60).toString().padStart(2, '0')}`;
-  const color = !timer.isTimerActive ? '#6B7280' : (timer.isRest ? '#10B981' : (timer.sessionType === 'chrono' ? '#3B82F6' : '#E11D48'));
-  const statusText = !timer.isTimerActive ? 'PAUSADO' : (timer.isRest ? 'DESCANSO' : timer.sessionType === 'chrono' ? 'CRONÓMETRO' : 'ENFOQUE');
+  const isActive = timer.isTimerActive;
+  const color = !isActive ? '#6B7280' : (isRest ? (settings.timerBreakColor || '#10B981') : (sessionType === 'chrono' ? (settings.timerChronoColor || '#3B82F6') : (settings.timerFocusColor || '#E11D48')));
+  const bgColor = settings.floatingBgColor || '#020203';
+  const statusText = !isActive ? 'PAUSADO' : (isRest ? 'DESCANSO' : 'ENFOQUE');
+
+  const toggleAlwaysOnTop = async () => {
+    const next = !alwaysOnTop;
+    try {
+      const win = getCurrentWebviewWindow();
+      await win.setAlwaysOnTop(next);
+      setAlwaysOnTop(next);
+    } catch { /* ignore */ }
+  };
 
   return (
-    <div style={{
+    <div data-tauri-drag-region style={{
       width: '100vw', height: '100vh',
-      background: '#020203',
+      background: bgColor,
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
       overflow: 'hidden', userSelect: 'none',
-      fontFamily: "'Outfit', sans-serif",
-      gap: 8,
+      fontFamily: "'Inter Tight', sans-serif",
+      gap: 6, cursor: 'grab',
     }}>
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2,
+      <div data-tauri-drag-region style={{
+        display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2,
       }}>
         <div style={{
           width: 5, height: 5, borderRadius: '50%',
           background: color,
-          boxShadow: timer.isTimerActive ? `0 0 6px ${color}` : 'none',
+          boxShadow: isActive ? `0 0 6px ${color}` : 'none',
           transition: 'background 200ms',
         }} />
         <span style={{
-          fontSize: 9, fontWeight: 700, color, letterSpacing: '0.08em',
+          fontSize: 10, fontWeight: 700, color, letterSpacing: '0.1em',
           textTransform: 'uppercase', transition: 'color 200ms',
         }}>
           {statusText}
         </span>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
+      <div data-tauri-drag-region style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
         {timeStr.split('').map((ch, i) =>
           ch === ':'
-            ? <ColonSVG key={i} color={color} width={14} height={58} />
-            : <DigitSVG key={i} d={ch} color={color} width={36} height={58} />
+            ? <ColonSVG key={i} color={color} />
+            : <DigitSVG key={i} d={ch} color={color} />
         )}
       </div>
+      <button onClick={toggleAlwaysOnTop}
+        style={{
+          position: 'absolute', bottom: 4, right: 4,
+          background: 'rgba(255,255,255,0.04)', border: 'none',
+          color: alwaysOnTop ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.12)',
+          cursor: 'pointer', padding: 3, borderRadius: 4,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          transition: 'all 150ms', lineHeight: 0,
+        }}
+        title={alwaysOnTop ? 'Siempre al frente (haz clic para cambiar)' : 'Ventana normal (haz clic para cambiar)'}
+      >
+        {alwaysOnTop ? <Monitor size={10} /> : <MonitorOff size={10} />}
+      </button>
     </div>
   );
 }
