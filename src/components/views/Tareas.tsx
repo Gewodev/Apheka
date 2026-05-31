@@ -69,6 +69,18 @@ function getFileIcon(type: string, size = 14) {
   }
 }
 
+function polarToCartesian(cx: number, cy: number, r: number, deg: number) {
+  const rad = (deg - 90) * Math.PI / 180;
+  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+}
+
+function describeArc(cx: number, cy: number, r: number, startDeg: number, endDeg: number) {
+  const s = polarToCartesian(cx, cy, r, endDeg);
+  const e = polarToCartesian(cx, cy, r, startDeg);
+  const large = endDeg - startDeg > 180 ? 1 : 0;
+  return `M ${s.x} ${s.y} A ${r} ${r} 0 ${large} 0 ${e.x} ${e.y}`;
+}
+
 export default function Tareas() {
   const { tasks, courses, addTask, updateTask, toggleTaskStatus, deleteTask, addSubTask, toggleSubTask, deleteSubTask, addTaskFile, removeTaskFile, clearAllTasks, addNotification, setNavigateTo } = useApp();
 
@@ -77,6 +89,7 @@ export default function Tareas() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [showNewModal, setShowNewModal] = useState(false);
+  const [newTaskPrefillDate, setNewTaskPrefillDate] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'board' | 'calendar'>('list');
   const [sortBy, setSortBy] = useState<'fecha' | 'curso'>('fecha');
   const [calendarDate, setCalendarDate] = useState(new Date());
@@ -107,13 +120,23 @@ export default function Tareas() {
   useEffect(() => { const t = setTimeout(() => setIsInitialLoading(false), 650); return () => clearTimeout(t); }, []);
   const [showNotesModal, setShowNotesModal] = useState(false);
   const [showSubtasksModal, setShowSubtasksModal] = useState(false);
-  const [addMaterialMode, setAddMaterialMode] = useState<'link' | 'file' | null>(null);
+  const [addMaterialMode, setAddMaterialMode] = useState<'link' | 'file'>('file');
   const [confirmDeleteMaterial, setConfirmDeleteMaterial] = useState<{ taskId: string; fileId: string } | null>(null);
   const [confirmDeleteTask, setConfirmDeleteTask] = useState<string | null>(null);
 
   const notificationCount = useMemo(() => tasks.filter(t => t.dueDate && new Date(t.dueDate).getTime() < Date.now() && t.status !== 'completado').length, [tasks]);
 
   useEffect(() => { const timer = setInterval(() => setCurrentTime(new Date()), 1000); return () => clearInterval(timer); }, []);
+
+  useEffect(() => {
+    if (showNewModal && newTaskPrefillDate) {
+      requestAnimationFrame(() => {
+        const input = document.getElementById('new-task-duedate') as HTMLInputElement;
+        if (input) { input.value = newTaskPrefillDate; }
+      });
+      setNewTaskPrefillDate(null);
+    }
+  }, [showNewModal, newTaskPrefillDate]);
 
   useEffect(() => { return onAuthChange(connected => setGoogleConnected(connected)); }, []);
 
@@ -219,24 +242,10 @@ export default function Tareas() {
   const handleFileSelected = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
     setNewMaterialFile(file);
-    // Try Tauri native dialog for real filesystem path
-    try {
-      const { open } = await import('@tauri-apps/plugin-dialog');
-      const selected = await open({ multiple: false });
-      if (selected) {
-        setNewMaterialPath(selected as string);
-      } else {
-        // Fallback to data URL if dialog cancelled
-        const reader = new FileReader();
-        reader.onload = (ev) => setNewMaterialPath(ev.target?.result as string);
-        reader.readAsDataURL(file);
-      }
-    } catch {
-      // Browser fallback: data URL
-      const reader = new FileReader();
-      reader.onload = (ev) => setNewMaterialPath(ev.target?.result as string);
-      reader.readAsDataURL(file);
-    }
+    // Use file directly — no double dialog
+    const reader = new FileReader();
+    reader.onload = (ev) => setNewMaterialPath(ev.target?.result as string);
+    reader.readAsDataURL(file);
     if (!newMaterialName.trim()) setNewMaterialName(file.name.replace(/\.[^/.]+$/, ''));
     const ext = file.name.split('.').pop()?.toLowerCase() || '';
     const typeMap: Record<string, string> = { pdf: 'pdf', png: 'image', jpg: 'image', jpeg: 'image', gif: 'image', webp: 'image', svg: 'image', mp4: 'video', webm: 'video', mp3: 'audio', wav: 'audio', ogg: 'audio', flac: 'audio', aac: 'audio', doc: 'doc', docx: 'doc', xls: 'xls', xlsx: 'xls', ppt: 'ppt', pptx: 'ppt', txt: 'text', csv: 'csv', zip: 'zip', rar: 'zip', '7z': 'zip', json: 'text', md: 'text' };
@@ -244,20 +253,35 @@ export default function Tareas() {
     e.target.value = '';
   }, [newMaterialName]);
 
-  const handleAddMaterial = useCallback(() => {
-    if (!selectedTask || !newMaterialName.trim()) return;
+  const fetchPageTitle = useCallback(async (url: string): Promise<string | null> => {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+      const html = await res.text();
+      const match = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+      return match ? match[1].trim() : null;
+    } catch { return null; }
+  }, []);
+
+  const handleAddMaterial = useCallback(async () => {
+    if (!selectedTask) return;
     const path = addMaterialMode === 'link' ? newMaterialPath.trim() : newMaterialPath;
     if (!path) { addNotification('Ingresa la URL o selecciona un archivo', 'error'); return; }
+    let name = newMaterialName.trim();
+    if (!name && addMaterialMode === 'link') {
+      const fetched = await fetchPageTitle(path);
+      if (fetched) name = fetched;
+    }
+    if (!name) { addNotification('Ingresa el nombre del material', 'error'); return; }
     const ext = newMaterialFile?.name.split('.').pop()?.toLowerCase() || '';
-    const typeMap: Record<string, string> = { pdf: 'pdf', png: 'image', jpg: 'image', jpeg: 'image', gif: 'image', webp: 'image', mp4: 'video', webm: 'video', mp3: 'audio', wav: 'audio', ogg: 'audio', doc: 'doc', docx: 'doc', xls: 'xls', xlsx: 'xls', ppt: 'ppt', pptx: 'ppt', txt: 'text', csv: 'csv' };
+    const typeMap: Record<string, string> = { pdf: 'pdf', png: 'image', jpg: 'image', jpeg: 'image', gif: 'image', webp: 'image', svg: 'image', bmp: 'image', mp4: 'video', webm: 'video', avi: 'video', mov: 'video', mkv: 'video', mp3: 'audio', wav: 'audio', ogg: 'audio', flac: 'audio', aac: 'audio', wma: 'audio', doc: 'doc', docx: 'doc', xls: 'xls', xlsx: 'xls', ppt: 'ppt', pptx: 'ppt', txt: 'text', csv: 'csv', json: 'text', md: 'text', xml: 'text', zip: 'zip', rar: 'zip', '7z': 'zip', tar: 'zip', gz: 'zip' };
     let detectedType = addMaterialMode === 'file' ? (typeMap[ext] || 'other') : 'link';
     if (addMaterialMode === 'link') {
       if (path.includes('youtube.com') || path.includes('youtu.be')) detectedType = 'video';
       else if (path.includes('drive.google.com')) detectedType = 'drive';
     }
-    addTaskFile(selectedTask.id, { name: newMaterialName.trim(), path, type: detectedType, size: newMaterialFile?.size });
+    addTaskFile(selectedTask.id, { name, path, type: detectedType, size: newMaterialFile?.size });
     setNewMaterialName(''); setNewMaterialPath(''); setNewMaterialFile(null); setShowAddMaterial(false); setAddMaterialMode(null);
-  }, [selectedTask, newMaterialName, newMaterialPath, newMaterialFile, addMaterialMode, addTaskFile]);
+  }, [selectedTask, newMaterialName, newMaterialPath, newMaterialFile, addMaterialMode, addTaskFile, fetchPageTitle]);
 
   const handleSyncClassroom = useCallback(async () => {
     if (!googleConnected) { const ok = await signIn(); if (!ok) { addNotification('No se pudo conectar con Google', 'error'); return; } setGoogleConnected(true); }
@@ -476,7 +500,7 @@ export default function Tareas() {
 
       {/* TOOLBAR */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 14, flexShrink: 0 }}>
-        <div style={{ display: 'flex', gap: 3, padding: 3, borderRadius: 10, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)' }}>
+        <div style={{ display: 'flex', gap: 4, padding: 3, borderRadius: 14, background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
           {[
             { id: 'list', label: 'Lista', icon: ListIcon },
             { id: 'board', label: 'Tablero', icon: LayoutGrid },
@@ -486,8 +510,22 @@ export default function Tareas() {
             const Icon = m.icon;
             return (
               <button key={m.id} onClick={() => setViewMode(m.id as any)}
-                style={{ padding: '6px 16px', borderRadius: 8, fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', cursor: 'pointer', border: 'none', background: active ? 'var(--accent)' : 'transparent', color: active ? '#fff' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 5, transition: 'all 300ms' }}>
-                <Icon size={12} /> {m.label}
+                style={{
+                  padding: '10px 22px', borderRadius: 11, fontSize: 12, fontWeight: 700,
+                  letterSpacing: '0.05em', cursor: 'pointer', border: 'none',
+                  background: active
+                    ? `linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 80%, #fff))`
+                    : 'transparent',
+                  color: active ? '#fff' : 'var(--text-muted)',
+                  display: 'flex', alignItems: 'center', gap: 7,
+                  transition: 'all 250ms cubic-bezier(0.34, 1.56, 0.64, 1)',
+                  boxShadow: active ? '0 2px 10px var(--accent-glow)' : 'none',
+                  transform: active ? 'scale(1.03)' : 'scale(1)',
+                  opacity: active ? 1 : 0.7,
+                }}
+                onMouseEnter={e => { if (!active) e.currentTarget.style.opacity = '1'; }}
+                onMouseLeave={e => { if (!active) e.currentTarget.style.opacity = '0.7'; }}>
+                <Icon size={15} /> {m.label}
               </button>
             );
           })}
@@ -516,24 +554,24 @@ export default function Tareas() {
         {viewMode === 'list' && (
             <div style={{ width: '100%', display: 'flex', flexDirection: 'column', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 12, flex: 1 }}>
               {/* Column headers */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 18px', borderBottom: '1px solid var(--border-soft)', flexShrink: 0, background: 'var(--bg-deep)', borderRadius: '12px 12px 0 0' }}>
-                <span style={{ width: 4, height: 4, borderRadius: '50%', flexShrink: 0 }} />
-                <span style={{ flex: 3.5, fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Tarea</span>
-                <span style={{ flex: 1.4, fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Curso</span>
-                <span style={{ flex: 0.9, fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Prioridad</span>
-                <span style={{ flex: 1.2, fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Fecha</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 18px', borderBottom: '1px solid var(--border-soft)', flexShrink: 0, background: 'var(--bg-elevated)', borderRadius: '12px 12px 0 0' }}>
+                <span style={{ width: 24, flexShrink: 0 }} />
+                <span style={{ flex: 4, fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Tarea</span>
+                <span style={{ flex: 2, fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Curso</span>
+                <span style={{ flex: 1.2, fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Prioridad</span>
+                <span style={{ flex: 1.6, fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Fecha</span>
                 <span style={{ width: 24, flexShrink: 0 }} />
               </div>
               {/* Rows */}
               <div className="no-scrollbar" style={{ display: 'flex', flexDirection: 'column', overflowY: 'auto', flex: 1 }}>
                 {isInitialLoading ? [1,2,3,4,5,6].map((_, i) => (
                   <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 0, padding: '0', minHeight: 50, borderBottom: '1px solid var(--border-soft)' }}>
-                    <div style={{ width: 28, minHeight: 50, flexShrink: 0, background: 'rgba(255,255,255,0.04)' }} />
-                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 12, padding: '0 18px', minHeight: 50 }}>
-                      <div style={{ flex: 3.5, height: 11, borderRadius: 6, background: 'rgba(255,255,255,0.06)', animation: 'pulse 1.5s ease-in-out infinite', animationDelay: `${i * 80}ms` }} />
-                      <div style={{ flex: 1.4, height: 11, borderRadius: 6, background: 'rgba(255,255,255,0.04)', animation: 'pulse 1.5s ease-in-out infinite', animationDelay: `${i * 80 + 100}ms` }} />
-                      <div style={{ flex: 0.9, height: 11, borderRadius: 6, background: 'rgba(255,255,255,0.04)', animation: 'pulse 1.5s ease-in-out infinite', animationDelay: `${i * 80 + 200}ms` }} />
-                      <div style={{ flex: 1.2, height: 11, borderRadius: 6, background: 'rgba(255,255,255,0.04)', animation: 'pulse 1.5s ease-in-out infinite', animationDelay: `${i * 80 + 300}ms` }} />
+                    <div style={{ width: 24, minHeight: 50, flexShrink: 0 }} />
+                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 12, padding: '0 18px 0 26px', minHeight: 50 }}>
+                      <div style={{ flex: 4, height: 11, borderRadius: 6, background: 'rgba(255,255,255,0.06)', animation: 'pulse 1.5s ease-in-out infinite', animationDelay: `${i * 80}ms` }} />
+                      <div style={{ flex: 2, height: 11, borderRadius: 6, background: 'rgba(255,255,255,0.04)', animation: 'pulse 1.5s ease-in-out infinite', animationDelay: `${i * 80 + 100}ms` }} />
+                      <div style={{ flex: 1.2, height: 11, borderRadius: 6, background: 'rgba(255,255,255,0.04)', animation: 'pulse 1.5s ease-in-out infinite', animationDelay: `${i * 80 + 200}ms` }} />
+                      <div style={{ flex: 1.6, height: 11, borderRadius: 6, background: 'rgba(255,255,255,0.04)', animation: 'pulse 1.5s ease-in-out infinite', animationDelay: `${i * 80 + 300}ms` }} />
                       <div style={{ width: 24, height: 24, borderRadius: 6, background: 'rgba(255,255,255,0.04)' }} />
                     </div>
                   </div>
@@ -564,23 +602,24 @@ export default function Tareas() {
                       {/* Content area — click opens detail */}
                       <div onClick={(e) => { e.stopPropagation(); handleOpenDetail(task.id); }}
                         style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 12, padding: '0 18px 0 26px', minHeight: 50, cursor: 'pointer', minWidth: 0 }}>
-                        <div style={{ flex: 3.5, display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                        <div style={{ flex: 4, display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                           <span style={{ fontSize: 13, fontWeight: 500, color: titleColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: isDone ? 'line-through' : 'none' }}>
                             {task.title}
                           </span>
                         </div>
-                        <div style={{ flex: 1.4, minWidth: 0 }}>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 500, padding: '3px 10px 3px 6px', borderRadius: 6, background: task.courseColor + '12', color: task.courseColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
-                            <span style={{ width: 5, height: 5, borderRadius: '50%', background: task.courseColor, flexShrink: 0 }} />
+                        <div style={{ flex: 2, minWidth: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 500, padding: '3px 10px', borderRadius: 6, background: task.courseColor + '12', color: task.courseColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%', border: task.status === 'progreso' ? `1px solid ${task.courseColor}50` : '1px solid transparent' }}>
+                            <span style={{ width: 5, height: 5, borderRadius: '50%', background: task.courseColor, flexShrink: 0, boxShadow: task.status === 'progreso' ? `0 0 6px ${task.courseColor}80` : 'none' }} />
                             {task.course}
                           </span>
+
                         </div>
-                        <div style={{ flex: 0.9 }}>
+                        <div style={{ flex: 1.2 }}>
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 9, fontWeight: 600, padding: '2px 8px', borderRadius: 6, textTransform: 'uppercase', letterSpacing: '0.04em', background: task.priority === 'high' ? 'rgba(239,68,68,0.15)' : task.priority === 'medium' ? 'rgba(245,158,11,0.15)' : 'rgba(16,185,129,0.15)', color: task.priority === 'high' ? '#EF4444' : task.priority === 'medium' ? '#F59E0B' : '#10B981' }}>
                             {task.priority === 'high' ? 'Alta' : task.priority === 'medium' ? 'Media' : 'Baja'}
                           </span>
                         </div>
-                        <div style={{ flex: 1.2, opacity: longPressedTaskId === task.id ? 0 : 1, transition: 'opacity 200ms' }}>
+                        <div style={{ flex: 1.6, opacity: longPressedTaskId === task.id ? 0 : 1, transition: 'opacity 200ms' }}>
                           {tr && (
                             <span style={{ fontSize: 12, fontWeight: 500, color: dateColor }}>
                               {tr.text}
@@ -719,24 +758,24 @@ export default function Tareas() {
 
           {/* CALENDAR VIEW */}
           {viewMode === 'calendar' && (
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative', background: 'rgba(255,255,255,0.015)', border: '1px solid var(--border-subtle)', borderRadius: 12 }}>
-              {/* Calendar Header — más transparente */}
-              <div style={{ padding: '12px 16px', background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid var(--border-soft)', borderRadius: '12px 12px 0 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 12 }}>
+              {/* Calendar Header */}
+              <div style={{ padding: '12px 16px', background: 'var(--bg-elevated)', borderBottom: '1px solid var(--border-soft)', borderRadius: '12px 12px 0 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <button onClick={() => { setCalendarDate(new Date()); setCalendarSelectedDay(new Date()); }} style={{ fontSize: 11, fontWeight: 500, padding: '5px 14px', borderRadius: 6, background: 'rgba(255,255,255,0.04)', color: 'var(--text-secondary)', border: '1px solid var(--border-soft)', cursor: 'pointer', transition: 'all 150ms' }}>Hoy</button>
+                  <button onClick={() => { setCalendarDate(new Date()); setCalendarSelectedDay(new Date()); }} style={{ fontSize: 11, fontWeight: 500, padding: '5px 14px', borderRadius: 6, background: 'var(--bg-hover)', color: 'var(--text-secondary)', border: '1px solid var(--border-soft)', cursor: 'pointer', transition: 'all 150ms' }}>Hoy</button>
                   <div style={{ display: 'flex', gap: 1 }}>
-                    <button onClick={handlePrevPeriod} style={{ width: 28, height: 28, borderRadius: 6, background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border-soft)', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}><ChevronLeft size={14} /></button>
-                    <button onClick={handleNextPeriod} style={{ width: 28, height: 28, borderRadius: 6, background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border-soft)', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}><ChevronRight size={14} /></button>
+                    <button onClick={handlePrevPeriod} style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--bg-hover)', border: '1px solid var(--border-soft)', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}><ChevronLeft size={14} /></button>
+                    <button onClick={handleNextPeriod} style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--bg-hover)', border: '1px solid var(--border-soft)', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}><ChevronRight size={14} /></button>
                   </div>
-                  <h2 style={{ fontSize: 16, fontWeight: 500, color: 'rgba(255,255,255,0.65)', fontFamily: "'Inter Tight', sans-serif", textTransform: 'capitalize', margin: 0 }}>{format(calendarDate, 'MMMM yyyy', { locale: es })}</h2>
+                  <h2 style={{ fontSize: 16, fontWeight: 500, color: 'var(--text-secondary)', fontFamily: "'Inter Tight', sans-serif", textTransform: 'capitalize', margin: 0 }}>{format(calendarDate, 'MMMM yyyy', { locale: es })}</h2>
                 </div>
-                <div style={{ display: 'flex', gap: 4, padding: 2, borderRadius: 6, background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-soft)' }}>
+                <div style={{ display: 'flex', gap: 4, padding: 2, borderRadius: 6, background: 'var(--bg-hover)', border: '1px solid var(--border-soft)' }}>
                   {[
                     { id: 'mes', label: 'Mes' },
                     { id: 'semana', label: 'Semana' },
                   ].map(m => (
                     <button key={m.id} onClick={() => setCalendarSubMode(m.id as any)}
-                      style={{ padding: '3px 10px', borderRadius: 4, fontSize: 9, fontWeight: 500, cursor: 'pointer', border: 'none', background: calendarSubMode === m.id ? 'rgba(225,29,72,0.12)' : 'transparent', color: calendarSubMode === m.id ? 'var(--accent)' : 'var(--text-muted)' }}>{m.label}</button>
+                      style={{ padding: '3px 10px', borderRadius: 4, fontSize: 9, fontWeight: 500, cursor: 'pointer', border: 'none', background: calendarSubMode === m.id ? 'var(--accent-dim)' : 'transparent', color: calendarSubMode === m.id ? 'var(--accent)' : 'var(--text-muted)' }}>{m.label}</button>
                   ))}
                 </div>
               </div>
@@ -749,21 +788,20 @@ export default function Tareas() {
                   right: 0,
                   width: 300,
                   height: '100%',
-                  background: 'rgba(10,10,14,0.96)',
-                  borderLeft: '1px solid rgba(255,255,255,0.06)',
+                  background: 'var(--bg-surface)',
+                  borderLeft: '1px solid var(--border-default)',
                   borderRadius: '0 12px 12px 0',
                   padding: '20px 16px',
-                  boxShadow: '-8px 0 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.02) inset',
+                  boxShadow: '-8px 0 40px rgba(0,0,0,0.5)',
                   zIndex: 20,
                   display: 'flex',
                   flexDirection: 'column',
                   gap: 12,
-                  backdropFilter: 'blur(24px)',
-                  animation: 'slideIn 200ms ease-out',
+                  animation: 'slideInRight 200ms ease-out',
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 12, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 12, borderBottom: '1px solid var(--border-soft)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{ width: 30, height: 30, borderRadius: 9, background: 'linear-gradient(135deg, var(--accent), #F43F5E)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 14px rgba(225,29,72,0.35)' }}>
+                      <div style={{ width: 30, height: 30, borderRadius: 9, background: 'linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 80%, #fff))', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 14px color-mix(in srgb, var(--accent) 35%, transparent)' }}>
                         <CalendarDays size={13} style={{ color: '#fff' }} />
                       </div>
                       <div>
@@ -775,14 +813,14 @@ export default function Tareas() {
                         </span>
                       </div>
                     </div>
-                    <button onClick={() => setCalendarSelectedDay(new Date(0))} style={{ width: 26, height: 26, borderRadius: 7, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 150ms' }} className="hover:bg-white/[0.08]"><X size={12} /></button>
+                    <button onClick={() => setCalendarSelectedDay(new Date(0))} style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--bg-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 200ms' }}><X size={14} /></button>
                   </div>
                   <div className="no-scrollbar" style={{ display: 'flex', flexDirection: 'column', gap: 6, overflowY: 'auto', flex: 1 }}>
                     {(() => {
                       const dayTasks = tasks.filter(t => t.dueDate && isSameDay(new Date(t.dueDate), calendarSelectedDay));
                       if (dayTasks.length === 0) return (
                         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '40px 0' }}>
-                          <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(255,255,255,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--bg-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             <CalendarDays size={16} style={{ opacity: 0.2, color: 'var(--text-muted)' }} />
                           </div>
                           <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)' }}>Sin tareas este día</span>
@@ -792,8 +830,7 @@ export default function Tareas() {
                         const tr = task.dueDate ? getTimeRemaining(task.dueDate) : null;
                         return (
                           <div key={task.id} onClick={() => handleOpenDetail(task.id)}
-                            style={{ padding: '12px 14px', borderRadius: 10, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderLeft: `3px solid ${task.courseColor}`, cursor: 'pointer', transition: 'all 150ms' }}
-                            className="hover:bg-white/[0.04]">
+                            style={{ padding: '12px 14px', borderRadius: 10, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderLeft: `3px solid ${task.courseColor}`, cursor: 'pointer', transition: 'all 150ms' }}>
                             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
                                 <span style={{ fontSize: 11, fontWeight: 500, color: task.status === 'completado' ? 'var(--text-tertiary)' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: task.status === 'completado' ? 'line-through' : 'none' }}>
@@ -801,7 +838,7 @@ export default function Tareas() {
                                 </span>
                               </div>
                               <button onClick={e => { e.stopPropagation(); handleToggle(e, task.id); }}
-                                style={{ flexShrink: 0, width: 14, height: 14, borderRadius: 3, border: `2px solid ${task.status === 'completado' ? '#10B981' : statusConfig[task.status]?.color || 'rgba(255,255,255,0.15)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', background: task.status === 'completado' ? '#10B981' : 'transparent' }}>
+                                style={{ flexShrink: 0, width: 14, height: 14, borderRadius: 3, border: `2px solid ${task.status === 'completado' ? '#10B981' : statusConfig[task.status]?.color || 'var(--border-default)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', background: task.status === 'completado' ? '#10B981' : 'transparent' }}>
                                 {task.status === 'completado' && <Check size={7} strokeWidth={3} style={{ color: '#fff' }} />}
                               </button>
                             </div>
@@ -811,7 +848,7 @@ export default function Tareas() {
                                 {task.course}
                               </span>
                               {task.priority === 'high' && (
-                                <span style={{ fontSize: 7, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: 'rgba(239,68,68,0.12)', color: '#EF4444' }}>ALTA</span>
+                                <span style={{ fontSize: 7, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: 'color-mix(in srgb, #EF4444 12%, transparent)', color: '#EF4444' }}>ALTA</span>
                               )}
                               {tr && (
                                 <span style={{ fontSize: 8, fontWeight: 500, color: tr.urgent ? '#EF4444' : 'var(--text-muted)', marginLeft: 'auto' }}>
@@ -824,10 +861,9 @@ export default function Tareas() {
                       });
                     })()}
                   </div>
-                  <div style={{ paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.04)', flexShrink: 0 }}>
-                    <div onClick={() => { setCalendarSelectedDay(new Date(0)); setQuickTitle(''); setQuickPriority('medium'); setQuickCourse(courses[0]?.name || ''); }}
-                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '8px 0', borderRadius: 8, fontSize: 10, fontWeight: 600, cursor: 'pointer', background: 'rgba(255,255,255,0.04)', border: '1px dashed rgba(255,255,255,0.08)', color: 'var(--text-muted)', transition: 'all 150ms' }}
-                      className="hover:bg-white/[0.04]">
+                  <div style={{ paddingTop: 8, borderTop: '1px solid var(--border-soft)', flexShrink: 0 }}>
+                    <div onClick={() => { setNewTaskPrefillDate(format(calendarSelectedDay, 'yyyy-MM-dd')); setShowNewModal(true); }}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '8px 0', borderRadius: 8, fontSize: 10, fontWeight: 600, cursor: 'pointer', background: 'var(--bg-hover)', border: '1px dashed var(--border-default)', color: 'var(--text-muted)', transition: 'all 150ms' }}>
                       <Plus size={12} /> Nueva tarea en este día
                     </div>
                   </div>
@@ -835,9 +871,9 @@ export default function Tareas() {
               )}
 
               {/* Day Headers */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: '1px solid rgba(255,255,255,0.04)', flexShrink: 0 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: '1px solid var(--border-soft)', flexShrink: 0 }}>
                 {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map((d, i) => (
-                  <div key={d} style={{ padding: '10px 0', textAlign: 'center', fontSize: 11, fontWeight: 600, color: i >= 5 ? 'rgba(239,68,68,0.35)' : 'rgba(255,255,255,0.3)', letterSpacing: '0.08em', background: 'rgba(255,255,255,0.01)', textTransform: 'uppercase' }}>{d}</div>
+                  <div key={d} style={{ padding: '10px 0', textAlign: 'center', fontSize: 11, fontWeight: 600, color: i >= 5 ? 'color-mix(in srgb, #EF4444 35%, transparent)' : 'var(--text-secondary)', letterSpacing: '0.08em', background: 'var(--bg-surface)', textTransform: 'uppercase' }}>{d}</div>
                 ))}
               </div>
 
@@ -854,7 +890,7 @@ export default function Tareas() {
                         const maxVisible = calendarSubMode === 'semana' ? 8 : 4;
                         const visibleTasks = dayTasks.slice(0, maxVisible);
                         const overflow = dayTasks.length - maxVisible;
-                        const cellBg = isSel ? 'rgba(225,29,72,0.04)' : isTodayDay ? 'rgba(225,29,72,0.02)' : 'transparent';
+                        const cellBg = isSel ? 'var(--accent-dim)' : isTodayDay ? 'color-mix(in srgb, var(--accent) 2%, transparent)' : 'transparent';
                         const isWeekend = di >= 5;
                         return (
                           <div key={di}
@@ -862,8 +898,8 @@ export default function Tareas() {
                             onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
                             onDrop={e => { e.preventDefault(); handleDrop(e, day); }}
                             style={{
-                              borderRight: '1px solid rgba(255,255,255,0.03)',
-                              borderBottom: '1px solid rgba(255,255,255,0.03)',
+                              borderRight: '1px solid var(--border-soft)',
+                              borderBottom: '1px solid var(--border-soft)',
                               padding: calendarSubMode === 'semana' ? '8px 8px' : '4px 6px',
                               cursor: 'pointer',
                               background: cellBg,
@@ -872,19 +908,19 @@ export default function Tareas() {
                               minHeight: calendarSubMode === 'semana' ? 260 : 110,
                               overflow: 'hidden',
                               position: 'relative',
-                              borderTop: isTodayDay ? '1px solid rgba(225,29,72,0.2)' : '1px solid transparent',
-                              borderLeft: isSel ? '1px solid rgba(225,29,72,0.1)' : di === 0 ? '1px solid rgba(255,255,255,0.03)' : 'none',
+                              borderTop: isTodayDay ? '1px solid var(--accent-soft)' : '1px solid transparent',
+                              borderLeft: isSel ? '1px solid var(--accent-dim)' : di === 0 ? '1px solid var(--border-soft)' : 'none',
                               transition: 'background 150ms',
                             }}>
                             {/* Day Number */}
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 4, flexShrink: 0 }}>
                               <span style={{
                                 fontSize: calendarSubMode === 'semana' ? 13 : 11,
-                                fontWeight: isTodayDay ? 700 : (isSel ? 600 : 400),
-                                color: isTodayDay ? 'var(--accent)' : (isSel ? 'var(--text-primary)' : isCurrentMonth ? (isWeekend ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.45)') : 'var(--text-muted)'),
+                                fontWeight: isTodayDay ? 700 : (isSel ? 700 : 400),
+                                color: isTodayDay ? 'var(--accent)' : (isSel ? 'var(--text-primary)' : isCurrentMonth ? (isWeekend ? 'var(--text-muted)' : 'var(--text-secondary)') : 'var(--text-muted)'),
                                 width: 26, height: 26,
                                 borderRadius: '50%',
-                                background: isTodayDay ? 'rgba(225,29,72,0.15)' : (isSel ? 'rgba(225,29,72,0.08)' : 'transparent'),
+                                background: isTodayDay ? 'var(--accent-dim)' : (isSel ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : 'transparent'),
                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                               }}>{format(day, 'd')}</span>
                             </div>
@@ -983,20 +1019,29 @@ export default function Tareas() {
             return (
               <>
                 <div style={{ padding: isBoard ? '14px 14px' : '20px 18px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 12 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: isBoard ? 10 : 14 }}>
-                    <span style={{ fontSize: isBoard ? 8 : 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em' }}>POR CURSO</span>
-                    <span style={{ fontSize: isBoard ? 8 : 9, fontWeight: 500, color: 'var(--text-muted)' }}>{courseDistribution.length} cursos</span>
-                  </div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: isBoard ? 10 : 14 }}>
+                      <span style={{ fontSize: isBoard ? 8 : 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.04em' }}>CURSOS</span>
+                    </div>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
                     <div style={{ position: 'relative', width: sz, height: sz, flexShrink: 0 }}>
-                      <svg viewBox="0 0 48 48" style={{ width: '100%', height: '100%', transform: 'rotate(-90deg)' }}>
-                        {courseDistribution.length > 0 ? courseDistribution.map((c, i) => {
-                          const r = 20;
-                          const circ = 2 * Math.PI * r;
-                          const pct2 = c.pct / 100;
-                          const off = courseDistribution.slice(0, i).reduce((sum, s) => sum - (s.pct / 100) * circ, 0);
-                          return <circle key={c.name} cx="24" cy="24" r={r} fill="none" stroke={c.color} strokeWidth="7" strokeDasharray={`${pct2 * circ} ${circ}`} strokeDashoffset={off} strokeLinecap="butt" style={{ transition: 'all 500ms' }} />;
-                        }) : <circle cx="24" cy="24" r="20" fill="none" stroke="var(--border-soft)" strokeWidth="7" />}
+                      <svg viewBox="0 0 48 48" style={{ width: '100%', height: '100%' }}>
+                        {courseDistribution.length > 0 ? (() => {
+                          const GAP = 8;
+                          const PAD = 0.8;
+                          const numActive = courseDistribution.length;
+                          const numGaps = numActive - 1;
+                          const gapPerSegment = numGaps > 0 ? GAP / numGaps : 0;
+                          const totalAngle = 360 - numGaps * gapPerSegment;
+                          let currentAngle = 0;
+                          return courseDistribution.map((c, i) => {
+                            const angle = (c.pct / 100) * totalAngle;
+                            const start = currentAngle + i * gapPerSegment + PAD;
+                            const end = currentAngle + i * gapPerSegment + angle - PAD;
+                            const seg = start < end ? describeArc(24, 24, 20, start, end) : '';
+                            currentAngle += angle;
+                            return seg ? <path key={c.name} d={seg} fill="none" stroke={c.color} strokeWidth="7" strokeLinecap="butt" style={{ filter: `drop-shadow(0 0 2px ${c.color}60)`, transition: 'all 500ms' }} /> : null;
+                          });
+                        })() : <circle cx="24" cy="24" r="20" fill="none" stroke="var(--border-soft)" strokeWidth="7" />}
                       </svg>
                       <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
                         <span style={{ fontSize: innerSz, fontWeight: 500, color: 'var(--text-primary)' }}>{tasks.length}</span>
@@ -1025,14 +1070,24 @@ export default function Tareas() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {statusData.length > 0 && (
                       <div style={{ position: 'relative', width: sz, height: sz, flexShrink: 0, alignSelf: 'center' }}>
-                        <svg viewBox="0 0 48 48" style={{ width: '100%', height: '100%', transform: 'rotate(-90deg)' }}>
-                          {statusData.map((s, i) => {
-                            const r = 20;
-                            const circ = 2 * Math.PI * r;
-                            const pct3 = totalStatus > 0 ? (s.val / totalStatus) * 100 : 0;
-                            const off = statusData.slice(0, i).reduce((sum, prev) => { const pp = totalStatus > 0 ? (prev.val / totalStatus) * 100 : 0; return sum - (pp / 100) * circ; }, 0);
-                            return <circle key={s.label} cx="24" cy="24" r={r} fill="none" stroke={s.color} strokeWidth="7" strokeDasharray={`${(pct3 / 100) * circ} ${circ}`} strokeDashoffset={off} strokeLinecap="butt" style={{ transition: 'all 500ms' }} />;
-                          })}
+                        <svg viewBox="0 0 48 48" style={{ width: '100%', height: '100%' }}>
+                          {(() => {
+                            const GAP = 8;
+                            const PAD = 0.8;
+                            const numGaps = statusData.length - 1;
+                            const gapPerSegment = numGaps > 0 ? GAP / numGaps : 0;
+                            const totalAngle = 360 - numGaps * gapPerSegment;
+                            let currentAngle = 0;
+                            return statusData.map((s, i) => {
+                              const pct = totalStatus > 0 ? (s.val / totalStatus) * 100 : 0;
+                              const angle = (pct / 100) * totalAngle;
+                              const start = currentAngle + i * gapPerSegment + PAD;
+                              const end = currentAngle + i * gapPerSegment + angle - PAD;
+                              const seg = start < end ? describeArc(24, 24, 20, start, end) : '';
+                              currentAngle += angle;
+                              return seg ? <path key={s.label} d={seg} fill="none" stroke={s.color} strokeWidth="7" strokeLinecap="butt" style={{ filter: `drop-shadow(0 0 2px ${s.color}60)`, transition: 'all 500ms' }} /> : null;
+                            });
+                          })()}
                         </svg>
                         <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
                           <span style={{ fontSize: innerSz, fontWeight: 500, color: 'var(--text-primary)' }}>{stats.completadasPct}%</span>
@@ -1280,47 +1335,37 @@ export default function Tareas() {
                         if (v) embedUrl = `https://www.youtube.com/embed/${v}`;
                       }
                       const localSrc = isLocal && typeof f.path === 'string' && !f.path.startsWith('http') ? (window as any).__TAURI__?.convertFileSrc?.(f.path as string) || f.path : f.path;
+
+                      const handleCardClick = () => {
+                        if (isPdf) setPdfPreviewUrl(isLocal ? localSrc : f.path);
+                        else if (isOffice) { try { (window as any).__TAURI__?.shell?.open?.(f.path); } catch {} }
+                        else if (isImage) setPreviewModalUrl(f.path);
+                        else if (isYouTube && embedUrl) setPreviewModalUrl(embedUrl);
+                        else if (isWeb) setPreviewModalUrl(f.path);
+                      };
+
+                      const cardCursor = (isPdf || isOffice || isImage || (isYouTube && embedUrl) || isWeb) ? 'pointer' : 'default';
+                      const statusColor = statusConfig[selectedTask.status]?.color || 'var(--accent)';
+
                       return (
-                        <div key={f.id} style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '14px', borderRadius: 10, background: 'linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-elevated) 100%)', border: `1px solid var(--border-subtle)` }}>
-                          {/* Header: icon + name + actions */}
+                        <div key={f.id} onClick={handleCardClick} style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '12px', borderRadius: 10, background: 'linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-elevated) 100%)', border: `1px solid var(--border-subtle)`, cursor: cardCursor, transition: 'all 150ms' }}
+                          className={cardCursor !== 'default' ? 'hover:border-borderDark/60' : ''}>
+                          {/* Header: icon + name + badge + delete */}
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <div style={{ width: 32, height: 32, borderRadius: 8, background: `linear-gradient(135deg, ${statusConfig[selectedTask.status]?.color}15, ${statusConfig[selectedTask.status]?.color}06)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <div style={{ width: 32, height: 32, borderRadius: 8, background: `linear-gradient(135deg, ${statusColor}15, ${statusColor}06)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                               {getFileIcon(f.type, 15)}
                             </div>
                             <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
-                            <div style={{ display: 'flex', gap: 3 }}>
-                              {isPdf && (
-                                <button onClick={() => setPdfPreviewUrl(isLocal ? localSrc : f.path)} title="Vista previa"
-                                  style={{ padding: 5, borderRadius: 6, background: 'var(--bg-hover)', border: 'none', color: '#EF4444', cursor: 'pointer', display: 'flex' }}><Eye size={12} /></button>
-                              )}
-                              {isYouTube && embedUrl && (
-                                <button onClick={() => setPreviewModalUrl(embedUrl)} title="Ver video"
-                                  style={{ padding: 5, borderRadius: 6, background: 'var(--bg-hover)', border: 'none', color: '#EF4444', cursor: 'pointer', display: 'flex' }}><Play size={12} /></button>
-                              )}
-                              {isWeb && (
-                                <button onClick={() => setPreviewModalUrl(f.path)} title="Vista previa web"
-                                  style={{ padding: 5, borderRadius: 6, background: 'var(--bg-hover)', border: 'none', color: '#10B981', cursor: 'pointer', display: 'flex' }}><Eye size={12} /></button>
-                              )}
-                              {(isOffice || (f.type === 'other' && !isAudio)) && (
-                                <button onClick={() => { try { (window as any).__TAURI__?.shell?.open?.(f.path); } catch { if (!isLocal) window.open(f.path); } }} title="Abrir archivo"
-                                  style={{ padding: 5, borderRadius: 6, background: 'var(--bg-hover)', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', display: 'flex' }}><ExternalLink size={12} /></button>
-                              )}
-                              {isAudio && (
-                                <button onClick={() => { setPreviewModalUrl(isLocal ? localSrc : f.path); }} title="Reproducir audio"
-                                  style={{ padding: 5, borderRadius: 6, background: 'var(--bg-hover)', border: 'none', color: '#8B5CF6', cursor: 'pointer', display: 'flex' }}><Play size={12} /></button>
-                              )}
-                              {isImage && (
-                                <button onClick={() => setPreviewModalUrl(f.path)} title="Ver imagen"
-                                  style={{ padding: 5, borderRadius: 6, background: 'var(--bg-hover)', border: 'none', color: '#F59E0B', cursor: 'pointer', display: 'flex' }}><Eye size={12} /></button>
-                              )}
-                              <button onClick={() => setConfirmDeleteMaterial({ taskId: selectedTask.id, fileId: f.id })} title="Eliminar"
-                                style={{ padding: 5, borderRadius: 6, background: 'var(--bg-hover)', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex' }}><X size={10} /></button>
-                            </div>
+                            <span style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.06em', padding: '2px 5px', borderRadius: 3, background: isPdf ? 'rgba(239,68,68,0.15)' : isOffice ? 'rgba(37,99,235,0.15)' : isAudio ? 'rgba(139,92,246,0.15)' : isImage ? 'rgba(245,158,11,0.15)' : isYouTube ? 'rgba(239,68,68,0.15)' : isWeb ? 'rgba(16,185,129,0.15)' : isDrive ? 'rgba(66,133,244,0.15)' : 'rgba(255,255,255,0.06)', color: isPdf ? '#EF4444' : isOffice ? '#2563EB' : isAudio ? '#8B5CF6' : isImage ? '#F59E0B' : isYouTube ? '#EF4444' : isWeb ? '#10B981' : isDrive ? '#4285F4' : 'var(--text-muted)', textTransform: 'uppercase' }}>
+                              {isPdf ? 'PDF' : isAudio ? 'Audio' : isOffice ? (f.type === 'doc' ? 'Doc' : f.type === 'xls' ? 'XLS' : 'PPT') : isImage ? 'IMG' : isYouTube ? 'Video' : isWeb ? 'Web' : isDrive ? 'Drive' : 'File'}
+                            </span>
+                            <button onClick={(e) => { e.stopPropagation(); setConfirmDeleteMaterial({ taskId: selectedTask.id, fileId: f.id }); }} title="Eliminar"
+                              style={{ padding: 4, borderRadius: 5, background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', opacity: 0.4, transition: 'opacity 150ms' }}
+                              className="hover:opacity-100"><X size={10} /></button>
                           </div>
                           {/* Preview content by type */}
                           {isYouTube && embedUrl && (
-                            <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', borderRadius: 8, overflow: 'hidden', background: '#000', cursor: 'pointer' }}
-                              onClick={() => setPreviewModalUrl(embedUrl)}>
+                            <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', borderRadius: 8, overflow: 'hidden', background: '#000' }}>
                               <img src={`https://img.youtube.com/vi/${embedUrl.split('/embed/')[1]?.split('?')[0]}/0.jpg`} style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.5 }} alt="" />
                               <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                 <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(239,68,68,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1330,7 +1375,7 @@ export default function Tareas() {
                             </div>
                           )}
                           {isAudio && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'var(--bg-deep)', borderRadius: 8 }}>
+                            <div onClick={e => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'var(--bg-deep)', borderRadius: 8 }}>
                               <div style={{ width: 28, height: 28, borderRadius: 7, background: 'rgba(139,92,246,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="#8B5CF6"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55C7.79 13 6 14.79 6 17s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
                               </div>
@@ -1340,41 +1385,42 @@ export default function Tareas() {
                             </div>
                           )}
                           {isImage && (
-                            <div style={{ borderRadius: 8, overflow: 'hidden', maxHeight: 160, cursor: 'pointer' }} onClick={() => setPreviewModalUrl(f.path)}>
+                            <div style={{ borderRadius: 8, overflow: 'hidden', maxHeight: 160 }}>
                               <img src={isLocal ? localSrc : f.path} alt={f.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                             </div>
                           )}
                           {isPdf && (
-                            <div style={{ borderRadius: 8, overflow: 'hidden', background: 'var(--bg-deep)', padding: '10px 12px', cursor: 'pointer' }} onClick={() => setPdfPreviewUrl(isLocal ? localSrc : f.path)}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="#EF4444"><path d="M20 2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8.5 7.5c0 .83-.67 1.5-1.5 1.5H9v2H7.5V7H10c.83 0 1.5.67 1.5 1.5v1zm5 2c0 .83-.67 1.5-1.5 1.5h-2.5V7H15c.83 0 1.5.67 1.5 1.5v3zm4-3H19v1h1.5V11H19v2h-1.5V7h3v1.5zM9 9.5h1v-1H9v1zM4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm10 5.5h1v-3h-1v3z"/></svg>
-                                <span style={{ flex: 1, fontSize: 10, color: 'var(--text-secondary)', fontWeight: 500 }}>Documento PDF — haz clic para vista previa</span>
-                                <Eye size={12} style={{ color: '#EF4444' }} />
-                              </div>
+                            <div style={{ borderRadius: 8, overflow: 'hidden', background: 'var(--bg-deep)', position: 'relative' }}>
+                              <object data={isLocal ? localSrc : f.path} type="application/pdf" style={{ width: '100%', height: 200, border: 'none', borderRadius: 8 }} aria-label={f.name}>
+                                {/* WhatsApp-style fallback when preview unavailable */}
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '24px 16px' }}>
+                                  <svg width="32" height="32" viewBox="0 0 24 24" fill="#EF4444"><path d="M6 2h12l4 4v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm8 1v5h5"/></svg>
+                                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>{f.name}</span>
+                                  <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>Toca para previsualizar</span>
+                                </div>
+                              </object>
                             </div>
                           )}
                           {isOffice && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'var(--bg-deep)', borderRadius: 8 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 8, background: 'var(--bg-deep)' }}>
                               {f.type === 'doc' ? <svg width="16" height="16" viewBox="0 0 24 24" fill="#2563EB"><path d="M6 2h12l4 4v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm8 1v5h5M8 13h8v-2H8v2zm0 4h5v-2H8v2zm0-8h3V7H8v2z"/></svg> : f.type === 'xls' ? <svg width="16" height="16" viewBox="0 0 24 24" fill="#16A34A"><path d="M6 2h12l4 4v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm8 1v5h5M8 13l4 4-4 4h2.5l2.5-2.5L15.5 21H18l-4-4 4-4h-2.5L12.5 15 10 13H8z"/></svg> : <svg width="16" height="16" viewBox="0 0 24 24" fill="#D97706"><path d="M6 2h12l4 4v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm8 1v5h5M8 13v-2h8v2H8zm0 4v-2h5v2H8z"/></svg>}
-                              <span style={{ flex: 1, fontSize: 10, color: 'var(--text-secondary)' }}>Archivo de {f.type === 'doc' ? 'documento' : f.type === 'xls' ? 'hoja de cálculo' : 'presentación'}</span>
-                              <button onClick={() => { try { (window as any).__TAURI__?.shell?.open?.(f.path); } catch {} }} style={{ padding: '4px 10px', borderRadius: 5, background: 'var(--bg-elevated)', border: '1px solid var(--border-soft)', color: 'var(--text-secondary)', fontSize: 8, fontWeight: 600, cursor: 'pointer' }}>
-                                Abrir
-                              </button>
+                              <span style={{ flex: 1, fontSize: 10, color: 'var(--text-secondary)' }}>Abrir {f.type === 'doc' ? 'documento' : f.type === 'xls' ? 'hoja de cálculo' : 'presentación'}</span>
+                              <ExternalLink size={11} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
                             </div>
                           )}
                           {isWeb && (
-                            <a href={f.path} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'var(--bg-deep)', borderRadius: 8, textDecoration: 'none', fontSize: 9, fontWeight: 500, color: 'var(--text-secondary)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'var(--bg-deep)', borderRadius: 8 }}>
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-                              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.path.replace(/^https?:\/\//, '').split('/')[0]}</span>
-                              <ExternalLink size={11} style={{ flexShrink: 0 }} />
-                            </a>
+                              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 9, fontWeight: 500, color: 'var(--text-secondary)' }}>{f.path.replace(/^https?:\/\//, '').split('/')[0]}</span>
+                              <ExternalLink size={11} style={{ flexShrink: 0, color: 'var(--text-muted)' }} />
+                            </div>
                           )}
                           {isDrive && (
-                            <a href={f.path} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 8, background: 'rgba(66,133,244,0.06)', border: '1px solid rgba(66,133,244,0.12)', textDecoration: 'none', fontSize: 9, fontWeight: 600, color: '#4285F4' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 8, background: 'rgba(66,133,244,0.06)', border: '1px solid rgba(66,133,244,0.12)' }}>
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="#4285F4"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
-                              Abrir en Google Drive
-                              <ExternalLink size={11} style={{ marginLeft: 'auto' }} />
-                            </a>
+                              <span style={{ flex: 1, fontSize: 9, fontWeight: 600, color: '#4285F4' }}>Google Drive</span>
+                              <ExternalLink size={11} style={{ flexShrink: 0, color: '#4285F4' }} />
+                            </div>
                           )}
                         </div>
                       );
@@ -1515,46 +1561,138 @@ export default function Tareas() {
         </div>
       )}
 
-      {/* UNIFIED PREVIEW MODAL (PDF, video, web) */}
-      {(pdfPreviewUrl || previewModalUrl) && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(6px)' }}
-          onClick={() => { setPdfPreviewUrl(null); setPreviewModalUrl(null); }}>
-          <div className="bento-card" style={{ width: '100%', maxWidth: 900, height: '85vh', padding: 0, display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 18px', borderBottom: '1px solid var(--border-subtle)' }}>
-              <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Eye size={13} style={{ color: 'var(--accent)' }} /> Vista previa
-              </span>
-              <div style={{ display: 'flex', gap: 6 }}>
-                {(previewModalUrl && previewModalUrl.startsWith('http') && !previewModalUrl.includes('youtube.com/embed')) && (
-                  <button onClick={() => { navigator.clipboard.writeText(previewModalUrl); addNotification('Enlace copiado', 'success'); }}
-                    style={{ padding: '5px 10px', borderRadius: 6, fontSize: 8, fontWeight: 600, cursor: 'pointer', border: '1px solid var(--border-soft)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}>Copiar enlace</button>
+      {/* MINI BROWSER STATE */}
+      {(() => {
+        const url = previewModalUrl || pdfPreviewUrl || '';
+        const isWebUrl = url.startsWith('http') && !url.includes('youtube.com/embed');
+        if (!url) return null;
+
+        const MiniBrowser = () => {
+          const [navUrl, setNavUrl] = useState(url);
+          const [currentUrl, setCurrentUrl] = useState(url);
+          const [canGoBack, setCanGoBack] = useState(false);
+          const [canGoForward, setCanGoForward] = useState(false);
+          const historyRef = useRef<string[]>([url]);
+          const positionRef = useRef(0);
+          const iframeRef = useRef<HTMLIFrameElement>(null);
+
+          const navigate = (newUrl: string) => {
+            const fullUrl = newUrl.startsWith('http://') || newUrl.startsWith('https://') ? newUrl : `https://${newUrl}`;
+            setCurrentUrl(fullUrl);
+            setNavUrl(fullUrl);
+            historyRef.current = historyRef.current.slice(0, positionRef.current + 1);
+            historyRef.current.push(fullUrl);
+            positionRef.current = historyRef.current.length - 1;
+            setCanGoBack(positionRef.current > 0);
+            setCanGoForward(false);
+          };
+
+          const goBack = () => {
+            if (positionRef.current <= 0) return;
+            positionRef.current--;
+            const prev = historyRef.current[positionRef.current];
+            setCurrentUrl(prev);
+            setNavUrl(prev);
+            setCanGoBack(positionRef.current > 0);
+            setCanGoForward(true);
+          };
+
+          const goForward = () => {
+            if (positionRef.current >= historyRef.current.length - 1) return;
+            positionRef.current++;
+            const next = historyRef.current[positionRef.current];
+            setCurrentUrl(next);
+            setNavUrl(next);
+            setCanGoBack(true);
+            setCanGoForward(positionRef.current < historyRef.current.length - 1);
+          };
+
+          const refresh = () => setCurrentUrl(prev => prev + (prev.includes('?') ? '&_t=' : '?_t=') + Date.now());
+
+          const handleKeyDown = (e: React.KeyboardEvent) => {
+            if (e.key === 'Enter') navigate(navUrl);
+          };
+
+          return (
+            <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
+              {/* Browser toolbar */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
+                <button onClick={goBack} disabled={!canGoBack} title="Atrás"
+                  style={{ padding: 4, borderRadius: 5, background: 'none', border: 'none', color: canGoBack ? 'var(--text-primary)' : 'var(--text-muted)', cursor: canGoBack ? 'pointer' : 'default', display: 'flex', opacity: canGoBack ? 1 : 0.3 }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
+                </button>
+                <button onClick={goForward} disabled={!canGoForward} title="Adelante"
+                  style={{ padding: 4, borderRadius: 5, background: 'none', border: 'none', color: canGoForward ? 'var(--text-primary)' : 'var(--text-muted)', cursor: canGoForward ? 'pointer' : 'default', display: 'flex', opacity: canGoForward ? 1 : 0.3 }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
+                </button>
+                <button onClick={refresh} title="Recargar"
+                  style={{ padding: 4, borderRadius: 5, background: 'none', border: 'none', color: 'var(--text-primary)', cursor: 'pointer', display: 'flex' }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
+                </button>
+                <div style={{ flex: 1, position: 'relative' }}>
+                  <input value={navUrl} onChange={e => setNavUrl(e.target.value)} onKeyDown={handleKeyDown}
+                    placeholder="Buscar o escribir URL..."
+                    style={{ width: '100%', padding: '5px 10px 5px 26px', borderRadius: 6, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', fontSize: 10, color: 'var(--text-primary)', outline: 'none' }} />
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }}><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                </div>
+                <button onClick={() => window.open(currentUrl, '_blank')} title="Abrir en navegador externo"
+                  style={{ padding: 4, borderRadius: 5, background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex' }}>
+                  <ExternalLink size={12} />
+                </button>
+              </div>
+              {/* Content */}
+              <div style={{ flex: 1, background: 'var(--bg-elevated)' }}>
+                {currentUrl.startsWith('http') ? (
+                  <iframe ref={iframeRef} src={currentUrl} style={{ width: '100%', height: '100%', border: 'none' }} title="Mini navegador" allow="autoplay; encrypted-media" sandbox="allow-scripts allow-same-origin allow-popups allow-forms" />
+                ) : currentUrl.startsWith('data:') || currentUrl.startsWith('blob:') ? (
+                  pdfPreviewUrl ? (
+                    <iframe src={currentUrl} style={{ width: '100%', height: '100%', border: 'none' }} title="PDF Preview" />
+                  ) : (
+                    <img src={currentUrl} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                  )
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 8, color: 'var(--text-tertiary)' }}>
+                    <Eye size={28} style={{ opacity: 0.3 }} />
+                    <span style={{ fontSize: 11, fontWeight: 600 }}>Archivo local — usa el botón de abrir</span>
+                  </div>
                 )}
-                <button onClick={() => { setPdfPreviewUrl(null); setPreviewModalUrl(null); }} style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={14} /></button>
               </div>
             </div>
-            <div style={{ flex: 1, background: 'var(--bg-elevated)' }}>
-              {(pdfPreviewUrl || previewModalUrl) && (
-                (pdfPreviewUrl || previewModalUrl)!.startsWith('http') ? (
-                  <iframe src={pdfPreviewUrl || previewModalUrl!} style={{ width: '100%', height: '100%', border: 'none' }} title="Preview" allow="autoplay; encrypted-media" />
-                ) : (
-                  (pdfPreviewUrl || previewModalUrl)!.startsWith('data:') || (pdfPreviewUrl || previewModalUrl)!.startsWith('blob:') ? (
+          );
+        };
+
+        return (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(6px)' }}
+            onClick={() => { setPdfPreviewUrl(null); setPreviewModalUrl(null); }}>
+            <div className="bento-card" style={{ width: '100%', maxWidth: 900, height: '85vh', padding: 0, display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderBottom: '1px solid var(--border-subtle)' }}>
+                <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Eye size={13} style={{ color: 'var(--accent)' }} /> Vista previa
+                </span>
+                <button onClick={() => { setPdfPreviewUrl(null); setPreviewModalUrl(null); }} style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={14} /></button>
+              </div>
+              {isWebUrl ? <MiniBrowser /> : (
+                <div style={{ flex: 1, background: 'var(--bg-elevated)' }}>
+                  {url.startsWith('http') ? (
+                    <iframe src={url} style={{ width: '100%', height: '100%', border: 'none' }} title="Preview" allow="autoplay; encrypted-media" />
+                  ) : url.startsWith('data:') || url.startsWith('blob:') ? (
                     pdfPreviewUrl ? (
-                      <iframe src={pdfPreviewUrl!} style={{ width: '100%', height: '100%', border: 'none' }} title="PDF Preview" />
+                      <iframe src={url} style={{ width: '100%', height: '100%', border: 'none' }} title="PDF Preview" />
                     ) : (
-                      <img src={previewModalUrl!} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                      <img src={url} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                     )
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 8, color: 'var(--text-tertiary)' }}>
                       <Eye size={28} style={{ opacity: 0.3 }} />
-                      <span style={{ fontSize: 11, fontWeight: 600 }}>Archivo local — abre desde el botón "Abrir archivo"</span>
+                      <span style={{ fontSize: 11, fontWeight: 600 }}>Archivo local</span>
                     </div>
-                  )
-                )
+                  )}
+                </div>
               )}
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* CONFIRM DELETE MATERIAL */}
       {confirmDeleteMaterial && (

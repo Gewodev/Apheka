@@ -72,7 +72,6 @@ export function useTimer() {
     ) {
       setChronoRounds((prev) => prev + 1);
       setChronoRoundCounted(true);
-      addNotification(`Ronda de ${chronoGoal / 60} min completada`, 'success');
     }
 
     // Reset helpers when timer stops or mode changes

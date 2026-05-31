@@ -4,6 +4,7 @@ import { convertFileSrc } from '@tauri-apps/api/core';
 import { copyFile, mkdir, exists, readFile, writeFile, BaseDirectory } from '@tauri-apps/plugin-fs';
 import { get, set } from 'idb-keyval';
 import { extractMp3Metadata } from '../lib/mp3Metadata';
+import { format, parseISO, subDays } from 'date-fns';
 import { appDataDir, appCacheDir, join, extname } from '@tauri-apps/api/path';
 
 const globalAudio = new Audio();
@@ -160,7 +161,7 @@ export interface StudySession {
 export interface Settings {
   // ...existing fields
   chronoGoal: number; // seconds, default 25 * 60
-  theme: 'claro' | 'oscuro' | 'sistema';
+  theme: 'claro' | 'oscuro' | 'sistema' | 'vibrante';
   accentColor: string;
   userName: string;
   backgroundImage?: string;
@@ -181,11 +182,45 @@ export interface Settings {
   heatmapStartDate?: string;
   timerFocusColor?: string;
   timerBreakColor?: string;
+  timerLongBreakColor?: string;
   timerChronoColor?: string;
   floatingBgColor: string;
   floatingClockType: 'led' | 'digital';
   floatingShowAnimation: boolean;
   dailyGoalHistory?: Record<string, number>;
+  initialDailyGoal?: number;
+  selectedThemePreset?: string | null;
+  secondaryColor?: string;
+  surfaceColor?: string;
+  playerBarEnabled?: boolean;
+  playerBarCharacterSource?: 'url' | 'draw';
+  playerBarCharacterUrl?: string;
+  playerBarCharacterDraw?: string;
+  playerBarFrameSpeeds?: string;
+  playerBarTrackColor?: string;
+  playerBarCharacterSize?: number;
+  playerBarBgUrl?: string;
+  playerBarTrackImage?: string;
+  playerBarTrackSource?: 'url' | 'draw';
+  playerBarTrackUrl?: string;
+  playerBarTrackDraw?: string;
+  playerBarTrackFrameSpeeds?: string;
+  // Character styling
+  playerBarCharacterBorderColor?: string;
+  playerBarCharacterBorderWidth?: number;
+  playerBarCharacterShadow?: number;
+  playerBarCharacterOffsetY?: number;
+  playerBarCharacterBorderRadius?: number;
+  // Bar container styling
+  playerBarBorderRadius?: number;
+  playerBarBorderColor?: string;
+  playerBarBorderWidth?: number;
+  playerBarHeight?: 'compact' | 'normal' | 'large';
+  playerBarBgColor?: string;
+  // Progress track styling
+  playerBarTrackHeight?: number;
+  // 3-color system
+  useThreeColors?: boolean;
 }
 
 export interface AppNotification {
@@ -409,6 +444,34 @@ const defaultSettings: Settings = {
   floatingBgColor: '#020203',
   floatingClockType: 'led',
   floatingShowAnimation: false,
+  selectedThemePreset: null,
+  secondaryColor: '#3B82F6',
+  surfaceColor: '#1a1a22',
+  playerBarEnabled: false,
+  playerBarCharacterSource: 'url',
+  playerBarCharacterUrl: '',
+  playerBarCharacterDraw: '',
+  playerBarFrameSpeeds: '',
+  playerBarTrackColor: '#E11D48',
+  playerBarCharacterSize: 40,
+  playerBarBgUrl: '',
+  playerBarTrackImage: '',
+  playerBarTrackSource: 'url',
+  playerBarTrackUrl: '',
+  playerBarTrackDraw: '',
+  playerBarTrackFrameSpeeds: '',
+  playerBarCharacterBorderColor: '',
+  playerBarCharacterBorderWidth: 0,
+  playerBarCharacterShadow: 6,
+  playerBarCharacterOffsetY: 0,
+  playerBarCharacterBorderRadius: 50,
+  playerBarBorderRadius: 12,
+  playerBarBorderColor: '',
+  playerBarBorderWidth: 0,
+  playerBarHeight: 'normal',
+  playerBarBgColor: '',
+  playerBarTrackHeight: 3,
+  useThreeColors: false,
 };
 
 const defaultFolders: NoteFolder[] = [
@@ -643,7 +706,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (data.courses) setCourses(data.courses);
           if (data.events) setEvents(data.events);
           if (data.studySessions) setStudySessions(data.studySessions);
-          if (data.settings) setSettings({ ...defaultSettings, ...data.settings });
+          if (data.settings) {
+            // Migration: dailyGoalHistory keys might have been stored in UTC (from old code using toISOString)
+            if (data.settings.dailyGoalHistory) {
+              const rawHistory = data.settings.dailyGoalHistory as Record<string, number>;
+              const todayLocal = format(new Date(), 'yyyy-MM-dd');
+              const fixed: Record<string, number> = {};
+              for (const key of Object.keys(rawHistory)) {
+                const val = rawHistory[key];
+                if (key > todayLocal) {
+                  const d = parseISO(key);
+                  fixed[format(subDays(d, 1), 'yyyy-MM-dd')] = val;
+                } else {
+                  fixed[key] = val;
+                }
+              }
+              data.settings.dailyGoalHistory = fixed;
+            }
+            setSettings({ ...defaultSettings, ...data.settings });
+          }
           if (data.sessionTime) setSessionTime(data.sessionTime);
           if (data.sessionType) setSessionType(data.sessionType);
           if (data.weeklyStudyTime) setWeeklyStudyTime(data.weeklyStudyTime);
@@ -715,6 +796,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Refs to avoid stale closures in timer interval
   const activeTaskIdRef = useRef(activeTaskId);
   activeTaskIdRef.current = activeTaskId;
+
+  // Midnight reset: auto-reset dailyStudyTime when date changes
+  useEffect(() => {
+    const checkDay = () => {
+      const today = new Date().toISOString().slice(0, 10);
+      setDailyStudyDate(prev => {
+        if (prev !== today) {
+          setDailyStudyTime(0);
+          return today;
+        }
+        return prev;
+      });
+    };
+    checkDay();
+    const t = setInterval(checkDay, 30000);
+    return () => clearInterval(t);
+  }, []);
   const sessionTimeRef = useRef(sessionTime);
   sessionTimeRef.current = sessionTime;
   const isRestRef = useRef(isRest);
@@ -1477,6 +1575,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const onEnded = () => {
       if (currentTrackIdRef.current && tracksRef.current.length > 0) {
         if (repeatModeRef.current === 'one') {
+          // Play once more, then disable repeat-one
+          _setRepeatMode('none');
           globalAudio.currentTime = 0;
           globalAudio.play().catch(() => {});
           return;
@@ -1699,10 +1799,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // â”€â”€ SETTINGS â”€â”€
   const updateSettingsCb = useCallback((updates: Partial<Settings>) => {
     setSettings(prev => {
-      const today = new Date().toISOString().split('T')[0];
+      const today = format(new Date(), 'yyyy-MM-dd');
       let extra: Partial<Settings> = {};
       if (updates.dailyGoal !== undefined && updates.dailyGoal !== prev.dailyGoal) {
-        extra = { dailyGoalHistory: { ...prev.dailyGoalHistory, [today]: prev.dailyGoal } };
+        extra = {
+          dailyGoalHistory: { ...prev.dailyGoalHistory, [today]: updates.dailyGoal },
+          initialDailyGoal: prev.initialDailyGoal ?? prev.dailyGoal,
+        };
       }
       return { ...prev, ...updates, ...extra };
     });

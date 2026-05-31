@@ -182,10 +182,10 @@ function ChartContainer({ children, height = 164 }: ChartContainerProps) {
 function Section({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
   return (
     <div style={{
-      padding: '12px 14px',
+      padding: '10px 12px',
       background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)',
       border: '1px solid var(--border-subtle)',
-      borderRadius: 12,
+      borderRadius: 10,
       ...style,
     }}>
       {children}
@@ -349,21 +349,23 @@ const AnalyticsDrawer = React.memo(function AnalyticsDrawer({ isOpen, onClose, s
         >
           <button onClick={handlePillClick}
             style={{
-              width: 28, height: 64,
-              borderRadius: '8px 0 0 8px',
-              background: 'var(--bg-elevated)',
+              width: 32, height: 72,
+              borderRadius: '10px 0 0 10px',
+              background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)',
               border: '1px solid var(--border-soft)',
               borderRight: 'none',
-              color: 'var(--text-muted)',
+              color: 'var(--accent)',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              backdropFilter: 'blur(12px)',
-              boxShadow: '-4px 0 16px rgba(0,0,0,0.2)',
+              backdropFilter: 'blur(16px)',
+              WebkitBackdropFilter: 'blur(16px)',
+              boxShadow: `-6px 0 24px rgba(0,0,0,0.25), 0 0 16px var(--accent-glow)`,
+              transition: 'all 250ms',
             }}
-            className="hover:text-white">
-            <ChevronRight size={14} style={{ transform: `rotate(${isOpen ? 180 : 0}deg)`, transition: 'transform 350ms' }} />
+            className="hover:text-white hover:brightness-125">
+            <ChevronRight size={16} style={{ transform: `rotate(${isOpen ? 180 : 0}deg)`, transition: 'transform 400ms cubic-bezier(0.34, 1.56, 0.64, 1)' }} />
           </button>
         </motion.div>
       </div>
@@ -390,49 +392,47 @@ const AnalyticsDrawer = React.memo(function AnalyticsDrawer({ isOpen, onClose, s
       >
         {/* ── Header with metrics ── */}
         <div style={{
-          padding: '16px 20px 14px',
+          padding: '14px 18px 12px',
           borderBottom: '1px solid var(--border-subtle)',
           flexShrink: 0,
-          background: 'linear-gradient(180deg, var(--bg-elevated) 0%, rgba(10,10,12,0.8) 100%)',
+          background: 'linear-gradient(180deg, var(--bg-elevated) 0%, var(--bg-base) 100%)',
           backdropFilter: 'blur(24px)',
           WebkitBackdropFilter: 'blur(24px)',
-          position: 'relative',
         }}>
-          <div style={{ position: 'absolute', inset: 0, borderBottom: '1px solid rgba(255,255,255,0.04)', pointerEvents: 'none', borderRadius: '0 0 2px 2px' }} />
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 4, height: 20, borderRadius: 2, background: 'var(--accent)', boxShadow: '0 0 12px var(--accent-glow)' }} />
+              <div style={{ width: 3, height: 18, borderRadius: 2, background: 'var(--accent)', boxShadow: '0 0 14px var(--accent-glow)' }} />
               <div>
-                <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em' }}>Analytics</span>
+                <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em' }}>Estadísticas</span>
                 <span style={{ fontSize: 9, color: 'var(--text-tertiary)', marginLeft: 8, fontWeight: 500 }}>{studySessions.length} sesiones</span>
               </div>
             </div>
             <button onClick={onClose}
-              style={{ width: 30, height: 30, borderRadius: 8, background: 'var(--bg-hover)', border: '1px solid var(--border-soft)', color: 'var(--text-tertiary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms' }}
-              className="hover:text-white hover:bg-surfaceElevated">
-              <X size={13} />
+              style={{ width: 28, height: 28, borderRadius: 7, background: 'var(--bg-hover)', border: '1px solid var(--border-soft)', color: 'var(--text-tertiary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms' }}
+              className="hover:text-white hover:brightness-125">
+              <X size={12} />
             </button>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
             {[
               { label: 'Estudio', value: `${totalStudyMin}m`, color: 'var(--accent)', icon: Clock },
               { label: 'Sesiones', value: studySessions.length, color: '#8B5CF6', icon: Activity },
               { label: 'Completadas', value: completedToday, color: '#10B981', icon: CheckCircle },
               { label: 'Promedio', value: `${avgSession}m`, color: '#F59E0B', icon: Zap },
             ].map(m => (
-              <div key={m.label} style={{ padding: '7px 10px', background: 'rgba(255,255,255,0.025)', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 3, marginBottom: 2 }}>
-                  <m.icon size={8} style={{ color: m.color }} />
+              <div key={m.label} style={{ padding: '6px 8px', background: 'rgba(255,255,255,0.02)', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 3, marginBottom: 1 }}>
+                  <m.icon size={7} style={{ color: m.color }} />
                   <span style={{ fontSize: 7, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{m.label}</span>
                 </div>
-                <span style={{ fontSize: 17, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>{m.value}</span>
+                <span style={{ fontSize: 16, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>{m.value}</span>
               </div>
             ))}
           </div>
         </div>
 
         {/* ── Tabs ── */}
-        <div style={{ display: 'flex', gap: 2, padding: '4px 20px 0', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-base)', flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: 2, padding: '4px 16px 0', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-base)', flexShrink: 0 }}>
           {tabs.map(tab => {
             const active = activeTab === tab.id;
             const Icon = tab.icon;
@@ -440,10 +440,10 @@ const AnalyticsDrawer = React.memo(function AnalyticsDrawer({ isOpen, onClose, s
               <button key={tab.id} onClick={() => setActiveTab(tab.id)}
                 style={{
                   flex: 1,
-                  padding: '9px 4px 7px',
-                  fontSize: 10,
+                  padding: '8px 4px 6px',
+                  fontSize: 9,
                   fontWeight: 600,
-                  letterSpacing: '0.03em',
+                  letterSpacing: '0.04em',
                   cursor: 'pointer',
                   border: 'none',
                   background: 'transparent',
@@ -451,15 +451,15 @@ const AnalyticsDrawer = React.memo(function AnalyticsDrawer({ isOpen, onClose, s
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: 6,
+                  gap: 5,
                   position: 'relative',
                   transition: 'color 200ms',
                 }}>
-                <Icon size={11} />
+                <Icon size={10} />
                 {tab.label}
                 {active && (
                   <motion.div layoutId="tab-underline"
-                    style={{ position: 'absolute', bottom: 0, left: '10%', right: '10%', height: 2, background: 'var(--accent)', borderRadius: 2, boxShadow: '0 0 8px var(--accent-glow)' }}
+                    style={{ position: 'absolute', bottom: 0, left: '15%', right: '15%', height: 2, background: 'var(--accent)', borderRadius: 2, boxShadow: '0 0 8px var(--accent-glow)' }}
                     transition={TAB_SPRING}
                   />
                 )}
@@ -469,32 +469,27 @@ const AnalyticsDrawer = React.memo(function AnalyticsDrawer({ isOpen, onClose, s
         </div>
 
         {/* ── Scrollable content ── */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px 20px' }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '10px 14px 16px' }}>
           <AnimatePresence mode="wait">
             {activeTab === 'time' && (
               <TabContent tabId="time">
                 <Section>
-                  <SectionTitle icon={BarChart3}>Distribucion Semanal</SectionTitle>
+                  <SectionTitle icon={BarChart3}>Distribución Semanal</SectionTitle>
                   <ChartContainer>
-                    <ResponsiveContainer>
+                    <ResponsiveContainer width="100%" height={164}>
                       <BarChart data={weekData} margin={{ top: 8, right: 4, bottom: 0, left: -12 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
                         <XAxis dataKey="day" tick={{ fontSize: 9, fill: chartTextColor }} axisLine={false} tickLine={false} />
                         <YAxis tick={{ fontSize: 8, fill: chartTextColor }} axisLine={false} tickLine={false} />
                         <Tooltip contentStyle={tooltipStyle} labelStyle={{ fontSize: 10, color: 'var(--text-primary)' }} />
-                        <Bar dataKey="productive" name="Productivo" fill="var(--accent)" radius={[3, 3, 0, 0]} maxBarSize={22} />
-                        <Bar dataKey="paused" name="Pausas" fill="#F59E0B" radius={[3, 3, 0, 0]} maxBarSize={22} />
+                        <Bar dataKey="productive" name="Tiempo de estudio" fill="var(--accent)" radius={[3, 3, 0, 0]} maxBarSize={26} />
                       </BarChart>
                     </ResponsiveContainer>
                   </ChartContainer>
                   <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 6 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                       <div style={{ width: 8, height: 8, borderRadius: 2, background: 'var(--accent)' }} />
-                      <span style={{ fontSize: 8, color: 'var(--text-secondary)' }}>Productivo: {weekData.reduce((a, d) => a + d.productive, 0)}m</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <div style={{ width: 8, height: 8, borderRadius: 2, background: '#F59E0B' }} />
-                      <span style={{ fontSize: 8, color: 'var(--text-secondary)' }}>Pausas: {weekData.reduce((a, d) => a + d.paused, 0)}m</span>
+                      <span style={{ fontSize: 8, color: 'var(--text-secondary)' }}>Estudio: {weekData.reduce((a, d) => a + d.productive, 0)}m</span>
                     </div>
                   </div>
                 </Section>
@@ -502,14 +497,14 @@ const AnalyticsDrawer = React.memo(function AnalyticsDrawer({ isOpen, onClose, s
                 <Section>
                   <SectionTitle icon={TrendingUp}>Eficiencia por Hora</SectionTitle>
                   <ChartContainer>
-                    <ResponsiveContainer>
+                    <ResponsiveContainer width="100%" height={164}>
                       <AreaChart data={hourData} margin={{ top: 8, right: 4, bottom: 0, left: -12 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
                         <XAxis dataKey="hour" tick={{ fontSize: 8, fill: chartTextColor }} axisLine={false} tickLine={false} interval={3} />
                         <YAxis tick={{ fontSize: 8, fill: chartTextColor }} axisLine={false} tickLine={false} />
                         <Tooltip contentStyle={tooltipStyle} labelStyle={{ fontSize: 10, color: 'var(--text-primary)' }} />
                         <Area type="monotone" dataKey="efficiency" name="Eficiencia %" stroke="#8B5CF6" fill="#8B5CF6" fillOpacity={0.2} strokeWidth={2} />
-                        <Area type="monotone" dataKey="avgDuration" name="Duracion prom. (min)" stroke="var(--accent)" fill="var(--accent)" fillOpacity={0.1} strokeWidth={1.5} />
+                        <Area type="monotone" dataKey="avgDuration" name="Duración prom. (min)" stroke="var(--accent)" fill="var(--accent)" fillOpacity={0.1} strokeWidth={1.5} />
                       </AreaChart>
                     </ResponsiveContainer>
                   </ChartContainer>
@@ -547,7 +542,7 @@ const AnalyticsDrawer = React.memo(function AnalyticsDrawer({ isOpen, onClose, s
                 <Section>
                   <SectionTitle icon={Target}>Embudo de Tareas</SectionTitle>
                   <ChartContainer height={150}>
-                    <ResponsiveContainer>
+                    <ResponsiveContainer width="100%" height={150}>
                       <BarChart data={funnelData} layout="vertical" margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" horizontal={false} />
                         <XAxis type="number" tick={{ fontSize: 9, fill: chartTextColor }} axisLine={false} tickLine={false} />
@@ -570,9 +565,9 @@ const AnalyticsDrawer = React.memo(function AnalyticsDrawer({ isOpen, onClose, s
                 </Section>
 
                 <Section>
-                  <SectionTitle icon={Layers}>Distribucion por Curso</SectionTitle>
+                  <SectionTitle icon={Layers}>Distribución por Curso</SectionTitle>
                   <ChartContainer height={Math.max(100, courseData.length * 28 + 16)}>
-                    <ResponsiveContainer>
+                    <ResponsiveContainer width="100%" height={Math.max(100, courseData.length * 28 + 16)}>
                       <BarChart data={courseData} layout="vertical" margin={{ top: 4, right: 8, bottom: 0, left: -8 }} barCategoryGap={4}>
                         <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" horizontal={false} />
                         <XAxis type="number" tick={{ fontSize: 8, fill: chartTextColor }} axisLine={false} tickLine={false} />
@@ -621,12 +616,12 @@ const AnalyticsDrawer = React.memo(function AnalyticsDrawer({ isOpen, onClose, s
                 </Section>
 
                 <Section>
-                  <SectionTitle icon={Activity}>Metricas Clave</SectionTitle>
+                  <SectionTitle icon={Activity}>Métricas Clave</SectionTitle>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                    <MiniStat label="Completitud" value={tasks.length > 0 ? `${Math.round((completedToday / tasks.length) * 100)}%` : '0%'} color="#10B981" icon={CheckCircle} />
-                    <MiniStat label="Sesiones/Dia" value={studySessions.length > 0 ? `${Math.round(studySessions.length / Math.max(1, Math.ceil((Date.now() - new Date(studySessions[0]?.startedAt || Date.now()).getTime()) / 86400000)))}` : '0'} color="#8B5CF6" icon={Activity} />
-                    <MiniStat label="Min/Sesion" value={`${avgSession}m`} color="var(--accent)" icon={Clock} />
-                    <MiniStat label="Pendiente" value={tasks.length > 0 ? `${Math.round((pendingToday / tasks.length) * 100)}%` : '0%'} color="#F59E0B" icon={AlertTriangle} />
+                    <MiniStat label="Finalización" value={tasks.length > 0 ? `${Math.round((completedToday / tasks.length) * 100)}%` : '0%'} color="#10B981" icon={CheckCircle} />
+                    <MiniStat label="Sesiones/Día" value={studySessions.length > 0 ? `${Math.round(studySessions.length / Math.max(1, Math.ceil((Date.now() - new Date(studySessions[0]?.startedAt || Date.now()).getTime()) / 86400000)))}` : '0'} color="#8B5CF6" icon={Activity} />
+                    <MiniStat label="Min/Sesión" value={`${avgSession}m`} color="var(--accent)" icon={Clock} />
+                    <MiniStat label="Pendientes" value={tasks.length > 0 ? `${Math.round((pendingToday / tasks.length) * 100)}%` : '0%'} color="#F59E0B" icon={AlertTriangle} />
                   </div>
                 </Section>
               </TabContent>

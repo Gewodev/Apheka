@@ -1,6 +1,7 @@
 ﻿import React, { useState, useEffect, useMemo } from 'react';
 import {
-  Monitor, Wifi, Music, CheckSquare, FileText, Flame
+  Activity, Monitor, Wifi, Music, CheckSquare, FileText, Flame,
+  Cpu, HardDrive, Thermometer
 } from 'lucide-react';
 import { useApp } from '../../store/AppContext';
 import { format, subDays, subWeeks, addDays, addWeeks, startOfWeek, parseISO } from 'date-fns';
@@ -56,58 +57,72 @@ function LEDTime({ time, color, digitWidth = 80, digitHeight = 130, colonWidth =
   );
 }
 
-function calculateStreak(w: Record<string, number>, dailyGoalMin: number, dailyGoalHistory?: Record<string, number>): number {
+function getGoalForDay(dayStr: string, currentGoal: number, dailyGoalHistory?: Record<string, number>, initialDailyGoal?: number): number {
+  const changeDates = Object.keys(dailyGoalHistory || {}).sort();
+  for (let i = changeDates.length - 1; i >= 0; i--) {
+    if (changeDates[i] <= dayStr) return dailyGoalHistory![changeDates[i]];
+  }
+  return initialDailyGoal ?? currentGoal;
+}
+
+function calculateStreak(w: Record<string, number>, dailyGoalMin: number, dailyGoalHistory?: Record<string, number>, initialDailyGoal?: number): number {
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const yesterdayStr = format(subDays(new Date(), 1), 'yyyy-MM-dd');
   
   const metGoal = (dayStr: string): boolean => {
-    const goalForDay = dailyGoalHistory?.[dayStr] ?? dailyGoalMin;
+    const goalForDay = getGoalForDay(dayStr, dailyGoalMin, dailyGoalHistory, initialDailyGoal);
     return (w[dayStr] || 0) >= goalForDay * 60;
   };
   
-  const completedToday = metGoal(todayStr);
-  const completedYesterday = metGoal(yesterdayStr);
+  // If today not completed yet, check yesterday first
+  const startDay = metGoal(todayStr) ? todayStr :
+                   metGoal(yesterdayStr) ? yesterdayStr : null;
   
-  if (!completedToday && !completedYesterday) return 0;
+  if (!startDay) return 0;
   
-  let s = 0;
-  let startDay = completedToday ? 0 : 1;
-  while (true) {
-    const d = subDays(new Date(), startDay);
-    const dStr = format(d, 'yyyy-MM-dd');
-    if (metGoal(dStr)) {
-      s++;
-      startDay++;
-    } else {
-      break;
-    }
+  // Walk backwards to find the start of the streak
+  let s = 1;
+  let d = subDays(new Date(startDay), 1);
+  while (metGoal(format(d, 'yyyy-MM-dd'))) {
+    s++;
+    d = subDays(d, 1);
   }
   return s;
 }
 
-interface SysStats { cpu: number; ram: number; ramTotal: number; ramUsed: number; disk: number; temp: number; battery: number; }
+interface SysStats {
+  cpu: number; ram: number; ramTotal: number; ramUsed: number;
+  disk: number; diskTotal: number; diskUsed: number;
+  battery: number; netSpeed: number; netName: string;
+  cpuTemp: number | null; gpuTemp: number | null;
+  cpuName: string; gpuName: string;
+  laptopModel: string; osInfo: string;
+}
 
-const mockStats = (): SysStats => ({ cpu: 23, ram: 42, ramTotal: 16384, ramUsed: 6963, disk: 42, temp: 45, battery: 87 });
+const mockStats = (): SysStats => ({
+  cpu: 0, ram: 0, ramTotal: 0, ramUsed: 0,
+  disk: 0, diskTotal: 0, diskUsed: 0, battery: -1,
+  netSpeed: 0, netName: '', cpuTemp: null, gpuTemp: null,
+  cpuName: '', gpuName: '', laptopModel: '', osInfo: '',
+});
 
 const hl = (l: number) =>
   l === 0 ? 'var(--bg-deep)' : l === 1 ? 'var(--accent-dim)' : l === 2 ? 'color-mix(in srgb, var(--accent) 35%, transparent)' : l === 3 ? 'color-mix(in srgb, var(--accent) 65%, transparent)' : 'var(--accent)';
 
-const sampleTasks = [
-  { title: 'Termodinámica - Problemas de Aplicación', course: 'Física III', priority: 'HIGH' as const, date: '2 May' },
-  { title: 'Química Orgánica - Mecanismos', course: 'Química Orgánica', priority: 'MEDIUM' as const, date: '3 May' },
-  { title: 'Repaso de Cálculo - Integrales', course: 'Cálculo III', priority: 'LOW' as const, date: '4 May' },
-  { title: 'Ejercicios de Programación', course: 'Computación', priority: 'MEDIUM' as const, date: '5 May' },
-];
+const pc: Record<string, string> = { high: '#E11D48', medium: '#F59E0B', low: '#10B981' };
+const pcl: Record<string, string> = { high: 'Alta', medium: 'Media', low: 'Baja' };
 
-const sampleNotes = [
-  { title: 'Mecánica Cuántica - Fundamentos', course: 'Física Moderna', time: 'Hace 1h' },
-  { title: 'Reacciones SN1 y SN2', course: 'Química Orgánica', time: 'Hace 3h' },
-  { title: 'Integrales Triples', course: 'Cálculo III', time: 'Hace 5h' },
-  { title: 'Estructuras de Datos', course: 'Computación', time: 'Hace 1d' },
-  { title: 'Ecuaciones Diferenciales', course: 'Matemáticas Avanzadas', time: 'Hace 2d' },
-];
-
-const pc: Record<string, string> = { HIGH: '#E11D48', MEDIUM: '#F59E0B', LOW: '#10B981' };
+function timeAgo(d: string): string {
+  const diff = Date.now() - new Date(d).getTime();
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return 'Ahora';
+  if (min < 60) return `Hace ${min}m`;
+  const hrs = Math.floor(min / 60);
+  if (hrs < 24) return `Hace ${hrs}h`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `Hace ${days}d`;
+  return format(new Date(d), 'd MMM', { locale: es });
+}
 
 export default function Inicio() {
   const app = useApp();
@@ -125,34 +140,64 @@ export default function Inicio() {
     tracks = [],
     trackHistory = [],
     updateSettings,
+    setNavigateTo,
   } = app || {};
   const [ct, setCt] = useState(new Date());
   const [ss, setSs] = useState<SysStats>(mockStats());
   const [detailStat, setDetailStat] = useState<string | null>(null);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  const [sysHistory, setSysHistory] = useState<{ time: string; cpu: number; ram: number; gpuTemp: number | null }[]>([]);
+  const [detailView, setDetailView] = useState(false);
 
   useEffect(() => {
     const ti = setInterval(() => setCt(new Date()), 1000);
     const si = setInterval(async () => {
       try {
         const raw: any = await invoke('get_system_stats');
-        const cpu = Math.round(raw.cpu || 0);
-        let rp = 42, rt = 16384, ru = 6963;
-        if (raw.mem?.Total) {
-          rt = Math.round(parseInt(raw.mem.Total) / 1024);
-          ru = rt - Math.round(parseInt(raw.mem.Free) / 1024);
-          rp = Math.round((ru / rt) * 100);
-        }
-        setSs(p => ({ cpu, ram: rp, ramTotal: rt, ramUsed: ru, disk: p.disk || 42, temp: p.temp || 45, battery: p.battery || 87 }));
-      } catch { setSs(mockStats()); }
+        const parsed: SysStats = {
+          cpu: Math.round(raw.cpu || 0),
+          ram: Math.round(raw.ram || 0),
+          ramTotal: raw.ramTotal || 0,
+          ramUsed: raw.ramUsed || 0,
+          disk: Math.round(raw.disk || 0),
+          diskTotal: raw.diskTotal || 0,
+          diskUsed: raw.diskUsed || 0,
+          battery: raw.battery ?? -1,
+          netSpeed: raw.netSpeed || 0,
+          netName: raw.netName || '',
+          cpuTemp: raw.cpuTemp ?? null,
+          gpuTemp: raw.gpuTemp ?? null,
+          cpuName: raw.cpuName || '',
+          gpuName: raw.gpuName || '',
+          laptopModel: raw.laptopModel || '',
+          osInfo: raw.osInfo || '',
+        };
+        setSs(parsed);
+        setSysHistory(prev => {
+          const next = [...prev, { time: format(ct, 'HH:mm'), cpu: parsed.cpu, ram: parsed.ram, gpuTemp: parsed.gpuTemp }];
+          return next.length > 30 ? next.slice(-30) : next;
+        });
+      } catch { /* keep prev values */ }
     }, 3000);
     return () => { clearInterval(ti); clearInterval(si); };
   }, []);
 
   const statsList = useMemo(() => [
     { id: 'cpu', label: 'CPU', val: ss.cpu, unit: '%', color: '#3B82F6', detail: `Carga del procesador: ${ss.cpu}%.` },
-    { id: 'ram', label: 'RAM', val: ss.ram, unit: '%', color: '#10B981', detail: `${(ss.ramUsed / 1024).toFixed(1)} GB / ${(ss.ramTotal / 1024).toFixed(0)} GB usados.` },
-    { id: 'disk', label: 'DISCO', val: ss.disk, unit: '%', color: '#8B5CF6', detail: `Almacenamiento: ${ss.disk}% ocupado.` },
-    { id: 'temp', label: 'TEMP', val: ss.temp, unit: '°C', color: '#F59E0B', detail: `Temperatura: ${ss.temp}°C.` },
+    { id: 'ram', label: 'RAM', val: ss.ram, unit: '%', color: '#10B981', detail: `${ss.ramUsed.toFixed(1)} GB / ${ss.ramTotal.toFixed(0)} GB usados.` },
+    { id: 'disk', label: 'DISCO', val: ss.disk, unit: '%', color: '#8B5CF6', detail: `Almacenamiento: ${ss.disk}% ocupado (${ss.diskUsed.toFixed(1)}/${ss.diskTotal.toFixed(1)} GB).` },
   ], [ss]);
 
   const timeStr = format(ct, 'HH:mm');
@@ -160,7 +205,7 @@ export default function Inicio() {
   const dateStr = format(ct, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es as any });
   const dateCap = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
 
-  const streak = useMemo(() => calculateStreak(weeklyStudyTime, settings?.dailyGoal || 240, settings?.dailyGoalHistory), [weeklyStudyTime, settings?.dailyGoal, settings?.dailyGoalHistory]);
+  const streak = useMemo(() => calculateStreak(weeklyStudyTime, settings?.dailyGoal || 240, settings?.dailyGoalHistory, settings?.initialDailyGoal), [weeklyStudyTime, settings?.dailyGoal, settings?.dailyGoalHistory, settings?.initialDailyGoal]);
   const phrase = useMemo(() => getWeeklyPhrase(), []);
   useEffect(() => {
     if (settings && !settings.heatmapStartDate && updateSettings) {
@@ -201,7 +246,7 @@ export default function Inicio() {
         const secondsStudied = weeklyStudyTime[dayStr] || 0;
         const isFuture = targetDate.getTime() > today.getTime();
         
-        const goalForDay = settings?.dailyGoalHistory?.[dayStr] ?? (settings?.dailyGoal || 240);
+        const goalForDay = getGoalForDay(dayStr, settings?.dailyGoal || 240, settings?.dailyGoalHistory, settings?.initialDailyGoal);
         const goalSeconds = goalForDay * 60;
         
         const met = secondsStudied >= goalSeconds && secondsStudied > 0;
@@ -220,7 +265,7 @@ export default function Inicio() {
       grid.push(rowCells);
     }
     return grid;
-  }, [weeklyStudyTime, settings?.heatmapStartDate, settings?.dailyGoal, settings?.dailyGoalHistory]);
+  }, [weeklyStudyTime, settings?.heatmapStartDate, settings?.dailyGoal, settings?.dailyGoalHistory, settings?.initialDailyGoal]);
 
   const ts = useMemo(() => ({
     active: tasks.filter(t => t.status !== 'completado').length || 8,
@@ -285,7 +330,7 @@ export default function Inicio() {
             pointerEvents: 'none',
             zIndex: 0
           }} />
-          <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#10B981', boxShadow: '0 0 8px rgba(16,185,129,0.5)', position: 'relative', zIndex: 1 }} />
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: isOnline ? '#10B981' : '#EF4444', boxShadow: isOnline ? '0 0 8px rgba(16,185,129,0.5)' : '0 0 8px rgba(239,68,68,0.5)', position: 'relative', zIndex: 1, transition: 'all 300ms' }} />
           <NotificationBell />
           <div style={{ textAlign: 'right', position: 'relative', zIndex: 1 }}>
             <div className="flex items-baseline gap-2 justify-end">
@@ -380,7 +425,7 @@ export default function Inicio() {
         <div className="xl:col-span-6" style={{ padding: '18px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 12, display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
             <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em' }}>RECIENTES</span>
-            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--accent)', cursor: 'pointer' }} className="hover:opacity-80">Ir a Música â†’</span>
+            <span onClick={() => setNavigateTo?.('musica')} style={{ fontSize: 10, fontWeight: 600, color: 'var(--accent)', cursor: 'pointer' }} className="hover:opacity-80">Ir a Música</span>
           </div>
           
           <div style={{ 
@@ -452,19 +497,34 @@ export default function Inicio() {
         <div className="xl:col-span-4" style={{ padding: '18px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 12, display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 12, borderBottom: '1px solid var(--border-soft)' }}>
             <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em' }}>TAREAS</span>
-            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--accent)', cursor: 'pointer' }} className="hover:opacity-80">Ver todas</span>
+            <span onClick={() => setNavigateTo?.('tareas')} style={{ fontSize: 10, fontWeight: 600, color: 'var(--accent)', cursor: 'pointer' }} className="hover:opacity-80">Ver todas</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {sampleTasks.map((t, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', borderRadius: 8, transition: 'all 150ms' }} className="hover:border-borderDark/60 group">
-                <div style={{ width: 12, height: 12, borderRadius: 6, border: '2px solid var(--border-subtle)', transition: 'border-color 150ms' }} className="group-hover:border-accent/60 cursor-pointer flex-shrink-0" />
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.title}</div>
-                  <div style={{ fontSize: 9, color: 'var(--text-tertiary)', marginTop: 1 }}>{t.course}</div>
+            {tasks.filter(t => t.status !== 'completado').slice(0, 4).map(t => {
+              const isDone = t.status === 'completado';
+              const tr = t.dueDate ? format(new Date(t.dueDate), 'd MMM', { locale: es }) : '';
+              return (
+                <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', borderRadius: 8, transition: 'all 150ms', opacity: isDone ? 0.5 : 1 }} className="hover:border-borderDark/60 group">
+                  <div style={{ width: 14, height: 14, borderRadius: 4, background: t.status === 'completado' ? '#10B981' : t.status === 'progreso' ? `${t.courseColor}50` : 'var(--bg-base)', border: `2px solid ${t.status === 'completado' ? '#10B981' : t.courseColor}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 150ms' }}>
+                    {isDone && <CheckSquare size={8} strokeWidth={3} style={{ color: '#fff' }} />}
+                  </div>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: isDone ? 'var(--text-muted)' : 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textDecoration: isDone ? 'line-through' : 'none' }}>{t.title}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 1 }}>
+                      <span style={{ width: 4, height: 4, borderRadius: '50%', background: t.courseColor, flexShrink: 0 }} />
+                      <span style={{ fontSize: 9, color: 'var(--text-tertiary)' }}>{t.course}</span>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {tr && <span style={{ fontSize: 8, color: 'var(--text-muted)', fontFamily: "'JetBrains Mono', monospace" }}>{tr}</span>}
+                    <span style={{ fontSize: 8, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: `${pc[t.priority]}20`, color: pc[t.priority] }}>{pcl[t.priority]}</span>
+                  </div>
                 </div>
-                <span style={{ fontSize: 8, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: `${pc[t.priority]}20`, color: pc[t.priority] }}>{t.priority}</span>
-              </div>
-            ))}
+              );
+            })}
+            {tasks.filter(t => t.status !== 'completado').length === 0 && (
+              <div style={{ padding: '16px 0', textAlign: 'center', fontSize: 10, color: 'var(--text-muted)' }}>Sin tareas pendientes</div>
+            )}
           </div>
         </div>
 
@@ -472,76 +532,76 @@ export default function Inicio() {
         <div className="xl:col-span-4" style={{ padding: '18px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 12, display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 12, borderBottom: '1px solid var(--border-soft)' }}>
             <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em' }}>NOTAS</span>
-            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--accent)', cursor: 'pointer' }} className="hover:opacity-80">Ver todas</span>
+            <span onClick={() => setNavigateTo?.('apuntes')} style={{ fontSize: 10, fontWeight: 600, color: 'var(--accent)', cursor: 'pointer' }} className="hover:opacity-80">Ver todas</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {sampleNotes.map((n, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', borderRadius: 8, cursor: 'pointer', transition: 'all 150ms' }} className="hover:border-borderDark/60 group">
+            {notes.slice(0, 5).map(n => (
+              <div key={n.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', borderRadius: 8, cursor: 'pointer', transition: 'all 150ms' }} className="hover:border-borderDark/60 group">
                 <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n.title}</div>
-                <span style={{ fontSize: 9, color: 'var(--text-tertiary)', flexShrink: 0 }}>{n.time}</span>
+                <span style={{ fontSize: 9, color: 'var(--text-tertiary)', flexShrink: 0 }}>{timeAgo(n.updatedAt)}</span>
               </div>
             ))}
+            {notes.length === 0 && (
+              <div style={{ padding: '16px 0', textAlign: 'center', fontSize: 10, color: 'var(--text-muted)' }}>Sin notas aún</div>
+            )}
           </div>
         </div>
 
         {/* SYSTEM STATUS */}
-        <div className="xl:col-span-4" style={{ padding: '18px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 12, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 10, borderBottom: '1px solid var(--border-soft)' }}>
-            <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em' }}>SISTEMA</span>
-            <span style={{ fontSize: 9, fontFamily: "'Share Tech Mono', monospace", color: '#3B82F6' }}>{'\u25CF'} En vivo</span>
-          </div>
-          <div style={{ display: 'flex', gap: 16, flex: 1 }}>
-            {/* Combined gauge */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, width: 110, flexShrink: 0 }}>
-              <div style={{ position: 'relative', width: 90, height: 90 }}>
-                <svg viewBox="0 0 120 120" style={{ width: '100%', height: '100%' }}>
-                  <circle cx="60" cy="60" r="50" fill="none" stroke="var(--bg-deep)" strokeWidth="8" />
-                  {(() => {
-                    const combined = Math.round((ss.cpu + ss.ram + ss.disk) / 3);
-                    const circ = 2 * Math.PI * 50;
-                    return (
-                      <circle cx="60" cy="60" r="50" fill="none" stroke="var(--accent)" strokeWidth="8" strokeDasharray={`${(combined / 100) * circ} ${circ}`} strokeLinecap="round" transform="rotate(-90 60 60)" style={{ filter: 'drop-shadow(0 0 16px var(--accent-glow))', transition: 'stroke-dasharray 500ms' }} />
-                    );
-                  })()}
-                </svg>
-                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Monitor size={32} style={{ color: 'var(--text-secondary)' }} />
-                </div>
-              </div>
-              <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.04em', fontFamily: "'Share Tech Mono', monospace" }}>GENERAL</span>
+        <div className="xl:col-span-4" style={{ padding: '24px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 14, display: 'flex', flexDirection: 'column' }}>
+          {/* Top: icon + info */}
+          {(() => { const a = Math.round((ss.cpu + ss.ram + ss.disk) / 3); const lc = a > 80 ? '#E11D48' : a > 50 ? '#F59E0B' : '#22C55E'; const R = 28; const circ = 2 * Math.PI * R; const off = circ * (1 - a / 100); return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid var(--border-soft)' }}>
+            <div style={{ position: 'relative', width: 72, height: 72, flexShrink: 0 }}>
+              <svg width="72" height="72" viewBox="0 0 72 72">
+                <circle cx="36" cy="36" r={R} fill="none" stroke="var(--bg-deep)" strokeWidth="5" />
+                <circle cx="36" cy="36" r={R} fill="none" stroke={lc} strokeWidth="5"
+                  strokeDasharray={circ} strokeDashoffset={off}
+                  strokeLinecap="round" transform="rotate(-90, 36, 36)" style={{ transition: 'stroke-dashoffset 600ms cubic-bezier(0.16, 1, 0.3, 1)' }} />
+              </svg>
+              <Monitor size={30} style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', color: lc }} />
             </div>
-            {/* Metrics in 2x2 grid */}
-            <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              {[
-                { label: 'CPU', val: ss.cpu, unit: '%', color: '#E11D48' },
-                { label: 'RAM', val: ss.ram, unit: '%', color: '#F59E0B' },
-                { label: 'DISCO', val: ss.disk, unit: '%', color: '#8B5CF6' },
-                { label: 'TEMP', val: ss.temp, unit: '°C', color: '#3B82F6' },
-              ].map(m => (
-                <div key={m.label} style={{ background: 'var(--bg-deep)', borderRadius: 8, padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 4, border: '1px solid var(--border-subtle)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.04em' }}>{m.label}</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: m.color, fontFamily: "'Share Tech Mono', monospace" }}>{m.label === 'TEMP' ? `${m.val}°C` : `${m.val}%`}</span>
-                  </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', marginBottom: 4 }}>SISTEMA</div>
+              <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ss.laptopModel || ss.osInfo || 'Equipo'}</div>
+            </div>
+            <span style={{ fontSize: 10, fontFamily: "'Share Tech Mono', monospace", color: '#3B82F6', whiteSpace: 'nowrap', padding: '4px 12px', background: 'var(--bg-surface)', borderRadius: 6, border: '1px solid var(--border-soft)' }}>{'\u25CF'} En vivo</span>
+          </div>
+          );})()}
+          {/* Metrics row — 3 per row, spacious */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+            {[
+              { label: 'CPU', val: `${ss.cpu}%`, color: '#E11D48', bar: ss.cpu },
+              { label: 'RAM', val: `${ss.ram}%`, color: '#F59E0B', bar: ss.ram },
+              { label: 'DISCO', val: `${ss.disk}%`, color: '#8B5CF6', bar: ss.disk },
+              { label: 'BAT.', val: ss.battery < 0 ? '--' : `${Math.round(ss.battery)}%`, color: '#3B82F6', bar: ss.battery < 0 ? 0 : ss.battery },
+              { label: 'CPU \u00B0C', val: ss.cpuTemp !== null ? `${Math.round(ss.cpuTemp)}\u00B0` : '--', color: '#EF4444' },
+              { label: 'GPU \u00B0C', val: ss.gpuTemp !== null ? `${Math.round(ss.gpuTemp)}\u00B0` : '--', color: '#F97316' },
+            ].map(m => (
+              <div key={m.label} style={{ background: 'var(--bg-deep)', borderRadius: 10, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8, border: '1px solid var(--border-subtle)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.04em' }}>{m.label}</span>
+                  <span style={{ fontSize: 17, fontWeight: 700, color: m.color, fontFamily: "'Share Tech Mono', monospace" }}>{m.val}</span>
+                </div>
+                {(m as any).bar !== undefined && (
                   <div style={{ height: 4, borderRadius: 2, background: 'var(--bg-base)', overflow: 'hidden' }}>
-                    <div style={{ height: '100%', borderRadius: 2, background: m.color, width: `${m.label === 'TEMP' ? Math.round((m.val / 80) * 100) : m.val}%`, boxShadow: `0 0 6px ${m.color}40`, transition: 'width 600ms cubic-bezier(0.16, 1, 0.3, 1)' }} />
+                    <div style={{ height: '100%', borderRadius: 2, background: m.color, width: `${(m as any).bar}%`, boxShadow: `0 0 8px ${m.color}50`, transition: 'width 600ms cubic-bezier(0.16, 1, 0.3, 1)' }} />
                   </div>
-                </div>
-              ))}
-            </div>
+                )}
+              </div>
+            ))}
           </div>
-          <div onClick={() => setDetailStat('all')} style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--border-soft)', cursor: 'pointer', transition: 'all 150ms' }}>
-            <Wifi size={12} style={{ color: '#3B82F6' }} />
-            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)' }}>Conectado · 42.4 Mbps</span>
-            <span style={{ marginLeft: 'auto', fontSize: 9, color: 'var(--text-tertiary)', fontFamily: "'Share Tech Mono', monospace" }}>Ver detalles â†’</span>
+          <div onClick={() => setDetailView(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border-soft)', cursor: 'pointer', transition: 'all 150ms' }}>
+            <span style={{ fontSize: 10, color: 'var(--text-tertiary)', fontFamily: "'Share Tech Mono', monospace" }}>Detalles del sistema</span>
+            <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--accent)', fontFamily: "'Share Tech Mono', monospace" }}>Ver especificaciones</span>
           </div>
         </div>
       </div>
 
-      {/* â”€â”€ DETAIL MODAL â”€â”€ */}
-      {detailStat === 'all' && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', padding: 16 }} onClick={() => setDetailStat(null)}>
-          <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 16, width: '100%', maxWidth: 400, padding: 24 }} onClick={e => e.stopPropagation()}>
+      {/* â”€â”€ EXPANDED DETAIL VIEW â”€â”€ */}
+      {detailView && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', padding: 16 }} onClick={() => setDetailView(false)}>
+          <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 16, width: '100%', maxWidth: 720, maxHeight: '85vh', overflowY: 'auto', padding: 28 }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, paddingBottom: 14, borderBottom: '1px solid var(--border-soft)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <div style={{ width: 40, height: 40, borderRadius: 8, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -549,31 +609,65 @@ export default function Inicio() {
                 </div>
                 <div>
                   <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Sistema</h2>
-                  <p style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>Diagnóstico en tiempo real</p>
+                  <p style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>Especificaciones del equipo</p>
                 </div>
               </div>
-              <button onClick={() => setDetailStat(null)} style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-tertiary)', cursor: 'pointer' }}><span style={{ fontSize: 14 }}>âœ•</span></button>
+              <button onClick={() => setDetailView(false)} style={{ padding: '8px 16px', borderRadius: 6, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer' }}>
+                Cerrar
+              </button>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
-              {statsList.map(s => (
-                <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'var(--bg-surface)', borderRadius: 8, border: '1px solid var(--border-soft)' }}>
-                  <div style={{ width: 32, height: 32, borderRadius: 6, background: `${s.color}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <span style={{ fontSize: 10, fontWeight: 800, color: s.color }}>{s.label.slice(0, 2)}</span>
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)' }}>{s.label}</span>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: s.color, fontFamily: "'Share Tech Mono', monospace" }}>{s.val}{s.unit}</span>
-                    </div>
-                    <div style={{ height: 4, borderRadius: 2, background: 'var(--bg-deep)', marginTop: 4, overflow: 'hidden' }}>
-                      <div style={{ height: '100%', borderRadius: 2, background: s.color, width: `${s.val}%`, boxShadow: `0 0 6px ${s.color}60`, transition: 'width 500ms' }} />
-                    </div>
-                    <div style={{ fontSize: 9, color: 'var(--text-tertiary)', marginTop: 3 }}>{s.detail}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <button onClick={() => setDetailStat(null)} style={{ width: '100%', padding: '10px 0', borderRadius: 8, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', fontSize: 10, fontWeight: 700, color: 'var(--text-primary)', cursor: 'pointer' }} className="hover:opacity-80">
+
+            {/* Single column: specs only (no graph) */}
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                {/* CPU Section */}
+                <DetailSection icon={<Cpu size={13} />} title="Procesador (CPU)" values={[
+                  { label: 'Modelo', value: ss.cpuName || 'Desconocido' },
+                  { label: 'Uso', value: `${ss.cpu}%` },
+                  { label: 'Temperatura', value: ss.cpuTemp !== null ? `${Math.round(ss.cpuTemp)}°C` : 'N/A' },
+                ]} />
+
+                {/* GPU Section */}
+                <DetailSection icon={<Monitor size={13} />} title="Tarjeta Gráfica (GPU)" values={[
+                  { label: 'Modelo', value: ss.gpuName || 'Desconocido' },
+                  { label: 'Temperatura', value: ss.gpuTemp !== null ? `${Math.round(ss.gpuTemp)}°C` : 'N/A' },
+                ]} />
+
+                {/* RAM Section */}
+                <DetailSection icon={<Activity size={13} />} title="Memoria RAM" values={[
+                  { label: 'Uso', value: `${ss.ram}%` },
+                  { label: 'Usado', value: `${ss.ramUsed.toFixed(1)} GB` },
+                  { label: 'Total', value: `${ss.ramTotal.toFixed(0)} GB` },
+                ]} />
+
+                {/* Disk Section */}
+                <DetailSection icon={<HardDrive size={13} />} title="Almacenamiento" values={[
+                  { label: 'Uso', value: `${ss.disk}%` },
+                  { label: 'Usado', value: `${ss.diskUsed.toFixed(1)} GB` },
+                  { label: 'Total', value: `${ss.diskTotal.toFixed(1)} GB` },
+                ]} />
+
+                {/* Network Section */}
+                <DetailSection icon={<Wifi size={13} />} title="Red" values={[
+                  { label: 'Conexión', value: isOnline ? 'En línea' : 'Sin conexión' },
+                  { label: 'Velocidad', value: ss.netSpeed > 0 ? `${ss.netSpeed} Mbps` : 'N/A' },
+                  { label: 'Adaptador', value: ss.netName || 'Desconocido' },
+                ]} />
+
+                {/* Battery Section */}
+                {ss.battery >= 0 && (
+                  <DetailSection icon={<Monitor size={13} />} title="Batería" values={[
+                    { label: 'Carga', value: `${Math.round(ss.battery)}%` },
+                  ]} />
+                )}
+
+                {/* System Info Section */}
+                <DetailSection icon={<Monitor size={13} />} title="Equipo" values={[
+                  { label: 'Modelo', value: ss.laptopModel || 'Desconocido' },
+                  { label: 'Sistema', value: ss.osInfo || 'Desconocido' },
+                ]} />
+              </div>
+
+            <button onClick={() => setDetailView(false)} style={{ width: '100%', marginTop: 12, padding: '10px 0', borderRadius: 8, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', fontSize: 10, fontWeight: 700, color: 'var(--text-primary)', cursor: 'pointer' }} className="hover:opacity-80">
               Cerrar
             </button>
           </div>
@@ -594,7 +688,7 @@ export default function Inicio() {
                   <p style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>Diagnóstico en tiempo real</p>
                 </div>
               </div>
-              <button onClick={() => setDetailStat(null)} style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-tertiary)', cursor: 'pointer' }}><span style={{ fontSize: 14 }}>âœ•</span></button>
+              <button onClick={() => setDetailStat(null)} style={{ padding: '8px 16px', borderRadius: 6, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer' }}>Cerrar</button>
             </div>
             <div style={{ fontSize: 40, fontWeight: 700, textAlign: 'center', margin: '16px 0', fontFamily: "'Share Tech Mono', monospace", color: dc.color }}>
               {dc.val}<span style={{ fontSize: 16, marginLeft: 2 }}>{dc.unit}</span>
@@ -610,6 +704,25 @@ export default function Inicio() {
         </div>
       )}
 
+    </div>
+  );
+}
+
+function DetailSection({ icon, title, values }: { icon: React.ReactNode; title: string; values: { label: string; value: string }[] }) {
+  return (
+    <div style={{ marginTop: 10, padding: '14px 16px', background: 'var(--bg-surface)', borderRadius: 10, border: '1px solid var(--border-subtle)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, paddingBottom: 10, borderBottom: '1px solid var(--border-soft)' }}>
+{icon}
+        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>{title}</span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {values.map(v => (
+          <div key={v.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', fontSize: 12 }}>
+            <span style={{ color: 'var(--text-tertiary)', fontSize: 11 }}>{v.label}</span>
+            <span style={{ color: 'var(--text-primary)', fontWeight: 600, fontFamily: "'Share Tech Mono', monospace", fontSize: 12 }}>{v.value}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

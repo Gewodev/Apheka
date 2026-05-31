@@ -147,11 +147,12 @@ export default function Musica() {
       updateDownloadProgress(data.downloadId, data.progress);
     });
     const unlistenComplete = onDownloadComplete((data: DownloadComplete) => {
-      updateDownloadStatus(data.downloadId, data.success ? 'completed' : 'error');
+      const errorMsg = data.errorMessage ? data.errorMessage.slice(0, 500) : undefined;
+      updateDownloadStatus(data.downloadId, data.success ? 'completed' : 'error', errorMsg);
       if (data.success) {
         addNotification('Descarga completada', 'success');
       } else {
-        addNotification('Error en la descarga', 'error');
+        addNotification(errorMsg ? `Error: ${errorMsg}` : `Error en la descarga (código ${data.code ?? '?'})`, 'error');
       }
     });
     return () => {
@@ -192,63 +193,98 @@ export default function Musica() {
     }
   };
 
-  const handleDownloadAll = async () => {
-    if (!preview) return;
-    const entries = getEntries(preview);
-    const path = persistentDownloadPath;
+  const getVideoUrl = useCallback((entry: YouTubeMetadata): string => {
+    return entry.webpage_url || (entry.id ? `https://www.youtube.com/watch?v=${entry.id}` : '');
+  }, []);
 
-    for (const entry of entries) {
-      const dlItemId = addToDownloadQueue({
-        title: entry.title,
-        artist: entry.channel,
-        url: entry.webpage_url,
-        type: entries.length > 1 ? 'playlist' : 'video',
-        totalItems: entries.length,
-        thumbnail: entry.thumbnail,
-        duration: entry.duration,
+  const autoImportTracks = useCallback((entries: YouTubeMetadata[]) => {
+    entries.forEach(entry => {
+      if (!entry.id) return;
+      const exists = tracks.some(t => t.url?.includes(entry.id!) || t.url?.includes(entry.webpage_url || ''));
+      if (exists) return;
+      addTrack({
+        title: entry.title || 'Unknown',
+        artist: (entry.channel as string) || 'Artista Desconocido',
+        collaborators: [],
+        duration: entry.duration || 0,
+        source: 'youtube',
+        url: getVideoUrl(entry),
+        coverImage: entry.thumbnail,
+        isFavorite: false,
+        listenedTime: 0,
       });
-
-      updateDownloadStatus(dlItemId, 'downloading');
-      try {
-        await startDownload(entry.webpage_url, dlItemId, path, audioFormat, includeCover);
-        updateDownloadStatus(dlItemId, 'completed');
-      } catch (e) {
-        const msg = String(e);
-        if (msg.includes('web-download-unavailable')) {
-          updateDownloadStatus(dlItemId, 'error', 'Solo disponible en la app de escritorio');
-          addNotification('Descargar requiere la app de escritorio. Usa "npm run tauri dev"', 'error');
-        } else {
-          updateDownloadStatus(dlItemId, 'error', 'Error al descargar');
-        }
-      }
-    }
-  };
-
-  const handleDownloadOne = async (entry: YouTubeMetadata) => {
-    const dlItemId = addToDownloadQueue({
-      title: entry.title,
-      artist: entry.channel,
-      url: entry.webpage_url,
-      type: 'video',
-      totalItems: 1,
-      thumbnail: entry.thumbnail,
-      duration: entry.duration,
     });
+  }, [addTrack, tracks, getVideoUrl]);
 
+  const doDownload = useCallback(async (entry: YouTubeMetadata, dlItemId: string, path: string) => {
+    const videoUrl = getVideoUrl(entry);
+    if (!videoUrl) {
+      updateDownloadStatus(dlItemId, 'error', 'URL del video no disponible');
+      return;
+    }
     updateDownloadStatus(dlItemId, 'downloading');
     try {
-      await startDownload(entry.webpage_url, dlItemId, persistentDownloadPath, audioFormat, includeCover);
+      await startDownload(videoUrl, dlItemId, path, audioFormat, includeCover);
       updateDownloadStatus(dlItemId, 'completed');
-      addNotification(`"${entry.title}" descargada`, 'success');
+      autoImportTracks([entry]);
     } catch (e) {
       const msg = String(e);
       if (msg.includes('web-download-unavailable')) {
         updateDownloadStatus(dlItemId, 'error', 'Solo disponible en la app de escritorio');
         addNotification('Descargar requiere la app de escritorio. Usa "npm run tauri dev"', 'error');
       } else {
-        updateDownloadStatus(dlItemId, 'error', 'Error al descargar');
+        const cleanMsg = msg.replace(/^(Error:\s*|Invoke error:\s*)/i, '').slice(0, 500);
+        updateDownloadStatus(dlItemId, 'error', cleanMsg || 'Error desconocido');
+        addNotification(`Error: ${cleanMsg || 'Error al descargar'}`, 'error');
       }
     }
+  }, [getVideoUrl, audioFormat, includeCover, updateDownloadStatus, autoImportTracks, addNotification]);
+
+  const handleDownloadAll = async () => {
+    if (!preview) return;
+    const entries = getEntries(preview);
+    const path = persistentDownloadPath;
+    const concurrency = 3;
+    const results: { entry: YouTubeMetadata; dlItemId: string }[] = [];
+
+    for (const entry of entries) {
+      const dlItemId = addToDownloadQueue({
+        title: entry.title || 'Unknown',
+        artist: entry.channel,
+        url: getVideoUrl(entry),
+        type: 'video',
+        totalItems: 1,
+        thumbnail: entry.thumbnail,
+        duration: entry.duration,
+      });
+      results.push({ entry, dlItemId });
+    }
+
+    for (let i = 0; i < results.length; i += concurrency) {
+      const batch = results.slice(i, i + concurrency);
+      await Promise.allSettled(batch.map(r => doDownload(r.entry, r.dlItemId, path)));
+    }
+
+    const completed = results.length;
+    addNotification(`Descarga completada: ${completed} canciones`, 'success');
+  };
+
+  const handleDownloadOne = async (entry: YouTubeMetadata) => {
+    const videoUrl = getVideoUrl(entry);
+    if (!videoUrl) {
+      addNotification('URL del video no disponible', 'error');
+      return;
+    }
+    const dlItemId = addToDownloadQueue({
+      title: entry.title || 'Unknown',
+      artist: entry.channel,
+      url: videoUrl,
+      type: 'video',
+      totalItems: 1,
+      thumbnail: entry.thumbnail,
+      duration: entry.duration,
+    });
+    await doDownload(entry, dlItemId, persistentDownloadPath);
   };
 
   const handleCancelDownload = async (itemId: string) => {
@@ -606,19 +642,21 @@ export default function Musica() {
                 <span onClick={() => setShowAllRecents(!showAllRecents)} className="text-accent" style={{ fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{showAllRecents ? 'Ver menos' : 'Ver todo'}</span>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16, minWidth: 0 }}>
                 {recentTracks.length > 0 ? recentTracks.slice(0, showAllRecents ? 10 : 5).map((track, i) => (
-                  <div key={track.id} onClick={() => playTrack(track.id)} className="bento-card" style={{ padding: 12, cursor: 'pointer', transition: 'all 200ms', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }} onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-4px)'} onMouseLeave={e => e.currentTarget.style.transform = ''}>
-                    <div style={{ width: '100%', aspectRatio: '1/1', borderRadius: 8, overflow: 'hidden', marginBottom: 12, position: 'relative', boxShadow: '0 4px 12px rgba(0,0,0,0.5)', background: 'var(--bg-surface)' }}>
+                  <div key={track.id} onClick={() => playTrack(track.id)} style={{ minWidth: 0, padding: 14, borderRadius: 14, cursor: 'pointer', transition: 'all 250ms cubic-bezier(0.16, 1, 0.3, 1)', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.borderColor = 'var(--border-strong)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.25)'; }} onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.boxShadow = 'none'; }}>
+                    <div style={{ width: '100%', aspectRatio: '1/1', borderRadius: 10, overflow: 'hidden', position: 'relative', background: 'var(--bg-deep)' }}>
                       {track.coverImage ? <img src={track.coverImage} alt={track.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={24} style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', color: 'var(--text-muted)', opacity: 0.3 }} />}
-                      <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)', opacity: 0, transition: 'opacity 200ms', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onMouseEnter={e => e.currentTarget.style.opacity = '1'} onMouseLeave={e => e.currentTarget.style.opacity = '0'}>
-                        <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.5)' }}>
+                      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.15) 50%, transparent 100%)', opacity: 0, transition: 'opacity 250ms', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onMouseEnter={e => e.currentTarget.style.opacity = '1'} onMouseLeave={e => e.currentTarget.style.opacity = '0'}>
+                        <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 14px rgba(0,0,0,0.5)' }}>
                           <Play size={18} fill="#fff" style={{ marginLeft: 2 }} />
                         </div>
                       </div>
                     </div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{track.title}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{track.artist}</div>
+                    <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3, height: '1.3em' }}>{track.title}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3, height: '1.3em' }}>{track.artist}</div>
+                    </div>
                   </div>
                 )) : (
                   <div style={{ gridColumn: '1 / -1', padding: '30px 20px', textAlign: 'center', color: 'var(--text-muted)', borderRadius: 12, border: '1px dashed var(--border-subtle)' }}>
@@ -1472,36 +1510,28 @@ export default function Musica() {
         </div>
       )}
 
-      {/* Confirmation Dialog */}
       {confirmDelete && (
         <div style={{
           position: 'fixed', inset: 0, zIndex: 1000,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
         }} onClick={() => { setConfirmDelete(null); setConfirmDeleteText(''); }}>
-          <div className="bento-card" style={{ padding: 28, width: 340, maxWidth: '90vw', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }} onClick={e => e.stopPropagation()}>
-            <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>Confirmar eliminacion</h3>
-            <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginBottom: 16 }}>
+          <div style={{ padding: 28, width: 340, maxWidth: '90vw', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 16 }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>Eliminar</h3>
+            <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginBottom: 24, lineHeight: 1.5 }}>
               {tracks.find(t => t.id === confirmDelete)
-                ? `Se eliminara "${tracks.find(t => t.id === confirmDelete)?.title}" de tu biblioteca.`
-                : 'Se eliminara esta playlist de tu biblioteca.'}
+                ? `Se eliminará "${tracks.find(t => t.id === confirmDelete)?.title}" de tu biblioteca.`
+                : 'Se eliminará esta playlist de tu biblioteca.'}
             </p>
-            <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
-              Escribe <strong style={{ color: 'var(--error)' }}>Deseoborrartodo</strong> para confirmar:
-            </p>
-            <input type="text" value={confirmDeleteText} onChange={e => setConfirmDeleteText(e.target.value)}
-              placeholder="Escribe Deseoborrartodo"
-              style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-deep)', color: 'var(--text-primary)', fontSize: 12, outline: 'none', marginBottom: 16 }} />
             <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-              <button onClick={() => { setConfirmDelete(null); setConfirmDeleteText(''); }} className="btn-secondary" style={{ height: 38, padding: '0 20px', fontSize: 12 }}>
+              <button onClick={() => { setConfirmDelete(null); setConfirmDeleteText(''); }} style={{ height: 38, padding: '0 20px', fontSize: 12, fontWeight: 600, borderRadius: 8, cursor: 'pointer', border: '1px solid var(--border-default)', background: 'var(--bg-surface)', color: 'var(--text-secondary)' }}>
                 Cancelar
               </button>
               <button onClick={() => {
-                if (confirmDeleteText !== 'Deseoborrartodo') return;
                 deleteTrack(confirmDelete);
                 setConfirmDelete(null);
                 setConfirmDeleteText('');
-              }} className="btn-primary" style={{ height: 38, padding: '0 20px', fontSize: 12, background: confirmDeleteText === 'Deseoborrartodo' ? 'var(--error)' : 'var(--bg-deep)', borderColor: confirmDeleteText === 'Deseoborrartodo' ? 'var(--error)' : 'var(--border-default)', opacity: confirmDeleteText === 'Deseoborrartodo' ? 1 : 0.4, cursor: confirmDeleteText === 'Deseoborrartodo' ? 'pointer' : 'not-allowed' }}>
+              }} style={{ height: 38, padding: '0 20px', fontSize: 12, fontWeight: 700, borderRadius: 8, cursor: 'pointer', border: 'none', background: '#EF4444', color: '#fff', display: 'flex', alignItems: 'center', gap: 6 }}>
                 Eliminar
               </button>
             </div>

@@ -6,21 +6,31 @@ import {
   TrendingUp, AlertTriangle, Link2, Eye, Focus, Target, Monitor, Minimize2, Maximize2, Calendar as CalendarIcon, Activity
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
+import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { useApp } from '../../store/AppContext';
 import { useTimer } from '../../hooks/useTimer';
-import { format, subDays } from 'date-fns';
+import { format, subDays, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { notifySessionComplete, notifyBreakOver } from '../../lib/notifications';
-import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import NotificationBell from '../ui/NotificationBell';
 import AnalyticsDrawer from '../ui/AnalyticsDrawer';
+import { DigitSVG, ColonSVG } from '../LEDDigits';
 
-function calculateStreak(w: Record<string, number>, dailyGoalMin: number, dailyGoalHistory?: Record<string, number>): number {
+function getGoalForDay(dayStr: string, currentGoal: number, dailyGoalHistory?: Record<string, number>, initialDailyGoal?: number): number {
+  const changeDates = Object.keys(dailyGoalHistory || {}).sort();
+  for (let i = changeDates.length - 1; i >= 0; i--) {
+    if (changeDates[i] <= dayStr) return dailyGoalHistory![changeDates[i]];
+  }
+  return initialDailyGoal ?? currentGoal;
+}
+
+function calculateStreak(w: Record<string, number>, dailyGoalMin: number, dailyGoalHistory?: Record<string, number>, initialDailyGoal?: number): number {
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const yesterdayStr = format(subDays(new Date(), 1), 'yyyy-MM-dd');
   
   const metGoal = (dayStr: string): boolean => {
-    const goalForDay = dailyGoalHistory?.[dayStr] ?? dailyGoalMin;
+    const goalForDay = getGoalForDay(dayStr, dailyGoalMin, dailyGoalHistory, initialDailyGoal);
     return (w[dayStr] || 0) >= goalForDay * 60;
   };
   
@@ -29,17 +39,21 @@ function calculateStreak(w: Record<string, number>, dailyGoalMin: number, dailyG
   
   if (!completedToday && !completedYesterday) return 0;
   
+  const changeDates = Object.keys(dailyGoalHistory || {}).sort();
+  const lastChangeDate = changeDates.length > 0 ? changeDates[changeDates.length - 1] : todayStr;
+  const startFrom = lastChangeDate > todayStr ? todayStr : lastChangeDate;
+  
   let s = 0;
-  let startDay = completedToday ? 0 : 1;
-  while (true) {
-    const d = subDays(new Date(), startDay);
+  let d = new Date(startFrom);
+  const todayDate = new Date();
+  while (d <= todayDate) {
     const dStr = format(d, 'yyyy-MM-dd');
     if (metGoal(dStr)) {
       s++;
-      startDay++;
     } else {
-      break;
+      s = 0;
     }
+    d = addDays(d, 1);
   }
   return s;
 }
@@ -52,53 +66,6 @@ const TomatoIcon = ({ size = 24, color = 'currentColor', style }: { size?: numbe
     <path d="M10 8s1-1 2-1 2 1 2 1" />
   </svg>
 );
-
-const segs: Record<string, boolean[]> = {
-  '0': [true,true,true,true,true,true,false], '1': [false,true,true,false,false,false,false],
-  '2': [true,true,false,true,true,false,true], '3': [true,true,true,true,false,false,true],
-  '4': [false,true,true,false,false,true,true], '5': [true,false,true,true,false,true,true],
-  '6': [true,false,true,true,true,true,true], '7': [true,true,true,false,false,false,false],
-  '8': [true,true,true,true,true,true,true], '9': [true,true,true,true,false,true,true],
-};
-
-const segPolys: [number,number][][] = [
-  [[14,4],[58,4],[50,12],[22,12]], // A (Top)
-  [[68,14],[60,18],[60,50],[68,54]], // B (Top-Right)
-  [[68,66],[60,70],[60,102],[68,106]], // C (Bottom-Right)
-  [[22,108],[50,108],[58,116],[14,116]], // D (Bottom)
-  [[4,66],[12,70],[12,102],[4,106]], // E (Bottom-Left)
-  [[4,14],[12,18],[12,50],[4,54]], // F (Top-Left)
-  [[10,60],[18,56],[54,56],[62,60],[54,64],[18,64]], // G (Middle)
-];
-
-function DigitSVG({ d, color, width = 112, height = 184 }: { d: string; color: string; width?: number; height?: number }) {
-  const s = segs[d] || segs['0'];
-  const pts = (poly: [number,number][]) => poly.map(p => p.join(',')).join(' ');
-  return (
-    <svg width={width} height={height} viewBox="0 0 72 120" style={{ display: 'block' }}>
-      {segPolys.map((poly, i) => (
-        <polygon key={i} points={pts(poly)}
-          fill={s[i] ? color : 'rgba(255,255,255,0.015)'}
-          style={{
-            transition: 'fill 150ms cubic-bezier(0.4, 0, 0.2, 1)',
-            filter: s[i] ? `drop-shadow(0 0 6px ${color}90) drop-shadow(0 0 18px ${color}50)` : 'none',
-          }}
-        />
-      ))}
-    </svg>
-  );
-}
-
-function ColonSVG({ color, width = 36, height = 184 }: { color: string; width?: number; height?: number }) {
-  return (
-    <svg width={width} height={height} viewBox="0 0 24 120" style={{ display: 'block' }}>
-      <rect x={8} y={38} width={8} height={8} rx={4} ry={4} fill={color}
-        style={{ filter: `drop-shadow(0 0 6px ${color}90) drop-shadow(0 0 16px ${color}50)`, transition: 'fill 150ms ease-out' }} />
-      <rect x={8} y={74} width={8} height={8} rx={4} ry={4} fill={color}
-        style={{ filter: `drop-shadow(0 0 6px ${color}90) drop-shadow(0 0 16px ${color}50)`, transition: 'fill 150ms ease-out' }} />
-    </svg>
-  );
-}
 
 function LEDTime({ time, color, digitWidth = 112, digitHeight = 184, colonWidth = 36 }: { time: string; color: string; digitWidth?: number; digitHeight?: number; colonWidth?: number }) {
   return (
@@ -124,19 +91,6 @@ interface ActivityEntry {
   pauseCount?: number;
 }
 
-const CustomTooltip = ({ active, payload }: any) => {
-  if (active && payload && payload.length) {
-    return (
-      <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-soft)', padding: '8px 12px', borderRadius: 8, boxShadow: '0 8px 16px rgba(0,0,0,0.4)' }}>
-        <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>{payload[0].name || payload[0].payload.l}</p>
-        <p style={{ margin: 0, fontSize: 11, color: payload[0].payload.color || 'var(--accent)' }}>
-          {payload[0].name ? `${Math.floor(payload[0].value / 60)} min` : `${payload[0].value} min`}
-        </p>
-      </div>
-    );
-  }
-  return null;
-};
 
 export default function Estudio() {
   const {
@@ -144,15 +98,15 @@ export default function Estudio() {
     pomodoroSessions, incrementPomodoroSessions, studySessions,
     addStudySession, weeklyStudyTime,
 
-    focusPomodoroTime, focusChronoTime, dailyBreakTime, dailyFocusPomodoro, dailyFocusChrono,
+    focusPomodoroTime, focusChronoTime, breakTime, dailyBreakTime, dailyFocusPomodoro, dailyFocusChrono,
     accumulatedPauseTime, distractionCount,
-    addNotification, updateTask, setAccumulatedPauseTime,
+    addNotification, updateTask, setAccumulatedPauseTime, setIsTimerActive,
   } = useApp();
 
   const {
     sessionType, setSessionType, chronoRounds, setChronoRounds, chronoGoal,
     isTimerActive, isRest, setIsRest, sessionTime, setSessionTime,
-    displayTime, restTimeLeft, pomodoroProgress, pomodoroGoal,
+    displayTime, pomodoroProgress, pomodoroGoal,
     handleToggle, handleReset, handleTypeChange,
   } = useTimer();
 
@@ -162,12 +116,23 @@ export default function Estudio() {
 
   const restStartRef = useRef(0);
   const hasTriggeredRef = useRef(false);
-  const lastChronoRoundRef = useRef(0);
+  const breakNotifiedRef = useRef(false);
+
+  // Persistent chrono round tracking (survives unmount/remount)
+  const CHRONO_KEY_EST = 'owa_chrono_last_round'; // shared key with useTimer
+  function loadChronoRound(): number {
+    try { return parseInt(localStorage.getItem(CHRONO_KEY_EST) || '0', 10) || 0; } catch { return 0; }
+  }
+  function saveChronoRound(r: number) {
+    try { localStorage.setItem(CHRONO_KEY_EST, String(r)); } catch {}
+  }
+  const lastChronoRoundRef = useRef(loadChronoRound());
+  const mountedRef = useRef(false);
   const lastPauseTimeRef = useRef(0);
 
   const activeTask = tasks.find(t => t.id === activeTaskId);
   const todayStr = format(new Date(), 'yyyy-MM-dd');
-  const streak = useMemo(() => calculateStreak(weeklyStudyTime, settings?.dailyGoal || 240, settings?.dailyGoalHistory), [weeklyStudyTime, settings?.dailyGoal, settings?.dailyGoalHistory]);
+  const streak = useMemo(() => calculateStreak(weeklyStudyTime, settings?.dailyGoal || 240, settings?.dailyGoalHistory, settings?.initialDailyGoal), [weeklyStudyTime, settings?.dailyGoal, settings?.dailyGoalHistory, settings?.initialDailyGoal]);
 
   const weekDayData = useMemo(() => {
     const dn = ['D','L','M','M','J','V','S'];
@@ -188,8 +153,11 @@ export default function Estudio() {
     return `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
   };
 
+  // Determine if current break should be long
+  const isLongBreak = isRest && pomodoroSessions > 0 && pomodoroSessions % (settings.pomodoroGoal || 4) === 0;
+  const currentBreakLimit = isLongBreak ? (settings.longBreakTime || 900) : (settings.shortBreakTime || 300);
   const restElapsed = isRest ? sessionTime - restStartRef.current : 0;
-  const computedRest = Math.max(0, settings.shortBreakTime - restElapsed);
+  const computedRest = Math.max(0, currentBreakLimit - restElapsed);
   const computedDisplay = sessionType === 'pomodoro' ? Math.max(0, settings.pomodoroTime - sessionTime) : sessionTime;
 
   useEffect(() => {
@@ -219,10 +187,22 @@ export default function Estudio() {
   }, [sessionTime, isTimerActive, sessionType, isRest, settings.pomodoroTime, distractionCount, activeTaskId, tasks, updateTask]);
 
   useEffect(() => {
+    if (!mountedRef.current) {
+      if (sessionType === 'chrono' && chronoGoal > 0) {
+        const r = Math.floor(sessionTime / chronoGoal);
+        if (r > 0) {
+          lastChronoRoundRef.current = r;
+          saveChronoRound(r);
+        }
+      }
+      mountedRef.current = true;
+      return;
+    }
     if (isTimerActive && sessionType === 'chrono' && chronoGoal > 0) {
       const r = Math.floor(sessionTime / chronoGoal);
       if (r > 0 && r > lastChronoRoundRef.current) {
         lastChronoRoundRef.current = r;
+        saveChronoRound(r);
         setChronoRounds(r);
         addNotification(`Ronda ${r} completada (${chronoGoal / 60} min)`, 'success');
         addStudySession({
@@ -245,7 +225,7 @@ export default function Estudio() {
   }, [sessionTime, isTimerActive, sessionType, chronoGoal, distractionCount]);
 
   useEffect(() => {
-    if (sessionType === 'chrono' && !isTimerActive && sessionTime === 0) lastChronoRoundRef.current = 0;
+    if (sessionType === 'chrono' && !isTimerActive && sessionTime === 0) { lastChronoRoundRef.current = 0; saveChronoRound(0); }
   }, [sessionType, isTimerActive, sessionTime]);
 
   // Read linked task from localStorage (set by Tareas "Estudiar esta tarea" button)
@@ -263,18 +243,19 @@ export default function Estudio() {
   }, []);
 
   useEffect(() => {
-    if (isRest && restElapsed >= settings.shortBreakTime) {
+    if (isRest && restElapsed >= currentBreakLimit && !breakNotifiedRef.current) {
+      breakNotifiedRef.current = true;
       setIsRest(false);
-      handleReset();
+      setSessionTime(0);
+      setIsTimerActive(false);
       notifyBreakOver();
+      addNotification(isLongBreak ? 'Descanso largo completado' : 'Descanso completado', 'success');
     }
-  }, [restElapsed, isRest, settings.shortBreakTime]);
+    if (!isRest) breakNotifiedRef.current = false;
+  }, [restElapsed, isRest, currentBreakLimit, isLongBreak]);
 
   const unlinkTask = () => { 
-    if (isTimerActive) {
-      addNotification('Pausa el temporizador antes de completar la sesión', 'error');
-      return;
-    }
+    if (isTimerActive) return;
     setActiveTaskId(null); 
     addNotification('Sesion completada', 'success'); 
   };
@@ -336,35 +317,67 @@ export default function Estudio() {
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   useEffect(() => {
-    const h = () => setIsFullscreen(!!document.fullscreenElement);
-    document.addEventListener('fullscreenchange', h);
-    return () => document.removeEventListener('fullscreenchange', h);
+    const check = async () => {
+      try {
+        const win = getCurrentWebviewWindow();
+        setIsFullscreen(await win.isFullscreen());
+      } catch { /* web mode */ }
+    };
+    check();
+    const interval = setInterval(check, 2000);
+    return () => clearInterval(interval);
   }, []);
 
-  const tf = () => {
-    if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
-    else document.exitFullscreen();
+  const tf = async () => {
+    try {
+      const win = getCurrentWebviewWindow();
+      const current = await win.isFullscreen();
+      await win.setFullscreen(!current);
+      setIsFullscreen(!current);
+    } catch {
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
+      else document.exitFullscreen();
+    }
   };
 
-  // Weekly donut: tracks REAL accumulated time per type per day
-  const now = new Date();
-  const dayOfWeek = now.getDay();
-  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-  const weekStart = new Date(now); weekStart.setDate(now.getDate() + mondayOffset);
-  const weekStartStr = format(weekStart, 'yyyy-MM-dd');
-  const weekPomodoro = Object.entries(dailyFocusPomodoro).filter(([k]) => k >= weekStartStr).reduce((a, [,v]) => a + v, 0);
-  const weekChrono = Object.entries(dailyFocusChrono).filter(([k]) => k >= weekStartStr).reduce((a, [,v]) => a + v, 0);
-  const weekBreaks = Object.entries(dailyBreakTime).filter(([k]) => k >= weekStartStr).reduce((a, [,v]) => a + v, 0);
-  const livePomodoro = weekPomodoro + (sessionType === 'pomodoro' && !isRest ? sessionTime : 0);
-  const liveChrono = weekChrono + (sessionType === 'chrono' && !isRest ? sessionTime : 0);
-  const liveBreaks = weekBreaks + (isRest ? sessionTime : 0);
-  const donutDataRaw = [
-    { name: 'Pomodoro', value: livePomodoro, color: focusColor },
-    { name: 'Cronómetro', value: liveChrono, color: chronoColor },
-    { name: 'Descanso', value: liveBreaks, color: breakColor },
-  ];
-  const totalDonut = donutDataRaw.reduce((a,b) => a + b.value, 0);
-  const donutData = totalDonut > 0 ? donutDataRaw.filter(d => d.value > 0) : [{ name: 'Sin Actividad', value: 1, color: 'var(--bg-hover)' }];
+  const donutDataRaw = useMemo(() => [
+    { name: 'Pomodoro', value: focusPomodoroTime, color: focusColor },
+    { name: 'Cronómetro', value: focusChronoTime, color: chronoColor },
+    { name: 'Descanso', value: breakTime, color: breakColor },
+  ], [focusPomodoroTime, focusChronoTime, breakTime, focusColor, chronoColor, breakColor]);
+  const totalDonut = focusPomodoroTime + focusChronoTime + breakTime;
+  const donutSegments = useMemo(() => {
+    if (totalDonut === 0) return [{ name: 'Sin Actividad', value: 1, color: 'var(--bg-hover)', startAngle: 0, endAngle: 360 }];
+    const GAP = 10;
+    const PAD = 1.5;
+    const active = donutDataRaw.filter(d => d.value > 0);
+    const numGaps = active.length - 1;
+    const gapPerSegment = numGaps > 0 ? GAP / numGaps : 0;
+    const totalAngle = 360 - numGaps * gapPerSegment;
+    let currentAngle = 0;
+    return active.map((d, i) => {
+      const angle = (d.value / totalDonut) * totalAngle;
+      const seg = {
+        ...d,
+        startAngle: currentAngle + i * gapPerSegment + PAD,
+        endAngle: currentAngle + i * gapPerSegment + angle - PAD,
+      };
+      currentAngle += angle;
+      return seg;
+    });
+  }, [donutDataRaw, totalDonut]);
+
+  function polarToCartesian(cx: number, cy: number, r: number, deg: number) {
+    const rad = (deg - 90) * Math.PI / 180;
+    return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+  }
+
+  function describeArc(cx: number, cy: number, r: number, startDeg: number, endDeg: number) {
+    const s = polarToCartesian(cx, cy, r, endDeg);
+    const e = polarToCartesian(cx, cy, r, startDeg);
+    const large = endDeg - startDeg > 180 ? 1 : 0;
+    return `M ${s.x} ${s.y} A ${r} ${r} 0 ${large} 0 ${e.x} ${e.y}`;
+  }
 
   return (
     <div className="page-container h-full flex flex-col" style={{ position: 'relative', overflow: 'hidden' }}>
@@ -384,7 +397,12 @@ export default function Estudio() {
             <button onClick={tf} style={{ padding: 8, borderRadius: '50%', background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-secondary)', cursor: 'pointer', transition: 'all 200ms', display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="hover:text-white hover:border-borderDefault" title="Pantalla completa">
               {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
             </button>
-            <button onClick={() => invoke('open_floating_timer')} style={{ padding: 8, borderRadius: '50%', background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-secondary)', cursor: 'pointer', transition: 'all 200ms', display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="hover:text-white hover:border-borderDefault" title="Ventana flotante">
+            {/* Floating timer toggle — opens always-on-top floating timer window */}
+            <button onClick={() => invoke('open_floating_timer')} style={{
+              padding: 8, borderRadius: '50%', background: 'var(--bg-deep)',
+              border: '1px solid var(--border-soft)', color: 'var(--text-secondary)',
+              cursor: 'pointer', transition: 'all 200ms', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }} className="hover:text-white hover:border-borderDefault" title="Ventana flotante del timer">
               <Monitor size={16} />
             </button>
           </div>
@@ -417,7 +435,7 @@ export default function Estudio() {
         <div style={{ flex: 1.6, display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
           
           {/* TIMER PANEL (Slightly more compact vertically) */}
-          <div className="bento-card" style={{ padding: '24px 32px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative', border: '1px solid var(--border-subtle)', boxShadow: '0 8px 32px rgba(0,0,0,0.2)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+          <div className="bento-card" style={{ padding: '24px 32px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative', border: '1px solid var(--border-subtle)', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
             
             {/* Mode Type Header */}
             <div style={{ display: 'flex', gap: 6, padding: 4, borderRadius: 12, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', marginBottom: 8 }}>
@@ -498,20 +516,26 @@ export default function Estudio() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             
             {/* Donut Chart - distribution */}
-            <div className="bento-card" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+            <div className="bento-card" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column' }}>
               <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-primary)', letterSpacing: '0.12em', textTransform: 'uppercase', fontFamily: "'Inter', sans-serif", marginBottom: 10 }}>Distribución</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                 <div style={{ width: 120, height: 120, position: 'relative', flexShrink: 0 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      {totalDonut > 0 && <RechartsTooltip content={<CustomTooltip />} />}
-                      <Pie data={donutData} innerRadius="70%" outerRadius="90%" paddingAngle={totalDonut > 0 ? 4 : 0} dataKey="value" stroke="none">
-                        {donutData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} style={{ filter: totalDonut > 0 ? `drop-shadow(0 0 4px ${entry.color}40)` : 'none' }} />
-                        ))}
-                      </Pie>
-                    </PieChart>
-                  </ResponsiveContainer>
+                  <svg width="120" height="120" viewBox="0 0 120 120">
+                    {donutSegments.map((s, i) => {
+                      const r = 42;
+                      const d = describeArc(60, 60, r, s.startAngle, s.endAngle);
+                      return (
+                        <path key={i} d={d}
+                          fill="none"
+                          stroke={s.color}
+                          strokeWidth="16"
+                          strokeLinecap="butt"
+                          style={{ filter: s.name !== 'Sin Actividad' ? `drop-shadow(0 0 3px ${s.color}70)` : 'none', transition: 'all 300ms' }}
+                        />
+                      );
+                    })}
+                    <circle cx="60" cy="60" r="12" fill="none" stroke="var(--bg-deep)" strokeWidth="2" opacity="0.3" />
+                  </svg>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                   {donutDataRaw.map(d => {
@@ -529,7 +553,7 @@ export default function Estudio() {
             </div>
 
             {/* Progress today */}
-            <div className="bento-card" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', justifyContent: 'center', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+            <div className="bento-card" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                 <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-primary)', letterSpacing: '0.12em', textTransform: 'uppercase', fontFamily: "'Inter', sans-serif" }}>Progreso de Hoy</span>
                 <span style={{ fontSize: 9, fontWeight: 700, color: dailyStudyTime >= (settings?.dailyGoal || 240) * 60 ? '#10B981' : 'var(--text-secondary)' }}>
@@ -558,7 +582,7 @@ export default function Estudio() {
         <div style={{ flex: 1.2, display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
           
           {/* 4 ELEGANT SIDEBAR METRICS CARD */}
-          <div className="bento-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 20, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+          <div className="bento-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
             <span style={{ fontSize: 11, fontWeight: 300, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.15em', display: 'flex', alignItems: 'center', gap: 8, fontFamily: "'Inter', sans-serif" }}>
               Resumen Operativo
             </span>
@@ -595,7 +619,7 @@ export default function Estudio() {
           </div>
 
           {/* DETAILED ACTIVITY HISTORY CARD (Max 5) */}
-          <div className="bento-card" style={{ flex: 1, padding: '20px', display: 'flex', flexDirection: 'column', minHeight: 300, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+          <div className="bento-card" style={{ flex: 1, padding: '20px', display: 'flex', flexDirection: 'column', minHeight: 300 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
                 HISTORIAL
@@ -607,47 +631,47 @@ export default function Estudio() {
               )}
             </div>
             
-            <div className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <div className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
               {activityFeed.length > 0 ? (
                 activityFeed.slice(0, 4).map((entry, i) => {
                   const isPomo = entry.type === 'pomodoro';
                   const isChrono = entry.type === 'chrono';
                   const isBreakEntry = entry.type === 'break';
-                  const c = isPomo ? (settings.accentColor || '#E11D48') : isBreakEntry ? '#10B981' : '#3B82F6';
+                  const c = isPomo ? (settings.accentColor || '#E11D48') : isChrono ? '#3B82F6' : '#10B981';
                   const Icon = isPomo ? TomatoIcon : isBreakEntry ? Coffee : Timer;
                   const mins = Math.floor(entry.duration / 60);
                   const secs = entry.duration % 60;
                   const timeStr = entry.endedAt ? format(new Date(entry.endedAt), 'HH:mm') : '—';
-                  const statusLabels: Record<string, string> = { completado: 'Hecho', mitad: 'Parcial', fallido: 'Fallido' };
+                  const statusLabels: Record<string, string> = { completado: '✓', mitad: '○', fallido: '✕' };
                   const statusColors: Record<string, string> = { completado: 'var(--success)', mitad: '#F59E0B', fallido: 'var(--error)' };
                   const status = entry.meta ?? '';
                   const barW = Math.min(100, (entry.duration / Math.max(...activityFeed.slice(0, 4).map(e => e.duration), 1)) * 100);
                   return (
-                    <div key={entry.id || i} style={{ display: 'flex', gap: 12, padding: '10px 12px', borderRadius: 10, transition: 'all 150ms' }} className="hover:bg-surfaceElevated">
-                      {/* Timeline accent */}
+                    <div key={entry.id || i} style={{ display: 'flex', gap: 12, padding: '8px 12px', borderRadius: 10, background: i % 2 === 0 ? 'var(--bg-hover)' : 'transparent', transition: 'all 150ms' }} className="hover:bg-surfaceElevated">
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, flexShrink: 0 }}>
-                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: c, boxShadow: `0 0 6px ${c}60` }} />
-                        {i < Math.min(activityFeed.length, 4) - 1 && <div style={{ width: 1, flex: 1, background: 'var(--border-subtle)' }} />}
+                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: c, boxShadow: `${c}60`, filter: `drop-shadow(0 0 4px ${c}60)` }} />
+                        {i < Math.min(activityFeed.length, 4) - 1 && <div style={{ width: 1, flex: 1, background: 'linear-gradient(to bottom, var(--border-subtle), transparent)' }} />}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
                             <Icon size={11} color={c} />
-                            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{entry.label}</span>
+                            {status && <span style={{ fontSize: 9, color: statusColors[status] || 'var(--text-tertiary)', fontWeight: 600 }}>{statusLabels[status] || status}</span>}
                           </div>
-                          <span style={{ fontSize: 9, color: 'var(--text-tertiary)', fontWeight: 500, whiteSpace: 'nowrap' }}>{timeStr}</span>
+                          <span style={{ fontSize: 9, color: 'var(--text-tertiary)', fontWeight: 500, whiteSpace: 'nowrap', fontFamily: "'Inter Tight', sans-serif" }}>{timeStr}</span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                          <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", minWidth: 40 }}>{mins > 0 ? `${mins}m` : ''}{secs > 0 ? ` ${secs}s` : ''}</span>
-                          <div style={{ flex: 1, height: 3, borderRadius: 2, background: 'var(--bg-deep)', overflow: 'hidden' }}>
-                            <div style={{ height: '100%', borderRadius: 2, width: `${barW}%`, background: c, transition: 'width 300ms' }} />
-                          </div>
-                          <span style={{ fontSize: 8, fontWeight: 600, padding: '1px 8px', borderRadius: 10, background: status ? `${statusColors[status] || c}15` : 'transparent', color: statusColors[status] || 'var(--text-tertiary)', letterSpacing: '0.03em', whiteSpace: 'nowrap' }}>
-                            {statusLabels[status] || status || '—'}
+                          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", minWidth: 44, letterSpacing: '0.01em' }}>
+                            {mins > 0 ? `${mins}m` : ''}{secs > 0 ? ` ${secs}s` : ''}
                           </span>
+                          <div style={{ flex: 1, height: 3, borderRadius: 2, background: 'var(--bg-deep)', overflow: 'hidden' }}>
+                            <div style={{ height: '100%', borderRadius: 2, width: `${barW}%`, background: `linear-gradient(90deg, ${c}, ${c}80)`, transition: 'width 300ms' }} />
+                          </div>
                         </div>
                         {(entry.pauseCount ?? 0) > 0 && (
-                          <div style={{ fontSize: 8, color: '#F59E0B', marginTop: 2, fontWeight: 500 }}>· {entry.pauseCount} pausa{(entry.pauseCount ?? 0) !== 1 ? 's' : ''}</div>
+                          <div style={{ fontSize: 8, color: '#F59E0B', marginTop: 2, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 3 }}>
+                            <span>·</span> {entry.pauseCount} pausa{(entry.pauseCount ?? 0) !== 1 ? 's' : ''}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -697,51 +721,72 @@ export default function Estudio() {
 
               <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 1 }} className="custom-scroll">
                 {activityFeed.length > 0 ? (
-                  activityFeed.slice(0, 15).map((entry, i) => {
-                    const isPomo = entry.type === 'pomodoro';
-                    const isChrono = entry.type === 'chrono';
-                    const isBreakEntry = entry.type === 'break';
-                    const c = isPomo ? (settings.accentColor || '#E11D48') : isBreakEntry ? '#10B981' : '#3B82F6';
-                    const Icon = isPomo ? TomatoIcon : isBreakEntry ? Coffee : Timer;
-                    const mins = Math.floor(entry.duration / 60);
-                    const secs = entry.duration % 60;
-                    const timeStr = entry.endedAt ? format(new Date(entry.endedAt), 'HH:mm') : '—';
-                    const dateStr = entry.startedAt ? format(new Date(entry.startedAt), 'd MMM', { locale: es }) : '';
-                    const statusLabels: Record<string, string> = { completado: 'Hecho', mitad: 'Parcial', fallido: 'Fallido' };
-                    const statusColors: Record<string, string> = { completado: 'var(--success)', mitad: '#F59E0B', fallido: 'var(--error)' };
-                    const status = entry.meta ?? '';
-                    const barW = Math.min(100, (entry.duration / Math.max(...activityFeed.slice(0, 15).map(e => e.duration), 1)) * 100);
-                    return (
-                      <div key={entry.id || i} style={{ display: 'flex', gap: 12, padding: '8px 10px', borderRadius: 8, transition: 'background 150ms' }} className="hover:bg-surfaceElevated">
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, flexShrink: 0, width: 10 }}>
-                          <div style={{ width: 6, height: 6, borderRadius: '50%', background: c }} />
-                          {i < Math.min(activityFeed.length, 15) - 1 && <div style={{ width: 1, flex: 1, background: 'var(--border-subtle)' }} />}
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
-                              <Icon size={10} color={c} />
-                              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{entry.label}</span>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                              <span style={{ fontSize: 9, color: 'var(--text-tertiary)', fontWeight: 500 }}>{timeStr}</span>
-                              {dateStr && <span style={{ fontSize: 8, color: 'var(--text-muted)' }}>{dateStr}</span>}
-                              <span style={{ fontSize: 8, fontWeight: 600, padding: '1px 6px', borderRadius: 8, background: status ? `${statusColors[status] || c}15` : 'transparent', color: statusColors[status] || 'var(--text-tertiary)' }}>
-                                {statusLabels[status] || status || '—'}
-                              </span>
-                            </div>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
-                            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', fontFamily: "'Inter Tight', sans-serif", minWidth: 32 }}>{mins > 0 ? `${mins}m` : ''}{secs > 0 ? ` ${secs}s` : ''}</span>
-                            <div style={{ flex: 1, height: 2, borderRadius: 1, background: 'var(--bg-deep)', overflow: 'hidden' }}>
-                              <div style={{ height: '100%', borderRadius: 1, width: `${barW}%`, background: c, transition: 'width 300ms' }} />
-                            </div>
-                            {(entry.pauseCount ?? 0) > 0 && <span style={{ fontSize: 8, color: '#F59E0B', fontWeight: 500 }}>{entry.pauseCount}p</span>}
-                          </div>
-                        </div>
+                  (() => {
+                    const totalSecs = activityFeed.reduce((s, e) => s + e.duration, 0);
+                    const totalMins = Math.floor(totalSecs / 60);
+                    const totalHours = Math.floor(totalMins / 60);
+                    const totalMinRem = totalMins % 60;
+                    const grouped: Record<string, typeof activityFeed> = {};
+                    activityFeed.slice(0, 15).forEach(e => {
+                      const d = e.startedAt ? format(new Date(e.startedAt), 'yyyy-MM-dd') : 'unknown';
+                      if (!grouped[d]) grouped[d] = [];
+                      grouped[d].push(e);
+                    });
+                    return (<>
+                      <div style={{ padding: '4px 10px 10px', fontSize: 10, color: 'var(--text-tertiary)', fontWeight: 600, letterSpacing: '0.04em', borderBottom: '1px solid var(--border-subtle)', marginBottom: 6 }}>
+                        Total: {totalHours > 0 ? `${totalHours}h ` : ''}{totalMinRem}m · {activityFeed.length} sesiones
                       </div>
-                    );
-                  })
+                      {Object.entries(grouped).map(([dateStr, entries]) => (
+                        <div key={dateStr}>
+                          <div style={{ padding: '6px 10px 4px', fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                            {dateStr === format(new Date(), 'yyyy-MM-dd') ? 'Hoy' : dateStr === format(new Date(Date.now() - 86400000), 'yyyy-MM-dd') ? 'Ayer' : format(new Date(dateStr), 'd MMM', { locale: es })}
+                            <span style={{ fontSize: 8, color: 'var(--text-tertiary)', fontWeight: 400, marginLeft: 6 }}>{entries.reduce((s, e) => s + e.duration, 0) > 0 ? `${Math.floor(entries.reduce((s, e) => s + e.duration, 0) / 60)}m` : ''}</span>
+                          </div>
+                          {entries.map((entry, i) => {
+                            const isPomo = entry.type === 'pomodoro';
+                            const isChrono = entry.type === 'chrono';
+                            const isBreakEntry = entry.type === 'break';
+                            const c = isPomo ? (settings.accentColor || '#E11D48') : isChrono ? '#3B82F6' : '#10B981';
+                            const Icon = isPomo ? TomatoIcon : isBreakEntry ? Coffee : Timer;
+                            const mins = Math.floor(entry.duration / 60);
+                            const secs = entry.duration % 60;
+                            const timeStr = entry.endedAt ? format(new Date(entry.endedAt), 'HH:mm') : '—';
+                            const dateStr = entry.startedAt ? format(new Date(entry.startedAt), 'd MMM', { locale: es }) : '';
+                            const statusLabels: Record<string, string> = { completado: '✓', mitad: '○', fallido: '✕' };
+                            const statusColors: Record<string, string> = { completado: 'var(--success)', mitad: '#F59E0B', fallido: 'var(--error)' };
+                            const status = entry.meta ?? '';
+                            const barW = Math.min(100, (entry.duration / Math.max(...activityFeed.slice(0, 15).map(e => e.duration), 1)) * 100);
+                            return (
+                              <div key={entry.id || i} style={{ display: 'flex', gap: 10, padding: '6px 10px', borderRadius: 6, transition: 'background 150ms' }} className="hover:bg-surfaceElevated">
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, flexShrink: 0, width: 8 }}>
+                                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: c, filter: `drop-shadow(0 0 3px ${c}60)` }} />
+                                  {i < entries.length - 1 && <div style={{ width: 1, flex: 1, background: 'linear-gradient(to bottom, var(--border-subtle), transparent)' }} />}
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0 }}>
+                                      <Icon size={9} color={c} />
+                                      <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>{mins > 0 ? `${mins}m` : ''}{secs > 0 ? ` ${secs}s` : ''}</span>
+                                      {status && <span style={{ fontSize: 8, color: statusColors[status] || 'var(--text-tertiary)', marginLeft: 2 }}>{statusLabels[status] || status}</span>}
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                                      <span style={{ fontSize: 9, color: 'var(--text-tertiary)', fontWeight: 500, fontFamily: "'Inter Tight', sans-serif" }}>{timeStr}</span>
+                                    </div>
+                                  </div>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                                    <div style={{ flex: 1, height: 2, borderRadius: 1, background: 'var(--bg-deep)', overflow: 'hidden' }}>
+                                      <div style={{ height: '100%', borderRadius: 1, width: `${barW}%`, background: `linear-gradient(90deg, ${c}, ${c}60)`, transition: 'width 300ms' }} />
+                                    </div>
+                                    {(entry.pauseCount ?? 0) > 0 && <span style={{ fontSize: 7, color: '#F59E0B', fontWeight: 500, whiteSpace: 'nowrap' }}>{entry.pauseCount}p</span>}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ))}
+                    </>);
+                  })()
                 ) : (
                   <div style={{ padding: '60px 10px', textAlign: 'center', color: 'var(--text-muted)' }}>
                     No hay actividad registrada.

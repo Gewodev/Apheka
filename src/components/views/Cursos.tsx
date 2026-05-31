@@ -1,7 +1,7 @@
 ﻿import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { 
   BookOpen, Clock, List as ListIcon, Layers, Star, Plus,
-  Target, GraduationCap, ChevronLeft, ChevronRight, CheckCircle,
+  Target, GraduationCap, CheckCircle,
   FileText, BrainCircuit, NotebookPen, ExternalLink,
   Image as ImageIcon, Folder, X, Upload, MoreVertical,
   Search, Filter, Trash2, Edit3, Eye, Check, Calendar,
@@ -297,56 +297,65 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
     setActiveFlashcardIndex((activeFlashcardIndex + 1) % flashcards.length);
   };
 
+  const courseImageUrl = selectedCourse?.color ? `https://images.unsplash.com/photo-1544383835-bda2bc66a55d?q=80&w=1200&auto=format&fit=crop` : '';
+
   return (
     <div className="page-container" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto' }}>
       
-      {/* â”€â”€ HEADER â”€â”€ */}
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, paddingTop: 8 }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <h1 style={{ fontSize: 32, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.15, letterSpacing: '-0.02em', fontFamily: "'Inter Tight', sans-serif" }}>Cursos</h1>
-            <GraduationCap size={26} style={{ color: 'var(--accent)' }} />
-          </div>
-          <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 6, fontWeight: 500 }}>Gestiona tu aprendizaje, domina tu carrera.</p>
-        </div>
+      {/* ── HERO HEADER with blurred cover ── */}
+      {selectedCourse && (
+        <div style={{ position: 'relative', marginBottom: 24, borderRadius: 16, overflow: 'hidden', minHeight: 200 }}>
+          {/* Blurred cover background */}
+          <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(135deg, ${selectedCourse.color}22 0%, var(--bg-base) 100%)`, opacity: 0.6 }} />
+          {selectedCourse.anchoredImages?.[0]?.url && (
+            <img src={selectedCourse.anchoredImages[0].url} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: 'blur(40px) saturate(1.2)', opacity: 0.25 }} />
+          )}
+          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(2,2,3,0.85) 0%, rgba(11,12,15,0.6) 100%)' }} />
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', border: '1px solid var(--border-default)', borderRadius: 16, fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>
-              <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--success)', boxShadow: '0 0 8px var(--success)' }} />
-              Conectado
+          <div style={{ position: 'relative', padding: '28px 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
+                <div style={{ width: 10, height: 10, borderRadius: '50%', background: selectedCourse.color, boxShadow: `0 0 12px ${selectedCourse.color}` }} />
+                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{courseLevel.toUpperCase()} · {courseCode}</span>
+              </div>
+              <h1 style={{ fontSize: 36, fontWeight: 700, color: '#fff', lineHeight: 1.1, letterSpacing: '-0.02em', fontFamily: "'Outfit', 'Inter Tight', sans-serif" }}>
+                {selectedCourse.name}
+              </h1>
+              <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', marginTop: 8, fontWeight: 400, maxWidth: 480 }}>
+                {courseDescription}
+              </p>
             </div>
-            <button className="btn-ghost" style={{ padding: 8, borderRadius: '50%' }}><Wifi size={16} /></button>
-            <NotificationBell />
-          </div>
 
-          <div style={{ textAlign: 'right', borderLeft: '1px solid var(--border-subtle)', paddingLeft: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, justifyContent: 'flex-end' }}>
-              <div className="led-display" style={{ fontSize: 28, fontWeight: 300, lineHeight: 1 }}>{timeStr}</div>
-              <div className="led-seconds" style={{ fontSize: 14 }}>{secondsStr}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px', borderRadius: 20, border: '1px solid rgba(255,255,255,0.15)', fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.8)' }}>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--success)', boxShadow: '0 0 8px var(--success)' }} />
+                Conectado
+              </div>
+              <NotificationBell />
+              <div style={{ borderLeft: '1px solid rgba(255,255,255,0.15)', paddingLeft: 20, textAlign: 'right' }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, justifyContent: 'flex-end' }}>
+                  <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 52, fontWeight: 200, lineHeight: 0.85, color: selectedCourse.color, letterSpacing: '0.02em', textShadow: `0 0 30px ${selectedCourse.color}66` }}>
+                    {timeStr}
+                  </span>
+                  <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 18, fontWeight: 200, color: selectedCourse.color, opacity: 0.7 }}>
+                    {secondsStr}
+                  </span>
+                </div>
+                <div style={{ fontSize: 10, fontWeight: 500, color: 'rgba(255,255,255,0.5)', marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                  {dateStrCapitalized}
+                </div>
+              </div>
             </div>
-            <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{dateStrCapitalized}</div>
           </div>
         </div>
-      </header>
+      )}
 
       {selectedCourse ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24, flex: 1 }}>
           
-          {/* Navigation Bar matching screenshot */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderRadius: 12, border: '1px solid var(--border-subtle)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <button onClick={handlePrevCourse} className="btn-ghost hover-lift" style={{ padding: 8, borderRadius: 8, border: '1px solid var(--border-default)' }}><ChevronLeft size={16} /></button>
-              <h2 style={{ fontSize: 16, fontWeight: 600, minWidth: 220, textAlign: 'center', letterSpacing: '-0.01em', color: 'var(--text-primary)' }}>
-                {selectedCourse.name}
-              </h2>
-              <button onClick={handleNextCourse} className="btn-ghost hover-lift" style={{ padding: 8, borderRadius: 8, border: '1px solid var(--border-default)' }}><ChevronRight size={16} /></button>
-              <button onClick={() => setShowNewCourse(true)} className="btn-secondary hover-lift" style={{ fontSize: 12, fontWeight: 600, padding: '6px 14px', height: 34, marginLeft: 8 }}>
-                + Nuevo
-              </button>
-            </div>
-
-            <div style={{ display: 'flex', gap: 6, padding: 4, borderRadius: 10, border: '1px solid var(--border-default)' }}>
+          {/* Workspace Tabs */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px 12px', borderBottom: '1px solid var(--border-subtle)', marginBottom: 4 }}>
+            <div style={{ display: 'flex', gap: 2, background: 'var(--bg-deep)', padding: 3, borderRadius: 10 }}>
               {[
                 { id: 'resumen', label: 'Resumen', icon: Layers },
                 { id: 'tareas', label: 'Tareas', icon: ListIcon },
@@ -355,15 +364,15 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
                 { id: 'repasos', label: 'Repaso', icon: BrainCircuit },
               ].map(tab => (
                 <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} style={{
-                  padding: '6px 16px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                  padding: '5px 14px', borderRadius: 7, fontSize: 11, fontWeight: 600, cursor: 'pointer',
                   border: 'none', background: activeTab === tab.id ? 'var(--accent)' : 'transparent',
-                  color: activeTab === tab.id ? '#fff' : 'var(--text-secondary)',
-                  display: 'flex', alignItems: 'center', gap: 6, transition: 'all 200ms',
+                  color: activeTab === tab.id ? '#fff' : 'var(--text-tertiary)',
+                  display: 'flex', alignItems: 'center', gap: 5, transition: 'all 200ms',
                 }}>
-                  <tab.icon size={14} />
+                  <tab.icon size={13} />
                   {tab.label}
                   {tab.id === 'tareas' && pendingTasksCount > 0 && (
-                    <span style={{ padding: '2px 6px', borderRadius: 10, background: 'rgba(255,255,255,0.2)', fontSize: 10 }}>{pendingTasksCount}</span>
+                    <span style={{ padding: '1px 5px', borderRadius: 8, background: 'rgba(255,255,255,0.2)', fontSize: 9 }}>{pendingTasksCount}</span>
                   )}
                 </button>
               ))}
@@ -378,84 +387,52 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
               
               {activeTab === 'resumen' && (
                 <>
-                  {/* Top Stats Bar matching screenshot (4 cards) */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
-                    
-                    {/* Progreso */}
-                    <div className="bento-card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
-                      <div>
-                        <div className="block-title" style={{ marginBottom: 6 }}>Progreso</div>
-                        <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-primary)', marginTop: 4 }}>{progressPct}%</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>Completado</div>
+                  {/* Top Stats Bar — minimal premium */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+                    {[
+                      { label: 'Progreso', value: `${progressPct}%`, sub: 'Completado', icon: CheckCircle, color: 'var(--success)' },
+                      { label: 'Tareas', value: courseTasks.length || 12, sub: `${pendingTasksCount || 3} pendientes`, icon: CheckSquare, color: 'var(--warning)' },
+                      { label: 'Notas', value: courseNotes.length || 8, sub: 'Guardadas', icon: FileText, color: 'var(--info)' },
+                      { label: 'Horas', value: '24h 30m', sub: 'Estudiadas', icon: Clock, color: 'var(--accent)' },
+                    ].map(stat => (
+                      <div key={stat.label} className="bento-card" style={{ padding: '14px 16px', border: '1px solid var(--border-subtle)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                          <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{stat.label}</div>
+                          <div style={{ width: 28, height: 28, borderRadius: 8, background: `${stat.color}18`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <stat.icon size={13} color={stat.color} />
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)', marginTop: 8, fontFamily: "'Inter Tight', sans-serif" }}>{stat.value}</div>
+                        <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 1 }}>{stat.sub}</div>
                       </div>
-                      <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--success-dim)', border: '1px solid var(--success)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--success)' }}>
-                        <CheckCircle size={20} />
-                      </div>
-                    </div>
-
-                    {/* Tareas */}
-                    <div className="bento-card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
-                      <div>
-                        <div className="block-title" style={{ marginBottom: 6 }}>Tareas</div>
-                        <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-primary)', marginTop: 4 }}>{courseTasks.length || 12}</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>{pendingTasksCount || 3} pendientes</div>
-                      </div>
-                      <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--warning-dim)', border: '1px solid var(--warning)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--warning)' }}>
-                        <CheckSquare size={20} />
-                      </div>
-                    </div>
-
-                    {/* Notas */}
-                    <div className="bento-card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
-                      <div>
-                        <div className="block-title" style={{ marginBottom: 6 }}>Notas</div>
-                        <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-primary)', marginTop: 4 }}>{courseNotes.length || 8}</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>Guardadas</div>
-                      </div>
-                      <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--info-dim)', border: '1px solid var(--info)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--info)' }}>
-                        <FileText size={20} />
-                      </div>
-                    </div>
-
-                    {/* Horas */}
-                    <div className="bento-card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
-                      <div>
-                        <div className="block-title" style={{ marginBottom: 6 }}>Horas</div>
-                        <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-primary)', marginTop: 4 }}>24h 30m</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>Estudiadas</div>
-                      </div>
-                      <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--accent-dim)', border: '1px solid var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)' }}>
-                        <Clock size={20} />
-                      </div>
-                    </div>
-
+                    ))}
                   </div>
 
-                  {/* Imágenes Ancladas Section matching screenshot */}
-                  <div className="bento-card" style={{ padding: '24px 20px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                      <h3 style={{ fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-primary)' }}>
-                        <ImageIcon size={20} className="text-accent" /> Imágenes Ancladas
+                  {/* Imágenes Ancladas */}
+                  <div className="bento-card" style={{ padding: '20px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                      <h3 style={{ fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-primary)' }}>
+                        <ImageIcon size={16} /> Imágenes Ancladas
                       </h3>
-                      <button onClick={() => setShowNewImage(true)} className="btn-secondary hover-lift" style={{ fontSize: 12, fontWeight: 600, padding: '6px 14px', height: 34 }}>
+                      <button onClick={() => setShowNewImage(true)} className="btn-secondary" style={{ fontSize: 11, fontWeight: 600, padding: '4px 12px', height: 28 }}>
                         + Añadir
                       </button>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
                       {anchoredImages.map(img => (
-                        <div key={img.id} className="bento-card" style={{ padding: 12, border: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: 10, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
-                          <div onClick={() => setPreviewImageUrl(img.url)} style={{ width: '100%', height: 140, borderRadius: 8, overflow: 'hidden', cursor: 'pointer', position: 'relative' }}>
+                        <div key={img.id} style={{ borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
+                          <div onClick={() => setPreviewImageUrl(img.url)} style={{ width: '100%', height: 130, overflow: 'hidden', cursor: 'pointer', position: 'relative' }}>
                             <img src={img.url} alt={img.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                             <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 200ms' }} onMouseEnter={e => e.currentTarget.style.opacity = '1'} onMouseLeave={e => e.currentTarget.style.opacity = '0'}>
-                              <Eye size={20} color="#fff" />
+                              <Eye size={18} color="#fff" />
                             </div>
                           </div>
-                          <div>
-                            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{img.name}</div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
-                              <span style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 600 }}>{img.tag}</span>
-                              <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{img.date}</span>
+                          <div style={{ padding: '8px 10px' }}>
+                            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{img.name}</div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 3 }}>
+                              <span style={{ fontSize: 9, color: 'var(--accent)', fontWeight: 600 }}>{img.tag}</span>
+                              <span style={{ fontSize: 9, color: 'var(--text-tertiary)' }}>{img.date}</span>
                             </div>
                           </div>
                         </div>
@@ -463,30 +440,28 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
                     </div>
                   </div>
 
-                  {/* Recursos del Curso Section matching screenshot */}
-                  <div className="bento-card" style={{ padding: '24px 20px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                      <h3 style={{ fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-primary)' }}>
-                        <Globe size={20} className="text-accent" /> Recursos del Curso
+                  {/* Recursos del Curso */}
+                  <div className="bento-card" style={{ padding: '20px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                      <h3 style={{ fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-primary)' }}>
+                        <Globe size={16} /> Recursos del Curso
                       </h3>
-                      <button onClick={() => setShowNewResource(true)} className="btn-secondary hover-lift" style={{ fontSize: 12, fontWeight: 600, padding: '6px 14px', height: 34 }}>
+                      <button onClick={() => setShowNewResource(true)} className="btn-secondary" style={{ fontSize: 11, fontWeight: 600, padding: '4px 12px', height: 28 }}>
                         + Añadir
                       </button>
                     </div>
 
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {resourcesList.map(res => (
-                        <a key={res.id} href={res.url} target="_blank" rel="noopener noreferrer" className="bento-card" style={{ padding: '14px 16px', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', textDecoration: 'none', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0 }}>
-                            <div style={{ width: 36, height: 36, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)' }}>
-                              {res.type === 'pdf' ? <FileText size={18} className="text-error" /> : res.type === 'doc' ? <File size={18} className="text-info" /> : <Globe size={18} />}
-                            </div>
+                        <a key={res.id} href={res.url} target="_blank" rel="noopener noreferrer" style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', textDecoration: 'none', transition: 'background 200ms' }} onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                            {res.type === 'pdf' ? <FileText size={15} color="var(--error)" /> : res.type === 'doc' ? <File size={15} color="var(--info)" /> : <Globe size={15} color="var(--accent)" />}
                             <div style={{ minWidth: 0 }}>
-                              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{res.title}</div>
-                              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{res.url}</div>
+                              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{res.title}</div>
+                              <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{res.url}</div>
                             </div>
                           </div>
-                          <ExternalLink size={16} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
+                          <ExternalLink size={14} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
                         </a>
                       ))}
                     </div>
@@ -496,49 +471,43 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
 
               {/* TAREAS TAB */}
               {activeTab === 'tareas' && (
-                <div className="bento-card" style={{ padding: '24px 20px', minHeight: 500, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--accent-dim)', border: '1px solid var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)' }}>
-                        <CheckSquare size={20} />
-                      </div>
-                      <div>
-                        <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>Gestión de Tareas</h2>
-                        <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>Administra las tareas y asignaciones de {selectedCourse.name}</p>
-                      </div>
-                    </div>
-                    <button onClick={() => setShowNewTask(true)} className="btn-primary hover-lift" style={{ fontSize: 12, fontWeight: 600, padding: '0 16px', height: 38, display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <Plus size={16} /> Nueva tarea
+                <div className="bento-card" style={{ padding: '24px 20px', minHeight: 400 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                    <h2 style={{ fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-primary)' }}>
+                      <CheckSquare size={17} /> Gestión de Tareas
+                    </h2>
+                    <button onClick={() => setShowNewTask(true)} className="btn-primary" style={{ fontSize: 11, fontWeight: 600, padding: '0 14px', height: 32, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Plus size={14} /> Nueva tarea
                     </button>
                   </div>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {courseTasks.map(task => {
                       const isDone = task.status === 'completado';
                       return (
-                        <div key={task.id} className="bento-card" style={{ padding: '16px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', borderLeft: '3px solid ' + (task.priority === 'high' ? 'var(--error)' : task.priority === 'medium' ? 'var(--warning)' : 'var(--success)'), display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                            <button onClick={() => toggleTaskStatus(task.id)} style={{ width: 24, height: 24, borderRadius: '50%', border: isDone ? 'none' : '2px solid var(--border-default)', background: isDone ? 'var(--success)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                              {isDone && <Check size={14} color="#fff" />}
+                        <div key={task.id} style={{ padding: '12px 14px', borderRadius: 8, border: '1px solid var(--border-subtle)', borderLeft: '3px solid ' + (task.priority === 'high' ? 'var(--error)' : task.priority === 'medium' ? 'var(--warning)' : 'var(--success)'), display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            <button onClick={() => toggleTaskStatus(task.id)} style={{ width: 20, height: 20, borderRadius: '50%', border: isDone ? 'none' : '2px solid var(--border-default)', background: isDone ? 'var(--success)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                              {isDone && <Check size={11} color="#fff" />}
                             </button>
                             <div>
-                              <div style={{ fontSize: 14, fontWeight: 600, color: isDone ? 'var(--text-tertiary)' : 'var(--text-primary)', textDecoration: isDone ? 'line-through' : 'none' }}>{task.title}</div>
-                              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>Fecha límite: {task.dueDate ? format(new Date(task.dueDate), "d MMMM yyyy", { locale: es }) : 'Sin fecha'}</div>
+                              <div style={{ fontSize: 13, fontWeight: 600, color: isDone ? 'var(--text-tertiary)' : 'var(--text-primary)', textDecoration: isDone ? 'line-through' : 'none' }}>{task.title}</div>
+                              <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 2 }}>Fecha límite: {task.dueDate ? format(new Date(task.dueDate), "d MMMM yyyy", { locale: es }) : 'Sin fecha'}</div>
                             </div>
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                            <span style={{ fontSize: 11, fontWeight: 600, padding: '4px 8px', borderRadius: 6, background: task.priority === 'high' ? 'var(--error-dim)' : task.priority === 'medium' ? 'var(--warning-dim)' : 'var(--success-dim)', color: task.priority === 'high' ? 'var(--error)' : task.priority === 'medium' ? 'var(--warning)' : 'var(--success)' }}>
-                              {task.priority === 'high' ? 'Prioridad Alta' : task.priority === 'medium' ? 'Prioridad Media' : 'Prioridad Baja'}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <span style={{ fontSize: 10, fontWeight: 600, padding: '3px 7px', borderRadius: 5, background: task.priority === 'high' ? 'var(--error-dim)' : task.priority === 'medium' ? 'var(--warning-dim)' : 'var(--success-dim)', color: task.priority === 'high' ? 'var(--error)' : task.priority === 'medium' ? 'var(--warning)' : 'var(--success)' }}>
+                              {task.priority === 'high' ? 'Alta' : task.priority === 'medium' ? 'Media' : 'Baja'}
                             </span>
-                            <button onClick={() => deleteTask(task.id)} className="btn-ghost" style={{ padding: 6, borderRadius: 8 }}><Trash2 size={16} /></button>
+                            <button onClick={() => deleteTask(task.id)} className="btn-ghost" style={{ padding: 4, borderRadius: 6 }}><Trash2 size={14} /></button>
                           </div>
                         </div>
                       );
                     })}
                     {courseTasks.length === 0 && (
-                      <div style={{ padding: '64px 0', textAlign: 'center', color: 'var(--text-tertiary)' }}>
-                        <CheckSquare size={48} style={{ opacity: 0.3, marginBottom: 12 }} />
-                        <div style={{ fontSize: 14, fontWeight: 600 }}>No hay tareas registradas para este curso.</div>
+                      <div style={{ padding: '48px 0', textAlign: 'center', color: 'var(--text-tertiary)' }}>
+                        <CheckSquare size={40} style={{ opacity: 0.3, marginBottom: 10 }} />
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>No hay tareas registradas para este curso.</div>
                       </div>
                     )}
                   </div>
@@ -547,39 +516,33 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
 
               {/* NOTAS TAB */}
               {activeTab === 'notas' && (
-                <div className="bento-card" style={{ padding: '24px 20px', minHeight: 500, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--accent-dim)', border: '1px solid var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)' }}>
-                        <NotebookPen size={20} />
-                      </div>
-                      <div>
-                        <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>Apuntes y Notas</h2>
-                        <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>Registra resúmenes, ideas y apuntes de clase de {selectedCourse.name}</p>
-                      </div>
-                    </div>
-                    <button onClick={() => setShowNewNote(true)} className="btn-primary hover-lift" style={{ fontSize: 12, fontWeight: 600, padding: '0 16px', height: 38, display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <Plus size={16} /> Nueva nota
+                <div className="bento-card" style={{ padding: '24px 20px', minHeight: 400 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                    <h2 style={{ fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-primary)' }}>
+                      <NotebookPen size={17} /> Apuntes y Notas
+                    </h2>
+                    <button onClick={() => setShowNewNote(true)} className="btn-primary" style={{ fontSize: 11, fontWeight: 600, padding: '0 14px', height: 32, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Plus size={14} /> Nueva nota
                     </button>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
                     {courseNotes.map(note => (
-                      <div key={note.id} className="bento-card" style={{ padding: 20, border: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: 12, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                      <div key={note.id} style={{ padding: 16, borderRadius: 10, border: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: 8 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>{note.title}</h3>
-                          <button onClick={() => deleteNote(note.id)} className="btn-ghost" style={{ padding: 4, borderRadius: 6 }}><Trash2 size={14} /></button>
+                          <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{note.title}</h3>
+                          <button onClick={() => deleteNote(note.id)} className="btn-ghost" style={{ padding: 3, borderRadius: 5 }}><Trash2 size={13} /></button>
                         </div>
-                        <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6, flex: 1 }} dangerouslySetInnerHTML={{ __html: note.content }} />
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-subtle)', paddingTop: 12, fontSize: 11, color: 'var(--text-tertiary)' }}>
-                          <span>Actualizado: {format(new Date(note.updatedAt), "d MMM yyyy", { locale: es })}</span>
+                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.6, flex: 1, display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }} dangerouslySetInnerHTML={{ __html: note.content }} />
+                        <div style={{ fontSize: 10, color: 'var(--text-tertiary)', borderTop: '1px solid var(--border-subtle)', paddingTop: 8 }}>
+                          Actualizado: {format(new Date(note.updatedAt), "d MMM yyyy", { locale: es })}
                         </div>
                       </div>
                     ))}
                     {courseNotes.length === 0 && (
-                      <div style={{ gridColumn: '1 / -1', padding: '64px 0', textAlign: 'center', color: 'var(--text-tertiary)' }}>
-                        <NotebookPen size={48} style={{ opacity: 0.3, marginBottom: 12 }} />
-                        <div style={{ fontSize: 14, fontWeight: 600 }}>No hay notas guardadas para este curso.</div>
+                      <div style={{ gridColumn: '1 / -1', padding: '48px 0', textAlign: 'center', color: 'var(--text-tertiary)' }}>
+                        <NotebookPen size={40} style={{ opacity: 0.3, marginBottom: 10 }} />
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>No hay notas guardadas para este curso.</div>
                       </div>
                     )}
                   </div>
@@ -588,39 +551,31 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
 
               {/* RECURSOS TAB */}
               {activeTab === 'recursos' && (
-                <div className="bento-card" style={{ padding: '24px 20px', minHeight: 500, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--accent-dim)', border: '1px solid var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)' }}>
-                        <Globe size={20} />
-                      </div>
-                      <div>
-                        <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>Recursos y Bibliografía</h2>
-                        <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>Enlaces web, bibliotecas digitales y documentos de consulta de {selectedCourse.name}</p>
-                      </div>
-                    </div>
-                    <button onClick={() => setShowNewResource(true)} className="btn-primary hover-lift" style={{ fontSize: 12, fontWeight: 600, padding: '0 16px', height: 38, display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <Plus size={16} /> Añadir recurso
+                <div className="bento-card" style={{ padding: '24px 20px', minHeight: 400 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                    <h2 style={{ fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-primary)' }}>
+                      <Globe size={17} /> Recursos y Bibliografía
+                    </h2>
+                    <button onClick={() => setShowNewResource(true)} className="btn-primary" style={{ fontSize: 11, fontWeight: 600, padding: '0 14px', height: 32, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Plus size={14} /> Añadir recurso
                     </button>
                   </div>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {resourcesList.map(res => (
-                      <div key={res.id} className="bento-card" style={{ padding: '16px', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                          <div style={{ width: 40, height: 40, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)' }}>
-                            {res.type === 'pdf' ? <FileText size={20} className="text-error" /> : res.type === 'doc' ? <File size={20} className="text-info" /> : <Globe size={20} />}
-                          </div>
+                      <div key={res.id} style={{ padding: '12px 14px', borderRadius: 8, border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          {res.type === 'pdf' ? <FileText size={16} color="var(--error)" /> : res.type === 'doc' ? <File size={16} color="var(--info)" /> : <Globe size={16} color="var(--accent)" />}
                           <div>
-                            <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>{res.title}</div>
-                            <a href={res.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}>
-                              <span>{res.url}</span> <ExternalLink size={12} />
-                            </a>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{res.title}</div>
+                            <span style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 1, display: 'flex', alignItems: 'center', gap: 4 }}>
+                              {res.url} <ExternalLink size={10} />
+                            </span>
                           </div>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                          <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{res.date}</span>
-                          <button onClick={() => updateCourse(selectedCourse.id, { resources: resourcesList.filter(r => r.id !== res.id) })} className="btn-ghost" style={{ padding: 6, borderRadius: 8 }}><Trash2 size={16} /></button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{res.date}</span>
+                          <button onClick={() => updateCourse(selectedCourse.id, { resources: resourcesList.filter(r => r.id !== res.id) })} className="btn-ghost" style={{ padding: 4, borderRadius: 6 }}><Trash2 size={13} /></button>
                         </div>
                       </div>
                     ))}
@@ -630,68 +585,66 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
 
               {/* REPASO TAB */}
               {activeTab === 'repasos' && (
-                <div className="bento-card" style={{ padding: '24px 20px', minHeight: 500, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--accent-dim)', border: '1px solid var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)' }}>
-                        <BrainCircuit size={20} />
-                      </div>
-                      <div>
-                        <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>Repaso Activo (Flashcards)</h2>
-                        <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>Sistema de Repetición espaciada para consolidar el aprendizaje de {selectedCourse.name}</p>
-                      </div>
-                    </div>
-                    <button onClick={() => setShowNewRepaso(true)} className="btn-primary hover-lift" style={{ fontSize: 12, fontWeight: 600, padding: '0 16px', height: 38, display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <Plus size={16} /> Crear tarjeta
+                <div className="bento-card" style={{ padding: '24px 20px', minHeight: 400 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                    <h2 style={{ fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-primary)' }}>
+                      <BrainCircuit size={17} /> Repaso Activo (Flashcards)
+                    </h2>
+                    <button onClick={() => setShowNewRepaso(true)} className="btn-primary" style={{ fontSize: 11, fontWeight: 600, padding: '0 14px', height: 32, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Plus size={14} /> Crear tarjeta
                     </button>
                   </div>
 
                   {flashcards.length > 0 ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24, maxWidth: 640, margin: '0 auto', padding: '20px 0' }}>
-                      <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20, maxWidth: 560, margin: '0 auto', padding: '16px 0' }}>
+                      <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)' }}>
                         <span>Tarjeta {activeFlashcardIndex + 1} de {flashcards.length}</span>
                         <span style={{ color: 'var(--accent)' }}>Dificultad: {flashcards[activeFlashcardIndex]?.difficulty?.toUpperCase() || 'BUENO'}</span>
                       </div>
 
-                      <div onClick={() => setShowFlashcardAnswer(!showFlashcardAnswer)} className="bento-card" style={{ width: '100%', height: 320, border: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 32, cursor: 'pointer', position: 'relative', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
-                        <div style={{ position: 'absolute', top: 16, right: 16, fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', padding: '6px 12px', borderRadius: 12 }}>
+                      <div onClick={() => setShowFlashcardAnswer(!showFlashcardAnswer)} style={{ width: '100%', minHeight: 260, borderRadius: 12, border: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '28px 24px', cursor: 'pointer', position: 'relative' }}>
+                        <div style={{ position: 'absolute', top: 12, right: 14, fontSize: 9, fontWeight: 600, color: 'var(--text-tertiary)' }}>
                           Clic para voltear
                         </div>
                         {!showFlashcardAnswer ? (
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
-                            <HelpCircle size={40} style={{ color: 'var(--accent)', opacity: 0.5 }} />
-                            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Pregunta</span>
-                            <h3 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)' }}>{flashcards[activeFlashcardIndex]?.question}</h3>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+                            <HelpCircle size={32} style={{ color: 'var(--accent)', opacity: 0.4 }} />
+                            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Pregunta</span>
+                            <h3 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>{flashcards[activeFlashcardIndex]?.question}</h3>
                           </div>
                         ) : (
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
-                            <Sparkles size={40} style={{ color: 'var(--success)', opacity: 0.5 }} />
-                            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--success)', textTransform: 'uppercase' }}>Respuesta</span>
-                            <p style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)' }}>{flashcards[activeFlashcardIndex]?.answer}</p>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+                            <Sparkles size={32} style={{ color: 'var(--success)', opacity: 0.4 }} />
+                            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--success)', textTransform: 'uppercase' }}>Respuesta</span>
+                            <p style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>{flashcards[activeFlashcardIndex]?.answer}</p>
                           </div>
                         )}
                       </div>
 
                       {showFlashcardAnswer && (
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, width: '100%' }}>
-                          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)' }}>¿Qué tan Fácil fue recordar la Respuesta?</span>
-                          <div style={{ display: 'flex', gap: 16, width: '100%' }}>
-                            <button onClick={() => handleRateFlashcard('dificil')} style={{ flex: 1, padding: 12, borderRadius: 10, background: 'var(--error-dim)', border: '1px solid var(--error)', color: 'var(--error)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Difícil</button>
-                            <button onClick={() => handleRateFlashcard('bueno')} style={{ flex: 1, padding: 12, borderRadius: 10, background: 'var(--warning-dim)', border: '1px solid var(--warning)', color: 'var(--warning)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Bueno</button>
-                            <button onClick={() => handleRateFlashcard('facil')} style={{ flex: 1, padding: 12, borderRadius: 10, background: 'var(--success-dim)', border: '1px solid var(--success)', color: 'var(--success)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Fácil</button>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, width: '100%' }}>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)' }}>¿Qué tan fácil fue recordar?</span>
+                          <div style={{ display: 'flex', gap: 10, width: '100%' }}>
+                            {[
+                              { label: 'Difícil', rating: 'dificil' as const, color: 'var(--error)', bg: 'var(--error-dim)' },
+                              { label: 'Bueno', rating: 'bueno' as const, color: 'var(--warning)', bg: 'var(--warning-dim)' },
+                              { label: 'Fácil', rating: 'facil' as const, color: 'var(--success)', bg: 'var(--success-dim)' },
+                            ].map(opt => (
+                              <button key={opt.rating} onClick={() => handleRateFlashcard(opt.rating)} style={{ flex: 1, padding: '10px', borderRadius: 8, background: opt.bg, border: `1px solid ${opt.color}`, color: opt.color, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>{opt.label}</button>
+                            ))}
                           </div>
                         </div>
                       )}
 
-                      <div style={{ display: 'flex', gap: 16 }}>
-                        <button onClick={() => { setShowFlashcardAnswer(false); setActiveFlashcardIndex((activeFlashcardIndex - 1 + flashcards.length) % flashcards.length); }} className="btn-secondary" style={{ padding: '8px 20px', fontSize: 12, fontWeight: 600 }}>Anterior</button>
-                        <button onClick={() => { setShowFlashcardAnswer(false); setActiveFlashcardIndex((activeFlashcardIndex + 1) % flashcards.length); }} className="btn-secondary" style={{ padding: '8px 20px', fontSize: 12, fontWeight: 600 }}>Siguiente</button>
+                      <div style={{ display: 'flex', gap: 12 }}>
+                        <button onClick={() => { setShowFlashcardAnswer(false); setActiveFlashcardIndex((activeFlashcardIndex - 1 + flashcards.length) % flashcards.length); }} className="btn-secondary" style={{ padding: '6px 16px', fontSize: 11, fontWeight: 600 }}>Anterior</button>
+                        <button onClick={() => { setShowFlashcardAnswer(false); setActiveFlashcardIndex((activeFlashcardIndex + 1) % flashcards.length); }} className="btn-secondary" style={{ padding: '6px 16px', fontSize: 11, fontWeight: 600 }}>Siguiente</button>
                       </div>
                     </div>
                   ) : (
-                    <div style={{ padding: '64px 0', textAlign: 'center', color: 'var(--text-tertiary)' }}>
-                      <BrainCircuit size={48} style={{ opacity: 0.3, marginBottom: 12 }} />
-                      <div style={{ fontSize: 14, fontWeight: 600 }}>No hay tarjetas de repaso creadas para este curso.</div>
+                    <div style={{ padding: '48px 0', textAlign: 'center', color: 'var(--text-tertiary)' }}>
+                      <BrainCircuit size={40} style={{ opacity: 0.3, marginBottom: 10 }} />
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>No hay tarjetas de repaso creadas para este curso.</div>
                     </div>
                   )}
                 </div>
@@ -699,61 +652,65 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
 
             </div>
 
-            {/* RIGHT COLUMN matching screenshot */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+            {/* RIGHT COLUMN */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               
-              {/* Información del Curso Card */}
-              <div className="bento-card" style={{ padding: '24px 20px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                  <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>Información del Curso</h3>
-                  <button onClick={() => setShowEditCourse(true)} className="btn-ghost" style={{ padding: 6, borderRadius: 8 }}><Edit3 size={16} /></button>
+              {/* Información del Curso */}
+              <div className="bento-card" style={{ padding: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>Información del Curso</h3>
+                  <button onClick={() => setShowEditCourse(true)} className="btn-ghost" style={{ padding: 4, borderRadius: 6 }}><Edit3 size={14} /></button>
                 </div>
-                <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 20 }}>
+                <p style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 16 }}>
                   {courseDescription}
                 </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }}>
-                  <span style={{ fontSize: 10, fontWeight: 700, padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', letterSpacing: '0.08em', background: 'var(--bg-deep)' }}>ASIGNATURA</span>
-                  <span style={{ fontSize: 10, fontWeight: 700, padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', letterSpacing: '0.08em', background: 'var(--bg-deep)' }}>{courseLevel.toUpperCase()}</span>
-                  <span style={{ fontSize: 10, fontWeight: 700, padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', letterSpacing: '0.08em', background: 'var(--bg-deep)' }}>{courseCredits.toUpperCase()}</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
+                  {['ASIGNATURA', courseLevel.toUpperCase(), courseCredits.toUpperCase()].map(label => (
+                    <span key={label} style={{ fontSize: 9, fontWeight: 700, padding: '5px 10px', borderRadius: 6, border: '1px solid var(--border-subtle)', color: 'var(--text-tertiary)', letterSpacing: '0.06em', background: 'var(--bg-deep)' }}>{label}</span>
+                  ))}
                 </div>
-                <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{courseTeacher}</div>
-                  <div style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600 }}>{courseCode}</div>
+                <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>{courseTeacher}</div>
+                  <div style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 600 }}>{courseCode}</div>
                 </div>
               </div>
 
-              {/* Tarjetas de Repaso Card matching screenshot */}
-              <div className="bento-card" style={{ padding: '24px 20px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                  <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>Tarjetas de Repaso</h3>
-                  <button onClick={() => setShowNewRepaso(true)} className="btn-ghost" style={{ padding: 6, borderRadius: 8 }}><Plus size={16} /></button>
+              {/* Tarjetas de Repaso sidebar */}
+              <div className="bento-card" style={{ padding: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                  <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>Tarjetas de Repaso</h3>
+                  <button onClick={() => setShowNewRepaso(true)} className="btn-ghost" style={{ padding: 4, borderRadius: 6 }}><Plus size={14} /></button>
                 </div>
 
                 {flashcards.length > 0 ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                    <div style={{ padding: '20px 16px', border: '1px solid var(--border-subtle)', borderRadius: 12, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{flashcards[activeFlashcardIndex]?.question}</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div style={{ padding: '16px 14px', border: '1px solid var(--border-subtle)', borderRadius: 10, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, background: 'var(--bg-elevated)' }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{flashcards[activeFlashcardIndex]?.question}</span>
                       {showFlashcardAnswer && (
-                        <div style={{ padding: '12px', borderRadius: 8, fontSize: 12, color: 'var(--success)', fontWeight: 600, width: '100%', marginTop: 8 }}>
+                        <div style={{ padding: '10px', borderRadius: 6, fontSize: 11, color: 'var(--success)', fontWeight: 600, width: '100%' }}>
                           {flashcards[activeFlashcardIndex]?.answer}
                         </div>
                       )}
                     </div>
 
                     {!showFlashcardAnswer ? (
-                      <button onClick={() => setShowFlashcardAnswer(true)} className="btn-primary hover-lift" style={{ width: '100%', height: 38, fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <button onClick={() => setShowFlashcardAnswer(true)} className="btn-primary" style={{ width: '100%', height: 34, fontSize: 11, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         Ver Respuesta
                       </button>
                     ) : (
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button onClick={() => handleRateFlashcard('dificil')} style={{ flex: 1, padding: '8px', borderRadius: 8, background: 'var(--error-dim)', border: '1px solid var(--error)', color: 'var(--error)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>DIFÍCIL</button>
-                        <button onClick={() => handleRateFlashcard('bueno')} style={{ flex: 1, padding: '8px', borderRadius: 8, background: 'var(--warning-dim)', border: '1px solid var(--warning)', color: 'var(--warning)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>BUENO</button>
-                        <button onClick={() => handleRateFlashcard('facil')} style={{ flex: 1, padding: '8px', borderRadius: 8, background: 'var(--success-dim)', border: '1px solid var(--success)', color: 'var(--success)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>FÁCIL</button>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        {[
+                          { label: 'Difícil', rating: 'dificil' as const, color: 'var(--error)', bg: 'var(--error-dim)' },
+                          { label: 'Bueno', rating: 'bueno' as const, color: 'var(--warning)', bg: 'var(--warning-dim)' },
+                          { label: 'Fácil', rating: 'facil' as const, color: 'var(--success)', bg: 'var(--success-dim)' },
+                        ].map(opt => (
+                          <button key={opt.rating} onClick={() => handleRateFlashcard(opt.rating)} style={{ flex: 1, padding: '6px', borderRadius: 6, background: opt.bg, border: `1px solid ${opt.color}`, color: opt.color, fontSize: 9, fontWeight: 700, cursor: 'pointer' }}>{opt.label.toUpperCase()}</button>
+                        ))}
                       </div>
                     )}
                   </div>
                 ) : (
-                  <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 12 }}>
+                  <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 11 }}>
                     No hay tarjetas de repaso creadas.
                   </div>
                 )}
@@ -777,7 +734,7 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
       {/* NEW COURSE MODAL */}
       {showNewCourse && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(12px)' }} onClick={() => setShowNewCourse(false)}>
-          <div className="bento-card" style={{ width: 440, padding: 28, border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }} onClick={e => e.stopPropagation()}>
+          <div className="bento-card" style={{ width: 440, padding: 28, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-primary)' }}>
                 <GraduationCap size={22} className="text-accent" /> Nuevo Curso
@@ -812,7 +769,7 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
       {/* EDIT COURSE MODAL */}
       {showEditCourse && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(12px)' }} onClick={() => setShowEditCourse(false)}>
-          <div className="bento-card" style={{ width: 440, padding: 28, border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }} onClick={e => e.stopPropagation()}>
+          <div className="bento-card" style={{ width: 440, padding: 28, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-primary)' }}>
                 <Edit3 size={22} className="text-accent" /> Editar Información
@@ -850,7 +807,7 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
       {/* NEW TASK MODAL */}
       {showNewTask && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(12px)' }} onClick={() => setShowNewTask(false)}>
-          <div className="bento-card" style={{ width: 440, padding: 28, border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }} onClick={e => e.stopPropagation()}>
+          <div className="bento-card" style={{ width: 440, padding: 28, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-primary)' }}>
                 <CheckSquare size={22} className="text-accent" /> Nueva Tarea
@@ -892,7 +849,7 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
       {/* NEW NOTE MODAL */}
       {showNewNote && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(12px)' }} onClick={() => setShowNewNote(false)}>
-          <div className="bento-card" style={{ width: 480, padding: 28, border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }} onClick={e => e.stopPropagation()}>
+          <div className="bento-card" style={{ width: 480, padding: 28, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-primary)' }}>
                 <NotebookPen size={22} className="text-accent" /> Nueva Nota
@@ -923,7 +880,7 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
       {/* NEW RESOURCE MODAL */}
       {showNewResource && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(12px)' }} onClick={() => setShowNewResource(false)}>
-          <div className="bento-card" style={{ width: 440, padding: 28, border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }} onClick={e => e.stopPropagation()}>
+          <div className="bento-card" style={{ width: 440, padding: 28, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-primary)' }}>
                 <Globe size={22} className="text-accent" /> Añadir Recurso
@@ -965,7 +922,7 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
       {/* NEW ANCHORED IMAGE MODAL */}
       {showNewImage && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(12px)' }} onClick={() => setShowNewImage(false)}>
-          <div className="bento-card" style={{ width: 440, padding: 28, border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }} onClick={e => e.stopPropagation()}>
+          <div className="bento-card" style={{ width: 440, padding: 28, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-primary)' }}>
                 <ImageIcon size={22} className="text-accent" /> Añadir Imagen Anclada
@@ -1007,7 +964,7 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
       {/* NEW FLASHCARD MODAL */}
       {showNewRepaso && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(12px)' }} onClick={() => setShowNewRepaso(false)}>
-          <div className="bento-card" style={{ width: 440, padding: 28, border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }} onClick={e => e.stopPropagation()}>
+          <div className="bento-card" style={{ width: 440, padding: 28, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-primary)' }}>
                 <BrainCircuit size={22} className="text-accent" /> Crear Tarjeta de Repaso

@@ -45,6 +45,7 @@ export interface DownloadComplete {
   downloadId: string;
   success: boolean;
   code: number | null;
+  errorMessage?: string;
 }
 
 export interface SearchResult {
@@ -84,12 +85,22 @@ function getThumbnail(data: Record<string, unknown>): string {
 const API_KEY = import.meta.env.VITE_GOOGLE_API_KEY || '';
 
 async function webSearchMusic(query: string): Promise<SearchResult[]> {
-  if (!API_KEY) return [];
-  try {
-    const r = await fetch(
-      `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoCategoryId=10&maxResults=20&q=${encodeURIComponent(query)}&key=${API_KEY}`
-    );
+  if (!API_KEY) {
+    console.warn('[webSearchMusic] No API key (VITE_GOOGLE_API_KEY)');
+    return [];
+  }
+  const tryFetch = async (url: string): Promise<SearchResult[]> => {
+    const r = await fetch(url);
+    if (!r.ok) {
+      const errorText = await r.text().catch(() => 'unknown error');
+      console.warn(`[webSearchMusic] HTTP ${r.status}: ${errorText}`);
+      return [];
+    }
     const data = await r.json();
+    if (data.error) {
+      console.warn('[webSearchMusic] API error:', data.error);
+      return [];
+    }
     return (data.items || []).map((item: any) => ({
       id: item.id?.videoId || '',
       title: item.snippet?.title || 'Unknown',
@@ -98,7 +109,23 @@ async function webSearchMusic(query: string): Promise<SearchResult[]> {
       thumbnail: item.snippet?.thumbnails?.high?.url || item.snippet?.thumbnails?.default?.url || '',
       webpage_url: `https://www.youtube.com/watch?v=${item.id?.videoId}`,
     }));
-  } catch { return []; }
+  };
+  try {
+    const results = await tryFetch(
+      `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoCategoryId=10&maxResults=20&q=${encodeURIComponent(query)}&key=${API_KEY}`
+    );
+    if (results.length > 0) return results;
+  } catch (e) {
+    console.warn('[webSearchMusic] First attempt failed, trying without category filter:', e);
+  }
+  try {
+    return await tryFetch(
+      `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=20&q=${encodeURIComponent(query)}&key=${API_KEY}`
+    );
+  } catch (e) {
+    console.warn('[webSearchMusic] All attempts failed:', e);
+    return [];
+  }
 }
 
 async function webStreamUrl(videoId: string): Promise<string> {
@@ -258,7 +285,10 @@ export async function searchMusic(query: string): Promise<SearchResult[]> {
       webpage_url: String(e.webpage_url || e.url || ''),
       ...e,
     })) as SearchResult[];
-  } catch { return webSearchMusic(query); }
+  } catch (e) {
+    console.warn('[searchMusic] Rust backend failed, falling back to web API:', e);
+    return webSearchMusic(query);
+  }
 }
 
 export async function validateUrl(url: string): Promise<YouTubePlaylist | YouTubeMetadata> {

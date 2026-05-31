@@ -1,14 +1,16 @@
-﻿import React, { useEffect, useState, useRef } from 'react';
+﻿import React, { useEffect, useState, useRef, useMemo } from 'react';
 import {
   User, Palette, Brain, Cloud, Download, Bell,
   Moon, Sun, Type, Check,
   Timer, Target, Zap, BookOpen,
   FolderOpen, RefreshCw, ExternalLink, Shield,
-  LogOut, Sliders, ListTodo, Music, GraduationCap, FileText, Sheet,
+  Sliders, ListTodo, Music, GraduationCap, FileText, Sheet,
   PlayCircle, Calendar, Database, Upload, ArrowDownToLine, Search,
-  Wifi, CheckCircle, Image, Coffee, X
+  Wifi, CheckCircle, Image, Coffee, X,
+  Monitor, Activity, Sparkles
 } from 'lucide-react';
 import { useApp } from '../../store/AppContext';
+import { invoke } from '@tauri-apps/api/core';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { open } from '@tauri-apps/plugin-dialog';
@@ -28,13 +30,13 @@ import {
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 const GOOGLE_CLIENT_SECRET = import.meta.env.VITE_GOOGLE_CLIENT_SECRET || '';
 
-type SettingsTab = 'perfil' | 'Apariencia' | 'estudio' | 'Notificaciones';
+type SettingsTab = 'perfil' | 'Apariencia' | 'estudio' | 'Notificaciones' | 'sistema';
 
 const TABS: { id: SettingsTab; label: string; icon: React.ComponentType<{ size?: number }> }[] = [
   { id: 'perfil', label: 'Perfil', icon: User },
   { id: 'Apariencia', label: 'Apariencia', icon: Palette },
   { id: 'estudio', label: 'Estudio', icon: Brain },
-
+  { id: 'sistema', label: 'Sistema', icon: Shield },
   { id: 'Notificaciones', label: 'Sonidos y Alertas', icon: Bell },
 ];
 
@@ -54,18 +56,21 @@ const FONTS = [
 ];
 
 const THEME_PRESETS = [
-  { name: 'Clásico', colors: ['#E11D48', '#3B82F6', '#10B981'], desc: 'Rojo acento clásico' },
-  { name: 'Tecnológico', colors: ['#06B6D4', '#3B82F6', '#8B5CF6'], desc: 'Cian, azul y violeta' },
-  { name: 'One Piece', colors: ['#0EA5E9', '#FBBF24', '#EF4444'], desc: 'Azul, amarillo y rojo' },
-  { name: 'Marvel', colors: ['#E11D48', '#3B82F6', '#F59E0B'], desc: 'Rojo, azul y dorado' },
-  { name: 'Naturaleza', colors: ['#10B981', '#84CC16', '#14B8A6'], desc: 'Verde esmeralda y lima' },
-  { name: 'Galaxia', colors: ['#8B5CF6', '#D946EF', '#6366F1'], desc: 'Púrpura, rosa e índigo' },
-  { name: 'Ocaso', colors: ['#F97316', '#EC4899', '#F59E0B'], desc: 'Naranja, rosa y ámbar' },
-  { name: 'Minimal', colors: ['#ffffff', '#94A3B8', '#64748B'], desc: 'Blanco y grises' },
-  { name: 'Energía', colors: ['#EF4444', '#F59E0B', '#10B981'], desc: 'Rojo, ámbar y verde' },
-  { name: 'Oscuro', colors: ['#1E1E2E', '#CBA6F7', '#89B4FA'], desc: 'Violeta, lavanda y azul' },
-  { name: 'Retro', colors: ['#FF6B6B', '#FFE66D', '#4ECDC4'], desc: 'Rojo pastel, amarillo y turquesa' },
-  { name: 'Otoño', colors: ['#D35400', '#E67E22', '#F39C12'], desc: 'Naranja, calabaza y ámbar' },
+  { name: 'Clásico', colors: ['#E11D48', '#3B82F6', '#1a1116'], desc: 'Rojo y azul sobre fondo granate oscuro' },
+  { name: 'Noche', colors: ['#38bdf8', '#818cf8', '#0e1628'], desc: 'Cian y violeta sobre fondo azul noche' },
+  { name: 'Galaxia', colors: ['#a78bfa', '#e879f9', '#181028'], desc: 'Púrpura y rosa sobre fondo violeta profundo' },
+  { name: 'Bosque', colors: ['#4ade80', '#2dd4bf', '#0e1a10'], desc: 'Verde y turquesa sobre fondo bosque oscuro' },
+  { name: 'Marino', colors: ['#60a5fa', '#34d399', '#0a1224'], desc: 'Azul océano y esmeralda sobre fondo marino' },
+  { name: 'Atardecer', colors: ['#fb923c', '#f472b6', '#20140c'], desc: 'Naranja y rosa sobre fondo cálido terroso' },
+  { name: 'Lava', colors: ['#f43f5e', '#f97316', '#1e0c0c'], desc: 'Rojo y naranja sobre fondo granate intenso' },
+  { name: 'Neón', colors: ['#22d3ee', '#34d399', '#0c1a1e'], desc: 'Cian y esmeralda sobre fondo teal profundo' },
+  { name: 'Hielo', colors: ['#7dd3fc', '#a5b4fc', '#0c1424'], desc: 'Azul y lavanda sobre fondo glacial oscuro' },
+  { name: 'Ámbar', colors: ['#fbbf24', '#d97706', '#1e1808'], desc: 'Ámbar y dorado sobre fondo miel oscuro' },
+  { name: 'Rosa', colors: ['#f472b6', '#c084fc', '#1a0e1c'], desc: 'Rosa y lavanda sobre fondo malva oscuro' },
+  { name: 'Lima', colors: ['#84cc16', '#65a30d', '#0e1a0c'], desc: 'Lima y verde hoja sobre fondo verde profundo' },
+  { name: 'Carbón', colors: ['#a1a1aa', '#6366f1', '#141416'], desc: 'Grises con acento índigo sobre fondo carbón' },
+  { name: 'Día', colors: ['#0f172a', '#475569', '#f0ece4'], desc: 'Acento oscuro sobre fondo crema claro' },
+  { name: 'Pastel', colors: ['#e86a7a', '#7fbbdd', '#f5f1eb'], desc: 'Coral suave y celeste sobre fondo marfil' },
 ];
 
 const ACCENT_COLORS = ['#E11D48', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#06B6D4', '#EC4899', '#F97316', '#84CC16', '#D946EF', '#14B8A6', '#6366F1'];
@@ -119,7 +124,8 @@ export default function Ajustes() {
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<SettingsTab>('perfil');
-  const [selectedTheme, setSelectedTheme] = useState<string | null>(null);
+
+
   const [downloadPath, setDownloadPathState] = useState('');
   const [audioFormat, setAudioFormat] = useState<'mp3' | 'm4a'>('mp3');
   const [syncing, setSyncing] = useState(false);
@@ -133,7 +139,10 @@ export default function Ajustes() {
   const [supabaseSyncing, setSupabaseSyncing] = useState(false);
   const [showGoogleModal, setShowGoogleModal] = useState(false);
   const [showClearAllMusic, setShowClearAllMusic] = useState(false);
+  const [showDrawModal, setShowDrawModal] = useState(false);
+  const [showBarDrawModal, setShowBarDrawModal] = useState(false);
   const [clearAllMusicText, setClearAllMusicText] = useState('');
+  const [sysInfo, setSysInfo] = useState<{ cpu: number; ram: number; disk: number; platform: string; arch: string; appVer: string } | null>(null);
 
   // Load theme colors from saved settings on mount
   useEffect(() => {
@@ -141,11 +150,9 @@ export default function Ajustes() {
     if (saved) {
       const match = THEME_PRESETS.find(t => t.colors[0] === saved);
       if (match) {
-        setSelectedTheme(match.name);
         if (match.colors[1]) document.documentElement.style.setProperty('--theme-secondary', match.colors[1]);
         if (match.colors[2]) document.documentElement.style.setProperty('--theme-tertiary', match.colors[2]);
       } else {
-        setSelectedTheme(null);
         document.documentElement.style.setProperty('--theme-secondary', saved);
         document.documentElement.style.setProperty('--theme-tertiary', saved);
       }
@@ -176,6 +183,25 @@ export default function Ajustes() {
       return unsub;
     }
   }, [setGoogleConnected]);
+
+  useEffect(() => {
+    if (!isTauri()) return;
+    (async () => {
+      try {
+        const raw: any = await invoke('get_system_stats');
+        setSysInfo({
+          cpu: Math.round(raw.cpu || 0),
+          ram: Math.round(raw.mem ? Math.round((parseInt(raw.mem.Total) - parseInt(raw.mem.Free)) / parseInt(raw.mem.Total) * 100) : 0),
+          disk: raw.disk || 0,
+          platform: navigator.platform,
+          arch: '',
+          appVer: '1.0.0',
+        });
+      } catch {
+        setSysInfo({ cpu: 0, ram: 0, disk: 0, platform: navigator.platform, arch: '', appVer: '1.0.0' });
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     const success = localStorage.getItem('owa_auth_success');
@@ -541,14 +567,7 @@ export default function Ajustes() {
                     style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 8, fontSize: 12, fontWeight: 500, background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)', color: '#EF4444', cursor: 'pointer', transition: 'all 200ms' }}>
                     <Music size={14} /> Borrar toda la música
                   </button>
-                  <button onClick={() => {
-                    if (confirm('¿Cerrar sesión? Se perderán las conexiones activas.')) {
-                      handleGoogleSignOut();
-                      handleSupabaseSignOut();
-                    }
-                  }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 8, fontSize: 12, fontWeight: 500, background: 'transparent', border: '1px solid rgba(239,68,68,0.2)', color: '#EF4444', cursor: 'pointer', transition: 'all 200ms' }}>
-                    <LogOut size={14} /> Cerrar Sesión
-                  </button>
+
                 </div>
 
                 <div className="bento-card" style={{ padding: '24px', border: '1px solid rgba(239,68,68,0.2)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
@@ -606,56 +625,189 @@ export default function Ajustes() {
                   <p style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 300, letterSpacing: '0.02em' }}>Personaliza cada aspecto visual de OWA Studio</p>
                 </div>
 
-                {/* Modo Visual */}
+                {/* Selector de modo: Clásico vs 3 Colores */}
                 <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
-                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16, display: 'block' }}>Modo Visual</span>
-                  <div style={{ display: 'flex', gap: 16 }}>
-                    {[
-                      { id: 'oscuro' as const, label: 'Modo Oscuro', icon: Moon },
-                      { id: 'claro' as const, label: 'Modo Claro', icon: Sun },
-                    ].map(t => {
-                      const Icon = t.icon;
-                      const active = settings.theme === t.id;
-                      return (
-                        <button key={t.id} onClick={() => updateSettings({ theme: t.id })} className="hover-lift" style={{
-                          flex: 1, padding: '16px', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
-                          background: active ? 'var(--accent)' : 'var(--bg-deep)', border: '1px solid var(--border-default)',
-                          color: active ? '#fff' : 'var(--text-secondary)', fontSize: 14, fontWeight: 500, cursor: 'pointer', letterSpacing: '0.02em'
-                        }}>
-                          <Icon size={18} /> {t.label}
-                        </button>
-                      );
-                    })}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                    <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                      Sistema de Color
+                    </span>
+                    <span style={{ fontSize: 9, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                      {settings.useThreeColors ? 'Modo 3 Colores' : 'Modo Clásico'}
+                    </span>
                   </div>
-                </div>
 
-                {/* Temas Predefinidos */}
-                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
-                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16, display: 'block' }}>Temas de Color</span>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-                    {THEME_PRESETS.map(theme => {
-                      const active = selectedTheme === theme.name;
-                      return (
-                        <button key={theme.name} onClick={() => {
-                          setSelectedTheme(theme.name);
-                          updateSettings({ accentColor: theme.colors[0] });
-                          if (theme.colors[1]) document.documentElement.style.setProperty('--theme-secondary', theme.colors[1]);
-                          if (theme.colors[2]) document.documentElement.style.setProperty('--theme-tertiary', theme.colors[2]);
-                        }} style={{
-                          padding: '16px', borderRadius: 12, cursor: 'pointer', background: active ? 'var(--bg-elevated)' : 'var(--bg-deep)',
-                          border: active ? `1px solid ${theme.colors[0]}` : '1px solid var(--border-default)', transition: 'all 200ms', textAlign: 'left'
-                        }}>
-                          <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
-                            {theme.colors.map((c, i) => (
-                              <div key={i} style={{ flex: 1, height: 16, borderRadius: 4, background: c, boxShadow: i === 0 && active ? `0 0 8px ${c}` : 'none' }} />
-                            ))}
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 10, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', marginBottom: 16, cursor: 'pointer' }}>
+                    <div style={{ flex: 1 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', display: 'block' }}>Modo 3 Colores</span>
+                      <span style={{ fontSize: 10, color: 'var(--text-tertiary)', display: 'block', marginTop: 2 }}>Define fondo, acento y secundario en un solo lugar</span>
+                    </div>
+                    <div style={{ position: 'relative', width: 40, height: 22, borderRadius: 11, background: settings.useThreeColors ? 'var(--accent)' : 'var(--bg-base)', border: '1px solid var(--border-default)', transition: 'all 200ms', flexShrink: 0, display: 'flex', alignItems: 'center', padding: 2 }}>
+                      <div style={{ width: 16, height: 16, borderRadius: '50%', background: '#fff', transform: settings.useThreeColors ? 'translateX(18px)' : 'translateX(0)', transition: 'all 200ms', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                      <input type="checkbox" checked={settings.useThreeColors ?? false} onChange={e => updateSettings({ useThreeColors: e.target.checked, selectedThemePreset: e.target.checked ? null : settings.selectedThemePreset })} style={{ display: 'none' }} />
+                    </div>
+                  </label>
+
+                  {/* MODO CLÁSICO (useThreeColors = false) */}
+                  {!settings.useThreeColors && (
+                    <>
+                      {/* Modo Visual - tema de fondo */}
+                      <div style={{ marginBottom: 20 }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 10 }}>Fondo de la App</span>
+                        <div style={{ display: 'flex', gap: 12 }}>
+                          {[
+                            { id: 'oscuro' as const, label: 'Oscuro', icon: Moon, desc: 'Fondo oscuro profesional' },
+                            { id: 'claro' as const, label: 'Claro', icon: Sun, desc: 'Fondo claro limpio' },
+                            { id: 'vibrante' as const, label: 'Vibrante', icon: Sparkles, desc: 'Colores intensos y vivos' },
+                          ].map(t => {
+                            const Icon = t.icon;
+                            const active = settings.theme === t.id;
+                            return (
+                              <button key={t.id} onClick={() => updateSettings({ theme: t.id })} className="hover-lift" style={{
+                                flex: 1, padding: '16px', borderRadius: 12, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+                                background: active ? 'var(--accent)' : 'var(--bg-deep)', border: '1px solid var(--border-default)',
+                                color: active ? '#fff' : 'var(--text-secondary)', fontSize: 14, fontWeight: 500, cursor: 'pointer', letterSpacing: '0.02em',
+                                transition: 'all 200ms',
+                              }}>
+                                <Icon size={20} />
+                                <span>{t.label}</span>
+                                <span style={{ fontSize: 9, fontWeight: 300, opacity: 0.7 }}>{t.desc}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Color de Acento - 14 círculos */}
+                      <div style={{ marginBottom: 16 }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 10 }}>Color de Acento</span>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                          {ACCENT_COLORS.map(color => {
+                            const active = settings.accentColor === color;
+                            return (
+                              <button key={color} onClick={() => updateSettings({ accentColor: color, selectedThemePreset: null })} style={{
+                                width: 32, height: 32, borderRadius: '50%', border: active ? '2px solid #fff' : '2px solid transparent',
+                                background: color, cursor: 'pointer', transition: 'all 200ms',
+                                outline: active ? `2px solid ${color}` : 'none',
+                                outlineOffset: 2,
+                                boxShadow: active ? `0 0 12px ${color}60` : '0 1px 3px rgba(0,0,0,0.2)',
+                              }} />
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Separador */}
+                      <div style={{ height: 1, background: 'var(--border-subtle)', margin: '12px 0' }} />
+
+                      {/* Color Primario - picker */}
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                          <div style={{ width: 10, height: 10, borderRadius: '50%', background: settings.accentColor, flexShrink: 0 }} />
+                          <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)' }}>Personalizar</span>
+                        </div>
+                        <input type="color" value={settings.accentColor}
+                          onChange={e => updateSettings({ accentColor: e.target.value, selectedThemePreset: null })}
+                          style={{ width: '100%', height: 40, borderRadius: 8, border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }} />
+                        <span style={{ fontSize: 8, color: 'var(--text-muted)', lineHeight: 1.3, display: 'block', marginTop: 4 }}>
+                          Navegación, botones, encabezados
+                        </span>
+                      </div>
+                    </>
+                  )}
+
+                  {/* MODO 3 COLORES (useThreeColors = true) */}
+                  {settings.useThreeColors && (
+                    <>
+                      {/* Paletas predefinidas de 3 colores */}
+                      <div style={{ marginBottom: 20 }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 10 }}>Paletas de Color</span>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                          {THEME_PRESETS.map(theme => {
+                            const active = settings.selectedThemePreset === theme.name;
+                            return (
+                              <button key={theme.name} onClick={() => {
+                                updateSettings({
+                                  selectedThemePreset: theme.name,
+                                  accentColor: theme.colors[0],
+                                  secondaryColor: theme.colors[1] || theme.colors[0],
+                                  surfaceColor: theme.colors[2] || '#1a1a22',
+                                });
+                              }} style={{
+                                padding: '14px', borderRadius: 10, cursor: 'pointer',
+                                background: active ? 'var(--bg-elevated)' : 'var(--bg-deep)',
+                                border: active ? `1.5px solid ${theme.colors[0]}` : '1px solid var(--border-default)',
+                                transition: 'all 200ms', textAlign: 'left',
+                                boxShadow: active ? `0 0 20px ${theme.colors[0]}30` : 'none',
+                              }}>
+                                <div style={{ display: 'flex', gap: 3, marginBottom: 6 }}>
+                                  {theme.colors.map((c, i) => (
+                                    <div key={i} style={{
+                                      flex: 1, height: 14, borderRadius: 3,
+                                      background: c,
+                                      boxShadow: i === 0 && active ? `0 0 6px ${c}` : 'none',
+                                    }} />
+                                  ))}
+                                </div>
+                                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', display: 'block', fontFamily: "'Inter Tight', sans-serif" }}>{theme.name}</span>
+                                <span style={{ fontSize: 9, fontWeight: 300, color: 'var(--text-tertiary)', display: 'block', marginTop: 1 }}>{theme.desc}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Separador */}
+                      <div style={{ height: 1, background: 'var(--border-subtle)', margin: '12px 0' }} />
+
+                      {/* 3 Color Pickers */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>
+                          Tus 3 Colores
+                        </span>
+                        <span style={{ fontSize: 8, fontWeight: 600, padding: '2px 8px', borderRadius: 4, background: `${settings.accentColor}20`, color: settings.accentColor, border: `1px solid ${settings.accentColor}40`, letterSpacing: '0.04em' }}>
+                          PERSONALIZAR
+                        </span>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <div style={{ width: 10, height: 10, borderRadius: '50%', background: settings.accentColor, flexShrink: 0 }} />
+                            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)' }}>1 · Acento</span>
                           </div>
-                          <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', display: 'block', fontFamily: "'Inter Tight', sans-serif" }}>{theme.name}</span>
-                          <span style={{ fontSize: 10, fontWeight: 300, color: 'var(--text-tertiary)', display: 'block', marginTop: 2 }}>{theme.desc}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
+                          <input type="color" value={settings.accentColor}
+                            onChange={e => updateSettings({ accentColor: e.target.value, selectedThemePreset: null })}
+                            style={{ width: '100%', height: 40, borderRadius: 8, border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }} />
+                          <span style={{ fontSize: 8, color: 'var(--text-muted)', lineHeight: 1.3 }}>
+                            Botones, navegación, acentos principales
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <div style={{ width: 10, height: 10, borderRadius: '50%', background: settings.secondaryColor || '#3B82F6', flexShrink: 0 }} />
+                            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)' }}>2 · Efectos</span>
+                          </div>
+                          <input type="color" value={settings.secondaryColor || '#3B82F6'}
+                            onChange={e => updateSettings({ secondaryColor: e.target.value, selectedThemePreset: null })}
+                            style={{ width: '100%', height: 40, borderRadius: 8, border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }} />
+                          <span style={{ fontSize: 8, color: 'var(--text-muted)', lineHeight: 1.3 }}>
+                            Efectos visuales, detalles secundarios
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <div style={{ width: 10, height: 10, borderRadius: '50%', background: settings.surfaceColor || '#1a1a22', flexShrink: 0 }} />
+                            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)' }}>3 · Fondo</span>
+                          </div>
+                          <input type="color" value={settings.surfaceColor || '#1a1a22'}
+                            onChange={e => updateSettings({ surfaceColor: e.target.value, selectedThemePreset: null })}
+                            style={{ width: '100%', height: 40, borderRadius: 8, border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }} />
+                          <span style={{ fontSize: 8, color: 'var(--text-muted)', lineHeight: 1.3 }}>
+                            Fondo de toda la interfaz
+                          </span>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 {/* Tipografía */}
@@ -781,26 +933,289 @@ export default function Ajustes() {
                   </div>
                 </div>
 
-                {/* Color Acento */}
+                {/* Barra de Reproducción Personalizable */}
                 <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
-                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16, display: 'block' }}>Color de Acento Principal</span>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14, justifyItems: 'center' }}>
-                    {ACCENT_COLORS.map(color => (
-                      <button key={color} onClick={() => {
-                        setSelectedTheme(null);
-                        updateSettings({ accentColor: color });
-                        document.documentElement.style.setProperty('--theme-secondary', color);
-                        document.documentElement.style.setProperty('--theme-tertiary', color);
-                      }} className="hover-lift" style={{
-                        width: 56, height: 56, borderRadius: '50%', background: color, border: settings.accentColor === color ? '3px solid #fff' : '2px solid transparent',
-                        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        boxShadow: settings.accentColor === color ? `0 0 20px ${color}` : '0 2px 8px rgba(0,0,0,0.3)',
-                        transition: 'all 200ms'
-                      }}>
-                        {settings.accentColor === color && <Check size={22} color="#fff" strokeWidth={3} />}
-                      </button>
-                    ))}
-                  </div>
+                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16, display: 'block' }}>
+                    Barra de Reproducción
+                  </span>
+
+                  <Toggle
+                    checked={settings.playerBarEnabled ?? false}
+                    onChange={v => updateSettings({ playerBarEnabled: v })}
+                    label="Diseño Personalizado de Barra"
+                    desc="Personaje, colores, bordes, fondos y más"
+                  />
+
+                  {settings.playerBarEnabled && (
+                    <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 28 }}>
+                      {/* ===== SECCION 1: PERSONAJE ===== */}
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                          <div style={{ width: 3, height: 18, borderRadius: 2, background: 'var(--accent)' }} />
+                          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+                            Personaje
+                          </span>
+                          <span style={{ fontSize: 10, color: 'var(--text-tertiary)', fontWeight: 400 }}>
+                            — el que viaja sobre la barra
+                          </span>
+                        </div>
+
+                        {/* Ambos modos visibles siempre: GIF URL + Dibujo */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                          {/* GIF / Imagen */}
+                          <div>
+                            <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', display: 'block', marginBottom: 4, letterSpacing: '0.03em' }}>
+                              URL de la imagen / GIF
+                            </label>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 96px', gap: 10 }}>
+                              <input type="text" value={settings.playerBarCharacterUrl || ''}
+                                onChange={e => updateSettings({ playerBarCharacterUrl: e.target.value })}
+                                placeholder="https://ejemplo.com/mi-personaje.gif"
+                                style={{ width: '100%', height: 36, borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 12px', fontSize: 12, fontFamily: 'monospace', outline: 'none' }} />
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-deep)', borderRadius: 8, border: '1px solid var(--border-default)', height: 36 }}>
+                                {settings.playerBarCharacterUrl ? (
+                                  <img src={settings.playerBarCharacterUrl} alt=""
+                                    style={{ maxWidth: 32, maxHeight: 32, objectFit: 'contain', borderRadius: 4 }} />
+                                ) : (
+                                  <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>Vacio</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          {/* Dibujo */}
+                          <div>
+                            <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', display: 'block', marginBottom: 4, letterSpacing: '0.03em' }}>
+                              Dibujo personalizado — {((settings.playerBarCharacterDraw || '').split('|').filter(Boolean).length) || 0} frame(s)
+                            </label>
+                            <button onClick={() => setShowDrawModal(true)}
+                              style={{
+                                width: '100%', padding: '10px', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                                background: 'var(--accent)', border: 'none', color: '#fff',
+                              }}>
+                              Abrir ventana de dibujo
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Selector: cual se muestra en la barra */}
+                        <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+                          {(['url', 'draw'] as const).map(src => (
+                            <button key={src} onClick={() => updateSettings({
+                              playerBarCharacterSource: src,
+                            })}
+                              style={{
+                                flex: 1, padding: '8px 10px', borderRadius: 6, fontSize: 10, fontWeight: 500, cursor: 'pointer',
+                                background: (settings.playerBarCharacterSource || 'url') === src ? 'var(--accent)' : 'var(--bg-deep)',
+                                border: '1px solid var(--border-default)',
+                                color: (settings.playerBarCharacterSource || 'url') === src ? '#fff' : 'var(--text-secondary)',
+                                transition: 'all 150ms',
+                              }}>
+                              Mostrar: {src === 'url' ? 'GIF' : 'Dibujo'}
+                            </button>
+                          ))}
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 12 }}>
+                          <SliderRow label="Tamano" value={settings.playerBarCharacterSize ?? 40} min={16} max={120} step={2} unit="px"
+                            onChange={v => updateSettings({ playerBarCharacterSize: v })} accent="var(--accent)" />
+                          <SliderRow label="Sombra" value={settings.playerBarCharacterShadow ?? 6} min={0} max={30} step={1} unit="px"
+                            onChange={v => updateSettings({ playerBarCharacterShadow: v })} accent="var(--accent)" />
+                          <SliderRow label="Offset Vertical" value={settings.playerBarCharacterOffsetY ?? 0} min={-30} max={30} step={2} unit="px"
+                            onChange={v => updateSettings({ playerBarCharacterOffsetY: v })} accent="var(--accent)" />
+                        </div>
+                      </div>
+
+                      {/* ===== SECCION 2: BARRA (TRACK FILL) ===== */}
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                          <div style={{ width: 3, height: 18, borderRadius: 2, background: 'var(--accent)' }} />
+                          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+                            Barra
+                          </span>
+                          <span style={{ fontSize: 10, color: 'var(--text-tertiary)', fontWeight: 400 }}>
+                            — relleno del progreso
+                          </span>
+                        </div>
+
+                        {/* Ambos modos visibles siempre: GIF URL + Dibujo */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                          {/* GIF / Imagen */}
+                          <div>
+                            <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', display: 'block', marginBottom: 4, letterSpacing: '0.03em' }}>
+                              URL de la imagen / GIF
+                            </label>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 96px', gap: 10 }}>
+                              <input type="text" value={settings.playerBarTrackUrl || ''}
+                                onChange={e => updateSettings({ playerBarTrackUrl: e.target.value })}
+                                placeholder="https://ejemplo.com/mi-bar.gif"
+                                style={{ width: '100%', height: 36, borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 12px', fontSize: 12, fontFamily: 'monospace', outline: 'none' }} />
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-deep)', borderRadius: 8, border: '1px solid var(--border-default)', height: 36 }}>
+                                {settings.playerBarTrackUrl ? (
+                                  <img src={settings.playerBarTrackUrl} alt=""
+                                    style={{ maxWidth: 32, maxHeight: 32, objectFit: 'contain', borderRadius: 4 }} />
+                                ) : (
+                                  <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>Vacio</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          {/* Dibujo */}
+                          <div>
+                            <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', display: 'block', marginBottom: 4, letterSpacing: '0.03em' }}>
+                              Dibujo personalizado — {((settings.playerBarTrackDraw || '').split('|').filter(Boolean).length) || 0} frame(s)
+                            </label>
+                            <button onClick={() => setShowBarDrawModal(true)}
+                              style={{
+                                width: '100%', padding: '10px', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                                background: 'var(--accent)', border: 'none', color: '#fff',
+                              }}>
+                              Abrir ventana de dibujo
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Selector: cual se muestra en la barra */}
+                        <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+                          {(['url', 'draw'] as const).map(src => (
+                            <button key={src} onClick={() => updateSettings({
+                              playerBarTrackSource: src,
+                            })}
+                              style={{
+                                flex: 1, padding: '8px 10px', borderRadius: 6, fontSize: 10, fontWeight: 500, cursor: 'pointer',
+                                background: (settings.playerBarTrackSource || 'url') === src ? 'var(--accent)' : 'var(--bg-deep)',
+                                border: '1px solid var(--border-default)',
+                                color: (settings.playerBarTrackSource || 'url') === src ? '#fff' : 'var(--text-secondary)',
+                                transition: 'all 150ms',
+                              }}>
+                              Mostrar: {src === 'url' ? 'GIF' : 'Dibujo'}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Color picker for track fill */}
+                        <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.03em' }}>
+                            Color de relleno
+                          </label>
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                            <div style={{ position: 'relative', width: 40, height: 40, borderRadius: 10, overflow: 'hidden', border: '2px solid var(--border-soft)', flexShrink: 0 }}>
+                              <input type="color" value={settings.playerBarTrackColor || '#E11D48'}
+                                onChange={e => updateSettings({ playerBarTrackColor: e.target.value })}
+                                style={{ position: 'absolute', inset: '-4px', width: 'calc(100% + 8px)', height: 'calc(100% + 8px)', cursor: 'pointer', border: 'none', padding: 0 }} />
+                            </div>
+                            <input type="text" value={settings.playerBarTrackColor || '#E11D48'}
+                              onChange={e => updateSettings({ playerBarTrackColor: e.target.value })}
+                              style={{ flex: 1, height: 36, borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 12px', fontSize: 12, fontFamily: 'monospace', outline: 'none' }} />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* ===== SECCION 3: ESTADO ===== */}
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                          <div style={{ width: 3, height: 18, borderRadius: 2, background: 'var(--accent)' }} />
+                          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+                            Estado
+                          </span>
+                          <span style={{ fontSize: 10, color: 'var(--text-tertiary)', fontWeight: 400 }}>
+                            — qué se muestra en cada parte
+                          </span>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '12px 16px', borderRadius: 10, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)' }}>
+                          <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-primary)' }}>
+                            Personaje: {settings.playerBarCharacterSource === 'url' ? 'Modo GIF' : 'Modo Dibujo'}
+                          </div>
+                          <div style={{ fontSize: 9, color: 'var(--text-tertiary)' }}>
+                            Barra: {settings.playerBarTrackSource === 'url' ? 'Modo GIF' : 'Modo Dibujo'}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* ===== SECCION 3: VISTA PREVIA ===== */}
+                      <div style={{ padding: '20px', borderRadius: 12, background: 'var(--bg-deep)', border: '1px solid var(--border-default)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                          <div style={{ width: 3, height: 18, borderRadius: 2, background: 'var(--accent)' }} />
+                          <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+                            Vista Previa
+                          </span>
+                          <span style={{ fontSize: 10, color: 'var(--text-tertiary)', fontWeight: 400 }}>
+                            — se actualiza al instante
+                          </span>
+                        </div>
+
+                        <div style={{ position: 'relative', height: 64, display: 'flex', alignItems: 'center', padding: '0 4px' }}>
+                            <div style={{
+                              flex: 1, height: 3, borderRadius: 2,
+                              background: 'rgba(255,255,255,0.06)',
+                              position: 'relative', overflow: 'visible',
+                            }}>
+                              <div style={{
+                                width: '45%', height: '100%',
+                                borderRadius: 2,
+                                background: settings.playerBarTrackColor || 'var(--accent)',
+                                backgroundImage: (() => {
+                                  const src = settings.playerBarTrackSource || 'url';
+                                  if (src === 'url') return settings.playerBarTrackUrl || undefined;
+                                  const frames = (settings.playerBarTrackDraw || '').split('|').filter(Boolean);
+                                  return frames.length > 0 ? `url(${frames[0]})` : undefined;
+                                })(),
+                                backgroundSize: 'cover',
+                                backgroundPosition: 'center',
+                                backgroundRepeat: 'no-repeat',
+                              }} />
+                            </div>
+
+                            <PreviewCharacter
+                              source={settings.playerBarCharacterSource || 'url'}
+                              drawData={settings.playerBarCharacterDraw || ''}
+                              gifUrl={settings.playerBarCharacterUrl || ''}
+                              size={settings.playerBarCharacterSize ?? 40}
+                              offsetY={settings.playerBarCharacterOffsetY ?? 0}
+                              shadow={settings.playerBarCharacterShadow ?? 6}
+                              speeds={settings.playerBarFrameSpeeds || ''}
+                            />
+                        </div>
+
+                        <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 8, background: 'var(--bg-base)', border: '1px dashed var(--border-default)' }}>
+                          <div style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 8 }}>Limites visuales</div>
+                          <div style={{ display: 'flex', gap: 16, fontSize: 10, color: 'var(--text-tertiary)', flexWrap: 'wrap' }}>
+                            <span>Personaje: {settings.playerBarCharacterSize ?? 40}x{settings.playerBarCharacterSize ?? 40}px</span>
+                            <span>Sombra: {settings.playerBarCharacterShadow ?? 6}px</span>
+                            <span>Offset Y: {settings.playerBarCharacterOffsetY ?? 0}px</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Drawing Modal for Character */}
+                  {showDrawModal && (
+                    <CharacterDrawModal
+                      currentDraw={settings.playerBarCharacterDraw || ''}
+                      currentSpeeds={settings.playerBarFrameSpeeds || ''}
+                      characterSize={settings.playerBarCharacterSize ?? 40}
+                      onSave={(dataUrl, speedsStr) => {
+                        updateSettings({ playerBarCharacterDraw: dataUrl, playerBarFrameSpeeds: speedsStr });
+                        setShowDrawModal(false);
+                      }}
+                      onClose={() => setShowDrawModal(false)}
+                    />
+                  )}
+
+                  {/* Drawing Modal for Bar Track */}
+                  {showBarDrawModal && (
+                    <CharacterDrawModal
+                      currentDraw={settings.playerBarTrackDraw || ''}
+                      currentSpeeds={settings.playerBarTrackFrameSpeeds || ''}
+                      characterSize={48}
+                      onSave={(dataUrl, speedsStr) => {
+                        updateSettings({ playerBarTrackDraw: dataUrl, playerBarTrackFrameSpeeds: speedsStr });
+                        setShowBarDrawModal(false);
+                      }}
+                      onClose={() => setShowBarDrawModal(false)}
+                    />
+                  )}
                 </div>
               </section>
             )}
@@ -828,23 +1243,28 @@ export default function Ajustes() {
 
                 {/* Timer Colors */}
                 <div className="bento-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 12, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
-                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Colores de Temporizadores</span>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-muted)' }}>Enfoque</span>
-                      <input type="color" value={settings.timerFocusColor || '#E11D48'} onChange={e => updateSettings({ timerFocusColor: e.target.value })}
-                        style={{ width: '100%', height: 36, borderRadius: 8, border: 'none', cursor: 'pointer', background: 'transparent' }} />
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-muted)' }}>Descanso</span>
-                      <input type="color" value={settings.timerBreakColor || '#10B981'} onChange={e => updateSettings({ timerBreakColor: e.target.value })}
-                        style={{ width: '100%', height: 36, borderRadius: 8, border: 'none', cursor: 'pointer', background: 'transparent' }} />
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-muted)' }}>Cronómetro</span>
-                      <input type="color" value={settings.timerChronoColor || '#3B82F6'} onChange={e => updateSettings({ timerChronoColor: e.target.value })}
-                        style={{ width: '100%', height: 36, borderRadius: 8, border: 'none', cursor: 'pointer', background: 'transparent' }} />
-                    </div>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>Colores de Temporizadores</span>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+                    {[
+                      { key: 'timerFocusColor', label: 'Enfoque', def: '#E11D48' },
+                      { key: 'timerBreakColor', label: 'Descanso', def: '#10B981' },
+                      { key: 'timerLongBreakColor', label: 'Desc. Largo', def: '#F59E0B' },
+                      { key: 'timerChronoColor', label: 'Cronómetro', def: '#3B82F6' },
+                    ].map(c => {
+                      const val = (settings as any)[c.key] || c.def;
+                      return (
+                        <label key={c.key} style={{ display: 'flex', flexDirection: 'column', gap: 6, cursor: 'pointer' }}>
+                          <div style={{ height: 44, borderRadius: 10, background: val, position: 'relative', overflow: 'hidden', border: '1px solid var(--border-soft)', transition: 'all 200ms', boxShadow: `inset 0 0 0 1px rgba(255,255,255,0.06)` }}>
+                            <input type="color" value={val} onChange={e => updateSettings({ [c.key]: e.target.value })}
+                              style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%', height: '100%' }} />
+                            <div style={{ position: 'absolute', bottom: 4, right: 4, width: 18, height: 18, borderRadius: 6, background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(255,255,255,0.1)' }}>
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                            </div>
+                          </div>
+                          <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.02em' }}>{c.label}</span>
+                        </label>
+                      );
+                    })}
                   </div>
                 </div>
               </section>
@@ -865,6 +1285,100 @@ export default function Ajustes() {
                     label="Alertas de Temporizador Pomodoro" desc="Emitir notificación visual y acústica al finalizar ciclos de estudio o descansos programados." />
                   <Toggle checked={settings.soundEffects} onChange={v => updateSettings({ soundEffects: v })}
                     label="Efectos de Sonido Hápticos" desc="Reproducir sutiles retroalimentaciones acústicas al interactuar con botones, pestañas y modales del sistema." />
+                </div>
+              </section>
+            )}
+
+            {/* SISTEMA */}
+            {activeTab === 'sistema' && (
+              <section style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                <div>
+                  <h2 style={{ fontSize: 20, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em', marginBottom: 4 }}>Diagnóstico del Sistema</h2>
+                  <p style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 300, letterSpacing: '0.02em' }}>Información del entorno y rendimiento de OWA Studio</p>
+                </div>
+
+                {/* Platform Info */}
+                <div className="bento-card" style={{ padding: '20px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                  <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Monitor size={14} style={{ color: 'var(--accent)' }} /> Plataforma
+                  </h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {[
+                      { label: 'Sistema operativo', value: sysInfo?.platform || navigator.platform || 'Desconocido' },
+                      { label: 'Arquitectura', value: sysInfo?.arch || navigator.platform.includes('64') ? 'x64' : 'x86' },
+                      { label: 'Entorno', value: isTauri() ? 'Tauri (nativo)' : 'Navegador web' },
+                      { label: 'Versión de la app', value: sysInfo?.appVer || '1.0.0' },
+                      { label: 'User Agent', value: navigator.userAgent.slice(0, 80) + '…' },
+                    ].map((r, i) => (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: i < 4 ? '1px solid var(--border-subtle)' : 'none' }}>
+                        <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)' }}>{r.label}</span>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Share Tech Mono', monospace" }}>{r.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Hardware Stats */}
+                {sysInfo && (
+                  <div className="bento-card" style={{ padding: '20px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                    <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <Activity size={14} style={{ color: 'var(--accent)' }} /> Rendimiento
+                    </h3>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                      {[
+                        { label: 'CPU', val: sysInfo.cpu, unit: '%', color: '#3B82F6' },
+                        { label: 'RAM', val: sysInfo.ram, unit: '%', color: '#F59E0B' },
+                        { label: 'DISCO', val: sysInfo.disk, unit: '%', color: '#8B5CF6' },
+                      ].map(m => (
+                        <div key={m.label} style={{ background: 'var(--bg-deep)', borderRadius: 8, padding: '12px', border: '1px solid var(--border-subtle)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                            <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.04em' }}>{m.label}</span>
+                            <span style={{ fontSize: 14, fontWeight: 700, color: m.color, fontFamily: "'Share Tech Mono', monospace" }}>{m.val}{m.unit}</span>
+                          </div>
+                          <div style={{ height: 4, borderRadius: 2, background: 'var(--bg-base)', overflow: 'hidden' }}>
+                            <div style={{ height: '100%', borderRadius: 2, background: m.color, width: `${Math.min(m.val, 100)}%`, boxShadow: `0 0 6px ${m.color}40` }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Cache & Storage */}
+                <div className="bento-card" style={{ padding: '20px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                  <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Database size={14} style={{ color: 'var(--accent)' }} /> Almacenamiento Local
+                  </h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {(() => {
+                      let totalSize = 0;
+                      const keys = Object.keys(localStorage);
+                      const items: { key: string; size: number }[] = [];
+                      for (const k of keys) {
+                        const sz = new Blob([localStorage.getItem(k) || '']).size;
+                        totalSize += sz;
+                        items.push({ key: k, size: sz });
+                      }
+                      const fmt = (b: number) => b > 1024 * 1024 ? `${(b / 1024 / 1024).toFixed(1)} MB` : b > 1024 ? `${(b / 1024).toFixed(1)} KB` : `${b} B`;
+                      return (
+                        <>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 8, borderBottom: '1px solid var(--border-subtle)' }}>
+                            <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)' }}>Total localStorage</span>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Share Tech Mono', monospace" }}>{fmt(totalSize)} ({keys.length} entradas)</span>
+                          </div>
+                          {items.sort((a, b) => b.size - a.size).slice(0, 6).map(it => (
+                            <div key={it.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 0' }}>
+                              <span style={{ fontSize: 10, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{it.key}</span>
+                              <span style={{ fontSize: 10, fontFamily: "'Share Tech Mono', monospace", color: 'var(--text-muted)', flexShrink: 0, marginLeft: 8 }}>{fmt(it.size)}</span>
+                            </div>
+                          ))}
+                          {items.length > 6 && (
+                            <span style={{ fontSize: 9, color: 'var(--text-muted)', textAlign: 'center' }}>… y {items.length - 6} entradas más</span>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
                 </div>
               </section>
             )}
@@ -964,6 +1478,494 @@ export default function Ajustes() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function PreviewCharacter({ source, drawData, gifUrl, size, offsetY, shadow, speeds: speedsStr }: {
+  source: string; drawData: string; gifUrl: string;
+  size: number; offsetY: number; shadow: number; speeds: string;
+}) {
+  const frames = useMemo(() => drawData.split('|').filter(Boolean), [drawData]);
+  const speedsArr = useMemo(() => speedsStr.split('|').map(Number).filter(n => n > 0), [speedsStr]);
+  const [frameIdx, setFrameIdx] = useState(0);
+
+  useEffect(() => {
+    if (source !== 'draw' || frames.length <= 1) return;
+    const delay = speedsArr[frameIdx] || 1000;
+    const timer = setTimeout(() => {
+      setFrameIdx((frameIdx + 1) % frames.length);
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [source, frames, speedsArr, frameIdx]);
+
+  // Reset index when data changes
+  useEffect(() => { setFrameIdx(0); }, [drawData, gifUrl, source]);
+
+  if (source === 'draw' && frames.length > 0 && frames[0]) {
+    return (
+      <div style={{
+        position: 'absolute', left: '45%', bottom: '50%', zIndex: 5,
+        pointerEvents: 'none',
+        transform: `translate(-50%, ${offsetY}px)`,
+      }}>
+        <div style={{
+          width: size, height: size, borderRadius: 8, overflow: 'hidden',
+          boxShadow: shadow > 0 ? `0 ${shadow * 0.3}px ${shadow}px rgba(0,0,0,0.35)` : 'none',
+          background: 'rgba(0,0,0,0.2)',
+        }}>
+          <img src={frames[frameIdx]} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+        </div>
+      </div>
+    );
+  }
+
+  if (source === 'url' && gifUrl) {
+    return (
+      <div style={{
+        position: 'absolute', left: '45%', bottom: '50%', zIndex: 5,
+        pointerEvents: 'none',
+        transform: `translate(-50%, ${offsetY}px)`,
+      }}>
+        <div style={{
+          width: size, height: size, borderRadius: 8, overflow: 'hidden',
+          boxShadow: shadow > 0 ? `0 ${shadow * 0.3}px ${shadow}px rgba(0,0,0,0.35)` : 'none',
+          background: 'rgba(0,0,0,0.2)',
+        }}>
+          <img src={gifUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+}
+
+function CharacterDrawModal({ currentDraw, currentSpeeds, characterSize, onSave, onClose }: {
+  currentDraw: string; currentSpeeds: string; characterSize: number;
+  onSave: (dataUrl: string, speedsStr: string) => void; onClose: () => void;
+}) {
+  const [frames, setFrames] = useState<string[]>(() => currentDraw.split('|').filter(Boolean));
+  const [speeds, setSpeeds] = useState<number[]>(() => {
+    const parsed = currentSpeeds.split('|').map(Number).filter(n => n > 0);
+    const frameCount = currentDraw.split('|').filter(Boolean).length || 1;
+    while (parsed.length < frameCount) parsed.push(1000);
+    return parsed.slice(0, frameCount);
+  });
+  const [activeFrame, setActiveFrame] = useState(0);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [drawColor, setDrawColor] = useState('#E11D48');
+  const [brushSize, setBrushSize] = useState(6);
+  const [isEraser, setIsEraser] = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
+  const [hasDrawn, setHasDrawn] = useState(false);
+  const [progressiveReveal, setProgressiveReveal] = useState(0);
+
+  const CANVAS_W = 300;
+  const CANVAS_H = 300;
+
+  const loadFrame = (frameData: string, ctx: CanvasRenderingContext2D) => {
+    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+    if (frameData) {
+      const img = document.createElement('img');
+      img.onload = () => {
+        ctx.drawImage(img, 0, 0, CANVAS_W, CANVAS_H);
+        setHasDrawn(true);
+        drawGuide(ctx);
+      };
+      img.src = frameData;
+    } else {
+      setHasDrawn(false);
+      drawGuide(ctx);
+    }
+  };
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctxRef.current = ctx;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    loadFrame(frames[activeFrame] || '', ctx);
+  }, [activeFrame]);
+
+  useEffect(() => {
+    if (!hasDrawn) return;
+    let start: number | null = null;
+    const duration = 400;
+    const animate = (ts: number) => {
+      if (!start) start = ts;
+      const elapsed = ts - start;
+      setProgressiveReveal(Math.min(elapsed / duration, 1));
+      if (elapsed < duration) requestAnimationFrame(animate);
+    };
+    requestAnimationFrame(animate);
+  }, [hasDrawn, activeFrame]);
+
+  const drawGuide = (ctx: CanvasRenderingContext2D) => {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(0, CANVAS_H / 2);
+    ctx.lineTo(CANVAS_W, CANVAS_H / 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.strokeStyle = 'rgba(255,50,50,0.15)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    const limitTop = CANVAS_H / 2 - characterSize / 2 - 10;
+    ctx.moveTo(0, limitTop);
+    ctx.lineTo(CANVAS_W, limitTop);
+    ctx.stroke();
+
+    const limitBot = CANVAS_H / 2 + characterSize / 2 + 10;
+    ctx.beginPath();
+    ctx.moveTo(0, limitBot);
+    ctx.lineTo(CANVAS_W, limitBot);
+    ctx.stroke();
+
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    ctx.font = '9px sans-serif';
+    ctx.fillText(`Limite superior (${characterSize}px)`, 8, limitTop - 4);
+    ctx.fillText(`Centro del riel de progreso`, 8, CANVAS_H / 2 - 4);
+    ctx.fillText(`Limite inferior`, 8, limitBot + 12);
+    ctx.restore();
+  };
+
+  const getPointerPos = (e: React.MouseEvent | React.TouchEvent) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = CANVAS_W / rect.width;
+    const scaleY = CANVAS_H / rect.height;
+    if ('touches' in e) {
+      return { x: (e.touches[0].clientX - rect.left) * scaleX, y: (e.touches[0].clientY - rect.top) * scaleY };
+    }
+    return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
+  };
+
+  const startDraw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    const ctx = ctxRef.current;
+    if (!ctx) return;
+    setIsDrawing(true);
+    setHasDrawn(true);
+    const pos = getPointerPos(e);
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
+  };
+
+  const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    if (!isDrawing || !ctxRef.current) return;
+    const pos = getPointerPos(e);
+    ctxRef.current.strokeStyle = isEraser ? '#000' : drawColor;
+    ctxRef.current.lineWidth = isEraser ? brushSize * 3 : brushSize;
+    ctxRef.current.globalCompositeOperation = isEraser ? 'destination-out' : 'source-over';
+    ctxRef.current.lineTo(pos.x, pos.y);
+    ctxRef.current.stroke();
+    ctxRef.current.globalCompositeOperation = 'source-over';
+  };
+
+  const stopDraw = () => {
+    setIsDrawing(false);
+    if (ctxRef.current) ctxRef.current.beginPath();
+  };
+
+  const clearFrame = () => {
+    const ctx = ctxRef.current;
+    if (!ctx) return;
+    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+    setHasDrawn(false);
+    drawGuide(ctx);
+  };
+
+  const getCurrentFrameData = (): string => {
+    const canvas = canvasRef.current;
+    if (!canvas) return '';
+    return canvas.toDataURL('image/png');
+  };
+
+  const saveCurrentFrame = () => {
+    const data = getCurrentFrameData();
+    if (!data) return;
+    const updated = [...frames];
+    updated[activeFrame] = data;
+    setFrames(updated);
+    setHasDrawn(false);
+  };
+
+  const updateSpeed = (idx: number, val: number) => {
+    const updated = [...speeds];
+    updated[idx] = Math.max(100, Math.min(5000, val));
+    setSpeeds(updated);
+  };
+
+  const addFrame = () => {
+    saveCurrentFrame();
+    setFrames([...frames, '']);
+    setSpeeds([...speeds, 1000]);
+    setActiveFrame(frames.length);
+  };
+
+  const removeFrame = (idx: number) => {
+    if (frames.length <= 1) return;
+    const updated = frames.filter((_, i) => i !== idx);
+    setFrames(updated);
+    setSpeeds(speeds.filter((_, i) => i !== idx));
+    if (activeFrame >= updated.length) setActiveFrame(updated.length - 1);
+  };
+
+  const saveAll = () => {
+    saveCurrentFrame();
+    const validFrames = frames.filter(f => f);
+    const validSpeeds = speeds.slice(0, validFrames.length);
+    onSave(validFrames.join('|'), validSpeeds.join('|'));
+  };
+
+  const previewUrl = frames[activeFrame] || '';
+
+  const frameCount = frames.filter(f => f).length;
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(12px)' }} onClick={onClose}>
+      <div style={{ width: 680, maxHeight: '90vh', overflowY: 'auto', padding: 28, borderRadius: 16, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }} onClick={e => e.stopPropagation()}>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>Dibujar personaje</span>
+          <button onClick={onClose} className="btn-ghost" style={{ padding: 6, borderRadius: '50%' }}><X size={18} /></button>
+        </div>
+
+        {/* Canvas */}
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
+          <canvas ref={canvasRef} width={CANVAS_W} height={CANVAS_H}
+            onMouseDown={startDraw} onMouseMove={draw} onMouseUp={stopDraw} onMouseLeave={stopDraw}
+            onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={stopDraw}
+            style={{
+              width: 300, height: 300, borderRadius: 12, background: '#000',
+              cursor: isEraser ? 'cell' : 'crosshair',
+              border: '2px solid var(--border-default)',
+              touchAction: 'none',
+              opacity: progressiveReveal || 1,
+              transition: 'opacity 0.3s',
+            }} />
+        </div>
+
+        {/* Tools */}
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 16 }}>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>Color:</span>
+            <input type="color" value={drawColor} onChange={e => { setDrawColor(e.target.value); setIsEraser(false); }}
+              style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid var(--border-default)', background: 'transparent', padding: 1, cursor: 'pointer' }} />
+          </div>
+
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>Grosor:</span>
+            <input type="range" min={2} max={20} step={1} value={brushSize} onChange={e => setBrushSize(parseInt(e.target.value))}
+              style={{ width: 60, accentColor: 'var(--accent)' }} />
+            <span style={{ fontSize: 9, color: 'var(--text-muted)', minWidth: 16 }}>{brushSize}</span>
+          </div>
+
+          <button onClick={() => setIsEraser(!isEraser)}
+            style={{
+              padding: '4px 10px', borderRadius: 6, fontSize: 10, fontWeight: 500, cursor: 'pointer',
+              background: isEraser ? 'var(--accent)' : 'var(--bg-deep)',
+              border: '1px solid var(--border-default)',
+              color: isEraser ? '#fff' : 'var(--text-secondary)',
+            }}>
+            {isEraser ? 'Borrando' : 'Dibujar'}
+          </button>
+
+          <button onClick={clearFrame}
+            style={{
+              padding: '4px 10px', borderRadius: 6, fontSize: 10, fontWeight: 500, cursor: 'pointer',
+              background: 'var(--bg-deep)', border: '1px solid var(--border-default)',
+              color: 'var(--text-muted)',
+            }}>
+            Limpiar
+          </button>
+
+          <button onClick={saveCurrentFrame}
+            style={{
+              padding: '4px 10px', borderRadius: 6, fontSize: 10, fontWeight: 500, cursor: 'pointer',
+              background: hasDrawn ? 'var(--accent)' : 'var(--bg-deep)',
+              border: '1px solid var(--border-default)',
+              color: hasDrawn ? '#fff' : 'var(--text-muted)',
+            }}>
+            Guardar frame
+          </button>
+        </div>
+
+        {/* Frames / Layers */}
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.03em' }}>Fotogramas (se rotan en bucle)</span>
+            <button onClick={addFrame}
+              style={{
+                padding: '3px 10px', borderRadius: 6, fontSize: 10, fontWeight: 600, cursor: 'pointer',
+                background: 'var(--accent)', border: 'none', color: '#fff',
+              }}>
+              + Agregar frame
+            </button>
+          </div>
+
+          {frames.map((f, idx) => (
+            <div key={idx} style={{
+              display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, padding: 8, borderRadius: 8,
+              background: activeFrame === idx ? 'var(--bg-deep)' : 'transparent',
+              border: activeFrame === idx ? '1px solid var(--border-default)' : '1px solid transparent',
+            }}>
+              {/* Thumbnail */}
+              <div onClick={() => { saveCurrentFrame(); setActiveFrame(idx); }}
+                style={{
+                  width: 48, height: 48, borderRadius: 6, overflow: 'hidden', cursor: 'pointer',
+                  border: '1px solid var(--border-default)', background: '#000', flexShrink: 0,
+                }}>
+                {f ? (
+                  <img src={f} alt={`Frame ${idx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7, color: 'var(--text-muted)' }}>Vacio</div>
+                )}
+              </div>
+
+              {/* Frame number */}
+              <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-tertiary)', minWidth: 20 }}>#{idx + 1}</span>
+
+              {/* Speed slider */}
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 8, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Vel:</span>
+                <input type="range" min={100} max={3000} step={100} value={speeds[idx] || 1000}
+                  onChange={e => updateSpeed(idx, parseInt(e.target.value))}
+                  style={{ flex: 1, height: 3, accentColor: 'var(--accent)', cursor: 'pointer' }} />
+                <span style={{ fontSize: 9, color: 'var(--text-secondary)', minWidth: 40, textAlign: 'right', fontFamily: 'monospace' }}>
+                  {(speeds[idx] || 1000)}ms
+                </span>
+              </div>
+
+              {/* Delete */}
+              {frames.length > 1 && (
+                <button onClick={(e) => { e.stopPropagation(); removeFrame(idx); }}
+                  style={{ width: 20, height: 20, borderRadius: '50%', background: 'rgba(255,50,50,0.2)', border: 'none', color: 'var(--error)', fontSize: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  X
+                </button>
+              )}
+            </div>
+          ))}
+          <div style={{ fontSize: 9, color: 'var(--text-tertiary)', marginTop: 8 }}>
+            {frameCount > 1
+              ? `Ciclo: ${speeds.slice(0, frameCount).map((s, i) => `F${i + 1} (${s}ms)`).join(' → ')} → vuelve al inicio`
+              : 'Un solo frame (sin ciclo)'}
+          </div>
+        </div>
+
+        {/* Preview within bar */}
+        <div style={{ padding: '14px', borderRadius: 10, background: 'var(--bg-deep)', border: '1px solid var(--border-default)', marginBottom: 16 }}>
+          <div style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 10 }}>Preview en la barra</div>
+          <div style={{ position: 'relative', height: 48, display: 'flex', alignItems: 'center', padding: '0 4px' }}>
+            <div style={{ flex: 1, height: 3, borderRadius: 2, background: 'rgba(255,255,255,0.06)', position: 'relative' }}>
+              <div style={{ width: '45%', height: '100%', borderRadius: 2, background: 'var(--accent)' }} />
+            </div>
+            {previewUrl && (
+              <div style={{ position: 'absolute', left: '45%', bottom: '50%', transform: 'translate(-50%, 0px)' }}>
+                <div style={{ width: Math.min(characterSize, 40), height: Math.min(characterSize, 40), borderRadius: 8, overflow: 'hidden' }}>
+                  <img src={previewUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+          <button onClick={onClose} style={{ padding: '10px 20px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'var(--bg-deep)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)' }}>
+            Cancelar
+          </button>
+          <button onClick={saveAll} style={{ padding: '10px 24px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'var(--accent)', border: 'none', color: '#fff' }}>
+            Guardar y cerrar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SliderRow({ label, value, min, max, step, unit, onChange, accent, displayMap }: {
+  label: string; value: number; min: number; max: number; step: number; unit: string;
+  onChange: (v: number) => void; accent: string; displayMap?: Record<number, string>;
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+        <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.03em' }}>{label}</span>
+        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>
+          {displayMap ? displayMap[value] ?? `${value}${unit}` : `${value}${unit}`}
+        </span>
+      </div>
+      <input type="range" min={min} max={max} step={step} value={value} onChange={e => onChange(Number(e.target.value))}
+        style={{
+          width: '100%', height: 4, borderRadius: 2, outline: 'none', cursor: 'pointer',
+          background: `linear-gradient(90deg, ${accent}60, ${accent} ${((value - min) / (max - min || 1)) * 100}%, var(--bg-deep) ${((value - min) / (max - min || 1)) * 100}%)`,
+          WebkitAppearance: 'none', appearance: 'none', accentColor: accent,
+        }}
+        className="slider-row" />
+    </div>
+  );
+}
+
+function ColorRow({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    if (isOpen) document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [isOpen]);
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'space-between' }}>
+      <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.03em' }}>{label}</span>
+      <div ref={pickerRef} style={{ position: 'relative' }}>
+        <div onClick={() => setIsOpen(!isOpen)}
+          style={{
+            width: 32, height: 24, borderRadius: 6, cursor: 'pointer', border: '2px solid var(--border-default)',
+            background: value || 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 8, color: 'var(--text-muted)',
+          }}>
+          {!value && <span>—</span>}
+        </div>
+        {isOpen && (
+          <div style={{ position: 'absolute', top: 30, right: 0, zIndex: 50, background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 10, padding: 10, boxShadow: '0 8px 30px rgba(0,0,0,0.3)' }}>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap', width: 168 }}>
+              {['#E11D48', '#F43F5E', '#FB7185', '#F97316', '#F59E0B', '#FBBF24', '#10B981', '#34D399', '#06B6D4', '#3B82F6', '#6366F1', '#8B5CF6', '#A855F7', '#D946EF', '#EC4899', '#ffffff', '#94A3B8', '#64748B'].map(c => (
+                <div key={c} onClick={() => { onChange(c); setIsOpen(false); }}
+                  style={{
+                    width: 22, height: 22, borderRadius: 6, cursor: 'pointer', background: c,
+                    border: value === c ? '2px solid var(--accent)' : '2px solid var(--border-default)',
+                    boxShadow: c === '#ffffff' ? 'inset 0 0 0 1px rgba(0,0,0,0.1)' : 'none',
+                  }} />
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <input type="text" value={value} onChange={e => onChange(e.target.value)}
+                placeholder="#hex"
+                style={{ flex: 1, height: 28, borderRadius: 6, border: '1px solid var(--border-default)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 8px', fontSize: 10, fontFamily: 'monospace', outline: 'none' }} />
+              <button onClick={() => { onChange(''); setIsOpen(false); }}
+                style={{ height: 28, padding: '0 8px', borderRadius: 6, border: '1px solid var(--border-default)', background: 'var(--bg-deep)', color: 'var(--text-muted)', fontSize: 9, cursor: 'pointer' }}>
+                Limpiar
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

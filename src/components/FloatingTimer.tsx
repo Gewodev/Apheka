@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
-import { Monitor, MonitorOff } from 'lucide-react';
+import { invoke } from '@tauri-apps/api/core';
+import { Monitor, MonitorOff, Square, Minus, X } from 'lucide-react';
 import { useApp } from '../store/AppContext';
+import { DigitSVG, ColonSVG } from './LEDDigits';
 
 interface TimerSync {
   sessionTime: number;
@@ -13,52 +15,6 @@ interface TimerSync {
   shortBreakTime: number;
 }
 
-const segs: Record<string, boolean[]> = {
-  '0': [true,true,true,true,true,true,false], '1': [false,true,true,false,false,false,false],
-  '2': [true,true,false,true,true,false,true], '3': [true,true,true,true,false,false,true],
-  '4': [false,true,true,false,false,true,true], '5': [true,false,true,true,false,true,true],
-  '6': [true,false,true,true,true,true,true], '7': [true,true,true,false,false,false,false],
-  '8': [true,true,true,true,true,true,true], '9': [true,true,true,true,false,true,true],
-};
-
-const segPolys: [number,number][][] = [
-  [[14,4],[58,4],[50,12],[22,12]],
-  [[68,14],[60,18],[60,50],[68,54]],
-  [[68,66],[60,70],[60,102],[68,106]],
-  [[22,108],[50,108],[58,116],[14,116]],
-  [[4,66],[12,70],[12,102],[4,106]],
-  [[4,14],[12,18],[12,50],[4,54]],
-  [[10,60],[18,56],[54,56],[62,60],[54,64],[18,64]],
-];
-
-function DigitSVG({ d, color, width = 42, height = 68 }: { d: string; color: string; width?: number; height?: number }) {
-  const s = segs[d] || segs['0'];
-  return (
-    <svg width={width} height={height} viewBox="0 0 72 120" style={{ display: 'block' }}>
-      {segPolys.map((poly, i) => (
-        <polygon key={i} points={poly.map(p => p.join(',')).join(' ')}
-          fill={s[i] ? color : 'rgba(255,255,255,0.015)'}
-          style={{
-            transition: 'fill 150ms cubic-bezier(0.4, 0, 0.2, 1)',
-            filter: s[i] ? `drop-shadow(0 0 5px ${color}90) drop-shadow(0 0 12px ${color}50)` : 'none',
-          }}
-        />
-      ))}
-    </svg>
-  );
-}
-
-function ColonSVG({ color, width = 16, height = 68 }: { color: string; width?: number; height?: number }) {
-  return (
-    <svg width={width} height={height} viewBox="0 0 24 120" style={{ display: 'block' }}>
-      <rect x={8} y={38} width={8} height={8} rx={4} ry={4} fill={color}
-        style={{ filter: `drop-shadow(0 0 5px ${color}90) drop-shadow(0 0 12px ${color}50)`, transition: 'fill 150ms ease-out' }} />
-      <rect x={8} y={74} width={8} height={8} rx={4} ry={4} fill={color}
-        style={{ filter: `drop-shadow(0 0 5px ${color}90) drop-shadow(0 0 12px ${color}50)`, transition: 'fill 150ms ease-out' }} />
-    </svg>
-  );
-}
-
 export default function FloatingTimer() {
   const { settings } = useApp();
   const [timer, setTimer] = useState<TimerSync>({
@@ -66,6 +22,7 @@ export default function FloatingTimer() {
     sessionType: 'pomodoro', pomodoroTime: 1500, shortBreakTime: 300,
   });
   const [alwaysOnTop, setAlwaysOnTop] = useState(true);
+  const [showBorder, setShowBorder] = useState(false);
   const lastSyncRef = useRef(Date.now());
   const displayRef = useRef(timer);
   displayRef.current = timer;
@@ -121,6 +78,30 @@ export default function FloatingTimer() {
     } catch { /* ignore */ }
   };
 
+  const toggleBorder = async () => {
+    const next = !showBorder;
+    try {
+      await invoke('toggle_floating_timer_border', { show: next });
+      setShowBorder(next);
+    } catch { /* ignore */ }
+  };
+
+  const closeWindow = async () => {
+    try {
+      await invoke('close_floating_timer');
+    } catch { /* ignore */ }
+  };
+
+  const btnStyle = (active: boolean, customColor?: string) => ({
+    background: active ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.025)',
+    border: 'none',
+    color: active ? (customColor || 'rgba(255,255,255,0.6)') : 'rgba(255,255,255,0.15)',
+    cursor: 'pointer', padding: 4, borderRadius: 4,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    transition: 'all 150ms',
+    lineHeight: 0,
+  } as const);
+
   return (
     <div data-tauri-drag-region style={{
       width: '100vw', height: '100vh',
@@ -130,6 +111,35 @@ export default function FloatingTimer() {
       fontFamily: "'Inter Tight', sans-serif",
       gap: 6, cursor: 'grab',
     }}>
+      {/* Top toolbar — not draggable */}
+      <div style={{
+        position: 'absolute', top: 0, left: 0, right: 0,
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        padding: '4px 6px',
+      }}>
+        <button onClick={toggleBorder}
+          style={btnStyle(showBorder)}
+          title={showBorder ? 'Ocultar bordes' : 'Mostrar bordes'}
+        >
+          {showBorder ? <Minus size={11} /> : <Square size={11} />}
+        </button>
+        <div style={{ display: 'flex', gap: 2 }}>
+          <button onClick={closeWindow}
+            style={btnStyle(false)}
+            title="Cerrar ventana flotante"
+          >
+            <X size={11} />
+          </button>
+          <button onClick={toggleAlwaysOnTop}
+            style={btnStyle(alwaysOnTop, color)}
+            title={alwaysOnTop ? 'Siempre al frente' : 'Ventana normal'}
+          >
+            {alwaysOnTop ? <Monitor size={11} /> : <MonitorOff size={11} />}
+          </button>
+        </div>
+      </div>
+
+      {/* Status indicator */}
       <div data-tauri-drag-region style={{
         display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2,
       }}>
@@ -146,6 +156,8 @@ export default function FloatingTimer() {
           {statusText}
         </span>
       </div>
+
+      {/* LED digits */}
       <div data-tauri-drag-region style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
         {timeStr.split('').map((ch, i) =>
           ch === ':'
@@ -153,19 +165,6 @@ export default function FloatingTimer() {
             : <DigitSVG key={i} d={ch} color={color} />
         )}
       </div>
-      <button onClick={toggleAlwaysOnTop}
-        style={{
-          position: 'absolute', bottom: 4, right: 4,
-          background: 'rgba(255,255,255,0.04)', border: 'none',
-          color: alwaysOnTop ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.12)',
-          cursor: 'pointer', padding: 3, borderRadius: 4,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          transition: 'all 150ms', lineHeight: 0,
-        }}
-        title={alwaysOnTop ? 'Siempre al frente (haz clic para cambiar)' : 'Ventana normal (haz clic para cambiar)'}
-      >
-        {alwaysOnTop ? <Monitor size={10} /> : <MonitorOff size={10} />}
-      </button>
     </div>
   );
 }

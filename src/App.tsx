@@ -76,32 +76,100 @@ function AppContent() {
 
   useEffect(() => {
     const root = document.documentElement;
-    if (settings.theme === 'claro') {
-      root.setAttribute('data-theme', 'claro');
-    } else if (settings.theme === 'oscuro') {
-      root.setAttribute('data-theme', 'oscuro');
-    } else {
-      const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      root.setAttribute('data-theme', isDark ? 'oscuro' : 'claro');
-    }
-    const c = settings.accentColor;
-    root.style.setProperty('--accent', c);
-    root.style.setProperty('--font-primary', settings.fontFamily);
-    // Derive rgba variants from hex color
     const h2r = (hex: string) => {
       const r = parseInt(hex.slice(1, 3), 16);
       const g = parseInt(hex.slice(3, 5), 16);
       const b = parseInt(hex.slice(5, 7), 16);
       return { r, g, b };
     };
-    const { r, g, b } = h2r(c);
-    root.style.setProperty('--accent-soft', `rgba(${r},${g},${b},0.12)`);
-    root.style.setProperty('--accent-glow', `rgba(${r},${g},${b},0.30)`);
-    root.style.setProperty('--accent-dim', `rgba(${r},${g},${b},0.06)`);
-    root.style.setProperty('--led-color', c);
-    root.style.setProperty('--led-glow', `rgba(${r},${g},${b},0.45)`);
-    root.style.setProperty('--led-dim', `rgba(${r},${g},${b},0.08)`);
-    root.style.setProperty('--led-segment-off', `rgba(${r},${g},${b},0.06)`);
+    const clamp = (v: number) => Math.max(0, Math.min(255, Math.round(v)));
+
+    if (settings.useThreeColors) {
+      root.removeAttribute('data-theme');
+      const c1 = settings.accentColor;
+      const c2 = settings.secondaryColor || c1;
+      const c3 = settings.surfaceColor || '#0a0a0c';
+      const b3 = h2r(c3);
+      const lum = (0.2126 * b3.r + 0.7152 * b3.g + 0.0722 * b3.b) / 255;
+      const isDark = lum < 0.5;
+      const white = isDark ? 255 : 0;
+      const dir = isDark ? 1 : -1;
+
+      // Color 1 — accent
+      root.style.setProperty('--accent', c1);
+      root.style.setProperty('--theme-secondary', c2);
+      root.style.setProperty('--theme-tertiary', c3);
+      const a1 = h2r(c1);
+      root.style.setProperty('--accent-soft', `rgba(${a1.r},${a1.g},${a1.b},0.12)`);
+      root.style.setProperty('--accent-glow', `rgba(${a1.r},${a1.g},${a1.b},0.30)`);
+      root.style.setProperty('--accent-dim', `rgba(${a1.r},${a1.g},${a1.b},0.06)`);
+      root.style.setProperty('--led-color', c1);
+      root.style.setProperty('--led-glow', `rgba(${a1.r},${a1.g},${a1.b},0.45)`);
+      root.style.setProperty('--led-dim', `rgba(${a1.r},${a1.g},${a1.b},0.08)`);
+      root.style.setProperty('--led-segment-off', `rgba(${a1.r},${a1.g},${a1.b},0.06)`);
+
+      // Color 3 — background & all surface/border/text variants
+      const lift = (amount: number) =>
+        `rgb(${clamp(b3.r + dir * amount)},${clamp(b3.g + dir * amount)},${clamp(b3.b + dir * amount)})`;
+      root.style.setProperty('--bg-base', c3);
+      root.style.setProperty('--bg-primary', c3);
+      root.style.setProperty('--bg-secondary', lift(4));
+      root.style.setProperty('--bg-surface', lift(8));
+      root.style.setProperty('--bg-elevated', lift(14));
+      root.style.setProperty('--bg-deep', lift(-6));
+      root.style.setProperty('--surface', lift(6));
+      root.style.setProperty('--surface-elevated', lift(16));
+      root.style.setProperty('--surface-hover', lift(20));
+
+      const textBase = isDark ? 255 : 0;
+      root.style.setProperty('--text-primary', `rgba(${textBase},${textBase},${textBase},0.92)`);
+      root.style.setProperty('--text-secondary', `rgba(${textBase},${textBase},${textBase},0.55)`);
+      root.style.setProperty('--text-tertiary', `rgba(${textBase},${textBase},${textBase},0.35)`);
+      root.style.setProperty('--text-muted', `rgba(${textBase},${textBase},${textBase},0.18)`);
+
+      const borderAlpha = isDark ? 0.06 : 0.08;
+      root.style.setProperty('--border-default', `rgba(${textBase},${textBase},${textBase},${borderAlpha})`);
+      root.style.setProperty('--border-subtle', `rgba(${textBase},${textBase},${textBase},${borderAlpha * 0.5})`);
+      root.style.setProperty('--border-strong', `rgba(${textBase},${textBase},${textBase},${borderAlpha * 1.6})`);
+      root.style.setProperty('--border-soft', `rgba(${textBase},${textBase},${textBase},${borderAlpha})`);
+      root.style.setProperty('--border-hover', `rgba(${textBase},${textBase},${textBase},${borderAlpha * 1.3})`);
+
+      root.style.setProperty('--bg-hover', `rgba(${textBase},${textBase},${textBase},0.03)`);
+      root.style.setProperty('--bg-active', `rgba(${textBase},${textBase},${textBase},0.05)`);
+    } else {
+      if (settings.theme === 'claro') {
+        root.setAttribute('data-theme', 'claro');
+      } else if (settings.theme === 'oscuro') {
+        root.setAttribute('data-theme', 'oscuro');
+      } else if (settings.theme === 'vibrante') {
+        root.setAttribute('data-theme', 'vibrante');
+      } else {
+        const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        root.setAttribute('data-theme', isDark ? 'oscuro' : 'claro');
+      }
+      const c = settings.accentColor;
+      root.style.setProperty('--accent', c);
+      const { r, g, b } = h2r(c);
+      root.style.setProperty('--accent-soft', `rgba(${r},${g},${b},0.12)`);
+      root.style.setProperty('--accent-glow', `rgba(${r},${g},${b},0.30)`);
+      root.style.setProperty('--accent-dim', `rgba(${r},${g},${b},0.06)`);
+      root.style.setProperty('--led-color', c);
+      root.style.setProperty('--led-glow', `rgba(${r},${g},${b},0.45)`);
+      root.style.setProperty('--led-dim', `rgba(${r},${g},${b},0.08)`);
+      root.style.setProperty('--led-segment-off', `rgba(${r},${g},${b},0.06)`);
+      
+      root.style.removeProperty('--bg-primary');
+      root.style.removeProperty('--bg-secondary');
+      root.style.removeProperty('--theme-secondary');
+      root.style.removeProperty('--theme-tertiary');
+      root.style.removeProperty('--surface');
+      root.style.removeProperty('--surface-elevated');
+      root.style.removeProperty('--surface-hover');
+      root.style.removeProperty('--border-soft');
+      root.style.removeProperty('--border-hover');
+    }
+    
+    root.style.setProperty('--font-primary', settings.fontFamily);
     
     const applyBg = (url: string) => {
       root.style.setProperty('--app-bg-image', `url("${url}")`);
@@ -122,7 +190,7 @@ function AppContent() {
     root.style.setProperty('--bg-brightness', `${settings.backgroundBrightness ?? 100}%`);
     root.style.setProperty('--bg-blur', `${settings.backgroundBlur ?? 0}px`);
     root.style.setProperty('--bg-overlay', `${(settings.backgroundOverlay ?? 0) / 100}`);
-  }, [settings.theme, settings.accentColor, settings.fontFamily, settings.backgroundImage, settings.uiOpacity, settings.backgroundBrightness, settings.backgroundBlur, settings.backgroundOverlay]);
+  }, [settings.theme, settings.accentColor, settings.fontFamily, settings.backgroundImage, settings.uiOpacity, settings.backgroundBrightness, settings.backgroundBlur, settings.backgroundOverlay, settings.useThreeColors, settings.secondaryColor, settings.surfaceColor]);
 
   const initials = settings.userName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
@@ -269,7 +337,7 @@ function AppContent() {
             }}
           />
         </div>}
-        <GlobalPlayer isCollapsed={isCollapsed} />
+        <GlobalPlayer sidebarCollapsed={isCollapsed} />
       </main>
 
       {importState.active && (

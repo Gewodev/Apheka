@@ -9,6 +9,9 @@ const PRESET_COLORS = [
   '#E11D48', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6',
   '#EC4899', '#06B6D4', '#F97316', '#6366F1', '#14B8A6',
   '#EF4444', '#0EA5E9', '#84CC16', '#D946EF', '#22C55E',
+  '#A855F7', '#D946EF', '#0D9488', '#2563EB', '#DC2626',
+  '#7C3AED', '#0284C7', '#65A30D', '#DB2777', '#0891B2',
+  '#C2410C', '#4F46E5', '#059669', '#BE123C', '#0369A1',
 ];
 
 interface CursosHubProps {
@@ -158,26 +161,34 @@ export default function CursosHub({ onSelectCourse }: CursosHubProps) {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 18 }}>
-        {courses.map(course => (
-          <div key={course.id} className="bento-card" style={{ padding: 0, overflow: 'hidden', cursor: 'pointer', transition: 'all 250ms cubic-bezier(0.16,1,0.3,1)', position: 'relative', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}
-            onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-3px)'}
-            onMouseLeave={e => { e.currentTarget.style.transform = ''; setMenuOpenId(null); }}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 18 }}>
+        {courses.map(course => {
+          const progressPct = course.totalTasks > 0 ? Math.round((course.completedTasks / course.totalTasks) * 100) : 0;
+          return (
+          <div key={course.id} className="bento-card" style={{ padding: 0, overflow: 'hidden', cursor: 'pointer', transition: 'all 350ms cubic-bezier(0.16,1,0.3,1)', position: 'relative', background: 'var(--bg-elevated)' }}
+            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 12px 40px rgba(0,0,0,0.35)'; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; setMenuOpenId(null); }}
           >
-            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: course.color, zIndex: 2 }} />
-            <div style={{ height: 100, position: 'relative', overflow: 'hidden', background: `linear-gradient(135deg, ${course.color}44 0%, ${course.color}11 100%)`, marginLeft: 3, borderRadius: '0 0 0 0' }}
+            {/* Banner */}
+            <div style={{ height: 110, position: 'relative', overflow: 'hidden', background: `linear-gradient(135deg, ${course.color} 0%, ${course.color}88 60%, ${course.color}33 100%)` }}
               onClick={() => onSelectCourse(course.id)}>
               {course.coverUrl ? (
-                <img src={course.coverUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.9 }} />
+                <img src={course.coverUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.7 }} />
               ) : (
                 <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <GraduationCap size={32} style={{ color: 'rgba(255,255,255,0.15)' }} />
+                  <GraduationCap size={36} style={{ color: 'rgba(255,255,255,0.12)' }} />
                 </div>
               )}
+              {/* Overlay gradient */}
+              <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(to top, var(--bg-elevated) 0%, transparent 60%)` }} />
+              {/* Course name on banner */}
+              <div style={{ position: 'absolute', bottom: 10, left: 14, right: 14, zIndex: 2 }}>
+                <h3 style={{ fontSize: 17, fontWeight: 700, color: '#fff', letterSpacing: '-0.01em', fontFamily: "'Inter Tight', sans-serif", textShadow: '0 1px 8px rgba(0,0,0,0.4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{course.name}</h3>
+              </div>
             </div>
 
             {/* Three-dots menu */}
-            <div style={{ position: 'absolute', top: 106, right: 12, zIndex: 10 }}>
+            <div style={{ position: 'absolute', top: 116, right: 12, zIndex: 10 }}>
               <button onClick={e => { e.stopPropagation(); setMenuOpenId(menuOpenId === course.id ? null : course.id); }}
                 style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-tertiary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(8px)', transition: 'all 150ms' }}>
                 <MoreHorizontal size={14} />
@@ -199,49 +210,49 @@ export default function CursosHub({ onSelectCourse }: CursosHubProps) {
               )}
             </div>
 
-            <div style={{ padding: '16px 18px 18px' }}>
-              <div style={{ flex: 1, minWidth: 0 }} onClick={() => onSelectCourse(course.id)}>
-                <h3 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em', fontFamily: "'Inter Tight', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2 }}>{course.name}</h3>
+            {/* Content */}
+            <div style={{ padding: '14px 16px 16px' }} onClick={() => onSelectCourse(course.id)}>
+              {/* Metadata badges */}
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
                 {course.teacher && (
-                  <p style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 8 }}>
+                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-secondary)', background: 'var(--bg-deep)', padding: '3px 8px', borderRadius: 5, display: 'flex', alignItems: 'center', gap: 4, letterSpacing: '0.01em' }}>
                     <User size={9} /> {course.teacher}
-                  </p>
+                  </span>
                 )}
-              </div>
-
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }} onClick={() => onSelectCourse(course.id)}>
                 {course.credits && (
-                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', background: 'var(--bg-deep)', padding: '2px 8px', borderRadius: 4, letterSpacing: '0.02em' }}>
-                    {course.credits} Créditos
+                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-secondary)', background: 'var(--bg-deep)', padding: '3px 8px', borderRadius: 5, letterSpacing: '0.01em' }}>
+                    <span style={{ opacity: 0.5 }}>{course.credits}</span> créditos
                   </span>
                 )}
                 {course.level && (
-                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', background: 'var(--bg-deep)', padding: '2px 8px', borderRadius: 4, letterSpacing: '0.02em' }}>
+                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-secondary)', background: 'var(--bg-deep)', padding: '3px 8px', borderRadius: 5, letterSpacing: '0.01em' }}>
                     {course.level}
                   </span>
                 )}
               </div>
 
+              {course.description && (
+                <p style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.5, marginBottom: 10, fontWeight: 300, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                  {course.description}
+                </p>
+              )}
+
+              {/* Compact progress dot */}
               {course.totalTasks > 0 && (
-                <div style={{ marginTop: 12 }} onClick={() => onSelectCourse(course.id)}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-tertiary)', marginBottom: 4 }}>
-                    <span>{course.completedTasks}/{course.totalTasks} tareas</span>
-                    <span>{Math.round((course.completedTasks / course.totalTasks) * 100)}%</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
+                  <div style={{ flex: 1, height: 3, background: 'var(--bg-deep)', borderRadius: 2, overflow: 'hidden' }}>
+                    <div style={{ width: `${progressPct}%`, height: '100%', background: course.color, borderRadius: 2, transition: 'width 400ms cubic-bezier(0.16,1,0.3,1)' }} />
                   </div>
-                  <div style={{ height: 3, background: 'var(--bg-deep)', borderRadius: 2, overflow: 'hidden' }}>
-                    <div style={{ width: `${(course.completedTasks / course.totalTasks) * 100}%`, height: '100%', background: course.color, borderRadius: 2, transition: 'width 300ms' }} />
-                  </div>
+                  <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-tertiary)', fontFamily: "'JetBrains Mono', monospace" }}>{progressPct}%</span>
                 </div>
               )}
 
-              {course.hoursStudied > 0 && (
-                <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 8, display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => onSelectCourse(course.id)}>
-                  <BookOpen size={9} /> {Math.round(course.hoursStudied * 10) / 10}h estudiadas
-                </div>
-              )}
+              {/* Bottom accent line */}
+              <div style={{ marginTop: course.description || course.totalTasks > 0 ? 12 : 12, height: 1.5, width: '100%', background: `linear-gradient(90deg, ${course.color}44, transparent)`, borderRadius: 1 }} />
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* New Course Modal */}
@@ -264,12 +275,16 @@ export default function CursosHub({ onSelectCourse }: CursosHubProps) {
 
               <div>
                 <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 8 }}>Color</label>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                   {PRESET_COLORS.map(c => (
                     <button key={c} onClick={() => setNewColor(c)}
                       style={{ width: 28, height: 28, borderRadius: '50%', background: c, border: newColor === c ? '2px solid #fff' : '2px solid transparent', cursor: 'pointer', boxShadow: newColor === c ? `0 0 10px ${c}` : 'none', transition: 'all 150ms' }}
                     />
                   ))}
+                  <label style={{ width: 28, height: 28, borderRadius: '50%', background: newColor, border: '2px dashed var(--border-default)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: newColor === PRESET_COLORS[0] ? '#fff' : undefined, transition: 'all 150ms', position: 'relative', overflow: 'hidden' }}>
+                    <input type="color" value={newColor} onChange={e => setNewColor(e.target.value)} style={{ position: 'absolute', opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }} />
+                    <span style={{ fontSize: 14, lineHeight: 1 }}>+</span>
+                  </label>
                 </div>
               </div>
 
@@ -343,12 +358,16 @@ export default function CursosHub({ onSelectCourse }: CursosHubProps) {
 
               <div>
                 <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 8 }}>Color</label>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                   {PRESET_COLORS.map(c => (
                     <button key={c} onClick={() => setEditColor(c)}
                       style={{ width: 28, height: 28, borderRadius: '50%', background: c, border: editColor === c ? '2px solid #fff' : '2px solid transparent', cursor: 'pointer', boxShadow: editColor === c ? `0 0 10px ${c}` : 'none', transition: 'all 150ms' }}
                     />
                   ))}
+                  <label style={{ width: 28, height: 28, borderRadius: '50%', background: editColor, border: '2px dashed var(--border-default)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, transition: 'all 150ms', position: 'relative', overflow: 'hidden' }}>
+                    <input type="color" value={editColor} onChange={e => setEditColor(e.target.value)} style={{ position: 'absolute', opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }} />
+                    <span style={{ fontSize: 14, lineHeight: 1 }}>+</span>
+                  </label>
                 </div>
               </div>
 

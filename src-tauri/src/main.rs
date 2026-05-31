@@ -194,6 +194,8 @@ async fn start_download(
         args.push("--embed-thumbnail");
     }
 
+    args.push(&url);
+
     let mut child = Command::new(&yt_bin)
         .args(&args)
         .stdout(Stdio::piped())
@@ -202,30 +204,65 @@ async fn start_download(
         .map_err(|e| format!("Failed to spawn yt-dlp: {e}"))?;
 
     let stdout = child.stdout.take().unwrap();
+    let stderr = child.stderr.take().unwrap();
     let dl_id = download_id.clone();
     let emit = app_handle.clone();
 
+    // Shared stderr capture (non-fatal lines filtered)
+    let stderr_buf = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+
+    // Read stderr for progress AND errors (yt-dlp writes progress to stderr by default)
+    let stderr_buf_progress = stderr_buf.clone();
+    let dl_id_progress = dl_id.clone();
+    let emit_progress = emit.clone();
+    std::thread::spawn(move || {
+        let reader = std::io::BufReader::new(stderr);
+        for line in reader.lines() {
+            if let Ok(text) = line {
+                let trimmed = text.trim();
+
+                // Parse download progress from stderr
+                if trimmed.starts_with("[download]") {
+                    if !trimmed.contains("Destination:") && !trimmed.contains("has already been downloaded") {
+                        if let Some(pct) = parse_progress(trimmed) {
+                            let _ = emit_progress.emit(
+                                "download:progress",
+                                serde_json::json!({
+                                    "downloadId": dl_id_progress,
+                                    "progress": pct,
+                                    "line": trimmed,
+                                }),
+                            );
+                        }
+                    }
+                }
+
+                // Capture only genuine errors (NOT metadata-replace warnings)
+                let is_metadata_error = trimmed.contains("is not a valid URL")
+                    || trimmed.contains("--replace-in-metadata")
+                    || trimmed.contains("don't self-terminate");
+                if !is_metadata_error && (trimmed.contains("ERROR:") || trimmed.contains("Error:")) {
+                    let mut buf = stderr_buf_progress.lock().unwrap();
+                    buf.push_str(&trimmed);
+                    buf.push('\n');
+                }
+            }
+        }
+    });
+
+    // Also read stdout for destination info (e.g. "[download] Destination: ...")
+    let dl_id_stdout = dl_id.clone();
+    let emit_stdout = emit.clone();
     std::thread::spawn(move || {
         let reader = std::io::BufReader::new(stdout);
         for line in reader.lines() {
             if let Ok(text) = line {
                 let trimmed = text.trim();
-                if trimmed.starts_with("[download]") {
-                    if let Some(pct) = parse_progress(trimmed) {
-                        let _ = emit.emit(
-                            "download:progress",
-                            serde_json::json!({
-                                "downloadId": dl_id,
-                                "progress": pct,
-                                "line": trimmed,
-                            }),
-                        );
-                    }
-                } else if trimmed.contains("Destination:") {
-                    let _ = emit.emit(
+                if trimmed.contains("Destination:") {
+                    let _ = emit_stdout.emit(
                         "download:file",
                         serde_json::json!({
-                            "downloadId": dl_id,
+                            "downloadId": dl_id_stdout,
                             "file": trimmed.replace("[download] Destination: ", "").trim(),
                             "type": "destination",
                         }),
@@ -243,25 +280,30 @@ async fn start_download(
     // Spawn completion watcher
     let dl_id2 = download_id.clone();
     let emit2 = app_handle.clone();
+    let stderr_buf_watcher = stderr_buf.clone();
     std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_secs(1));
         loop {
+            std::thread::sleep(std::time::Duration::from_secs(1));
             let state = emit2.state::<DownloadState>();
             let mut active = state.active.lock().unwrap();
             if let Some(mut child) = active.remove(&dl_id2) {
                 let status = child.wait().ok();
-                let success = status.map(|s| s.success()).unwrap_or(false);
                 let code = status.and_then(|s| s.code());
+                let error_msg = stderr_buf_watcher.lock().unwrap().clone();
+                // Consider success if exit code is 0 OR if no actual ERROR lines in stderr
+                // yt-dlp sometimes exits non-zero for minor warnings but file is fine
+                let success = status.map(|s| s.success()).unwrap_or(false) || error_msg.is_empty();
                 let _ = emit2.emit(
                     "download:complete",
                     serde_json::json!({
                         "downloadId": dl_id2,
                         "success": success,
                         "code": code,
+                        "errorMessage": if error_msg.is_empty() { "" } else { &error_msg },
                     }),
                 );
+                break;
             }
-            break;
         }
     });
 
@@ -310,36 +352,151 @@ fn set_download_path(app_handle: tauri::AppHandle, path: String) -> Result<(), S
     Ok(())
 }
 
+async fn run_powershell_json(app_handle: &tauri::AppHandle, cmd: &str) -> Result<serde_json::Value, String> {
+    let output = app_handle
+        .shell()
+        .command("powershell")
+        .args(["-Command", cmd])
+        .output()
+        .await
+        .map_err(|e| format!("PowerShell failed: {e}"))?;
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if stdout.is_empty() || stdout == "null" || stdout == "{}" {
+        return Err("No output".into());
+    }
+    serde_json::from_str(&stdout).map_err(|e| format!("JSON parse failed: {e}"))
+}
+
+async fn run_powershell_raw(app_handle: &tauri::AppHandle, cmd: &str) -> Result<String, String> {
+    let output = app_handle
+        .shell()
+        .command("powershell")
+        .args(["-Command", cmd])
+        .output()
+        .await
+        .map_err(|e| format!("PowerShell failed: {e}"))?;
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if stdout.is_empty() { Err("No output".into()) } else { Ok(stdout) }
+}
+
 #[tauri::command]
 async fn get_system_stats(app_handle: tauri::AppHandle) -> Result<serde_json::Value, String> {
-    let cpu_output = app_handle
-        .shell()
-        .command("powershell")
-        .args(["-Command", "Get-WmiObject Win32_Processor | Select-Object -ExpandProperty LoadPercentage"])
-        .output()
-        .await
-        .map_err(|e| e.to_string())?;
+    // CPU usage via performance counter (real-time sample)
+    let cpu = run_powershell_json(&app_handle,
+        "Get-CimInstance Win32_Processor | Measure-Object -Property LoadPercentage -Average | Select-Object -ExpandProperty Average"
+    ).await.ok().and_then(|v| v.as_f64()).unwrap_or(0.0);
 
-    let mem_output = app_handle
+    // RAM in bytes (more accurate)
+    let mem = run_powershell_json(&app_handle,
+        "$cs = Get-CimInstance Win32_ComputerSystem; $os = Get-CimInstance Win32_OperatingSystem; @{Total=[math]::Round($cs.TotalPhysicalMemory/1GB,1); Free=[math]::Round(($os.FreePhysicalMemory*1024)/1GB,1); Used=[math]::Round(($cs.TotalPhysicalMemory - $os.FreePhysicalMemory*1024)/1GB,1); Pct=[math]::Round((1 - ($os.FreePhysicalMemory*1024)/$cs.TotalPhysicalMemory)*100,1)} | ConvertTo-Json"
+    ).await.unwrap_or(serde_json::json!({}));
+
+    // Disk: all fixed drives summed
+    let disk = run_powershell_json(&app_handle,
+        "Get-CimInstance Win32_LogicalDisk -Filter \"DriveType=3\" | Select-Object DeviceID, @{N='SizeGB';E={[math]::Round($_.Size/1GB,1)}}, @{N='FreeGB';E={[math]::Round($_.FreeSpace/1GB,1)}} | ConvertTo-Json"
+    ).await.unwrap_or(serde_json::json!([]));
+
+    // Battery
+    let battery = run_powershell_json(&app_handle,
+        "Get-CimInstance Win32_Battery | Select-Object @{N='Pct';E={$_.EstimatedChargeRemaining}} | ConvertTo-Json"
+    ).await.ok();
+
+    // Network: active adapter with real current speed via Get-NetAdapter
+    let net_out = app_handle
         .shell()
         .command("powershell")
-        .args([
-            "-Command",
-            "Get-WmiObject Win32_OperatingSystem | Select-Object @{Name='Total';Expression={$_.TotalVisibleMemorySize}}, @{Name='Free';Expression={$_.FreePhysicalMemory}} | ConvertTo-Json",
+        .args(["-Command",
+            "$a = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object Status -eq 'Up' | Select-Object -First 1 Name, LinkSpeed; if ($a) { $sp = $a.LinkSpeed -replace ' Gbps','000' -replace ' Mbps','' -replace '[^0-9]',''; [PSCustomObject]@{Name=$a.Name;SpeedMbps=[int]$sp} | ConvertTo-Json } else { '{}' }"
         ])
         .output()
-        .await
-        .map_err(|e| e.to_string())?;
+        .await;
+    let net: serde_json::Value = net_out.ok()
+        .and_then(|o| serde_json::from_str(&String::from_utf8_lossy(&o.stdout)).ok())
+        .unwrap_or(serde_json::json!({}));
 
-    let cpu = String::from_utf8_lossy(&cpu_output.stdout)
-        .trim()
-        .parse::<f64>()
-        .unwrap_or(0.0);
-    let mem: serde_json::Value =
-        serde_json::from_str(&String::from_utf8_lossy(&mem_output.stdout))
-            .unwrap_or(serde_json::json!({}));
+    // CPU temperature via performance counter or WMI
+    let cpu_temp_str = run_powershell_raw(&app_handle,
+        "$t = Get-Counter '\\Thermal Zone Information\\*' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty CounterSamples | Select-Object -First 1 -ExpandProperty CookedValue; if ($null -ne $t) { [math]::Round($t, 1) } else { try { $z = Get-CimInstance -Namespace root/wmi -ClassName MSAcpi_ThermalZoneTemperature -ErrorAction SilentlyContinue | Where-Object { $_.InstanceName -match 'CPU' } | Select-Object -First 1 -ExpandProperty CurrentTemperature; if ($null -ne $z) { [math]::Round(($z/10)-273.15, 1) } else { 'null' } } catch { 'null' } }"
+    ).await.unwrap_or_default();
+    let cpu_temp: f64 = cpu_temp_str.trim().parse().unwrap_or(-1.0);
 
-    Ok(serde_json::json!({ "cpu": cpu, "mem": mem }))
+    // CPU model/name
+    let cpu_name = run_powershell_raw(&app_handle,
+        "Get-CimInstance Win32_Processor | Select-Object -ExpandProperty Name"
+    ).await.unwrap_or_default().trim().to_string();
+
+    // GPU temperature via nvidia-smi or performance counter
+    let gpu_temp_str = run_powershell_raw(&app_handle,
+        "$t = & nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader 2>$null; if ($t) { $t.Trim() } else { try { $c = Get-Counter '\\GPU Core Temperature' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty CounterSamples | Select-Object -First 1 -ExpandProperty CookedValue; if ($null -ne $c) { [math]::Round($c, 1) } else { 'null' } } catch { 'null' } }"
+    ).await.unwrap_or_default();
+    let gpu_temp: f64 = gpu_temp_str.trim().parse().unwrap_or(-1.0);
+
+    // GPU name
+    let gpu_name = run_powershell_raw(&app_handle,
+        "Get-CimInstance Win32_VideoController | Select-Object -First 1 -ExpandProperty Name"
+    ).await.unwrap_or_default().trim().to_string();
+
+    // Laptop model
+    let laptop_model = run_powershell_raw(&app_handle,
+        "$cs = Get-CimInstance Win32_ComputerSystem; ($cs.Manufacturer + ' ' + $cs.Model).Trim()"
+    ).await.unwrap_or_default().trim().to_string();
+
+    // OS info
+    let os_info = run_powershell_raw(&app_handle,
+        "$os = Get-CimInstance Win32_OperatingSystem; $os.Caption + ' | Build ' + $os.BuildNumber"
+    ).await.unwrap_or_default().trim().to_string();
+
+    // Parse disk
+    let (disk_total, disk_free) = match &disk {
+        serde_json::Value::Array(arr) => {
+            let total: f64 = arr.iter().filter_map(|d| d.get("SizeGB")?.as_f64()).sum();
+            let free: f64 = arr.iter().filter_map(|d| d.get("FreeGB")?.as_f64()).sum();
+            (total, free)
+        }
+        serde_json::Value::Object(obj) => {
+            (obj.get("SizeGB").and_then(|v| v.as_f64()).unwrap_or(0.0),
+             obj.get("FreeGB").and_then(|v| v.as_f64()).unwrap_or(0.0))
+        }
+        _ => (0.0, 0.0),
+    };
+    let disk_used = disk_total - disk_free;
+    let disk_pct = if disk_total > 0.0 { (disk_used / disk_total * 100.0).round() } else { 0.0 };
+
+    let battery_pct = battery.and_then(|b| {
+        if let serde_json::Value::Object(ref obj) = b {
+            obj.get("Pct").and_then(|v| v.as_f64())
+        } else if let serde_json::Value::Array(ref arr) = b {
+            arr.first().and_then(|v| v.get("Pct")).and_then(|v| v.as_f64())
+        } else { None }
+    }).unwrap_or(-1.0);
+
+    let net_speed = net.get("SpeedMbps").and_then(|v| v.as_f64()).unwrap_or(0.0);
+    let net_name = net.get("Name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+
+    // RAM: parse from our structured JSON
+    let ram_total = mem.get("Total").and_then(|v| v.as_f64()).unwrap_or(0.0);
+    let ram_pct = mem.get("Pct").and_then(|v| v.as_f64()).unwrap_or(0.0);
+    let ram_used_gb = mem.get("Used").and_then(|v| v.as_f64()).unwrap_or(0.0);
+
+    let res = serde_json::json!({
+        "cpu": cpu,
+        "cpuTemp": if cpu_temp >= 0.0 { serde_json::json!(cpu_temp) } else { serde_json::Value::Null },
+        "cpuName": cpu_name,
+        "gpuTemp": if gpu_temp >= 0.0 { serde_json::json!(gpu_temp) } else { serde_json::Value::Null },
+        "gpuName": gpu_name,
+        "ram": ram_pct,
+        "ramTotal": ram_total,
+        "ramUsed": ram_used_gb,
+        "disk": disk_pct,
+        "diskTotal": disk_total,
+        "diskUsed": disk_used,
+        "battery": battery_pct,
+        "netSpeed": net_speed,
+        "netName": net_name,
+        "laptopModel": laptop_model,
+        "osInfo": os_info,
+    });
+    Ok(res)
 }
 
 #[tauri::command]

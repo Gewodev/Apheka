@@ -19,22 +19,13 @@
         "decorations": true,
         "transparent": false,
         "center": true
-      },
-      {
-        "label": "floating-timer",
-        "title": "OWA Studio - Timer",
-        "width": 140,
-        "height": 65,
-        "resizable": false,
-        "decorations": true,
-        "transparent": false,
-        "alwaysOnTop": true,
-        "visible": false,
-        "skipTaskbar": true
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "assetProtocol": {
+        "scope": ["**"]
+      }
     }
   },
   "bundle": {
@@ -64,6 +55,8 @@
     "shell": {
       "open": true
     },
-    "fs": {}
+    "fs": {
+      "requireLiteralLeadingDot": false
+    }
   }
 }
