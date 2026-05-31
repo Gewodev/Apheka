@@ -949,8 +949,8 @@ export default function Ajustes() {
                   {settings.playerBarEnabled && (
                     <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 28 }}>
                       {/* ===== SECCION 1: PERSONAJE ===== */}
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                      <div style={{ padding: '18px 20px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 12 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
                           <div style={{ width: 3, height: 18, borderRadius: 2, background: 'var(--accent)' }} />
                           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
                             Personaje
@@ -960,12 +960,11 @@ export default function Ajustes() {
                           </span>
                         </div>
 
-                        {/* Ambos modos visibles siempre: GIF URL + Dibujo */}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                          {/* GIF / Imagen */}
+                          {/* GIF URL */}
                           <div>
                             <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', display: 'block', marginBottom: 4, letterSpacing: '0.03em' }}>
-                              URL de la imagen / GIF
+                              URL del GIF
                             </label>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 96px', gap: 10 }}>
                               <input type="text" value={settings.playerBarCharacterUrl || ''}
@@ -982,27 +981,25 @@ export default function Ajustes() {
                               </div>
                             </div>
                           </div>
-                          {/* Dibujo */}
+                          {/* Draw frames */}
                           <div>
                             <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', display: 'block', marginBottom: 4, letterSpacing: '0.03em' }}>
-                              Dibujo personalizado — {((settings.playerBarCharacterDraw || '').split('|').filter(Boolean).length) || 0} frame(s)
+                              Dibujo animado — {((settings.playerBarCharacterDraw || '').split('|').filter(Boolean).length) || 0} frame(s)
                             </label>
                             <button onClick={() => setShowDrawModal(true)}
                               style={{
                                 width: '100%', padding: '10px', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer',
                                 background: 'var(--accent)', border: 'none', color: '#fff',
                               }}>
-                              Abrir ventana de dibujo
+                              {((settings.playerBarCharacterDraw || '').split('|').filter(Boolean).length) > 0 ? 'Editar dibujo' : 'Dibujar personaje'}
                             </button>
                           </div>
                         </div>
 
-                        {/* Selector: cual se muestra en la barra */}
+                        {/* Source selector */}
                         <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
                           {(['url', 'draw'] as const).map(src => (
-                            <button key={src} onClick={() => updateSettings({
-                              playerBarCharacterSource: src,
-                            })}
+                            <button key={src} onClick={() => updateSettings({ playerBarCharacterSource: src })}
                               style={{
                                 flex: 1, padding: '8px 10px', borderRadius: 6, fontSize: 10, fontWeight: 500, cursor: 'pointer',
                                 background: (settings.playerBarCharacterSource || 'url') === src ? 'var(--accent)' : 'var(--bg-deep)',
@@ -1010,12 +1007,12 @@ export default function Ajustes() {
                                 color: (settings.playerBarCharacterSource || 'url') === src ? '#fff' : 'var(--text-secondary)',
                                 transition: 'all 150ms',
                               }}>
-                              Mostrar: {src === 'url' ? 'GIF' : 'Dibujo'}
+                              Usar: {src === 'url' ? 'GIF' : 'Dibujo'}
                             </button>
                           ))}
                         </div>
 
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 12 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 16 }}>
                           <SliderRow label="Tamano" value={settings.playerBarCharacterSize ?? 40} min={16} max={120} step={2} unit="px"
                             onChange={v => updateSettings({ playerBarCharacterSize: v })} accent="var(--accent)" />
                           <SliderRow label="Sombra" value={settings.playerBarCharacterShadow ?? 6} min={0} max={30} step={1} unit="px"
@@ -1033,21 +1030,20 @@ export default function Ajustes() {
                             Barra
                           </span>
                           <span style={{ fontSize: 10, color: 'var(--text-tertiary)', fontWeight: 400 }}>
-                            — relleno del progreso
+                            — relleno del progreso (dibujo o GIF)
                           </span>
                         </div>
 
-                        {/* Ambos modos visibles siempre: GIF URL + Dibujo */}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                           {/* GIF / Imagen */}
                           <div>
                             <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', display: 'block', marginBottom: 4, letterSpacing: '0.03em' }}>
-                              URL de la imagen / GIF
+                              URL del GIF — se revela progresivamente
                             </label>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 96px', gap: 10 }}>
                               <input type="text" value={settings.playerBarTrackUrl || ''}
                                 onChange={e => updateSettings({ playerBarTrackUrl: e.target.value })}
-                                placeholder="https://ejemplo.com/mi-bar.gif"
+                                placeholder="https://ejemplo.com/mi-barra.gif"
                                 style={{ width: '100%', height: 36, borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 12px', fontSize: 12, fontFamily: 'monospace', outline: 'none' }} />
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-deep)', borderRadius: 8, border: '1px solid var(--border-default)', height: 36 }}>
                                 {settings.playerBarTrackUrl ? (
@@ -1059,17 +1055,17 @@ export default function Ajustes() {
                               </div>
                             </div>
                           </div>
-                          {/* Dibujo */}
+                          {/* Dibujo de barra */}
                           <div>
                             <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', display: 'block', marginBottom: 4, letterSpacing: '0.03em' }}>
-                              Dibujo personalizado — {((settings.playerBarTrackDraw || '').split('|').filter(Boolean).length) || 0} frame(s)
+                              Dibuja tu barra — un solo trazo que se revela con el progreso
                             </label>
                             <button onClick={() => setShowBarDrawModal(true)}
                               style={{
                                 width: '100%', padding: '10px', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer',
                                 background: 'var(--accent)', border: 'none', color: '#fff',
                               }}>
-                              Abrir ventana de dibujo
+                              {((settings.playerBarTrackDraw || '').split('|').filter(Boolean).length) > 0 ? 'Editar dibujo de barra' : 'Dibujar barra'}
                             </button>
                           </div>
                         </div>
@@ -1087,26 +1083,9 @@ export default function Ajustes() {
                                 color: (settings.playerBarTrackSource || 'url') === src ? '#fff' : 'var(--text-secondary)',
                                 transition: 'all 150ms',
                               }}>
-                              Mostrar: {src === 'url' ? 'GIF' : 'Dibujo'}
+                              Usar: {src === 'url' ? 'GIF' : 'Dibujo'}
                             </button>
                           ))}
-                        </div>
-
-                        {/* Color picker for track fill */}
-                        <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                          <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.03em' }}>
-                            Color de relleno
-                          </label>
-                          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                            <div style={{ position: 'relative', width: 40, height: 40, borderRadius: 10, overflow: 'hidden', border: '2px solid var(--border-soft)', flexShrink: 0 }}>
-                              <input type="color" value={settings.playerBarTrackColor || '#E11D48'}
-                                onChange={e => updateSettings({ playerBarTrackColor: e.target.value })}
-                                style={{ position: 'absolute', inset: '-4px', width: 'calc(100% + 8px)', height: 'calc(100% + 8px)', cursor: 'pointer', border: 'none', padding: 0 }} />
-                            </div>
-                            <input type="text" value={settings.playerBarTrackColor || '#E11D48'}
-                              onChange={e => updateSettings({ playerBarTrackColor: e.target.value })}
-                              style={{ flex: 1, height: 36, borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 12px', fontSize: 12, fontFamily: 'monospace', outline: 'none' }} />
-                          </div>
                         </div>
                       </div>
 
@@ -1228,16 +1207,82 @@ export default function Ajustes() {
                   <p style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 300, letterSpacing: '0.02em' }}>Configura los intervalos de tu método Pomodoro y objetivos</p>
                 </div>
 
-                <div className="bento-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 16, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                <div className="bento-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 20, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
                     <RangeSlider label="Enfoque" value={settings.pomodoroTime / 60} min={10} max={120} unit="min" onChange={v => updateSettings({ pomodoroTime: v * 60 })} color="#E11D48" />
-                    <RangeSlider label="Descanso Corto" value={settings.shortBreakTime / 60} min={1} max={30} unit="min" onChange={v => updateSettings({ shortBreakTime: v * 60 })} color="#10B981" />
                     <RangeSlider label="Cronómetro (meta por ronda)" value={(settings.chronoGoal || 1500) / 60} min={25} max={180} unit="min" onChange={v => updateSettings({ chronoGoal: v * 60 })} color="#3B82F6" />
                     <RangeSlider label="Meta Diaria" value={settings.dailyGoal} min={30} max={600} unit="min" onChange={v => updateSettings({ dailyGoal: v })} color="#8B5CF6" />
                   </div>
-                  <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 16, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
-                    <RangeSlider label="Descanso Largo" value={settings.longBreakTime / 60} min={5} max={60} unit="min" onChange={v => updateSettings({ longBreakTime: v * 60 })} color="#F59E0B" />
-                    <RangeSlider label="Ciclos antes de Descanso Largo" value={settings.pomodoroGoal} min={1} max={20} unit=" ciclos" onChange={v => updateSettings({ pomodoroGoal: v })} color="#6366F1" />
+
+                  {/* Break section with visual cycle indicator */}
+                  <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 20 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Ciclo de Descansos</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 6, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)' }}>
+                        {Array.from({ length: settings.pomodoroGoal || 4 }, (_, i) => (
+                          <div key={i} style={{
+                            width: 16, height: 16, borderRadius: 4,
+                            background: i === (settings.pomodoroGoal || 4) - 1 ? '#F59E0B' : '#10B981',
+                            opacity: 0.7, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            boxShadow: i === (settings.pomodoroGoal || 4) - 1 ? '0 0 6px #F59E0B60' : 'none',
+                          }}>
+                            <span style={{ fontSize: 7, fontWeight: 700, color: '#fff' }}>{i + 1}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+                      <div style={{ padding: '12px 14px', borderRadius: 10, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                          <div style={{ width: 3, height: 3, borderRadius: '50%', background: '#10B981', boxShadow: '0 0 4px #10B98180' }} />
+                          <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-secondary)' }}>CORTOS</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 18, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>
+                            {settings.shortBreakTime / 60}<span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>min</span>
+                          </span>
+                          <input type="range" min={1} max={30} value={settings.shortBreakTime / 60} onChange={e => updateSettings({ shortBreakTime: Number(e.target.value) * 60 })}
+                            style={{ flex: 1, height: 3, cursor: 'pointer', WebkitAppearance: 'none', appearance: 'none', outline: 'none', borderRadius: 2, background: `linear-gradient(90deg, #10B98160, #10B981 ${((settings.shortBreakTime / 60 - 1) / 29) * 100}%, var(--bg-hover) ${((settings.shortBreakTime / 60 - 1) / 29) * 100}%)` }}
+                            className="range-slider" />
+                        </div>
+                        <div style={{ fontSize: 8, color: 'var(--text-tertiary)', marginTop: 4 }}>×{settings.pomodoroGoal - 1 || 3} entre ciclos</div>
+                      </div>
+                      <div style={{ padding: '12px 14px', borderRadius: 10, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', position: 'relative', overflow: 'hidden' }}>
+                        <div style={{ position: 'absolute', top: 0, right: 0, width: 60, height: 60, background: 'radial-gradient(circle, #F59E0B08 0%, transparent 70%)', pointerEvents: 'none' }} />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                          <div style={{ width: 3, height: 3, borderRadius: '50%', background: '#F59E0B', boxShadow: '0 0 4px #F59E0B80' }} />
+                          <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-secondary)' }}>LARGO</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 18, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>
+                            {settings.longBreakTime / 60}<span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>min</span>
+                          </span>
+                          <input type="range" min={5} max={60} value={settings.longBreakTime / 60} onChange={e => updateSettings({ longBreakTime: Number(e.target.value) * 60 })}
+                            style={{ flex: 1, height: 3, cursor: 'pointer', WebkitAppearance: 'none', appearance: 'none', outline: 'none', borderRadius: 2, background: `linear-gradient(90deg, #F59E0B60, #F59E0B ${((settings.longBreakTime / 60 - 5) / 55) * 100}%, var(--bg-hover) ${((settings.longBreakTime / 60 - 5) / 55) * 100}%)` }}
+                            className="range-slider" />
+                        </div>
+                        <div style={{ fontSize: 8, color: 'var(--text-tertiary)', marginTop: 4 }}>Cada {settings.pomodoroGoal} ciclos</div>
+                      </div>
+                      <div style={{ padding: '12px 14px', borderRadius: 10, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                          <div style={{ width: 3, height: 3, borderRadius: '50%', background: '#6366F1', boxShadow: '0 0 4px #6366F180' }} />
+                          <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-secondary)' }}>CICLOS</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 18, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>
+                            {settings.pomodoroGoal}<span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>×</span>
+                          </span>
+                          <input type="range" min={1} max={20} value={settings.pomodoroGoal} onChange={e => updateSettings({ pomodoroGoal: Number(e.target.value) })}
+                            style={{ flex: 1, height: 3, cursor: 'pointer', WebkitAppearance: 'none', appearance: 'none', outline: 'none', borderRadius: 2, background: `linear-gradient(90deg, #6366F160, #6366F1 ${((settings.pomodoroGoal - 1) / 19) * 100}%, var(--bg-hover) ${((settings.pomodoroGoal - 1) / 19) * 100}%)` }}
+                            className="range-slider" />
+                        </div>
+                        <div style={{ fontSize: 8, color: 'var(--text-tertiary)', marginTop: 4 }}>
+                          {settings.pomodoroGoal > 1
+                            ? `${settings.pomodoroGoal - 1} cortos + 1 largo`
+                            : 'Solo descanso largo'}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
 

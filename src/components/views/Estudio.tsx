@@ -2,17 +2,16 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Play, Pause, RotateCcw, Zap, Clock,
   CheckCircle, Trophy, Sparkles, Flame,
-  Coffee, Check, X, Timer, BarChart3, Plus,
-  TrendingUp, AlertTriangle, Link2, Eye, Focus, Target, Monitor, Minimize2, Maximize2, Calendar as CalendarIcon, Activity
+  Coffee, X, Timer, BarChart3, Plus,
+  TrendingUp, AlertTriangle, Link2, Eye, Focus, Monitor, Minimize2, Maximize2
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { useApp } from '../../store/AppContext';
 import { useTimer } from '../../hooks/useTimer';
-import { format, subDays, addDays } from 'date-fns';
+import { format, subDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { notifySessionComplete, notifyBreakOver } from '../../lib/notifications';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import NotificationBell from '../ui/NotificationBell';
 import AnalyticsDrawer from '../ui/AnalyticsDrawer';
 import { DigitSVG, ColonSVG } from '../LEDDigits';
@@ -28,32 +27,22 @@ function getGoalForDay(dayStr: string, currentGoal: number, dailyGoalHistory?: R
 function calculateStreak(w: Record<string, number>, dailyGoalMin: number, dailyGoalHistory?: Record<string, number>, initialDailyGoal?: number): number {
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const yesterdayStr = format(subDays(new Date(), 1), 'yyyy-MM-dd');
-  
+
   const metGoal = (dayStr: string): boolean => {
     const goalForDay = getGoalForDay(dayStr, dailyGoalMin, dailyGoalHistory, initialDailyGoal);
     return (w[dayStr] || 0) >= goalForDay * 60;
   };
-  
-  const completedToday = metGoal(todayStr);
-  const completedYesterday = metGoal(yesterdayStr);
-  
-  if (!completedToday && !completedYesterday) return 0;
-  
-  const changeDates = Object.keys(dailyGoalHistory || {}).sort();
-  const lastChangeDate = changeDates.length > 0 ? changeDates[changeDates.length - 1] : todayStr;
-  const startFrom = lastChangeDate > todayStr ? todayStr : lastChangeDate;
-  
-  let s = 0;
-  let d = new Date(startFrom);
-  const todayDate = new Date();
-  while (d <= todayDate) {
-    const dStr = format(d, 'yyyy-MM-dd');
-    if (metGoal(dStr)) {
-      s++;
-    } else {
-      s = 0;
-    }
-    d = addDays(d, 1);
+
+  const startDay = metGoal(todayStr) ? todayStr :
+                   metGoal(yesterdayStr) ? yesterdayStr : null;
+
+  if (!startDay) return 0;
+
+  let s = 1;
+  let d = subDays(new Date(startDay), 1);
+  while (metGoal(format(d, 'yyyy-MM-dd'))) {
+    s++;
+    d = subDays(d, 1);
   }
   return s;
 }
@@ -112,6 +101,7 @@ export default function Estudio() {
 
   const [showAllActivity, setShowAllActivity] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
+  const [showBreakResetConfirm, setShowBreakResetConfirm] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
 
   const restStartRef = useRef(0);
@@ -132,6 +122,26 @@ export default function Estudio() {
 
   const activeTask = tasks.find(t => t.id === activeTaskId);
   const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const weekAgoStr = format(subDays(new Date(), 6), 'yyyy-MM-dd');
+  const monthStartStr = format(new Date(new Date().getFullYear(), new Date().getMonth(), 1), 'yyyy-MM-dd');
+
+  // Monthly study seconds
+  const monthlyStudySecs = useMemo(() => {
+    let total = 0;
+    for (const [day, secs] of Object.entries(weeklyStudyTime)) {
+      if (day >= monthStartStr) total += secs;
+    }
+    return total;
+  }, [weeklyStudyTime, monthStartStr]);
+  const monthlyStudyFormatted = monthlyStudySecs > 0
+    ? `${Math.floor(monthlyStudySecs / 3600)}h ${Math.floor((monthlyStudySecs % 3600) / 60)}m`
+    : '0m';
+
+  // Sessiones de la ultima semana para el feed (reseteo semanal visual)
+  const recentSessions = useMemo(() => 
+    studySessions.filter(s => s.startedAt.slice(0, 10) >= weekAgoStr),
+  [studySessions, weekAgoStr]);
+
   const streak = useMemo(() => calculateStreak(weeklyStudyTime, settings?.dailyGoal || 240, settings?.dailyGoalHistory, settings?.initialDailyGoal), [weeklyStudyTime, settings?.dailyGoal, settings?.dailyGoalHistory, settings?.initialDailyGoal]);
 
   const weekDayData = useMemo(() => {
@@ -286,7 +296,7 @@ export default function Estudio() {
 
   const activityFeed: ActivityEntry[] = useMemo(() => {
     const entries: ActivityEntry[] = [];
-    const sortedSessions = [...studySessions].sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()).slice(0, 15);
+    const sortedSessions = [...recentSessions].sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()).slice(0, 15);
     
     for (const s of sortedSessions) {
       const isFull = s.type === 'pomodoro' ? s.duration >= settings.pomodoroTime : s.duration > 0;
@@ -444,16 +454,17 @@ export default function Estudio() {
                 { id: 'chrono', label: 'Cronómetro', icon: Timer },
               ].map(mode => {
                 const active = sessionType === mode.id && !isBreakTime;
+                const blocked = (isTimerActive || isBreakTime) && !active;
                 const Icon = mode.icon;
                 return (
                   <button key={mode.id} onClick={() => handleTypeChange(mode.id as any)}
                     style={{
                       padding: '8px 24px', borderRadius: 8, fontSize: 11, fontWeight: 600,
-                      letterSpacing: '0.04em', cursor: 'pointer', border: 'none', textTransform: 'uppercase',
+                      letterSpacing: '0.04em', cursor: blocked ? 'not-allowed' : 'pointer', border: 'none', textTransform: 'uppercase',
                       background: active ? `linear-gradient(135deg, ${statusColor}15, ${statusColor}05)` : 'transparent',
-                      color: active ? statusColor : 'var(--text-muted)',
+                      color: active ? statusColor : blocked ? 'var(--text-muted)' : 'var(--text-muted)',
                       display: 'flex', alignItems: 'center', gap: 8, transition: 'all 300ms',
-                      position: 'relative',
+                      position: 'relative', opacity: blocked ? 0.4 : 1,
                     }}
                   >
                     <Icon size={14} color={active ? statusColor : 'currentColor'} />
@@ -486,8 +497,22 @@ export default function Estudio() {
 
             {/* Controls */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 40, marginTop: 12, marginBottom: 8 }}>
-              <button onClick={handleReset} style={{ width: 56, height: 56, borderRadius: '50%', cursor: 'pointer', border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms' }} className="hover:text-white hover:border-borderDefault hover:bg-surfaceElevated" title="Reiniciar">
+              <button onClick={() => { if (isBreakTime && isTimerActive) { setShowBreakResetConfirm(true); } else { handleReset(); } }}
+                style={{
+                  width: 56, height: 56, borderRadius: '50%',
+                  cursor: isTimerActive ? (isBreakTime ? 'pointer' : 'not-allowed') : 'pointer',
+                  border: isBreakTime && isTimerActive ? `1px solid #F59E0B50` : '1px solid var(--border-soft)',
+                  background: isBreakTime && isTimerActive ? '#F59E0B10' : 'var(--bg-deep)',
+                  color: isBreakTime && isTimerActive ? '#F59E0B' : 'var(--text-secondary)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'all 200ms',
+                  opacity: isTimerActive && !isBreakTime ? 0.35 : 1,
+                  position: 'relative',
+                }}
+                className="hover:text-white hover:border-borderDefault hover:bg-surfaceElevated"
+                title={isBreakTime && isTimerActive ? 'Reiniciar descanso (se considera distracción)' : 'Reiniciar'}>
                 <RotateCcw size={20} />
+                {isBreakTime && isTimerActive && <div style={{ position: 'absolute', top: -2, right: -2, width: 8, height: 8, borderRadius: '50%', background: '#F59E0B', boxShadow: '0 0 6px #F59E0B80' }} />}
               </button>
               
               <button onClick={handleToggle} style={{
@@ -552,26 +577,62 @@ export default function Estudio() {
               </div>
             </div>
 
-            {/* Progress today */}
-            <div className="bento-card" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+            {/* Progress today (customized) */}
+            <div className="bento-card" style={{
+              padding: '20px 24px', display: 'flex', flexDirection: 'column', justifyContent: 'center',
+              background: `linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)`,
+              border: `1px solid ${dailyStudyTime >= (settings?.dailyGoal || 240) * 60 ? '#10B98130' : 'var(--border-subtle)'}`,
+              position: 'relative', overflow: 'hidden',
+            }}>
+              {/* Sutil glow cuando se cumple la meta */}
+              {dailyStudyTime >= (settings?.dailyGoal || 240) * 60 && (
+                <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(circle at 80% 30%, #10B98115 0%, transparent 60%)', pointerEvents: 'none' }} />
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-primary)', letterSpacing: '0.12em', textTransform: 'uppercase', fontFamily: "'Inter', sans-serif" }}>Progreso de Hoy</span>
-                <span style={{ fontSize: 9, fontWeight: 700, color: dailyStudyTime >= (settings?.dailyGoal || 240) * 60 ? '#10B981' : 'var(--text-secondary)' }}>
-                  {dailyStudyTime >= (settings?.dailyGoal || 240) * 60 ? (<><Check size={10} style={{ marginRight: 2 }} /> META</>) : `${Math.min(100, Math.round((dailyStudyTime / ((settings?.dailyGoal || 240) * 60)) * 100))}%`}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {dailyStudyTime >= (settings?.dailyGoal || 240) * 60 && (
+                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#10B981', boxShadow: '0 0 8px #10B98180' }} />
+                  )}
+                  <span style={{
+                    fontSize: 9, fontWeight: 700,
+                    color: dailyStudyTime >= (settings?.dailyGoal || 240) * 60 ? '#10B981' : 'var(--text-secondary)',
+                    background: dailyStudyTime >= (settings?.dailyGoal || 240) * 60 ? '#10B98110' : 'var(--bg-deep)',
+                    padding: '2px 8px', borderRadius: 4,
+                  }}>
+                    {dailyStudyTime >= (settings?.dailyGoal || 240) * 60 ? 'META' : `${Math.min(100, Math.round((dailyStudyTime / ((settings?.dailyGoal || 240) * 60)) * 100))}%`}
+                  </span>
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 10 }}>
+                <span style={{ fontSize: 28, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em' }}>
+                  {Math.floor(dailyStudyTime / 3600)}<span style={{ fontSize: 14, fontWeight: 300, color: 'var(--text-tertiary)' }}>h </span>
+                  {Math.floor((dailyStudyTime % 3600) / 60)}<span style={{ fontSize: 14, fontWeight: 300, color: 'var(--text-tertiary)' }}>m</span>
                 </span>
+                <span style={{ fontSize: 10, color: 'var(--text-tertiary)', fontWeight: 400 }}>/ {settings?.dailyGoal || 240}min</span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6 }}>
-                <span style={{ fontSize: 22, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>
-                  {Math.floor(dailyStudyTime / 3600)}h {Math.floor((dailyStudyTime % 3600) / 60)}m
+              <div style={{ width: '100%', height: 6, background: 'var(--bg-deep)', borderRadius: 4, overflow: 'hidden', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.15)' }}>
+                <div style={{
+                  height: '100%', borderRadius: 4,
+                  background: dailyStudyTime >= (settings?.dailyGoal || 240) * 60
+                    ? 'linear-gradient(90deg, #10B981, #34D399)'
+                    : `linear-gradient(90deg, ${settings?.accentColor || 'var(--accent)'}, #8B5CF6)`,
+                  width: `${Math.min(100, (dailyStudyTime / ((settings?.dailyGoal || 240) * 60)) * 100)}%`,
+                  transition: 'width 500ms ease',
+                  boxShadow: dailyStudyTime >= (settings?.dailyGoal || 240) * 60
+                    ? '0 0 12px #10B98160'
+                    : `0 0 8px ${settings?.accentColor || 'var(--accent)'}40`,
+                }} />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10 }}>
+                <Flame size={11} color={dailyStudyTime >= (settings?.dailyGoal || 240) * 60 ? '#F59E0B' : 'var(--text-muted)'} fill={dailyStudyTime >= (settings?.dailyGoal || 240) * 60 ? '#F59E0B' : 'none'} />
+                <span style={{ fontSize: 10, fontWeight: 600, color: dailyStudyTime >= (settings?.dailyGoal || 240) * 60 ? '#F59E0B' : 'var(--text-secondary)' }}>
+                  {streak} {streak === 1 ? 'día' : 'días'} consecutivos
                 </span>
-                <span style={{ fontSize: 8, color: 'var(--text-tertiary)' }}>/ {(settings?.dailyGoal || 240)}min</span>
-              </div>
-              <div style={{ width: '100%', height: 5, background: 'var(--bg-deep)', borderRadius: 3, overflow: 'hidden' }}>
-                <div style={{ height: '100%', background: dailyStudyTime >= (settings?.dailyGoal || 240) * 60 ? '#10B981' : `linear-gradient(90deg, ${settings?.accentColor || 'var(--accent)'}, #8B5CF6)`, width: `${Math.min(100, (dailyStudyTime / ((settings?.dailyGoal || 240) * 60)) * 100)}%`, transition: 'width 400ms ease' }} />
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6 }}>
-                <Flame size={10} color={dailyStudyTime >= (settings?.dailyGoal || 240) * 60 ? '#F59E0B' : 'var(--text-muted)'} fill={dailyStudyTime >= (settings?.dailyGoal || 240) * 60 ? '#F59E0B' : 'none'} />
-                <span style={{ fontSize: 9, fontWeight: 600, color: dailyStudyTime >= (settings?.dailyGoal || 240) * 60 ? '#F59E0B' : 'var(--text-secondary)' }}>{streak} {streak === 1 ? 'día' : 'días'}</span>
+                {/* Monthly study time indicator */}
+                <span style={{ marginLeft: 'auto', fontSize: 9, color: 'var(--text-tertiary)', fontWeight: 400 }}>
+                  Este mes: {monthlyStudyFormatted}
+                </span>
               </div>
             </div>
 
@@ -599,7 +660,7 @@ export default function Estudio() {
               <div style={{ background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', borderRadius: 16, padding: '20px', display: 'flex', flexDirection: 'column', gap: 8, position: 'relative', overflow: 'hidden' }}>
                 <CheckCircle size={80} style={{ position: 'absolute', bottom: -20, right: -20, color: '#8B5CF6', opacity: 0.15 }} />
                 <span style={{ fontSize: 10, fontWeight: 300, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', zIndex: 1 }}>Sesiones</span>
-                <span style={{ fontSize: 26, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", zIndex: 1 }}>{studySessions.length}</span>
+                <span style={{ fontSize: 26, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", zIndex: 1 }}>{recentSessions.length}</span>
               </div>
 
               {/* Metric 3: Efficiency % */}
@@ -799,6 +860,42 @@ export default function Estudio() {
 
       </div>
       </div>
+
+      {/* Break Reset Confirmation Modal */}
+      {showBreakResetConfirm && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }} onClick={() => setShowBreakResetConfirm(false)}>
+          <div onClick={e => e.stopPropagation()}
+            style={{
+              background: 'var(--bg-elevated)', borderRadius: 16,
+              border: '1px solid var(--border-soft)', padding: '28px 32px',
+              maxWidth: 400, width: '90%',
+              boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
+            }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+              <div style={{ width: 32, height: 32, borderRadius: 10, background: '#F59E0B15', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <AlertTriangle size={16} color="#F59E0B" />
+              </div>
+              <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>¿Reiniciar durante descanso?</span>
+            </div>
+            <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6, margin: '0 0 6px' }}>
+              Si reinicias ahora, este descanso se marcará como <strong style={{ color: '#F59E0B' }}>distracción</strong> y no contará para tu recuperación.
+            </p>
+            <p style={{ fontSize: 12, color: 'var(--text-tertiary)', lineHeight: 1.5, margin: '0 0 20px' }}>
+              Te recomendamos completar el descanso o aprovechar para repasar apuntes. Unos minutos de pausa activa mejoran tu retención.
+            </p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button onClick={() => setShowBreakResetConfirm(false)}
+                style={{ padding: '8px 20px', borderRadius: 8, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                Seguir descansando
+              </button>
+              <button onClick={() => { setShowBreakResetConfirm(false); handleReset(); }}
+                style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: '#F59E0B', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                Reiniciar de todos modos
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Analytics Drawer */}
       <AnalyticsDrawer

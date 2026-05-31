@@ -194,7 +194,7 @@ export default function Musica() {
   };
 
   const getVideoUrl = useCallback((entry: YouTubeMetadata): string => {
-    return entry.webpage_url || (entry.id ? `https://www.youtube.com/watch?v=${entry.id}` : '');
+    return entry.webpage_url || entry.url || (entry.id ? `https://www.youtube.com/watch?v=${entry.id}` : '');
   }, []);
 
   const autoImportTracks = useCallback((entries: YouTubeMetadata[]) => {
@@ -226,7 +226,6 @@ export default function Musica() {
     try {
       await startDownload(videoUrl, dlItemId, path, audioFormat, includeCover);
       updateDownloadStatus(dlItemId, 'completed');
-      autoImportTracks([entry]);
     } catch (e) {
       const msg = String(e);
       if (msg.includes('web-download-unavailable')) {
@@ -238,7 +237,7 @@ export default function Musica() {
         addNotification(`Error: ${cleanMsg || 'Error al descargar'}`, 'error');
       }
     }
-  }, [getVideoUrl, audioFormat, includeCover, updateDownloadStatus, autoImportTracks, addNotification]);
+  }, [getVideoUrl, audioFormat, includeCover, updateDownloadStatus, addNotification]);
 
   const handleDownloadAll = async () => {
     if (!preview) return;

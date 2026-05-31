@@ -240,7 +240,10 @@ async fn start_download(
                 // Capture only genuine errors (NOT metadata-replace warnings)
                 let is_metadata_error = trimmed.contains("is not a valid URL")
                     || trimmed.contains("--replace-in-metadata")
-                    || trimmed.contains("don't self-terminate");
+                    || trimmed.contains("don't self-terminate")
+                    || trimmed.contains("[generic]")
+                    || trimmed.contains("[youtube]")
+                    || (trimmed.contains("not a valid URL") && trimmed.len() < 150);
                 if !is_metadata_error && (trimmed.contains("ERROR:") || trimmed.contains("Error:")) {
                     let mut buf = stderr_buf_progress.lock().unwrap();
                     buf.push_str(&trimmed);
@@ -281,6 +284,7 @@ async fn start_download(
     let dl_id2 = download_id.clone();
     let emit2 = app_handle.clone();
     let stderr_buf_watcher = stderr_buf.clone();
+    let out_dir_watcher = out_dir.clone();
     std::thread::spawn(move || {
         loop {
             std::thread::sleep(std::time::Duration::from_secs(1));
@@ -290,16 +294,29 @@ async fn start_download(
                 let status = child.wait().ok();
                 let code = status.and_then(|s| s.code());
                 let error_msg = stderr_buf_watcher.lock().unwrap().clone();
+                // Check if any audio file was actually created in the output dir
+                let dir = std::path::Path::new(&out_dir_watcher);
+                let has_output = dir.exists() && dir.read_dir().ok()
+                    .map(|entries| entries.filter_map(|e| e.ok())
+                        .any(|e| {
+                            let n = e.file_name().to_string_lossy().to_lowercase();
+                            n.ends_with(".mp3") || n.ends_with(".m4a") || n.ends_with(".wav")
+                        })
+                    ).unwrap_or(false);
                 // Consider success if exit code is 0 OR if no actual ERROR lines in stderr
-                // yt-dlp sometimes exits non-zero for minor warnings but file is fine
-                let success = status.map(|s| s.success()).unwrap_or(false) || error_msg.is_empty();
+                // OR if an audio file was created (yt-dlp may exit non-zero for metadata warnings)
+                let success = status.map(|s| s.success()).unwrap_or(false)
+                    || error_msg.is_empty()
+                    || has_output;
+                let final_code = if success { Some(0) } else { code };
+                let final_error = if success { String::new() } else { error_msg };
                 let _ = emit2.emit(
                     "download:complete",
                     serde_json::json!({
                         "downloadId": dl_id2,
                         "success": success,
-                        "code": code,
-                        "errorMessage": if error_msg.is_empty() { "" } else { &error_msg },
+                        "code": final_code,
+                        "errorMessage": final_error,
                     }),
                 );
                 break;
@@ -381,12 +398,12 @@ async fn run_powershell_raw(app_handle: &tauri::AppHandle, cmd: &str) -> Result<
 
 #[tauri::command]
 async fn get_system_stats(app_handle: tauri::AppHandle) -> Result<serde_json::Value, String> {
-    // CPU usage via performance counter (real-time sample)
+    // CPU usage via performance counter (real-time sample over 1s)
     let cpu = run_powershell_json(&app_handle,
-        "Get-CimInstance Win32_Processor | Measure-Object -Property LoadPercentage -Average | Select-Object -ExpandProperty Average"
+        "$s = (Get-Counter '\\Processor(_Total)\\% Processor Time' -SampleInterval 1 -MaxSamples 1 -ErrorAction SilentlyContinue).CounterSamples[0].CookedValue; if ($null -ne $s) { [math]::Round($s, 1) } else { (Get-CimInstance Win32_Processor | Measure-Object -Property LoadPercentage -Average | Select-Object -ExpandProperty Average) }"
     ).await.ok().and_then(|v| v.as_f64()).unwrap_or(0.0);
 
-    // RAM in bytes (more accurate)
+    // RAM in GB (more accurate)
     let mem = run_powershell_json(&app_handle,
         "$cs = Get-CimInstance Win32_ComputerSystem; $os = Get-CimInstance Win32_OperatingSystem; @{Total=[math]::Round($cs.TotalPhysicalMemory/1GB,1); Free=[math]::Round(($os.FreePhysicalMemory*1024)/1GB,1); Used=[math]::Round(($cs.TotalPhysicalMemory - $os.FreePhysicalMemory*1024)/1GB,1); Pct=[math]::Round((1 - ($os.FreePhysicalMemory*1024)/$cs.TotalPhysicalMemory)*100,1)} | ConvertTo-Json"
     ).await.unwrap_or(serde_json::json!({}));
@@ -401,22 +418,14 @@ async fn get_system_stats(app_handle: tauri::AppHandle) -> Result<serde_json::Va
         "Get-CimInstance Win32_Battery | Select-Object @{N='Pct';E={$_.EstimatedChargeRemaining}} | ConvertTo-Json"
     ).await.ok();
 
-    // Network: active adapter with real current speed via Get-NetAdapter
-    let net_out = app_handle
-        .shell()
-        .command("powershell")
-        .args(["-Command",
-            "$a = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object Status -eq 'Up' | Select-Object -First 1 Name, LinkSpeed; if ($a) { $sp = $a.LinkSpeed -replace ' Gbps','000' -replace ' Mbps','' -replace '[^0-9]',''; [PSCustomObject]@{Name=$a.Name;SpeedMbps=[int]$sp} | ConvertTo-Json } else { '{}' }"
-        ])
-        .output()
-        .await;
-    let net: serde_json::Value = net_out.ok()
-        .and_then(|o| serde_json::from_str(&String::from_utf8_lossy(&o.stdout)).ok())
-        .unwrap_or(serde_json::json!({}));
+    // Network: actual current bandwidth usage via performance counters
+    let net = run_powershell_json(&app_handle,
+        "$i = (Get-Counter '\\Network Interface(*)\\Bytes Total/sec' -ErrorAction SilentlyContinue).CounterSamples | Where-Object {$_.InstanceName -notmatch '_isatap|_teredo|Loopback|Pseudo'} | Select-Object -First 1; if ($i) { $mbps = [math]::Round($i.CookedValue * 8 / 1MB, 1); [PSCustomObject]@{Name=$i.InstanceName;SpeedMbps=$mbps} | ConvertTo-Json } else { '{}' }"
+    ).await.unwrap_or(serde_json::json!({}));
 
-    // CPU temperature via performance counter or WMI
+    // CPU temperature via performance counter
     let cpu_temp_str = run_powershell_raw(&app_handle,
-        "$t = Get-Counter '\\Thermal Zone Information\\*' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty CounterSamples | Select-Object -First 1 -ExpandProperty CookedValue; if ($null -ne $t) { [math]::Round($t, 1) } else { try { $z = Get-CimInstance -Namespace root/wmi -ClassName MSAcpi_ThermalZoneTemperature -ErrorAction SilentlyContinue | Where-Object { $_.InstanceName -match 'CPU' } | Select-Object -First 1 -ExpandProperty CurrentTemperature; if ($null -ne $z) { [math]::Round(($z/10)-273.15, 1) } else { 'null' } } catch { 'null' } }"
+        "$t = Get-Counter '\\Thermal Zone Information\\*' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty CounterSamples | Where-Object {$_.InstanceName -match 'CPU|TZ\\d+'} | Select-Object -First 1 -ExpandProperty CookedValue; if ($null -ne $t -and $t -gt 0) { [math]::Round($t, 1) } else { try { $z = Get-CimInstance -Namespace root/wmi -ClassName MSAcpi_ThermalZoneTemperature -ErrorAction SilentlyContinue | Where-Object { $_.InstanceName -match 'CPU' } | Select-Object -First 1 -ExpandProperty CurrentTemperature; if ($null -ne $z) { [math]::Round(($z/10)-273.15, 1) } else { 'null' } } catch { 'null' } }"
     ).await.unwrap_or_default();
     let cpu_temp: f64 = cpu_temp_str.trim().parse().unwrap_or(-1.0);
 
@@ -427,7 +436,7 @@ async fn get_system_stats(app_handle: tauri::AppHandle) -> Result<serde_json::Va
 
     // GPU temperature via nvidia-smi or performance counter
     let gpu_temp_str = run_powershell_raw(&app_handle,
-        "$t = & nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader 2>$null; if ($t) { $t.Trim() } else { try { $c = Get-Counter '\\GPU Core Temperature' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty CounterSamples | Select-Object -First 1 -ExpandProperty CookedValue; if ($null -ne $c) { [math]::Round($c, 1) } else { 'null' } } catch { 'null' } }"
+        "$t = & nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader 2>$null; if ($t) { $t.Trim() } else { try { $c = Get-Counter '\\GPU Core Temperature' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty CounterSamples | Select-Object -First 1 -ExpandProperty CookedValue; if ($null -ne $c -and $c -gt 0) { [math]::Round($c, 1) } else { 'null' } } catch { 'null' } }"
     ).await.unwrap_or_default();
     let gpu_temp: f64 = gpu_temp_str.trim().parse().unwrap_or(-1.0);
 

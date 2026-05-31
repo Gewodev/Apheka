@@ -280,7 +280,7 @@ export default function Tareas() {
       else if (path.includes('drive.google.com')) detectedType = 'drive';
     }
     addTaskFile(selectedTask.id, { name, path, type: detectedType, size: newMaterialFile?.size });
-    setNewMaterialName(''); setNewMaterialPath(''); setNewMaterialFile(null); setShowAddMaterial(false); setAddMaterialMode(null);
+    setNewMaterialName(''); setNewMaterialPath(''); setNewMaterialFile(null); setShowAddMaterial(false); setAddMaterialMode('file');
   }, [selectedTask, newMaterialName, newMaterialPath, newMaterialFile, addMaterialMode, addTaskFile, fetchPageTitle]);
 
   const handleSyncClassroom = useCallback(async () => {
@@ -419,7 +419,7 @@ export default function Tareas() {
             )}
             <input type="file" ref={fileInputRef} onChange={handleFileSelected} style={{ display: 'none' }} multiple />
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, paddingTop: 6, borderTop: '1px solid var(--border-subtle)' }}>
-              <button onClick={() => { setShowAddMaterial(false); setNewMaterialName(''); setNewMaterialPath(''); setNewMaterialFile(null); setAddMaterialMode(null); }}
+              <button onClick={() => { setShowAddMaterial(false); setNewMaterialName(''); setNewMaterialPath(''); setNewMaterialFile(null); setAddMaterialMode('file'); }}
                 style={{ padding: '5px 12px', borderRadius: 6, fontSize: 9, fontWeight: 600, cursor: 'pointer', border: '1px solid var(--border-default)', background: 'transparent', color: 'var(--text-secondary)' }}>Cancelar</button>
               <button onClick={handleAddMaterial} disabled={!newMaterialName.trim()}
                 style={{ padding: '5px 14px', borderRadius: 6, fontSize: 9, fontWeight: 700, cursor: 'pointer', border: 'none', background: 'var(--accent)', color: '#fff', opacity: newMaterialName.trim() ? 1 : 0.3 }}>
@@ -483,13 +483,11 @@ export default function Tareas() {
     <div className="page-container flex flex-col h-full overflow-y-auto custom-scroll" style={{ gap: 20 }}>
 
       {/* HEADER */}
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, paddingTop: 2, flexShrink: 0 }}>
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, padding: '14px 20px', flexShrink: 0, background: 'var(--bg-surface)', borderRadius: 12, border: '1px solid var(--border-subtle)' }}>
         <h1 style={{ fontFamily: "'Inter Tight', sans-serif", fontWeight: 300, fontSize: 32, lineHeight: 1.4, letterSpacing: '0.02em', color: 'var(--text-primary)' }}>Tareas</h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, position: 'relative' }}>
-          <div style={{ position: 'absolute', top: '50%', right: 0, width: 150, height: 100, background: 'radial-gradient(circle at center, var(--accent-dim) 0%, transparent 70%)', opacity: 0.5, transform: 'translateY(-50%)', pointerEvents: 'none', zIndex: 0 }} />
-          <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#10B981', boxShadow: '0 0 8px rgba(16,185,129,0.5)', position: 'relative', zIndex: 1 }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, position: 'relative' }}>
           <NotificationBell />
-          <div style={{ textAlign: 'right', position: 'relative', zIndex: 1 }}>
+          <div style={{ position: 'relative', zIndex: 1 }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 3, justifyContent: 'flex-end' }}>
               <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 68, fontWeight: 200, lineHeight: 0.9, color: 'var(--accent)', letterSpacing: '0.02em', textShadow: '0 0 20px var(--accent-glow)' }}>{timeStr}</span>
               <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 22, fontWeight: 200, color: 'var(--accent)', opacity: 0.6, letterSpacing: '0.02em' }}>{secondsStr}</span>
@@ -669,7 +667,7 @@ export default function Tareas() {
                         updateTask(taskId, { status: newStatus });
                       }
                     }}
-                    style={{ flex: 1, minWidth: 0, padding: '14px 12px', display: 'flex', flexDirection: 'column', background: 'rgba(255,255,255,0.02)', backdropFilter: 'blur(4px)', border: '1px solid var(--border-subtle)', borderRadius: 12 }}>
+                    style={{ flex: 1, minWidth: 0, padding: '14px 12px', display: 'flex', flexDirection: 'column', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 12 }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingBottom: 8, borderBottom: '1px solid var(--border-soft)', flexShrink: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <div style={{ width: 6, height: 6, borderRadius: '50%', background: col.color, boxShadow: `0 0 6px ${col.color}60` }} />
@@ -1018,7 +1016,7 @@ export default function Tareas() {
             const innerSz = isBoard ? 12 : 24;
             return (
               <>
-                <div style={{ padding: isBoard ? '14px 14px' : '20px 18px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 12 }}>
+                <div style={{ padding: isBoard ? '14px 14px' : '20px 18px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 12 }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: isBoard ? 10 : 14 }}>
                       <span style={{ fontSize: isBoard ? 8 : 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.04em' }}>CURSOS</span>
                     </div>
@@ -1065,7 +1063,7 @@ export default function Tareas() {
                   </div>
                 </div>
 
-                <div style={{ padding: isBoard ? '14px 14px' : '20px 18px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 12 }}>
+                <div style={{ padding: isBoard ? '14px 14px' : '20px 18px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 12 }}>
                   <span style={{ fontSize: isBoard ? 8 : 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', display: 'block', marginBottom: isBoard ? 10 : 14 }}>ESTADO</span>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {statusData.length > 0 && (
@@ -1451,7 +1449,7 @@ export default function Tareas() {
                     )}
                     <input type="file" ref={fileInputRef} onChange={handleFileSelected} style={{ display: 'none' }} multiple />
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 10, borderTop: '1px solid var(--border-subtle)' }}>
-                      <button onClick={() => { setShowAddMaterial(false); setNewMaterialName(''); setNewMaterialPath(''); setNewMaterialFile(null); setAddMaterialMode(null); }}
+                      <button onClick={() => { setShowAddMaterial(false); setNewMaterialName(''); setNewMaterialPath(''); setNewMaterialFile(null); setAddMaterialMode('file'); }}
                         style={{ padding: '8px 18px', borderRadius: 7, fontSize: 10, fontWeight: 600, cursor: 'pointer', border: '1px solid var(--border-default)', background: 'transparent', color: 'var(--text-secondary)', transition: 'all 150ms' }}
                         className="hover:text-white">Cancelar</button>
                       <button onClick={handleAddMaterial} disabled={!newMaterialName.trim()}

@@ -623,13 +623,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     overallProgress: 100,
   });
   const [musicListeningTime, setMusicListeningTime] = useState(0);
-  const [musicListeningDate, setMusicListeningDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [musicListeningDate, setMusicListeningDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
   const [dailyMusicTime, setDailyMusicTime] = useState<Record<string, number>>({});
 
   // Reset listening time daily
   useEffect(() => {
     const check = setInterval(() => {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = format(new Date(), 'yyyy-MM-dd');
       if (today !== musicListeningDate) {
         setMusicListeningTime(0);
         setMusicListeningDate(today);
@@ -643,7 +643,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!isPlayingMusic) return;
     const interval = setInterval(() => {
       setMusicListeningTime(prev => prev + 1);
-      const today = new Date().toISOString().slice(0, 10);
+      const today = format(new Date(), 'yyyy-MM-dd');
       setDailyMusicTime(prev => ({ ...prev, [today]: (prev[today] || 0) + 1 }));
     }, 1000);
     return () => clearInterval(interval);
@@ -710,15 +710,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
             // Migration: dailyGoalHistory keys might have been stored in UTC (from old code using toISOString)
             if (data.settings.dailyGoalHistory) {
               const rawHistory = data.settings.dailyGoalHistory as Record<string, number>;
-              const todayLocal = format(new Date(), 'yyyy-MM-dd');
               const fixed: Record<string, number> = {};
               for (const key of Object.keys(rawHistory)) {
-                const val = rawHistory[key];
-                if (key > todayLocal) {
-                  const d = parseISO(key);
-                  fixed[format(subDays(d, 1), 'yyyy-MM-dd')] = val;
+                if (/^\d{4}-\d{2}-\d{2}$/.test(key)) {
+                  fixed[key] = rawHistory[key];
                 } else {
-                  fixed[key] = val;
+                  // Try to fix: it was stored as ISO date string
+                  try {
+                    const localDate = format(parseISO(key), 'yyyy-MM-dd');
+                    fixed[localDate] = rawHistory[key];
+                  } catch {
+                    fixed[key] = rawHistory[key];
+                  }
                 }
               }
               data.settings.dailyGoalHistory = fixed;
@@ -728,7 +731,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (data.sessionTime) setSessionTime(data.sessionTime);
           if (data.sessionType) setSessionType(data.sessionType);
           if (data.weeklyStudyTime) setWeeklyStudyTime(data.weeklyStudyTime);
-          const today = new Date().toISOString().slice(0, 10);
+          const today = format(new Date(), 'yyyy-MM-dd');
           if (data.dailyStudyTime !== undefined && data.dailyStudyDate === today) {
             setDailyStudyTime(data.dailyStudyTime);
           }
@@ -738,7 +741,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (data.musicProgress !== undefined) setMusicProgress(data.musicProgress);
           if (data.musicDuration !== undefined) setMusicDuration(data.musicDuration);
           if (data.musicListeningTime !== undefined) {
-            const today = new Date().toISOString().slice(0, 10);
+            const today = format(new Date(), 'yyyy-MM-dd');
             if (data.musicListeningDate === today) {
               setMusicListeningTime(data.musicListeningTime);
             }
@@ -797,10 +800,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const activeTaskIdRef = useRef(activeTaskId);
   activeTaskIdRef.current = activeTaskId;
 
-  // Midnight reset: auto-reset dailyStudyTime when date changes
+  // Midnight reset (local time): auto-reset dailyStudyTime when date changes
   useEffect(() => {
     const checkDay = () => {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = format(new Date(), 'yyyy-MM-dd');
       setDailyStudyDate(prev => {
         if (prev !== today) {
           setDailyStudyTime(0);
@@ -860,10 +863,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         if (rest) {
           setBreakTime(prev => prev + 1);
-          const today = new Date().toISOString().split('T')[0];
+          const today = format(new Date(), 'yyyy-MM-dd');
           setDailyBreakTime(prev => ({ ...prev, [today]: (prev[today] || 0) + 1 }));
         } else {
-          const today = new Date().toISOString().split('T')[0];
+          const today = format(new Date(), 'yyyy-MM-dd');
           setDailyStudyDate(today);
           setDailyStudyTime(prev => prev + 1);
           setWeeklyStudyTime(prev => ({ ...prev, [today]: (prev[today] || 0) + 1 }));
@@ -1575,8 +1578,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const onEnded = () => {
       if (currentTrackIdRef.current && tracksRef.current.length > 0) {
         if (repeatModeRef.current === 'one') {
-          // Play once more, then disable repeat-one
-          _setRepeatMode('none');
           globalAudio.currentTime = 0;
           globalAudio.play().catch(() => {});
           return;
@@ -1602,9 +1603,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setIsPlayingMusic(false);
       }
     };
+    let retryCount = 0;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
     const onError = () => {
-      setIsPlayingMusic(false);
-      console.warn('Audio playback error for track:', currentTrackIdRef.current);
+      const cid = currentTrackIdRef.current;
+      if (!cid) { setIsPlayingMusic(false); return; }
+      // Retry up to 3 times with exponential backoff
+      if (retryCount < 3) {
+        retryCount++;
+        const delay = Math.min(500 * Math.pow(2, retryCount - 1), 3000);
+        console.warn(`Audio playback error for track ${cid}, retry ${retryCount}/3 in ${delay}ms`);
+        retryTimer = setTimeout(() => {
+          if (currentTrackIdRef.current === cid && isPlayingMusicRef.current) {
+            globalAudio.load();
+            globalAudio.play().catch(() => {});
+          }
+        }, delay);
+      } else {
+        console.warn('Audio playback error, max retries reached for track:', cid);
+        setIsPlayingMusic(false);
+      }
+    };
+    const onStalled = () => {
+      if (isPlayingMusicRef.current && !globalAudio.paused) {
+        console.warn('Audio stalled, attempting recovery');
+        globalAudio.play().catch(() => {});
+      }
     };
     const onCanPlay = () => {
       if (autoPlayRef.current) {
@@ -1639,6 +1663,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     audio.addEventListener('durationchange', onDurationChange);
     audio.addEventListener('ended', onEnded);
     audio.addEventListener('error', onError);
+    audio.addEventListener('stalled', onStalled);
     audio.addEventListener('canplay', onCanPlay);
     audio.addEventListener('pause', onPauseExternal);
     audio.addEventListener('play', onPlayExternal);
@@ -1696,10 +1721,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     document.addEventListener('visibilitychange', onVisibilityChange);
 
     return () => {
+      if (retryTimer) clearTimeout(retryTimer);
       audio.removeEventListener('timeupdate', onTimeUpdate);
       audio.removeEventListener('durationchange', onDurationChange);
       audio.removeEventListener('ended', onEnded);
       audio.removeEventListener('error', onError);
+      audio.removeEventListener('stalled', onStalled);
       audio.removeEventListener('canplay', onCanPlay);
       audio.removeEventListener('pause', onPauseExternal);
       audio.removeEventListener('play', onPlayExternal);
@@ -1712,7 +1739,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // â”€â”€ STUDY SESSIONS â”€â”€
+  const lastSessionKeyRef = useRef<string>('');
   const addStudySession = useCallback((session: Omit<StudySession, 'id'>) => {
+    // Dedup: prevent duplicate sessions created within 2s with same type+duration
+    const key = `${session.type}-${session.duration}-${Math.floor(Date.now() / 2000)}`;
+    if (key === lastSessionKeyRef.current) return;
+    lastSessionKeyRef.current = key;
     setStudySessions(prev => [...prev, { ...session, id: Date.now().toString() }]);
   }, []);
 
@@ -1721,7 +1753,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const incrementDailyStudyTime = useCallback(() => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = format(new Date(), 'yyyy-MM-dd');
     setDailyStudyDate(today);
     setDailyStudyTime(prev => prev + 1);
     setWeeklyStudyTime(prev => ({ ...prev, [today]: (prev[today] || 0) + 1 }));
@@ -1950,7 +1982,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const { exportStatsToSheet } = await import('../lib/google/docs');
       const headers = ['Día', 'Minutos Estudio', 'Tareas Completadas', 'Pomodoros'];
-      const today = new Date().toISOString().split('T')[0];
+      const today = format(new Date(), 'yyyy-MM-dd');
       const data = [[today, Math.floor(sessionTime / 60), tasks.filter(t => t.status === 'completado').length, pomodoroSessions]];
       const url = await exportStatsToSheet(headers, data);
       addNotification('Estadísticas exportadas a Google Sheets', 'success');

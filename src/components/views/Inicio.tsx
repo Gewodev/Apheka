@@ -32,7 +32,7 @@ function DigitSVG({ d, color, width = 80, height = 130 }: { d: string; color: st
     <svg width={width} height={height} viewBox="0 0 72 120" style={{ display: 'block' }}>
       {segPolys.map((poly, i) => (
         <polygon key={i} points={poly.map(p => p.join(',')).join(' ')}
-          fill={s[i] ? color : 'rgba(255,255,255,0.015)'}
+          fill={s[i] ? color : 'var(--led-segment-off)'}
           style={{ transition: 'fill 150ms cubic-bezier(0.4, 0, 0.2, 1)', filter: s[i] ? `drop-shadow(0 0 5px ${color}90) drop-shadow(0 0 15px ${color}50)` : 'none' }}
         />
       ))}
@@ -257,8 +257,8 @@ export default function Inicio() {
         const minutesStudied = Math.floor(secondsStudied / 60);
         
         const tooltip = isFuture 
-          ? `${dateFormatted}: Día futuro`
-          : `${dateFormatted}: ${minutesStudied}m / ${goalForDay}m (${Math.round(pct * 100)}%) ${met ? 'âœ“ Meta cumplida' : ''}`;
+          ? `${dateFormatted}: Dia futuro`
+          : `${dateFormatted}: ${minutesStudied}m / ${goalForDay}m (${Math.round(pct * 100)}%) ${met ? 'Meta cumplida' : ''}`;
           
         rowCells.push({ level, tooltip });
       }
@@ -298,13 +298,13 @@ export default function Inicio() {
   return (
     <div className="page-container flex flex-col h-full overflow-y-auto custom-scroll" style={{ gap: 20 }}>
 
-      {/* â”€â”€ HEADER â”€â”€ */}
+      {/* â'€â'€ HEADER â'€â'€ */}
       <header className="flex justify-between items-end gap-6 pt-1" style={{ paddingBottom: 4, marginBottom: 4 }}>
         <div className="flex-1 min-w-0">
           <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 6, color: 'var(--text-tertiary)' }}>
             {(() => {
               const h = ct.getHours();
-              return h < 12 ? 'Buenos días' : h < 18 ? 'Buenas tardes' : 'Buenas noches';
+              return h < 12 ? 'Buenos dias' : h < 18 ? 'Buenas tardes' : 'Buenas noches';
             })()}, <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{settings.userName || 'Avery'}</span>
           </div>
           <h1 style={{ fontFamily: "'Inter Tight', sans-serif", fontWeight: 300, fontSize: 32, lineHeight: 1.4, letterSpacing: '0.02em', color: 'var(--text-primary)' }}>
@@ -348,12 +348,12 @@ export default function Inicio() {
         </div>
       </header>
 
-      {/* â”€â”€ ROW 1: 3 STATS + TIMER â”€â”€ */}
+      {/* â'€â'€ ROW 1: 3 STATS + TIMER â'€â'€ */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
           { label: 'TAREAS', val: ts.active, sub: 'Pendientes', color: '#3B82F6', icon: CheckSquare },
           { label: 'NOTAS', val: ts.total, sub: 'Guardadas', color: '#10B981', icon: FileText },
-          { label: 'RACHA', val: streak, sub: 'días', color: '#F59E0B', icon: Flame },
+          { label: 'RACHA', val: streak, sub: 'dias', color: '#F59E0B', icon: Flame },
         ].map((s, i) => (
           <div key={i}
             style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 10, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 12 }}>
@@ -390,7 +390,7 @@ export default function Inicio() {
               </div>
               <span style={{ fontSize: 9, fontWeight: 500, color: remaining <= 0 ? '#10B981' : 'var(--text-secondary)' }}>
                 {remaining <= 0
-                  ? 'âœ“ Meta alcanzada'
+                  ? 'Meta alcanzada'
                   : `Faltan ${remaining}min para alcanzar la meta`}
               </span>
             </div>
@@ -398,7 +398,7 @@ export default function Inicio() {
         })()}
       </div>
 
-      {/* â”€â”€ ROW 2: HEATMAP + RECIENTES â”€â”€ */}
+      {/* â'€â'€ ROW 2: HEATMAP + RECIENTES â'€â'€ */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-stretch">
 
         {/* HEATMAP */}
@@ -417,7 +417,7 @@ export default function Inicio() {
           <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 4, marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border-soft)', fontSize: 9, color: 'var(--text-tertiary)', fontWeight: 600 }}>
             <span>Menos</span>
             {[0,1,2,3,4].map(l => <div key={l} style={{ width: 10, height: 10, borderRadius: 2, background: hl(l) }} />)}
-            <span>Más</span>
+            <span>Mas</span>
           </div>
         </div>
 
@@ -425,7 +425,7 @@ export default function Inicio() {
         <div className="xl:col-span-6" style={{ padding: '18px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 12, display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
             <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em' }}>RECIENTES</span>
-            <span onClick={() => setNavigateTo?.('musica')} style={{ fontSize: 10, fontWeight: 600, color: 'var(--accent)', cursor: 'pointer' }} className="hover:opacity-80">Ir a Música</span>
+            <span onClick={() => setNavigateTo?.('musica')} style={{ fontSize: 10, fontWeight: 600, color: 'var(--accent)', cursor: 'pointer' }} className="hover:opacity-80">Ir a Musica</span>
           </div>
           
           <div style={{ 
@@ -482,7 +482,7 @@ export default function Inicio() {
                   width: '100%'
                 }}>
                   <Music size={20} style={{ color: 'var(--text-muted)', opacity: 0.2 }} />
-                  <span style={{ fontSize: 8, marginTop: 4, color: 'var(--text-tertiary)' }}>Vacío</span>
+                  <span style={{ fontSize: 8, marginTop: 4, color: 'var(--text-tertiary)' }}>Vacio</span>
                 </div>
               ))
             )}
@@ -490,7 +490,7 @@ export default function Inicio() {
         </div>
       </div>
 
-      {/* â”€â”€ ROW 3: TASKS + NOTES + SYSTEM â”€â”€ */}
+      {/* â'€â'€ ROW 3: TASKS + NOTES + SYSTEM â'€â'€ */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 mb-2">
 
         {/* TASKS */}
@@ -542,7 +542,7 @@ export default function Inicio() {
               </div>
             ))}
             {notes.length === 0 && (
-              <div style={{ padding: '16px 0', textAlign: 'center', fontSize: 10, color: 'var(--text-muted)' }}>Sin notas aún</div>
+              <div style={{ padding: '16px 0', textAlign: 'center', fontSize: 10, color: 'var(--text-muted)' }}>Sin notas aun</div>
             )}
           </div>
         </div>
@@ -568,7 +568,7 @@ export default function Inicio() {
             <span style={{ fontSize: 10, fontFamily: "'Share Tech Mono', monospace", color: '#3B82F6', whiteSpace: 'nowrap', padding: '4px 12px', background: 'var(--bg-surface)', borderRadius: 6, border: '1px solid var(--border-soft)' }}>{'\u25CF'} En vivo</span>
           </div>
           );})()}
-          {/* Metrics row — 3 per row, spacious */}
+          {/* Metrics row - 3 per row, spacious */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
             {[
               { label: 'CPU', val: `${ss.cpu}%`, color: '#E11D48', bar: ss.cpu },
@@ -598,7 +598,7 @@ export default function Inicio() {
         </div>
       </div>
 
-      {/* â”€â”€ EXPANDED DETAIL VIEW â”€â”€ */}
+      {/* â'€â'€ EXPANDED DETAIL VIEW â'€â'€ */}
       {detailView && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', padding: 16 }} onClick={() => setDetailView(false)}>
           <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 16, width: '100%', maxWidth: 720, maxHeight: '85vh', overflowY: 'auto', padding: 28 }} onClick={e => e.stopPropagation()}>
@@ -623,13 +623,13 @@ export default function Inicio() {
                 <DetailSection icon={<Cpu size={13} />} title="Procesador (CPU)" values={[
                   { label: 'Modelo', value: ss.cpuName || 'Desconocido' },
                   { label: 'Uso', value: `${ss.cpu}%` },
-                  { label: 'Temperatura', value: ss.cpuTemp !== null ? `${Math.round(ss.cpuTemp)}°C` : 'N/A' },
+                  { label: 'Temperatura', value: ss.cpuTemp !== null ? `${Math.round(ss.cpuTemp)}C` : 'N/A' },
                 ]} />
 
                 {/* GPU Section */}
-                <DetailSection icon={<Monitor size={13} />} title="Tarjeta Gráfica (GPU)" values={[
+                <DetailSection icon={<Monitor size={13} />} title="Tarjeta Grafica (GPU)" values={[
                   { label: 'Modelo', value: ss.gpuName || 'Desconocido' },
-                  { label: 'Temperatura', value: ss.gpuTemp !== null ? `${Math.round(ss.gpuTemp)}°C` : 'N/A' },
+                  { label: 'Temperatura', value: ss.gpuTemp !== null ? `${Math.round(ss.gpuTemp)}C` : 'N/A' },
                 ]} />
 
                 {/* RAM Section */}
@@ -648,14 +648,14 @@ export default function Inicio() {
 
                 {/* Network Section */}
                 <DetailSection icon={<Wifi size={13} />} title="Red" values={[
-                  { label: 'Conexión', value: isOnline ? 'En línea' : 'Sin conexión' },
+                  { label: 'Conexion', value: isOnline ? 'En linea' : 'Sin conexion' },
                   { label: 'Velocidad', value: ss.netSpeed > 0 ? `${ss.netSpeed} Mbps` : 'N/A' },
                   { label: 'Adaptador', value: ss.netName || 'Desconocido' },
                 ]} />
 
                 {/* Battery Section */}
                 {ss.battery >= 0 && (
-                  <DetailSection icon={<Monitor size={13} />} title="Batería" values={[
+                  <DetailSection icon={<Monitor size={13} />} title="Bateria" values={[
                     { label: 'Carga', value: `${Math.round(ss.battery)}%` },
                   ]} />
                 )}
@@ -674,7 +674,7 @@ export default function Inicio() {
         </div>
       )}
 
-      {/* â”€â”€ SINGLE STAT MODAL â”€â”€ */}
+      {/* â'€â'€ SINGLE STAT MODAL â'€â'€ */}
       {dc && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', padding: 16 }} onClick={() => setDetailStat(null)}>
           <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 16, width: '100%', maxWidth: 380, padding: 24 }} onClick={e => e.stopPropagation()}>
@@ -685,7 +685,7 @@ export default function Inicio() {
                 </div>
                 <div>
                   <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{dc.label}</h2>
-                  <p style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>Diagnóstico en tiempo real</p>
+                  <p style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>Diagnostico en tiempo real</p>
                 </div>
               </div>
               <button onClick={() => setDetailStat(null)} style={{ padding: '8px 16px', borderRadius: 6, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer' }}>Cerrar</button>

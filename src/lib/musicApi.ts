@@ -12,6 +12,7 @@ export interface YouTubeMetadata {
   duration: number;
   channel: string;
   webpage_url: string;
+  url?: string;
   playlist?: string;
   playlist_index?: number;
   playlist_count?: number;
@@ -235,6 +236,7 @@ export async function fetchMetadata(url: string): Promise<YouTubePlaylist | YouT
     const rawEntries = data.entries as Record<string, unknown>[];
     const playlistCount = Number(data.playlist_count) || rawEntries.length;
     const entries: YouTubeMetadata[] = rawEntries.map(e => ({
+      ...e,
       id: String(e.id || ''),
       title: String(e.title || 'Unknown'),
       thumbnail: getThumbnail(e),
@@ -244,10 +246,10 @@ export async function fetchMetadata(url: string): Promise<YouTubePlaylist | YouT
       playlist: String(data.title || ''),
       playlist_index: Number(e.playlist_index) || 0,
       playlist_count: playlistCount,
-      ...e,
     }));
 
     return {
+      ...(data as Record<string, unknown>),
       id: String(data.id || ''),
       title: String(data.title || 'Playlist'),
       channel: String(data.channel || data.uploader || 'Unknown'),
@@ -255,18 +257,17 @@ export async function fetchMetadata(url: string): Promise<YouTubePlaylist | YouT
       webpage_url: String(data.webpage_url || url),
       entries,
       playlist_count: playlistCount,
-      ...(data as Record<string, unknown>),
     } as YouTubePlaylist;
   }
 
   return {
+    ...(data as Record<string, unknown>),
     id: String(data.id || ''),
     title: String(data.title || 'Unknown'),
     thumbnail: getThumbnail(data as Record<string, unknown>),
     duration: parseDuration(data.duration as string | number | undefined),
     channel: String(data.channel || data.uploader || 'Unknown'),
     webpage_url: String(data.webpage_url || data.url || url),
-    ...(data as Record<string, unknown>),
   } as YouTubeMetadata;
 }
 
@@ -300,16 +301,17 @@ export async function validateUrl(url: string): Promise<YouTubePlaylist | YouTub
 
   if (data.entries) {
     const entries = (data.entries as Record<string, unknown>[]).map(e => ({
+      ...e,
       id: String(e.id || ''),
       title: String(e.title || 'Unknown'),
       thumbnail: getThumbnail(e),
       duration: parseDuration(e.duration as string | number | undefined),
       channel: String(e.channel || e.uploader || 'Unknown'),
       webpage_url: String(e.webpage_url || e.url || ''),
-      ...e,
     }));
 
     return {
+      ...(data as Record<string, unknown>),
       id: String(data.id || ''),
       title: String(data.title || 'Playlist'),
       channel: String(data.channel || data.uploader || 'Unknown'),
@@ -317,18 +319,17 @@ export async function validateUrl(url: string): Promise<YouTubePlaylist | YouTub
       webpage_url: String(data.webpage_url || url),
       entries,
       playlist_count: Number(data.playlist_count) || entries.length,
-      ...(data as Record<string, unknown>),
     } as YouTubePlaylist;
   }
 
   return {
+    ...(data as Record<string, unknown>),
     id: String(data.id || ''),
     title: String(data.title || 'Unknown'),
     thumbnail: getThumbnail(data as Record<string, unknown>),
     duration: parseDuration(data.duration as string | number | undefined),
     channel: String(data.channel || data.uploader || 'Unknown'),
     webpage_url: String(data.webpage_url || data.url || url),
-    ...(data as Record<string, unknown>),
   } as YouTubeMetadata;
 }
 

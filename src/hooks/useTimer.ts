@@ -137,7 +137,6 @@ export function useTimer() {
 
   const handleReset = useCallback(() => {
     if (isTimerActive) {
-      addNotification('Pausa el temporizador antes de reiniciar', 'error');
       return;
     }
     // Persist the session if it was long enough (>= 10s)
@@ -159,14 +158,13 @@ export function useTimer() {
 
   const handleTypeChange = useCallback(
     (type: 'pomodoro' | 'chrono') => {
-      if (isTimerActive) {
-        addNotification('Pausa el temporizador antes de cambiar de modo', 'error');
+      if (isTimerActive || isRest) {
         return;
       }
       setSessionType(type);
       setSessionTime(0);
     },
-    [isTimerActive, setSessionType, setSessionTime, addNotification],
+    [isTimerActive, isRest, setSessionType, setSessionTime],
   );
 
   // ---------------------------------------------------------------------------

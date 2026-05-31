@@ -24,6 +24,11 @@
   --bg-hover: rgba(255, 255, 255, 0.03);
   --bg-active: rgba(255, 255, 255, 0.05);
   --bg-deep: #06060a;
+  --bg-primary: #0a0a0c;
+  --bg-secondary: #0c0c10;
+  --surface: #0f0f14;
+  --surface-elevated: #14141a;
+  --surface-hover: #18181e;
 
   --accent: #E11D48;
   --accent-soft: rgba(225, 29, 72, 0.12);
@@ -40,11 +45,16 @@
   --border-default: rgba(255, 255, 255, 0.06);
   --border-subtle: rgba(255, 255, 255, 0.03);
   --border-strong: rgba(255, 255, 255, 0.10);
+  --border-soft: rgba(255, 255, 255, 0.05);
+  --border-hover: rgba(255, 255, 255, 0.08);
 
   --success: #10B981;
   --warning: #F59E0B;
   --error: #EF4444;
   --info: #3B82F6;
+  --error-dim: rgba(239, 68, 68, 0.12);
+  --warning-dim: rgba(245, 158, 11, 0.12);
+  --success-dim: rgba(16, 185, 129, 0.12);
 
   --radius-sm: 6px;
   --radius-md: 8px;
@@ -79,6 +89,11 @@
   --bg-hover: rgba(0, 0, 0, 0.04);
   --bg-active: rgba(0, 0, 0, 0.06);
   --bg-deep: #e2e8f0;
+  --bg-primary: #f8fafc;
+  --bg-secondary: #f0f4f8;
+  --surface: #eef2f6;
+  --surface-elevated: #e2e8f0;
+  --surface-hover: #d1d9e6;
 
   --text-primary: #0f172a;
   --text-secondary: #475569;
@@ -88,6 +103,8 @@
   --border-default: rgba(0, 0, 0, 0.08);
   --border-subtle: rgba(0, 0, 0, 0.04);
   --border-strong: rgba(0, 0, 0, 0.12);
+  --border-soft: rgba(0, 0, 0, 0.06);
+  --border-hover: rgba(0, 0, 0, 0.10);
 
   --accent-soft: rgba(225, 29, 72, 0.08);
   --accent-glow: rgba(225, 29, 72, 0.15);
@@ -471,6 +488,10 @@ body,
   position: relative;
 }
 
+.main-area > .page-container {
+  opacity: var(--ui-opacity, 0.85);
+}
+
 .page-container {
   height: 100%;
   overflow-y: auto;
@@ -507,6 +528,11 @@ body,
   --bg-hover: rgba(139, 92, 246, 0.06);
   --bg-active: rgba(139, 92, 246, 0.10);
   --bg-deep: #08061a;
+  --bg-primary: #0c0a1a;
+  --bg-secondary: #0e0c1e;
+  --surface: #110e24;
+  --surface-elevated: #181430;
+  --surface-hover: #1c1840;
 
   --text-primary: rgba(255, 255, 255, 0.93);
   --text-secondary: rgba(230, 220, 255, 0.55);
@@ -516,6 +542,8 @@ body,
   --border-default: rgba(139, 92, 246, 0.10);
   --border-subtle: rgba(139, 92, 246, 0.05);
   --border-strong: rgba(139, 92, 246, 0.18);
+  --border-soft: rgba(139, 92, 246, 0.06);
+  --border-hover: rgba(139, 92, 246, 0.10);
 
   --accent-soft: color-mix(in srgb, var(--accent) 20%, transparent);
   --accent-glow: color-mix(in srgb, var(--accent) 40%, transparent);

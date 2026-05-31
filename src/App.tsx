@@ -158,8 +158,13 @@ function AppContent() {
       root.style.setProperty('--led-dim', `rgba(${r},${g},${b},0.08)`);
       root.style.setProperty('--led-segment-off', `rgba(${r},${g},${b},0.06)`);
       
+      // Cleanup 3-color mode JS variables so CSS values take effect
+      root.style.removeProperty('--bg-base');
       root.style.removeProperty('--bg-primary');
       root.style.removeProperty('--bg-secondary');
+      root.style.removeProperty('--bg-surface');
+      root.style.removeProperty('--bg-elevated');
+      root.style.removeProperty('--bg-deep');
       root.style.removeProperty('--theme-secondary');
       root.style.removeProperty('--theme-tertiary');
       root.style.removeProperty('--surface');
@@ -167,6 +172,15 @@ function AppContent() {
       root.style.removeProperty('--surface-hover');
       root.style.removeProperty('--border-soft');
       root.style.removeProperty('--border-hover');
+      root.style.removeProperty('--border-default');
+      root.style.removeProperty('--border-subtle');
+      root.style.removeProperty('--border-strong');
+      root.style.removeProperty('--text-primary');
+      root.style.removeProperty('--text-secondary');
+      root.style.removeProperty('--text-tertiary');
+      root.style.removeProperty('--text-muted');
+      root.style.removeProperty('--bg-hover');
+      root.style.removeProperty('--bg-active');
     }
     
     root.style.setProperty('--font-primary', settings.fontFamily);
@@ -344,7 +358,7 @@ function AppContent() {
         <div style={{
           position: 'fixed',
           inset: 0,
-          background: 'rgba(10, 10, 12, 0.75)',
+          background: 'color-mix(in srgb, var(--bg-base) 80%, transparent)',
           backdropFilter: 'blur(12px)',
           WebkitBackdropFilter: 'blur(12px)',
           display: 'flex',
@@ -354,13 +368,13 @@ function AppContent() {
           animation: 'fadeIn 0.3s ease-out',
         }}>
           <div style={{
-            background: 'rgba(20, 20, 25, 0.8)',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--border-default)',
             borderRadius: 16,
             padding: '32px 40px',
             width: '100%',
             maxWidth: 460,
-            boxShadow: '0 20px 40px rgba(0, 0, 0, 0.5), 0 0 50px rgba(225, 29, 72, 0.1)',
+            boxShadow: '0 20px 60px color-mix(in srgb, var(--accent) 8%, transparent)',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
@@ -369,7 +383,7 @@ function AppContent() {
             {/* High-tech rotating gradient loader */}
             <div style={{ position: 'relative', width: 80, height: 80, marginBottom: 24 }}>
               <svg width="80" height="80" viewBox="0 0 80 80">
-                <circle cx="40" cy="40" r="34" stroke="rgba(255,255,255,0.03)" strokeWidth="4" fill="none" />
+                <circle cx="40" cy="40" r="34" stroke="var(--border-soft)" strokeWidth="4" fill="none" />
                 <circle
                   cx="40"
                   cy="40"
@@ -409,11 +423,11 @@ function AppContent() {
 
             <div style={{
               width: '100%',
-              background: 'rgba(255,255,255,0.03)',
+              background: 'var(--bg-elevated)',
               borderRadius: 8,
               padding: 12,
               marginBottom: 20,
-              border: '1px solid rgba(255,255,255,0.04)',
+              border: '1px solid var(--border-subtle)',
               textAlign: 'left'
             }}>
               <div style={{
@@ -444,7 +458,7 @@ function AppContent() {
                     width: 6,
                     height: 6,
                     borderRadius: '50%',
-                    background: importState.phase === 'loading_file' ? 'var(--accent)' : (['extracting_metadata', 'validating_audio', 'finished'].includes(importState.phase) ? '#10B981' : 'transparent'),
+                    background: importState.phase === 'loading_file' ? 'var(--accent)' : (['extracting_metadata', 'validating_audio', 'finished'].includes(importState.phase) ? 'var(--accent)' : 'transparent'),
                     boxShadow: importState.phase === 'loading_file' ? '0 0 8px var(--accent)' : 'none'
                   }} />
                   <span style={{ textDecoration: (['extracting_metadata', 'validating_audio', 'finished'].includes(importState.phase)) ? 'line-through' : 'none', opacity: (['extracting_metadata', 'validating_audio', 'finished'].includes(importState.phase)) ? 0.5 : 1 }}>
@@ -457,7 +471,7 @@ function AppContent() {
                     width: 6,
                     height: 6,
                     borderRadius: '50%',
-                    background: importState.phase === 'extracting_metadata' ? 'var(--accent)' : (['validating_audio', 'finished'].includes(importState.phase) ? '#10B981' : 'transparent'),
+                    background: importState.phase === 'extracting_metadata' ? 'var(--accent)' : (['validating_audio', 'finished'].includes(importState.phase) ? 'var(--accent)' : 'transparent'),
                     boxShadow: importState.phase === 'extracting_metadata' ? '0 0 8px var(--accent)' : 'none'
                   }} />
                   <span style={{ textDecoration: (['validating_audio', 'finished'].includes(importState.phase)) ? 'line-through' : 'none', opacity: (['validating_audio', 'finished'].includes(importState.phase)) ? 0.5 : 1 }}>
@@ -470,7 +484,7 @@ function AppContent() {
                     width: 6,
                     height: 6,
                     borderRadius: '50%',
-                    background: importState.phase === 'validating_audio' ? 'var(--accent)' : (importState.phase === 'finished' ? '#10B981' : 'transparent'),
+                    background: importState.phase === 'validating_audio' ? 'var(--accent)' : (importState.phase === 'finished' ? 'var(--accent)' : 'transparent'),
                     boxShadow: importState.phase === 'validating_audio' ? '0 0 8px var(--accent)' : 'none'
                   }} />
                   <span style={{ textDecoration: importState.phase === 'finished' ? 'line-through' : 'none', opacity: importState.phase === 'finished' ? 0.5 : 1 }}>
@@ -481,7 +495,7 @@ function AppContent() {
             </div>
 
             {/* Horizontal Overall Progress Bar */}
-            <div style={{ width: '100%', height: 4, background: 'rgba(255,255,255,0.05)', borderRadius: 2, overflow: 'hidden' }}>
+            <div style={{ width: '100%', height: 4, background: 'var(--bg-hover)', borderRadius: 2, overflow: 'hidden' }}>
               <div style={{
                 width: `${importState.overallProgress}%`,
                 height: '100%',
