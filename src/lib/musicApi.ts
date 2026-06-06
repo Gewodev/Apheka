@@ -134,7 +134,22 @@ async function webStreamUrl(videoId: string): Promise<string> {
 }
 
 // Web download using multiple free conversion APIs
+const SAFE_HOSTS = ['youtube.com', 'youtu.be', 'vimeo.com'];
+
+function assertSafeVideoUrl(url: string): void {
+  try {
+    const parsed = new URL(url);
+    const hostOk = SAFE_HOSTS.some(h => parsed.hostname.endsWith(h));
+    if (!hostOk || !['http:', 'https:'].includes(parsed.protocol)) {
+      throw new Error('Host not permitted or protocol unsafe');
+    }
+  } catch {
+    throw new Error('Invalid URL format');
+  }
+}
+
 async function webDownloadAudio(downloadId: string, ytUrl: string, format: string): Promise<void> {
+  assertSafeVideoUrl(ytUrl);
   const match = ytUrl.match(/(?:v=|youtu\.be\/)([\w-]{11})/);
   if (!match) throw new Error('URL de YouTube inválida');
   const videoId = match[1];
@@ -339,6 +354,7 @@ export async function startDownload(
   outputDir?: string,
   format: string = 'mp3',
   includeCover: boolean = true,
+  audioQuality: string = '3',
 ): Promise<void> {
   if (!isTauri()) {
     return webDownloadAudio(downloadId, url, format);
@@ -348,6 +364,7 @@ export async function startDownload(
     outputDir: outputDir || '',
     format,
     includeCover,
+    audioQuality,
   });
 }
 

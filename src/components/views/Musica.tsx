@@ -23,7 +23,6 @@ import {
   type YouTubePlaylist, type YouTubeMetadata, type SearchResult,
   type DownloadProgress, type DownloadComplete,
 } from '../../lib/musicApi';
-import { extractMp3Metadata } from '../../lib/mp3Metadata';
 import NotificationBell from '../ui/NotificationBell';
 
 type TabId = 'biblioteca' | 'artistas' | 'favoritas' | 'explorar';
@@ -63,6 +62,7 @@ export default function Musica() {
   const [showAllRecents, setShowAllRecents] = useState(false);
   const [audioFormat, setAudioFormat] = useState<'mp3' | 'm4a'>('mp3');
   const [includeCover, setIncludeCover] = useState(true);
+  const [audioQuality, setAudioQuality] = useState('3');
   const [selectedArtist, setSelectedArtist] = useState<string | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const [searchMode, setSearchMode] = useState<'link' | 'query'>('link');
@@ -224,7 +224,7 @@ export default function Musica() {
     }
     updateDownloadStatus(dlItemId, 'downloading');
     try {
-      await startDownload(videoUrl, dlItemId, path, audioFormat, includeCover);
+      await startDownload(videoUrl, dlItemId, path, audioFormat, includeCover, audioQuality);
       updateDownloadStatus(dlItemId, 'completed');
     } catch (e) {
       const msg = String(e);
@@ -932,27 +932,47 @@ export default function Musica() {
                 </div>
               )}
 
-              {/* Format Selector + Cover toggle + Destination */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderRadius: 8, border: '1px solid var(--border-subtle)', marginBottom: 20 }}>
-                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                  <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Formato:</span>
+              {/* Download options: Quality + Format + Cover toggle + Destination */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '12px 16px', borderRadius: 8, border: '1px solid var(--border-subtle)', marginBottom: 20 }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
+                  <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>Calidad:</span>
+                  {([['7', '96 kbps'], ['5', '128 kbps'], ['3', '192 kbps'], ['0', '320 kbps']] as const).map(([q, label]) => {
+                    return (
+                      <button key={q}
+                        onClick={() => setAudioQuality(q)}
+                        style={{
+                          padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
+                          background: audioQuality === q ? 'var(--accent)' : 'var(--bg-surface)',
+                          color: audioQuality === q ? '#fff' : 'var(--text-secondary)',
+                          border: audioQuality === q ? 'none' : '1px solid var(--border-default)',
+                          cursor: 'pointer', transition: 'all 200ms',
+                        }}
+                      >{label}</button>
+                    );
+                  })}
+                  <div style={{ width: 1, height: 22, background: 'var(--border-subtle)', flexShrink: 0 }} />
+                  <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>Formato:</span>
                   {(['mp3', 'm4a'] as const).map(f => (
-                    <button
-                      key={f}
+                    <button key={f}
                       onClick={() => setAudioFormat(f)}
                       style={{
-                        padding: '4px 12px', borderRadius: 6, fontSize: 11, fontWeight: 600, textTransform: 'uppercase',
+                        padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', whiteSpace: 'nowrap',
                         background: audioFormat === f ? 'var(--accent)' : 'var(--bg-surface)',
                         color: audioFormat === f ? '#fff' : 'var(--text-secondary)',
                         border: audioFormat === f ? 'none' : '1px solid var(--border-default)', cursor: 'pointer', transition: 'all 200ms',
                       }}
                     >{f}</button>
                   ))}
-                  <div style={{ width: 1, height: 24, background: 'var(--border-subtle)' }} />
+                  {audioFormat === 'm4a' && (
+                    <span style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 500, whiteSpace: 'nowrap' }}>
+                      ✓ Mejor calidad al mismo bitrate
+                    </span>
+                  )}
+                  <div style={{ width: 1, height: 22, background: 'var(--border-subtle)', flexShrink: 0 }} />
                   <button
                     onClick={() => setIncludeCover(!includeCover)}
                     style={{
-                      padding: '4px 12px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                      padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
                       background: includeCover ? 'var(--accent)' : 'var(--bg-surface)',
                       color: includeCover ? '#fff' : 'var(--text-secondary)',
                       border: '1px solid var(--border-default)', cursor: 'pointer', transition: 'all 200ms',
@@ -960,16 +980,18 @@ export default function Musica() {
                     }}
                   ><Image size={12} /> {includeCover ? 'Con portada' : 'Sin portada'}</button>
                 </div>
-
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                  <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Destino:</span>
-                  <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>{persistentDownloadPath || 'Descargas/OWA Music'}</span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+                  <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>Destino:</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', wordBreak: 'break-all' }}>{persistentDownloadPath || 'Descargas/OWA Music'}</span>
                   <button
                     onClick={handleSelectFolder}
-                    className="btn-ghost" style={{ padding: 6, background: 'var(--bg-surface)', borderRadius: 6, border: '1px solid var(--border-default)' }}
+                    className="btn-ghost" style={{ padding: 6, background: 'var(--bg-surface)', borderRadius: 6, border: '1px solid var(--border-default)', flexShrink: 0 }}
                   >
                     <FolderOpen size={14} />
                   </button>
+                  <span style={{ fontSize: 10, color: 'var(--text-tertiary)', marginLeft: 'auto' }}>
+                    La calidad se mide en kbps (kilobits por segundo) — más alto = mejor sonido
+                  </span>
                 </div>
               </div>
 
@@ -1328,7 +1350,7 @@ export default function Musica() {
                             <div className="progress-fill" style={{ width: `${item.progress * 100}%`, height: '100%', borderRadius: 2, background: item.status === 'completed' ? 'var(--success)' : item.status === 'error' ? 'var(--error)' : 'var(--accent)', transition: 'width 300ms' }} />
                           </div>
                           <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-tertiary)', minWidth: 28, textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
-                            {item.status === 'downloading' ? `${Math.round(item.progress * 100)}%` : item.status === 'queued' ? 'Cola' : item.status === 'completed' ? '100%' : 'Error'}
+                            {item.status === 'queued' ? 'Cola' : item.status === 'error' ? 'Error' : `${Math.round(item.progress * 100)}%`}
                           </span>
                         </div>
                         {item.errorMessage && item.status === 'error' && (

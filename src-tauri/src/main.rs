@@ -138,6 +138,7 @@ async fn start_download(
     output_dir: String,
     format: String,
     include_cover: bool,
+    audio_quality: String,
 ) -> Result<(), String> {
     let state = app_handle.state::<DownloadState>();
     let download_path = state.path.lock().map_err(|e| e.to_string())?;
@@ -164,8 +165,9 @@ async fn start_download(
         "--audio-format",
         audio_format,
         "--audio-quality",
-        "0",
+        &audio_quality,
         "--no-warnings",
+        "--windows-filenames",
         "--newline",
         "--replace-in-metadata",
         "title",
@@ -225,11 +227,13 @@ async fn start_download(
                 if trimmed.starts_with("[download]") {
                     if !trimmed.contains("Destination:") && !trimmed.contains("has already been downloaded") {
                         if let Some(pct) = parse_progress(trimmed) {
+                            // Scale download progress to 0-80% — remaining 20% is for post-processing
+                            let scaled = pct * 0.8;
                             let _ = emit_progress.emit(
                                 "download:progress",
                                 serde_json::json!({
                                     "downloadId": dl_id_progress,
-                                    "progress": pct,
+                                    "progress": scaled,
                                     "line": trimmed,
                                 }),
                             );
@@ -310,6 +314,13 @@ async fn start_download(
                     || has_output;
                 let final_code = if success { Some(0) } else { code };
                 let final_error = if success { String::new() } else { error_msg };
+                let _ = emit2.emit(
+                    "download:progress",
+                    serde_json::json!({
+                        "downloadId": dl_id2,
+                        "progress": 1.0,
+                    }),
+                );
                 let _ = emit2.emit(
                     "download:complete",
                     serde_json::json!({

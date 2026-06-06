@@ -3,7 +3,7 @@ import { emit } from '@tauri-apps/api/event';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { copyFile, mkdir, exists, readFile, writeFile, BaseDirectory } from '@tauri-apps/plugin-fs';
 import { get, set } from 'idb-keyval';
-import { extractMp3Metadata } from '../lib/mp3Metadata';
+import { extractAudioMetadata } from '../lib/audioMetadata';
 import { format, parseISO, subDays } from 'date-fns';
 import { appDataDir, appCacheDir, join, extname } from '@tauri-apps/api/path';
 
@@ -1213,10 +1213,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const clearAllMusicData = useCallback(() => {
     setTracks([]);
-    setTrackHistory([]);
-    setPlayCounts({});
     setMusicQueue([]);
-    setArtists([]);
     setCurrentTrackId(null);
     setIsPlayingMusic(false);
     setMusicProgress(0);
@@ -1225,7 +1222,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       globalAudio.pause();
       globalAudio.src = '';
     }
-    localStorage.removeItem(STORAGE_KEY);
+    // Preserve all stats: musicListeningTime, dailyMusicTime, trackHistory, playCounts, artists
   }, []);
 
   const playAudioInstance = useCallback((sessionId: string | null) => {
@@ -1291,27 +1288,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         // Phase 1: Loading/Reading file
         updateProgress('loading_file', 10);
-        const readInterval = setInterval(() => {
-          setImportState(prev => {
-            if (prev.phase === 'loading_file' && prev.phaseProgress < 80) {
-              const nextVal = prev.phaseProgress + 10;
-              const itemBudget = 100 / selectedPaths.length;
-              const currentItemBase = (prev.current - 1 * 100) / prev.total; // wait, prev is safe
-              return { ...prev, phaseProgress: nextVal };
-            }
-            return prev;
-          });
-        }, 80);
-
-        const data = await readFile(path);
-        clearInterval(readInterval);
         updateProgress('loading_file', 100);
 
         // Phase 2: Metadata Parsing
         updateProgress('extracting_metadata', 10);
-        const meta = path.toLowerCase().endsWith('.mp3') 
-          ? await extractMp3Metadata(path) 
-          : { title: undefined, artist: undefined, collaborators: [] as string[], coverUrl: undefined };
+        const meta = await extractAudioMetadata(path);
         updateProgress('extracting_metadata', 100);
 
         // Phase 3: Audio Validation & Duration Extraction
