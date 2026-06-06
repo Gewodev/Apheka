@@ -3,7 +3,7 @@ import {
   Activity, Monitor, Wifi, Music, CheckSquare, FileText, Flame,
   Cpu, HardDrive, Thermometer
 } from 'lucide-react';
-import { useApp } from '../../store/AppContext';
+import { useApp, fmtClock } from '../../store/AppContext';
 import { format, subDays, subWeeks, addDays, addWeeks, startOfWeek, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { invoke } from '@tauri-apps/api/core';
@@ -200,7 +200,7 @@ export default function Inicio() {
     { id: 'disk', label: 'DISCO', val: ss.disk, unit: '%', color: '#8B5CF6', detail: `Almacenamiento: ${ss.disk}% ocupado (${ss.diskUsed.toFixed(1)}/${ss.diskTotal.toFixed(1)} GB).` },
   ], [ss]);
 
-  const timeStr = format(ct, 'HH:mm');
+  const timeStr = fmtClock(format(ct, 'HH:mm'), settings?.timeFormat);
   const secStr = format(ct, 'ss');
   const dateStr = format(ct, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es as any });
   const dateCap = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
@@ -452,7 +452,7 @@ export default function Inicio() {
                 }}>
                   <div style={{ width: '100%', aspectRatio: '1/1', borderRadius: 6, overflow: 'hidden', background: 'var(--bg-surface)' }}>
                     {track.coverImage ? (
-                      <img src={track.coverImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      <img src={track.coverImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                     ) : (
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
                         <Music size={20} style={{ color: 'var(--text-muted)', opacity: 0.3 }} />

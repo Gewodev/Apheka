@@ -4,9 +4,9 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
-  ChevronLeft, ChevronRight, Plus, Calendar, Clock, X, Trash2, Check, ChevronDown
+  ChevronLeft, ChevronRight, Plus, Calendar, Clock, X, Trash2, Check
 } from 'lucide-react';
-import { useApp } from '../../store/AppContext';
+import { useApp, fmtClock, fmtTimeRange } from '../../store/AppContext';
 import {
   format, addMonths, subMonths, startOfMonth, endOfMonth,
   startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth,
@@ -20,8 +20,8 @@ import EventModal, { PlanEvent } from './planificacion/EventModal';
 import ScheduleBuilder, { ScheduleClass } from './planificacion/ScheduleBuilder';
 import LateralPanel, { SelectedItem } from './planificacion/LateralPanel';
 
-const H_START = 7;
-const H_END   = 22;
+const H_START = 0;
+const H_END   = 23;
 const H_PX    = 64; 
 const DAY_LABELS = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
 
@@ -131,9 +131,12 @@ function getMergedClasses(classes: ScheduleClass[]) {
 }
 
 export default function Planificacion() {
-  const { tasks, courses, setNavigateTo, addNotification } = useApp();
+  const { tasks, courses, setNavigateTo, addNotification, settings } = useApp();
 
-  const [planView, setPlanView] = useState<PlanView>('week');
+  const [planView, setPlanView] = useState<PlanView>(() => {
+    try { return (localStorage.getItem('owa_planner_view') as PlanView) || 'week'; }
+    catch { return 'week'; }
+  });
   const [navDate, setNavDate]   = useState(new Date());
   const [now, setNow]           = useState(new Date());
 
@@ -151,13 +154,17 @@ export default function Planificacion() {
 
   const imgInputRef = useRef<HTMLInputElement>(null);
   const [scheduleImageUrl, setScheduleImageUrl] = useState<string | null>(null);
-  const [scheduleTab, setScheduleTab] = useState<'image' | 'manual'>('manual');
+  const [scheduleTab, setScheduleTab] = useState<'image' | 'manual'>(() => {
+    try { return (localStorage.getItem('owa_sched_last_tab') as 'image' | 'manual') || 'manual'; }
+    catch { return 'manual'; }
+  });
   const [showScheduleBuilder, setShowScheduleBuilder] = useState(false);
-  
-  const [showViewDropdown, setShowViewDropdown] = useState(false);
 
+  useEffect(() => { localStorage.setItem('owa_sched_last_tab', scheduleTab); }, [scheduleTab]);
+
+  useEffect(() => { localStorage.setItem('owa_planner_view', planView); }, [planView]);
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t); }, []);
-  const timeStr = format(now, 'HH:mm');
+  const timeStr = fmtClock(format(now, 'HH:mm'), settings?.timeFormat);
   const secsStr = format(now, 'ss');
   const dateStr = format(now, "EEEE d 'de' MMMM yyyy", { locale: es as any });
 
@@ -256,8 +263,8 @@ export default function Planificacion() {
   return (
     <div className="page-container" style={{ display:'flex', flexDirection:'column', height:'100%', overflow:'hidden', background: 'var(--bg-primary)' }}>
 
-      {/* HEADER */}
-      <header style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20, paddingTop:6, flexShrink:0 }}>
+      {/* HEADER — Title + Date | Bell + Clock */}
+      <header style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-end', marginBottom:16, paddingTop:6, flexShrink:0 }}>
         <div>
           <h1 style={{ fontSize:32, fontWeight:700, color:'var(--text-primary)', letterSpacing:'-0.03em', fontFamily:"'Outfit', sans-serif", lineHeight:1 }}>
             Planificador
@@ -267,16 +274,43 @@ export default function Planificacion() {
           </p>
         </div>
 
-        <div style={{ display:'flex', alignItems:'center', gap:16 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:12 }}>
           <NotificationBell />
-          <button onClick={() => setShowScheduleBuilder(!showScheduleBuilder)} className="btn-secondary" style={{ fontSize: 12, fontWeight: 600, padding: '8px 16px', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 6, border: showScheduleBuilder ? '1px solid var(--accent)' : '1px solid var(--border-soft)', background: showScheduleBuilder ? 'rgba(225,29,72,0.08)' : 'transparent' }}>
-            <Calendar size={14} /> {showScheduleBuilder ? 'Cerrar Horario' : 'Horario'}
-          </button>
           <div style={{ textAlign:'right', paddingRight:2 }}>
             <div style={{ display:'flex', alignItems:'baseline', gap:3, justifyContent:'flex-end' }}>
               <span style={{ fontFamily:"'Outfit', sans-serif", fontSize:44, fontWeight:300, lineHeight:0.9, color:'var(--accent)', textShadow:'0 0 32px var(--accent-glow)', letterSpacing:'-0.02em' }}>{timeStr}</span>
             </div>
           </div>
+        </div>
+      </header>
+
+      {/* TOOLBAR — View Selector + Nav | Horario + Nuevo Evento */}
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:24, flexShrink:0 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+          {/* Segmented view tabs — exclusive */}
+          <div style={{ display: 'flex', gap: 4, padding: 4, borderRadius: 12, background: showScheduleBuilder ? 'var(--bg-secondary)' : 'var(--surface-elevated)', border: '1px solid var(--border-soft)', opacity: showScheduleBuilder ? 0.4 : 1, pointerEvents: showScheduleBuilder ? 'none' : 'auto', transition: 'opacity 200ms' }}>
+            {(['week', 'day', 'month'] as PlanView[]).map(v => (
+              <button key={v} onClick={() => setPlanView(v)}
+                style={{ padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer', transition: 'all 200ms', background: planView === v ? 'var(--accent)' : 'transparent', color: planView === v ? '#fff' : 'var(--text-secondary)', fontFamily: "'Outfit',sans-serif" }}>
+                {VIEW_LABELS[v]}
+              </button>
+            ))}
+          </div>
+
+          {!showScheduleBuilder && (
+            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+              <button onClick={()=>nav(-1)} className="btn-secondary" style={{ padding:'8px 10px', borderRadius:10, height:36, border: 'none' }}><ChevronLeft size={16}/></button>
+              <button onClick={()=>setNavDate(new Date())} className="btn-secondary" style={{ fontSize:13, fontWeight:600, padding:'0 20px', height:36, borderRadius:10, border: 'none' }}>Hoy</button>
+              <button onClick={()=>nav(1)}  className="btn-secondary" style={{ padding:'8px 10px', borderRadius:10, height:36, border: 'none' }}><ChevronRight size={16}/></button>
+              <span style={{ fontSize:16, fontWeight:300, color:'var(--text-primary)', textTransform:'capitalize', minWidth:260, fontFamily: "'Outfit', sans-serif", textAlign: 'right', letterSpacing: '-0.01em' }}>{navLabel}</span>
+            </div>
+          )}
+        </div>
+
+        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+          <button onClick={() => setShowScheduleBuilder(!showScheduleBuilder)} className="btn-secondary" style={{ fontSize: 12, fontWeight: 600, padding: '9px 18px', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 6, border: showScheduleBuilder ? '1px solid var(--accent)' : '1px solid var(--border-soft)', background: showScheduleBuilder ? 'rgba(225,29,72,0.08)' : 'transparent' }}>
+            <Calendar size={14} /> {showScheduleBuilder ? 'Cerrar Horario' : 'Horario'}
+          </button>
           <button
             onClick={() => { setModalDefaults({ date: format(new Date(), 'yyyy-MM-dd') }); setEditingEvent(null); setShowEventModal(true); }}
             className="btn-primary"
@@ -285,48 +319,6 @@ export default function Planificacion() {
             <Plus size={18}/> Nuevo Evento
           </button>
         </div>
-      </header>
-
-      {/* VIEW SELECTION & NAV */}
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:24, flexShrink:0 }}>
-        
-        {/* Dropdown View Selector */}
-        <div style={{ position: 'relative' }}>
-          <button 
-            onClick={() => setShowViewDropdown(!showViewDropdown)}
-            style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px', background: 'var(--surface-elevated)', border: '1px solid var(--border-soft)', borderRadius: 12, fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer', fontFamily: "'Outfit', sans-serif", letterSpacing: '0.02em' }}
-          >
-            <Calendar size={16} style={{ color: 'var(--accent)' }} />
-            {VIEW_LABELS[planView]}
-            <ChevronDown size={14} style={{ color: 'var(--text-muted)' }} />
-          </button>
-          
-          {showViewDropdown && (
-            <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 8, width: 220, background: 'var(--surface)', border: '1px solid var(--border-soft)', borderRadius: 12, boxShadow: '0 16px 48px rgba(0,0,0,0.4)', zIndex: 100, overflow: 'hidden' }}>
-              {(['week', 'day', 'month'] as PlanView[]).map(v => (
-                <div 
-                  key={v}
-                  onClick={() => { setPlanView(v); setShowViewDropdown(false); }}
-                  style={{ padding: '12px 20px', fontSize: 13, fontWeight: 600, color: planView === v ? 'var(--accent)' : 'var(--text-secondary)', cursor: 'pointer', background: planView === v ? 'rgba(225,29,72,0.05)' : 'transparent', borderLeft: `3px solid ${planView === v ? 'var(--accent)' : 'transparent'}`, transition: 'all 200ms' }}
-                  onMouseEnter={e => e.currentTarget.style.background = planView === v ? 'rgba(225,29,72,0.05)' : 'var(--surface-hover)'}
-                  onMouseLeave={e => e.currentTarget.style.background = planView === v ? 'rgba(225,29,72,0.05)' : 'transparent'}
-                >
-                  {VIEW_LABELS[v]}
-                </div>
-              ))}
-            </div>
-          )}
-          {showViewDropdown && <div style={{ position: 'fixed', inset: 0, zIndex: 90 }} onClick={() => setShowViewDropdown(false)} />}
-        </div>
-
-        {!showScheduleBuilder && (
-          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-            <button onClick={()=>nav(-1)} className="btn-secondary" style={{ padding:'8px 10px', borderRadius:10, height:36, border: 'none' }}><ChevronLeft size={16}/></button>
-            <button onClick={()=>setNavDate(new Date())} className="btn-secondary" style={{ fontSize:13, fontWeight:600, padding:'0 20px', height:36, borderRadius:10, border: 'none' }}>Hoy</button>
-            <button onClick={()=>nav(1)}  className="btn-secondary" style={{ padding:'8px 10px', borderRadius:10, height:36, border: 'none' }}><ChevronRight size={16}/></button>
-            <span style={{ fontSize:16, fontWeight:300, color:'var(--text-primary)', textTransform:'capitalize', minWidth:260, fontFamily: "'Outfit', sans-serif", textAlign: 'right', letterSpacing: '-0.01em' }}>{navLabel}</span>
-          </div>
-        )}
       </div>
 
       {/* MAIN GRID */}
@@ -342,11 +334,12 @@ export default function Planificacion() {
             scheduleTab={scheduleTab}
             onSetScheduleTab={setScheduleTab}
             addNotification={addNotification}
+            timeFormat={settings?.timeFormat}
           />
         </div>
       ) : (
       <div style={{ display:'flex', flex:1, gap:16, minHeight:0, overflow:'hidden' }}>
-        <div style={{ flex:1, display:'flex', flexDirection:'column', minWidth:0, overflow:'hidden', borderRadius:20, border:'1px solid var(--border-soft)', background: 'var(--surface)', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
+        <div className="bento-card" style={{ flex:1, display:'flex', flexDirection:'column', minWidth:0, overflow:'hidden', padding:0, border:'1px solid var(--border-default)', background: 'color-mix(in srgb, var(--bg-elevated) 65%, transparent)', backdropFilter: 'blur(8px)', boxShadow: '0 8px 32px rgba(0,0,0,0.25)' }}>
 
           {/* WEEK VIEW */}
           {planView === 'week' && (
@@ -382,7 +375,7 @@ export default function Planificacion() {
                     {HOURS.map(h => (
                       <div key={h} style={{ height:H_PX, display:'flex', alignItems:'flex-start', justifyContent:'flex-end', paddingRight:12, paddingTop:6, borderBottom:'1px solid var(--border-soft)' }}>
                         <span style={{ fontSize:10, fontWeight:600, color:'var(--text-muted)', fontFamily:"'JetBrains Mono',monospace", letterSpacing:'0.04em' }}>
-                          {String(h).padStart(2,'0')}:00
+                          {fmtClock(String(h).padStart(2,'0') + ':00', settings?.timeFormat)}
                         </span>
                       </div>
                     ))}
@@ -414,8 +407,8 @@ export default function Planificacion() {
                           const top = eventTop(item);
                           const hpx = eventHeight(item);
                           const pos = layout.get(item.id) || { left: 0, width: 100 };
+                          const itemColor = isClass && item.type === 'break' ? 'var(--text-muted)' : isClass && item.type === 'meal' ? '#f59e0b' : item.color;
                           
-                          // Professional aesthetics: no gap, strict rectangles
                           return (
                             <div key={item.id}
                               draggable={!isClass}
@@ -424,19 +417,25 @@ export default function Planificacion() {
                               onClick={e => { e.stopPropagation(); isClass ? setSelectedItem({ type: 'day', date: d, events: timedEvs, tasks: [] }) : setSelectedItem({ type: 'event', event: item as PlanEvent }); }}
                               style={{
                                 position:'absolute', top, left: `${pos.left}%`, width: `${pos.width}%`, height: hpx,
-                                borderLeft:`4px solid ${isClass && item.type === 'break' ? 'var(--text-muted)' : isClass && item.type === 'meal' ? '#f59e0b' : item.color}`,
-                                borderRight: '1px solid var(--border-soft)',
-                                borderTop: '1px solid var(--border-soft)',
-                                borderBottom: '1px solid var(--border-soft)',
-                                background: isClass ? 'var(--surface-elevated)' : `${item.color}20`,
-                                zIndex: 3, cursor: isClass ? 'pointer' : 'grab', display:'flex', flexDirection:'column', padding: '6px 8px', overflow: 'hidden',
-                                transition:'all 150ms ease-out',
+                                borderLeft: isClass ? 'none' : `3px solid ${itemColor}`,
+                                borderRadius: '4px',
+                                background: isClass ? `color-mix(in srgb, ${itemColor} 4%, transparent)` : `color-mix(in srgb, ${itemColor} 12%, var(--bg-base))`,
+                                boxShadow: isClass ? 'none' : `inset 0 1px 0 ${itemColor}10, 0 2px 8px rgba(0,0,0,0.08)`,
+                                zIndex: isClass ? 0 : 3, cursor: isClass ? 'pointer' : 'grab', display:'flex', flexDirection:'column', padding: isClass ? '4px 8px' : '6px 10px', overflow: 'hidden',
+                                transition:'opacity 150ms',
+                                opacity: isClass ? 0.55 : 1,
+                                pointerEvents: isClass ? 'none' : 'auto',
                               }}
-                              onMouseEnter={e=>{ e.currentTarget.style.filter = 'brightness(1.2)'; e.currentTarget.style.zIndex='4'; }}
-                              onMouseLeave={e=>{ e.currentTarget.style.filter = 'none'; e.currentTarget.style.zIndex='3'; }}
+                              onMouseEnter={e=>{ if (!isClass) { e.currentTarget.style.boxShadow = `inset 0 1px 0 ${itemColor}20, 0 6px 20px rgba(0,0,0,0.25)`; e.currentTarget.style.zIndex='4'; } }}
+                              onMouseLeave={e=>{ if (!isClass) { e.currentTarget.style.boxShadow = `inset 0 1px 0 ${itemColor}10, 0 2px 8px rgba(0,0,0,0.08)`; e.currentTarget.style.zIndex='3'; } }}
                             >
-                              <span style={{ fontSize:11, fontWeight:600, color:isClass ? 'var(--text-primary)' : item.color, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{item.title}</span>
-                              {hpx > 40 && <span style={{ fontSize:10, color:'var(--text-muted)', marginTop: 2 }}>{item.startTime} - {item.endTime}</span>}
+                              <span style={{ fontSize: isClass ? 10 : 11, fontWeight: isClass ? 500 : 600, color: isClass ? 'var(--text-muted)' : itemColor, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{item.title}</span>
+                              {!isClass && hpx > 40 && (
+                                <div style={{ display:'flex', alignItems:'center', gap:4, marginTop:2 }}>
+                                  <Clock size={10} style={{ color:'var(--text-muted)', flexShrink:0 }} />
+                                  <span style={{ fontSize:10, color:'var(--text-muted)' }}>{fmtTimeRange(item.startTime, item.endTime, settings?.timeFormat)}</span>
+                                </div>
+                              )}
                             </div>
                           );
                         })}
@@ -472,7 +471,7 @@ export default function Planificacion() {
                   <div style={{ borderRight:'1px solid var(--border-soft)', background: 'var(--bg-primary)' }}>
                     {HOURS.map(h=>(
                       <div key={h} style={{ height:H_PX, display:'flex', alignItems:'flex-start', justifyContent:'flex-end', paddingRight:12, paddingTop:6, borderBottom:'1px solid var(--border-soft)' }}>
-                        <span style={{ fontSize:11, fontWeight:600, color:'var(--text-muted)', fontFamily:"'JetBrains Mono',monospace" }}>{String(h).padStart(2,'0')}:00</span>
+                        <span style={{ fontSize:11, fontWeight:600, color:'var(--text-muted)', fontFamily:"'JetBrains Mono',monospace" }}>{fmtClock(String(h).padStart(2,'0') + ':00', settings?.timeFormat)}</span>
                       </div>
                     ))}
                   </div>
@@ -495,16 +494,19 @@ export default function Planificacion() {
                           <div key={item.id} onClick={e=>{e.stopPropagation(); isClass ? null : setSelectedItem({ type: 'event', event: item as PlanEvent });}} 
                             style={{ 
                               position:'absolute', top, left:`${pos.left}%`, width:`${pos.width}%`, height:hpx, 
-                              borderLeft:`4px solid ${item.color}`, borderRight: '1px solid var(--border-soft)', borderTop: '1px solid var(--border-soft)', borderBottom: '1px solid var(--border-soft)',
-                              background: isClass ? 'var(--surface-elevated)' : `${item.color}15`, 
-                              zIndex:3, cursor: isClass ? 'default' : 'pointer', display:'flex', flexDirection:'column', padding:'12px 16px', overflow:'hidden',
+                              borderLeft: isClass ? 'none' : `3px solid ${item.color}`,
+                              background: isClass ? `color-mix(in srgb, ${item.color} 3%, transparent)` : `color-mix(in srgb, ${item.color} 18%, var(--bg-base))`, 
+                              zIndex: isClass ? 0 : 3, cursor: isClass ? 'default' : 'pointer', display:'flex', flexDirection:'column', padding: isClass ? '4px 10px' : '12px 16px', overflow:'hidden',
+                              opacity: isClass ? 0.5 : 1,
+                              pointerEvents: isClass ? 'none' : 'auto',
+                              borderRight: isClass ? 'none' : '1px solid var(--border-soft)', borderTop: isClass ? 'none' : '1px solid var(--border-soft)', borderBottom: isClass ? 'none' : '1px solid var(--border-soft)',
                               transition: 'filter 150ms'
                             }}
                             onMouseEnter={e => !isClass && (e.currentTarget.style.filter = 'brightness(1.2)')}
                             onMouseLeave={e => !isClass && (e.currentTarget.style.filter = 'none')}
                           >
-                            <div style={{ fontSize:15, fontWeight:600, color:isClass ? 'var(--text-primary)' : item.color, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{item.title}</div>
-                            <div style={{ fontSize:12, color:'var(--text-muted)', marginTop:4 }}>{item.startTime} - {item.endTime}</div>
+                            <div style={{ fontSize: isClass ? 11 : 15, fontWeight: isClass ? 500 : 600, color: isClass ? 'var(--text-muted)' : item.color, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{item.title}</div>
+                            {!isClass && <div style={{ fontSize:12, color:'var(--text-muted)', marginTop:4 }}>{fmtTimeRange(item.startTime, item.endTime, settings?.timeFormat)}</div>}
                             {!isClass && (item as PlanEvent).description && <div style={{ fontSize:13, color:'var(--text-secondary)', marginTop:8, overflow:'hidden', textOverflow:'ellipsis', display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical' }}>{(item as PlanEvent).description}</div>}
                           </div>
                         );
@@ -563,7 +565,9 @@ export default function Planificacion() {
       <LateralPanel 
         item={selectedItem} 
         onClose={() => setSelectedItem(null)} 
+        onSelectEvent={(ev) => setSelectedItem({ type: 'event', event: ev })}
         onEditEvent={(ev) => { setEditingEvent(ev); setShowEventModal(true); setSelectedItem(null); }}
+        onDeleteEvent={(id) => { deleteEvent(id); }}
         onViewTask={(id) => { setSelectedItem(null); setNavigateTo(`tareas`); }}
       />
 

@@ -379,6 +379,17 @@ export default function Musica() {
     ? tracks.filter(t => t.isFavorite)
     : (showAllLibrary ? libraryTracks : libraryTracks.slice(0, 25));
 
+  const now = new Date();
+  const weeklyListeningTime = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(now);
+    d.setDate(d.getDate() - (6 - i));
+    return dailyMusicTime[d.toISOString().slice(0, 10)] || 0;
+  }).reduce((a, b) => a + b, 0);
+  const monthKey = now.toISOString().slice(0, 7);
+  const monthlyListeningTime = Object.entries(dailyMusicTime)
+    .filter(([day]) => day.startsWith(monthKey))
+    .reduce((sum, [, val]) => sum + val, 0);
+
   return (
     <div className="page-container" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto' }}>
 
@@ -790,7 +801,7 @@ export default function Musica() {
                   </div>
                 </>
               ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 8 }}>
                   {displayTracks.length > 0 ? displayTracks.map((track, i) => {
                     const isPlaying = currentTrackId === track.id && isPlayingMusic;
                     return (
@@ -799,43 +810,33 @@ export default function Musica() {
                         onClick={() => playTrack(track.id)}
                         className="bento-card hover-lift"
                         style={{
-                          padding: 16, display: 'flex', flexDirection: 'column', gap: 12, cursor: 'pointer',
+                          padding: 10, display: 'flex', flexDirection: 'column', gap: 8, cursor: 'pointer',
                           background: isPlaying ? 'var(--accent-dim)' : 'var(--bg-deep)',
                           border: isPlaying ? '1px solid var(--accent-glow)' : '1px solid var(--border-subtle)',
                         }}
                       >
-                        <div style={{ position: 'relative', width: '100%', aspectRatio: '1', borderRadius: 8, overflow: 'hidden', background: 'var(--bg-surface)' }}>
-                          {track.coverImage ? <img src={track.coverImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={24} style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', color: 'var(--text-muted)', opacity: 0.3 }} />}
+                        <div style={{ position: 'relative', width: '100%', aspectRatio: '1', borderRadius: 6, overflow: 'hidden', background: 'var(--bg-surface)' }}>
+                          {track.coverImage ? <img src={track.coverImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} /> : <Music size={24} style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', color: 'var(--text-muted)', opacity: 0.3 }} />}
                           <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)', opacity: isPlaying ? 1 : 0, transition: 'opacity 200ms', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onMouseEnter={e => e.currentTarget.style.opacity = '1'} onMouseLeave={e => e.currentTarget.style.opacity = isPlaying ? '1' : '0'}>
-                            <div style={{ width: 42, height: 42, borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.5)' }}>
-                              {isPlaying ? <Pause size={20} fill="#fff" /> : <Play size={20} fill="#fff" style={{ marginLeft: 3 }} />}
+                            <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.5)' }}>
+                              {isPlaying ? <Pause size={20} fill="#fff" /> : <Play size={20} fill="#fff" style={{ marginLeft: 2 }} />}
                             </div>
                           </div>
                         </div>
                         <div>
-                          <div style={{ fontSize: 14, fontWeight: 600, color: isPlaying ? 'var(--accent)' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{track.title}</div>
-                          <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>{track.artist} · {formatTime(track.duration)}</div>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: isPlaying ? 'var(--accent)' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{track.title}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{track.artist} · {formatTime(track.duration)}</div>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-subtle)', paddingTop: 12, marginTop: 'auto' }}>
-                          <button onClick={(e) => { e.stopPropagation(); toggleTrackFavorite(track.id); }} className="btn-ghost" style={{ padding: 6, color: track.isFavorite ? 'var(--accent)' : 'var(--text-tertiary)' }} title={track.isFavorite ? 'Quitar de favoritos' : 'Añadir a favoritos'}>
-                            <Heart size={16} style={{ fill: track.isFavorite ? 'var(--accent)' : 'transparent' }} />
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-subtle)', paddingTop: 8 }}>
+                          <button onClick={(e) => { e.stopPropagation(); toggleTrackFavorite(track.id); }} className="btn-ghost" style={{ padding: 4, color: track.isFavorite ? 'var(--accent)' : 'var(--text-tertiary)' }}>
+                            <Heart size={14} style={{ fill: track.isFavorite ? 'var(--accent)' : 'transparent' }} />
                           </button>
                           <div style={{ display: 'flex', gap: 4 }}>
-
-                            <button onClick={(e) => {
-                              e.stopPropagation();
-                              setEditingTrackId(track.id);
-                              setEditTitle(track.title);
-                              setEditArtist(track.artist);
-                              setEditCover(track.coverImage || '');
-                            }} className="btn-ghost" style={{ padding: 6, color: 'var(--text-tertiary)' }} title="Editar canción">
-                              <Edit2 size={14} />
+                            <button onClick={(e) => { e.stopPropagation(); setEditingTrackId(track.id); setEditTitle(track.title); setEditArtist(track.artist); setEditCover(track.coverImage || ''); }} className="btn-ghost" style={{ padding: 4, color: 'var(--text-tertiary)' }}>
+                              <Edit2 size={13} />
                             </button>
-                            <button onClick={(e) => {
-                              e.stopPropagation();
-                              setConfirmDelete(track.id);
-                            }} className="btn-ghost" style={{ padding: 6, color: 'var(--text-tertiary)' }} title="Eliminar canción">
-                              <Trash2 size={14} />
+                            <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(track.id); }} className="btn-ghost" style={{ padding: 4, color: 'var(--text-tertiary)' }}>
+                              <Trash2 size={13} />
                             </button>
                           </div>
                         </div>
@@ -1201,8 +1202,8 @@ export default function Musica() {
             </div>
 
             <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-primary)' }}>{formatTime(musicListeningTime)}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Tiempo de escucha</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-primary)' }}>{formatTime(statsPeriod === 'week' ? weeklyListeningTime : monthlyListeningTime)}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{statsPeriod === 'week' ? 'Esta semana' : 'Este mes'}</div>
             </div>
 
             {/* SVG Wave Chart - with hover tooltips and real-time updates */}

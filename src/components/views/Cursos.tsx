@@ -10,7 +10,7 @@ import {
   BarChart2, PieChart, Sparkles, BookMarked, Globe,
   Video, File, Circle, Loader, Award, HelpCircle, Wifi
 } from 'lucide-react';
-import { useApp, Course, Task, Note } from '../../store/AppContext';
+import { useApp, Course, Task, Note, fmtClock } from '../../store/AppContext';
 import NotificationBell from '../ui/NotificationBell';
 import { format, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -18,7 +18,8 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
   const { 
     courses, tasks, notes, addCourse, updateCourse, deleteCourse,
     addTask, updateTask, deleteTask, toggleTaskStatus,
-    addNote, updateNote, deleteNote, addNotification
+    addNote, updateNote, deleteNote, addNotification,
+    settings,
   } = useApp();
 
   const [selectedCourseId, setSelectedCourseId] = useState<string>(
@@ -33,7 +34,7 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
     return () => clearInterval(timer);
   }, []);
 
-  const timeStr = format(currentTime, 'HH:mm');
+  const timeStr = fmtClock(format(currentTime, 'HH:mm'), settings?.timeFormat);
   const secondsStr = format(currentTime, 'ss');
   const dateStr = format(currentTime, "EEEE, d 'de' MMMM, yyyy", { locale: es as any });
   const dateStrCapitalized = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
@@ -485,7 +486,7 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
                     {courseTasks.map(task => {
                       const isDone = task.status === 'completado';
                       return (
-                        <div key={task.id} style={{ padding: '12px 14px', borderRadius: 8, border: '1px solid var(--border-subtle)', borderLeft: '3px solid ' + (task.priority === 'high' ? 'var(--error)' : task.priority === 'medium' ? 'var(--warning)' : 'var(--success)'), display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div key={task.id} style={{ padding: '12px 14px', borderRadius: 8, border: '1px solid var(--border-subtle)', borderLeft: '3px solid ' + (task.priority === 'high' ? 'var(--error)' : task.priority === 'medium' ? 'var(--warning)' : 'var(--border-default)'), display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                             <button onClick={() => toggleTaskStatus(task.id)} style={{ width: 20, height: 20, borderRadius: '50%', border: isDone ? 'none' : '2px solid var(--border-default)', background: isDone ? 'var(--success)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
                               {isDone && <Check size={11} color="#fff" />}
@@ -496,9 +497,15 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
                             </div>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            {task.priority !== 'none' ? (
                             <span style={{ fontSize: 10, fontWeight: 600, padding: '3px 7px', borderRadius: 5, background: task.priority === 'high' ? 'var(--error-dim)' : task.priority === 'medium' ? 'var(--warning-dim)' : 'var(--success-dim)', color: task.priority === 'high' ? 'var(--error)' : task.priority === 'medium' ? 'var(--warning)' : 'var(--success)' }}>
                               {task.priority === 'high' ? 'Alta' : task.priority === 'medium' ? 'Media' : 'Baja'}
                             </span>
+                            ) : (
+                            <span style={{ fontSize: 10, fontWeight: 400, padding: '3px 7px', borderRadius: 5, background: 'var(--bg-hover)', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                              Sin prioridad
+                            </span>
+                            )}
                             <button onClick={() => deleteTask(task.id)} className="btn-ghost" style={{ padding: 4, borderRadius: 6 }}><Trash2 size={14} /></button>
                           </div>
                         </div>

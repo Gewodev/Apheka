@@ -9,7 +9,8 @@ import {
   Wifi, CheckCircle, Image, Coffee, X,
   Monitor, Activity, Sparkles
 } from 'lucide-react';
-import { useApp } from '../../store/AppContext';
+import { useApp, fmtClock } from '../../store/AppContext';
+import { del } from 'idb-keyval';
 import { invoke } from '@tauri-apps/api/core';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -166,7 +167,7 @@ export default function Ajustes() {
     return () => clearInterval(timer);
   }, []);
 
-  const timeStr = format(currentTime, 'HH:mm');
+  const timeStr = fmtClock(format(currentTime, 'HH:mm'), settings?.timeFormat);
   const secondsStr = format(currentTime, 'ss');
   const dateStr = format(currentTime, "EEEE, d 'de' MMMM, yyyy", { locale: es as any });
   const dateStrCapitalized = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
@@ -1022,76 +1023,42 @@ export default function Ajustes() {
                         </div>
                       </div>
 
-                      {/* ===== SECCION 2: BARRA (TRACK FILL) ===== */}
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                      {/* ===== SECCION 2: BARRA (TRACK FILL) — Solo GIF ===== */}
+                      <div style={{ padding: '18px 20px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 12 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
                           <div style={{ width: 3, height: 18, borderRadius: 2, background: 'var(--accent)' }} />
                           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
                             Barra
                           </span>
                           <span style={{ fontSize: 10, color: 'var(--text-tertiary)', fontWeight: 400 }}>
-                            — relleno del progreso (dibujo o GIF)
+                            — GIF que se revela con el progreso
                           </span>
                         </div>
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                          {/* GIF / Imagen */}
-                          <div>
-                            <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', display: 'block', marginBottom: 4, letterSpacing: '0.03em' }}>
-                              URL del GIF — se revela progresivamente
-                            </label>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 96px', gap: 10 }}>
-                              <input type="text" value={settings.playerBarTrackUrl || ''}
-                                onChange={e => updateSettings({ playerBarTrackUrl: e.target.value })}
-                                placeholder="https://ejemplo.com/mi-barra.gif"
-                                style={{ width: '100%', height: 36, borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 12px', fontSize: 12, fontFamily: 'monospace', outline: 'none' }} />
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-deep)', borderRadius: 8, border: '1px solid var(--border-default)', height: 36 }}>
-                                {settings.playerBarTrackUrl ? (
-                                  <img src={settings.playerBarTrackUrl} alt=""
-                                    style={{ maxWidth: 32, maxHeight: 32, objectFit: 'contain', borderRadius: 4 }} />
-                                ) : (
-                                  <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>Vacio</span>
-                                )}
-                              </div>
+                        <div>
+                          <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', display: 'block', marginBottom: 4, letterSpacing: '0.03em' }}>
+                            URL del GIF
+                          </label>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 96px', gap: 10 }}>
+                            <input type="text" value={settings.playerBarTrackUrl || ''}
+                              onChange={e => updateSettings({ playerBarTrackUrl: e.target.value })}
+                              placeholder="https://ejemplo.com/mi-barra.gif"
+                              style={{ width: '100%', height: 36, borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 12px', fontSize: 12, fontFamily: 'monospace', outline: 'none' }} />
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-deep)', borderRadius: 8, border: '1px solid var(--border-default)', height: 36 }}>
+                              {settings.playerBarTrackUrl ? (
+                                <img src={settings.playerBarTrackUrl} alt=""
+                                  style={{ maxWidth: 32, maxHeight: 32, objectFit: 'contain', borderRadius: 4 }} />
+                              ) : (
+                                <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>Vacio</span>
+                              )}
                             </div>
                           </div>
-                          {/* Dibujo de barra */}
-                          <div>
-                            <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', display: 'block', marginBottom: 4, letterSpacing: '0.03em' }}>
-                              Dibuja tu barra — un solo trazo que se revela con el progreso
-                            </label>
-                            <button onClick={() => setShowBarDrawModal(true)}
-                              style={{
-                                width: '100%', padding: '10px', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                                background: 'var(--accent)', border: 'none', color: '#fff',
-                              }}>
-                              {((settings.playerBarTrackDraw || '').split('|').filter(Boolean).length) > 0 ? 'Editar dibujo de barra' : 'Dibujar barra'}
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Selector: cual se muestra en la barra */}
-                        <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-                          {(['url', 'draw'] as const).map(src => (
-                            <button key={src} onClick={() => updateSettings({
-                              playerBarTrackSource: src,
-                            })}
-                              style={{
-                                flex: 1, padding: '8px 10px', borderRadius: 6, fontSize: 10, fontWeight: 500, cursor: 'pointer',
-                                background: (settings.playerBarTrackSource || 'url') === src ? 'var(--accent)' : 'var(--bg-deep)',
-                                border: '1px solid var(--border-default)',
-                                color: (settings.playerBarTrackSource || 'url') === src ? '#fff' : 'var(--text-secondary)',
-                                transition: 'all 150ms',
-                              }}>
-                              Usar: {src === 'url' ? 'GIF' : 'Dibujo'}
-                            </button>
-                          ))}
                         </div>
                       </div>
 
                       {/* ===== SECCION 3: ESTADO ===== */}
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                      <div style={{ padding: '18px 20px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 12 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
                           <div style={{ width: 3, height: 18, borderRadius: 2, background: 'var(--accent)' }} />
                           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
                             Estado
@@ -1133,12 +1100,12 @@ export default function Ajustes() {
                                 width: '45%', height: '100%',
                                 borderRadius: 2,
                                 background: settings.playerBarTrackColor || 'var(--accent)',
-                                backgroundImage: (() => {
-                                  const src = settings.playerBarTrackSource || 'url';
-                                  if (src === 'url') return settings.playerBarTrackUrl || undefined;
-                                  const frames = (settings.playerBarTrackDraw || '').split('|').filter(Boolean);
-                                  return frames.length > 0 ? `url(${frames[0]})` : undefined;
-                                })(),
+                                  backgroundImage: (() => {
+                                    const src = settings.playerBarTrackSource || 'url';
+                                    if (src === 'url') return settings.playerBarTrackUrl ? `url(${settings.playerBarTrackUrl})` : undefined;
+                                    const frames = (settings.playerBarTrackDraw || '').split('|').filter(Boolean);
+                                    return frames.length > 0 ? `url(${frames[0]})` : undefined;
+                                  })(),
                                 backgroundSize: 'cover',
                                 backgroundPosition: 'center',
                                 backgroundRepeat: 'no-repeat',
@@ -1288,6 +1255,20 @@ export default function Ajustes() {
 
                 {/* Timer Colors */}
                 <div className="bento-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 12, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>Formato de Hora</span>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {(['24h', '12h'] as const).map(f => (
+                      <button key={f} onClick={() => updateSettings({ timeFormat: f })}
+                        style={{ flex: 1, padding: '12px 0', borderRadius: 12, fontSize: 14, fontWeight: 600, border: `1px solid ${(settings.timeFormat || '24h') === f ? 'var(--accent)' : 'var(--border-soft)'}`, background: (settings.timeFormat || '24h') === f ? 'rgba(225,29,72,0.08)' : 'var(--bg-deep)', color: (settings.timeFormat || '24h') === f ? 'var(--accent)' : 'var(--text-secondary)', cursor: 'pointer', transition: 'all 200ms' }}>
+                        {f === '24h' ? '24 horas (00:00 – 23:59)' : '12 horas (AM / PM)'}
+                      </button>
+                    ))}
+                  </div>
+                  <p style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>Afecta a todo el planificador, horario, eventos, cabeceras y tiempos en toda la app.</p>
+                </div>
+
+                {/* Timer Colors */}
+                <div className="bento-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 12, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
                   <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>Colores de Temporizadores</span>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
                     {[
@@ -1423,6 +1404,26 @@ export default function Ajustes() {
                         </>
                       );
                     })()}
+                  </div>
+
+                  {/* Cache clearing */}
+                  <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.5 }}>
+                      Los datos cacheados (imágenes de horario, ajustes temporales) se pueden regenerar. 
+                      Esto <strong>no</strong> elimina carátulas, canciones, archivos ni descargas.
+                    </div>
+                    <button onClick={() => {
+                      if (!confirm('¿Limpiar caché temporal? Las imágenes de horario y datos regenerables se eliminarán. Los archivos descargados no se verán afectados.')) return;
+                      del('owa_sched_images_v3').then(() => {
+                        addNotification('Caché temporal limpiado correctamente', 'success');
+                      }).catch(() => {
+                        addNotification('No se pudo limpiar la caché de imágenes', 'error');
+                      });
+                      localStorage.removeItem('owa_sched_active_image_idx');
+                      localStorage.removeItem('owa_sched_images_v3');
+                    }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.15)', color: '#EF4444' }}>
+                      <RefreshCw size={14} /> Limpiar caché temporal
+                    </button>
                   </div>
                 </div>
               </section>

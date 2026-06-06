@@ -1,6 +1,44 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Calendar, Clock, Plus, Trash2, Repeat, Check, Paperclip, FileText, Link as LinkIcon, ExternalLink } from 'lucide-react';
+import { X, Calendar, Clock, Plus, Trash2, Repeat, Check, Paperclip, FileText, Link as LinkIcon, ExternalLink, Music, Video, Image, FileSpreadsheet, File } from 'lucide-react';
 import { format } from 'date-fns';
+
+function getEventFileIcon(type: string, size = 14) {
+  switch (type) {
+    case 'pdf': return <FileText size={size} style={{ color: '#ef4444' }} />;
+    case 'video': return <Video size={size} style={{ color: '#8b5cf6' }} />;
+    case 'image': return <Image size={size} style={{ color: '#3b82f6' }} />;
+    case 'audio': return <Music size={size} style={{ color: '#10b981' }} />;
+    case 'link': return <LinkIcon size={size} style={{ color: '#3b82f6' }} />;
+    case 'drive': return <ExternalLink size={size} style={{ color: '#f59e0b' }} />;
+    case 'doc':
+    case 'xls':
+    case 'ppt': return <FileText size={size} style={{ color: '#6366f1' }} />;
+    default: return <File size={size} style={{ color: 'var(--text-muted)' }} />;
+  }
+}
+
+function detectEventFileType(fileName: string, path: string): string {
+  const ext = fileName.split('.').pop()?.toLowerCase() || '';
+  const typeMap: Record<string, string> = {
+    pdf: 'pdf', png: 'image', jpg: 'image', jpeg: 'image', gif: 'image', webp: 'image', svg: 'image',
+    mp4: 'video', webm: 'video', mov: 'video', avi: 'video',
+    mp3: 'audio', wav: 'audio', ogg: 'audio', flac: 'audio', m4a: 'audio',
+    doc: 'doc', docx: 'doc', xls: 'xls', xlsx: 'xls', ppt: 'ppt', pptx: 'ppt',
+  };
+  if (typeMap[ext]) return typeMap[ext];
+  if (path.includes('youtube.com') || path.includes('youtu.be')) return 'video';
+  if (path.includes('drive.google.com')) return 'drive';
+  return 'other';
+}
+
+async function fetchEventPageTitle(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    const html = await res.text();
+    const match = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+    return match ? match[1].trim() : null;
+  } catch { return null; }
+}
 
 export interface PlanEvent {
   id: string;
@@ -52,7 +90,7 @@ export default function EventModal({
   const [repeatDays, setRepeatDays] = useState<number[]>(event?.repeatDays || []);
   const [repeatUntil, setRepeatUntil] = useState(event?.repeatUntil || '');
   const [taskId, setTaskId] = useState(event?.taskId || '');
-  const [attachments, setAttachments] = useState<PlanEvent['attachments']>(event?.attachments || []);
+  const [attachments, setAttachments] = useState<{ type: 'link' | 'file'; name: string; url: string; size?: string }[]>(event?.attachments || []);
   
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -105,11 +143,17 @@ export default function EventModal({
     setRepeatDays(prev => prev.includes(idx) ? prev.filter(d => d !== idx) : [...prev, idx]);
   };
 
-  const handleAddLink = () => {
+  const handleAddLink = async () => {
     const url = prompt('Ingresa la URL:');
     if (url) {
-      const name = prompt('Nombre del enlace:') || url;
-      setAttachments([...attachments, { type: 'link', name, url }]);
+      let name = prompt('Nombre del enlace (opcional):') || '';
+      if (!name.trim()) {
+        const fetched = await fetchEventPageTitle(url);
+        if (fetched) name = fetched;
+        else name = url;
+      }
+      const detectedType = url.includes('youtube.com') || url.includes('youtu.be') ? 'video' : url.includes('drive.google.com') ? 'drive' : 'link';
+      setAttachments([...attachments, { type: detectedType as any, name, url }]);
     }
     setShowAttachMenu(false);
   };
@@ -119,13 +163,14 @@ export default function EventModal({
       const file = e.target.files[0];
       const url = URL.createObjectURL(file);
       const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
-      setAttachments([...attachments, { type: 'file', name: file.name, url, size: `${sizeMb} MB` }]);
+      const detectedType = detectEventFileType(file.name, url);
+      setAttachments([...attachments, { type: detectedType as any, name: file.name, url, size: `${sizeMb} MB` }]);
     }
     setShowAttachMenu(false);
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 1500, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(2, 2, 3, 0.85)', backdropFilter: 'blur(16px)' }} onClick={onClose}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 1500, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(4px)' }} onClick={onClose}>
       <div 
         style={{ 
           width: 580, 
@@ -318,16 +363,50 @@ export default function EventModal({
               />
               <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border-soft)', background: 'var(--bg-primary)', display: 'flex', flexDirection: 'column', gap: 10, borderRadius: '0 0 12px 12px' }}>
                 {attachments.length > 0 && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                    {attachments.map((item, i) => (
-                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', background: 'var(--surface)', border: '1px solid var(--border-soft)', borderRadius: 8 }}>
-                        {item.type === 'link' ? <LinkIcon size={12} style={{ color: '#3b82f6' }} /> : <FileText size={12} style={{ color: 'var(--accent)' }} />}
-                        <a href={item.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: 'var(--text-primary)', maxWidth: 120, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textDecoration: 'none' }}>
-                          {item.name}
-                        </a>
-                        <button onClick={() => setAttachments(prev => prev.filter((_, idx) => idx !== i))} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 2, display: 'flex' }}><X size={10} /></button>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {attachments.map((item, i) => {
+                      const fileType = detectEventFileType(item.name, item.url);
+                      const isVideo = fileType === 'video' && (item.url.includes('youtube.com') || item.url.includes('youtu.be'));
+                      const isImage = fileType === 'image';
+                      const isAudio = fileType === 'audio';
+                      const isDrive = fileType === 'drive';
+                      return (
+                      <div key={i} style={{ background: 'var(--surface)', border: '1px solid var(--border-soft)', borderRadius: 8, overflow: 'hidden' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px' }}>
+                          {getEventFileIcon(fileType, 14)}
+                          <a href={item.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: 'var(--text-primary)', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textDecoration: 'none', fontWeight: 500 }}>
+                            {item.name}
+                          </a>
+                          {item.size && <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: "'JetBrains Mono',monospace", flexShrink: 0 }}>{item.size}</span>}
+                          <button onClick={() => setAttachments(prev => prev.filter((_, idx) => idx !== i))} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 2, display: 'flex', flexShrink: 0 }}><X size={10} /></button>
+                        </div>
+                        {isImage && (
+                          <div style={{ padding: '0 12px 8px' }}>
+                            <img src={item.url} alt={item.name} style={{ maxWidth: '100%', maxHeight: 120, borderRadius: 6, objectFit: 'contain', background: 'var(--bg-primary)' }} />
+                          </div>
+                        )}
+                        {isVideo && (
+                          <div style={{ padding: '0 12px 8px' }}>
+                            <div style={{ padding: '6px 10px', borderRadius: 6, background: 'var(--bg-primary)', fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <Video size={12} /> YouTube · {item.name}
+                            </div>
+                          </div>
+                        )}
+                        {isAudio && (
+                          <div style={{ padding: '0 12px 8px' }}>
+                            <audio controls src={item.url} style={{ width: '100%', height: 32 }} />
+                          </div>
+                        )}
+                        {isDrive && (
+                          <div style={{ padding: '0 12px 8px' }}>
+                            <div style={{ padding: '6px 10px', borderRadius: 6, background: 'var(--bg-primary)', fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <ExternalLink size={12} /> Google Drive
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
                 

@@ -6,7 +6,7 @@ import {
   CheckCircle, Clock, Image, Palette, Highlighter,
   Type, Link, Upload
 } from 'lucide-react';
-import { useApp, Note } from '../../store/AppContext';
+import { useApp, Note, fmtClock } from '../../store/AppContext';
 import NotificationBell from '../ui/NotificationBell';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -69,6 +69,7 @@ export default function Notas() {
     updateNote,
     deleteNote,
     addNoteFolder,
+    settings,
   } = app || {};
 
   const [activeFolderId, setActiveFolderId] = useState<string | 'all' | 'pinned'>('all');
@@ -89,7 +90,7 @@ export default function Notas() {
     return () => clearInterval(timer);
   }, []);
 
-  const timeStr = format(currentTime, 'HH:mm');
+  const timeStr = fmtClock(format(currentTime, 'HH:mm'), settings?.timeFormat);
   const secondsStr = format(currentTime, 'ss');
   const dateStr = format(currentTime, "EEEE, d 'de' MMMM, yyyy", { locale: es as any });
   const dateStrCapitalized = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);

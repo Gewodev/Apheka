@@ -45,7 +45,7 @@ export interface Task {
   course: string;
   courseColor: string;
   status: 'inicio' | 'progreso' | 'completado';
-  priority: 'high' | 'medium' | 'low';
+  priority: 'high' | 'medium' | 'low' | 'none';
   urgent: boolean;
   important: boolean;
   dueDate?: string;
@@ -98,6 +98,7 @@ export interface Course {
   level?: string;
   credits?: string;
   teacher?: string;
+  room?: string;
   code?: string;
 }
 
@@ -221,6 +222,7 @@ export interface Settings {
   playerBarTrackHeight?: number;
   // 3-color system
   useThreeColors?: boolean;
+  timeFormat?: '24h' | '12h';
 }
 
 export interface AppNotification {
@@ -472,6 +474,7 @@ const defaultSettings: Settings = {
   playerBarBgColor: '',
   playerBarTrackHeight: 3,
   useThreeColors: false,
+  timeFormat: '24h',
 };
 
 const defaultFolders: NoteFolder[] = [
@@ -483,6 +486,7 @@ const defaultFolders: NoteFolder[] = [
 ];
 
 const STORAGE_KEY = 'owa_studio_data';
+const MUSIC_STATS_KEY = 'owa_music_stats';
 
 const AppContext = createContext<AppContextType | null>(null);
 export { AppContext };
@@ -522,6 +526,19 @@ function getAudioDuration(fileUrl: string): Promise<number> {
     audio.addEventListener('error', onError);
     audio.load();
   });
+}
+
+export function fmtClock(hhmm: string, format?: '24h' | '12h'): string {
+  if (format === '24h' || !format) return hhmm;
+  const [h, m] = hhmm.split(':').map(Number);
+  if (isNaN(h) || isNaN(m)) return hhmm;
+  const period = h >= 12 ? 'pm' : 'am';
+  const hour12 = h % 12 || 12;
+  return `${hour12}:${String(m).padStart(2, '0')}${period}`;
+}
+
+export function fmtTimeRange(start: string, end: string, format?: '24h' | '12h'): string {
+  return `${fmtClock(start, format)} – ${fmtClock(end, format)}`;
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
@@ -663,7 +680,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const isPlayingMusicRef = useRef(isPlayingMusic);
   const currentTrackStartTimeRef = useRef<number | null>(null);
   const intentionalPauseRef = useRef(false);
-  const wakeResumeLockRef = useRef(false);
+  const restoreSeekRef = useRef<number | null>(null);
   
   useEffect(() => { currentTrackIdRef.current = currentTrackId; }, [currentTrackId]);
    useEffect(() => { tracksRef.current = tracks; }, [tracks]);
@@ -738,7 +755,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (data.pomodoroSessions) setPomodoroSessions(data.pomodoroSessions);
           if (data.musicVolume !== undefined) setMusicVolume(data.musicVolume);
           if (data.currentTrackId) setCurrentTrackId(data.currentTrackId);
-          if (data.musicProgress !== undefined) setMusicProgress(data.musicProgress);
+          if (data.musicProgress !== undefined) {
+            setMusicProgress(data.musicProgress);
+            if (data.currentTrackId) restoreSeekRef.current = data.musicProgress;
+          }
           if (data.musicDuration !== undefined) setMusicDuration(data.musicDuration);
           if (data.musicListeningTime !== undefined) {
             const today = format(new Date(), 'yyyy-MM-dd');
@@ -762,6 +782,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } catch (e) {
         console.error('Error loading data:', e);
       }
+      // Load music stats from dedicated key (survives track operations)
+      try {
+        const statsRaw = await get(MUSIC_STATS_KEY);
+        if (statsRaw) {
+          const statsData = JSON.parse(statsRaw);
+          if (statsData.musicListeningTime !== undefined) {
+            const today = format(new Date(), 'yyyy-MM-dd');
+            if (statsData.musicListeningDate === today) {
+              setMusicListeningTime(statsData.musicListeningTime);
+            }
+          }
+          if (statsData.dailyMusicTime) setDailyMusicTime(statsData.dailyMusicTime);
+        }
+      } catch {}
       // Sync with Rust backend for default path
       try {
         const { getDownloadPath } = await import('../lib/musicApi');
@@ -773,28 +807,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     loadData();
   }, []);
-
-  // Auto-play saved track after data loads
-  const autoPlayedRef = useRef(false);
-  const savedTrackIdRef = useRef<string | null>(null);
-  const savedProgressRef = useRef(0);
-
-  useEffect(() => {
-    if (currentTrackId && tracks.length > 0 && !autoPlayedRef.current && tracks.find(t => t.id === currentTrackId)) {
-      autoPlayedRef.current = true;
-      savedTrackIdRef.current = currentTrackId;
-      savedProgressRef.current = musicProgress;
-      // Use setTimeout to let React batch state updates
-      const tid = currentTrackId;
-      const prog = musicProgress;
-      setTimeout(() => {
-        playTrack(tid);
-        if (prog > 0) {
-          setTimeout(() => { globalAudio.currentTime = prog; }, 600);
-        }
-      }, 100);
-    }
-  }, [tracks, currentTrackId]);
 
   // Refs to avoid stale closures in timer interval
   const activeTaskIdRef = useRef(activeTaskId);
@@ -867,7 +879,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setDailyBreakTime(prev => ({ ...prev, [today]: (prev[today] || 0) + 1 }));
         } else {
           const today = format(new Date(), 'yyyy-MM-dd');
-          setDailyStudyDate(today);
+          setDailyStudyDate(prev => {
+            if (prev && prev !== today) {
+              setDailyStudyTime(0);
+            }
+            return today;
+          });
           setDailyStudyTime(prev => prev + 1);
           setWeeklyStudyTime(prev => ({ ...prev, [today]: (prev[today] || 0) + 1 }));
 
@@ -961,6 +978,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         focusPomodoroTime, focusChronoTime, breakTime, dailyBreakTime,
         dailyFocusPomodoro, dailyFocusChrono,
       })).catch((e: any) => console.error("Error saving data:", e));
+      set(MUSIC_STATS_KEY, JSON.stringify({
+        musicListeningTime, musicListeningDate, dailyMusicTime,
+      })).catch((e: any) => console.error("Error saving music stats:", e));
     }, 300);
     return () => clearTimeout(t);
   }, [
@@ -976,11 +996,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Pause audio when closing window
   useEffect(() => {
     const handleBeforeUnload = () => {
+      if (globalAudio.duration && isFinite(globalAudio.duration)) {
+        const progress = globalAudio.duration > 0 ? globalAudio.currentTime / globalAudio.duration : 0;
+        setMusicProgress(progress);
+      }
       globalAudio.pause();
+      // Force save immediately using refs so position is persisted
+      saveBeforeUnloadRef.current?.();
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, []);
+
+  const saveBeforeUnloadRef = useRef<(() => void) | null>(null);
+  saveBeforeUnloadRef.current = () => {
+    set(STORAGE_KEY, JSON.stringify({
+      tasks, notes, noteFolders, courses, events, tracks, studySessions,
+      settings, sessionTime, sessionType, weeklyStudyTime, dailyStudyTime, dailyStudyDate, pomodoroSessions,
+      trackHistory, playCounts, musicQueue, musicVolume, shuffleMode, repeatMode, artists,
+      currentTrackId, musicListeningTime, musicListeningDate, dailyMusicTime,
+      musicProgress, musicDuration, downloadPath,
+      accumulatedPauseTime, pauseStartTime, distractionCount,
+      focusPomodoroTime, focusChronoTime, breakTime, dailyBreakTime,
+      dailyFocusPomodoro, dailyFocusChrono,
+    })).catch((e: any) => console.error("Error saving data on unload:", e));
+    set(MUSIC_STATS_KEY, JSON.stringify({
+      musicListeningTime, musicListeningDate, dailyMusicTime,
+    })).catch((e: any) => console.error("Error saving music stats on unload:", e));
+  };
 
   // â”€â”€ TASKS â”€â”€
   const addTask = useCallback((task: Omit<Task, 'id' | 'createdAt' | 'status' | 'subtasks' | 'files' | 'notes' | 'studyTime'> & { notes?: string; files?: TaskFile[]; subtasks?: SubTask[] }) => {
@@ -1178,7 +1221,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setIsPlayingMusic(false);
     setMusicProgress(0);
     setMusicDuration(0);
-    setMusicListeningTime(0);
     if (globalAudio) {
       globalAudio.pause();
       globalAudio.src = '';
@@ -1333,8 +1375,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setIsPlayingMusic(true);
         return;
       }
-      // Guard: prevent duplicate play calls during wake-up
-      if (wakeResumeLockRef.current || activePlaySessionIdRef.current) {
+      // Guard: prevent duplicate play calls
+      if (activePlaySessionIdRef.current) {
         setIsPlayingMusic(true);
         return;
       }
@@ -1368,7 +1410,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       URL.revokeObjectURL(currentBlobUrlRef.current);
       currentBlobUrlRef.current = null;
     }
+    intentionalPauseRef.current = true;
     globalAudio.pause();
+    intentionalPauseRef.current = false;
 
     loadedTrackIdRef.current = null;
     setCurrentTrackId(id);
@@ -1393,6 +1437,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return;
     }
     setYoutubeVideoUrl(null);
+
+    // If playing from queue, skip tracks before the selected one and remove it
+    setMusicQueue(prev => {
+      const idx = prev.indexOf(id);
+      if (idx >= 0) return prev.slice(idx + 1);
+      return prev;
+    });
 
     // Audio playback: try readFile + Blob, fallback to convertFileSrc
     const setupAudio = async () => {
@@ -1580,6 +1631,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (repeatModeRef.current === 'one') {
           globalAudio.currentTime = 0;
           globalAudio.play().catch(() => {});
+          _setRepeatMode('none');
           return;
         }
         let nextId: string | null = null;
@@ -1587,7 +1639,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const cid = currentTrackIdRef.current;
         if (q.length > 0) {
           const [next] = q;
-          setMusicQueue([...q.slice(1), cid]);
+          setMusicQueue(q.slice(1));
           nextId = next;
         } else if (shuffleModeRef.current || repeatModeRef.current === 'all') {
           const rest = tracksRef.current.filter(t => t.id !== cid).map(t => t.id);
@@ -1621,7 +1673,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }, delay);
       } else {
         console.warn('Audio playback error, max retries reached for track:', cid);
+        loadedTrackIdRef.current = null;
         setIsPlayingMusic(false);
+        // Enterprise behaviour: skip to next in queue (like Spotify/Apple Music)
+        const nextInQueue = musicQueueRef.current?.[0];
+        if (nextInQueue) {
+          playTrackRef.current?.(nextInQueue);
+        }
       }
     };
     const onStalled = () => {
@@ -1633,6 +1691,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const onCanPlay = () => {
       if (autoPlayRef.current) {
         autoPlayRef.current = false;
+        const seek = restoreSeekRef.current;
+        if (seek !== null) {
+          restoreSeekRef.current = null;
+          globalAudio.currentTime = seek * globalAudio.duration;
+        }
         playAudioInstanceRef.current(activePlaySessionIdRef.current);
       }
     };
@@ -1670,51 +1733,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     // sync state when tab becomes visible again (lid open, tab switch)
     const onVisibilityChange = () => {
-      if (!document.hidden && currentTrackIdRef.current) {
+      if (document.hidden && currentTrackIdRef.current && isPlayingMusicRef.current) {
         const currentTrack = tracksRef.current.find(t => t.id === currentTrackIdRef.current);
         const isYouTube = currentTrack?.url?.includes('youtube.com/') || currentTrack?.url?.includes('youtu.be/');
-
         if (isYouTube) {
-          // YouTube uses ReactPlayer which handles its own resume
-          // Just sync the state flag if needed
-          if (isPlayingMusicRef.current) {
-            setIsPlayingMusic(true);
+          if (currentTrackStartTimeRef.current !== null && currentTrackIdRef.current) {
+            const endTime = Date.now() / 1000;
+            const durationPlayed = endTime - currentTrackStartTimeRef.current;
+            setTrackPlayDurations(prev => {
+              const cid = currentTrackIdRef.current;
+              if (!cid) return prev;
+              const currentDuration = prev[cid] || 0;
+              return { ...prev, [cid]: currentDuration + durationPlayed };
+            });
           }
-        } else {
-          // Native audio — browser may have paused it during suspend
-          if (audio.paused && isPlayingMusicRef.current && !wakeResumeLockRef.current) {
-            wakeResumeLockRef.current = true;
-            // Save duration played before pause
-            if (currentTrackStartTimeRef.current !== null) {
-              const endTime = Date.now() / 1000;
-              const durationPlayed = endTime - currentTrackStartTimeRef.current;
-              setTrackPlayDurations(prev => {
-                const cid = currentTrackIdRef.current;
-                if (!cid) return prev;
-                const currentDuration = prev[cid] || 0;
-                return { ...prev, [cid]: currentDuration + durationPlayed };
-              });
-            }
-            // Resume after a short delay to let audio system recover
-            setTimeout(() => {
-              if (currentTrackIdRef.current && isPlayingMusicRef.current && audio.paused) {
-                if (audio.ended) audio.currentTime = 0;
-                audio.play().then(() => {
-                  setCurrentTrackStartTime(Date.now() / 1000);
-                }).catch(() => {
-                  // Audio may need reload — gracefully stop
-                  setIsPlayingMusic(false);
-                }).finally(() => {
-                  wakeResumeLockRef.current = false;
-                });
-              } else {
-                wakeResumeLockRef.current = false;
-              }
-            }, 200);
-          } else if (!audio.paused && !isPlayingMusicRef.current) {
-            setIsPlayingMusic(true);
-            setCurrentTrackStartTime(Date.now() / 1000);
-          }
+          setCurrentTrackStartTime(null);
+          setIsPlayingMusic(false);
         }
       }
     };
@@ -1754,7 +1788,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const incrementDailyStudyTime = useCallback(() => {
     const today = format(new Date(), 'yyyy-MM-dd');
-    setDailyStudyDate(today);
+    setDailyStudyDate(prev => {
+      if (prev && prev !== today) {
+        setDailyStudyTime(0);
+      }
+      return today;
+    });
     setDailyStudyTime(prev => prev + 1);
     setWeeklyStudyTime(prev => ({ ...prev, [today]: (prev[today] || 0) + 1 }));
   }, []);

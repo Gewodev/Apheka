@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
-import { useApp } from '../../store/AppContext';
+import { useApp, fmtClock } from '../../store/AppContext';
 import { useTimer } from '../../hooks/useTimer';
 import { format, subDays } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -307,7 +307,7 @@ export default function Estudio() {
       
       let label = s.type === 'pomodoro' ? 'Pomodoro' : (s.type === 'chrono' ? 'Cronómetro' : 'Descanso');
       
-      const completionTime = s.endedAt ? format(new Date(s.endedAt), 'HH:mm') : format(new Date(), 'HH:mm');
+      const completionTime = s.endedAt ? fmtClock(format(new Date(s.endedAt), 'HH:mm'), settings?.timeFormat) : fmtClock(format(new Date(), 'HH:mm'), settings?.timeFormat);
       
       entries.push({
         id: s.id,
@@ -424,7 +424,7 @@ export default function Estudio() {
             <div style={{ textAlign: 'right', position: 'relative', zIndex: 1 }}>
               <div className="flex items-baseline gap-2 justify-end">
                 <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 68, fontWeight: 200, lineHeight: 0.9, color: 'var(--text-secondary)', letterSpacing: '0.02em', transition: 'color 300ms' }}>
-                  {format(currentTime, 'HH:mm')}
+                  {fmtClock(format(currentTime, 'HH:mm'), settings?.timeFormat)}
                 </span>
                 <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 22, fontWeight: 200, color: 'var(--text-tertiary)', opacity: 0.7, letterSpacing: '0.02em', transition: 'color 300ms' }}>
                   {format(currentTime, 'ss')}
@@ -811,7 +811,7 @@ export default function Estudio() {
                             const Icon = isPomo ? TomatoIcon : isBreakEntry ? Coffee : Timer;
                             const mins = Math.floor(entry.duration / 60);
                             const secs = entry.duration % 60;
-                            const timeStr = entry.endedAt ? format(new Date(entry.endedAt), 'HH:mm') : '—';
+                  const timeStr = entry.endedAt ? fmtClock(format(new Date(entry.endedAt), 'HH:mm'), settings?.timeFormat) : '—';
                             const dateStr = entry.startedAt ? format(new Date(entry.startedAt), 'd MMM', { locale: es }) : '';
                             const statusLabels: Record<string, string> = { completado: '✓', mitad: '○', fallido: '✕' };
                             const statusColors: Record<string, string> = { completado: 'var(--success)', mitad: '#F59E0B', fallido: 'var(--error)' };

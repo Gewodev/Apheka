@@ -3,6 +3,7 @@ import { X, Calendar, Clock, BookOpen, FileText, ExternalLink, Trash2, CheckCirc
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { PlanEvent } from './EventModal';
+import { fmtTimeRange, useApp } from '../../../store/AppContext';
 
 export type SelectedItem = 
   | { type: 'day'; date: Date; events: PlanEvent[]; tasks: any[] }
@@ -12,11 +13,15 @@ export type SelectedItem =
 interface LateralPanelProps {
   item: SelectedItem | null;
   onClose: () => void;
+  onSelectEvent?: (ev: PlanEvent) => void;
   onEditEvent?: (ev: PlanEvent) => void;
+  onDeleteEvent?: (evId: string) => void;
   onViewTask?: (taskId: string) => void;
 }
 
-export default function LateralPanel({ item, onClose, onEditEvent, onViewTask }: LateralPanelProps) {
+export default function LateralPanel({ item, onClose, onSelectEvent, onEditEvent, onDeleteEvent, onViewTask }: LateralPanelProps) {
+  const { settings } = useApp();
+  const tf = settings?.timeFormat;
   if (!item) return null;
 
   return (
@@ -69,10 +74,10 @@ export default function LateralPanel({ item, onClose, onEditEvent, onViewTask }:
         {/* Content */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '36px' }}>
           {item.type === 'day' && (
-            <DayDetails item={item} onEditEvent={onEditEvent} onViewTask={onViewTask} />
+            <DayDetails item={item} onSelectEvent={onSelectEvent} onViewTask={onViewTask} timeFormat={tf} />
           )}
           {item.type === 'event' && (
-            <EventDetails item={item} onEdit={onEditEvent} />
+            <EventDetails item={item} onEdit={onEditEvent} onDelete={onDeleteEvent} timeFormat={tf} />
           )}
           {item.type === 'task' && (
             <TaskDetails item={item} onViewTask={onViewTask} />
@@ -83,7 +88,7 @@ export default function LateralPanel({ item, onClose, onEditEvent, onViewTask }:
   );
 }
 
-function DayDetails({ item, onEditEvent, onViewTask }: { item: Extract<SelectedItem, {type: 'day'}>, onEditEvent?: (ev: PlanEvent) => void, onViewTask?: (taskId: string) => void }) {
+function DayDetails({ item, onSelectEvent, onViewTask, timeFormat }: { item: Extract<SelectedItem, {type: 'day'}>, onSelectEvent?: (ev: PlanEvent) => void, onViewTask?: (taskId: string) => void, timeFormat?: '24h' | '12h' }) {
   const { date, events, tasks } = item;
   const formattedDate = format(date, "EEEE d 'de' MMMM", { locale: es });
   
@@ -108,14 +113,14 @@ function DayDetails({ item, onEditEvent, onViewTask }: { item: Extract<SelectedI
               {events.map(ev => (
                 <div 
                   key={ev.id} 
-                  onClick={() => onEditEvent?.(ev)}
+                  onClick={() => onSelectEvent?.(ev)}
                   style={{ padding: '16px 20px', background: 'var(--surface-elevated)', border: '1px solid var(--border-soft)', borderRadius: 14, borderLeft: `3px solid ${ev.color}`, cursor: 'pointer', transition: 'all 200ms' }}
                   onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface-hover)'; e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.2)'; }}
                   onMouseLeave={e => { e.currentTarget.style.background = 'var(--surface-elevated)'; e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}
                 >
                   <div style={{ fontSize: 16, fontWeight: 500, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ev.title}</div>
                   <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Clock size={13} /> {ev.allDay ? 'Todo el día' : `${ev.startTime} - ${ev.endTime}`}
+                    <Clock size={13} /> {ev.allDay ? 'Todo el día' : fmtTimeRange(ev.startTime, ev.endTime, timeFormat)}
                   </div>
                 </div>
               ))}
@@ -159,9 +164,11 @@ function DayDetails({ item, onEditEvent, onViewTask }: { item: Extract<SelectedI
   );
 }
 
-function EventDetails({ item, onEdit }: { item: Extract<SelectedItem, {type: 'event'}>, onEdit?: (ev: PlanEvent) => void }) {
+function EventDetails({ item, onEdit, onDelete, timeFormat }: { item: Extract<SelectedItem, {type: 'event'}>, onEdit?: (ev: PlanEvent) => void, onDelete?: (evId: string) => void, timeFormat?: '24h' | '12h' }) {
   const { event } = item;
-  
+
+  const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 40, height: '100%' }}>
       <div>
@@ -176,7 +183,7 @@ function EventDetails({ item, onEdit }: { item: Extract<SelectedItem, {type: 'ev
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <DetailRow icon={<Calendar size={18} strokeWidth={1.5} />} label="Fecha" value={format(new Date(event.date + 'T12:00:00'), "EEEE d 'de' MMMM yyyy", { locale: es })} />
-        <DetailRow icon={<Clock size={18} strokeWidth={1.5} />} label="Hora" value={event.allDay ? 'Todo el día' : `${event.startTime} - ${event.endTime}`} />
+        <DetailRow icon={<Clock size={18} strokeWidth={1.5} />} label="Hora" value={event.allDay ? 'Todo el día' : fmtTimeRange(event.startTime, event.endTime, timeFormat)} />
         {event.repeat !== 'none' && <DetailRow icon={<Repeat size={18} strokeWidth={1.5} />} label="Repetición" value={event.repeat === 'daily' ? 'Diaria' : event.repeat === 'weekly' ? 'Semanal' : 'Días específicos'} subValue={event.repeatUntil ? `Hasta el ${format(new Date(event.repeatUntil + 'T12:00:00'), 'd MMM yyyy')}` : undefined} />}
       </div>
 
@@ -214,13 +221,30 @@ function EventDetails({ item, onEdit }: { item: Extract<SelectedItem, {type: 'ev
         </div>
       )}
 
-      <button 
-        onClick={() => onEdit?.(event)}
-        className="btn-secondary"
-        style={{ marginTop: 'auto', width: '100%', padding: '16px', borderRadius: 14, fontSize: 15, fontWeight: 600, border: '1px solid var(--border-soft)' }}
-      >
-        Editar Evento
-      </button>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 'auto' }}>
+        <button 
+          onClick={() => onEdit?.(event)}
+          style={{ width: '100%', padding: '14px 20px', borderRadius: 14, fontSize: 15, fontWeight: 600, border: 'none', background: 'var(--accent)', color: '#fff', cursor: 'pointer', transition: 'all 200ms', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+          onMouseEnter={e => { e.currentTarget.style.opacity = '0.9'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+          onMouseLeave={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.transform = 'none'; }}
+        >
+          Editar Evento
+        </button>
+        {showDeleteConfirm ? (
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button onClick={() => setShowDeleteConfirm(false)} style={{ flex: 1, padding: '14px', borderRadius: 14, fontSize: 14, fontWeight: 600, border: '1px solid var(--border-soft)', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+              Cancelar
+            </button>
+            <button onClick={() => { onDelete?.(event.id); }} style={{ flex: 1, padding: '14px', borderRadius: 14, fontSize: 14, fontWeight: 600, border: 'none', background: 'rgba(225,29,72,0.15)', color: 'var(--accent)', cursor: 'pointer' }}>
+              Confirmar Eliminar
+            </button>
+          </div>
+        ) : (
+          <button onClick={() => setShowDeleteConfirm(true)} style={{ width: '100%', padding: '16px', borderRadius: 14, fontSize: 15, fontWeight: 600, border: '1px solid rgba(225,29,72,0.2)', background: 'rgba(225,29,72,0.06)', color: 'var(--accent)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+            <Trash2 size={16} /> Eliminar Evento
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -258,13 +282,13 @@ function TaskDetails({ item, onViewTask }: { item: Extract<SelectedItem, {type: 
 
 function DetailRow({ icon, label, value, subValue }: { icon: React.ReactNode, label: string, value: string, subValue?: string }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-      <div style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--surface-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', border: '1px solid var(--border-soft)' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+      <div style={{ width: 40, height: 40, borderRadius: 12, background: 'var(--surface-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', border: '1px solid var(--border-soft)', flexShrink: 0 }}>
         {icon}
       </div>
-      <div>
+      <div style={{ minWidth: 0 }}>
         <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>{label}</div>
-        <div style={{ fontSize: 15, color: 'var(--text-primary)', fontWeight: 500 }}>{value}</div>
+        <div style={{ fontSize: 15, color: 'var(--text-primary)', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</div>
         {subValue && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{subValue}</div>}
       </div>
     </div>
