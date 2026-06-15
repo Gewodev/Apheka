@@ -1,451 +1,349 @@
-﻿import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
-  Plus, BookOpen, Trash2, Edit3, X, Check, GraduationCap,
-  User, FileText, Layers, Image, MoreHorizontal,
+  GraduationCap, Book, PlusCircle, Upload, Download, Trash2,
+  X, Image as ImageIcon, Sparkles, FolderUp, MoreHorizontal
 } from 'lucide-react';
-import { format } from 'date-fns';
-import { useApp, fmtClock } from '../../store/AppContext';
+import { useApp, Course } from '../../store/AppContext';
 import NotificationBell from '../ui/NotificationBell';
-const PRESET_COLORS = [
-  '#E11D48', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6',
-  '#EC4899', '#06B6D4', '#F97316', '#6366F1', '#14B8A6',
-  '#EF4444', '#0EA5E9', '#84CC16', '#D946EF', '#22C55E',
-  '#A855F7', '#D946EF', '#0D9488', '#2563EB', '#DC2626',
-  '#7C3AED', '#0284C7', '#65A30D', '#DB2777', '#0891B2',
-  '#C2410C', '#4F46E5', '#059669', '#BE123C', '#0369A1',
-];
+import toast from 'react-hot-toast';
 
 interface CursosHubProps {
   onSelectCourse: (courseId: string) => void;
 }
 
 export default function CursosHub({ onSelectCourse }: CursosHubProps) {
-  const { courses, addCourse, updateCourse, deleteCourse, addNotification, settings } = useApp();
-  const [currentTime, setCurrentTime] = useState(new Date());
-  const [showNew, setShowNew] = useState(false);
-  const [editId, setEditId] = useState<string | null>(null);
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const { courses = [], addCourse, updateCourse, deleteCourse, addNotification } = useApp();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
-  const [newName, setNewName] = useState('');
-  const [newColor, setNewColor] = useState(PRESET_COLORS[0]);
-  const [newRoom, setNewRoom] = useState('');
-  const [newTeacher, setNewTeacher] = useState('');
-  const [newCredits, setNewCredits] = useState('');
-  const [newLevel, setNewLevel] = useState('');
-  const [newCover, setNewCover] = useState('');
-  const [newDesc, setNewDesc] = useState('');
-  const [newCoverFile, setNewCoverFile] = useState<File | null>(null);
-  const [newCoverPreview, setNewCoverPreview] = useState('');
+  // Modal states
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [courseName, setCourseName] = useState('');
+  const [courseCover, setCourseCover] = useState<string | undefined>(undefined);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
-  const [editName, setEditName] = useState('');
-  const [editColor, setEditColor] = useState(PRESET_COLORS[0]);
-  const [editRoom, setEditRoom] = useState('');
-  const [editTeacher, setEditTeacher] = useState('');
-  const [editCredits, setEditCredits] = useState('');
-  const [editLevel, setEditLevel] = useState('');
-  const [editCover, setEditCover] = useState('');
-  const [editDesc, setEditDesc] = useState('');
-  const [editCoverFile, setEditCoverFile] = useState<File | null>(null);
-  const [editCoverPreview, setEditCoverPreview] = useState('');
-
-  const newFileRef = useRef<HTMLInputElement>(null);
-  const editFileRef = useRef<HTMLInputElement>(null);
-
-  const resetNewForm = () => {
-    setNewName(''); setNewColor(PRESET_COLORS[0]); setNewRoom('');
-    setNewTeacher(''); setNewCredits(''); setNewLevel(''); setNewCover('');
-    setNewDesc(''); setNewCoverFile(null); setNewCoverPreview('');
-  };
-
-  const resetEditForm = () => {
-    setEditId(null); setEditCoverFile(null); setEditCoverPreview('');
-  };
-
-  const handleCoverFile = (file: File | null, setPreview: (v: string) => void, setName?: (v: string) => void) => {
+  // File loading helper
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (e) => setPreview(e.target?.result as string);
+    reader.onload = (event) => {
+      setCourseCover(event.target?.result as string);
+      toast.success('Imagen cargada correctamente');
+    };
     reader.readAsDataURL(file);
   };
 
+  // Create course
   const handleCreate = () => {
-    if (!newName.trim()) { addNotification('El nombre del curso es obligatorio', 'error'); return; }
+    const name = courseName.trim();
+    if (!name) {
+      toast.error('El nombre de la asignatura es obligatorio');
+      return;
+    }
+    if (courses.some(c => c.name.toLowerCase() === name.toLowerCase())) {
+      toast.error('Esta asignatura ya existe');
+      return;
+    }
+
     addCourse({
-      name: newName.trim(),
-      color: newColor,
-      progress: 0, totalTasks: 0, completedTasks: 0, hoursStudied: 0,
-      coverUrl: newCoverPreview || newCover || undefined,
-      description: newDesc || undefined,
-      level: newLevel || undefined,
-      credits: newCredits || undefined,
-      room: newRoom || undefined,
-      teacher: newTeacher || undefined,
+      name,
+      color: '#758bfa',
+      progress: 0,
+      totalTasks: 0,
+      completedTasks: 0,
+      hoursStudied: 0,
+      sortOrder: courses.length,
+      coverImage: courseCover,
+      coverUrl: courseCover,
+      groups: [],
+      studyTopics: []
     });
-    resetNewForm();
-    setShowNew(false);
+
+    setCourseName('');
+    setCourseCover(undefined);
+    setShowAddModal(false);
+    toast.success('Asignatura creada correctamente');
   };
 
-  const startEdit = (course: typeof courses[0]) => {
-    setEditId(course.id);
-    setEditName(course.name);
-    setEditColor(course.color);
-    setEditRoom(course.room || '');
-    setEditTeacher(course.teacher || '');
-    setEditCredits(course.credits || '');
-    setEditLevel(course.level || '');
-    setEditCover(course.coverUrl || '');
-    setEditDesc(course.description || '');
-    setEditCoverPreview('');
-    setEditCoverFile(null);
+  // Delete course
+  const handleConfirmDelete = () => {
+    if (!pendingDeleteId) return;
+    deleteCourse(pendingDeleteId);
+    setPendingDeleteId(null);
+    toast.success('Asignatura eliminada');
   };
 
-  const handleSaveEdit = () => {
-    if (!editName.trim() || !editId) return;
-    updateCourse(editId, {
-      name: editName.trim(),
-      color: editColor,
-      room: editRoom || undefined,
-      teacher: editTeacher || undefined,
-      credits: editCredits || undefined,
-      level: editLevel || undefined,
-      coverUrl: editCoverPreview || editCover || undefined,
-      description: editDesc || undefined,
-    });
-    resetEditForm();
+  // Export JSON
+  const handleExport = () => {
+    try {
+      const dataStr = JSON.stringify(courses, null, 2);
+      const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+      
+      const exportFileDefaultName = `owa-asignaturas-${new Date().toISOString().split('T')[0]}.json`;
+      
+      const linkElement = document.createElement('a');
+      linkElement.setAttribute('href', dataUri);
+      linkElement.setAttribute('download', exportFileDefaultName);
+      linkElement.click();
+      toast.success('Asignaturas exportadas correctamente');
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al exportar asignaturas');
+    }
   };
 
-  const handleDelete = (id: string) => {
-    deleteCourse(id);
-    setConfirmDeleteId(null);
-    setMenuOpenId(null);
+  // Import JSON
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const importedData = JSON.parse(event.target?.result as string);
+        if (Array.isArray(importedData)) {
+          // Add all imported courses
+          importedData.forEach(course => {
+            // Check for duplicate names
+            if (!courses.some(c => c.name.toLowerCase() === course.name.toLowerCase())) {
+              addCourse({
+                name: course.name,
+                color: course.color || '#758bfa',
+                progress: course.progress || 0,
+                totalTasks: course.totalTasks || 0,
+                completedTasks: course.completedTasks || 0,
+                hoursStudied: course.hoursStudied || 0,
+                sortOrder: course.sortOrder ?? courses.length,
+                coverImage: course.coverImage || course.coverUrl,
+                coverUrl: course.coverImage || course.coverUrl,
+                groups: course.groups || [],
+                studyTopics: course.studyTopics || []
+              });
+            }
+          });
+          toast.success('Datos importados correctamente');
+        } else {
+          toast.error('El formato del archivo es inválido');
+        }
+      } catch (err) {
+        console.error(err);
+        toast.error('Error al parsear el archivo JSON');
+      }
+    };
+    reader.readAsText(file);
+    if (e.target) e.target.value = '';
   };
-
-  useEffect(() => {
-    const t = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(t);
-  }, []);
-
-  const timeStr = fmtClock(format(currentTime, 'HH:mm'), settings?.timeFormat);
-  const secondsStr = currentTime.toLocaleTimeString('es-ES', { second: '2-digit' });
-  const dateStr = currentTime.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
-  const dateStrCapitalized = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
 
   return (
-    <div className="page-container" style={{ height: '100%', overflowY: 'auto', padding: '24px 28px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
+    <div className="page-container" style={{ height: '100%', overflowY: 'auto', padding: '28px 32px', background: 'var(--bg-base)' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 36 }}>
         <div>
-          <h1 style={{ fontSize: 30, fontWeight: 200, color: 'var(--text-primary)', letterSpacing: '-0.03em', display: 'flex', alignItems: 'center', gap: 12, fontFamily: "'Inter Tight', sans-serif" }}>
-            <Layers size={22} style={{ color: 'var(--accent)' }} />
-            Mis Cursos
+          <h1 style={{ fontSize: 32, fontWeight: 300, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 12, fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.03em' }}>
+            <GraduationCap size={28} className="aether-text-primary" />
+            Mis Asignaturas
           </h1>
-          <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4, fontWeight: 400, letterSpacing: '0.02em' }}>
-            {courses.length} curso{courses.length !== 1 ? 's' : ''}
+          <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 4, fontWeight: 400 }}>
+            {courses.length} asignatura{courses.length !== 1 ? 's' : ''} en tu biblioteca
           </p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <button onClick={() => { resetNewForm(); setShowNew(true); }}
-            style={{ height: 38, padding: '0 22px', fontSize: 12, fontWeight: 500, letterSpacing: '0.03em', display: 'flex', alignItems: 'center', gap: 8, borderRadius: 10, border: 'none', background: 'var(--accent)', color: '#fff', cursor: 'pointer', transition: 'all 200ms' }}>
-            <Plus size={14} /> Nuevo Curso
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button onClick={() => importInputRef.current?.click()} className="btn-ghost"
+            style={{ display: 'flex', alignItems: 'center', gap: 8, height: 38, padding: '0 16px', borderRadius: 10, border: '1px solid var(--aether-border-glass)', fontSize: 12, fontWeight: 500, cursor: 'pointer', transition: 'all 200ms' }}>
+            <Upload size={14} /> Importar
+          </button>
+          <button onClick={handleExport} className="btn-ghost"
+            style={{ display: 'flex', alignItems: 'center', gap: 8, height: 38, padding: '0 16px', borderRadius: 10, border: '1px solid var(--aether-border-glass)', fontSize: 12, fontWeight: 500, cursor: 'pointer', transition: 'all 200ms' }}>
+            <Download size={14} /> Exportar
+          </button>
+          <button onClick={() => setShowAddModal(true)} className="aether-btn-primary"
+            style={{ display: 'flex', alignItems: 'center', gap: 8, height: 38, padding: '0 20px', fontSize: 12, border: 'none', cursor: 'pointer' }}>
+            <PlusCircle size={15} /> Añadir
           </button>
           <NotificationBell />
-          <div style={{ textAlign: 'right', borderLeft: '1px solid var(--border-subtle)', paddingLeft: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, justifyContent: 'flex-end' }}>
-              <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 28, fontWeight: 300, lineHeight: 1, color: 'var(--text-secondary)', letterSpacing: '0.02em' }}>{timeStr}</span>
-              <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 14, fontWeight: 300, color: 'var(--text-tertiary)', opacity: 0.5 }}>{secondsStr}</span>
-            </div>
-            <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', marginTop: 2, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{dateStrCapitalized}</div>
-          </div>
         </div>
       </div>
 
-      {courses.length === 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 20px', textAlign: 'center' }}>
-          <BookOpen size={48} style={{ color: 'var(--text-muted)', marginBottom: 16, opacity: 0.3 }} />
-          <h3 style={{ fontSize: 16, fontWeight: 400, color: 'var(--text-secondary)', fontFamily: "'Inter Tight', sans-serif", marginBottom: 8 }}>Aún no tienes cursos</h3>
-          <p style={{ fontSize: 12, color: 'var(--text-tertiary)', maxWidth: 360, lineHeight: 1.6, fontWeight: 300 }}>Crea tu primer curso para empezar a organizar tus tareas, apuntes y horarios de estudio.</p>
+      <input type="file" ref={importInputRef} style={{ display: 'none' }} accept=".json" onChange={handleImport} />
+
+      {/* Subject list */}
+      {courses.length === 0 ? (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '100px 20px', textAlign: 'center' }}>
+          <GraduationCap size={64} style={{ color: 'var(--text-muted)', marginBottom: 20, opacity: 0.3 }} />
+          <h3 style={{ fontSize: 18, fontWeight: 400, color: 'var(--text-secondary)', fontFamily: "'Inter Tight', sans-serif", marginBottom: 8 }}>Aún no tienes asignaturas</h3>
+          <p style={{ fontSize: 13, color: 'var(--text-tertiary)', maxWidth: 380, lineHeight: 1.6, fontWeight: 300 }}>
+            Agrega tu primera asignatura para empezar a estructurar tus temas, agrupaciones y recursos de estudio.
+          </p>
         </div>
-      )}
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 24, paddingBottom: 40 }}>
+          {courses.map(course => {
+            const studyTopics = course.studyTopics || [];
+            const doneTopics = studyTopics.filter(t => t.status === 'done').length;
+            const totalTopics = studyTopics.length;
+            const progressPercent = totalTopics > 0 ? Math.round((doneTopics / totalTopics) * 100) : 0;
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 18, paddingBottom: 24 }}>
-        {courses.map(course => {
-          const progressPct = course.totalTasks > 0 ? Math.round((course.completedTasks / course.totalTasks) * 100) : 0;
-          return (
-          <div key={course.id} style={{ borderRadius: 16, overflow: 'hidden', cursor: 'pointer', transition: 'all 350ms cubic-bezier(0.16,1,0.3,1)', position: 'relative', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', transform: 'translateZ(0)' }}
-            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-6px) scale(1.01)'; e.currentTarget.style.boxShadow = `0 16px 48px ${course.color}22, 0 4px 16px rgba(0,0,0,0.2)`; e.currentTarget.style.borderColor = `${course.color}44`; }}
-            onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; e.currentTarget.style.borderColor = 'var(--border-default)'; setMenuOpenId(null); }}
-          >
-            {/* Cover / Banner — taller, more immersive */}
-            <div style={{ height: 140, position: 'relative', overflow: 'hidden', background: `linear-gradient(135deg, ${course.color} 0%, ${course.color}aa 40%, ${course.color}44 80%, ${course.color}22 100%)` }}
-              onClick={() => onSelectCourse(course.id)}>
-              {course.coverUrl ? (
-                <img src={course.coverUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.65, transition: 'transform 600ms' }}
-                  onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.08)'}
-                  onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'} />
-              ) : (
-                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <GraduationCap size={48} style={{ color: 'rgba(255,255,255,0.1)' }} />
+            return (
+              <div
+                key={course.id}
+                className="aether-glass-card group"
+                style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', cursor: 'pointer', position: 'relative', height: 240 }}
+                onClick={() => onSelectCourse(course.id)}
+              >
+                {/* Header card with name and delete */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', background: 'rgba(0,0,0,0.15)', borderBottom: '1px solid var(--aether-border-glass)', zIndex: 10 }}>
+                  <h3 className="truncate" style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', maxWidth: '80%', fontFamily: "'Inter Tight', sans-serif" }}>
+                    {course.name}
+                  </h3>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPendingDeleteId(course.id);
+                    }}
+                    className="btn-ghost text-red-500 hover-opacity"
+                    style={{
+                      width: 28, height: 28, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      opacity: 0, transition: 'all 200ms', background: 'transparent', border: 'none', cursor: 'pointer'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <Trash2 size={13} />
+                  </button>
                 </div>
-              )}
-              <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(to top, ${course.color}dd 0%, transparent 60%)` }} />
-              {/* Course name on banner — larger */}
-              <div style={{ position: 'absolute', bottom: 14, left: 16, right: 16, zIndex: 2 }}>
-                <h3 style={{ fontSize: 20, fontWeight: 700, color: '#fff', letterSpacing: '-0.02em', fontFamily: "'Inter Tight', sans-serif", textShadow: '0 2px 12px rgba(0,0,0,0.5)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.2 }}>{course.name}</h3>
-              </div>
-              {/* Three-dots on banner top-right */}
-              <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 10 }}>
-                <button onClick={e => { e.stopPropagation(); setMenuOpenId(menuOpenId === course.id ? null : course.id); }}
-                  style={{ width: 30, height: 30, borderRadius: 8, background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
-                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(0,0,0,0.5)'; e.currentTarget.style.color = '#fff'; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(0,0,0,0.3)'; e.currentTarget.style.color = 'rgba(255,255,255,0.7)'; }}>
-                  <MoreHorizontal size={15} />
-                </button>
-                {menuOpenId === course.id && (
-                  <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 4, width: 140, background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 10, boxShadow: '0 8px 32px rgba(0,0,0,0.5)', padding: 4, zIndex: 20, backdropFilter: 'blur(16px)' }}
-                    onClick={e => e.stopPropagation()}>
-                    <button onClick={() => { startEdit(course); setMenuOpenId(null); }}
-                      style={{ width: '100%', padding: '8px 12px', borderRadius: 6, fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, textAlign: 'left', transition: 'all 150ms' }}>
-                      <Edit3 size={12} /> Editar
-                    </button>
-                    <button onClick={() => { setConfirmDeleteId(course.id); setMenuOpenId(null); }}
-                      style={{ width: '100%', padding: '8px 12px', borderRadius: 6, fontSize: 11, fontWeight: 500, color: '#EF4444', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, textAlign: 'left', transition: 'all 150ms' }}>
-                      <Trash2 size={12} /> Eliminar
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
 
-            {/* Content — denser, info-rich */}
-            <div style={{ padding: '14px 16px 16px' }} onClick={() => onSelectCourse(course.id)}>
-              {/* Metadata badges row */}
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
-                {course.teacher && (
-                  <span style={{ fontSize: 10, fontWeight: 500, color: course.color, background: `${course.color}15`, padding: '2px 8px', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 4, letterSpacing: '0.01em' }}>
-                    <User size={9} /> {course.teacher}
-                  </span>
-                )}
-                {course.level && (
-                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-secondary)', background: 'var(--bg-deep)', padding: '2px 8px', borderRadius: 4, letterSpacing: '0.01em' }}>
-                    {course.level}
-                  </span>
-                )}
-                {course.room && (
-                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-secondary)', background: 'var(--bg-deep)', padding: '2px 8px', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 3, letterSpacing: '0.01em' }}>
-                    <span style={{ opacity: 0.4 }}>·</span> {course.room}
-                  </span>
-                )}
-              </div>
+                {/* Banner / Cover area */}
+                <div style={{ flex: 1, position: 'relative', overflow: 'hidden', background: `linear-gradient(135deg, ${course.color}22 0%, ${course.color}05 100%)` }}>
+                  {course.coverUrl ? (
+                    <img
+                      src={course.coverUrl}
+                      alt=""
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 500ms' }}
+                      onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                      onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                    />
+                  ) : (
+                    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Book size={40} style={{ color: 'rgba(255,255,255,0.05)' }} />
+                    </div>
+                  )}
+                  <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(10,10,12,0.9) 0%, transparent 100%)' }} />
+                </div>
 
-              {/* Description */}
-              {course.description && (
-                <p style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.5, marginBottom: 10, fontWeight: 300, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                  {course.description}
-                </p>
-              )}
-
-              {/* Progress + stats row */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                      {course.totalTasks > 0 ? `${course.completedTasks}/${course.totalTasks} tareas` : 'Sin tareas'}
+                {/* Footer progress bar */}
+                <div style={{ padding: 16, background: 'rgba(10,10,12,0.85)', borderTop: '1px solid var(--aether-border-glass)', zIndex: 10 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      Retención y Maestría
                     </span>
-                    <span style={{ fontSize: 10, fontWeight: 600, color: course.color, fontFamily: "'JetBrains Mono', monospace" }}>{progressPct}%</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--aether-primary)' }}>
+                      {doneTopics} / {totalTopics} temas ({progressPercent}%)
+                    </span>
                   </div>
-                  <div style={{ height: 3, background: 'var(--bg-deep)', borderRadius: 2, overflow: 'hidden' }}>
-                    <div style={{ width: `${progressPct}%`, height: '100%', background: course.color, borderRadius: 2, transition: 'width 500ms cubic-bezier(0.16,1,0.3,1)', boxShadow: `0 0 6px ${course.color}66` }} />
+                  <div style={{ height: 4, background: 'rgba(255,255,255,0.05)', borderRadius: 2, overflow: 'hidden' }}>
+                    <div
+                      style={{
+                        width: `${progressPercent}%`, height: '100%',
+                        background: 'var(--aether-primary)', borderRadius: 2,
+                        transition: 'width 500ms cubic-bezier(0.16,1,0.3,1)',
+                        boxShadow: '0 0 8px rgba(117, 139, 250, 0.4)'
+                      }}
+                    />
                   </div>
                 </div>
               </div>
+            );
+          })}
+        </div>
+      )}
 
-              {/* Hours studied */}
-              {course.hoursStudied > 0 && (
-                <div style={{ marginTop: 8, fontSize: 10, color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <span style={{ opacity: 0.4 }}>📖</span> {course.hoursStudied}h estudiadas
-                </div>
-              )}
-
-              {/* Color accent line */}
-              <div style={{ marginTop: 12, height: 2, width: '40%', background: `linear-gradient(90deg, ${course.color}66, transparent)`, borderRadius: 1 }} />
-            </div>
-          </div>
-          );
-        })}
-      </div>
-
-      {/* New Course Modal */}
-      {showNew && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}
-          onClick={() => { resetNewForm(); setShowNew(false); }}>
-          <div className="bento-card" style={{ width: 480, maxHeight: '90vh', overflowY: 'auto', padding: 32, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, paddingBottom: 14, borderBottom: '1px solid var(--border-subtle)' }}>
-              <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em', display: 'flex', alignItems: 'center', gap: 10 }}>
-                <Plus size={16} style={{ color: 'var(--accent)' }} /> Nuevo Curso
+      {/* Add Modal */}
+      {showAddModal && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }}
+          onClick={() => setShowAddModal(false)}>
+          <div className="aether-glass-card" style={{ width: 440, padding: 28, background: 'var(--bg-surface)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <h3 style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <GraduationCap size={18} className="aether-text-primary" /> Nueva Asignatura
               </h3>
-              <button onClick={() => { resetNewForm(); setShowNew(false); }} className="btn-ghost" style={{ padding: 6 }}><X size={16} /></button>
+              <button onClick={() => setShowAddModal(false)} className="btn-ghost" style={{ padding: 6, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)' }}><X size={16} /></button>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div>
-                <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Nombre *</label>
-                <input value={newName} onChange={e => setNewName(e.target.value)} className="input-base" style={{ width: '100%', height: 40, fontSize: 13 }} placeholder="Ej: Cálculo Diferencial" />
+                <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 6 }}>Nombre de Asignatura</label>
+                <input
+                  type="text"
+                  value={courseName}
+                  onChange={e => setCourseName(e.target.value)}
+                  className="input-base"
+                  style={{ width: '100%', height: 38, fontSize: 13, padding: '0 12px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)' }}
+                  placeholder="Ej: Cálculo de Variaciones, Biología Celular..."
+                  autoFocus
+                />
               </div>
 
               <div>
-                <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 8 }}>Color</label>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                  {PRESET_COLORS.map(c => (
-                    <button key={c} onClick={() => setNewColor(c)}
-                      style={{ width: 28, height: 28, borderRadius: '50%', background: c, border: newColor === c ? '2px solid #fff' : '2px solid transparent', cursor: 'pointer', boxShadow: newColor === c ? `0 0 10px ${c}` : 'none', transition: 'all 150ms' }}
-                    />
-                  ))}
-                  <label style={{ width: 28, height: 28, borderRadius: '50%', background: newColor, border: '2px dashed var(--border-default)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: newColor === PRESET_COLORS[0] ? '#fff' : undefined, transition: 'all 150ms', position: 'relative', overflow: 'hidden' }}>
-                    <input type="color" value={newColor} onChange={e => setNewColor(e.target.value)} style={{ position: 'absolute', opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }} />
-                    <span style={{ fontSize: 14, lineHeight: 1 }}>+</span>
-                  </label>
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div>
-                  <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Aula</label>
-                  <input value={newRoom} onChange={e => setNewRoom(e.target.value)} className="input-base" style={{ width: '100%', height: 38, fontSize: 12 }} placeholder="Ej: A-202" />
-                </div>
-                <div>
-                  <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Docente</label>
-                  <input value={newTeacher} onChange={e => setNewTeacher(e.target.value)} className="input-base" style={{ width: '100%', height: 38, fontSize: 12 }} placeholder="Nombre del profesor" />
-                </div>
-              </div>
-              <div>
-                <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Nivel</label>
-                <input value={newLevel} onChange={e => setNewLevel(e.target.value)} className="input-base" style={{ width: '100%', height: 38, fontSize: 12 }} placeholder="Ej: Avanzado, Intermedio, etc." />
-              </div>
-
-              <div>
-                  <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Portada</label>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <input value={newCover} onChange={e => setNewCover(e.target.value)} className="input-base" style={{ flex: 1, height: 38, fontSize: 12 }} placeholder="https://..." />
-                    <button onClick={() => newFileRef.current?.click()} style={{ width: 38, height: 38, borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <Image size={14} />
+                <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 6 }}>Banner (Imagen Opcional)</label>
+                {courseCover ? (
+                  <div style={{ position: 'relative', width: '100%', aspectRatio: '16/7', borderRadius: 10, overflow: 'hidden', border: '1px solid var(--aether-border-glass)' }}>
+                    <img src={courseCover} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <button
+                      onClick={() => setCourseCover(undefined)}
+                      style={{ position: 'absolute', top: 6, right: 6, width: 24, height: 24, borderRadius: '50%', background: 'rgba(239,68,68,0.9)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                      <X size={12} />
                     </button>
                   </div>
-                  <input type="file" ref={newFileRef} accept="image/*" style={{ display: 'none' }}
-                    onChange={e => { const f = e.target.files?.[0]; if (f) { setNewCoverFile(f); handleCoverFile(f, setNewCoverPreview); } }} />
-                  {newCoverPreview && (
-                    <div style={{ marginTop: 6, height: 60, borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
-                      <img src={newCoverPreview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    </div>
-                  )}
+                ) : (
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    style={{
+                      width: '100%', height: 90, borderRadius: 10, border: '2px dashed var(--aether-border-glass)',
+                      background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer',
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.01)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <ImageIcon size={18} className="aether-text-primary" />
+                    <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Subir Banner</span>
+                  </button>
+                )}
+                <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept="image/*" onChange={handleImageUpload} />
               </div>
 
-              <div>
-                <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Descripción</label>
-                <textarea value={newDesc} onChange={e => setNewDesc(e.target.value)} className="input-base" style={{ width: '100%', minHeight: 60, fontSize: 12, resize: 'vertical', padding: '8px 10px' }} placeholder="Breve Descripción del curso..." />
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 24 }}>
-              <button onClick={() => { resetNewForm(); setShowNew(false); }} className="btn-secondary" style={{ height: 36, padding: '0 16px', fontSize: 12 }}>Cancelar</button>
-              <button onClick={handleCreate} className="btn-primary" style={{ height: 36, padding: '0 20px', fontSize: 12 }}>
-                <Plus size={14} /> Crear Curso
+              <button
+                onClick={handleCreate}
+                className="aether-btn-primary"
+                disabled={!courseName.trim()}
+                style={{ width: '100%', height: 38, border: 'none', cursor: 'pointer', marginTop: 8 }}
+              >
+                Crear Asignatura
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Edit Course Modal */}
-      {editId && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}
-          onClick={() => resetEditForm()}>
-          <div className="bento-card" style={{ width: 480, maxHeight: '90vh', overflowY: 'auto', padding: 32, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, paddingBottom: 14, borderBottom: '1px solid var(--border-subtle)' }}>
-              <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em', display: 'flex', alignItems: 'center', gap: 10 }}>
-                <Edit3 size={16} style={{ color: 'var(--accent)' }} /> Editar Curso
-              </h3>
-              <button onClick={() => resetEditForm()} className="btn-ghost" style={{ padding: 6 }}><X size={16} /></button>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <div>
-                <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Nombre *</label>
-                <input value={editName} onChange={e => setEditName(e.target.value)} className="input-base" style={{ width: '100%', height: 40, fontSize: 13 }} />
-              </div>
-
-              <div>
-                <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 8 }}>Color</label>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                  {PRESET_COLORS.map(c => (
-                    <button key={c} onClick={() => setEditColor(c)}
-                      style={{ width: 28, height: 28, borderRadius: '50%', background: c, border: editColor === c ? '2px solid #fff' : '2px solid transparent', cursor: 'pointer', boxShadow: editColor === c ? `0 0 10px ${c}` : 'none', transition: 'all 150ms' }}
-                    />
-                  ))}
-                  <label style={{ width: 28, height: 28, borderRadius: '50%', background: editColor, border: '2px dashed var(--border-default)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, transition: 'all 150ms', position: 'relative', overflow: 'hidden' }}>
-                    <input type="color" value={editColor} onChange={e => setEditColor(e.target.value)} style={{ position: 'absolute', opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }} />
-                    <span style={{ fontSize: 14, lineHeight: 1 }}>+</span>
-                  </label>
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div>
-                  <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Aula</label>
-                  <input value={editRoom} onChange={e => setEditRoom(e.target.value)} className="input-base" style={{ width: '100%', height: 38, fontSize: 12 }} placeholder="Ej: A-202" />
-                </div>
-                <div>
-                  <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Docente</label>
-                  <input value={editTeacher} onChange={e => setEditTeacher(e.target.value)} className="input-base" style={{ width: '100%', height: 38, fontSize: 12 }} />
-                </div>
-              </div>
-              <div>
-                <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Portada</label>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <input value={editCover} onChange={e => setEditCover(e.target.value)} className="input-base" style={{ flex: 1, height: 38, fontSize: 12 }} placeholder="https://..." />
-                    <button onClick={() => editFileRef.current?.click()} style={{ width: 38, height: 38, borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <Image size={14} />
-                    </button>
-                  </div>
-                  <input type="file" ref={editFileRef} accept="image/*" style={{ display: 'none' }}
-                    onChange={e => { const f = e.target.files?.[0]; if (f) { setEditCoverFile(f); handleCoverFile(f, setEditCoverPreview); } }} />
-                  {(editCoverPreview || editCover) && (
-                    <div style={{ marginTop: 6, height: 60, borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
-                      <img src={editCoverPreview || editCover} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    </div>
-                  )}
-              </div>
-
-              <div>
-                <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Descripción</label>
-                <textarea value={editDesc} onChange={e => setEditDesc(e.target.value)} className="input-base" style={{ width: '100%', minHeight: 60, fontSize: 12, resize: 'vertical', padding: '8px 10px' }} />
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 24 }}>
-              <button onClick={() => resetEditForm()} className="btn-secondary" style={{ height: 36, padding: '0 16px', fontSize: 12 }}>Cancelar</button>
-              <button onClick={handleSaveEdit} className="btn-primary" style={{ height: 36, padding: '0 20px', fontSize: 12 }}>
-                <Check size={14} /> Guardar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {confirmDeleteId && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}
-          onClick={() => setConfirmDeleteId(null)}>
-          <div className="bento-card" style={{ width: 320, padding: 28, textAlign: 'center', border: '1px solid rgba(239,68,68,0.25)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }} onClick={e => e.stopPropagation()}>
-            <div style={{ width: 42, height: 42, borderRadius: '50%', background: 'rgba(239,68,68,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
-              <Trash2 size={18} style={{ color: '#ef4444' }} />
-            </div>
-            <h3 style={{ fontSize: 16, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", marginBottom: 6 }}>¿Eliminar curso?</h3>
-            <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 20, lineHeight: 1.5, fontWeight: 300 }}>
-              Esta acción eliminará el curso y se perderán las tareas y notas asociadas.
+      {/* Delete Confirmation Modal */}
+      {pendingDeleteId && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }}
+          onClick={() => setPendingDeleteId(null)}>
+          <div className="aether-glass-card" style={{ width: 400, padding: 24, background: 'var(--bg-surface)' }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>¿Eliminar asignatura?</h3>
+            <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: 20 }}>
+              Esto eliminará permanentemente la asignatura junto con todas sus agrupaciones temáticas, temas independientes y materiales del repositorio. Esta acción no se puede deshacer.
             </p>
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-              <button onClick={() => setConfirmDeleteId(null)} className="btn-secondary" style={{ height: 36, padding: '0 16px', fontSize: 12 }}>Cancelar</button>
-              <button onClick={() => handleDelete(confirmDeleteId)} style={{ height: 36, padding: '0 20px', fontSize: 12, borderRadius: 8, border: 'none', background: '#ef4444', color: '#fff', fontWeight: 500, cursor: 'pointer' }}>
-                <Trash2 size={13} /> Eliminar
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button onClick={() => setPendingDeleteId(null)} className="btn-ghost"
+                style={{ height: 34, padding: '0 16px', borderRadius: 8, fontSize: 12, cursor: 'pointer', border: '1px solid var(--border-soft)', background: 'transparent', color: 'var(--text-secondary)' }}>
+                Cancelar
+              </button>
+              <button onClick={handleConfirmDelete}
+                style={{ height: 34, padding: '0 16px', borderRadius: 8, fontSize: 12, cursor: 'pointer', border: 'none', background: '#EF4444', color: '#fff', fontWeight: 600 }}>
+                Eliminar
               </button>
             </div>
           </div>
@@ -454,4 +352,3 @@ export default function CursosHub({ onSelectCourse }: CursosHubProps) {
     </div>
   );
 }
-

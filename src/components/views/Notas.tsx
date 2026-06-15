@@ -1,740 +1,1704 @@
-﻿import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Search, Plus, Folder as FolderIcon, Pin, Trash2, Edit3,
   ChevronLeft, FolderPlus, FileText, Download, Check, X,
-  Bold, Italic, Underline, List, Code,
-  CheckCircle, Clock, Image, Palette, Highlighter,
-  Type, Link, Upload
+  Bold, Italic, Underline, List, Code, CheckCircle, Clock,
+  Image as ImageIcon, Palette, Highlighter, Type, Link, Upload,
+  MoreVertical, Share2, HelpCircle, AlertCircle, Copy, Move, ArrowLeft,
+  ChevronDown, BookOpen, Star, RefreshCw, PenTool, Calculator, Sigma,
+  Eye, Info, AlertTriangle, FileVideo, Music, Paperclip
 } from 'lucide-react';
-import { useApp, Note, fmtClock } from '../../store/AppContext';
-import NotificationBell from '../ui/NotificationBell';
+import { useApp, Note, NoteFolder, NoteAttachment } from '../../store/AppContext';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { motion, AnimatePresence } from 'framer-motion';
+import toast from 'react-hot-toast';
 
-function NoteListItem({ note, onClick, isSelected }: { note: Note; onClick: () => void; isSelected: boolean }) {
+// ── SORTABLE NOTE CARD COMPONENT ──
+interface SortableNoteCardProps {
+  note: Note;
+  isSelected: boolean;
+  onClick: () => void;
+  onContextMenu: (e: React.MouseEvent, note: Note) => void;
+}
+
+function SortableNoteCard({ note, isSelected, onClick, onContextMenu }: SortableNoteCardProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: note.id });
+
+  const style = {
+    transform: CSS.Translate.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+    zIndex: isDragging ? 50 : 'auto',
+  };
+
+  const hasCover = note.coverImage || note.coverColor;
+
   return (
-    <div onClick={onClick} style={{
-      display: 'flex', borderRadius: 6, cursor: 'pointer', overflow: 'hidden',
-      background: isSelected ? 'var(--accent)08' : 'var(--bg-hover)',
-      border: `1px solid ${isSelected ? 'var(--accent)25' : 'var(--border-subtle)'}`,
-      transition: 'all 120ms', position: 'relative',
-    }} className="hover:bg-white/[0.02]">
-      {/* Book spine */}
-      <div style={{
-        width: 14, background: `linear-gradient(180deg, ${note.courseColor || 'var(--accent)'}, ${note.courseColor || 'var(--accent)'}dd)`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        flexShrink: 0, writingMode: 'vertical-rl', textOrientation: 'mixed',
-        fontSize: 8, fontWeight: 700, color: 'rgba(255,255,255,0.9)',
-        letterSpacing: '0.15em', padding: '8px 0',
-        textTransform: 'uppercase',
-      }}>
-        {(note.course || 'G').charAt(0)}
-      </div>
-      {/* Book content */}
-      <div style={{ flex: 1, minWidth: 0, padding: '9px 10px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 3 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {note.title || 'Sin título'}
-          </span>
-          {note.isPinned && <Pin size={10} fill="var(--accent)" color="var(--accent)" style={{ flexShrink: 0 }} />}
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`note-card rounded-xl border ${
+        isSelected
+          ? 'border-[var(--accent)] bg-[var(--accent-dim)]'
+          : 'border-[var(--border-subtle)] bg-[var(--bg-surface)]'
+      } overflow-hidden flex flex-col`}
+      onClick={onClick}
+      onContextMenu={(e) => onContextMenu(e, note)}
+    >
+      {/* Cover image or color block */}
+      {hasCover && (
+        <div
+          className="note-card-cover"
+          style={{
+            backgroundImage: note.coverImage ? `url(${note.coverImage})` : 'none',
+            backgroundColor: note.coverColor || 'transparent',
+          }}
+        >
+          <div className="absolute top-2 right-2 text-white/90 drop-shadow">
+            {note.isPinned && <Pin size={12} fill="white" />}
+          </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-          <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-muted)' }}>
-            {format(new Date(note.updatedAt), "d MMM", { locale: es })}
-          </span>
-          {note.tags && note.tags.length > 0 && (
-            <span style={{ fontSize: 8, fontWeight: 600, padding: '1px 5px', borderRadius: 3, background: 'var(--bg-elevated)', color: 'var(--text-tertiary)' }}>
-              #{note.tags[0]}
-            </span>
+      )}
+
+      <div className="p-4 flex flex-col gap-2 flex-grow relative">
+        {/* Course color spine on left if it belongs to a course and has no cover */}
+        {!hasCover && note.courseColor && (
+          <div
+            className="absolute left-0 top-0 bottom-0 w-1.5"
+            style={{ backgroundColor: note.courseColor }}
+          />
+        )}
+
+        <div className="flex items-start justify-between gap-2">
+          <h4 className="font-bold text-sm text-[var(--text-primary)] line-clamp-1 flex-grow">
+            {note.title || 'Sin título'}
+          </h4>
+          {!hasCover && note.isPinned && (
+            <Pin size={11} fill="var(--accent)" className="text-[var(--accent)] shrink-0 mt-0.5" />
           )}
         </div>
+
+        {note.subtitle && (
+          <p className="text-xs text-[var(--text-secondary)] line-clamp-1 italic">
+            {note.subtitle}
+          </p>
+        )}
+
+        <div
+          className="text-xs text-[var(--text-muted)] line-clamp-2 leading-relaxed"
+          dangerouslySetInnerHTML={{
+            __html: note.content ? note.content.replace(/<[^>]*>/g, ' ') : 'Sin contenido...',
+          }}
+        />
+
+        <div className="flex items-center justify-between mt-2 pt-2 border-t border-[var(--border-subtle)] text-[10px] text-[var(--text-tertiary)]">
+          <span>{format(new Date(note.updatedAt), 'd MMM, yyyy', { locale: es })}</span>
+          <div className="flex gap-1">
+            {note.tags && note.tags.slice(0, 2).map(t => (
+              <span key={t} className="px-1.5 py-0.5 rounded bg-[var(--bg-deep)] text-[var(--text-secondary)]">
+                #{t}
+              </span>
+            ))}
+          </div>
+        </div>
       </div>
-      {/* Shelf line at bottom */}
-      <div style={{
-        position: 'absolute', bottom: 0, left: 14, right: 0, height: 1,
-        background: 'linear-gradient(90deg, transparent, var(--border-subtle), transparent)',
-        opacity: 0.5,
-      }} />
     </div>
   );
 }
 
+// ── MAIN NOTAS MODULE ──
 export default function Notas() {
-  const app = useApp();
   const {
     notes = [],
     noteFolders = [],
     courses = [],
+    settings,
     addNote,
     updateNote,
     deleteNote,
     addNoteFolder,
-    settings,
-  } = app || {};
+    deleteNoteFolder,
+    reorderNotes,
+    updateNoteFolder,
+    duplicateNote,
+  } = useApp();
 
+  // Navigation states
   const [activeFolderId, setActiveFolderId] = useState<string | 'all' | 'pinned'>('all');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
-  const [showFolderModal, setShowFolderModal] = useState(false);
-  const [newFolderName, setNewFolderName] = useState('');
-  const [customTagInput, setCustomTagInput] = useState('');
-  const [savedIndicator, setSavedIndicator] = useState(false);
-  const [editingTag, setEditingTag] = useState<string | null>(null);
-  const [editingTagValue, setEditingTagValue] = useState('');
-  const [confirmDeleteTag, setConfirmDeleteTag] = useState<string | null>(null);
 
+  // Time & Clock state
   const [currentTime, setCurrentTime] = useState(new Date());
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  const timeStr = fmtClock(format(currentTime, 'HH:mm'), settings?.timeFormat);
-  const secondsStr = format(currentTime, 'ss');
-  const dateStr = format(currentTime, "EEEE, d 'de' MMMM, yyyy", { locale: es as any });
+  const timeStr = format(currentTime, settings?.timeFormat === '12h' ? 'hh:mm' : 'HH:mm');
+  const periodStr = settings?.timeFormat === '12h' ? format(currentTime, ' a') : '';
+  const dateStr = format(currentTime, "EEEE, d 'de' MMMM, yyyy", { locale: es });
   const dateStrCapitalized = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
 
-  // Collect all unique tags from notes, sorted by frequency
-  const allTags = useMemo(() => {
-    const tagMap = new Map<string, number>();
-    notes.forEach(n => {
-      (n.tags || []).forEach(t => tagMap.set(t, (tagMap.get(t) || 0) + 1));
-    });
-    return Array.from(tagMap.entries())
-      .sort((a, b) => b[1] - a[1])
-      .map(([name, count]) => ({ name, count }));
-  }, [notes]);
-
-  const renameTag = (oldName: string, newName: string) => {
-    if (!newName.trim() || newName === oldName) return;
-    notes.forEach(n => {
-      if (n.tags?.includes(oldName)) {
-        const newTags = n.tags.filter(t => t !== oldName);
-        if (!newTags.includes(newName)) newTags.push(newName);
-        updateNote(n.id, { tags: newTags });
-      }
-    });
-    if (selectedTag === oldName) setSelectedTag(newName);
-    setEditingTag(null);
-  };
-
-  const deleteTagGlobal = (tagName: string) => {
-    notes.forEach(n => {
-      if (n.tags?.includes(tagName)) {
-        updateNote(n.id, { tags: n.tags.filter(t => t !== tagName) });
-      }
-    });
-    if (selectedTag === tagName) setSelectedTag(null);
-    setConfirmDeleteTag(null);
-  };
-
+  // Editor states
+  const selectedNote = useMemo(() => notes.find(n => n.id === selectedNoteId), [notes, selectedNoteId]);
   const editorRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const selectedNote = notes.find(n => n.id === selectedNoteId);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const subtitleInputRef = useRef<HTMLInputElement>(null);
+  const [editorWordCount, setEditorWordCount] = useState(0);
+  const [editorCharCount, setEditorCharCount] = useState(0);
+  const [editorReadingTime, setEditorReadingTime] = useState(0);
+  const [isSaved, setIsSaved] = useState(false);
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const handleBold = useCallback(() => {
-    document.execCommand('bold'); setAutoSave(); hideToolbar();
-  }, []);
-  const handleItalic = useCallback(() => {
-    document.execCommand('italic'); setAutoSave(); hideToolbar();
-  }, []);
-  const handleUnderline = useCallback(() => {
-    document.execCommand('underline'); setAutoSave(); hideToolbar();
-  }, []);
-  const handleBulletList = useCallback(() => {
-    document.execCommand('insertUnorderedList'); setAutoSave(); hideToolbar();
-  }, []);
-  const handleNumberedList = useCallback(() => {
-    document.execCommand('insertOrderedList'); setAutoSave(); hideToolbar();
-  }, []);
-  const handleHeading = (level: string) => useCallback(() => {
-    document.execCommand('formatBlock', false, level); setAutoSave(); hideToolbar();
-  }, [])();
-  const handleCodeBlock = useCallback(() => {
-    document.execCommand('insertHTML', false, '<pre style="background:var(--bg-deep);padding:12px;border-radius:8px;font-size:13px;font-family:monospace;overflow-x:auto;border:1px solid var(--border-subtle);line-height:1.5"><code>código</code></pre>');
-    setAutoSave(); hideToolbar();
-  }, []);
-  const handleInsertImage = useCallback(() => {
-    const url = prompt('URL de la imagen:');
-    if (url) {
-      document.execCommand('insertImage', false, url);
-      setAutoSave();
-    }
-    hideToolbar();
-  }, []);
-  const handleInsertLink = useCallback(() => {
-    const url = prompt('URL del enlace:');
-    if (url) {
-      const sel = window.getSelection();
-      if (sel && sel.toString()) {
-        document.execCommand('createLink', false, url);
-      } else {
-        document.execCommand('insertHTML', false, `<a href="${url}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:underline">${url}</a>`);
-      }
-      setAutoSave();
-    }
-    hideToolbar();
-  }, []);
+  // Floating tools panels state
+  const [showCalculator, setShowCalculator] = useState(false);
+  const [showWhiteboard, setShowWhiteboard] = useState(false);
+  const [showFormulaEditor, setShowFormulaEditor] = useState(false);
 
-  const [showFormatPopup, setShowFormatPopup] = useState(false);
-  const [formatPopupPos, setFormatPopupPos] = useState({ x: 0, y: 0 });
-  const hideToolbar = () => setShowFormatPopup(false);
+  // Context Menu state
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; note: Note } | null>(null);
 
-  const handleEditorInput = useCallback(() => {
-    setAutoSave();
-  }, []);
+  // Modals state
+  const [showNewFolderModal, setShowNewFolderModal] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+  const [newFolderColor, setNewFolderColor] = useState('#E11D48');
+  const [newFolderDesc, setNewFolderDesc] = useState('');
 
-  const setAutoSave = useCallback(() => {
-    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
-    autoSaveTimerRef.current = setTimeout(() => {
-      if (!selectedNoteId || !selectedNote) return;
-      const content = editorRef.current?.innerHTML || '';
-      if (content !== selectedNote.content) {
-        updateNote(selectedNote.id, { content });
-        setSavedIndicator(true);
-        setTimeout(() => setSavedIndicator(false), 1500);
-      }
-    }, 300);
-  }, [selectedNoteId, selectedNote, updateNote]);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const [showMoveFolderModal, setShowMoveFolderModal] = useState<string | null>(null);
+  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
 
+  // Floating formatting popup state
+  const [formatPopup, setFormatPopup] = useState<{ x: number; y: number; show: boolean }>({ x: 0, y: 0, show: false });
+
+  // Tag creation / editing state
+  const [newTagInput, setNewTagInput] = useState('');
+  const [editingTag, setEditingTag] = useState<string | null>(null);
+  const [editingTagValue, setEditingTagValue] = useState('');
+  const [tagToDelete, setTagToDelete] = useState<string | null>(null);
+
+  // Auto-fill editor content when selecting a note
   useEffect(() => {
-    if (selectedNote && editorRef.current) {
+    if (editorRef.current && selectedNote) {
       if (editorRef.current.innerHTML !== selectedNote.content) {
         editorRef.current.innerHTML = selectedNote.content;
       }
+      updateEditorStats();
     }
   }, [selectedNoteId]);
 
+  // Handle escape & clicks outside to close floating elements
   useEffect(() => {
-    return () => {
-      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    const handleGlobalClick = (e: MouseEvent) => {
+      if (contextMenu) setContextMenu(null);
+      if (showDownloadMenu) setShowDownloadMenu(false);
     };
-  }, []);
-
-  const filteredNotes = useMemo(() => {
-    return notes.filter(n => {
-      const matchesSearch = n.title.toLowerCase().includes(searchQuery.toLowerCase()) || n.content.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesFolder = activeFolderId === 'all' ? true :
-        activeFolderId === 'pinned' ? n.isPinned :
-          n.folderId === activeFolderId;
-      const matchesTag = selectedTag ? n.tags?.includes(selectedTag) : true;
-      return matchesSearch && matchesFolder && matchesTag;
-    });
-  }, [notes, searchQuery, activeFolderId, selectedTag]);
-
-  const handleCreateFolder = () => {
-    if (!newFolderName.trim()) return;
-    addNoteFolder({ name: newFolderName.trim(), color: '#8B5CF6', isManual: true });
-    setNewFolderName('');
-    setShowFolderModal(false);
-  };
-
-  const toggleNoteTag = (tag: string) => {
-    if (!selectedNote) return;
-    const currentTags = selectedNote.tags || [];
-    const newTags = currentTags.includes(tag)
-      ? currentTags.filter(t => t !== tag)
-      : [...currentTags, tag];
-    updateNote(selectedNote.id, { tags: newTags });
-  };
-
-  const handleAddCustomTag = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && customTagInput.trim() && selectedNote) {
-      const tag = customTagInput.trim();
-      const currentTags = selectedNote.tags || [];
-      if (!currentTags.includes(tag)) {
-        updateNote(selectedNote.id, { tags: [...currentTags, tag] });
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowNewFolderModal(false);
+        setShowDeleteConfirm(null);
+        setShowMoveFolderModal(null);
+        setContextMenu(null);
+        setShowCalculator(false);
+        setShowWhiteboard(false);
+        setShowFormulaEditor(false);
       }
-      setCustomTagInput('');
+    };
+    window.addEventListener('click', handleGlobalClick);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('click', handleGlobalClick);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [contextMenu, showDownloadMenu]);
+
+  // ── AUTO-SAVE WITH DEBOUNCE ──
+  const triggerAutoSave = useCallback(() => {
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(() => {
+      if (!selectedNoteId) return;
+      const html = editorRef.current?.innerHTML || '';
+      const title = titleInputRef.current?.value || 'Sin título';
+      const subtitle = subtitleInputRef.current?.value || '';
+
+      updateNote(selectedNoteId, {
+        content: html,
+        title,
+        subtitle,
+        updatedAt: new Date().toISOString(),
+      });
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 1200);
+    }, 500);
+  }, [selectedNoteId, updateNote]);
+
+  // Update statistics
+  const updateEditorStats = () => {
+    const text = editorRef.current?.innerText || '';
+    const words = text.trim().split(/\s+/).filter(Boolean).length;
+    const chars = text.length;
+    const minutes = Math.ceil(words / 200); // Average reading speed
+
+    setEditorWordCount(words);
+    setEditorCharCount(chars);
+    setEditorReadingTime(minutes);
+  };
+
+  // Selection change for floating formatting bar
+  const handleSelectionChange = () => {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !editorRef.current) {
+      setFormatPopup(prev => ({ ...prev, show: false }));
+      return;
+    }
+    const range = sel.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    const editorRect = editorRef.current.getBoundingClientRect();
+
+    if (rect.top >= editorRect.top && rect.bottom <= editorRect.bottom) {
+      setFormatPopup({
+        x: rect.left - editorRect.left + rect.width / 2,
+        y: rect.top - editorRect.top - 48,
+        show: true
+      });
     }
   };
 
-  const handleCreateNote = (folderId?: string) => {
+  // ── FORMAT COMMANDS ──
+  const applyFormat = (command: string, value: string = '') => {
+    document.execCommand(command, false, value);
+    triggerAutoSave();
+    updateEditorStats();
+  };
+
+  // ── TAGS COMPUTATION ──
+  const allTags = useMemo(() => {
+    const map = new Map<string, number>();
+    notes.forEach(n => {
+      (n.tags || []).forEach(tag => {
+        map.set(tag, (map.get(tag) || 0) + 1);
+      });
+    });
+    return Array.from(map.entries()).map(([name, count]) => ({ name, count }));
+  }, [notes]);
+
+  const handleCreateTag = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTagInput.trim() || !selectedNote) return;
+    const tag = newTagInput.trim().toLowerCase();
+    const currentTags = selectedNote.tags || [];
+    if (!currentTags.includes(tag)) {
+      updateNote(selectedNote.id, { tags: [...currentTags, tag] });
+    }
+    setNewTagInput('');
+  };
+
+  const handleRenameTagGlobal = (oldTag: string, newTag: string) => {
+    if (!newTag.trim() || oldTag === newTag) {
+      setEditingTag(null);
+      return;
+    }
+    notes.forEach(n => {
+      if (n.tags?.includes(oldTag)) {
+        const nextTags = n.tags.map(t => t === oldTag ? newTag.trim() : t);
+        updateNote(n.id, { tags: nextTags });
+      }
+    });
+    if (selectedTag === oldTag) setSelectedTag(newTag);
+    setEditingTag(null);
+    toast.success('Etiqueta renombrada');
+  };
+
+  const handleDeleteTagGlobal = (tag: string) => {
+    notes.forEach(n => {
+      if (n.tags?.includes(tag)) {
+        updateNote(n.id, { tags: n.tags.filter(t => t !== tag) });
+      }
+    });
+    if (selectedTag === tag) setSelectedTag(null);
+    setTagToDelete(null);
+    toast.success('Etiqueta eliminada');
+  };
+
+  // ── FOLDER DEFINITIONS ──
+  const allFolders = useMemo(() => {
+    const courseFolders: NoteFolder[] = courses.map(c => ({
+      id: `course-${c.id}`,
+      name: c.name,
+      color: c.color,
+      courseId: c.id,
+      isManual: false
+    }));
+    return [...courseFolders, ...noteFolders];
+  }, [courses, noteFolders]);
+
+  const activeFolderName = useMemo(() => {
+    if (activeFolderId === 'all') return 'Todas las notas';
+    if (activeFolderId === 'pinned') return 'Destacadas';
+    const f = allFolders.find(x => x.id === activeFolderId);
+    return f ? f.name : 'Carpeta';
+  }, [activeFolderId, allFolders]);
+
+  const handleCreateFolderSubmit = () => {
+    if (!newFolderName.trim()) return;
+    addNoteFolder({
+      name: newFolderName.trim(),
+      color: newFolderColor,
+      isManual: true,
+      description: newFolderDesc
+    });
+    setNewFolderName('');
+    setNewFolderDesc('');
+    setShowNewFolderModal(false);
+    toast.success('Carpeta creada');
+  };
+
+  // ── FILTERED NOTES LIST ──
+  const filteredNotes = useMemo(() => {
+    let result = notes;
+    if (activeFolderId === 'pinned') {
+      result = result.filter(n => n.isPinned);
+    } else if (activeFolderId !== 'all') {
+      // Find if it matches a course folder or custom folder
+      const folder = allFolders.find(f => f.id === activeFolderId);
+      if (folder) {
+        if (folder.courseId) {
+          // It's a course folder, filter by course name matching
+          result = result.filter(n => n.course === folder.name);
+        } else {
+          result = result.filter(n => n.folderId === folder.id);
+        }
+      }
+    }
+    if (selectedTag) {
+      result = result.filter(n => n.tags?.includes(selectedTag));
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(n =>
+        n.title.toLowerCase().includes(q) ||
+        (n.subtitle && n.subtitle.toLowerCase().includes(q)) ||
+        n.content.toLowerCase().includes(q)
+      );
+    }
+    // Sort by sortOrder then updatedAt descending
+    return [...result].sort((a, b) => {
+      const sortA = a.sortOrder ?? 99999;
+      const sortB = b.sortOrder ?? 99999;
+      if (sortA !== sortB) return sortA - sortB;
+      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+    });
+  }, [notes, activeFolderId, selectedTag, searchQuery, allFolders]);
+
+  // DND kit reordering
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const activeIdx = filteredNotes.findIndex(n => n.id === active.id);
+      const overIdx = filteredNotes.findIndex(n => n.id === over.id);
+      const newOrderIds = [...filteredNotes.map(n => n.id)];
+      // move activeIdx to overIdx
+      newOrderIds.splice(activeIdx, 1);
+      newOrderIds.splice(overIdx, 0, active.id as string);
+      reorderNotes(newOrderIds);
+    }
+  };
+
+  // Create Note
+  const handleCreateNote = () => {
+    // Determine course or folder
+    let courseName = 'General';
+    let courseColor = '#E11D48';
+    let folderId: string | undefined = undefined;
+
+    if (activeFolderId !== 'all' && activeFolderId !== 'pinned') {
+      const folder = allFolders.find(f => f.id === activeFolderId);
+      if (folder) {
+        if (folder.courseId) {
+          courseName = folder.name;
+          courseColor = folder.color;
+        } else {
+          folderId = folder.id;
+        }
+      }
+    }
+
     const newId = addNote({
       title: 'Nueva nota',
-      content: '<p>Escribe aquí...</p>',
-      course: 'General',
-      courseColor: '#8B5CF6',
+      subtitle: 'Descripción breve',
+      content: 'Comienza a escribir...',
+      course: courseName,
+      courseColor,
+      folderId,
       isPinned: false,
       tags: selectedTag ? [selectedTag] : [],
-      folderId: folderId || undefined,
+      attachments: [],
+      coverColor: '#0F172A'
     });
-    if (newId) {
-      setSelectedNoteId(newId);
-      setActiveFolderId(folderId || 'all');
-    }
+
+    setSelectedNoteId(newId);
+    toast.success('Nota creada');
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Delete Note
+  const handleDeleteNoteConfirm = () => {
+    if (!showDeleteConfirm) return;
+    deleteNote(showDeleteConfirm);
+    if (selectedNoteId === showDeleteConfirm) setSelectedNoteId(null);
+    setShowDeleteConfirm(null);
+    toast.success('Nota eliminada');
+  };
+
+  // Move Folder note
+  const handleMoveFolder = (folderId: string | undefined) => {
+    if (!showMoveFolderModal) return;
+    updateNote(showMoveFolderModal, { folderId });
+    setShowMoveFolderModal(null);
+    toast.success('Nota movida de carpeta');
+  };
+
+  // Context Menu triggers
+  const handleContextMenu = (e: React.MouseEvent, note: Note) => {
+    e.preventDefault();
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      note
+    });
+  };
+
+  // File Attachments base64 convert
+  const handleFileAttachmentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !editorRef.current) return;
-    const url = URL.createObjectURL(file);
-    const isVideo = file.type.startsWith('video/');
-    const isAudio = file.type.startsWith('audio/');
-    const isImage = file.type.startsWith('image/');
-    if (isImage) {
-      document.execCommand('insertHTML', false, `<img src="${url}" alt="${file.name}" style="max-width:100%;border-radius:8px;margin:8px 0" />`);
-    } else if (isVideo) {
-      document.execCommand('insertHTML', false, `<video src="${url}" controls style="max-width:100%;border-radius:8px;margin:8px 0" width="100%">${file.name}</video>`);
-    } else if (isAudio) {
-      document.execCommand('insertHTML', false, `<audio src="${url}" controls style="width:100%;margin:8px 0">${file.name}</audio>`);
-    } else {
-      document.execCommand('insertHTML', false, `<a href="${url}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:underline">${file.name}</a>`);
-    }
-    setAutoSave();
+    if (!file || !selectedNote) return;
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string;
+      const type: NoteAttachment['type'] = file.type.startsWith('image/') ? 'image'
+        : file.type.startsWith('video/') ? 'video'
+        : file.type.startsWith('audio/') ? 'audio'
+        : file.type === 'application/pdf' ? 'pdf'
+        : 'file';
+
+      const attachment: NoteAttachment = {
+        id: Date.now().toString(),
+        name: file.name,
+        type,
+        dataUrl,
+        size: file.size
+      };
+
+      const prevAttachments = selectedNote.attachments || [];
+      updateNote(selectedNote.id, {
+        attachments: [...prevAttachments, attachment]
+      });
+
+      // Insert link/preview directly in editor
+      if (type === 'image') {
+        document.execCommand('insertHTML', false, `<img src="${dataUrl}" alt="${file.name}" style="max-width:100%; border-radius:10px; margin: 12px 0;" />`);
+      } else if (type === 'video') {
+        document.execCommand('insertHTML', false, `<video src="${dataUrl}" controls style="max-width:100%; border-radius:10px; margin: 12px 0;"></video>`);
+      } else if (type === 'audio') {
+        document.execCommand('insertHTML', false, `<audio src="${dataUrl}" controls style="width:100%; margin: 8px 0;"></audio>`);
+      } else {
+        document.execCommand('insertHTML', false, `<a href="${dataUrl}" download="${file.name}" style="color:var(--accent); text-decoration: underline; font-weight:600;">📎 ${file.name}</a>`);
+      }
+      triggerAutoSave();
+      updateEditorStats();
+    };
+    reader.readAsDataURL(file);
     e.target.value = '';
   };
 
-  const handleKeyUp = useCallback(() => {
-    const sel = window.getSelection();
-    if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
-      const range = sel.getRangeAt(0);
-      const rect = range.getBoundingClientRect();
-      const editorRect = editorRef.current?.getBoundingClientRect();
-      if (editorRect) {
-        setFormatPopupPos({ x: rect.left - editorRect.left + rect.width / 2, y: rect.top - editorRect.top - 40 });
-        setShowFormatPopup(true);
-      }
+  // HTML / TXT download logic
+  const downloadNote = (type: 'html' | 'txt') => {
+    if (!selectedNote) return;
+    let filename = `${selectedNote.title.replace(/\s+/g, '_')}`;
+    let blob: Blob;
+
+    if (type === 'html') {
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${selectedNote.title}</title>
+<style>
+body{font-family:'Inter',sans-serif;max-width:760px;margin:40px auto;padding:0 20px;color:#1e293b;line-height:1.8;background:#f8fafc;}
+.container{background:#ffffff;padding:40px;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.05);}
+h1{font-size:32px;font-weight:800;color:#0f172a;margin-bottom:6px;}
+h2{font-size:20px;font-weight:400;color:#64748b;margin-bottom:24px;border-bottom:1px solid #e2e8f0;padding-bottom:12px;}
+blockquote{border-left:4px solid #E11D48;padding:12px 20px;margin:20px 0;background:#fff1f2;border-radius:0 8px 8px 0;font-style:italic;}
+pre{background:#0f172a;color:#f8fafc;padding:16px;border-radius:8px;font-family:monospace;overflow-x:auto;}
+code{background:#f1f5f9;padding:2px 6px;border-radius:4px;font-family:monospace;color:#e11d48;}
+pre code{background:none;color:inherit;padding:0;}
+img{max-width:100%;border-radius:8px;}
+a{color:#E11D48;text-decoration:none;}
+a:hover{text-decoration:underline;}
+</style></head>
+<body><div class="container">
+<h1>${selectedNote.title}</h1>
+${selectedNote.subtitle ? `<h2>${selectedNote.subtitle}</h2>` : ''}
+<div>${selectedNote.content}</div>
+</div></body></html>`;
+      blob = new Blob([html], { type: 'text/html' });
+      filename += '.html';
     } else {
-      setShowFormatPopup(false);
+      const text = `${selectedNote.title}\n${selectedNote.subtitle || ''}\n\n${editorRef.current?.innerText || ''}`;
+      blob = new Blob([text], { type: 'text/plain' });
+      filename += '.txt';
     }
-  }, []);
 
-  const autoLinkify = useCallback(() => {
-    if (!editorRef.current) return;
-    const walker = document.createTreeWalker(editorRef.current, NodeFilter.SHOW_TEXT, null);
-    const nodes: Text[] = [];
-    while (walker.nextNode()) nodes.push(walker.currentNode as Text);
-    nodes.forEach(textNode => {
-      const parent = textNode.parentElement;
-      if (parent && (parent.tagName === 'A' || parent.closest('a'))) return;
-      const urlRegex = /(https?:\/\/[^\s<]+)/g;
-      if (urlRegex.test(textNode.textContent || '')) {
-        const span = document.createElement('span');
-        span.innerHTML = (textNode.textContent || '').replace(urlRegex,
-          '<a href="$1" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:underline;font-weight:600">$1</a>');
-        textNode.parentNode?.replaceChild(span, textNode);
-        setAutoSave();
-      }
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!selectedNote) return;
-    const timer = setTimeout(autoLinkify, 1000);
-    return () => clearTimeout(timer);
-  }, [selectedNote?.content]);
-
-  const editorStats = useMemo(() => {
-    if (!selectedNote) return { words: 0, chars: 0, readingTime: 0 };
-    const text = selectedNote.content.replace(/<[^>]+>/g, '').trim();
-    const words = text ? text.split(/\s+/).length : 0;
-    const chars = text.length;
-    const readingTime = Math.ceil(words / 200);
-    return { words, chars, readingTime };
-  }, [selectedNote?.content]);
-
-  const downloadTxt = () => {
-    if (!selectedNote) return;
-    const text = selectedNote.content.replace(/<[^>]+>/g, '');
-    const blob = new Blob([text], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = `${selectedNote.title || 'nota'}.txt`; a.click();
+    a.href = url;
+    a.download = filename;
+    a.click();
     URL.revokeObjectURL(url);
+    toast.success(`Nota descargada como ${type.toUpperCase()}`);
   };
 
-  const sidebarFolders = useMemo(() => {
-    const seen = new Set<string>();
-    const courseFolders: ({ id: string; name: string; color: string; isCourse: boolean })[] = courses.map(c => ({
-      id: `course_${c.id}`,
-      name: c.name,
-      color: c.color || '#8B5CF6',
-      isCourse: true,
-    }));
-    const allFolders = [...courseFolders, ...noteFolders.map(f => ({ ...f, isCourse: false }))];
-    return allFolders.filter(f => {
-      const key = f.name.toLowerCase().trim();
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
+  // ── FLOATING PANEL - CALCULATOR ──
+  const [calcExpr, setCalcExpr] = useState('');
+  const [calcRes, setCalcRes] = useState('0');
+  const [isDeg, setIsDeg] = useState(true);
+
+  const handleCalcPress = (val: string) => {
+    if (val === 'C') {
+      setCalcExpr('');
+      setCalcRes('0');
+    } else if (val === '=') {
+      try {
+        let clean = calcExpr
+          .replace(/×/g, '*')
+          .replace(/÷/g, '/')
+          .replace(/π/g, 'Math.PI')
+          .replace(/sin\(/g, isDeg ? 'Math.sin(Math.PI/180*' : 'Math.sin(')
+          .replace(/cos\(/g, isDeg ? 'Math.cos(Math.PI/180*' : 'Math.cos(')
+          .replace(/tan\(/g, isDeg ? 'Math.tan(Math.PI/180*' : 'Math.tan(')
+          .replace(/log\(/g, 'Math.log10(')
+          .replace(/ln\(/g, 'Math.log(')
+          .replace(/√\(/g, 'Math.sqrt(')
+          .replace(/\^/g, '**');
+
+        const openP = (clean.match(/\(/g) || []).length;
+        const closeP = (clean.match(/\)/g) || []).length;
+        if (openP > closeP) clean += ')'.repeat(openP - closeP);
+
+        const evalRes = new Function(`return (${clean})`)();
+        if (typeof evalRes === 'number' && !isNaN(evalRes)) {
+          setCalcRes(Number(evalRes.toFixed(8)).toString());
+        } else {
+          setCalcRes('Error');
+        }
+      } catch {
+        setCalcRes('Error');
+      }
+    } else {
+      setCalcExpr(prev => prev + val);
+    }
+  };
+
+  const insertCalcResult = () => {
+    if (calcRes === 'Error') return;
+    document.execCommand('insertHTML', false, ` <code class="px-2 py-0.5 bg-[var(--bg-elevated)] text-[var(--accent)] font-mono rounded">${calcRes}</code> `);
+    triggerAutoSave();
+  };
+
+  // ── FLOATING PANEL - WHITEBOARD ──
+  const wbCanvasRef = useRef<HTMLCanvasElement>(null);
+  const [wbColor, setWbColor] = useState('#FFFFFF');
+  const [wbBrushSize, setWbBrushSize] = useState(5);
+  const [wbTool, setWbTool] = useState<'pen' | 'eraser'>('pen');
+  const isDrawingRef = useRef(false);
+
+  const initWhiteboard = () => {
+    const canvas = wbCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.fillStyle = '#0e0e14';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  };
+
+  useEffect(() => {
+    if (showWhiteboard) {
+      setTimeout(initWhiteboard, 50);
+    }
+  }, [showWhiteboard]);
+
+  const handleWbStart = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    isDrawingRef.current = true;
+    const canvas = wbCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = ('touches' in e) ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
+    const y = ('touches' in e) ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
+
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.strokeStyle = wbTool === 'eraser' ? '#0e0e14' : wbColor;
+    ctx.lineWidth = wbBrushSize;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+  };
+
+  const handleWbDraw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    if (!isDrawingRef.current) return;
+    const canvas = wbCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = ('touches' in e) ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
+    const y = ('touches' in e) ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
+
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  };
+
+  const handleWbEnd = () => {
+    isDrawingRef.current = false;
+  };
+
+  const insertWhiteboard = () => {
+    const canvas = wbCanvasRef.current;
+    if (!canvas) return;
+    const dataUrl = canvas.toDataURL('image/png');
+    document.execCommand('insertHTML', false, `<img src="${dataUrl}" alt="Whiteboard Drawing" style="max-width:100%; border-radius:10px; border: 1px solid var(--border-subtle); margin:12px 0;" />`);
+    setShowWhiteboard(false);
+    triggerAutoSave();
+  };
+
+  // ── FLOATING PANEL - FORMULA EDITOR ──
+  const [formulaInput, setFormulaInput] = useState('');
+  const parsedFormulaHTML = useMemo(() => {
+    let html = formulaInput;
+    const symbols: Record<string, string> = {
+      alpha: 'α', beta: 'β', theta: 'θ', delta: 'Δ', Delta: 'Δ', pi: 'π',
+      sum: '∑', int: '∫', inf: '∞', neq: '≠', leq: '≤', geq: '≥', pm: '±',
+      times: '×', div: '÷'
+    };
+    Object.entries(symbols).forEach(([k, v]) => {
+      const reg = new RegExp(`\\\\${k}\\b`, 'g');
+      html = html.replace(reg, v);
     });
-  }, [courses, noteFolders]);
+
+    html = html.replace(/sqrt\(([^)]+)\)/g, '<div class="formula-sqrt"><span class="formula-sqrt-content">$1</span></div>');
+    html = html.replace(/([^/\s()]+)\/([^/\s()]+)/g, '<div class="formula-fraction"><span class="formula-fraction-num">$1</span><span class="formula-fraction-bar"></span><span class="formula-fraction-den">$2</span></div>');
+    html = html.replace(/\(([^)]+)\)\/\(([^)]+)\)/g, '<div class="formula-fraction"><span class="formula-fraction-num">$1</span><span class="formula-fraction-bar"></span><span class="formula-fraction-den">$2</span></div>');
+
+    html = html.replace(/\^([^^(\s]+)/g, '<sup>$1</sup>');
+    html = html.replace(/\^\(([^)]+)\)/g, '<sup>$1</sup>');
+
+    html = html.replace(/_([^_(\s]+)/g, '<sub>$1</sub>');
+    html = html.replace(/_\(([^)]+)\)/g, '<sub>$1</sub>');
+
+    return `<span class="formula-rendered">${html}</span>`;
+  }, [formulaInput]);
+
+  const insertFormula = () => {
+    if (!formulaInput.trim()) return;
+    document.execCommand('insertHTML', false, parsedFormulaHTML);
+    setFormulaInput('');
+    setShowFormulaEditor(false);
+    triggerAutoSave();
+  };
 
   return (
-    <div className="page-container" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-
-      {/* HEADER */}
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20, paddingTop: 8, flexShrink: 0 }}>
+    <div className="flex flex-col h-full bg-[var(--bg-base)] text-[var(--text-primary)] select-none">
+      
+      {/* ── HEADER ── */}
+      <div className="flex justify-between items-center px-6 py-4 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] shrink-0 font-sans">
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <h1 style={{ fontSize: 40, fontWeight: 200, color: 'var(--text-primary)', lineHeight: 1, letterSpacing: '-0.03em', fontFamily: "'Inter Tight', sans-serif", textShadow: '0 0 20px var(--accent-glow)' }}>Notas</h1>
-          </div>
-          <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4, fontWeight: 400, letterSpacing: '0.02em' }}>Captura, organiza y encuentra tu conocimiento.</p>
+          <h2 className="text-xl font-bold font-headline text-white flex items-center gap-2">
+            <FileText className="text-[var(--accent)]" size={20} />
+            Módulo de Notas
+          </h2>
+          <p className="text-xs text-[var(--text-muted)] mt-1">Organización y editor avanzado de apuntes</p>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <NotificationBell />
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, justifyContent: 'flex-end' }}>
-              <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 40, fontWeight: 200, lineHeight: 0.9, color: 'var(--text-secondary)', letterSpacing: '0.02em' }}>{timeStr}</span>
-              <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 18, fontWeight: 200, color: 'var(--text-tertiary)', opacity: 0.5 }}>{secondsStr}</span>
+        <div className="text-right shrink-0">
+          <div className="flex items-baseline gap-1.5 justify-end">
+            <span className="font-mono text-3xl font-extralight text-[var(--accent)] text-shadow-glow">
+              {timeStr}
+            </span>
+            {periodStr && <span className="text-xs text-[var(--accent)] font-semibold">{periodStr}</span>}
+          </div>
+          <p className="text-[10px] text-[var(--text-tertiary)] uppercase tracking-wider mt-1">{dateStrCapitalized}</p>
+        </div>
+      </div>
+
+      {/* ── MAIN GRID ── */}
+      <div className="flex flex-1 overflow-hidden font-sans">
+        
+        {/* ── SIDEBAR ── */}
+        <div className="w-[280px] border-r border-[var(--border-subtle)] bg-[var(--bg-surface)] flex flex-col shrink-0">
+          <div className="p-4 shrink-0">
+            <div className="relative">
+              <Search className="absolute left-3 top-2.5 text-[var(--text-tertiary)]" size={14} />
+              <input
+                type="text"
+                placeholder="Buscar apuntes..."
+                className="w-full pl-9 pr-4 py-2 bg-[var(--bg-deep)] border border-[var(--border-subtle)] rounded-lg text-xs outline-none text-white focus:border-[var(--accent)]"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+              />
             </div>
-            <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)', marginTop: 4, letterSpacing: '0.04em', textTransform: 'capitalize' }}>{dateStrCapitalized}</div>
           </div>
-        </div>
-      </header>
 
-      {/* MAIN */}
-      <div style={{ display: 'flex', flex: 1, gap: 20, minHeight: 0, overflow: 'hidden' }}>
+          <div className="flex-grow overflow-y-auto notes-sidebar p-3 space-y-4">
+            
+            {/* General buttons */}
+            <div className="space-y-1">
+              <button
+                className={`notes-sidebar-item ${activeFolderId === 'all' ? 'active' : ''}`}
+                onClick={() => { setActiveFolderId('all'); setSelectedTag(null); }}
+              >
+                <div className="flex items-center gap-2">
+                  <FileText size={15} />
+                  <span>Todos los apuntes</span>
+                </div>
+                <span className="count-badge">{notes.length}</span>
+              </button>
+              <button
+                className={`notes-sidebar-item ${activeFolderId === 'pinned' ? 'active' : ''}`}
+                onClick={() => { setActiveFolderId('pinned'); setSelectedTag(null); }}
+              >
+                <div className="flex items-center gap-2">
+                  <Star size={15} />
+                  <span>Destacadas</span>
+                </div>
+                <span className="count-badge">{notes.filter(n => n.isPinned).length}</span>
+              </button>
+            </div>
 
-        {/* SIDEBAR */}
-        <aside className="bento-card" style={{ width: 240, padding: '16px 14px', display: 'flex', flexDirection: 'column', gap: 16, flexShrink: 0, overflowY: 'auto', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
-          <div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {[
-                { id: 'all', label: 'Todas las notas', icon: FileText, count: notes.length },
-                { id: 'pinned', label: 'Destacadas', icon: Pin, count: notes.filter(n => n.isPinned).length },
-              ].map(item => (
-                <button key={item.id} onClick={() => { setActiveFolderId(item.id as any); setSelectedTag(null); setSelectedNoteId(null); }} style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderRadius: 6,
-                  background: activeFolderId === item.id && !selectedTag ? 'var(--accent)' : 'transparent',
-                  border: 'none', color: activeFolderId === item.id && !selectedTag ? '#fff' : 'var(--text-secondary)',
-                  fontSize: 12, fontWeight: 600, cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'all 150ms'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <item.icon size={14} />
-                    <span>{item.label}</span>
-                  </div>
-                  <span style={{ fontSize: 10, background: activeFolderId === item.id && !selectedTag ? 'rgba(255,255,255,0.2)' : 'var(--bg-elevated)', padding: '1px 7px', borderRadius: 8 }}>{item.count}</span>
+            {/* Folder section */}
+            <div className="notes-sidebar-section">
+              <div className="notes-sidebar-section-title">
+                <span>Carpetas</span>
+                <button
+                  className="p-1 hover:bg-[var(--bg-hover)] rounded"
+                  onClick={() => setShowNewFolderModal(true)}
+                >
+                  <FolderPlus size={13} />
                 </button>
-              ))}
-            </div>
-          </div>
+              </div>
 
-          {/* FOLDERS (courses + custom) */}
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, padding: '0 2px' }}>
-              <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Carpetas</span>
-              <button onClick={() => setShowFolderModal(true)} style={{ padding: 3, borderRadius: 4, background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex' }}><FolderPlus size={13} /></button>
+              <div className="space-y-1 mt-1">
+                {allFolders.map(folder => {
+                  const isCourse = !!folder.courseId;
+                  const count = notes.filter(n => isCourse ? n.course === folder.name : n.folderId === folder.id).length;
+                  return (
+                    <button
+                      key={folder.id}
+                      className={`notes-sidebar-item ${activeFolderId === folder.id ? 'active' : ''}`}
+                      onClick={() => { setActiveFolderId(folder.id); setSelectedTag(null); }}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FolderIcon size={14} style={{ color: folder.color }} className="shrink-0" />
+                        <span className="truncate">{folder.name}</span>
+                        {isCourse && (
+                          <span className="text-[8px] bg-[var(--bg-deep)] text-[var(--text-tertiary)] px-1 py-0.5 rounded leading-none shrink-0 font-semibold uppercase">
+                            Curso
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="count-badge">{count}</span>
+                        {folder.isManual && (
+                          <Trash2
+                            size={12}
+                            className="text-red-500 hover:text-red-400 ml-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteNoteFolder(folder.id);
+                              if (activeFolderId === folder.id) setActiveFolderId('all');
+                            }}
+                          />
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-              {sidebarFolders.map(folder => {
-                const folderId = folder.isCourse ? folder.id : folder.id;
-                const count = folder.isCourse
-                  ? notes.filter(n => n.course === folder.name).length
-                  : notes.filter(n => n.folderId === folder.id).length;
-                return (
-                  <button key={folderId} onClick={() => { setActiveFolderId(folderId); setSelectedTag(null); setSelectedNoteId(null); }} style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 10px', borderRadius: 5,
-                    background: activeFolderId === folderId && !selectedTag ? 'var(--accent)' : 'transparent',
-                    border: 'none', color: activeFolderId === folderId && !selectedTag ? '#fff' : 'var(--text-secondary)',
-                    fontSize: 11, fontWeight: 500, cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'all 120ms'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, overflow: 'hidden', minWidth: 0 }}>
-                      <FolderIcon size={13} style={{ color: activeFolderId === folderId && !selectedTag ? '#fff' : (folder.color || 'var(--accent)'), flexShrink: 0 }} />
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 110 }}>{folder.name}</span>
-                    </div>
-                    <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 5, background: activeFolderId === folderId && !selectedTag ? 'rgba(255,255,255,0.2)' : 'var(--bg-elevated)', flexShrink: 0 }}>{count}</span>
+
+            {/* Tag section */}
+            <div className="notes-sidebar-section">
+              <div className="notes-sidebar-section-title">
+                <span>Etiquetas</span>
+                {selectedTag && (
+                  <button
+                    className="text-[9px] text-[var(--accent)] font-semibold lowercase tracking-normal"
+                    onClick={() => setSelectedTag(null)}
+                  >
+                    Limpiar
                   </button>
-                );
-              })}
-              {sidebarFolders.length === 0 && (
-                <div style={{ padding: '10px 2px', fontSize: 10, color: 'var(--text-tertiary)', textAlign: 'center' }}>Crea una carpeta o agrega cursos</div>
-              )}
-            </div>
-          </div>
+                )}
+              </div>
 
-          {/* TAGS as blocks like folders */}
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, padding: '0 2px' }}>
-              <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Etiquetas</span>
-              {selectedTag && (
-                <button onClick={() => setSelectedTag(null)} style={{ fontSize: 9, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', padding: '1px 4px' }}>Limpiar</button>
-              )}
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-              {allTags.map(tag => {
-                const isSel = selectedTag === tag.name;
-                const isEditing = editingTag === tag.name;
-                return (
-                  <div key={tag.name} style={{
-                    display: 'flex', alignItems: 'center', borderRadius: 5,
-                    background: isSel ? 'var(--accent)' : 'transparent',
-                    overflow: 'hidden', transition: 'all 120ms',
-                  }}>
-                    {isEditing ? (
-                      <div style={{ display: 'flex', alignItems: 'center', flex: 1, padding: '2px' }}>
-                        <input type="text" value={editingTagValue} autoFocus
-                          onChange={e => setEditingTagValue(e.target.value)}
-                          onKeyDown={e => {
-                            if (e.key === 'Enter') renameTag(tag.name, editingTagValue);
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {allTags.map(({ name, count }) => {
+                  const isEditing = editingTag === name;
+                  const isConfirming = tagToDelete === name;
+
+                  return (
+                    <div
+                      key={name}
+                      className={`tag-chip ${selectedTag === name ? 'active' : ''} group flex items-center gap-1`}
+                      onClick={() => !isEditing && setSelectedTag(name === selectedTag ? null : name)}
+                    >
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          className="bg-transparent text-white border-0 outline-none w-16 text-[10px]"
+                          defaultValue={name}
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleRenameTagGlobal(name, e.currentTarget.value);
                             if (e.key === 'Escape') setEditingTag(null);
                           }}
-                          style={{ flex: 1, padding: '5px 8px', background: 'var(--bg-deep)', border: '1px solid var(--accent)', borderRadius: 4, fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', outline: 'none' }} />
-                        <button onClick={() => renameTag(tag.name, editingTagValue)}
-                          style={{ padding: '4px 6px', background: 'none', border: 'none', color: '#10B981', cursor: 'pointer', display: 'flex' }}><Check size={13} /></button>
-                        <button onClick={() => setEditingTag(null)}
-                          style={{ padding: '4px 6px', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex' }}><X size={13} /></button>
-                      </div>
-                    ) : confirmDeleteTag === tag.name ? (
-                      <div style={{ display: 'flex', alignItems: 'center', flex: 1, gap: 4, padding: '6px 8px' }}>
-                        <span style={{ fontSize: 10, fontWeight: 600, color: '#EF4444', flex: 1 }}>¿Eliminar?</span>
-                        <button onClick={() => deleteTagGlobal(tag.name)}
-                          style={{ padding: '3px 6px', borderRadius: 4, background: '#EF4444', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 9, fontWeight: 700 }}>Sí</button>
-                        <button onClick={() => setConfirmDeleteTag(null)}
-                          style={{ padding: '3px 6px', borderRadius: 4, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 9, fontWeight: 600 }}>No</button>
-                      </div>
-                    ) : (
-                      <button onClick={() => { setSelectedTag(isSel ? null : tag.name); setSelectedNoteId(null); }}
-                        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 10px', background: 'none', border: 'none', color: isSel ? '#fff' : 'var(--text-secondary)', fontSize: 11, fontWeight: 500, cursor: 'pointer', textAlign: 'left', transition: 'all 120ms' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 7, overflow: 'hidden', minWidth: 0 }}>
-                          <span style={{ fontSize: 13, fontWeight: 400, flexShrink: 0 }}>#</span>
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 100 }}>{tag.name}</span>
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      ) : isConfirming ? (
+                        <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                          <span className="text-[9px]">¿Borrar?</span>
+                          <button onClick={() => handleDeleteTagGlobal(name)} className="hover:text-green-400 font-bold">Sí</button>
+                          <button onClick={() => setTagToDelete(null)} className="hover:text-red-400 font-bold">No</button>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                          <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 4, background: isSel ? 'rgba(255,255,255,0.2)' : 'var(--bg-hover)', flexShrink: 0 }}>{tag.count}</span>
-                          <span onClick={(e) => { e.stopPropagation(); setEditingTag(tag.name); setEditingTagValue(tag.name); }}
-                            style={{ opacity: 0, padding: 3, color: isSel ? 'rgba(255,255,255,0.6)' : 'var(--text-muted)', cursor: 'pointer', display: 'flex', transition: 'opacity 120ms' }}
-                            className="group-hover:opacity-100"><Edit3 size={11} /></span>
-                          <span onClick={(e) => { e.stopPropagation(); setConfirmDeleteTag(tag.name); }}
-                            style={{ opacity: 0, padding: 3, color: isSel ? 'rgba(255,255,255,0.6)' : '#EF4444', cursor: 'pointer', display: 'flex', transition: 'opacity 120ms' }}
-                            className="group-hover:opacity-100"><Trash2 size={11} /></span>
-                        </div>
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-              <div style={{ marginTop: 2 }}>
-                <input type="text" placeholder="+ crear etiqueta..." value={customTagInput}
-                  onChange={e => setCustomTagInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && customTagInput.trim()) {
-                      const tag = customTagInput.trim();
-                      setSelectedTag(tag);
-                      setCustomTagInput('');
-                    }
-                  }}
-                  style={{ width: '100%', padding: '7px 10px', background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 5, fontSize: 11, color: 'var(--text-primary)', outline: 'none' }} />
+                      ) : (
+                        <>
+                          <span>#{name}</span>
+                          <span className="text-[9px] opacity-60">({count})</span>
+                          <div className="hidden group-hover:flex items-center gap-0.5 ml-1" onClick={e => e.stopPropagation()}>
+                            <button
+                              className="hover:text-white"
+                              onClick={() => {
+                                setEditingTag(name);
+                                setEditingTagValue(name);
+                              }}
+                            >
+                              <Edit3 size={9} />
+                            </button>
+                            <button
+                              className="hover:text-white"
+                              onClick={() => setTagToDelete(name)}
+                            >
+                              <Trash2 size={9} />
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+                {allTags.length === 0 && (
+                  <span className="text-[10px] text-[var(--text-muted)] italic">Sin etiquetas</span>
+                )}
               </div>
             </div>
+
           </div>
-        </aside>
+        </div>
 
-        {/* MAIN AREA */}
-        <main className="bento-card" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
-          {!selectedNoteId ? (
-            <>
-              {/* TOOLBAR */}
-              <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em' }}>
-                    {selectedTag ? `#${selectedTag}` : activeFolderId === 'all' ? 'Todas las notas' : activeFolderId === 'pinned' ? 'Destacadas' : sidebarFolders.find(f => (f.isCourse ? f.id : f.id) === activeFolderId)?.name || 'Notas'}
-                  </h2>
-                  <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', background: 'var(--bg-elevated)', padding: '2px 8px', borderRadius: 5 }}>{filteredNotes.length}</span>
-                </div>
-
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                  <div style={{ position: 'relative', width: 200 }}>
-                    <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-                    <input type="text" placeholder="Buscar..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                      style={{ width: '100%', padding: '7px 10px 7px 32px', background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 6, fontSize: 11, color: 'var(--text-primary)', outline: 'none' }} />
+        {/* ── NOTES LIST OR EDITOR AREA ── */}
+        <div className="flex-1 flex overflow-hidden relative">
+          
+          {selectedNoteId ? (
+            // ── EDITOR VIEW ──
+            <div className="flex-grow flex flex-col h-full bg-[var(--bg-deep)] relative overflow-hidden">
+              
+              {/* Editor Header */}
+              <div className="px-6 py-3 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] flex justify-between items-center shrink-0">
+                <div className="flex items-center gap-3">
+                  <button
+                    className="p-1.5 hover:bg-[var(--bg-hover)] rounded-lg text-[var(--text-secondary)]"
+                    onClick={() => setSelectedNoteId(null)}
+                  >
+                    <ArrowLeft size={16} />
+                  </button>
+                  <div className="flex flex-col">
+                    <input
+                      ref={titleInputRef}
+                      type="text"
+                      className="bg-transparent font-bold text-sm text-white outline-none border-b border-transparent focus:border-[var(--accent)] w-[260px]"
+                      placeholder="Título"
+                      defaultValue={selectedNote?.title}
+                      onChange={triggerAutoSave}
+                    />
+                    <input
+                      ref={subtitleInputRef}
+                      type="text"
+                      className="bg-transparent text-[11px] text-[var(--text-secondary)] mt-0.5 outline-none border-b border-transparent focus:border-[var(--accent)] w-[260px] italic"
+                      placeholder="Añadir subtítulo..."
+                      defaultValue={selectedNote?.subtitle}
+                      onChange={triggerAutoSave}
+                    />
                   </div>
-                  <button onClick={() => handleCreateNote()}
-                    style={{ padding: '7px 16px', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', border: 'none', background: 'var(--accent)', color: '#fff', display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <Plus size={12} /> Nueva nota
-                  </button>
-                </div>
-              </header>
-
-              {/* NOTES LIST - shelf style grid */}
-              <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  {filteredNotes.map(note => (
-                    <NoteListItem key={note.id} note={note} isSelected={false} onClick={() => setSelectedNoteId(note.id)} />
-                  ))}
-                  {filteredNotes.length === 0 && (
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 0', color: 'var(--text-muted)' }}>
-                      <FileText size={40} style={{ opacity: 0.12, marginBottom: 10 }} />
-                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>No se encontraron notas</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>Crea una o cambia los filtros</div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </>
-          ) : selectedNote ? (
-            /* EDITOR */
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-              <header style={{ padding: '12px 20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
-                  <button onClick={() => setSelectedNoteId(null)} style={{ padding: 6, borderRadius: 6, background: 'none', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex' }}>
-                    <ChevronLeft size={16} />
-                  </button>
-                  <input type="text" value={selectedNote.title} onChange={e => updateNote(selectedNote.id, { title: e.target.value })}
-                    style={{ background: 'transparent', border: 'none', fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', outline: 'none', flex: 1, minWidth: 0, fontFamily: "'Inter Tight', sans-serif" }}
-                    placeholder="Título de la nota..." />
                 </div>
 
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  {savedIndicator && (
-                    <span style={{ fontSize: 9, fontWeight: 600, color: '#10B981', display: 'flex', alignItems: 'center', gap: 3 }}>
-                      <CheckCircle size={10} /> Guardado
-                    </span>
-                  )}
-                  <button onClick={() => updateNote(selectedNote.id, { isPinned: !selectedNote.isPinned })}
-                    style={{ padding: 6, borderRadius: 6, background: 'none', border: '1px solid var(--border-subtle)', cursor: 'pointer', color: selectedNote.isPinned ? 'var(--accent)' : 'var(--text-muted)' }}>
-                    <Pin size={14} fill={selectedNote.isPinned ? 'var(--accent)' : 'none'} />
+                <div className="flex items-center gap-2">
+                  {/* Saved Status */}
+                  <span className="text-[10px] text-[var(--text-muted)] select-none mr-2">
+                    {isSaved ? 'Guardado ✅' : 'Autoguardando...'}
+                  </span>
+
+                  <button
+                    className={`p-2 rounded-lg border border-[var(--border-subtle)] ${
+                      selectedNote?.isPinned
+                        ? 'bg-[var(--accent-soft)] text-[var(--accent)]'
+                        : 'bg-transparent text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'
+                    }`}
+                    onClick={() => {
+                      if (selectedNote) updateNote(selectedNote.id, { isPinned: !selectedNote.isPinned });
+                    }}
+                  >
+                    <Pin size={14} fill={selectedNote?.isPinned ? 'var(--accent)' : 'none'} />
                   </button>
-                  <button onClick={downloadTxt} style={{ padding: 6, borderRadius: 6, background: 'none', border: '1px solid var(--border-subtle)', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex' }}>
-                    <Download size={14} />
-                  </button>
-                  <button onClick={() => { if (confirm('¿Eliminar esta nota?')) { deleteNote(selectedNote.id); setSelectedNoteId(null); } }}
-                    style={{ padding: 6, borderRadius: 6, background: 'none', border: '1px solid var(--border-subtle)', cursor: 'pointer', color: 'var(--error)', display: 'flex' }}>
+
+                  {/* Download Selector */}
+                  <div className="relative">
+                    <button
+                      className="p-2 bg-transparent text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] border border-[var(--border-subtle)] rounded-lg flex items-center gap-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowDownloadMenu(prev => !prev);
+                      }}
+                    >
+                      <Download size={14} />
+                      <ChevronDown size={12} />
+                    </button>
+                    {showDownloadMenu && (
+                      <div className="absolute right-0 mt-2 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl shadow-xl py-1 w-48 z-50">
+                        <button
+                          className="w-full text-left px-4 py-2 hover:bg-[var(--bg-hover)] text-xs text-white flex items-center gap-2 border-none"
+                          onClick={() => downloadNote('txt')}
+                        >
+                          <FileText size={13} className="text-blue-400" /> Descargar (.txt)
+                        </button>
+                        <button
+                          className="w-full text-left px-4 py-2 hover:bg-[var(--bg-hover)] text-xs text-white flex items-center gap-2 border-none"
+                          onClick={() => downloadNote('html')}
+                        >
+                          <Code size={13} className="text-red-400" /> Descargar (.html)
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    className="p-2 bg-transparent text-red-500 hover:bg-red-500/10 border border-red-500/20 rounded-lg"
+                    onClick={() => selectedNote && setShowDeleteConfirm(selectedNote.id)}
+                  >
                     <Trash2 size={14} />
                   </button>
                 </div>
-              </header>
+              </div>
 
-              {/* METADATA BAR */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '10px 20px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0, flexWrap: 'wrap', background: 'var(--bg-deep)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <FolderIcon size={12} style={{ color: 'var(--text-muted)' }} />
-                  <select value={selectedNote.folderId || ''} onChange={e => updateNote(selectedNote.id, { folderId: e.target.value || undefined })}
-                    style={{ border: '1px solid var(--border-subtle)', borderRadius: 5, padding: '4px 8px', fontSize: 10, fontWeight: 600, color: 'var(--text-primary)', outline: 'none', cursor: 'pointer', background: 'var(--bg-elevated)' }}>
-                    <option value="">Sin carpeta</option>
-                    {sidebarFolders.map(f => (
-                      <option key={f.id} value={f.isCourse ? f.id : f.id}>{f.name}</option>
+              {/* Metadata & Tags bar */}
+              <div className="px-6 py-2 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]/50 flex items-center justify-between gap-4 shrink-0 overflow-x-auto no-scrollbar">
+                <div className="flex items-center gap-3">
+                  {/* Folder Selector */}
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <FolderIcon size={13} className="text-[var(--text-secondary)]" />
+                    <select
+                      className="bg-transparent border-0 outline-none text-white font-semibold cursor-pointer text-xs"
+                      value={selectedNote?.folderId || ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        updateNote(selectedNoteId, { folderId: val || undefined });
+                        toast.success('Carpeta actualizada');
+                      }}
+                    >
+                      <option value="" className="bg-[var(--bg-surface)] text-white">Sin carpeta</option>
+                      {allFolders.filter(f => f.isManual).map(f => (
+                        <option key={f.id} value={f.id} className="bg-[var(--bg-surface)] text-white">{f.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Course Indicator */}
+                  {selectedNote?.course && (
+                    <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-[var(--bg-deep)] border border-[var(--border-subtle)] text-[10px] text-white">
+                      <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: selectedNote.courseColor }} />
+                      <span>{selectedNote.course}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Edit Tags of selected note */}
+                <form onSubmit={handleCreateTag} className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-1">
+                    {selectedNote?.tags?.map(t => (
+                      <span
+                        key={t}
+                        className="px-2 py-0.5 rounded-full bg-[var(--accent-dim)] text-[var(--accent)] text-[9px] font-semibold flex items-center gap-1"
+                      >
+                        #{t}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = selectedNote.tags?.filter(tag => tag !== t) || [];
+                            updateNote(selectedNote.id, { tags: next });
+                          }}
+                          className="hover:text-white border-none bg-transparent p-0 cursor-pointer"
+                        >
+                          <X size={8} />
+                        </button>
+                      </span>
                     ))}
-                  </select>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, overflow: 'hidden', flexWrap: 'wrap' }}>
-                  {allTags.map(tag => {
-                    const active = selectedNote.tags?.includes(tag.name);
-                    return (
-                      <button key={tag.name} onClick={() => toggleNoteTag(tag.name)} style={{
-                        fontSize: 9, fontWeight: 600, padding: '3px 8px', borderRadius: 4, cursor: 'pointer',
-                        background: active ? 'var(--accent)' : 'var(--bg-elevated)',
-                        color: active ? '#fff' : 'var(--text-secondary)',
-                        border: '1px solid', borderColor: active ? 'var(--accent)' : 'var(--border-subtle)',
-                        transition: 'all 120ms', flexShrink: 0
-                      }}>{tag.name}</button>
-                    );
-                  })}
-                  <input type="text" placeholder="+ etiqueta" value={customTagInput} onChange={e => setCustomTagInput(e.target.value)} onKeyDown={handleAddCustomTag}
-                    style={{ border: '1px solid var(--border-subtle)', borderRadius: 4, padding: '3px 8px', fontSize: 9, color: 'var(--text-primary)', outline: 'none', width: 80, background: 'var(--bg-elevated)' }} />
-                </div>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="+ etiqueta..."
+                    className="bg-transparent border border-dashed border-[var(--border-subtle)] rounded-full px-2 py-0.5 text-[9px] text-white outline-none w-16 focus:w-24 focus:border-[var(--accent)] transition-all"
+                    value={newTagInput}
+                    onChange={e => setNewTagInput(e.target.value)}
+                  />
+                </form>
               </div>
 
-              {/* FLOATING FORMAT POPUP */}
-              {showFormatPopup && (
-                <div style={{
-                  position: 'absolute', zIndex: 100, left: formatPopupPos.x, top: formatPopupPos.y,
-                  transform: 'translateX(-50%)', display: 'flex', gap: 2, padding: '4px 6px',
-                  background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)',
-                  borderRadius: 10, boxShadow: '0 4px 16px rgba(0,0,0,0.3)'
-                }}>
-                  {[
-                    { icon: Bold, action: () => { document.execCommand('bold'); setAutoSave(); hideToolbar(); } },
-                    { icon: Italic, action: () => { document.execCommand('italic'); setAutoSave(); hideToolbar(); } },
-                    { icon: Underline, action: () => { document.execCommand('underline'); setAutoSave(); hideToolbar(); } },
-                    { icon: Type, action: () => { document.execCommand('strikeThrough'); setAutoSave(); hideToolbar(); } },
-                    { icon: Link, action: handleInsertLink },
-                    { icon: Highlighter, action: () => { document.execCommand('hiliteColor', false, '#FEF08A'); setAutoSave(); hideToolbar(); } },
-                    { icon: Palette, action: () => { const c = prompt('Color hex:'); if (c) { document.execCommand('foreColor', false, c); setAutoSave(); } hideToolbar(); } },
-                  ].map((btn, i) => (
-                    <button key={i} onMouseDown={e => { e.preventDefault(); btn.action(); }} title={['Negrita','Itálica','Subrayado','Tachado','Enlace','Resaltar','Color'][i]}
-                      style={{ padding: '5px 7px', borderRadius: 5, background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex' }}>
-                      <btn.icon size={14} />
+              {/* Rich Text Format Toolbar */}
+              <div className="px-6 py-2 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]/90 flex items-center gap-1 shrink-0 overflow-x-auto no-scrollbar">
+                
+                {/* Format buttons */}
+                <button className="editor-toolbar-btn border-none" onClick={() => applyFormat('bold')} data-tooltip="Negrita"><Bold size={14} /></button>
+                <button className="editor-toolbar-btn border-none" onClick={() => applyFormat('italic')} data-tooltip="Cursiva"><Italic size={14} /></button>
+                <button className="editor-toolbar-btn border-none" onClick={() => applyFormat('underline')} data-tooltip="Subrayado"><Underline size={14} /></button>
+                
+                <div className="editor-toolbar-divider" />
+                
+                <button className="editor-toolbar-btn border-none text-xs font-bold" onClick={() => applyFormat('formatBlock', '<h1>')} data-tooltip="Título 1">H1</button>
+                <button className="editor-toolbar-btn border-none text-xs font-bold" onClick={() => applyFormat('formatBlock', '<h2>')} data-tooltip="Título 2">H2</button>
+                <button className="editor-toolbar-btn border-none text-xs font-bold" onClick={() => applyFormat('formatBlock', '<h3>')} data-tooltip="Título 3">H3</button>
+
+                <div className="editor-toolbar-divider" />
+
+                <button className="editor-toolbar-btn border-none" onClick={() => applyFormat('insertUnorderedList')} data-tooltip="Lista Viñetas"><List size={14} /></button>
+                <button className="editor-toolbar-btn border-none" onClick={() => applyFormat('insertOrderedList')} data-tooltip="Lista Numérica"><span className="text-[10px] font-bold">1.</span></button>
+                
+                <div className="editor-toolbar-divider" />
+
+                <button
+                  className="editor-toolbar-btn border-none"
+                  onClick={() => {
+                    const code = prompt('Ingresa bloque de código:');
+                    if (code) applyFormat('insertHTML', `<pre><code>${code}</code></pre>`);
+                  }}
+                  data-tooltip="Código"
+                >
+                  <Code size={14} />
+                </button>
+                <button
+                  className="editor-toolbar-btn border-none"
+                  onClick={() => {
+                    const quote = prompt('Ingresa cita:');
+                    if (quote) applyFormat('insertHTML', `<blockquote>${quote}</blockquote>`);
+                  }}
+                  data-tooltip="Cita"
+                >
+                  <Type size={14} />
+                </button>
+                <button
+                  className="editor-toolbar-btn border-none"
+                  onClick={() => {
+                    const text = prompt('Mensaje del Callout:');
+                    if (text) applyFormat('insertHTML', `<div class="note-callout note-callout-info"><div>ℹ️</div><div>${text}</div></div>`);
+                  }}
+                  data-tooltip="Callout"
+                >
+                  <Info size={14} />
+                </button>
+
+                <div className="editor-toolbar-divider" />
+
+                <button
+                  className="editor-toolbar-btn border-none"
+                  onClick={() => {
+                    const url = prompt('URL de la imagen:');
+                    if (url) applyFormat('insertImage', url);
+                  }}
+                  data-tooltip="Insertar Imagen"
+                >
+                  <ImageIcon size={14} />
+                </button>
+                
+                <button
+                  className="editor-toolbar-btn border-none"
+                  onClick={() => {
+                    const url = prompt('URL del enlace:');
+                    if (url) {
+                      const sel = window.getSelection();
+                      if (sel && sel.toString()) {
+                        applyFormat('createLink', url);
+                      } else {
+                        applyFormat('insertHTML', `<a href="${url}" target="_blank" rel="noopener">${url}</a>`);
+                      }
+                    }
+                  }}
+                  data-tooltip="Insertar Enlace"
+                >
+                  <Link size={14} />
+                </button>
+
+                {/* File Attachment Input Trigger */}
+                <div className="relative">
+                  <label className="editor-toolbar-btn cursor-pointer" data-tooltip="Adjuntar archivo">
+                    <Paperclip size={14} />
+                    <input
+                      type="file"
+                      className="hidden"
+                      onChange={handleFileAttachmentUpload}
+                    />
+                  </label>
+                </div>
+
+                <div className="editor-toolbar-divider" />
+
+                {/* Dynamic Block Tools triggers */}
+                <button
+                  className={`editor-toolbar-btn border-none ${showWhiteboard ? 'active' : ''} flex items-center gap-1`}
+                  onClick={() => {
+                    setShowWhiteboard(!showWhiteboard);
+                    setShowCalculator(false);
+                    setShowFormulaEditor(false);
+                  }}
+                  data-tooltip="Pizarra / Whiteboard"
+                >
+                  <PenTool size={14} />
+                  <span className="text-[10px] font-bold">Dibujar</span>
+                </button>
+
+                <button
+                  className={`editor-toolbar-btn border-none ${showCalculator ? 'active' : ''} flex items-center gap-1`}
+                  onClick={() => {
+                    setShowCalculator(!showCalculator);
+                    setShowWhiteboard(false);
+                    setShowFormulaEditor(false);
+                  }}
+                  data-tooltip="Calculadora"
+                >
+                  <Calculator size={14} />
+                  <span className="text-[10px] font-bold">Calc</span>
+                </button>
+
+                <button
+                  className={`editor-toolbar-btn border-none ${showFormulaEditor ? 'active' : ''} flex items-center gap-1`}
+                  onClick={() => {
+                    setShowFormulaEditor(!showFormulaEditor);
+                    setShowCalculator(false);
+                    setShowWhiteboard(false);
+                  }}
+                  data-tooltip="Editor Fórmulas"
+                >
+                  <Sigma size={14} />
+                  <span className="text-[10px] font-bold">Fórmula</span>
+                </button>
+              </div>
+
+              {/* Main Content Editable Area */}
+              <div className="flex-grow overflow-y-auto p-8 relative bg-[#0B0C0E]/50">
+                
+                {/* Floating formatting Popup */}
+                {formatPopup.show && (
+                  <div
+                    className="format-popup"
+                    style={{ left: formatPopup.x, top: formatPopup.y }}
+                    onClick={e => e.stopPropagation()}
+                  >
+                    <button onClick={() => applyFormat('bold')} className="p-1 hover:bg-[var(--bg-hover)] text-white rounded border-none bg-transparent"><Bold size={11} /></button>
+                    <button onClick={() => applyFormat('italic')} className="p-1 hover:bg-[var(--bg-hover)] text-white rounded border-none bg-transparent"><Italic size={11} /></button>
+                    <button onClick={() => applyFormat('underline')} className="p-1 hover:bg-[var(--bg-hover)] text-white rounded border-none bg-transparent"><Underline size={11} /></button>
+                    <button
+                      onClick={() => {
+                        const url = prompt('URL del enlace:');
+                        if (url) applyFormat('createLink', url);
+                      }}
+                      className="p-1 hover:bg-[var(--bg-hover)] text-white rounded border-none bg-transparent"
+                    >
+                      <Link size={11} />
                     </button>
-                  ))}
-                </div>
-              )}
+                  </div>
+                )}
 
-              {/* RICH TEXT TOOLBAR */}
-              <div style={{ display: 'flex', gap: 4, padding: '8px 20px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0, flexWrap: 'wrap', alignItems: 'center' }}>
-                {[
-                  { icon: Bold, action: handleBold },
-                  { icon: Italic, action: handleItalic },
-                  { icon: Underline, action: handleUnderline },
-                ].map((btn, i) => (
-                  <button key={i} onMouseDown={e => { e.preventDefault(); btn.action(); }}
-                    style={{ padding: '6px 9px', borderRadius: 6, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex' }}>
-                    <btn.icon size={14} />
-                  </button>
-                ))}
-                <span style={{ width: 1, height: 18, background: 'var(--border-subtle)', margin: '0 4px' }} />
-                <button onMouseDown={e => { e.preventDefault(); document.execCommand('formatBlock', false, 'h1'); setAutoSave(); }}
-                  style={{ padding: '6px 9px', borderRadius: 6, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>H1</button>
-                <button onMouseDown={e => { e.preventDefault(); document.execCommand('formatBlock', false, 'h2'); setAutoSave(); }}
-                  style={{ padding: '6px 9px', borderRadius: 6, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}>H2</button>
-                <button onMouseDown={e => { e.preventDefault(); document.execCommand('formatBlock', false, 'h3'); setAutoSave(); }}
-                  style={{ padding: '6px 9px', borderRadius: 6, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 11, fontWeight: 700 }}>H3</button>
-                <button onMouseDown={e => { e.preventDefault(); document.execCommand('formatBlock', false, 'h4'); setAutoSave(); }}
-                  style={{ padding: '6px 9px', borderRadius: 6, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 10, fontWeight: 700 }}>H4</button>
-                <span style={{ width: 1, height: 18, background: 'var(--border-subtle)', margin: '0 4px' }} />
-                <button onMouseDown={e => { e.preventDefault(); handleBulletList(); }}
-                  style={{ padding: '6px 9px', borderRadius: 6, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex' }}><List size={14} /></button>
-                <button onMouseDown={e => { e.preventDefault(); handleNumberedList(); }}
-                  style={{ padding: '6px 9px', borderRadius: 6, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', fontSize: 11, fontWeight: 700 }}>1.</button>
-                <button onMouseDown={e => { e.preventDefault(); handleCodeBlock(); }}
-                  style={{ padding: '6px 9px', borderRadius: 6, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex' }}><Code size={14} /></button>
-                <span style={{ width: 1, height: 18, background: 'var(--border-subtle)', margin: '0 4px' }} />
-                <button onMouseDown={e => { e.preventDefault(); handleInsertImage(); }}
-                  style={{ padding: '6px 9px', borderRadius: 6, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex' }}><Image size={14} /></button>
-                <button onMouseDown={e => { e.preventDefault(); handleInsertLink(); }}
-                  style={{ padding: '6px 9px', borderRadius: 6, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex' }}><Link size={14} /></button>
-                <button onMouseDown={e => { e.preventDefault(); fileInputRef.current?.click(); }}
-                  style={{ padding: '6px 9px', borderRadius: 6, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex' }}><Upload size={14} /></button>
-                <input type="file" ref={fileInputRef} onChange={handleFileUpload} style={{ display: 'none' }} accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt" />
-                <button onMouseDown={e => { e.preventDefault(); const c = prompt('Color del texto (hex):'); if (c) { document.execCommand('foreColor', false, c); setAutoSave(); } }}
-                  style={{ padding: '6px 9px', borderRadius: 6, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex' }}><Palette size={14} /></button>
-                <button onMouseDown={e => { e.preventDefault(); document.execCommand('hiliteColor', false, '#FEF08A'); setAutoSave(); }}
-                  style={{ padding: '6px 9px', borderRadius: 6, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex' }}><Highlighter size={14} /></button>
+                <div
+                  ref={editorRef}
+                  contentEditable
+                  className="notes-editor-area"
+                  onInput={() => {
+                    triggerAutoSave();
+                    updateEditorStats();
+                  }}
+                  onMouseUp={handleSelectionChange}
+                  onKeyUp={handleSelectionChange}
+                />
               </div>
 
-              {/* EDITOR */}
-              <div style={{ flex: 1, overflowY: 'auto', padding: '24px 40px', background: 'var(--bg-deep)' }} onMouseUp={handleKeyUp} onKeyUp={handleKeyUp}>
-                <div ref={editorRef} contentEditable onInput={handleEditorInput}
-                  style={{ minHeight: '100%', outline: 'none', fontSize: 15, color: 'var(--text-primary)', lineHeight: 1.8, maxWidth: 720, margin: '0 auto', paddingBottom: 64, fontFamily: "'Inter', sans-serif" }} />
+              {/* Editor Footer Stats */}
+              <div className="px-6 py-2 border-t border-[var(--border-subtle)] bg-[var(--bg-surface)] flex justify-between text-[10px] text-[var(--text-tertiary)] shrink-0">
+                <div className="flex items-center gap-4">
+                  <span>Palabras: <b className="text-white">{editorWordCount}</b></span>
+                  <span>Caracteres: <b className="text-white">{editorCharCount}</b></span>
+                </div>
+                <span>Tiempo de lectura: <b className="text-white">{editorReadingTime} min</b></span>
               </div>
 
-              {/* FOOTER */}
-              <footer style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 20px', borderTop: '1px solid var(--border-subtle)', flexShrink: 0, fontSize: 9, color: 'var(--text-tertiary)', fontWeight: 600 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <span>{editorStats.words} palabras</span>
-                  <span>{editorStats.chars} caracteres</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <Clock size={10} />
-                  <span>{editorStats.readingTime} min lectura</span>
-                </div>
-              </footer>
             </div>
           ) : (
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 12 }}>
-              Selecciona una nota para editarla
+            // ── NOTES LIST VIEW ──
+            <div className="flex-grow flex flex-col h-full bg-[#0B0C0E]/30 relative overflow-hidden">
+              
+              {/* Toolbar */}
+              <div className="px-6 py-4 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]/40 flex justify-between items-center shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <h3 className="font-bold text-sm text-white">{activeFolderName}</h3>
+                  <span className="px-2 py-0.5 rounded-full bg-[var(--bg-deep)] text-[10px] font-semibold text-[var(--text-secondary)] border border-[var(--border-subtle)]">
+                    {filteredNotes.length} notas
+                  </span>
+                </div>
+
+                <button
+                  className="btn-primary flex items-center gap-1 text-xs py-1.5 px-3 cursor-pointer"
+                  onClick={handleCreateNote}
+                >
+                  <Plus size={14} /> Nueva nota
+                </button>
+              </div>
+
+              {/* Notes grid */}
+              <div className="flex-grow overflow-y-auto p-6">
+                {filteredNotes.length > 0 ? (
+                  <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                    <SortableContext items={filteredNotes} strategy={verticalListSortingStrategy}>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {filteredNotes.map(note => (
+                          <SortableNoteCard
+                            key={note.id}
+                            note={note}
+                            isSelected={selectedNoteId === note.id}
+                            onClick={() => setSelectedNoteId(note.id)}
+                            onContextMenu={handleContextMenu}
+                          />
+                        ))}
+                      </div>
+                    </SortableContext>
+                  </DndContext>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-20 text-[var(--text-muted)] select-none">
+                    <FileText size={48} className="text-[var(--text-tertiary)] opacity-30 mb-3" />
+                    <p className="text-sm font-medium">No se encontraron apuntes</p>
+                    <p className="text-xs text-[var(--text-tertiary)] mt-1">Intenta cambiar de carpeta, filtro, o crea una nueva nota.</p>
+                  </div>
+                )}
+              </div>
+
             </div>
           )}
-        </main>
+
+          {/* ── FLOATING TOOL: SCIENTIFIC CALCULATOR ── */}
+          {showCalculator && (
+            <div className="tool-panel right-6 bottom-16 bg-[#0c0c10] shadow-2xl rounded-2xl border border-[var(--border-subtle)] p-4 w-[340px] flex flex-col gap-3">
+              <div className="flex justify-between items-center">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-1.5">
+                  <Calculator size={13} className="text-[var(--accent)]" /> Calculadora Científica
+                </h4>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setIsDeg(!isDeg)}
+                    className="px-1.5 py-0.5 rounded bg-[var(--bg-deep)] text-[9px] font-bold text-white hover:bg-[var(--bg-hover)] border-none cursor-pointer"
+                  >
+                    {isDeg ? 'DEG' : 'RAD'}
+                  </button>
+                  <button onClick={() => setShowCalculator(false)} className="text-white hover:text-red-400 border-none bg-transparent cursor-pointer"><X size={14} /></button>
+                </div>
+              </div>
+
+              {/* Display */}
+              <div className="bg-[#050508] border border-white/[0.02] rounded-lg p-3 text-right">
+                <p className="font-mono text-[10px] text-[var(--text-tertiary)] break-all min-h-[14px]">{calcExpr || '0'}</p>
+                <h3 className="font-mono text-2xl font-semibold text-white break-all">{calcRes}</h3>
+              </div>
+
+              {/* Grid buttons */}
+              <div className="grid grid-cols-4 gap-1.5 text-xs">
+                {/* Memory row */}
+                {['MC', 'MR', 'M+', 'M-'].map(btn => (
+                  <button key={btn} onClick={() => toast.success('Memoria guardada')} className="calc-btn calc-btn-mem py-2 border-none">{btn}</button>
+                ))}
+
+                {/* Trigonometry and functions */}
+                {['sin(', 'cos(', 'tan(', 'π'].map(btn => (
+                  <button key={btn} onClick={() => handleCalcPress(btn)} className="calc-btn calc-btn-fn py-2 border-none">{btn === 'π' ? 'π' : btn.slice(0, 3)}</button>
+                ))}
+
+                {['√(', 'x²', '^', 'log('].map(btn => {
+                  let lbl = btn;
+                  if (btn === '√(') lbl = '√';
+                  if (btn === 'x²') lbl = 'x²';
+                  if (btn === '^') lbl = 'xʸ';
+                  if (btn === 'log(') lbl = 'log';
+                  return (
+                    <button key={btn} onClick={() => handleCalcPress(btn === 'x²' ? '^2' : btn)} className="calc-btn calc-btn-fn py-2 border-none">{lbl}</button>
+                  );
+                })}
+
+                {/* Arithmetic operators & numbers */}
+                {['(', ')', '%', '÷'].map(btn => (
+                  <button key={btn} onClick={() => handleCalcPress(btn)} className="calc-btn calc-btn-op py-2 border-none">{btn}</button>
+                ))}
+
+                {['7', '8', '9', '×'].map(btn => (
+                  <button key={btn} onClick={() => handleCalcPress(btn === '×' ? '*' : btn)} className={`calc-btn py-2 border-none ${btn === '×' ? 'calc-btn-op' : 'calc-btn-num'}`}>{btn}</button>
+                ))}
+
+                {['4', '5', '6', '-'].map(btn => (
+                  <button key={btn} onClick={() => handleCalcPress(btn)} className={`calc-btn py-2 border-none ${btn === '-' ? 'calc-btn-op' : 'calc-btn-num'}`}>{btn}</button>
+                ))}
+
+                {['1', '2', '3', '+'].map(btn => (
+                  <button key={btn} onClick={() => handleCalcPress(btn)} className={`calc-btn py-2 border-none ${btn === '+' ? 'calc-btn-op' : 'calc-btn-num'}`}>{btn}</button>
+                ))}
+
+                <button onClick={() => handleCalcPress('C')} className="calc-btn calc-btn-clear py-2 border-none">C</button>
+                <button onClick={() => handleCalcPress('0')} className="calc-btn calc-btn-num py-2 border-none">0</button>
+                <button onClick={() => handleCalcPress('.')} className="calc-btn calc-btn-num py-2 border-none">.</button>
+                <button onClick={() => handleCalcPress('=')} className="calc-btn calc-btn-eq py-2 border-none">=</button>
+              </div>
+
+              <button
+                className="w-full btn-primary text-xs py-1.5 mt-1 border-none cursor-pointer"
+                onClick={insertCalcResult}
+              >
+                Insertar resultado en nota
+              </button>
+            </div>
+          )}
+
+          {/* ── FLOATING TOOL: WHITEBOARD ── */}
+          {showWhiteboard && (
+            <div className="tool-panel right-6 bottom-16 bg-[#0c0c10] shadow-2xl rounded-2xl border border-[var(--border-subtle)] p-4 flex flex-col gap-3 z-50">
+              <div className="flex justify-between items-center">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-1.5">
+                  <PenTool size={13} className="text-[var(--accent)]" /> Pizarra de Dibujo
+                </h4>
+                <button onClick={() => setShowWhiteboard(false)} className="text-white hover:text-red-400 border-none bg-transparent cursor-pointer"><X size={14} /></button>
+              </div>
+
+              {/* Canvas toolbar */}
+              <div className="flex items-center justify-between gap-4 bg-[var(--bg-deep)] p-2 rounded-lg border border-[var(--border-subtle)]">
+                <div className="flex gap-2">
+                  <button
+                    className={`p-1.5 rounded text-xs font-semibold border-none cursor-pointer ${wbTool === 'pen' ? 'bg-[var(--accent-soft)] text-[var(--accent)]' : 'text-white bg-transparent'}`}
+                    onClick={() => setWbTool('pen')}
+                  >
+                    Lápiz
+                  </button>
+                  <button
+                    className={`p-1.5 rounded text-xs font-semibold border-none cursor-pointer ${wbTool === 'eraser' ? 'bg-[var(--accent-soft)] text-[var(--accent)]' : 'text-white bg-transparent'}`}
+                    onClick={() => setWbTool('eraser')}
+                  >
+                    Borrador
+                  </button>
+                </div>
+
+                {/* Brush size slider */}
+                <div className="flex items-center gap-2 text-[10px]">
+                  <span>Pincel:</span>
+                  <input
+                    type="range"
+                    min="1"
+                    max="20"
+                    className="w-16 h-1 rounded-lg bg-[var(--bg-surface)] accent-[var(--accent)] cursor-pointer"
+                    value={wbBrushSize}
+                    onChange={e => setWbBrushSize(Number(e.target.value))}
+                  />
+                  <span>{wbBrushSize}px</span>
+                </div>
+
+                {/* Clear canvas */}
+                <button
+                  onClick={initWhiteboard}
+                  className="px-2 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded text-[10px] font-semibold border-none cursor-pointer"
+                >
+                  Limpiar
+                </button>
+              </div>
+
+              {/* Color dots row */}
+              <div className="flex gap-2 justify-center py-1">
+                {['#FFFFFF', '#E11D48', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#06B6D4'].map(c => (
+                  <button
+                    key={c}
+                    onClick={() => {
+                      setWbColor(c);
+                      setWbTool('pen');
+                    }}
+                    className="w-5 h-5 rounded-full border border-white/20 transition-all hover:scale-115 cursor-pointer"
+                    style={{
+                      backgroundColor: c,
+                      boxShadow: wbColor === c && wbTool === 'pen' ? `0 0 10px ${c}` : 'none',
+                      transform: wbColor === c && wbTool === 'pen' ? 'scale(1.15)' : 'scale(1)'
+                    }}
+                  />
+                ))}
+              </div>
+
+              {/* Canvas area */}
+              <canvas
+                ref={wbCanvasRef}
+                width={480}
+                height={320}
+                className="whiteboard-canvas rounded-lg border border-[var(--border-subtle)]"
+                onMouseDown={handleWbStart}
+                onMouseMove={handleWbDraw}
+                onMouseUp={handleWbEnd}
+                onMouseLeave={handleWbEnd}
+                onTouchStart={handleWbStart}
+                onTouchMove={handleWbDraw}
+                onTouchEnd={handleWbEnd}
+              />
+
+              <button
+                className="w-full btn-primary text-xs py-1.5 border-none cursor-pointer"
+                onClick={insertWhiteboard}
+              >
+                Insertar pizarra en nota
+              </button>
+            </div>
+          )}
+
+          {/* ── FLOATING TOOL: FORMULA EDITOR ── */}
+          {showFormulaEditor && (
+            <div className="tool-panel right-6 bottom-16 bg-[#0c0c10] shadow-2xl rounded-2xl border border-[var(--border-subtle)] p-4 w-[380px] flex flex-col gap-3 z-50">
+              <div className="flex justify-between items-center">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-1.5">
+                  <Sigma size={13} className="text-[var(--accent)]" /> Editor de Fórmulas Matemáticas
+                </h4>
+                <button onClick={() => setShowFormulaEditor(false)} className="text-white hover:text-red-400 border-none bg-transparent cursor-pointer"><X size={14} /></button>
+              </div>
+
+              {/* Preview */}
+              <div className="bg-[#050508] border border-white/[0.02] rounded-lg p-6 min-h-[90px] flex items-center justify-center overflow-x-auto">
+                <div dangerouslySetInnerHTML={{ __html: formulaInput ? parsedFormulaHTML : '<span class="italic text-[var(--text-muted)] text-xs">Vista previa de la fórmula...</span>' }} />
+              </div>
+
+              {/* Quick symbol triggers */}
+              <div className="flex flex-wrap gap-1">
+                {[
+                  { sym: '\\alpha', lbl: 'α' }, { sym: '\\beta', lbl: 'β' },
+                  { sym: '\\theta', lbl: 'θ' }, { sym: '\\Delta', lbl: 'Δ' },
+                  { sym: '\\pi', lbl: 'π' }, { sym: '\\sum', lbl: '∑' },
+                  { sym: '\\int', lbl: '∫' }, { sym: '\\inf', lbl: '∞' },
+                  { sym: '\\neq', lbl: '≠' }, { sym: '\\leq', lbl: '≤' },
+                  { sym: '\\geq', lbl: '≥' }, { sym: '\\pm', lbl: '±' },
+                  { sym: '\\times', lbl: '×' }, { sym: '\\div', lbl: '÷' },
+                  { sym: 'a/b', lbl: 'a/b' }, { sym: 'sqrt(x)', lbl: '√x' },
+                  { sym: '^', lbl: 'xʸ' }, { sym: '_', lbl: 'x₁' }
+                ].map(({ sym, lbl }) => (
+                  <button
+                    key={sym}
+                    onClick={() => {
+                      setFormulaInput(prev => prev + (sym === 'a/b' ? '(a)/(b)' : sym));
+                    }}
+                    className="px-2 py-1 bg-[var(--bg-deep)] hover:bg-[var(--bg-hover)] border border-[var(--border-subtle)] text-[11px] rounded font-mono text-[var(--text-secondary)] hover:text-white cursor-pointer"
+                  >
+                    {lbl}
+                  </button>
+                ))}
+              </div>
+
+              <input
+                type="text"
+                placeholder="Escribe la fórmula sintaxis (ej. sqrt(a/b))"
+                className="w-full bg-[var(--bg-deep)] border border-[var(--border-subtle)] rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-[var(--accent)] font-mono"
+                value={formulaInput}
+                onChange={e => setFormulaInput(e.target.value)}
+              />
+
+              <button
+                className="w-full btn-primary text-xs py-1.5 border-none cursor-pointer"
+                onClick={insertFormula}
+              >
+                Insertar fórmula en nota
+              </button>
+            </div>
+          )}
+
+        </div>
       </div>
 
-      {/* NEW FOLDER MODAL */}
-      {showFolderModal && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(12px)' }} onClick={() => setShowFolderModal(false)}>
-          <div className="bento-card" style={{ width: 380, padding: 24, border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }} onClick={e => e.stopPropagation()}>
-            <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", marginBottom: 16 }}>Nueva carpeta</h3>
-            <input type="text" placeholder="Nombre de la carpeta..." value={newFolderName} onChange={e => setNewFolderName(e.target.value)}
-              style={{ width: '100%', padding: '8px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 6, fontSize: 12, color: 'var(--text-primary)', outline: 'none' }} autoFocus />
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 16 }}>
-              <button onClick={() => setShowFolderModal(false)}
-                style={{ padding: '7px 16px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)' }}>Cancelar</button>
-              <button onClick={handleCreateFolder} disabled={!newFolderName.trim()}
-                style={{ padding: '7px 20px', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: 'none', background: 'var(--accent)', color: '#fff', opacity: newFolderName.trim() ? 1 : 0.3 }}>Crear</button>
+      {/* ── CONTEXT MENU ── */}
+      {contextMenu && (
+        <div
+          className="notes-context-menu"
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            className="notes-context-menu-item border-none bg-transparent"
+            onClick={() => {
+              if (contextMenu) {
+                updateNote(contextMenu.note.id, { isPinned: !contextMenu.note.isPinned });
+                setContextMenu(null);
+                toast.success(contextMenu.note.isPinned ? 'Nota desfijada' : 'Nota fijada');
+              }
+            }}
+          >
+            <Pin size={13} /> {contextMenu.note.isPinned ? 'Desfijar' : 'Fijar nota'}
+          </button>
+
+          <button
+            className="notes-context-menu-item border-none bg-transparent"
+            onClick={() => {
+              if (contextMenu) {
+                duplicateNote(contextMenu.note.id);
+                setContextMenu(null);
+                toast.success('Nota duplicada');
+              }
+            }}
+          >
+            <Copy size={13} /> Duplicar nota
+          </button>
+
+          <button
+            className="notes-context-menu-item border-none bg-transparent"
+            onClick={() => {
+              if (contextMenu) {
+                setShowMoveFolderModal(contextMenu.note.id);
+                setContextMenu(null);
+              }
+            }}
+          >
+            <Move size={13} /> Mover de carpeta
+          </button>
+
+          <div className="notes-context-menu-divider" />
+
+          <button
+            className="notes-context-menu-item danger border-none bg-transparent"
+            onClick={() => {
+              if (contextMenu) {
+                setShowDeleteConfirm(contextMenu.note.id);
+                setContextMenu(null);
+              }
+            }}
+          >
+            <Trash2 size={13} /> Eliminar
+          </button>
+        </div>
+      )}
+
+      {/* ── MODAL: CREATE NEW FOLDER ── */}
+      {showNewFolderModal && (
+        <div className="notes-modal-overlay animate-fadeIn" onClick={() => setShowNewFolderModal(false)}>
+          <div className="notes-modal w-96 flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-white">Nueva Carpeta Personal</h3>
+              <button onClick={() => setShowNewFolderModal(false)} className="text-white hover:text-red-400 border-none bg-transparent cursor-pointer"><X size={16} /></button>
+            </div>
+
+            <div className="flex flex-col gap-1.5 text-xs">
+              <span>Nombre de la carpeta:</span>
+              <input
+                type="text"
+                className="bg-[var(--bg-deep)] border border-[var(--border-subtle)] rounded-lg px-3 py-2 text-white outline-none focus:border-[var(--accent)]"
+                placeholder="Ej. Tesis / Proyectos"
+                value={newFolderName}
+                onChange={e => setNewFolderName(e.target.value)}
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5 text-xs">
+              <span>Descripción (opcional):</span>
+              <textarea
+                className="bg-[var(--bg-deep)] border border-[var(--border-subtle)] rounded-lg px-3 py-2 text-white outline-none focus:border-[var(--accent)] resize-none h-16"
+                placeholder="Breve reseña..."
+                value={newFolderDesc}
+                onChange={e => setNewFolderDesc(e.target.value)}
+              />
+            </div>
+
+            {/* Color Grid */}
+            <div className="flex flex-col gap-2 text-xs">
+              <span>Color identificador:</span>
+              <div className="flex flex-wrap gap-2.5">
+                {[
+                  '#E11D48', '#EF4444', '#F59E0B', '#10B981',
+                  '#06B6D4', '#3B82F6', '#6366F1', '#8B5CF6',
+                  '#EC4899', '#14B8A6', '#6B7280', '#0F172A'
+                ].map(c => (
+                  <button
+                    key={c}
+                    onClick={() => setNewFolderColor(c)}
+                    className={`folder-color-option border-none ${newFolderColor === c ? 'selected' : ''}`}
+                    style={{ backgroundColor: c }}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-2 text-xs">
+              <button className="btn-secondary px-4 py-2 border-none cursor-pointer font-bold" onClick={() => setShowNewFolderModal(false)}>Cancelar</button>
+              <button className="btn-primary px-4 py-2 border-none cursor-pointer font-bold" onClick={handleCreateFolderSubmit}>Crear Carpeta</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: DELETE NOTE CONFIRMATION ── */}
+      {showDeleteConfirm && (
+        <div className="notes-modal-overlay" onClick={() => setShowDeleteConfirm(null)}>
+          <div className="notes-modal w-80 text-center flex flex-col items-center gap-4" onClick={(e) => e.stopPropagation()}>
+            <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center text-red-500">
+              <AlertTriangle size={24} />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-white uppercase">¿Eliminar apunte?</h3>
+              <p className="text-[11px] text-[var(--text-secondary)] mt-1.5">Esta acción no se puede deshacer. Se borrarán todos los bloques del repositorio.</p>
+            </div>
+            <div className="flex gap-3 w-full text-xs mt-2">
+              <button className="flex-1 btn-secondary py-2 border-none cursor-pointer font-bold" onClick={() => setShowDeleteConfirm(null)}>Cancelar</button>
+              <button className="flex-1 bg-red-600 hover:bg-red-700 text-white rounded-lg py-2 font-bold border-none cursor-pointer" onClick={handleDeleteNoteConfirm}>Eliminar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: MOVE NOTE TO FOLDER ── */}
+      {showMoveFolderModal && (
+        <div className="notes-modal-overlay" onClick={() => setShowMoveFolderModal(null)}>
+          <div className="notes-modal w-80 flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-white">Mover a carpeta</h3>
+              <button onClick={() => setShowMoveFolderModal(null)} className="text-white hover:text-red-400 border-none bg-transparent cursor-pointer"><X size={16} /></button>
+            </div>
+
+            <div className="flex flex-col gap-1.5 max-h-60 overflow-y-auto notes-sidebar">
+              <button
+                className="w-full text-left px-3 py-2 text-xs hover:bg-[var(--bg-hover)] rounded-lg text-white flex items-center gap-2 border-none bg-transparent cursor-pointer"
+                onClick={() => handleMoveFolder(undefined)}
+              >
+                <FolderIcon size={14} className="text-gray-400" />
+                <span>Sin carpeta (Notas sueltas)</span>
+              </button>
+
+              {allFolders.filter(f => f.isManual).map(f => (
+                <button
+                  key={f.id}
+                  className="w-full text-left px-3 py-2 text-xs hover:bg-[var(--bg-hover)] rounded-lg text-white flex items-center gap-2 border-none bg-transparent cursor-pointer"
+                  onClick={() => handleMoveFolder(f.id)}
+                >
+                  <FolderIcon size={14} style={{ color: f.color }} />
+                  <span>{f.name}</span>
+                </button>
+              ))}
             </div>
           </div>
         </div>

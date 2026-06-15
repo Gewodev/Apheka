@@ -6,8 +6,8 @@ import {
   FolderOpen, RefreshCw, ExternalLink, Shield,
   Sliders, ListTodo, Music, GraduationCap, FileText, Sheet,
   PlayCircle, Calendar, Database, Upload, ArrowDownToLine, Search,
-  Wifi, CheckCircle, Image, Coffee, X,
-  Monitor, Activity, Sparkles
+  Wifi, CheckCircle, Image, Coffee, X, Trash2,
+  Monitor, Activity, Sparkles, LogOut
 } from 'lucide-react';
 import { useApp, fmtClock } from '../../store/AppContext';
 import { del } from 'idb-keyval';
@@ -117,11 +117,9 @@ export default function Ajustes() {
     settings, updateSettings, googleConnected, setGoogleConnected,
     setCalendarSyncEnabled, lastCalendarSync, setLastCalendarSync,
     triggerCalendarSync, importGoogleEvents,
-    triggerTasksSync, importGoogleTasks,
-    searchYouTubeMusic, importClassroomCourses, importClassroomAssignments,
-    exportNotesToGoogleDoc, exportStatsToGoogleSheets,
-    loadGoogleProfile, triggerDriveBackup,
-    events, tasks, notes, courses, clearAllMusicData, addNotification, deleteCompletedTasks
+    loadGoogleProfile,
+    events, tasks, notes, clearAllMusicData, addNotification, deleteCompletedTasks,
+    exportMusicLibrary, importMusicLibrary,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<SettingsTab>('perfil');
@@ -130,16 +128,16 @@ export default function Ajustes() {
   const [downloadPath, setDownloadPathState] = useState('');
   const [audioFormat, setAudioFormat] = useState<'mp3' | 'm4a'>('mp3');
   const [syncing, setSyncing] = useState(false);
-  const [backupUrl, setBackupUrl] = useState<string | null>(null);
-  const [docsUrl, setDocsUrl] = useState<string | null>(null);
-  const [sheetsUrl, setSheetsUrl] = useState<string | null>(null);
-  const [ytSearch, setYtSearch] = useState('');
-  const [ytResults, setYtResults] = useState<{ videoId: string; title: string; channel: string; thumbnail: string }[]>([]);
   const [googleProfile, setGoogleProfile] = useState<{ displayName: string; givenName: string; photoUrl: string; email: string } | null>(null);
   const [supabaseConnected, setSupabaseConnected] = useState(false);
+  const [supabaseUser, setSupabaseUser] = useState<{ email?: string } | null>(null);
   const [supabaseSyncing, setSupabaseSyncing] = useState(false);
   const [showGoogleModal, setShowGoogleModal] = useState(false);
   const [showClearAllMusic, setShowClearAllMusic] = useState(false);
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [authLoading, setAuthLoading] = useState(false);
   const [showDrawModal, setShowDrawModal] = useState(false);
   const [showBarDrawModal, setShowBarDrawModal] = useState(false);
   const [clearAllMusicText, setClearAllMusicText] = useState('');
@@ -233,7 +231,7 @@ export default function Ajustes() {
       setSupabaseConnected(true);
       addNotification('Supabase conectado exitosamente', 'success');
     }
-    getCurrentUser().then(user => setSupabaseConnected(!!user));
+    getCurrentUser().then(user => { setSupabaseConnected(!!user); if (user) setSupabaseUser(user as any); });
   }, [loadGoogleProfile, setGoogleConnected, updateSettings]);
 
   const handleGoogleSignIn = async () => {
@@ -268,10 +266,46 @@ export default function Ajustes() {
     }
   };
 
+  const handleEmailSignIn = async () => {
+    if (!authEmail || !authPassword) { addNotification('Completa email y contraseña', 'error'); return; }
+    setAuthLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email: authEmail, password: authPassword });
+      if (error) throw error;
+      setSupabaseConnected(true);
+      setSupabaseUser({ email: data.user?.email || undefined });
+      addNotification('Inicio de sesión exitoso', 'success');
+    } catch (e: any) {
+      addNotification(e?.message || 'Error al iniciar sesión', 'error');
+    }
+    setAuthLoading(false);
+  };
+
+  const handleEmailRegister = async () => {
+    if (!authEmail || !authPassword) { addNotification('Completa email y contraseña', 'error'); return; }
+    if (authPassword.length < 6) { addNotification('La contraseña debe tener al menos 6 caracteres', 'error'); return; }
+    setAuthLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signUp({ email: authEmail, password: authPassword });
+      if (error) throw error;
+      if (data.user?.identities?.length === 0) {
+        addNotification('Este email ya está registrado. Inicia sesión.', 'info');
+      } else {
+        addNotification('Registro exitoso. Revisa tu email para confirmar.', 'success');
+        setSupabaseConnected(true);
+        setSupabaseUser({ email: data.user?.email || undefined });
+      }
+    } catch (e: any) {
+      addNotification(e?.message || 'Error al registrarse', 'error');
+    }
+    setAuthLoading(false);
+  };
+
   const handleSupabaseSignOut = async () => {
     await signOutSupabase();
     setSupabaseConnected(false);
-    addNotification('Supabase desconectado exitosamente', 'success');
+    setSupabaseUser(null);
+    addNotification('Sesión cerrada exitosamente', 'success');
   };
 
   const handleSupabaseSync = async () => {
@@ -290,7 +324,7 @@ export default function Ajustes() {
 
   const handleGoogleSignOut = () => {
     signOut(); setGoogleConnected(false); setCalendarSyncEnabled(false); setLastCalendarSync(null);
-    setGoogleProfile(null); setDocsUrl(null); setSheetsUrl(null); setYtResults([]);
+    setGoogleProfile(null);
     addNotification('Google desconectado exitosamente', 'success');
   };
 
@@ -301,65 +335,6 @@ export default function Ajustes() {
       const count = await importGoogleEvents();
       addNotification(count > 0 ? `${count} eventos importados de Google Calendar` : 'Eventos sincronizados exitosamente', 'success');
     } catch { addNotification('Error de Sincronización con Google Calendar', 'error'); }
-    setSyncing(false);
-  };
-
-  const handleTasksSync = async () => {
-    setSyncing(true);
-    try {
-      await triggerTasksSync();
-      const count = await importGoogleTasks();
-      addNotification(count > 0 ? `${count} tareas importadas de Google Tasks` : 'Tareas sincronizadas exitosamente', 'success');
-    } catch { addNotification('Error al sincronizar con Google Tasks', 'error'); }
-    setSyncing(false);
-  };
-
-  const handleYouTubeSearch = async () => {
-    if (!ytSearch.trim()) { addNotification('Escribe un término de búsqueda', 'error'); return; }
-    setSyncing(true);
-    try {
-      const results = await searchYouTubeMusic(ytSearch);
-      setYtResults(results);
-      if (results.length === 0) addNotification('Sin resultados encontrados', 'error');
-      else addNotification(`${results.length} resultados encontrados`, 'success');
-    } catch { addNotification('Error al buscar en YouTube Music', 'error'); }
-    setSyncing(false);
-  };
-
-  const handleClassroomImport = async () => {
-    setSyncing(true);
-    try {
-      await importClassroomCourses();
-      const count = await importClassroomAssignments();
-      addNotification(count > 0 ? `${count} tareas importadas de Classroom` : 'Classroom sincronizado exitosamente', 'success');
-    } catch { addNotification('Error al importar de Google Classroom', 'error'); }
-    setSyncing(false);
-  };
-
-  const handleExportNotes = async () => {
-    setSyncing(true);
-    try {
-      const url = await exportNotesToGoogleDoc();
-      if (url) { setDocsUrl(url); addNotification('Notas exportadas a Google Docs', 'success'); }
-    } catch { addNotification('Error al exportar notas a Google Docs', 'error'); }
-    setSyncing(false);
-  };
-
-  const handleExportStats = async () => {
-    setSyncing(true);
-    try {
-      const url = await exportStatsToGoogleSheets();
-      if (url) { setSheetsUrl(url); addNotification('Estadísticas exportadas a Google Sheets', 'success'); }
-    } catch { addNotification('Error al exportar estadísticas a Google Sheets', 'error'); }
-    setSyncing(false);
-  };
-
-  const handleDriveBackup = async () => {
-    setSyncing(true);
-    try {
-      const url = await triggerDriveBackup();
-      if (url) { setBackupUrl(url); addNotification('Backup creado en Google Drive exitosamente', 'success'); }
-    } catch { addNotification('Error al crear backup en Google Drive', 'error'); }
     setSyncing(false);
   };
 
@@ -481,138 +456,114 @@ export default function Ajustes() {
 
                 {/* Connected Services */}
                 <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
-                  <h3 style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em', marginBottom: 16 }}>Servicios Vinculados</h3>
+                  <h3 style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em', marginBottom: 16 }}>Autenticación y Nube</h3>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {/* Google */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <svg viewBox="0 0 24 24" style={{ width: 18, height: 18 }}>
+                        <svg viewBox="0 0 24 24" style={{ width: 20, height: 20 }}>
                           <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/>
                           <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
                           <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
                           <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
                         </svg>
-                        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>Google</span>
+                        <div>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Google</span>
+                          <span style={{ fontSize: 10, color: googleConnected ? '#10B981' : 'var(--text-tertiary)', display: 'block', marginTop: 1 }}>{googleConnected ? (googleProfile?.email || 'Conectado') : 'Desconectado'}</span>
+                        </div>
                       </div>
-                      <button onClick={() => { if (googleConnected) { handleGoogleSignOut(); } else { setShowGoogleModal(true); } }} className={googleConnected ? 'btn-secondary' : 'btn-primary'} style={{ fontSize: 10, fontWeight: 600, padding: '0 12px', height: 28 }}>
+                      <button onClick={() => { if (googleConnected) { handleGoogleSignOut(); } else { setShowGoogleModal(true); } }}
+                        style={{ fontSize: 10, fontWeight: 600, padding: '0 14px', height: 30, borderRadius: 6, cursor: 'pointer', border: googleConnected ? '1px solid rgba(239,68,68,0.2)' : 'none', background: googleConnected ? 'rgba(239,68,68,0.08)' : '#4285F4', color: googleConnected ? '#EF4444' : '#fff', transition: 'all 150ms' }}>
                         {googleConnected ? 'Desconectar' : 'Conectar'}
                       </button>
                     </div>
-                    {/* Google Calendar */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <Calendar size={16} style={{ color: '#4285F4' }} />
-                        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>Calendar</span>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: 10, fontWeight: 500, color: googleConnected ? '#10B981' : 'var(--text-muted)' }}>{googleConnected ? 'Sincronizado' : 'Inactivo'}</span>
-                      </div>
-                    </div>
-                    {/* Google Tasks */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <ListTodo size={16} style={{ color: '#F59E0B' }} />
-                        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>Tasks</span>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: 10, fontWeight: 500, color: googleConnected ? '#10B981' : 'var(--text-muted)' }}>{googleConnected ? 'Vinculado' : 'Inactivo'}</span>
-                      </div>
-                    </div>
-                    {/* Google Classroom */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <GraduationCap size={16} style={{ color: '#8B5CF6' }} />
-                        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>Classroom</span>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: 10, fontWeight: 500, color: googleConnected ? '#10B981' : 'var(--text-muted)' }}>{googleConnected ? 'Disponible' : 'Inactivo'}</span>
-                      </div>
-                    </div>
-                    {/* YouTube Music */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <PlayCircle size={16} style={{ color: '#EF4444' }} />
-                        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>YouTube Music</span>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: 10, fontWeight: 500, color: googleConnected ? '#10B981' : 'var(--text-muted)' }}>{googleConnected ? 'Disponible' : 'Inactivo'}</span>
-                      </div>
-                    </div>
-                    {/* Google Drive */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <svg viewBox="0 0 24 24" style={{ width: 16, height: 16 }}><path fill="#FFD04B" d="M19 13h-6v6h6v-6z"/><path fill="#4285F4" d="M13 19h-6v-6h6v6z"/><path fill="#0F9D58" d="M7 13h6V7H7v6z"/><path fill="#DB4437" d="M19 7h-6v6h6V7z"/></svg>
-                        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>Drive</span>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: 10, fontWeight: 500, color: googleConnected ? '#10B981' : 'var(--text-muted)' }}>{googleConnected ? 'Vinculado' : 'Inactivo'}</span>
-                      </div>
-                    </div>
                     {/* Supabase */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <Database size={16} style={{ color: '#3DCF8E' }} />
-                        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>Supabase Cloud</span>
+                    {supabaseConnected ? (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          <Database size={18} style={{ color: '#3DCF8E' }} />
+                          <div>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Supabase Cloud</span>
+                            <span style={{ fontSize: 10, color: supabaseConnected ? '#10B981' : 'var(--text-tertiary)', display: 'block', marginTop: 1 }}>
+                              {supabaseConnected ? `Usuario: ${supabaseUser?.email || 'Conectado'}` : 'Sincronización en la nube'}
+                            </span>
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: 10, fontWeight: 600, color: supabaseConnected ? '#10B981' : 'var(--text-muted)' }}>{supabaseConnected ? 'Activo' : 'Inactivo'}</span>
+                          <div style={{ width: 8, height: 8, borderRadius: '50%', background: supabaseConnected ? '#10B981' : 'var(--text-muted)', boxShadow: supabaseConnected ? '0 0 8px rgba(16,185,129,0.5)' : 'none' }} />
+                        </div>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: 10, fontWeight: 500, color: supabaseConnected ? '#10B981' : 'var(--text-muted)' }}>{supabaseConnected ? 'Conectado' : 'Desconectado'}</span>
-                        <div style={{ width: 6, height: 6, borderRadius: '50%', background: supabaseConnected ? '#10B981' : 'var(--text-muted)', boxShadow: supabaseConnected ? '0 0 6px rgba(16,185,129,0.5)' : 'none' }} />
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '12px 14px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                          <Database size={16} style={{ color: '#3DCF8E' }} />
+                          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{authMode === 'login' ? 'Iniciar sesión' : 'Crear cuenta'}</span>
+                        </div>
+                        <input type="email" value={authEmail} onChange={e => setAuthEmail(e.target.value)} placeholder="Email" className="input-base" style={{ width: '100%', height: 36, fontSize: 12, padding: '0 10px' }} />
+                        <input type="password" value={authPassword} onChange={e => setAuthPassword(e.target.value)} placeholder="Contraseña" className="input-base" style={{ width: '100%', height: 36, fontSize: 12, padding: '0 10px' }} onKeyDown={e => { if (e.key === 'Enter') authMode === 'login' ? handleEmailSignIn() : handleEmailRegister(); }} />
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button onClick={authMode === 'login' ? handleEmailSignIn : handleEmailRegister} disabled={authLoading} style={{ flex: 1, height: 34, borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: 'none', background: '#3DCF8E', color: '#fff', opacity: authLoading ? 0.6 : 1, transition: 'all 150ms' }}>
+                            {authLoading ? '...' : authMode === 'login' ? 'Entrar' : 'Registrarse'}
+                          </button>
+                          <button onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setAuthEmail(''); setAuthPassword(''); }} style={{ fontSize: 10, color: 'var(--text-tertiary)', cursor: 'pointer', background: 'none', border: 'none', padding: '0 8px', textDecoration: 'underline', textUnderlineOffset: 2 }}>
+                            {authMode === 'login' ? 'Registrarse' : 'Volver'}
+                          </button>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ flex: 1, height: 1, background: 'var(--border-subtle)' }} />
+                          <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>o</span>
+                          <div style={{ flex: 1, height: 1, background: 'var(--border-subtle)' }} />
+                        </div>
+                        <button onClick={() => { setShowGoogleModal(true); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, height: 34, borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: 'none', background: '#4285F4', color: '#fff', transition: 'all 150ms' }}>
+                          <svg viewBox="0 0 24 24" style={{ width: 14, height: 14 }}>
+                            <path fill="#fff" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/>
+                            <path fill="#fff" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                            <path fill="#fff" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                            <path fill="#fff" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                          </svg>
+                          Google
+                        </button>
                       </div>
-                    </div>
+                    )}
                   </div>
                 </div>
 
-                {/* Logout */}
-                <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <button onClick={() => setShowClearAllMusic(true)}
-                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 8, fontSize: 12, fontWeight: 500, background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)', color: '#EF4444', cursor: 'pointer', transition: 'all 200ms' }}>
-                    <Music size={14} /> Borrar toda la música
-                  </button>
-
-                </div>
-
-                <div className="bento-card" style={{ padding: '24px', border: '1px solid rgba(239,68,68,0.2)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <h3 style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", marginBottom: 4 }}>Datos de Tareas</h3>
-                      <p style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 300 }}>Borra todas las tareas completadas. Las tareas antiguas (&gt;2 meses) se eliminan automáticamente al iniciar.</p>
+                {/* Danger Zone — Logout + Data Management */}
+                <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {(googleConnected || supabaseConnected) && (
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
+                      <button onClick={async () => {
+                        try {
+                          await signOutSupabase();
+                          setSupabaseConnected(false);
+                          setSupabaseUser(null);
+                          signOut();
+                          setGoogleConnected(false);
+                          setCalendarSyncEnabled(false);
+                          setLastCalendarSync(null);
+                          setGoogleProfile(null);
+                          addNotification('Sesión cerrada exitosamente', 'success');
+                        } catch { addNotification('Error al cerrar sesión', 'error'); }
+                      }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 8, fontSize: 12, fontWeight: 600, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#EF4444', cursor: 'pointer', transition: 'all 200ms' }}>
+                        <LogOut size={14} /> Cerrar Sesión
+                      </button>
                     </div>
+                  )}
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    <button onClick={() => setShowClearAllMusic(true)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 8, fontSize: 12, fontWeight: 500, background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)', color: '#EF4444', cursor: 'pointer', transition: 'all 200ms' }}>
+                      <Music size={14} /> Borrar toda la música
+                    </button>
                     <button onClick={() => {
                       const completedCount = tasks.filter(t => t.status === 'completado').length;
                       if (completedCount === 0) { addNotification('No hay tareas completadas para eliminar', 'info'); return; }
                       if (confirm(`¿Eliminar ${completedCount} tarea${completedCount !== 1 ? 's' : ''} completada${completedCount !== 1 ? 's' : ''}? Esta acción no se puede deshacer.`)) {
                         deleteCompletedTasks();
                       }
-                    }} style={{ padding: '0 20px', height: 38, borderRadius: 8, fontSize: 12, fontWeight: 500, background: '#EF4444', border: 'none', color: '#fff', cursor: 'pointer' }}>
-                      Borrar completadas
+                    }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 8, fontSize: 12, fontWeight: 500, background: '#EF4444', border: 'none', color: '#fff', cursor: 'pointer' }}>
+                      <Trash2 size={14} /> Borrar completadas
                     </button>
-                  </div>
-                </div>
-
-                {/* Floating Timer Customization */}
-                <div className="bento-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 12, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
-                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Timer Flotante</span>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)' }}>Color de fondo</span>
-                      <input type="color" value={settings.floatingBgColor || '#020203'} onChange={e => updateSettings({ floatingBgColor: e.target.value })}
-                        style={{ width: 32, height: 32, borderRadius: 6, border: '1px solid var(--border-default)', cursor: 'pointer', background: 'transparent', padding: 0 }} />
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)' }}>Estilo de reloj</span>
-                      <select value={settings.floatingClockType || 'led'} onChange={e => updateSettings({ floatingClockType: e.target.value as any })}
-                        style={{ padding: '6px 10px', borderRadius: 6, fontSize: 10, background: 'var(--bg-deep)', border: '1px solid var(--border-default)', color: 'var(--text-primary)', cursor: 'pointer', outline: 'none' }}>
-                        <option value="led">LED Digital</option>
-                        <option value="digital">Texto Simple</option>
-                      </select>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)' }}>Animación en pausa</span>
-                      <button onClick={() => updateSettings({ floatingShowAnimation: !settings.floatingShowAnimation })}
-                        style={{ padding: '6px 14px', borderRadius: 6, fontSize: 10, fontWeight: 600, cursor: 'pointer', border: 'none', background: settings.floatingShowAnimation ? 'var(--accent)' : 'var(--bg-deep)', color: settings.floatingShowAnimation ? '#fff' : 'var(--text-secondary)', transition: 'all 150ms' }}>
-                        {settings.floatingShowAnimation ? 'Activado' : 'Desactivado'}
-                      </button>
-                    </div>
                   </div>
                 </div>
               </section>
@@ -934,6 +885,37 @@ export default function Ajustes() {
                   </div>
                 </div>
 
+                {/* Vista de Portada Grande */}
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16, display: 'block' }}>
+                    Vista de Portada Grande
+                  </span>
+                  <span style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block', marginBottom: 12, lineHeight: 1.4 }}>
+                    Fondo de la pantalla completa al hacer clic en una portada
+                  </span>
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    {[
+                      { id: 'auto' as const, label: 'Desde portada', desc: 'Color extraído' },
+                      { id: 'black' as const, label: 'Negro', desc: 'Fondo oscuro neutro' },
+                      { id: 'gray' as const, label: 'Gris', desc: 'Gris medio neutro' },
+                      { id: 'theme' as const, label: 'Del tema', desc: 'Según acento/ fondo' },
+                    ].map(opt => {
+                      const active = (settings.coverBgMode ?? 'auto') === opt.id;
+                      return (
+                        <button key={opt.id} onClick={() => updateSettings({ coverBgMode: opt.id })} style={{
+                          flex: 1, padding: '12px 8px', borderRadius: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                          background: active ? 'var(--accent)' : 'var(--bg-deep)', border: '1px solid var(--border-default)',
+                          color: active ? '#fff' : 'var(--text-secondary)', fontSize: 11, fontWeight: 500, cursor: 'pointer',
+                          transition: 'all 200ms',
+                        }}>
+                          <span>{opt.label}</span>
+                          <span style={{ fontSize: 9, fontWeight: 300, opacity: 0.65 }}>{opt.desc}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 {/* Barra de Reproducción Personalizable */}
                 <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
                   <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16, display: 'block' }}>
@@ -1099,13 +1081,13 @@ export default function Ajustes() {
                               <div style={{
                                 width: '45%', height: '100%',
                                 borderRadius: 2,
-                                background: settings.playerBarTrackColor || 'var(--accent)',
-                                  backgroundImage: (() => {
-                                    const src = settings.playerBarTrackSource || 'url';
-                                    if (src === 'url') return settings.playerBarTrackUrl ? `url(${settings.playerBarTrackUrl})` : undefined;
-                                    const frames = (settings.playerBarTrackDraw || '').split('|').filter(Boolean);
-                                    return frames.length > 0 ? `url(${frames[0]})` : undefined;
-                                  })(),
+                                backgroundColor: settings.playerBarTrackColor || 'var(--accent)',
+                                backgroundImage: (() => {
+                                  const src = settings.playerBarTrackSource || 'url';
+                                  if (src === 'url') return settings.playerBarTrackUrl ? `url(${settings.playerBarTrackUrl})` : undefined;
+                                  const frames = (settings.playerBarTrackDraw || '').split('|').filter(Boolean);
+                                  return frames.length > 0 ? `url(${frames[0]})` : undefined;
+                                })(),
                                 backgroundSize: 'cover',
                                 backgroundPosition: 'center',
                                 backgroundRepeat: 'no-repeat',
@@ -1293,24 +1275,226 @@ export default function Ajustes() {
                     })}
                   </div>
                 </div>
+
+                {/* Floating Timer Customization */}
+                <div className="bento-card" style={{
+                  padding: 0, overflow: 'hidden',
+                  background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)',
+                  border: '1px solid var(--border-subtle)',
+                }}>
+                  <div style={{
+                    padding: '24px 24px 16px',
+                    display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20,
+                  }}>
+                    <div>
+                      <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Timer Flotante</span>
+                      <h3 style={{ fontSize: 16, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", margin: '4px 0 2px' }}>Ventana independiente</h3>
+                      <p style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 300, margin: 0 }}>Aparece al iniciar un enfoque desde el panel de estudio</p>
+                    </div>
+                    <div style={{
+                      width: 80, height: 44, borderRadius: 8,
+                      background: settings.floatingBgMode === 'app' ? '#0a0a0c' : (settings.floatingBgColor || '#020203'),
+                      border: '1px solid rgba(255,255,255,0.08)',
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, flexShrink: 0,
+                      fontFamily: "'Inter Tight', sans-serif", color: '#E11D48',
+                    }}>
+                      <span style={{ fontSize: 6, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)' }}>ENFOQUE</span>
+                      <span style={{
+                        fontSize: 13, fontWeight: 300, lineHeight: 1, letterSpacing: '0.04em',
+                        fontFamily: ({ led: "'Share Tech Mono', monospace", outfit: "'Outfit', sans-serif", 'dm-sans': "'DM Sans', sans-serif", playfair: "'Playfair Display', serif", space: "'Space Grotesk', sans-serif", jakarta: "'Plus Jakarta Sans', sans-serif", sora: "'Sora', sans-serif", inter: "'Inter', sans-serif" } as Record<string,string>)[settings.floatingFont] || "'Share Tech Mono', monospace",
+                      }}>25:00</span>
+                    </div>
+                  </div>
+
+                  <div style={{ height: 1, background: 'var(--border-subtle)', margin: '0 24px' }} />
+
+                  <div style={{ padding: '16px 24px 24px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+                    {/* Background mode */}
+                    <div>
+                      <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)' }}>Fondo</span>
+                      <span style={{ fontSize: 9, fontWeight: 400, color: 'var(--text-tertiary)', marginLeft: 8 }}>Color de la app o personalizado</span>
+                      <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                        {[
+                          { value: 'app', label: 'App' },
+                          { value: 'custom', label: 'Personalizado' },
+                        ].map(o => (
+                          <button key={o.value} onClick={() => updateSettings({ floatingBgMode: o.value as any })}
+                            style={{
+                              padding: '7px 16px', borderRadius: 8, fontSize: 10, fontWeight: 500,
+                              border: (settings.floatingBgMode || 'custom') === o.value ? '1px solid var(--accent)' : '1px solid var(--border-default)',
+                              background: (settings.floatingBgMode || 'custom') === o.value ? 'rgba(225,29,72,0.08)' : 'var(--bg-deep)',
+                              color: (settings.floatingBgMode || 'custom') === o.value ? 'var(--accent)' : 'var(--text-secondary)',
+                              cursor: 'pointer', transition: 'all 150ms',
+                            }}>{o.label}</button>
+                        ))}
+                      </div>
+                      {settings.floatingBgMode === 'custom' && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
+                          <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Color</span>
+                          <span style={{ fontSize: 9, fontFamily: 'monospace', color: 'var(--text-tertiary)' }}>{settings.floatingBgColor || '#020203'}</span>
+                          <label style={{ position: 'relative', width: 28, height: 28, borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border-default)', cursor: 'pointer' }}>
+                            <div style={{ position: 'absolute', inset: 0, background: settings.floatingBgColor || '#020203' }} />
+                            <input type="color" value={settings.floatingBgColor || '#020203'} onChange={e => updateSettings({ floatingBgColor: e.target.value })}
+                              style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%', height: '100%' }} />
+                          </label>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Typography grid */}
+                    <div>
+                      <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)' }}>Tipografía</span>
+                      <span style={{ fontSize: 9, fontWeight: 400, color: 'var(--text-tertiary)', marginLeft: 8 }}>Elige el estilo del reloj</span>
+                      <div style={{
+                        display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginTop: 8,
+                      }}>
+                        {[
+                          { value: 'led', label: 'LED', preview: '88:88', font: "'Share Tech Mono', monospace" },
+                          { value: 'outfit', label: 'Outfit', preview: '88:88', font: "'Outfit', sans-serif" },
+                          { value: 'dm-sans', label: 'DM Sans', preview: '88:88', font: "'DM Sans', sans-serif" },
+                          { value: 'playfair', label: 'Playfair', preview: '88:88', font: "'Playfair Display', serif" },
+                          { value: 'space', label: 'Space G.', preview: '88:88', font: "'Space Grotesk', sans-serif" },
+                          { value: 'jakarta', label: 'Jakarta', preview: '88:88', font: "'Plus Jakarta Sans', sans-serif" },
+                          { value: 'sora', label: 'Sora', preview: '88:88', font: "'Sora', sans-serif" },
+                          { value: 'inter', label: 'Inter', preview: '88:88', font: "'Inter', sans-serif" },
+                        ].map(opt => (
+                          <button key={opt.value} onClick={() => updateSettings({ floatingFont: opt.value })}
+                            style={{
+                              padding: '10px 6px', borderRadius: 8, fontSize: 10,
+                              border: settings.floatingFont === opt.value ? '1px solid var(--accent)' : '1px solid var(--border-default)',
+                              background: settings.floatingFont === opt.value ? 'rgba(225,29,72,0.08)' : 'var(--bg-deep)',
+                              color: settings.floatingFont === opt.value ? 'var(--accent)' : 'var(--text-secondary)',
+                              cursor: 'pointer', transition: 'all 150ms',
+                              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                            }}>
+                            <span style={{ fontFamily: opt.font, fontSize: 16, fontWeight: 400, lineHeight: 1, color: 'currentColor' }}>{opt.preview}</span>
+                            <span style={{ fontSize: 8, fontWeight: 500, opacity: 0.7, letterSpacing: '0.02em' }}>{opt.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Hide time + animation */}
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                          <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)' }}>Ocultar tiempo en enfoque</span>
+                          <span style={{ fontSize: 9, fontWeight: 400, color: 'var(--text-tertiary)' }}>Al activarse, el reloj se reemplaza por una animación</span>
+                        </div>
+                        <button onClick={() => {
+                          if (!settings.floatingHideInFocus) {
+                            updateSettings({ floatingHideInFocus: true, floatingAnimationType: settings.floatingAnimationType || 'plant' });
+                          } else {
+                            updateSettings({ floatingHideInFocus: false });
+                          }
+                        }}
+                          style={{
+                            width: 40, height: 22, borderRadius: 11, border: 'none', cursor: 'pointer', position: 'relative',
+                            background: settings.floatingHideInFocus ? 'var(--accent)' : 'var(--bg-deep)',
+                            transition: 'background 200ms', boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.2)',
+                          }}>
+                          <div style={{
+                            width: 16, height: 16, borderRadius: '50%', background: '#fff',
+                            position: 'absolute', top: 3, transition: 'left 200ms',
+                            left: settings.floatingHideInFocus ? 21 : 3,
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                          }} />
+                        </button>
+                      </div>
+                      {settings.floatingHideInFocus && (
+                        <div style={{ marginTop: 10 }}>
+                          <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-primary)', display: 'block', marginBottom: 8 }}>
+                            Tipo de animación
+                            <span style={{ fontSize: 8, fontWeight: 400, color: 'var(--text-tertiary)', marginLeft: 6 }}>Solo visible en Pomodoro</span>
+                          </span>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
+                            {[
+                              { value: 'plant', label: 'Planta', desc: 'Crece lentamente' },
+                              { value: 'books', label: 'Libros', desc: 'Se apilan solos' },
+                              { value: 'stars', label: 'Estrellas', desc: 'Brillan suavemente' },
+                              { value: 'waves', label: 'Ondas', desc: 'Fluyen en calma' },
+                              { value: 'leaves', label: 'Hojas', desc: 'Caen al viento' },
+                              { value: 'breathing', label: 'Respiración', desc: 'Círculo que inspira' },
+                            ].map(a => (
+                              <button key={a.value} onClick={() => updateSettings({ floatingAnimationType: a.value })}
+                                style={{
+                                  padding: '10px 6px', borderRadius: 8, fontSize: 10,
+                                  border: (settings.floatingAnimationType || 'plant') === a.value ? '1px solid var(--accent)' : '1px solid var(--border-default)',
+                                  background: (settings.floatingAnimationType || 'plant') === a.value ? 'rgba(225,29,72,0.08)' : 'var(--bg-deep)',
+                                  color: (settings.floatingAnimationType || 'plant') === a.value ? 'var(--accent)' : 'var(--text-secondary)',
+                                  cursor: 'pointer', transition: 'all 150ms',
+                                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+                                }}>
+                                <span style={{ fontSize: 14, lineHeight: 1, opacity: 0.7 }}>
+                                  {a.value === 'plant' ? '🌱' : a.value === 'books' ? '📚' : a.value === 'stars' ? '✨' : a.value === 'waves' ? '〰️' : a.value === 'leaves' ? '🍃' : '○'}
+                                </span>
+                                <span style={{ fontSize: 10, fontWeight: 600 }}>{a.label}</span>
+                                <span style={{ fontSize: 7, fontWeight: 400, opacity: 0.6 }}>{a.desc}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </section>
             )}
-
-
-
-            {/* â•â•â•â•â•â•â•â•â•â•â• Notificaciones â•â•â•â•â•â•â•â•â•â•â• */}
             {activeTab === 'Notificaciones' && (
               <section style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
                 <div>
-                  <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>Sonidos y Alertas de Sistema</h2>
-                  <p style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>Controla el comportamiento acústico y Notificaciones del entorno</p>
+                  <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4, fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em' }}>Sonidos y Alertas de Sistema</h2>
+                  <p style={{ fontSize: 13, color: 'var(--text-tertiary)', lineHeight: 1.5 }}>Controla el comportamiento acústico y notificaciones del entorno de estudio</p>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {/* General Toggles */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <Toggle checked={settings.notifications} onChange={v => updateSettings({ notifications: v })}
-                    label="Alertas de Temporizador Pomodoro" desc="Emitir notificación visual y acústica al finalizar ciclos de estudio o descansos programados." />
+                    label="Notificaciones Visuales del Temporizador" desc="Mostrar notificación nativa al finalizar ciclos de estudio o descansos programados." />
                   <Toggle checked={settings.soundEffects} onChange={v => updateSettings({ soundEffects: v })}
-                    label="Efectos de Sonido Hápticos" desc="Reproducir sutiles retroalimentaciones acústicas al interactuar con botones, pestañas y modales del sistema." />
+                    label="Sonidos de Interfaz" desc="Reproducir retroalimentación acústica al interactuar con botones, pestañas, modales y arrastrar elementos." />
+                </div>
+
+                {/* Event-specific settings */}
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 14, display: 'block' }}>Eventos de Temporizador</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {[
+                      { id: 'pomodoro', label: 'Fin de Pomodoro', desc: 'Al completar un ciclo de concentración', color: '#E11D48' },
+                      { id: 'break', label: 'Fin de Descanso', desc: 'Al terminar un período de descanso', color: '#10B981' },
+                      { id: 'task', label: 'Tareas por Vencer', desc: 'Recordatorio de tareas próximas a vencer', color: '#F59E0B' },
+                    ].map(ev => {
+                      const key = `event_${ev.id}` as keyof typeof settings;
+                      const enabled = settings[key] !== false;
+                      return (
+                        <div key={ev.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div style={{ width: 8, height: 8, borderRadius: '50%', background: ev.color, flexShrink: 0, boxShadow: `0 0 6px ${ev.color}50` }} />
+                            <div>
+                              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{ev.label}</span>
+                              <span style={{ fontSize: 9, color: 'var(--text-tertiary)', display: 'block', marginTop: 1 }}>{ev.desc}</span>
+                            </div>
+                          </div>
+                          <label style={{ position: 'relative', width: 36, height: 20, borderRadius: 10, background: enabled ? ev.color : 'var(--bg-surface)', border: '1px solid var(--border-default)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', padding: 2, transition: 'all 200ms' }}>
+                            <div style={{ width: 14, height: 14, borderRadius: '50%', background: '#fff', transform: enabled ? 'translateX(16px)' : 'translateX(0)', transition: 'all 200ms', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                            <input type="checkbox" checked={enabled} onChange={e => updateSettings({ [key]: e.target.checked } as any)} style={{ display: 'none' }} />
+                          </label>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Test notification */}
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  <button onClick={() => { import('../../lib/notifications').then(m => m.sendNativeNotification('🔔 OWA Studio', 'Notificaciones funcionando correctamente')); }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'var(--accent)', border: 'none', color: '#fff', transition: 'all 200ms' }}>
+                    <Bell size={14} /> Probar Notificación
+                  </button>
+                  <button onClick={() => { addNotification('✅ Notificación de prueba enviada', 'success'); }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)', transition: 'all 200ms' }}>
+                    <Bell size={14} /> Probar Toast
+                  </button>
                 </div>
               </section>
             )}
@@ -1426,6 +1610,46 @@ export default function Ajustes() {
                     </button>
                   </div>
                 </div>
+
+                {/* Music Backup */}
+                <div className="bento-card" style={{ padding: '20px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                  <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Music size={14} style={{ color: 'var(--accent)' }} /> Respaldo de Música
+                  </h3>
+                  <p style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.5, marginBottom: 14 }}>
+                    Exporta toda tu biblioteca de música (metadatos + archivos de audio) a una carpeta.
+                    Luego puedes importarla desde esa misma carpeta para restaurarla.
+                  </p>
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    <button onClick={async () => {
+                      try {
+                        const selected = await open({ directory: true, title: 'Seleccionar carpeta para exportar música' });
+                        if (!selected) return;
+                        const count = await exportMusicLibrary(selected);
+                        addNotification(`Biblioteca exportada: ${count} archivos copiados`, 'success');
+                      } catch (e) {
+                        addNotification('Error al exportar música', 'error');
+                        console.error(e);
+                      }
+                    }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.15)', color: '#3B82F6' }}>
+                      <Upload size={14} /> Exportar biblioteca
+                    </button>
+                    <button onClick={async () => {
+                      try {
+                        const selected = await open({ directory: true, title: 'Seleccionar carpeta para importar música' });
+                        if (!selected) return;
+                        const count = await importMusicLibrary(selected);
+                        addNotification(`Biblioteca importada: ${count} canciones restauradas`, 'success');
+                      } catch (e) {
+                        addNotification('Error al importar música', 'error');
+                        console.error(e);
+                      }
+                    }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.15)', color: '#10B981' }}>
+                      <Download size={14} /> Importar biblioteca
+                    </button>
+                  </div>
+                </div>
+
               </section>
             )}
 
@@ -1464,14 +1688,6 @@ export default function Ajustes() {
                   </div>
                   <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#10B981', marginLeft: 'auto', boxShadow: '0 0 6px rgba(16,185,129,0.5)' }} />
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  <button onClick={() => { handleTasksSync(); }} style={{ padding: '8px', borderRadius: 8, fontSize: 10, fontWeight: 600, cursor: 'pointer', border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}>
-                    Sincronizar Tasks
-                  </button>
-                  <button onClick={() => { handleClassroomImport(); }} style={{ padding: '8px', borderRadius: 8, fontSize: 10, fontWeight: 600, cursor: 'pointer', border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}>
-                    Sincronizar Classroom
-                  </button>
-                </div>
                 <button onClick={handleGoogleSignOut} style={{ width: '100%', padding: '10px', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: '1px solid rgba(239,68,68,0.2)', background: 'rgba(239,68,68,0.06)', color: '#EF4444' }}>
                   Desconectar Google
                 </button>
@@ -1479,13 +1695,8 @@ export default function Ajustes() {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <p style={{ fontSize: 13, color: 'var(--text-tertiary)', lineHeight: 1.5 }}>
-                  Conecta tu cuenta de Google para sincronizar tareas, calendario, Classroom y acceder a Google Drive desde OWA Studio.
+                  Conecta tu cuenta de Google para usar tu identidad en OWA Studio.
                 </p>
-                <div style={{ display: 'flex', gap: 10 }}>
-                  {['Calendar', 'Tasks', 'Classroom', 'Drive', 'YouTube'].map(s => (
-                    <div key={s} style={{ flex: 1, padding: '6px 0', borderRadius: 6, background: 'var(--bg-deep)', textAlign: 'center', fontSize: 8, fontWeight: 600, color: 'var(--text-muted)' }}>{s}</div>
-                  ))}
-                </div>
                 <button onClick={handleGoogleSignIn} style={{ width: '100%', padding: '12px', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer', border: 'none', background: '#4285F4', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                   <svg viewBox="0 0 24 24" style={{ width: 18, height: 18 }}><path fill="#fff" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/></svg>
                   Iniciar sesión con Google

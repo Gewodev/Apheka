@@ -19,6 +19,7 @@ import CursosHub from './components/views/CursosHub';
 import OAuthCallback from './components/OAuthCallback';
 import SupabaseCallback from './components/SupabaseCallback';
 import GlobalPlayer from './components/GlobalPlayer';
+import NowPlayingView from './components/NowPlayingView';
 import ReactPlayer from 'react-player';
 const Player = ReactPlayer as any;
 
@@ -29,7 +30,7 @@ interface AppContentProps {
 }
 
 function AppContent() {
-  const { settings, courses, navigateTo, setNavigateTo, importState, updateSettings, toastMessage, deleteOldCompletedTasks, youtubeVideoUrl, isPlayingMusic, musicVolume, musicProgress, musicDuration, setMusicProgress, setIsPlayingMusic, playTrack, musicQueue, setMusicQueue, shuffleMode, repeatMode, tracks, currentTrackId, setRepeatMode } = useApp();
+  const { settings, courses, navigateTo, setNavigateTo, importState, updateSettings, toastMessage, deleteOldCompletedTasks, youtubeVideoUrl, isPlayingMusic, musicVolume, musicProgress, musicDuration, setMusicProgress, setIsPlayingMusic, playTrack, musicQueue, setMusicQueue, shuffleMode, repeatMode, tracks, currentTrackId, setRepeatMode, coverModalTrackId } = useApp();
   const [activeView, setActiveView] = useState<ViewId>('inicio');
 
   // Auto-clean completed tasks older than 2 months on startup
@@ -225,7 +226,7 @@ function AppContent() {
 
   return (
     <div className="app-layout">
-      <aside className={`sidebar ${isCollapsed ? 'collapsed' : ''}`}>
+      <aside className={`sidebar ${isCollapsed ? 'collapsed' : ''}${coverModalTrackId ? ' cover-tinted' : ''}`}>
 
         {/* ─── Logo / Home Anchor (click to toggle) ─── */}
         <div className="sidebar-logo" onClick={() => setIsCollapsed(!isCollapsed)} style={{ cursor: 'pointer' }}>
@@ -352,6 +353,7 @@ function AppContent() {
           />
         </div>}
         <GlobalPlayer sidebarCollapsed={isCollapsed} />
+        <NowPlayingView sidebarCollapsed={isCollapsed} activeView={activeView} />
       </main>
 
       {importState.active && (
@@ -458,10 +460,10 @@ function AppContent() {
                     width: 6,
                     height: 6,
                     borderRadius: '50%',
-                    background: importState.phase === 'loading_file' ? 'var(--accent)' : (['extracting_metadata', 'validating_audio', 'finished'].includes(importState.phase) ? 'var(--accent)' : 'transparent'),
+                    background: importState.phase === 'loading_file' ? 'var(--accent)' : (['extracting_metadata', 'validating_audio', 'saving_to_db', 'finished'].includes(importState.phase) ? 'var(--accent)' : 'transparent'),
                     boxShadow: importState.phase === 'loading_file' ? '0 0 8px var(--accent)' : 'none'
                   }} />
-                  <span style={{ textDecoration: (['extracting_metadata', 'validating_audio', 'finished'].includes(importState.phase)) ? 'line-through' : 'none', opacity: (['extracting_metadata', 'validating_audio', 'finished'].includes(importState.phase)) ? 0.5 : 1 }}>
+                  <span style={{ textDecoration: (['extracting_metadata', 'validating_audio', 'saving_to_db', 'finished'].includes(importState.phase)) ? 'line-through' : 'none', opacity: (['extracting_metadata', 'validating_audio', 'saving_to_db', 'finished'].includes(importState.phase)) ? 0.5 : 1 }}>
                     Lectura e indexación en disco
                   </span>
                 </div>
@@ -471,10 +473,10 @@ function AppContent() {
                     width: 6,
                     height: 6,
                     borderRadius: '50%',
-                    background: importState.phase === 'extracting_metadata' ? 'var(--accent)' : (['validating_audio', 'finished'].includes(importState.phase) ? 'var(--accent)' : 'transparent'),
+                    background: importState.phase === 'extracting_metadata' ? 'var(--accent)' : (['validating_audio', 'saving_to_db', 'finished'].includes(importState.phase) ? 'var(--accent)' : 'transparent'),
                     boxShadow: importState.phase === 'extracting_metadata' ? '0 0 8px var(--accent)' : 'none'
                   }} />
-                  <span style={{ textDecoration: (['validating_audio', 'finished'].includes(importState.phase)) ? 'line-through' : 'none', opacity: (['validating_audio', 'finished'].includes(importState.phase)) ? 0.5 : 1 }}>
+                  <span style={{ textDecoration: (['validating_audio', 'saving_to_db', 'finished'].includes(importState.phase)) ? 'line-through' : 'none', opacity: (['validating_audio', 'saving_to_db', 'finished'].includes(importState.phase)) ? 0.5 : 1 }}>
                     Extracción de metadatos ID3 (Título, Artista, Portada)
                   </span>
                 </div>
@@ -484,11 +486,24 @@ function AppContent() {
                     width: 6,
                     height: 6,
                     borderRadius: '50%',
-                    background: importState.phase === 'validating_audio' ? 'var(--accent)' : (importState.phase === 'finished' ? 'var(--accent)' : 'transparent'),
+                    background: importState.phase === 'validating_audio' ? 'var(--accent)' : (['saving_to_db', 'finished'].includes(importState.phase) ? 'var(--accent)' : 'transparent'),
                     boxShadow: importState.phase === 'validating_audio' ? '0 0 8px var(--accent)' : 'none'
                   }} />
-                  <span style={{ textDecoration: importState.phase === 'finished' ? 'line-through' : 'none', opacity: importState.phase === 'finished' ? 0.5 : 1 }}>
+                  <span style={{ textDecoration: (['saving_to_db', 'finished'].includes(importState.phase)) ? 'line-through' : 'none', opacity: (['saving_to_db', 'finished'].includes(importState.phase)) ? 0.5 : 1 }}>
                     Validación de reproducción y duración de audio
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: importState.phase === 'saving_to_db' ? 'var(--accent)' : (importState.phase === 'finished' ? 'var(--accent)' : 'var(--text-secondary)') }}>
+                  <div style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: '50%',
+                    background: importState.phase === 'saving_to_db' ? 'var(--accent)' : (importState.phase === 'finished' ? 'var(--accent)' : 'transparent'),
+                    boxShadow: importState.phase === 'saving_to_db' ? '0 0 8px var(--accent)' : 'none'
+                  }} />
+                  <span style={{ textDecoration: importState.phase === 'finished' ? 'line-through' : 'none', opacity: importState.phase === 'finished' ? 0.5 : 1 }}>
+                    Guardando en base de datos local
                   </span>
                 </div>
               </div>

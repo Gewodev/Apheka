@@ -17,9 +17,18 @@ import { useApp, Task, fmtClock } from '../../store/AppContext';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, isToday, addMonths, subMonths, addWeeks, subWeeks } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { isSignedIn, signIn, signOut, onAuthChange } from '../../lib/google';
-import { importGoogleTasks } from '../../lib/google/tasks';
 import NotificationBell from '../ui/NotificationBell';
-import { importClassroomCourses, importClassroomAssignments } from '../../lib/google/classroom';
+import {
+  DndContext, DragOverlay, closestCenter,
+  PointerSensor, useSensor, useSensors,
+  useDraggable, useDroppable
+} from '@dnd-kit/core';
+import {
+  SortableContext, useSortable, arrayMove,
+  verticalListSortingStrategy, rectSortingStrategy
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { restrictToParentElement } from '@dnd-kit/modifiers';
 
 const s = {
   flex: (v: number) => ({ flex: v }),
@@ -70,16 +79,28 @@ function getFileIcon(type: string, size = 14) {
   }
 }
 
-function polarToCartesian(cx: number, cy: number, r: number, deg: number) {
-  const rad = (deg - 90) * Math.PI / 180;
-  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+
+
+function SortableTaskRow({ task, children }: { task: Task; children: (dragProps: { attributes: any; listeners: any; setNodeRef: any; style: any; isDragging: boolean }) => React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
+  const style = { transform: CSS.Translate.toString(transform), transition, zIndex: isDragging ? 10 : 'auto' };
+  return <div ref={setNodeRef} style={style}>{children({ attributes, listeners, setNodeRef, style, isDragging })}</div>;
 }
 
-function describeArc(cx: number, cy: number, r: number, startDeg: number, endDeg: number) {
-  const s = polarToCartesian(cx, cy, r, endDeg);
-  const e = polarToCartesian(cx, cy, r, startDeg);
-  const large = endDeg - startDeg > 180 ? 1 : 0;
-  return `M ${s.x} ${s.y} A ${r} ${r} 0 ${large} 0 ${e.x} ${e.y}`;
+function DraggableCalendarTask({ id, children }: { id: string; children: (props: { attributes: any; listeners: any; setNodeRef: any; isDragging: boolean; transform: any }) => React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, isDragging, transform } = useDraggable({ id });
+  return <>{children({ attributes, listeners, setNodeRef, isDragging, transform })}</>;
+}
+
+function DroppableCalendarDay({ id, children }: { id: string; children: (props: { setNodeRef: any; isOver: boolean }) => React.ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({ id });
+  return <>{children({ setNodeRef, isOver })}</>;
+}
+
+function SortableCalendarTask({ task, children }: { task: Task; children: (dragProps: { attributes: any; listeners: any; setNodeRef: any; style: any; isDragging: boolean }) => React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
+  const style = { transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 10 : 'auto' };
+  return <div ref={setNodeRef} style={style}>{children({ attributes, listeners, setNodeRef, style, isDragging })}</div>;
 }
 
 export default function Tareas() {
@@ -94,7 +115,8 @@ export default function Tareas() {
   const [viewMode, setViewMode] = useState<'list' | 'board' | 'calendar'>('list');
   const [sortBy, setSortBy] = useState<'fecha' | 'curso'>('fecha');
   const [calendarDate, setCalendarDate] = useState(new Date());
-  const [calendarSelectedDay, setCalendarSelectedDay] = useState<Date>(new Date());
+  const [calendarSelectedDay, setCalendarSelectedDay] = useState<Date>(new Date(0));
+  const [includeTime, setIncludeTime] = useState(false);
   const [calendarSubMode, setCalendarSubMode] = useState<'semana' | 'mes'>('mes');
   const [isDetailExpanded, setIsDetailExpanded] = useState(false);
   const [activePreviewUrl, setActivePreviewUrl] = useState<string | null>(null);
@@ -112,6 +134,30 @@ export default function Tareas() {
   const [googleConnected, setGoogleConnected] = useState(isSignedIn());
   const [syncing, setSyncing] = useState<'classroom' | 'tasks' | null>(null);
   const [subtasksCollapsed, setSubtasksCollapsed] = useState(false);
+
+  function donutGradient(segments: { value: number; color: string }[], gapDeg = 2): string {
+    const total = segments.reduce((a, s) => a + s.value, 0);
+    if (total === 0) return 'conic-gradient(from -90deg, var(--border-soft) 0deg 360deg)';
+    const active = segments.filter(s => s.value > 0);
+    const N = active.length;
+    if (N === 0) return 'conic-gradient(from -90deg, var(--border-soft) 0deg 360deg)';
+    if (N === 1) return `conic-gradient(from -90deg, ${active[0].color} 0deg 360deg)`;
+    const available = 360 - N * gapDeg;
+    let currentDeg = gapDeg / 2;
+    const stops = [`transparent 0deg ${currentDeg}deg`];
+    for (let i = 0; i < N; i++) {
+      const segDeg = (active[i].value / total) * available;
+      stops.push(`${active[i].color} ${currentDeg}deg ${currentDeg + segDeg}deg`);
+      currentDeg += segDeg;
+      if (i < N - 1) {
+        stops.push(`transparent ${currentDeg}deg ${currentDeg + gapDeg}deg`);
+        currentDeg += gapDeg;
+      } else {
+        stops.push(`transparent ${currentDeg}deg 360deg`);
+      }
+    }
+    return `conic-gradient(from -90deg, ${stops.join(', ')})`;
+  }
   const [previewModalUrl, setPreviewModalUrl] = useState<string | null>(null);
   const [longPressedTaskId, setLongPressedTaskId] = useState<string | null>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -133,7 +179,9 @@ export default function Tareas() {
     if (showNewModal && newTaskPrefillDate) {
       requestAnimationFrame(() => {
         const input = document.getElementById('new-task-duedate') as HTMLInputElement;
-        if (input) { input.value = newTaskPrefillDate; }
+        if (input) { input.value = newTaskPrefillDate.slice(0, 10); }
+        const timeInput = document.getElementById('new-task-duetime') as HTMLInputElement;
+        if (timeInput) { timeInput.value = newTaskPrefillDate.length > 10 ? newTaskPrefillDate.slice(11, 16) : ''; }
       });
       setNewTaskPrefillDate(null);
     }
@@ -162,6 +210,41 @@ export default function Tareas() {
       return (a.course || '').localeCompare(b.course || '');
     });
   }, [tasks, courseFilter, searchQuery, sortBy]);
+
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const [taskOrder, setTaskOrder] = useState<Task[] | null>(null);
+  const [calendarDragTaskId, setCalendarDragTaskId] = useState<string | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+  );
+
+  const handleDragEndList = useCallback((event: any) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const currentTasks = taskOrder || filteredTasks;
+      const oldIndex = currentTasks.findIndex(t => t.id === active.id);
+      const newIndex = currentTasks.findIndex(t => t.id === over.id);
+      const newOrder = arrayMove([...currentTasks], oldIndex, newIndex);
+      setTaskOrder(newOrder);
+    }
+    setActiveDragId(null);
+  }, [filteredTasks, taskOrder]);
+
+  const handleDragEndCalendar = useCallback((event: any) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const targetDateStr = over.id.toString().replace('day-', '');
+      if (targetDateStr) {
+        updateTask(active.id.toString(), { dueDate: targetDateStr });
+      }
+    }
+    setCalendarDragTaskId(null);
+  }, [updateTask]);
+
+  useEffect(() => {
+    setTaskOrder(null);
+  }, [courseFilter, searchQuery, sortBy]);
 
   const selectedTask = tasks.find(t => t.id === selectedTaskId);
 
@@ -230,13 +313,18 @@ export default function Tareas() {
     const courseSelect = document.getElementById('new-task-course') as HTMLSelectElement;
     const prioritySelect = document.getElementById('new-task-priority') as HTMLSelectElement;
     const dueDateInput = document.getElementById('new-task-duedate') as HTMLInputElement;
+    const dueTimeInput = document.getElementById('new-task-duetime') as HTMLInputElement;
     const estimatedInput = document.getElementById('new-task-estimated') as HTMLInputElement;
     if (!title) { addNotification('Ingresa un título', 'error'); return; }
     const courseName = courseSelect?.value || 'Sin curso';
     const course = courses.find(c => c.name === courseName);
-    addTask({ title, course: courseName, courseColor: course?.color || (courseName === 'Sin curso' ? 'var(--text-muted)' : '#E11D48'), priority: (prioritySelect?.value as any) || 'none', urgent: (prioritySelect?.value as any) === 'high', important: (prioritySelect?.value as any) === 'high', dueDate: dueDateInput?.value || undefined, estimatedMinutes: estimatedInput?.value ? parseInt(estimatedInput.value) : 60 });
+    let dueDate: string | undefined = undefined;
+    if (dueDateInput?.value) {
+      dueDate = includeTime && dueTimeInput?.value ? `${dueDateInput.value}T${dueTimeInput.value}` : dueDateInput.value;
+    }
+    addTask({ title, course: courseName, courseColor: course?.color || (courseName === 'Sin curso' ? 'var(--text-muted)' : '#E11D48'), priority: (prioritySelect?.value as any) || 'none', urgent: (prioritySelect?.value as any) === 'high', important: (prioritySelect?.value as any) === 'high', dueDate, estimatedMinutes: estimatedInput?.value ? parseInt(estimatedInput.value) : 60 });
     setShowNewModal(false);
-  }, [addTask, courses]);
+  }, [addTask, courses, includeTime]);
 
   const handleAddSubtask = useCallback(() => { if (!selectedTask || !newSubtaskTitle.trim()) return; addSubTask(selectedTask.id, newSubtaskTitle.trim()); setNewSubtaskTitle(''); }, [selectedTask, newSubtaskTitle, addSubTask]);
 
@@ -283,57 +371,6 @@ export default function Tareas() {
     addTaskFile(selectedTask.id, { name, path, type: detectedType, size: newMaterialFile?.size });
     setNewMaterialName(''); setNewMaterialPath(''); setNewMaterialFile(null); setShowAddMaterial(false); setAddMaterialMode('file');
   }, [selectedTask, newMaterialName, newMaterialPath, newMaterialFile, addMaterialMode, addTaskFile, fetchPageTitle]);
-
-  const handleSyncClassroom = useCallback(async () => {
-    if (!googleConnected) { const ok = await signIn(); if (!ok) { addNotification('No se pudo conectar con Google', 'error'); return; } setGoogleConnected(true); }
-    setSyncing('classroom');
-    try {
-      const { courses: clsCourses } = await importClassroomCourses();
-      let imported = 0;
-      for (const course of clsCourses) {
-        const { assignments } = await importClassroomAssignments(course.id);
-        for (const a of assignments) {
-          addTask({
-            title: a.title,
-            course: course.name,
-            courseColor: course.color || '#3B82F6',
-            priority: 'medium',
-            dueDate: a.dueDate || undefined,
-            urgent: false,
-            important: false,
-            estimatedMinutes: 60,
-            notes: a.description || '',
-          });
-          imported++;
-        }
-      }
-      addNotification(`${imported} tareas importadas de Google Classroom`, 'success');
-    } catch { addNotification('Error al sincronizar Classroom', 'error'); }
-    setSyncing(null);
-  }, [googleConnected, addTask]);
-
-  const handleSyncTasks = useCallback(async () => {
-    if (!googleConnected) { const ok = await signIn(); if (!ok) { addNotification('No se pudo conectar con Google', 'error'); return; } setGoogleConnected(true); }
-    setSyncing('tasks');
-    try {
-      const { imported } = await importGoogleTasks();
-      for (const t of imported) {
-        addTask({
-          title: t.title,
-          course: 'General',
-          courseColor: '#3B82F6',
-          priority: 'medium',
-          dueDate: t.dueDate || undefined,
-          urgent: false,
-          important: false,
-          estimatedMinutes: 30,
-          notes: t.description || '',
-        });
-      }
-      addNotification(`${imported.length} tareas importadas de Google Tasks`, 'success');
-    } catch { addNotification('Error al sincronizar Tasks', 'error'); }
-    setSyncing(null);
-  }, [googleConnected, addTask]);
 
   const renderMaterials = () => {
     if (!selectedTask) return null;
@@ -499,7 +536,7 @@ export default function Tareas() {
 
       {/* TOOLBAR */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 14, flexShrink: 0 }}>
-        <div style={{ display: 'flex', gap: 4, padding: 3, borderRadius: 14, background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
+        <div style={{ display: 'flex', gap: 3, padding: 3, borderRadius: 10, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
           {[
             { id: 'list', label: 'Lista', icon: ListIcon },
             { id: 'board', label: 'Tablero', icon: LayoutGrid },
@@ -510,21 +547,19 @@ export default function Tareas() {
             return (
               <button key={m.id} onClick={() => setViewMode(m.id as any)}
                 style={{
-                  padding: '10px 22px', borderRadius: 11, fontSize: 12, fontWeight: 700,
-                  letterSpacing: '0.05em', cursor: 'pointer', border: 'none',
-                  background: active
-                    ? `linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 80%, #fff))`
-                    : 'transparent',
-                  color: active ? '#fff' : 'var(--text-muted)',
-                  display: 'flex', alignItems: 'center', gap: 7,
-                  transition: 'all 250ms cubic-bezier(0.34, 1.56, 0.64, 1)',
-                  boxShadow: active ? '0 2px 10px var(--accent-glow)' : 'none',
-                  transform: active ? 'scale(1.03)' : 'scale(1)',
+                  padding: '8px 18px', borderRadius: 8, fontSize: 11.5, fontWeight: active ? 600 : 500,
+                  fontFamily: "'Inter Tight', sans-serif",
+                  letterSpacing: '0.02em', cursor: 'pointer', border: 'none',
+                  background: active ? 'var(--accent)' : 'transparent',
+                  color: active ? '#fff' : 'var(--text-tertiary)',
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  transition: 'all 200ms ease',
+                  boxShadow: active ? '0 2px 10px color-mix(in srgb, var(--accent) 30%, transparent)' : 'none',
                   opacity: active ? 1 : 0.7,
                 }}
-                onMouseEnter={e => { if (!active) e.currentTarget.style.opacity = '1'; }}
-                onMouseLeave={e => { if (!active) e.currentTarget.style.opacity = '0.7'; }}>
-                <Icon size={15} /> {m.label}
+                onMouseEnter={e => { if (!active) { e.currentTarget.style.opacity = '0.9'; e.currentTarget.style.color = 'var(--text-secondary)'; } }}
+                onMouseLeave={e => { if (!active) { e.currentTarget.style.opacity = '0.7'; e.currentTarget.style.color = 'var(--text-tertiary)'; } }}>
+                <Icon size={13} /> {m.label}
               </button>
             );
           })}
@@ -538,7 +573,7 @@ export default function Tareas() {
             {searchQuery && <button onClick={() => setSearchQuery('')} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', padding: 2 }}><X size={10} /></button>}
           </div>
           <button onClick={() => setShowNewModal(true)} style={{ display: 'flex', alignItems: 'center', gap: 5, height: 32, padding: '0 14px', borderRadius: 6, fontSize: 11, fontWeight: 500, cursor: 'pointer', border: 'none', background: 'var(--accent)', color: '#fff', transition: 'all 200ms' }}>
-            <Plus size={14} /> Nueva
+            <Plus size={14} /> Agregar tarea
           </button>
         </div>
       </div>
@@ -574,79 +609,91 @@ export default function Tareas() {
                       <div style={{ width: 24, height: 24, borderRadius: 6, background: 'rgba(255,255,255,0.04)' }} />
                     </div>
                   </div>
-                )) : filteredTasks.map(task => {
-                  const tr = task.dueDate ? getTimeRemaining(task.dueDate) : null;
-                  const isDone = task.status === 'completado';
-                  const isOverdue = tr?.overdue && !isDone;
-                  const titleColor = isDone ? 'rgba(255,255,255,0.35)' : 'var(--text-primary)';
-                  const dateColor = isDone ? '#10B981' : (isOverdue ? '#EF4444' : 'var(--text-secondary)');
-                  const stripColor = statusConfig[task.status]?.color || '#F59E0B';
-                  const bgStatus = isDone ? 'rgba(16,185,129,0.03)' : 'transparent';
-
-                  return (
-                    <div key={task.id}
-                      onMouseDown={() => { isLongPressRef.current = false; longPressTimer.current = setTimeout(() => { isLongPressRef.current = true; setLongPressedTaskId(prev => prev === task.id ? null : task.id); }, 500); }}
-                      onMouseUp={() => { if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; } }}
-                      onMouseLeave={() => { if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; } }}
-                      onTouchStart={() => { isLongPressRef.current = false; longPressTimer.current = setTimeout(() => { isLongPressRef.current = true; setLongPressedTaskId(prev => prev === task.id ? null : task.id); }, 500); }}
-                      onTouchEnd={() => { if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; } }}
-                      style={{ display: 'flex', alignItems: 'center', gap: 0, padding: '0', minHeight: 50, borderBottom: '1px solid var(--border-soft)', background: selectedTaskId === task.id ? `${stripColor}06` : bgStatus, transition: 'all 120ms' }}
-                      className="hover:bg-white/[0.025]">
-                      {/* Left toggle strip — cuadrado centrado */}
-                      <div onClick={(e) => { e.stopPropagation(); if (isLongPressRef.current) { isLongPressRef.current = false; return; } handleToggle(e, task.id); }}
-                        style={{ width: 30, height: 30, flexShrink: 0, background: stripColor, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, margin: 'auto 0 auto 12px', transition: 'all 150ms', boxShadow: `0 0 12px ${stripColor}30` }}>
-                        {isDone && <Check size={13} strokeWidth={3} style={{ color: '#fff' }} />}
-                        {task.status === 'progreso' && <Zap size={12} style={{ color: '#fff' }} />}
-                      </div>
-                      {/* Content area — click opens detail */}
-                      <div onClick={(e) => { e.stopPropagation(); handleOpenDetail(task.id); }}
-                        style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 12, padding: '0 18px 0 26px', minHeight: 50, cursor: 'pointer', minWidth: 0 }}>
-                        <div style={{ flex: 4, display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                          <span style={{ fontSize: 13, fontWeight: 500, color: titleColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: isDone ? 'line-through' : 'none' }}>
-                            {task.title}
-                          </span>
-                        </div>
-                        <div style={{ flex: 2, minWidth: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
-                          {task.course && task.course !== 'Sin curso' ? (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 500, padding: '3px 10px', borderRadius: 6, background: task.courseColor + '12', color: task.courseColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%', border: task.status === 'progreso' ? `1px solid ${task.courseColor}50` : '1px solid transparent' }}>
-                            <span style={{ width: 5, height: 5, borderRadius: '50%', background: task.courseColor, flexShrink: 0, boxShadow: task.status === 'progreso' ? `0 0 6px ${task.courseColor}80` : 'none' }} />
-                            {task.course}
-                          </span>
-                          ) : (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 400, padding: '2px 10px', borderRadius: 6, background: 'var(--bg-hover)', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%', fontStyle: 'italic' }}>
-                            Sin curso
-                          </span>
-                          )}
-                        </div>
-                        <div style={{ flex: 1.2 }}>
-                          {task.priority !== 'none' ? (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 9, fontWeight: 600, padding: '2px 8px', borderRadius: 6, textTransform: 'uppercase', letterSpacing: '0.04em', background: task.priority === 'high' ? 'rgba(239,68,68,0.15)' : task.priority === 'medium' ? 'rgba(245,158,11,0.15)' : 'rgba(16,185,129,0.15)', color: task.priority === 'high' ? '#EF4444' : task.priority === 'medium' ? '#F59E0B' : '#10B981' }}>
-                            {task.priority === 'high' ? 'Alta' : task.priority === 'medium' ? 'Media' : 'Baja'}
-                          </span>
-                          ) : (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 9, fontWeight: 400, padding: '2px 8px', borderRadius: 6, background: 'var(--bg-hover)', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                            Sin prioridad
-                          </span>
-                          )}
-                        </div>
-                        <div style={{ flex: 1.6, opacity: longPressedTaskId === task.id ? 0 : 1, transition: 'opacity 200ms' }}>
-                          {tr && (
-                            <span style={{ fontSize: 12, fontWeight: 500, color: dateColor }}>
-                              {tr.text}
-                            </span>
-                          )}
-                        </div>
-                        <div style={{ width: 24, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <div onClick={(e) => { e.stopPropagation(); handleOpenDetail(task.id); }}
-                            style={{ width: 22, height: 22, borderRadius: 6, background: 'var(--bg-hover)', border: '1px solid var(--border-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 150ms' }}
-                            className="hover:bg-white/[0.06]">
-                            <ChevronRight size={11} style={{ color: 'var(--text-muted)' }} />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+                )) : (
+                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={e => setActiveDragId(e.active.id as string)} onDragEnd={handleDragEndList} modifiers={[restrictToParentElement]}>
+                    <SortableContext items={filteredTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
+                      {(taskOrder || filteredTasks).map(task => {
+                        const displayTasks = taskOrder || filteredTasks;
+                        const t = displayTasks.find(t => t.id === task.id)!;
+                        const tr = t.dueDate ? getTimeRemaining(t.dueDate) : null;
+                        const isDone = t.status === 'completado';
+                        const isOverdue = tr?.overdue && !isDone;
+                        const titleColor = isDone ? 'rgba(255,255,255,0.35)' : 'var(--text-primary)';
+                        const dateColor = isDone ? '#10B981' : (isOverdue ? '#EF4444' : 'var(--text-secondary)');
+                        const stripColor = statusConfig[t.status]?.color || '#F59E0B';
+                        const bgStatus = isDone ? 'rgba(16,185,129,0.03)' : 'transparent';
+                        const isDragging = activeDragId === t.id;
+                        return (
+                          <SortableTaskRow key={t.id} task={t}>
+                            {({ attributes, listeners, setNodeRef, style: dndStyle, isDragging: isDndDragging }) => (
+                              <div ref={setNodeRef} style={{ ...dndStyle, display: 'flex', alignItems: 'center', gap: 0, padding: '0', minHeight: 50, borderBottom: '1px solid var(--border-soft)', background: selectedTaskId === t.id ? `${stripColor}06` : bgStatus, transition: 'all 120ms', opacity: isDndDragging ? 0.4 : 1 }}
+                                className="hover:bg-white/[0.025]"
+                                onMouseDown={() => { isLongPressRef.current = false; longPressTimer.current = setTimeout(() => { isLongPressRef.current = true; setLongPressedTaskId(prev => prev === t.id ? null : t.id); }, 500); }}
+                                onMouseUp={() => { if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; } }}
+                                onMouseLeave={() => { if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; } }}
+                                onTouchStart={() => { isLongPressRef.current = false; longPressTimer.current = setTimeout(() => { isLongPressRef.current = true; setLongPressedTaskId(prev => prev === t.id ? null : t.id); }, 500); }}
+                                onTouchEnd={() => { if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; } }}>
+                                {/* Left toggle strip — cuadrado centrado — also drag handle */}
+                                <div {...attributes} {...listeners}
+                                  onClick={(e) => { e.stopPropagation(); if (isLongPressRef.current) { isLongPressRef.current = false; return; } handleToggle(e, t.id); }}
+                                  style={{ width: 30, height: 30, flexShrink: 0, background: stripColor, cursor: 'grab', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, margin: 'auto 0 auto 12px', transition: 'all 150ms', boxShadow: `0 0 12px ${stripColor}30` }}>
+                                  {isDone && <Check size={13} strokeWidth={3} style={{ color: '#fff' }} />}
+                                  {t.status === 'progreso' && <Zap size={12} style={{ color: '#fff' }} />}
+                                </div>
+                                {/* Content area — click opens detail */}
+                                <div onClick={(e) => { e.stopPropagation(); handleOpenDetail(t.id); }}
+                                  style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 12, padding: '0 18px 0 26px', minHeight: 50, cursor: 'pointer', minWidth: 0 }}>
+                                  <div style={{ flex: 4, display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                                    <span style={{ fontSize: 13, fontWeight: 500, color: titleColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: isDone ? 'line-through' : 'none' }}>
+                                      {t.title}
+                                    </span>
+                                  </div>
+                                  <div style={{ flex: 2, minWidth: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    {t.course && t.course !== 'Sin curso' ? (
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 500, padding: '3px 10px', borderRadius: 6, background: t.courseColor + '12', color: t.courseColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%', border: t.status === 'progreso' ? `1px solid ${t.courseColor}50` : '1px solid transparent' }}>
+                                      <span style={{ width: 5, height: 5, borderRadius: '50%', background: t.courseColor, flexShrink: 0, boxShadow: t.status === 'progreso' ? `0 0 6px ${t.courseColor}80` : 'none' }} />
+                                      {t.course}
+                                    </span>
+                                    ) : (
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 400, padding: '2px 10px', borderRadius: 6, background: 'var(--bg-hover)', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%', fontStyle: 'italic' }}>
+                                      Sin curso
+                                    </span>
+                                    )}
+                                  </div>
+                                  <div style={{ flex: 1.2 }}>
+                                    {t.priority !== 'none' ? (
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 9, fontWeight: 600, padding: '2px 8px', borderRadius: 6, textTransform: 'uppercase', letterSpacing: '0.04em', background: t.priority === 'high' ? 'rgba(239,68,68,0.15)' : t.priority === 'medium' ? 'rgba(245,158,11,0.15)' : 'rgba(16,185,129,0.15)', color: t.priority === 'high' ? '#EF4444' : t.priority === 'medium' ? '#F59E0B' : '#10B981' }}>
+                                      {t.priority === 'high' ? 'Alta' : t.priority === 'medium' ? 'Media' : 'Baja'}
+                                    </span>
+                                    ) : (
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 9, fontWeight: 400, padding: '2px 8px', borderRadius: 6, background: 'var(--bg-hover)', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                                      Sin prioridad
+                                    </span>
+                                    )}
+                                  </div>
+                                  <div style={{ flex: 1.6, opacity: longPressedTaskId === t.id ? 0 : 1, transition: 'opacity 200ms' }}>
+                                    {tr && (
+                                      <span style={{ fontSize: 12, fontWeight: 500, color: dateColor }}>
+                                        {tr.text}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div style={{ width: 24, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <div onClick={(e) => { e.stopPropagation(); handleOpenDetail(t.id); }}
+                                      style={{ width: 22, height: 22, borderRadius: 6, background: 'var(--bg-hover)', border: '1px solid var(--border-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 150ms' }}
+                                      className="hover:bg-white/[0.06]">
+                                      <ChevronRight size={11} style={{ color: 'var(--text-muted)' }} />
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </SortableTaskRow>
+                        );
+                      })}
+                    </SortableContext>
+                  </DndContext>
+                )}
                 {!isInitialLoading && filteredTasks.length === 0 && (
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 10, padding: '48px 0', color: 'var(--text-muted)' }}>
                     <div style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid var(--border-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -781,7 +828,7 @@ export default function Tareas() {
               {/* Calendar Header */}
               <div style={{ padding: '12px 16px', background: 'var(--bg-elevated)', borderBottom: '1px solid var(--border-soft)', borderRadius: '12px 12px 0 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <button onClick={() => { setCalendarDate(new Date()); setCalendarSelectedDay(new Date()); }} style={{ fontSize: 11, fontWeight: 500, padding: '5px 14px', borderRadius: 6, background: 'var(--bg-hover)', color: 'var(--text-secondary)', border: '1px solid var(--border-soft)', cursor: 'pointer', transition: 'all 150ms' }}>Hoy</button>
+                  <button onClick={() => { setCalendarDate(new Date()); const todayTasks = tasks.filter(t => t.dueDate && isSameDay(new Date(t.dueDate), new Date())); if (todayTasks.length > 0) setCalendarSelectedDay(new Date()); else setCalendarSelectedDay(new Date(0)); }} style={{ fontSize: 11, fontWeight: 500, padding: '5px 14px', borderRadius: 6, background: 'var(--bg-hover)', color: 'var(--text-secondary)', border: '1px solid var(--border-soft)', cursor: 'pointer', transition: 'all 150ms' }}>Hoy</button>
                   <div style={{ display: 'flex', gap: 1 }}>
                     <button onClick={handlePrevPeriod} style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--bg-hover)', border: '1px solid var(--border-soft)', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}><ChevronLeft size={14} /></button>
                     <button onClick={handleNextPeriod} style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--bg-hover)', border: '1px solid var(--border-soft)', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}><ChevronRight size={14} /></button>
@@ -810,76 +857,81 @@ export default function Tareas() {
                   background: 'var(--bg-surface)',
                   borderLeft: '1px solid var(--border-default)',
                   borderRadius: '0 12px 12px 0',
-                  padding: '20px 16px',
-                  boxShadow: '-8px 0 40px rgba(0,0,0,0.5)',
+                  padding: '22px 18px',
+                  boxShadow: '-6px 0 40px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.02) inset',
                   zIndex: 20,
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: 12,
+                  gap: 14,
                   animation: 'slideInRight 200ms ease-out',
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 12, borderBottom: '1px solid var(--border-soft)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{ width: 30, height: 30, borderRadius: 9, background: 'linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 80%, #fff))', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 14px color-mix(in srgb, var(--accent) 35%, transparent)' }}>
-                        <CalendarDays size={13} style={{ color: '#fff' }} />
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 14, borderBottom: '1px solid var(--border-soft)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
+                      <div style={{ width: 32, height: 32, borderRadius: 10, background: `linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 70%, #fff))`, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 16px color-mix(in srgb, var(--accent) 35%, transparent)' }}>
+                        <CalendarDays size={14} style={{ color: '#fff' }} />
                       </div>
                       <div>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', textTransform: 'capitalize', display: 'block', lineHeight: 1.3 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', textTransform: 'capitalize', display: 'block', lineHeight: 1.3, fontFamily: "'Inter Tight', sans-serif" }}>
                           {format(calendarSelectedDay, "EEEE d", { locale: es })}
                         </span>
-                        <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-muted)' }}>
+                        <span style={{ fontSize: 9.5, fontWeight: 500, color: 'var(--text-muted)' }}>
                           {tasks.filter(t => t.dueDate && isSameDay(new Date(t.dueDate), calendarSelectedDay)).length} tareas
                         </span>
                       </div>
                     </div>
-                    <button onClick={() => setCalendarSelectedDay(new Date(0))} style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--bg-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 200ms' }}><X size={14} /></button>
+                    <button onClick={() => setCalendarSelectedDay(new Date(0))} style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--bg-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 200ms', opacity: 0.6 }}
+                      onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = 'var(--bg-elevated)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.opacity = '0.6'; e.currentTarget.style.background = 'var(--bg-hover)'; }}>
+                      <X size={14} />
+                    </button>
                   </div>
-                  <div className="no-scrollbar" style={{ display: 'flex', flexDirection: 'column', gap: 6, overflowY: 'auto', flex: 1 }}>
+                  <div className="no-scrollbar" style={{ display: 'flex', flexDirection: 'column', gap: 8, overflowY: 'auto', flex: 1, paddingRight: 2 }}>
                     {(() => {
                       const dayTasks = tasks.filter(t => t.dueDate && isSameDay(new Date(t.dueDate), calendarSelectedDay));
-                      if (dayTasks.length === 0) return (
-                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '40px 0' }}>
-                          <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--bg-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <CalendarDays size={16} style={{ opacity: 0.2, color: 'var(--text-muted)' }} />
+                      if (dayTasks.length === 0) {
+                        return (
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 8, padding: '32px 0', color: 'var(--text-muted)' }}>
+                            <div style={{ width: 6, height: 24, borderRadius: 3, background: 'var(--border-soft)' }} />
+                            <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-tertiary)', fontStyle: 'italic' }}>Sin tareas este día</span>
                           </div>
-                          <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)' }}>Sin tareas este día</span>
-                        </div>
-                      );
+                        );
+                      }
                       return dayTasks.map(task => {
                         const tr = task.dueDate ? getTimeRemaining(task.dueDate) : null;
                         return (
                           <div key={task.id} onClick={() => handleOpenDetail(task.id)}
-                            style={{ padding: '12px 14px', borderRadius: 10, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderLeft: `3px solid ${task.courseColor}`, cursor: 'pointer', transition: 'all 150ms' }}>
-                            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+                            style={{ padding: '12px 14px', borderRadius: 10, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderLeft: `3px solid ${task.courseColor}`, cursor: 'pointer', transition: 'all 150ms', boxShadow: '0 1px 3px rgba(0,0,0,0.12)' }}
+                            className="hover:bg-white/[0.02]">
+                            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 7 }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
-                                <span style={{ fontSize: 11, fontWeight: 500, color: task.status === 'completado' ? 'var(--text-tertiary)' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: task.status === 'completado' ? 'line-through' : 'none' }}>
+                                <span style={{ fontSize: 11.5, fontWeight: 500, color: task.status === 'completado' ? 'var(--text-tertiary)' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: task.status === 'completado' ? 'line-through' : 'none' }}>
                                   {task.title}
                                 </span>
                               </div>
                               <button onClick={e => { e.stopPropagation(); handleToggle(e, task.id); }}
-                                style={{ flexShrink: 0, width: 14, height: 14, borderRadius: 3, border: `2px solid ${task.status === 'completado' ? '#10B981' : statusConfig[task.status]?.color || 'var(--border-default)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', background: task.status === 'completado' ? '#10B981' : 'transparent' }}>
+                                style={{ flexShrink: 0, width: 15, height: 15, borderRadius: 4, border: `2px solid ${task.status === 'completado' ? '#10B981' : statusConfig[task.status]?.color || 'var(--border-default)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', background: task.status === 'completado' ? '#10B981' : 'transparent', transition: 'all 120ms' }}>
                                 {task.status === 'completado' && <Check size={7} strokeWidth={3} style={{ color: '#fff' }} />}
                               </button>
                             </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                               {task.course && task.course !== 'Sin curso' ? (
-                              <span style={{ fontSize: 8, fontWeight: 500, color: task.courseColor, display: 'flex', alignItems: 'center', gap: 3 }}>
-                                <span style={{ width: 3, height: 3, borderRadius: '50%', background: task.courseColor, flexShrink: 0 }} />
+                              <span style={{ fontSize: 8.5, fontWeight: 500, color: task.courseColor, display: 'flex', alignItems: 'center', gap: 3 }}>
+                                <span style={{ width: 4, height: 4, borderRadius: '50%', background: task.courseColor, flexShrink: 0, boxShadow: `0 0 4px ${task.courseColor}50` }} />
                                 {task.course}
                               </span>
                               ) : (
-                              <span style={{ fontSize: 8, fontWeight: 400, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 3, fontStyle: 'italic' }}>
+                              <span style={{ fontSize: 8.5, fontWeight: 400, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 3, fontStyle: 'italic' }}>
                                 Sin curso
                               </span>
                               )}
                               {task.priority === 'high' && (
-                                <span style={{ fontSize: 7, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: 'color-mix(in srgb, #EF4444 12%, transparent)', color: '#EF4444' }}>ALTA</span>
+                                <span style={{ fontSize: 7.5, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: 'color-mix(in srgb, #EF4444 12%, transparent)', color: '#EF4444' }}>ALTA</span>
                               )}
                               {task.priority === 'none' && (
-                                <span style={{ fontSize: 7, fontWeight: 400, padding: '1px 5px', borderRadius: 3, background: 'var(--bg-hover)', color: 'var(--text-muted)', fontStyle: 'italic' }}>Sin prioridad</span>
+                                <span style={{ fontSize: 7.5, fontWeight: 400, padding: '1px 6px', borderRadius: 4, background: 'var(--bg-hover)', color: 'var(--text-muted)', fontStyle: 'italic' }}>Sin prioridad</span>
                               )}
                               {tr && (
-                                <span style={{ fontSize: 8, fontWeight: 500, color: tr.urgent ? '#EF4444' : 'var(--text-muted)', marginLeft: 'auto' }}>
+                                <span style={{ fontSize: 8.5, fontWeight: 500, color: tr.urgent ? '#EF4444' : 'var(--text-muted)', marginLeft: 'auto', whiteSpace: 'nowrap' }}>
                                   {tr.text}
                                 </span>
                               )}
@@ -889,10 +941,12 @@ export default function Tareas() {
                       });
                     })()}
                   </div>
-                  <div style={{ paddingTop: 8, borderTop: '1px solid var(--border-soft)', flexShrink: 0 }}>
+                  <div style={{ paddingTop: 10, borderTop: '1px solid var(--border-soft)', flexShrink: 0 }}>
                     <div onClick={() => { setNewTaskPrefillDate(format(calendarSelectedDay, 'yyyy-MM-dd')); setShowNewModal(true); }}
-                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '8px 0', borderRadius: 8, fontSize: 10, fontWeight: 600, cursor: 'pointer', background: 'var(--bg-hover)', border: '1px dashed var(--border-default)', color: 'var(--text-muted)', transition: 'all 150ms' }}>
-                      <Plus size={12} /> Nueva tarea en este día
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '9px 0', borderRadius: 8, fontSize: 10.5, fontWeight: 500, cursor: 'pointer', background: 'transparent', border: '1px dashed var(--border-default)', color: 'var(--text-muted)', transition: 'all 150ms' }}
+                      onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.borderColor = 'var(--border-soft)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'var(--border-default)'; }}>
+                      <Plus size={12} /> Agregar tarea este día
                     </div>
                   </div>
                 </div>
@@ -906,6 +960,7 @@ export default function Tareas() {
               </div>
 
               {/* Calendar Grid — más vertical */}
+              <DndContext onDragStart={e => setCalendarDragTaskId(e.active.id as string)} onDragEnd={handleDragEndCalendar}>
               <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
                 {weekRows.map((week, wi) => {
                   return (
@@ -921,116 +976,138 @@ export default function Tareas() {
                         const cellBg = isSel ? 'var(--accent-dim)' : isTodayDay ? 'color-mix(in srgb, var(--accent) 2%, transparent)' : 'transparent';
                         const isWeekend = di >= 5;
                         return (
-                          <div key={di}
-                            onClick={() => setCalendarSelectedDay(day)}
-                            onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
-                            onDrop={e => { e.preventDefault(); handleDrop(e, day); }}
-                            style={{
-                              borderRight: '1px solid var(--border-soft)',
-                              borderBottom: '1px solid var(--border-soft)',
-                              padding: calendarSubMode === 'semana' ? '8px 8px' : '4px 6px',
-                              cursor: 'pointer',
-                              background: cellBg,
-                              display: 'flex',
-                              flexDirection: 'column',
-                              minHeight: calendarSubMode === 'semana' ? 260 : 110,
-                              overflow: 'hidden',
-                              position: 'relative',
-                              borderTop: isTodayDay ? '1px solid var(--accent-soft)' : '1px solid transparent',
-                              borderLeft: isSel ? '1px solid var(--accent-dim)' : di === 0 ? '1px solid var(--border-soft)' : 'none',
-                              transition: 'background 150ms',
-                            }}>
-                            {/* Day Number */}
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 4, flexShrink: 0 }}>
-                              <span style={{
-                                fontSize: calendarSubMode === 'semana' ? 13 : 11,
-                                fontWeight: isTodayDay ? 700 : (isSel ? 700 : 400),
-                                color: isTodayDay ? 'var(--accent)' : (isSel ? 'var(--text-primary)' : isCurrentMonth ? (isWeekend ? 'var(--text-muted)' : 'var(--text-secondary)') : 'var(--text-muted)'),
-                                width: 26, height: 26,
-                                borderRadius: '50%',
-                                background: isTodayDay ? 'var(--accent-dim)' : (isSel ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : 'transparent'),
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              }}>{format(day, 'd')}</span>
-                            </div>
-                            {/* Task cards */}
-                            {dayTasks.length > 0 && (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1, overflow: 'hidden', paddingTop: calendarSubMode === 'semana' ? 4 : 2 }}>
-                                {visibleTasks.map(task => {
-                                  const isOverdueCal = task.dueDate && new Date(task.dueDate).getTime() < Date.now() && task.status !== 'completado';
-                                  return calendarSubMode === 'semana' ? (
-                                    <div key={task.id} draggable onDragStart={e => handleDragStart(e, task.id)}
-                                      onClick={(e) => { e.stopPropagation(); setCalendarSelectedDay(day); handleOpenDetail(task.id); }}
-                                      style={{
-                                        borderRadius: 4,
-                                        padding: '3px 8px',
-                                        fontSize: 11,
-                                        fontWeight: 500,
-                                        color: task.status === 'completado' ? 'rgba(255,255,255,0.3)' : '#fff',
-                                        background: task.status === 'completado' ? 'rgba(255,255,255,0.03)' : (isOverdueCal ? 'rgba(239,68,68,0.2)' : `${task.courseColor}18`),
-                                        borderLeft: `2px solid ${isOverdueCal ? '#EF4444' : task.courseColor}`,
-                                        overflow: 'hidden',
-                                        textOverflow: 'ellipsis',
-                                        whiteSpace: 'nowrap',
-                                        lineHeight: '24px',
-                                        cursor: 'grab',
-                                        flexShrink: 0,
-                                        textDecoration: task.status === 'completado' ? 'line-through' : 'none',
-                                        transition: 'all 120ms',
-                                      }}
-                                      className="hover:brightness-125">
-                                      {task.title}
-                                    </div>
-                                  ) : (
-                                    <div key={task.id} draggable onDragStart={e => handleDragStart(e, task.id)}
-                                      onClick={(e) => { e.stopPropagation(); setCalendarSelectedDay(day); handleOpenDetail(task.id); }}
-                                      style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: 4,
-                                        height: 18,
-                                        borderRadius: 3,
-                                        padding: '0 6px',
-                                        cursor: 'grab',
-                                        flexShrink: 0,
-                                        background: isOverdueCal ? 'rgba(239,68,68,0.15)' : `${task.courseColor}15`,
-                                        borderLeft: `2px solid ${isOverdueCal ? '#EF4444' : task.courseColor}`,
-                                        transition: 'all 120ms',
-                                      }}
-                                      className="hover:brightness-125">
-                                      <span style={{
-                                        width: 5, height: 5, borderRadius: '50%',
-                                        background: isOverdueCal ? '#EF4444' : task.courseColor,
-                                        flexShrink: 0,
-                                      }} />
-                                      <span style={{
-                                        fontSize: 8,
-                                        fontWeight: 600,
-                                        color: task.status === 'completado' ? 'rgba(255,255,255,0.25)' : (isOverdueCal ? '#EF4444' : task.courseColor),
-                                        overflow: 'hidden',
-                                        textOverflow: 'ellipsis',
-                                        whiteSpace: 'nowrap',
-                                        textDecoration: task.status === 'completado' ? 'line-through' : 'none',
-                                      }}>
-                                        {task.title}
-                                      </span>
-                                    </div>
-                                  );
-                                })}
-                                {overflow > 0 && (
-                                  <div style={{ fontSize: 8, fontWeight: 500, color: 'var(--text-muted)', padding: '0 4px', flexShrink: 0 }}>+{overflow} más</div>
+                          <DroppableCalendarDay key={di} id={`day-${format(day, 'yyyy-MM-dd')}`}>
+                            {({ setNodeRef, isOver }) => (
+                              <div ref={setNodeRef}
+                                onClick={() => { const dt = tasks.filter(t => t.dueDate && isSameDay(new Date(t.dueDate), day)); if (dt.length > 0) setCalendarSelectedDay(day); }}
+                                style={{
+                                  borderRight: '1px solid var(--border-soft)',
+                                  borderBottom: '1px solid var(--border-soft)',
+                                  padding: calendarSubMode === 'semana' ? '8px 8px' : '4px 6px',
+                                  cursor: 'pointer',
+                                  background: isOver ? 'color-mix(in srgb, var(--accent) 6%, transparent)' : cellBg,
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  minHeight: calendarSubMode === 'semana' ? 260 : 110,
+                                  overflow: 'hidden',
+                                  position: 'relative',
+                                  borderTop: isTodayDay ? '1px solid var(--accent-soft)' : '1px solid transparent',
+                                  borderLeft: isSel ? '1px solid var(--accent-dim)' : di === 0 ? '1px solid var(--border-soft)' : 'none',
+                                  transition: 'background 150ms',
+                                  outline: isOver ? '1.5px solid var(--accent)' : 'none',
+                                  outlineOffset: -1.5,
+                                }}>
+                                {/* Day Number */}
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 4, flexShrink: 0 }}>
+                                  <span style={{
+                                    fontSize: calendarSubMode === 'semana' ? 13 : 11,
+                                    fontWeight: isTodayDay ? 700 : (isSel ? 700 : 400),
+                                    color: isTodayDay ? 'var(--accent)' : (isSel ? 'var(--text-primary)' : isCurrentMonth ? (isWeekend ? 'var(--text-muted)' : 'var(--text-secondary)') : 'var(--text-muted)'),
+                                    width: 26, height: 26,
+                                    borderRadius: '50%',
+                                    background: isTodayDay ? 'var(--accent-dim)' : (isSel ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : 'transparent'),
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  }}>{format(day, 'd')}</span>
+                                </div>
+                                {/* Task cards */}
+                                {dayTasks.length > 0 && (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1, overflow: 'hidden', paddingTop: calendarSubMode === 'semana' ? 4 : 2 }}>
+                                    {visibleTasks.map(task => {
+                                      const isOverdueCal = task.dueDate && new Date(task.dueDate).getTime() < Date.now() && task.status !== 'completado';
+                                      return calendarSubMode === 'semana' ? (
+                                        <DraggableCalendarTask key={task.id} id={task.id}>
+                                          {({ attributes, listeners, setNodeRef: dragRef, isDragging }) => (
+                                            <div ref={dragRef} {...attributes} {...listeners}
+                                              onClick={(e) => { e.stopPropagation(); setCalendarSelectedDay(day); handleOpenDetail(task.id); }}
+                                              style={{
+                                                borderRadius: 4,
+                                                padding: '3px 8px',
+                                                fontSize: 11,
+                                                fontWeight: 500,
+                                                color: task.status === 'completado' ? 'rgba(255,255,255,0.3)' : '#fff',
+                                                background: task.status === 'completado' ? 'rgba(255,255,255,0.03)' : (isOverdueCal ? 'rgba(239,68,68,0.2)' : `${task.courseColor}18`),
+                                                borderLeft: `2px solid ${isOverdueCal ? '#EF4444' : task.courseColor}`,
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                whiteSpace: 'nowrap',
+                                                lineHeight: '24px',
+                                                cursor: isDragging ? 'grabbing' : 'grab',
+                                                flexShrink: 0,
+                                                textDecoration: task.status === 'completado' ? 'line-through' : 'none',
+                                                transition: 'all 120ms',
+                                                opacity: isDragging ? 0.4 : 1,
+                                              }}
+                                              className="hover:brightness-125">
+                                              {task.title}
+                                            </div>
+                                          )}
+                                        </DraggableCalendarTask>
+                                      ) : (
+                                        <DraggableCalendarTask key={task.id} id={task.id}>
+                                          {({ attributes, listeners, setNodeRef: dragRef, isDragging }) => (
+                                            <div ref={dragRef} {...attributes} {...listeners}
+                                              onClick={(e) => { e.stopPropagation(); setCalendarSelectedDay(day); handleOpenDetail(task.id); }}
+                                              style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: 4,
+                                                height: 18,
+                                                borderRadius: 3,
+                                                padding: '0 6px',
+                                                cursor: isDragging ? 'grabbing' : 'grab',
+                                                flexShrink: 0,
+                                                background: isOverdueCal ? 'rgba(239,68,68,0.15)' : `${task.courseColor}15`,
+                                                borderLeft: `2px solid ${isOverdueCal ? '#EF4444' : task.courseColor}`,
+                                                transition: 'all 120ms',
+                                                opacity: isDragging ? 0.4 : 1,
+                                              }}
+                                              className="hover:brightness-125">
+                                              <span style={{
+                                                width: 5, height: 5, borderRadius: '50%',
+                                                background: isOverdueCal ? '#EF4444' : task.courseColor,
+                                                flexShrink: 0,
+                                              }} />
+                                              <span style={{
+                                                fontSize: 8,
+                                                fontWeight: 600,
+                                                color: task.status === 'completado' ? 'rgba(255,255,255,0.25)' : (isOverdueCal ? '#EF4444' : task.courseColor),
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                whiteSpace: 'nowrap',
+                                                textDecoration: task.status === 'completado' ? 'line-through' : 'none',
+                                              }}>
+                                                {task.title}
+                                              </span>
+                                            </div>
+                                          )}
+                                        </DraggableCalendarTask>
+                                      );
+                                    })}
+                                    {overflow > 0 && (
+                                      <div style={{ fontSize: 8, fontWeight: 500, color: 'var(--text-muted)', padding: '0 4px', flexShrink: 0 }}>+{overflow} más</div>
+                                    )}
+                                  </div>
+                                )}
+                                {dayTasks.length === 0 && calendarSubMode === 'semana' && (
+                                  <div style={{ flex: 1 }} />
                                 )}
                               </div>
                             )}
-                            {dayTasks.length === 0 && calendarSubMode === 'semana' && (
-                              <div style={{ flex: 1 }} />
-                            )}
-                          </div>
+                          </DroppableCalendarDay>
                         );
                       })}
                     </div>
                   );
                 })}
               </div>
+              <DragOverlay>
+                {calendarDragTaskId ? (
+                  <div style={{ padding: '4px 12px', borderRadius: 6, background: 'var(--accent-dim)', color: '#fff', fontSize: 11, fontWeight: 500, boxShadow: '0 4px 16px rgba(0,0,0,0.4)', borderLeft: '2px solid var(--accent)' }}>
+                    {tasks.find(t => t.id === calendarDragTaskId)?.title}
+                  </div>
+                ) : null}
+              </DragOverlay>
+              </DndContext>
             </div>
           )}
 
@@ -1052,25 +1129,17 @@ export default function Tareas() {
                     </div>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
                     <div style={{ position: 'relative', width: sz, height: sz, flexShrink: 0 }}>
-                      <svg viewBox="0 0 48 48" style={{ width: '100%', height: '100%' }}>
-                        {courseDistribution.length > 0 ? (() => {
-                          const GAP = 8;
-                          const PAD = 0.8;
-                          const numActive = courseDistribution.length;
-                          const numGaps = numActive - 1;
-                          const gapPerSegment = numGaps > 0 ? GAP / numGaps : 0;
-                          const totalAngle = 360 - numGaps * gapPerSegment;
-                          let currentAngle = 0;
-                          return courseDistribution.map((c, i) => {
-                            const angle = (c.pct / 100) * totalAngle;
-                            const start = currentAngle + i * gapPerSegment + PAD;
-                            const end = currentAngle + i * gapPerSegment + angle - PAD;
-                            const seg = start < end ? describeArc(24, 24, 20, start, end) : '';
-                            currentAngle += angle;
-                            return seg ? <path key={c.name} d={seg} fill="none" stroke={c.color} strokeWidth="7" strokeLinecap="butt" style={{ filter: `drop-shadow(0 0 2px ${c.color}60)`, transition: 'all 500ms' }} /> : null;
-                          });
-                        })() : <circle cx="24" cy="24" r="20" fill="none" stroke="var(--border-soft)" strokeWidth="7" />}
-                      </svg>
+                      <div style={{
+                        width: '100%', height: '100%', borderRadius: '50%',
+                        background: courseDistribution.length > 0
+                          ? donutGradient(courseDistribution.map(c => ({ value: c.count, color: c.color })))
+                          : 'conic-gradient(from -90deg, var(--border-soft) 0deg 360deg)',
+                        mask: `radial-gradient(circle at ${sz/2}px ${sz/2}px, transparent ${16.5 * sz / 48}px, #000 ${16.5 * sz / 48}px ${23.5 * sz / 48}px, transparent ${23.5 * sz / 48}px)`,
+                        WebkitMask: `radial-gradient(circle at ${sz/2}px ${sz/2}px, transparent ${16.5 * sz / 48}px, #000 ${16.5 * sz / 48}px ${23.5 * sz / 48}px, transparent ${23.5 * sz / 48}px)`,
+                        willChange: 'transform',
+                        backfaceVisibility: 'hidden',
+                        transform: 'translateZ(0)',
+                      }} />
                       <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
                         <span style={{ fontSize: innerSz, fontWeight: 500, color: 'var(--text-primary)' }}>{tasks.length}</span>
                         <span style={{ fontSize: isBoard ? 8 : 10, fontWeight: 500, color: 'var(--text-muted)', marginTop: isBoard ? 1 : 3 }}>tareas</span>
@@ -1098,25 +1167,15 @@ export default function Tareas() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {statusData.length > 0 && (
                       <div style={{ position: 'relative', width: sz, height: sz, flexShrink: 0, alignSelf: 'center' }}>
-                        <svg viewBox="0 0 48 48" style={{ width: '100%', height: '100%' }}>
-                          {(() => {
-                            const GAP = 8;
-                            const PAD = 0.8;
-                            const numGaps = statusData.length - 1;
-                            const gapPerSegment = numGaps > 0 ? GAP / numGaps : 0;
-                            const totalAngle = 360 - numGaps * gapPerSegment;
-                            let currentAngle = 0;
-                            return statusData.map((s, i) => {
-                              const pct = totalStatus > 0 ? (s.val / totalStatus) * 100 : 0;
-                              const angle = (pct / 100) * totalAngle;
-                              const start = currentAngle + i * gapPerSegment + PAD;
-                              const end = currentAngle + i * gapPerSegment + angle - PAD;
-                              const seg = start < end ? describeArc(24, 24, 20, start, end) : '';
-                              currentAngle += angle;
-                              return seg ? <path key={s.label} d={seg} fill="none" stroke={s.color} strokeWidth="7" strokeLinecap="butt" style={{ filter: `drop-shadow(0 0 2px ${s.color}60)`, transition: 'all 500ms' }} /> : null;
-                            });
-                          })()}
-                        </svg>
+                        <div style={{
+                          width: '100%', height: '100%', borderRadius: '50%',
+                          background: donutGradient(statusData.map(s => ({ value: s.val, color: s.color }))),
+                          mask: `radial-gradient(circle at ${sz/2}px ${sz/2}px, transparent ${16.5 * sz / 48}px, #000 ${16.5 * sz / 48}px ${23.5 * sz / 48}px, transparent ${23.5 * sz / 48}px)`,
+                          WebkitMask: `radial-gradient(circle at ${sz/2}px ${sz/2}px, transparent ${16.5 * sz / 48}px, #000 ${16.5 * sz / 48}px ${23.5 * sz / 48}px, transparent ${23.5 * sz / 48}px)`,
+                          willChange: 'transform',
+                          backfaceVisibility: 'hidden',
+                          transform: 'translateZ(0)',
+                        }} />
                         <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
                           <span style={{ fontSize: innerSz, fontWeight: 500, color: 'var(--text-primary)' }}>{stats.completadasPct}%</span>
                           <span style={{ fontSize: isBoard ? 8 : 10, fontWeight: 500, color: 'var(--text-muted)', marginTop: isBoard ? 1 : 3 }}>completado</span>
@@ -1181,10 +1240,17 @@ export default function Tareas() {
                   </select>
                 </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 0.7fr', gap: 12 }}>
                 <div>
-                  <label style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 4 }}>Fecha y hora</label>
-                  <input id="new-task-duedate" type="datetime-local" style={{ width: '100%', padding: '10px 14px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12, color: 'var(--text-primary)', outline: 'none', colorScheme: 'dark', fontFamily: "'JetBrains Mono',monospace" }} />
+                  <label style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 4 }}>Fecha</label>
+                  <input id="new-task-duedate" type="date" style={{ width: '100%', padding: '10px 14px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12, color: 'var(--text-primary)', outline: 'none', colorScheme: 'dark', fontFamily: "'JetBrains Mono',monospace" }} />
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, fontSize: 10, color: 'var(--text-tertiary)', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={includeTime} onChange={e => setIncludeTime(e.target.checked)} style={{ accentColor: 'var(--accent)' }} />
+                    Incluir hora
+                  </label>
+                  {includeTime && (
+                    <input id="new-task-duetime" type="time" defaultValue="23:59" style={{ width: '100%', padding: '8px 12px', marginTop: 6, background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12, color: 'var(--text-primary)', outline: 'none', colorScheme: 'dark', fontFamily: "'JetBrains Mono',monospace" }} />
+                  )}
                 </div>
                 <div>
                   <label style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 4 }}>Estimado (min)</label>
@@ -1256,8 +1322,28 @@ export default function Tareas() {
                     <CalendarDays size={11} style={{ color: statusConfig[selectedTask.status]?.color }} />
                     <span style={{ fontSize: 8, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Fecha</span>
                   </div>
-                  <input type="datetime-local" value={selectedTask.dueDate ? selectedTask.dueDate.slice(0, 16) : ''} onChange={e => updateTask(selectedTask.id, { dueDate: e.target.value ? e.target.value + ':00' : undefined })}
+                  <input type="date"
+                    value={selectedTask.dueDate ? selectedTask.dueDate.slice(0, 10) : ''}
+                    onChange={e => {
+                      const oldTime = selectedTask.dueDate && selectedTask.dueDate.length > 10 ? selectedTask.dueDate.slice(11, 16) : '';
+                      updateTask(selectedTask.id, { dueDate: e.target.value ? (oldTime ? `${e.target.value}T${oldTime}` : e.target.value) : undefined });
+                    }}
                     style={{ width: '100%', padding: '8px 10px', background: 'var(--bg-surface)', border: '1px solid var(--border-soft)', borderRadius: 8, fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', outline: 'none', colorScheme: 'dark', fontFamily: "'JetBrains Mono',monospace" }} />
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 4, fontSize: 9, color: 'var(--text-tertiary)', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={selectedTask.dueDate ? selectedTask.dueDate.length > 10 : false}
+                      onChange={e => {
+                        const datePart = selectedTask.dueDate ? selectedTask.dueDate.slice(0, 10) : '';
+                        updateTask(selectedTask.id, { dueDate: e.target.checked && datePart ? `${datePart}T23:59` : (datePart || undefined) });
+                      }}
+                      style={{ accentColor: 'var(--accent)' }} />
+                    Hora
+                  </label>
+                  {selectedTask.dueDate && selectedTask.dueDate.length > 10 && (
+                    <input type="time"
+                      value={selectedTask.dueDate!.slice(11, 16)}
+                      onChange={e => updateTask(selectedTask.id, { dueDate: `${selectedTask.dueDate!.slice(0, 10)}T${e.target.value}` })}
+                      style={{ width: '100%', padding: '6px 8px', marginTop: 4, background: 'var(--bg-surface)', border: '1px solid var(--border-soft)', borderRadius: 8, fontSize: 12, color: 'var(--text-primary)', outline: 'none', colorScheme: 'dark', fontFamily: "'JetBrains Mono',monospace" }} />
+                  )}
                 </div>
                 <div style={{ padding: '14px 16px', background: `${statusConfig[selectedTask.status]?.color}06`, borderRadius: 12, border: `1px solid ${statusConfig[selectedTask.status]?.color}15` }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>

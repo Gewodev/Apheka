@@ -260,6 +260,16 @@ export default function Planificacion() {
   const nowH  = nowFrac();
   const nowPx = (nowH - H_START) * H_PX;
 
+  const timelineRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = timelineRef.current;
+    if (!el) return;
+    const viewH = el.clientHeight;
+    const target = nowPx - viewH / 2 + H_PX;
+    el.scrollTop = Math.max(0, target);
+  }, [planView, navDate]);
+
   return (
     <div className="page-container" style={{ display:'flex', flexDirection:'column', height:'100%', overflow:'hidden', background: 'var(--bg-primary)' }}>
 
@@ -278,7 +288,7 @@ export default function Planificacion() {
           <NotificationBell />
           <div style={{ textAlign:'right', paddingRight:2 }}>
             <div style={{ display:'flex', alignItems:'baseline', gap:3, justifyContent:'flex-end' }}>
-              <span style={{ fontFamily:"'Outfit', sans-serif", fontSize:44, fontWeight:300, lineHeight:0.9, color:'var(--accent)', textShadow:'0 0 32px var(--accent-glow)', letterSpacing:'-0.02em' }}>{timeStr}</span>
+              <span style={{ fontFamily:"'Inter Tight', sans-serif", fontSize:68, fontWeight:200, lineHeight:0.9, color:'var(--accent)', textShadow:'0 0 32px var(--accent-glow)', letterSpacing:'0.02em' }}>{timeStr}</span>
             </div>
           </div>
         </div>
@@ -369,7 +379,7 @@ export default function Planificacion() {
                   );
                 })}
               </div>
-              <div style={{ flex:1, overflowY:'auto' }}>
+              <div ref={timelineRef} style={{ flex:1, overflowY:'auto' }}>
                 <div style={{ display:'grid', gridTemplateColumns:`60px repeat(7,1fr)`, minHeight:(H_END-H_START+1)*H_PX }}>
                   <div style={{ borderRight:'1px solid var(--border-soft)', background: 'var(--bg-primary)' }}>
                     {HOURS.map(h => (
@@ -466,7 +476,7 @@ export default function Planificacion() {
                   ))}
                 </div>
               </div>
-              <div style={{ flex:1, overflowY:'auto' }}>
+              <div ref={timelineRef} style={{ flex:1, overflowY:'auto' }}>
                 <div style={{ display:'grid', gridTemplateColumns:'80px 1fr', minHeight:(H_END-H_START+1)*H_PX }}>
                   <div style={{ borderRight:'1px solid var(--border-soft)', background: 'var(--bg-primary)' }}>
                     {HOURS.map(h=>(

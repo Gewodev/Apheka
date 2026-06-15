@@ -23,8 +23,10 @@ export async function audit(action: string, userId: string, details: Record<stri
   const line = JSON.stringify(entry) + '\n';
   if (isTauri()) {
     try {
-      const { writeFile, BaseDirectory, appendFile } = await import('@tauri-apps/api/fs');
-      await appendFile({ path: LOG_PATH, contents: line, directory: BaseDirectory.AppData });
+      const { readTextFile, writeTextFile, BaseDirectory } = await import('@tauri-apps/plugin-fs');
+      let existing = '';
+      try { existing = await readTextFile(LOG_PATH, { baseDir: BaseDirectory.AppData }); } catch {}
+      await writeTextFile(LOG_PATH, existing + line, { baseDir: BaseDirectory.AppData });
     } catch (e) {
       console.error('Audit write failed:', e);
     }

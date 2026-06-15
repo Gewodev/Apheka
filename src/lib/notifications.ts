@@ -1,28 +1,31 @@
-export function requestNativePermission(): Promise<NotificationPermission> {
-  if (!('Notification' in window)) return Promise.resolve('denied');
-  if (Notification.permission === 'granted') return Promise.resolve('granted');
-  if (Notification.permission === 'denied') return Promise.resolve('denied');
-  return Notification.requestPermission();
+import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
+
+let cachedPermission: boolean | null = null;
+
+export async function requestNativePermission(): Promise<boolean> {
+  if (cachedPermission !== null) return cachedPermission;
+  let granted = await isPermissionGranted();
+  if (!granted) {
+    const perm = await requestPermission();
+    granted = perm === 'granted';
+  }
+  cachedPermission = granted;
+  return granted;
 }
 
-export function sendNativeNotification(title: string, body: string): void {
-  if (!('Notification' in window)) return;
-  if (Notification.permission !== 'granted') return;
+export async function sendNativeNotification(title: string, body: string): Promise<void> {
   try {
-    new Notification(title, {
-      body,
-      icon: '/icon.png',
-      silent: false,
-      tag: 'owa-studio',
-    });
+    const ok = await requestNativePermission();
+    if (!ok) return;
+    sendNotification({ title, body });
   } catch {
-    // fallback silently
+    // silently fall back — app may not be in Tauri context
   }
 }
 
 export function notifySessionComplete(minutes: number): void {
   sendNativeNotification(
-    'Sesion completada',
+    'Sesión completada',
     `Has completado ${minutes} minutos de enfoque. Toma un descanso.`
   );
 }
@@ -45,5 +48,12 @@ export function notifyAllTasksComplete(): void {
   sendNativeNotification(
     'Tareas completadas',
     'Todas las tareas pendientes han sido marcadas como completadas.'
+  );
+}
+
+export function notifyTaskDueSoon(title: string, dueDate: string): void {
+  sendNativeNotification(
+    'Tarea por vencer',
+    `"${title}" vence el ${dueDate}.`
   );
 }

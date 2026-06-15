@@ -1,4 +1,6 @@
 import { readFile } from '@tauri-apps/plugin-fs';
+import { convertFileSrc } from '@tauri-apps/api/core';
+import * as mm from 'music-metadata-browser';
 
 function toDataUrl(mime: string, data: Uint8Array): string {
   const binary = Array.from(data).map(b => String.fromCharCode(b)).join('');
@@ -17,15 +19,32 @@ function read24BE(buf: Uint8Array, offset: number): number {
   return (buf[offset] << 16) | (buf[offset + 1] << 8) | buf[offset + 2];
 }
 
-export function parseCollaborators(artistRaw: string): { artist: string; collaborators: string[] } {
-  const separators = /[,;&]|\bfeat\.\b|\bft\.\b|\bfeat\b|\bft\b|\bfeaturing\b|\bx\b/i;
-  const parts = artistRaw.split(separators).map(s => s.trim()).filter(Boolean);
-  if (parts.length <= 1) return { artist: artistRaw, collaborators: [] };
-  return { artist: parts[0], collaborators: parts.slice(1) };
+function decodeId3Text(enc: number, raw: Uint8Array): string {
+  // Strip trailing nulls (simple loop)
+  let end = raw.length;
+  while (end > 0 && raw[end - 1] === 0) end--;
+  const data = end > 0 ? raw.subarray(0, end) : raw;
+  if (data.length === 0) return '';
+
+  if (enc === 0x01) {
+    if (data.length >= 2) {
+      if (data[0] === 0xFF && data[1] === 0xFE) return new TextDecoder('utf-16le').decode(data.subarray(2));
+      if (data[0] === 0xFE && data[1] === 0xFF) return new TextDecoder('utf-16be').decode(data.subarray(2));
+    }
+    return new TextDecoder('utf-16le').decode(data);
+  }
+  if (enc === 0x02) return new TextDecoder('utf-16be').decode(data);
+  if (enc === 0x03) return new TextDecoder('utf-8').decode(data);
+  // enc === 0x00 (ISO-8859-1 / Latin-1):
+  // Many encoders write UTF-8 but forget to set encoding byte to $03.
+  // Try UTF-8 first — if result has no U+FFFD, it was valid UTF-8.
+  const utf8 = new TextDecoder('utf-8').decode(data);
+  if (!utf8.includes('\uFFFD')) return utf8;
+  return new TextDecoder('latin1').decode(data);
 }
 
-function parseId3v2Tags(buf: Uint8Array): { coverUrl?: string; title?: string; artist?: string; collaborators?: string[] } | null {
-  if (buf[0] !== 0x49 || buf[1] !== 0x44 || buf[2] !== 0x53) return null;
+function parseId3v2Tags(buf: Uint8Array): { coverUrl?: string; title?: string; artist?: string } | null {
+  if (buf.length < 10 || buf[0] !== 0x49 || buf[1] !== 0x44 || buf[2] !== 0x33) return null;
   const major = buf[3];
   const size = readSyncsafeInt(buf, 6);
   const tagHdrSize = 10;
@@ -84,7 +103,7 @@ function parseId3v2Tags(buf: Uint8Array): { coverUrl?: string; title?: string; a
           }
         }
       } catch {
-        // APIC parse failed — continue with other frames
+        // APIC parse failed — continue
       }
     }
     try {
@@ -93,17 +112,7 @@ function parseId3v2Tags(buf: Uint8Array): { coverUrl?: string; title?: string; a
         if (textStart >= frameEnd) { offset = frameEnd; continue; }
         const enc = buf[textStart];
         const raw = textStart + 1 < frameEnd ? buf.slice(textStart + 1, frameEnd) : new Uint8Array(0);
-        let str: string;
-        if (enc === 0x01) {
-          str = new TextDecoder('utf-16le').decode(raw);
-        } else if (enc === 0x02) {
-          str = new TextDecoder('utf-16be').decode(raw);
-        } else if (enc === 0x03) {
-          str = new TextDecoder('utf-8').decode(raw);
-        } else {
-          str = new TextDecoder('latin1').decode(raw);
-        }
-        title = str.replace(/\0/g, '').trim();
+        title = decodeId3Text(enc, raw).replace(/\0/g, '').trim();
       }
     } catch { /* TIT2 failed */ }
     try {
@@ -112,23 +121,45 @@ function parseId3v2Tags(buf: Uint8Array): { coverUrl?: string; title?: string; a
         if (textStart >= frameEnd) { offset = frameEnd; continue; }
         const enc = buf[textStart];
         const raw = textStart + 1 < frameEnd ? buf.slice(textStart + 1, frameEnd) : new Uint8Array(0);
-        let str: string;
-        if (enc === 0x01) {
-          str = new TextDecoder('utf-16le').decode(raw);
-        } else if (enc === 0x02) {
-          str = new TextDecoder('utf-16be').decode(raw);
-        } else if (enc === 0x03) {
-          str = new TextDecoder('utf-8').decode(raw);
-        } else {
-          str = new TextDecoder('latin1').decode(raw);
-        }
-        artist = str.replace(/\0/g, '').trim();
+        artist = decodeId3Text(enc, raw).replace(/\0/g, '').trim();
       }
     } catch { /* TPE1 failed */ }
     offset = frameEnd;
   }
-  const parsed = artist ? parseCollaborators(artist) : undefined;
-  return { coverUrl, title, artist: parsed?.artist || artist, collaborators: parsed?.collaborators };
+  return { coverUrl, title, artist };
+}
+
+// ID3v1: 128 bytes at end of file
+function decodeId3v1Text(raw: Uint8Array): string {
+  // Truncate at first null (ID3v1 fields are null-terminated, remaining bytes are garbage)
+  let end = raw.length;
+  for (let i = 0; i < raw.length; i++) {
+    if (raw[i] === 0) { end = i; break; }
+  }
+  const data = raw.subarray(0, end);
+  const latin1 = new TextDecoder('latin1').decode(data).trim();
+  if (!latin1) return latin1;
+  // Check for high bytes: some encoders write UTF-8 into ID3v1 fields
+  for (let i = 0; i < data.length; i++) {
+    if (data[i] >= 0x80) {
+      const utf8 = new TextDecoder('utf-8').decode(data).trim();
+      if (utf8 && !utf8.includes('\uFFFD')) return utf8;
+      break;
+    }
+  }
+  return latin1;
+}
+
+function parseId3v1Tags(buf: Uint8Array): { title?: string; artist?: string } | null {
+  if (buf.length < 128) return null;
+  const tagStart = buf.length - 128;
+  if (buf[tagStart] !== 0x54 || buf[tagStart + 1] !== 0x41 || buf[tagStart + 2] !== 0x47) return null;
+  const title = decodeId3v1Text(buf.slice(tagStart + 3, tagStart + 33));
+  const artist = decodeId3v1Text(buf.slice(tagStart + 33, tagStart + 63));
+  return {
+    title: title || undefined,
+    artist: artist || undefined,
+  };
 }
 
 function parseMp4Metadata(buf: Uint8Array): { coverUrl?: string; title?: string; artist?: string; duration: number } {
@@ -156,23 +187,22 @@ function parseMp4Metadata(buf: Uint8Array): { coverUrl?: string; title?: string;
     return null;
   }
 
-  function walkBox(d: Uint8Array, ...types: string[]): Uint8Array | null {
-    let remaining = d;
-    for (const t of types) {
-      const found = findBox(remaining, t);
-      if (!found) return null;
-      remaining = found;
-    }
-    return remaining;
-  }
-
   const moov = findBox(buf, 'moov');
+  let duration = 0;
   if (moov) {
+    const mvhd = findBox(moov, 'mvhd');
+    if (mvhd) {
+      const version = mvhd[0];
+      const timescale = read32BE(mvhd, version === 0 ? 12 : 20);
+      if (timescale > 0) {
+        const dur = version === 0 ? read32BE(mvhd, 16) : read32BE(mvhd, 24);
+        duration = dur / timescale;
+      }
+    }
     const udta = findBox(moov, 'udta');
     if (udta) {
       const meta = findBox(udta, 'meta');
       if (meta) {
-        // meta is a "full box" — 8-byte header + 4-byte version/flags before children
         const metaBody = meta.slice(4);
         const ilst = findBox(metaBody, 'ilst');
         if (ilst) {
@@ -196,11 +226,7 @@ function parseMp4Metadata(buf: Uint8Array): { coverUrl?: string; title?: string;
               if (dataBox && dataBox.length > 8) {
                 const raw = dataBox.slice(8);
                 const enc = raw[0];
-                if (enc === 0x01 || enc === 0x02) {
-                  title = new TextDecoder('utf-16le').decode(raw.slice(1)).replace(/\0/g, '').trim();
-                } else {
-                  title = new TextDecoder('utf-8').decode(raw).replace(/\0/g, '').trim();
-                }
+                title = decodeId3Text(enc, raw.slice(1)).replace(/\0/g, '').trim();
               }
             }
             if (box.type === '\u00a9ART') {
@@ -208,11 +234,7 @@ function parseMp4Metadata(buf: Uint8Array): { coverUrl?: string; title?: string;
               if (dataBox && dataBox.length > 8) {
                 const raw = dataBox.slice(8);
                 const enc = raw[0];
-                if (enc === 0x01 || enc === 0x02) {
-                  artist = new TextDecoder('utf-16le').decode(raw.slice(1)).replace(/\0/g, '').trim();
-                } else {
-                  artist = new TextDecoder('utf-8').decode(raw).replace(/\0/g, '').trim();
-                }
+                artist = decodeId3Text(enc, raw.slice(1)).replace(/\0/g, '').trim();
               }
             }
             pos = box.next;
@@ -221,14 +243,15 @@ function parseMp4Metadata(buf: Uint8Array): { coverUrl?: string; title?: string;
       }
     }
   }
-  return { coverUrl, title, artist };
+  return { coverUrl, title, artist, duration };
 }
 
-function parseFlacMetadata(buf: Uint8Array): { coverUrl?: string; title?: string; artist?: string } {
-  if (buf[0] !== 0x66 || buf[1] !== 0x4C || buf[2] !== 0x61 || buf[3] !== 0x43) return {};
+function parseFlacMetadata(buf: Uint8Array): { coverUrl?: string; title?: string; artist?: string; duration: number } {
+  if (buf[0] !== 0x66 || buf[1] !== 0x4C || buf[2] !== 0x61 || buf[3] !== 0x43) return { duration: 0 };
   let coverUrl: string | undefined;
   let title: string | undefined;
   let artist: string | undefined;
+  let duration = 0;
   let pos = 4;
   let lastBlock = false;
   while (!lastBlock && pos + 4 <= buf.length) {
@@ -238,6 +261,11 @@ function parseFlacMetadata(buf: Uint8Array): { coverUrl?: string; title?: string
     const blockSize = read24BE(buf, pos + 1);
     pos += 4;
     if (pos + blockSize > buf.length) break;
+    if (blockType === 0 && blockSize >= 18) {
+      const sampleRate = (buf[pos + 10] << 12) | (buf[pos + 11] << 4) | (buf[pos + 12] >> 4);
+      const totalSamples = ((buf[pos + 12] & 0x0F) << 32) | (buf[pos + 13] << 24) | (buf[pos + 14] << 16) | (buf[pos + 15] << 8) | buf[pos + 16];
+      if (sampleRate > 0) duration = totalSamples / sampleRate;
+    }
     if (blockType === 6 && blockSize > 20) {
       const picType = read32BE(buf, pos);
       if (picType === 3) {
@@ -272,7 +300,7 @@ function parseFlacMetadata(buf: Uint8Array): { coverUrl?: string; title?: string
     }
     pos += blockSize;
   }
-  return { coverUrl, title, artist };
+  return { coverUrl, title, artist, duration };
 }
 
 function compressCover(dataUrl: string, maxSize = 300): Promise<string> {
@@ -304,116 +332,163 @@ function compressCover(dataUrl: string, maxSize = 300): Promise<string> {
   });
 }
 
-function parseId3v1Tags(buf: Uint8Array): { title?: string; artist?: string } | null {
-  if (buf.length < 128) return null;
-  const tagStart = buf.length - 128;
-  if (buf[tagStart] !== 0x54 || buf[tagStart + 1] !== 0x41 || buf[tagStart + 2] !== 0x47) return null;
-  const decode = (start: number, len: number) => {
-    const slice = buf.slice(tagStart + start, tagStart + start + len);
-    const end = slice.indexOf(0);
-    const text = new TextDecoder('latin1').decode(end >= 0 ? slice.slice(0, end) : slice).trim();
-    return text || undefined;
-  };
-  return { title: decode(3, 30), artist: decode(33, 30) };
-}
-
 export async function extractAudioMetadata(filePath: string): Promise<{
   coverUrl?: string;
   title?: string;
   artist?: string;
-  collaborators?: string[];
   duration: number;
 }> {
+  const fileName = filePath.split(/[/\\]/).pop() || 'Unknown';
   try {
+    let data = await readFile(filePath);
+    if (!data || data.length < 10) {
+      console.warn('[Metadata] File too small or empty:', fileName, data?.length);
+      return { duration: 0 };
+    }
+    // Ensure data is Uint8Array (some Tauri versions return number[])
+    if (!(data instanceof Uint8Array)) {
+      data = new Uint8Array(data as any);
+    }
     const ext = filePath.toLowerCase().split('.').pop() || '';
-    const data = await readFile(filePath);
 
-    let coverUrl: string | undefined;
+    const mimeMap: Record<string, string> = {
+      mp3: 'audio/mpeg',
+      m4a: 'audio/mp4',
+      aac: 'audio/aac',
+      mp4: 'audio/mp4',
+      flac: 'audio/flac',
+      ogg: 'audio/ogg',
+      opus: 'audio/opus',
+      wav: 'audio/wav',
+      wma: 'audio/x-ms-wma',
+      aiff: 'audio/aiff',
+      ape: 'audio/ape',
+    };
+
+    const mimeType = mimeMap[ext] || 'audio/mpeg';
+
+    // Try music-metadata-browser first (AETHER approach)
+    let metadata: mm.IAudioMetadata | null = null;
+    try {
+      const audioFile = new File([data], fileName, { type: mimeType });
+      metadata = await mm.parseBlob(audioFile);
+    } catch (err) {
+      console.warn('[Metadata] parseBlob(File) failed:', fileName);
+      metadata = null;
+    }
+    if (!metadata) {
+      try {
+        metadata = await mm.parseBuffer(data, mimeType);
+      } catch {
+        console.warn('[Metadata] parseBuffer failed:', fileName);
+        metadata = null;
+      }
+    }
+    if (!metadata) {
+      try {
+        const blob = new Blob([data], { type: mimeType });
+        metadata = await mm.parseBlob(blob);
+      } catch {
+        console.warn('[Metadata] parseBlob(Blob) failed:', fileName);
+        metadata = null;
+      }
+    }
+
+    // Tier 4 — fetch via Tauri asset protocol (same mechanism playback uses)
+    if (!metadata) {
+      try {
+        const assetUrl = convertFileSrc(filePath);
+        const resp = await fetch(assetUrl);
+        const blob = await resp.blob();
+        if (blob.size > 100) {
+          metadata = await mm.parseBlob(blob);
+        }
+      } catch {
+        console.warn('[Metadata] fetch+parseBlob failed:', fileName);
+        metadata = null;
+      }
+    }
+
+    if (metadata) {
+      const { common, format } = metadata;
+      const title = common.title || fileName.replace(/\.[^/.]+$/, "");
+      const artist = common.artist || 'Unknown Artist';
+      const duration = format.duration || 0;
+      const hasPics = !!(common.picture && common.picture.length > 0);
+      console.log('[Metadata] music-metadata-browser OK:', fileName, { title, artist, hasCover: hasPics });
+
+      let coverUrl: string | undefined;
+      if (hasPics) {
+        const pic = common.picture![0];
+        const format2 = pic.format;
+        console.log('[Metadata] Cover pic.format:', format2, 'pic.data.length:', (pic.data as any).length || (pic.data as any).byteLength || '?');
+        const binary = Array.from(new Uint8Array(pic.data)).map(b => String.fromCharCode(b)).join('');
+        coverUrl = `data:${format2};base64,${btoa(binary)}`;
+        console.log('[Metadata] Raw coverUrl length:', coverUrl.length, 'prefix:', coverUrl.substring(0, 50));
+        try {
+          coverUrl = await compressCover(coverUrl);
+          console.log('[Metadata] After compress, length:', coverUrl.length);
+        } catch (e) {
+          console.warn('[Metadata] compressCover failed, using original:', e);
+        }
+      } else {
+        console.log('[Metadata] No cover art in metadata — trying manual APIC path...');
+        const manual = parseId3v2Tags(data);
+        console.log('[Metadata] Manual APIC result:', { hasCover: !!manual?.coverUrl, coverLen: manual?.coverUrl?.length });
+        if (manual?.coverUrl) {
+          coverUrl = manual.coverUrl;
+        }
+      }
+      return { coverUrl, title, artist, duration: Math.round(duration) };
+    }
+
+    // Manual fallback: format-specific byte-level parsers
+    console.log('[Metadata] Manual parsing for', fileName, 'ext:', ext, 'size:', data.length, 'firstBytes:', Array.from(data.slice(0, 16)).map(b => b.toString(16).padStart(2, '0')).join(' '));
     let title: string | undefined;
     let artist: string | undefined;
-    let collaborators: string[] | undefined;
+    let coverUrl: string | undefined;
+    let duration = 0;
 
     if (ext === 'mp3') {
-      const tags = parseId3v2Tags(data);
-      coverUrl = tags?.coverUrl;
-      title = tags?.title || title;
-      artist = tags?.artist || artist;
-      collaborators = tags?.collaborators || collaborators;
-      // Fallback: try ID3v1 (at end of file) if ID3v2 didn't find title/artist
+      // ID3v2
+      const id3v2 = parseId3v2Tags(data);
+      if (id3v2) {
+        console.log('[Metadata] ID3v2 found:', { title: id3v2.title, artist: id3v2.artist, hasCover: !!id3v2.coverUrl });
+        title = id3v2.title;
+        artist = id3v2.artist;
+        coverUrl = id3v2.coverUrl;
+      }
+      // ID3v1 (if ID3v2 didn't give us title/artist)
       if (!title || !artist) {
-        const v1 = parseId3v1Tags(data);
-        if (v1) {
-          if (!title) title = v1.title;
-          if (!artist) artist = v1.artist;
+        const id3v1 = parseId3v1Tags(data);
+        if (id3v1) {
+          console.log('[Metadata] ID3v1 found:', { title: id3v1.title, artist: id3v1.artist });
+          title = title || id3v1.title;
+          artist = artist || id3v1.artist;
         }
       }
-    } else if (ext === 'm4a' || ext === 'aac' || ext === 'mp4') {
-      const tags = parseMp4Metadata(data);
-      coverUrl ||= tags.coverUrl;
-      title ||= tags.title;
-      artist ||= tags.artist;
+    } else if (ext === 'm4a' || ext === 'mp4' || ext === 'aac') {
+      const mp4 = parseMp4Metadata(data);
+      title = mp4.title;
+      artist = mp4.artist;
+      coverUrl = mp4.coverUrl;
+      duration = mp4.duration;
     } else if (ext === 'flac') {
-      const tags = parseFlacMetadata(data);
-      coverUrl ||= tags.coverUrl;
-      title ||= tags.title;
-      artist ||= tags.artist;
-    } else if (ext === 'ogg' || ext === 'opus') {
-      const tags = parseFlacMetadata(data);
-      coverUrl ||= tags.coverUrl;
-      title ||= tags.title;
-      artist ||= tags.artist;
+      const flac = parseFlacMetadata(data);
+      title = flac.title;
+      artist = flac.artist;
+      coverUrl = flac.coverUrl;
+      duration = flac.duration;
     }
 
-    if (coverUrl) {
-      try {
-        coverUrl = await compressCover(coverUrl);
-      } catch {
-        // keep original coverUrl if compression fails
-      }
-    }
-
-  // If structured parsing didn't find cover, scan raw buffer for embedded image headers
-  if (!coverUrl) {
-    const scanEnd = Math.min(data.length, 1_048_576);
-    for (let i = 0; i <= scanEnd - 4; i++) {
-      if (data[i] === 0xFF && data[i + 1] === 0xD8 && data[i + 2] === 0xFF) {
-        // JPEG header found — find EOI marker
-        for (let j = i + 2; j < data.length - 1; j++) {
-          if (data[j] === 0xFF && data[j + 1] === 0xD9) {
-            const img = data.slice(i, j + 2);
-            if (img.length > 5000) {
-              coverUrl = toDataUrl('image/jpeg', img);
-            }
-            break;
-          }
-        }
-        if (coverUrl) break;
-      }
-      if (data[i] === 0x89 && data[i + 1] === 0x50 && data[i + 2] === 0x4E && data[i + 3] === 0x47) {
-        // PNG header found — find IEND
-        for (let j = i + 4; j < data.length - 3; j++) {
-          if (data[j] === 0x49 && data[j + 1] === 0x45 && data[j + 2] === 0x4E && data[j + 3] === 0x44) {
-            const img = data.slice(i, j + 4);
-            if (img.length > 5000) {
-              coverUrl = toDataUrl('image/png', img);
-            }
-            break;
-          }
-        }
-        if (coverUrl) break;
-      }
-    }
-  }
-
-  const parsed = artist ? parseCollaborators(artist) : undefined;
     return {
       coverUrl,
       title,
-      artist: parsed?.artist || artist,
-      collaborators: parsed?.collaborators || collaborators,
-      duration: 0,
+      artist,
+      duration: Math.round(duration),
     };
-  } catch {
+  } catch (err) {
+    console.warn('[Metadata] extractAudioMetadata failed for', fileName, err);
     return { duration: 0 };
   }
 }

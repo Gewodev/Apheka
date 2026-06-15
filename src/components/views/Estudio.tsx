@@ -6,12 +6,12 @@ import {
   TrendingUp, AlertTriangle, Link2, Eye, Focus, Monitor, Minimize2, Maximize2
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
-import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { WebviewWindow, getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { useApp, fmtClock } from '../../store/AppContext';
 import { useTimer } from '../../hooks/useTimer';
 import { format, subDays } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { notifySessionComplete, notifyBreakOver } from '../../lib/notifications';
+import { notifySessionComplete, notifyBreakOver, sendNativeNotification } from '../../lib/notifications';
 import NotificationBell from '../ui/NotificationBell';
 import AnalyticsDrawer from '../ui/AnalyticsDrawer';
 import { DigitSVG, ColonSVG } from '../LEDDigits';
@@ -85,11 +85,12 @@ export default function Estudio() {
   const {
     tasks, courses, addSubTask, settings, dailyStudyTime, activeTaskId, setActiveTaskId,
     pomodoroSessions, incrementPomodoroSessions, studySessions,
-    addStudySession, weeklyStudyTime,
-
+    addStudySession, updateStudySession, weeklyStudyTime,
+    dailyPerformances,
     focusPomodoroTime, focusChronoTime, breakTime, dailyBreakTime, dailyFocusPomodoro, dailyFocusChrono,
     accumulatedPauseTime, distractionCount,
     addNotification, updateTask, setAccumulatedPauseTime, setIsTimerActive,
+    setDistractionCount,
   } = useApp();
 
   const {
@@ -102,6 +103,18 @@ export default function Estudio() {
   const [showAllActivity, setShowAllActivity] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [showBreakResetConfirm, setShowBreakResetConfirm] = useState(false);
+  const [showSessionEval, setShowSessionEval] = useState(false);
+  const [showFreeStudyPrompt, setShowFreeStudyPrompt] = useState(false);
+  const [evalSessionId, setEvalSessionId] = useState<string | null>(null);
+  const [evalPerception, setEvalPerception] = useState(7);
+  const [evalDiscomfort, setEvalDiscomfort] = useState(2);
+  const [evalVolmeter, setEvalVolmeter] = useState(10);
+  const [evalMode, setEvalMode] = useState<'rendimiento' | 'tiempo'>('rendimiento');
+  const [evalSubjects, setEvalSubjects] = useState<string[]>([]);
+  const [evalTaskAction, setEvalTaskAction] = useState<'progress' | 'complete' | 'not_finished' | null>(null);
+  const [evalStudyMode, setEvalStudyMode] = useState<'free' | 'task'>('free');
+  const [evalLinkedTaskId, setEvalLinkedTaskId] = useState<string | null>(null);
+  const [evalFreeText, setEvalFreeText] = useState('');
   const [currentTime, setCurrentTime] = useState(new Date());
 
   const restStartRef = useRef(0);
@@ -174,10 +187,11 @@ export default function Estudio() {
     if (isTimerActive && !isRest && sessionTime >= settings.pomodoroTime && !hasTriggeredRef.current && sessionType === 'pomodoro') {
       hasTriggeredRef.current = true;
       setIsRest(true);
+      sendNativeNotification('Descanso iniciado', 'Es momento de tomar un descanso. Recupera energía para el siguiente ciclo.');
       restStartRef.current = sessionTime;
       incrementPomodoroSessions();
       notifySessionComplete(settings.pomodoroTime / 60);
-      addStudySession({
+      const sessionId = addStudySession({
         type: 'pomodoro',
         startedAt: new Date(Date.now() - sessionTime * 1000).toISOString(),
         endedAt: new Date().toISOString(),
@@ -187,6 +201,23 @@ export default function Estudio() {
         pauseCount: distractionCount,
         pauseDuration: accumulatedPauseTime - lastPauseTimeRef.current,
       });
+      if (sessionId) {
+        setEvalSessionId(sessionId);
+        setEvalPerception(7);
+        setEvalDiscomfort(Math.min(10, distractionCount));
+        setEvalVolmeter(Math.min(20, Math.max(1, 10 - distractionCount + 5)));
+        setEvalMode('rendimiento');
+        setEvalFreeText('');
+        if (activeTaskId) {
+          const task = tasks.find(t => t.id === activeTaskId);
+          setEvalTaskAction(task?.status === 'inicio' ? null : (task?.status === 'progreso' ? 'not_finished' : 'complete'));
+          setEvalSubjects(courses.filter(c => task?.course === c.name).map(c => c.id));
+          setShowSessionEval(true);
+        } else {
+          setEvalSubjects([]);
+          setShowFreeStudyPrompt(true);
+        }
+      }
       lastPauseTimeRef.current = accumulatedPauseTime;
       if (activeTaskId) {
         const task = tasks.find(t => t.id === activeTaskId);
@@ -215,7 +246,7 @@ export default function Estudio() {
         saveChronoRound(r);
         setChronoRounds(r);
         addNotification(`Ronda ${r} completada (${chronoGoal / 60} min)`, 'success');
-        addStudySession({
+        const sessionId = addStudySession({
           type: 'chrono',
           startedAt: new Date(Date.now() - sessionTime * 1000).toISOString(),
           endedAt: new Date().toISOString(),
@@ -225,6 +256,23 @@ export default function Estudio() {
           pauseCount: distractionCount,
           pauseDuration: accumulatedPauseTime - lastPauseTimeRef.current,
         });
+        if (sessionId) {
+          setEvalSessionId(sessionId);
+          setEvalPerception(7);
+          setEvalDiscomfort(Math.min(10, distractionCount));
+          setEvalVolmeter(Math.min(20, Math.max(1, 10 - distractionCount + 5)));
+          setEvalMode('tiempo');
+          setEvalFreeText('');
+          if (activeTaskId) {
+            const task = tasks.find(t => t.id === activeTaskId);
+            setEvalTaskAction(task?.status === 'inicio' ? null : (task?.status === 'progreso' ? 'not_finished' : 'complete'));
+            setEvalSubjects(courses.filter(c => task?.course === c.name).map(c => c.id));
+            setShowSessionEval(true);
+          } else {
+            setEvalSubjects([]);
+            setShowFreeStudyPrompt(true);
+          }
+        }
         lastPauseTimeRef.current = accumulatedPauseTime;
         if (activeTaskId) {
           const task = tasks.find(t => t.id === activeTaskId);
@@ -255,6 +303,16 @@ export default function Estudio() {
   useEffect(() => {
     if (isRest && restElapsed >= currentBreakLimit && !breakNotifiedRef.current) {
       breakNotifiedRef.current = true;
+      addStudySession({
+        type: 'break',
+        startedAt: new Date(Date.now() - restElapsed * 1000).toISOString(),
+        endedAt: new Date().toISOString(),
+        duration: restElapsed,
+        taskId: undefined,
+        courseId: undefined,
+        pauseCount: 0,
+        pauseDuration: 0,
+      });
       setIsRest(false);
       setSessionTime(0);
       setIsTimerActive(false);
@@ -262,7 +320,7 @@ export default function Estudio() {
       addNotification(isLongBreak ? 'Descanso largo completado' : 'Descanso completado', 'success');
     }
     if (!isRest) breakNotifiedRef.current = false;
-  }, [restElapsed, isRest, currentBreakLimit, isLongBreak]);
+  }, [restElapsed, isRest, currentBreakLimit, isLongBreak, addStudySession]);
 
   const unlinkTask = () => { 
     if (isTimerActive) return;
@@ -283,8 +341,8 @@ export default function Estudio() {
   const studyM = Math.floor((studyTotalSecs % 3600) / 60);
   const studyFormatted = studyH > 0 ? `${studyH}h ${studyM}m` : `${studyM}m`;
 
-  const efficiencyPct = isTimerActive || sessionTime > 0
-    ? Math.max(0, Math.min(100, Math.round(100 - ((accumulatedPauseTime / Math.max(1, sessionTime)) * 100))))
+  const efficiencyPct = studyTotalSecs + accumulatedPauseTime > 0
+    ? Math.max(0, Math.min(100, Math.round(100 * studyTotalSecs / (studyTotalSecs + accumulatedPauseTime + distractionCount * 30))))
     : 100;
 
   // Daily trend: compare today vs yesterday
@@ -356,39 +414,29 @@ export default function Estudio() {
     { name: 'Descanso', value: breakTime, color: breakColor },
   ], [focusPomodoroTime, focusChronoTime, breakTime, focusColor, chronoColor, breakColor]);
   const totalDonut = focusPomodoroTime + focusChronoTime + breakTime;
-  const donutSegments = useMemo(() => {
-    if (totalDonut === 0) return [{ name: 'Sin Actividad', value: 1, color: 'var(--bg-hover)', startAngle: 0, endAngle: 360 }];
-    const GAP = 10;
-    const PAD = 1.5;
+  const donutGradient = useMemo(() => {
+    if (totalDonut === 0) return 'conic-gradient(from -90deg, var(--bg-hover) 0deg 360deg)';
     const active = donutDataRaw.filter(d => d.value > 0);
-    const numGaps = active.length - 1;
-    const gapPerSegment = numGaps > 0 ? GAP / numGaps : 0;
-    const totalAngle = 360 - numGaps * gapPerSegment;
-    let currentAngle = 0;
-    return active.map((d, i) => {
-      const angle = (d.value / totalDonut) * totalAngle;
-      const seg = {
-        ...d,
-        startAngle: currentAngle + i * gapPerSegment + PAD,
-        endAngle: currentAngle + i * gapPerSegment + angle - PAD,
-      };
-      currentAngle += angle;
-      return seg;
-    });
+    const N = active.length;
+    if (N === 0) return 'conic-gradient(from -90deg, var(--bg-hover) 0deg 360deg)';
+    const GAP_DEG = 2;
+    if (N === 1) return `conic-gradient(from -90deg, ${active[0].color} 0deg 360deg)`;
+    const available = 360 - N * GAP_DEG;
+    let currentDeg = GAP_DEG / 2;
+    const stops = [`transparent 0deg ${currentDeg}deg`];
+    for (let i = 0; i < N; i++) {
+      const segDeg = (active[i].value / totalDonut) * available;
+      stops.push(`${active[i].color} ${currentDeg}deg ${currentDeg + segDeg}deg`);
+      currentDeg += segDeg;
+      if (i < N - 1) {
+        stops.push(`transparent ${currentDeg}deg ${currentDeg + GAP_DEG}deg`);
+        currentDeg += GAP_DEG;
+      } else {
+        stops.push(`transparent ${currentDeg}deg 360deg`);
+      }
+    }
+    return `conic-gradient(from -90deg, ${stops.join(', ')})`;
   }, [donutDataRaw, totalDonut]);
-
-  function polarToCartesian(cx: number, cy: number, r: number, deg: number) {
-    const rad = (deg - 90) * Math.PI / 180;
-    return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
-  }
-
-  function describeArc(cx: number, cy: number, r: number, startDeg: number, endDeg: number) {
-    const s = polarToCartesian(cx, cy, r, endDeg);
-    const e = polarToCartesian(cx, cy, r, startDeg);
-    const large = endDeg - startDeg > 180 ? 1 : 0;
-    return `M ${s.x} ${s.y} A ${r} ${r} 0 ${large} 0 ${e.x} ${e.y}`;
-  }
-
   return (
     <div className="page-container h-full flex flex-col" style={{ position: 'relative', overflow: 'hidden' }}>
       <div className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', gap: 0, padding: '0 0 16px 0' }}>
@@ -408,7 +456,20 @@ export default function Estudio() {
               {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
             </button>
             {/* Floating timer toggle — opens always-on-top floating timer window */}
-            <button onClick={() => invoke('open_floating_timer')} style={{
+            <button onClick={async () => {
+              const existing = await WebviewWindow.getByLabel('floating-timer');
+              if (existing) { await existing.show(); await existing.setFocus(); return; }
+              const win = new WebviewWindow('floating-timer', {
+                url: '/',
+                title: 'Timer',
+                width: 170, height: 96,
+                resizable: false,
+                decorations: true,
+                alwaysOnTop: true,
+                skipTaskbar: true,
+              });
+              win.once('tauri://error', () => {});
+            }} style={{
               padding: 8, borderRadius: '50%', background: 'var(--bg-deep)',
               border: '1px solid var(--border-soft)', color: 'var(--text-secondary)',
               cursor: 'pointer', transition: 'all 200ms', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -444,7 +505,7 @@ export default function Estudio() {
         {/* LEFT COLUMN: Timer & Bottom Statistics */}
         <div style={{ flex: 1.6, display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
           
-          {/* TIMER PANEL (Slightly more compact vertically) */}
+          {/* TIMER PANEL */}
           <div className="bento-card" style={{ padding: '24px 32px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative', border: '1px solid var(--border-subtle)', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
             
             {/* Mode Type Header */}
@@ -476,7 +537,7 @@ export default function Estudio() {
             </div>
 
             {/* Glowing Segmented Timer */}
-            <div style={{ position: 'relative', margin: '16px 0', height: 190, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ position: 'relative', margin: '10px 0 4px', height: 190, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: 400, height: 200, background: `radial-gradient(ellipse, ${statusColor}08 0%, transparent 65%)`, pointerEvents: 'none' }} />
               <LEDTime 
                 time={isBreakTime ? fmt(computedRest) : fmt(computedDisplay)} 
@@ -487,16 +548,47 @@ export default function Estudio() {
               />
             </div>
 
-            {/* Linked Task Indicator */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '6px 14px', borderRadius: 8, background: activeTask ? `${activeTask.courseColor || statusColor}10` : 'var(--bg-deep)', border: `1px solid ${activeTask ? `${activeTask.courseColor || statusColor}30` : 'var(--border-subtle)'}`, marginTop: 4 }}>
-              <div style={{ width: 5, height: 5, borderRadius: '50%', background: activeTask ? (activeTask.courseColor || statusColor) : 'var(--text-muted)', boxShadow: activeTask ? `0 0 6px ${activeTask.courseColor || statusColor}80` : 'none', flexShrink: 0 }} />
-              <span style={{ fontSize: 11, fontWeight: activeTask ? 600 : 400, color: activeTask ? 'var(--text-primary)' : 'var(--text-muted)', letterSpacing: '0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 200 }}>
+            {/* Edge-to-edge progress dots — pomodoro only */}
+            {sessionType === 'pomodoro' && !isBreakTime && (
+              <div style={{ width: '100%', display: 'flex', gap: 2, justifyContent: 'space-between', marginTop: 0, marginBottom: 2 }}>
+                {Array.from({ length: 60 }, (_, i) => {
+                  const filled = sessionTime >= ((settings.pomodoroTime || 1500) / 60) * (i + 1);
+                  return (
+                    <div key={i} style={{
+                      flex: 1, height: 3, borderRadius: 1.5,
+                      background: filled ? statusColor : 'var(--bg-hover)',
+                      boxShadow: filled ? `0 0 4px ${statusColor}60` : 'none',
+                      transition: 'background 200ms, box-shadow 200ms',
+                    }} />
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Linked Task Indicator (small typography, below timer) */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '5px 12px', borderRadius: 6, background: activeTask ? `${activeTask.courseColor || statusColor}08` : 'transparent', border: activeTask ? `1px solid ${activeTask.courseColor || statusColor}20` : 'none', marginTop: 10 }}>
+              <div style={{ width: 4, height: 4, borderRadius: '50%', background: activeTask ? (activeTask.courseColor || statusColor) : 'var(--text-muted)', boxShadow: activeTask ? `0 0 4px ${activeTask.courseColor || statusColor}60` : 'none', flexShrink: 0 }} />
+              <span style={{ fontSize: 10, fontWeight: activeTask ? 500 : 400, color: activeTask ? 'var(--text-secondary)' : 'var(--text-muted)', letterSpacing: '0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 200 }}>
                 {activeTask ? activeTask.title : 'Sin tarea vinculada'}
               </span>
+              {activeTask && (
+                <>
+                  <button onClick={() => setActiveTaskId(null)} style={{ fontSize: 9, color: 'var(--text-tertiary)', cursor: 'pointer', background: 'none', border: 'none', textDecoration: 'underline', textUnderlineOffset: 2, padding: 0 }}>
+                    Desvincular
+                  </button>
+                  <button onClick={() => {
+                    const nextStatus = activeTask.status === 'inicio' ? 'progreso' : activeTask.status === 'progreso' ? 'completado' : 'inicio';
+                    updateTask(activeTaskId!, { status: nextStatus });
+                    addNotification(`Tarea marcada como "${nextStatus}"`, 'success');
+                  }} style={{ fontSize: 9, fontWeight: 600, color: 'var(--accent)', cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}>
+                    {activeTask.status === 'inicio' ? 'Iniciar' : activeTask.status === 'progreso' ? 'Completar' : 'Reabrir'}
+                  </button>
+                </>
+              )}
             </div>
 
             {/* Controls */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 40, marginTop: 12, marginBottom: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 40, marginTop: 20, marginBottom: 8 }}>
               <button onClick={() => { if (isBreakTime && isTimerActive) { setShowBreakResetConfirm(true); } else { handleReset(); } }}
                 style={{
                   width: 56, height: 56, borderRadius: '50%',
@@ -531,8 +623,43 @@ export default function Estudio() {
                 {isTimerActive ? <Pause size={30} fill="currentColor" /> : <Play size={30} fill="currentColor" style={{ marginLeft: 4 }} />}
               </button>
 
-              <button onClick={unlinkTask} style={{ width: 56, height: 56, borderRadius: '50%', cursor: 'pointer', border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms' }} className="hover:text-white hover:border-borderDefault hover:bg-surfaceElevated" title="Completar sesión con tarea">
-                <Link2 size={20} />
+              <button onClick={() => {
+                if (sessionTime < 60) return;
+                setIsTimerActive(false);
+                const sessionId = addStudySession({
+                  type: sessionType,
+                  startedAt: new Date(Date.now() - sessionTime * 1000).toISOString(),
+                  endedAt: new Date().toISOString(),
+                  duration: sessionTime,
+                  taskId: activeTaskId || undefined,
+                  courseId: undefined,
+                  pauseCount: distractionCount,
+                  pauseDuration: accumulatedPauseTime,
+                });
+                setEvalSessionId(sessionId || null);
+                setEvalVolmeter(Math.min(20, Math.max(1, 10 - distractionCount + 5)));
+                setEvalFreeText('');
+                if (activeTask) {
+                  setEvalTaskAction(activeTask.status === 'inicio' ? null : (activeTask.status === 'progreso' ? 'not_finished' : 'complete'));
+                  setEvalSubjects(courses.filter(c => activeTask.course === c.name).map(c => c.id));
+                  setShowSessionEval(true);
+                } else {
+                  setEvalSubjects([]);
+                  setShowFreeStudyPrompt(true);
+                }
+                if (activeTaskId) {
+                  const task = tasks.find(t => t.id === activeTaskId);
+                  if (task) updateTask(activeTaskId, { studyTime: (task.studyTime || 0) + Math.round(sessionTime / 60) });
+                }
+              }} style={{
+                width: 56, height: 56, borderRadius: '50%', cursor: sessionTime >= 60 ? 'pointer' : 'not-allowed',
+                border: sessionTime >= 60 ? `1px solid #10B98150` : '1px solid var(--border-soft)',
+                background: sessionTime >= 60 ? '#10B98110' : 'var(--bg-deep)',
+                color: sessionTime >= 60 ? '#10B981' : 'var(--text-muted)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'all 200ms', opacity: sessionTime >= 60 ? 1 : 0.35,
+              }} className="hover:text-white hover:border-borderDefault hover:bg-surfaceElevated" title={sessionTime < 60 ? 'Espera al menos 1 minuto' : 'Completar sesión'}>
+                <CheckCircle size={22} strokeWidth={2.5} />
               </button>
             </div>
           </div>
@@ -544,23 +671,16 @@ export default function Estudio() {
             <div className="bento-card" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column' }}>
               <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-primary)', letterSpacing: '0.12em', textTransform: 'uppercase', fontFamily: "'Inter', sans-serif", marginBottom: 10 }}>Distribución</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                <div style={{ width: 120, height: 120, position: 'relative', flexShrink: 0 }}>
-                  <svg width="120" height="120" viewBox="0 0 120 120">
-                    {donutSegments.map((s, i) => {
-                      const r = 42;
-                      const d = describeArc(60, 60, r, s.startAngle, s.endAngle);
-                      return (
-                        <path key={i} d={d}
-                          fill="none"
-                          stroke={s.color}
-                          strokeWidth="16"
-                          strokeLinecap="butt"
-                          style={{ filter: s.name !== 'Sin Actividad' ? `drop-shadow(0 0 3px ${s.color}70)` : 'none', transition: 'all 300ms' }}
-                        />
-                      );
-                    })}
-                    <circle cx="60" cy="60" r="12" fill="none" stroke="var(--bg-deep)" strokeWidth="2" opacity="0.3" />
-                  </svg>
+                <div style={{ width: 120, height: 120, flexShrink: 0 }}>
+                  <div style={{
+                    width: '100%', height: '100%', borderRadius: '50%',
+                    background: donutGradient,
+                    mask: 'radial-gradient(circle at 60px 60px, transparent 34px, #000 34px 50px, transparent 50px)',
+                    WebkitMask: 'radial-gradient(circle at 60px 60px, transparent 34px, #000 34px 50px, transparent 50px)',
+                    willChange: 'transform',
+                    backfaceVisibility: 'hidden',
+                    transform: 'translateZ(0)',
+                  }} />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                   {donutDataRaw.map(d => {
@@ -577,14 +697,13 @@ export default function Estudio() {
               </div>
             </div>
 
-            {/* Progress today (customized) */}
+            {/* PROGRESS TODAY + STREAK (replaces old Tarea Vinculada) */}
             <div className="bento-card" style={{
               padding: '20px 24px', display: 'flex', flexDirection: 'column', justifyContent: 'center',
               background: `linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)`,
               border: `1px solid ${dailyStudyTime >= (settings?.dailyGoal || 240) * 60 ? '#10B98130' : 'var(--border-subtle)'}`,
               position: 'relative', overflow: 'hidden',
             }}>
-              {/* Sutil glow cuando se cumple la meta */}
               {dailyStudyTime >= (settings?.dailyGoal || 240) * 60 && (
                 <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(circle at 80% 30%, #10B98115 0%, transparent 60%)', pointerEvents: 'none' }} />
               )}
@@ -629,13 +748,11 @@ export default function Estudio() {
                 <span style={{ fontSize: 10, fontWeight: 600, color: dailyStudyTime >= (settings?.dailyGoal || 240) * 60 ? '#F59E0B' : 'var(--text-secondary)' }}>
                   {streak} {streak === 1 ? 'día' : 'días'} consecutivos
                 </span>
-                {/* Monthly study time indicator */}
                 <span style={{ marginLeft: 'auto', fontSize: 9, color: 'var(--text-tertiary)', fontWeight: 400 }}>
                   Este mes: {monthlyStudyFormatted}
                 </span>
               </div>
             </div>
-
           </div>
         </div>
 
@@ -663,11 +780,11 @@ export default function Estudio() {
                 <span style={{ fontSize: 26, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", zIndex: 1 }}>{recentSessions.length}</span>
               </div>
 
-              {/* Metric 3: Efficiency % */}
-              <div style={{ background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', borderRadius: 16, padding: '20px', display: 'flex', flexDirection: 'column', gap: 8, position: 'relative', overflow: 'hidden' }}>
-                <Zap size={80} style={{ position: 'absolute', bottom: -20, right: -20, color: '#F59E0B', opacity: 0.15 }} />
+              {/* Metric 3: Eficiencia */}
+              <div style={{ background: 'var(--bg-deep)', border: `1px solid ${efficiencyPct > 80 ? '#10B981' : efficiencyPct > 50 ? '#F59E0B' : '#EF4444'}30`, borderRadius: 16, padding: '20px', display: 'flex', flexDirection: 'column', gap: 8, position: 'relative', overflow: 'hidden' }}>
+                <TrendingUp size={80} style={{ position: 'absolute', bottom: -20, right: -20, color: efficiencyPct > 80 ? '#10B981' : efficiencyPct > 50 ? '#F59E0B' : '#EF4444', opacity: 0.15 }} />
                 <span style={{ fontSize: 10, fontWeight: 300, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', zIndex: 1 }}>Eficiencia</span>
-                <span style={{ fontSize: 26, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", zIndex: 1 }}>{efficiencyPct}%</span>
+                <span style={{ fontSize: 26, fontWeight: 300, color: efficiencyPct > 80 ? '#10B981' : efficiencyPct > 50 ? 'var(--text-primary)' : '#EF4444', fontFamily: "'Inter Tight', sans-serif", zIndex: 1 }}>{efficiencyPct}%</span>
               </div>
 
               {/* Metric 4: Distractions */}
@@ -888,9 +1005,248 @@ export default function Estudio() {
                 style={{ padding: '8px 20px', borderRadius: 8, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
                 Seguir descansando
               </button>
-              <button onClick={() => { setShowBreakResetConfirm(false); handleReset(); }}
+              <button onClick={() => { setShowBreakResetConfirm(false); setDistractionCount((distractionCount ?? 0) + 1); setAccumulatedPauseTime(prev => prev + 30); handleReset(); }}
                 style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: '#F59E0B', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
                 Reiniciar de todos modos
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* POST-SESSION EVALUATION — with linked task */}
+      {showSessionEval && evalSessionId && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }} onClick={() => { setShowSessionEval(false); if (activeTaskId) setActiveTaskId(null); handleReset(); }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{
+              background: 'var(--bg-elevated)', borderRadius: 20,
+              border: '1px solid var(--border-soft)', padding: '32px 36px',
+              maxWidth: 460, width: '90%',
+              boxShadow: '0 32px 80px rgba(0,0,0,0.7)',
+            }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
+              <div style={{ width: 6, height: 6, borderRadius: '50%', background: statusColor, boxShadow: `0 0 8px ${statusColor}80`, flexShrink: 0 }} />
+              <span style={{ fontSize: 17, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em' }}>Evaluar sesión</span>
+            </div>
+
+            {/* Linked task info */}
+            {activeTask && (
+              <div style={{ marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, background: `${activeTask.courseColor || statusColor}10`, border: `1px solid ${activeTask.courseColor || statusColor}30` }}>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: activeTask.courseColor || statusColor, flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{activeTask.title}</div>
+                  <div style={{ fontSize: 10, fontWeight: 500, color: activeTask.status === 'inicio' ? '#F59E0B' : activeTask.status === 'progreso' ? '#3B82F6' : '#10B981' }}>
+                    {activeTask.status === 'inicio' ? 'Sin empezar' : activeTask.status === 'progreso' ? 'En progreso' : 'Completada'}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Volmeter 1-20 */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.02em' }}>¿Qué tan bien lo hiciste?</span>
+                <span style={{ fontSize: 16, fontWeight: 700, color: evalVolmeter > 14 ? '#10B981' : (evalVolmeter > 7 ? '#F59E0B' : '#EF4444'), fontFamily: "'Inter Tight', sans-serif" }}>{evalVolmeter}/20</span>
+              </div>
+              <div style={{ position: 'relative', height: 28, display: 'flex', alignItems: 'flex-end', gap: 2, marginBottom: 4 }}>
+                {Array.from({ length: 20 }, (_, i) => (
+                  <div key={i} style={{
+                    flex: 1, height: i < evalVolmeter ? 6 + (i / 20) * 18 : 3, borderRadius: '2px 2px 0 0',
+                    background: i < evalVolmeter
+                      ? (i < 7 ? '#EF4444' : i < 14 ? '#F59E0B' : '#10B981')
+                      : 'var(--bg-hover)',
+                    transition: 'all 200ms cubic-bezier(0.16, 1, 0.3, 1)',
+                    boxShadow: i < evalVolmeter ? `0 0 3px ${i < 7 ? '#EF4444' : i < 14 ? '#F59E0B' : '#10B981'}50` : 'none',
+                  }} />
+                ))}
+              </div>
+              <input type="range" min="1" max="20" value={evalVolmeter} onChange={e => setEvalVolmeter(Number(e.target.value))}
+                style={{ width: '100%', height: 3, cursor: 'pointer', WebkitAppearance: 'none', appearance: 'none', outline: 'none', borderRadius: 2, background: 'transparent', marginTop: 2 }}
+                className="volume-slider" />
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>
+                <span>Bajo</span><span>Alto</span>
+              </div>
+            </div>
+
+            {/* Task state action */}
+            {activeTask && (
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8, letterSpacing: '0.02em' }}>Estado de la tarea</label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {activeTask.status === 'inicio' && (
+                    <>
+                      <button onClick={() => setEvalTaskAction('progress')} style={{
+                        flex: 1, padding: '10px 12px', borderRadius: 10, fontSize: 11, fontWeight: 600,
+                        border: evalTaskAction === 'progress' ? `1px solid #F59E0B` : '1px solid var(--border-soft)',
+                        background: evalTaskAction === 'progress' ? '#F59E0B12' : 'var(--bg-deep)',
+                        color: evalTaskAction === 'progress' ? '#F59E0B' : 'var(--text-secondary)',
+                        cursor: 'pointer', transition: 'all 150ms',
+                      }}>En proceso</button>
+                      <button onClick={() => setEvalTaskAction('complete')} style={{
+                        flex: 1, padding: '10px 12px', borderRadius: 10, fontSize: 11, fontWeight: 600,
+                        border: evalTaskAction === 'complete' ? `1px solid #10B981` : '1px solid var(--border-soft)',
+                        background: evalTaskAction === 'complete' ? '#10B98112' : 'var(--bg-deep)',
+                        color: evalTaskAction === 'complete' ? '#10B981' : 'var(--text-secondary)',
+                        cursor: 'pointer', transition: 'all 150ms',
+                      }}>Completado</button>
+                    </>
+                  )}
+                  {activeTask.status === 'progreso' && (
+                    <>
+                      <button onClick={() => setEvalTaskAction('complete')} style={{
+                        flex: 1, padding: '10px 12px', borderRadius: 10, fontSize: 11, fontWeight: 600,
+                        border: evalTaskAction === 'complete' ? `1px solid #10B981` : '1px solid var(--border-soft)',
+                        background: evalTaskAction === 'complete' ? '#10B98112' : 'var(--bg-deep)',
+                        color: evalTaskAction === 'complete' ? '#10B981' : 'var(--text-secondary)',
+                        cursor: 'pointer', transition: 'all 150ms',
+                      }}>Completado</button>
+                      <button onClick={() => setEvalTaskAction('not_finished')} style={{
+                        flex: 1, padding: '10px 12px', borderRadius: 10, fontSize: 11, fontWeight: 600,
+                        border: evalTaskAction === 'not_finished' ? `1px solid #F59E0B` : '1px solid var(--border-soft)',
+                        background: evalTaskAction === 'not_finished' ? '#F59E0B12' : 'var(--bg-deep)',
+                        color: evalTaskAction === 'not_finished' ? '#F59E0B' : 'var(--text-secondary)',
+                        cursor: 'pointer', transition: 'all 150ms',
+                      }}>No lo terminé</button>
+                    </>
+                  )}
+                  {activeTask.status === 'completado' && (
+                    <div style={{ fontSize: 12, color: '#10B981', fontWeight: 600, padding: '10px 12px', background: '#10B98112', borderRadius: 10, border: '1px solid #10B98130', flex: 1, textAlign: 'center' }}>
+                      Tarea ya completada
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
+              <button onClick={() => { setShowSessionEval(false); }}
+                style={{ padding: '8px 20px', borderRadius: 10, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                Cancelar
+              </button>
+              <button onClick={() => {
+                updateStudySession(evalSessionId, {
+                  perception: evalPerception,
+                  discomfort: evalDiscomfort,
+                  mode: evalMode,
+                  subjects: evalSubjects.length > 0 ? evalSubjects : undefined,
+                });
+                if (evalTaskAction === 'complete' && activeTaskId) {
+                  updateTask(activeTaskId, { status: 'completado', completedAt: new Date().toISOString() });
+                  addNotification('¡Tarea completada!', 'success');
+                } else if (evalTaskAction === 'progress' && activeTaskId) {
+                  updateTask(activeTaskId, { status: 'progreso' });
+                }
+                if (activeTaskId) setActiveTaskId(null);
+                setShowSessionEval(false);
+                handleReset();
+              }}
+                style={{ padding: '8px 24px', borderRadius: 10, border: 'none', background: `linear-gradient(135deg, ${statusColor}, ${statusColor}dd)`, color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FREE STUDY PROMPT — no linked task */}
+      {showFreeStudyPrompt && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }} onClick={() => { setShowFreeStudyPrompt(false); handleReset(); }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{
+              background: 'var(--bg-elevated)', borderRadius: 20,
+              border: '1px solid var(--border-soft)', padding: '32px 36px',
+              maxWidth: 460, width: '90%',
+              boxShadow: '0 32px 80px rgba(0,0,0,0.7)',
+            }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
+              <div style={{ width: 6, height: 6, borderRadius: '50%', background: statusColor, boxShadow: `0 0 8px ${statusColor}80`, flexShrink: 0 }} />
+              <span style={{ fontSize: 17, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em' }}>Registrar tiempo</span>
+            </div>
+
+            {/* What did you study? */}
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8, letterSpacing: '0.02em' }}>¿Qué estudiaste?</label>
+              <input value={evalFreeText} onChange={e => setEvalFreeText(e.target.value)}
+                style={{ width: '100%', height: 42, borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 14px', fontSize: 13, outline: 'none' }}
+                placeholder="Tema, materia o concepto..." className="input-base" />
+            </div>
+
+            {/* Course selector (free study only) — single select */}
+            {courses.length > 0 && (
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8, letterSpacing: '0.02em' }}>Materia (opcional)</label>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 6 }}>
+                  {courses.map(c => {
+                    const sel = evalSubjects.includes(c.id);
+                    return (
+                      <button key={c.id} onClick={() => setEvalSubjects(sel ? [] : [c.id])}
+                        style={{
+                          padding: '10px 12px', borderRadius: 10, fontSize: 11, fontWeight: 500,
+                          border: sel ? `1.5px solid ${c.color}` : '1px solid var(--border-soft)',
+                          background: sel ? `${c.color}15` : 'var(--bg-deep)',
+                          color: sel ? c.color : 'var(--text-tertiary)',
+                          cursor: 'pointer', transition: 'all 180ms',
+                          display: 'flex', alignItems: 'center', gap: 8,
+                          boxShadow: sel ? `0 0 12px ${c.color}25` : 'none',
+                        }}>
+                        <div style={{
+                          width: 8, height: 8, borderRadius: '50%',
+                          background: c.color, flexShrink: 0,
+                          boxShadow: sel ? `0 0 6px ${c.color}` : 'none',
+                          transition: 'box-shadow 200ms',
+                        }} />
+                        <span style={{ flex: 1, textAlign: 'left' }}>{c.name}</span>
+                        {sel && <span style={{ fontSize: 9, opacity: 0.5 }}>✓</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Volmeter 1-20 */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.02em' }}>¿Qué tan bien lo hiciste?</span>
+                <span style={{ fontSize: 16, fontWeight: 700, color: evalVolmeter > 14 ? '#10B981' : (evalVolmeter > 7 ? '#F59E0B' : '#EF4444'), fontFamily: "'Inter Tight', sans-serif" }}>{evalVolmeter}/20</span>
+              </div>
+              <div style={{ position: 'relative', height: 28, display: 'flex', alignItems: 'flex-end', gap: 2, marginBottom: 4 }}>
+                {Array.from({ length: 20 }, (_, i) => (
+                  <div key={i} style={{
+                    flex: 1, height: i < evalVolmeter ? 6 + (i / 20) * 18 : 3, borderRadius: '2px 2px 0 0',
+                    background: i < evalVolmeter
+                      ? (i < 7 ? '#EF4444' : i < 14 ? '#F59E0B' : '#10B981')
+                      : 'var(--bg-hover)',
+                    transition: 'all 200ms cubic-bezier(0.16, 1, 0.3, 1)',
+                    boxShadow: i < evalVolmeter ? `0 0 3px ${i < 7 ? '#EF4444' : i < 14 ? '#F59E0B' : '#10B981'}50` : 'none',
+                  }} />
+                ))}
+              </div>
+              <input type="range" min="1" max="20" value={evalVolmeter} onChange={e => setEvalVolmeter(Number(e.target.value))}
+                style={{ width: '100%', height: 3, cursor: 'pointer', WebkitAppearance: 'none', appearance: 'none', outline: 'none', borderRadius: 2, background: 'transparent', marginTop: 2 }}
+                className="volume-slider" />
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>
+                <span>Bajo</span><span>Alto</span>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
+              <button onClick={() => { setShowFreeStudyPrompt(false); }}
+                style={{ padding: '8px 20px', borderRadius: 10, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                Cancelar
+              </button>
+              <button onClick={() => {
+                if (evalSessionId) {
+                  updateStudySession(evalSessionId, {
+                    subjects: evalSubjects.length > 0 ? evalSubjects : undefined,
+                  });
+                }
+                setShowFreeStudyPrompt(false);
+                handleReset();
+                addNotification(evalFreeText.trim() ? `Estudiaste: ${evalFreeText.trim()}` : 'Sesión registrada', 'success');
+              }}
+                style={{ padding: '8px 24px', borderRadius: 10, border: 'none', background: `linear-gradient(135deg, ${statusColor}, ${statusColor}dd)`, color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                Guardar
               </button>
             </div>
           </div>

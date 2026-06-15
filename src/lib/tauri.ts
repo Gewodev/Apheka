@@ -10,11 +10,9 @@ export async function invoke<T>(command: string, args?: any): Promise<T> {
     throw new Error('Not in Tauri environment');
   }
   const tokenObj = getStoredToken();
-  if (!isValidToken(tokenObj)) {
-    throw new Error('Authentication required for Tauri commands');
-  }
-  // Inject token into args so Rust side can verify
-  const enrichedArgs = { ...args, auth_token: tokenObj?.token };
+  const enrichedArgs = isValidToken(tokenObj)
+    ? { ...args, auth_token: tokenObj?.token }
+    : args || {};
   const { invoke: tauriInvoke } = await import('@tauri-apps/api/core');
   try {
     return await tauriInvoke(command, enrichedArgs);

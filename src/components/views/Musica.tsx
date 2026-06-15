@@ -9,9 +9,10 @@ import {
   User, Wifi, Sliders, Repeat, Shuffle, BarChart2,
   Edit2, Grid, List, Image,
 } from 'lucide-react';
-import { useApp } from '../../store/AppContext';
+import { useApp, type Track } from '../../store/AppContext';
 import { open, save } from '@tauri-apps/plugin-dialog';
-import { format } from 'date-fns';
+import { readFile } from '@tauri-apps/plugin-fs';
+import { format, subDays, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {
   fetchMetadata, searchMusic, startDownload, cancelDownload,
@@ -25,7 +26,7 @@ import {
 } from '../../lib/musicApi';
 import NotificationBell from '../ui/NotificationBell';
 
-type TabId = 'biblioteca' | 'artistas' | 'favoritas' | 'explorar';
+type TabId = 'biblioteca' | 'artistas' | 'playlists' | 'favoritas' | 'explorar';
 
 function isPlaylist(data: YouTubePlaylist | YouTubeMetadata): data is YouTubePlaylist {
   return 'entries' in data && Array.isArray((data as YouTubePlaylist).entries);
@@ -41,14 +42,18 @@ export default function Musica() {
     tracks, currentTrackId, isPlayingMusic, toggleMusicPlayback,
     playTrack, musicVolume, setMusicVolume, setMusicProgress, musicProgress, musicDuration,
     shuffleMode, repeatMode, musicQueue, setMusicQueue, setShuffleMode, setRepeatMode,
+    setQueueSource, queueSource,
     addTrack, addToDownloadQueue, musicListeningTime, dailyMusicTime,
+    weeklyMusicTime, monthlyMusicTime,
     updateDownloadProgress, updateDownloadStatus, toggleTrackFavorite,
     downloadQueue, removeFromDownloadQueue, clearCompletedDownloads,
     updateTrack, deleteTrack,
     trackHistory, playCounts, studySessions, artists, addArtist, deleteArtist, updateArtist,
+    playlists, addPlaylist, updatePlaylist, deletePlaylist,
     clearAllMusicData,
     addNotification,
     importLocalTracks,
+    setCoverModalTrackId,
     downloadPath: persistentDownloadPath, setDownloadPathCtx,
   } = useApp();
 
@@ -65,16 +70,26 @@ export default function Musica() {
   const [audioQuality, setAudioQuality] = useState('3');
   const [selectedArtist, setSelectedArtist] = useState<string | null>(null);
   const [showSearch, setShowSearch] = useState(false);
+  const [coverHover, setCoverHover] = useState(false);
   const [searchMode, setSearchMode] = useState<'link' | 'query'>('link');
   const [currentTime, setCurrentTime] = useState(new Date());
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [confirmDeleteText, setConfirmDeleteText] = useState('');
   const [showClearAllConfirm, setShowClearAllConfirm] = useState(false);
+  const [searchPerformed, setSearchPerformed] = useState(false);
   const [statsPeriod, setStatsPeriod] = useState<'week' | 'month'>('week');
   const [chartTooltip, setChartTooltip] = useState<{ text: string; date: string; x: number; y: number } | null>(null);
   const [editingArtistId, setEditingArtistId] = useState<string | null>(null);
   const [editArtistName, setEditArtistName] = useState('');
   const [editArtistImage, setEditArtistImage] = useState('');
+  const [artistSelectedTrackIds, setArtistSelectedTrackIds] = useState<string[]>([]);
+  // Playlist state
+  const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
+  const [showCreatePlaylist, setShowCreatePlaylist] = useState(false);
+  const [newPlaylistName, setNewPlaylistName] = useState('');
+  const [editingPlaylistId, setEditingPlaylistId] = useState<string | null>(null);
+  const [selectedTrackIds, setSelectedTrackIds] = useState<Set<string>>(new Set());
+  const [playlistArtistFilter, setPlaylistArtistFilter] = useState<string>('');
 
   const [viewMode, setViewMode] = useState<'lista' | 'bloques'>('lista');
   const [editingTrackId, setEditingTrackId] = useState<string | null>(null);
@@ -84,6 +99,20 @@ export default function Musica() {
 
   const urlInputRef = useRef<HTMLInputElement>(null);
   const [colocarTrackId, setColocarTrackId] = useState<string | null>(null);
+
+  const handlePlayWithTabCb = useCallback((trackOrId: string | Track, sourceTab?: TabId) => {
+    const trackId = typeof trackOrId === 'string' ? trackOrId : trackOrId.id;
+    const track = tracks.find(t => t.id === trackId);
+    if (!track) return;
+    const inPlaylists = playlists.some(p => p.trackIds?.includes(trackId));
+    const inFavorites = track.isFavorite;
+    const tab = sourceTab
+      || (inFavorites && activeTab !== 'favoritas' ? 'favoritas' as TabId : undefined)
+      || (inPlaylists && activeTab !== 'playlists' ? 'playlists' as TabId : undefined)
+      || activeTab;
+    if (tab !== activeTab) setActiveTab(tab);
+    playTrack(trackId);
+  }, [tracks, playlists, activeTab, playTrack]);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -183,11 +212,14 @@ export default function Musica() {
     if (!q) return;
     setIsLoading(true);
     setSearchResults([]);
+    setSearchPerformed(false);
     try {
       const results = await searchMusic(q);
       setSearchResults(results);
+      setSearchPerformed(true);
     } catch {
       addNotification('Error al buscar', 'error');
+      setSearchPerformed(true);
     } finally {
       setIsLoading(false);
     }
@@ -205,7 +237,6 @@ export default function Musica() {
       addTrack({
         title: entry.title || 'Unknown',
         artist: (entry.channel as string) || 'Artista Desconocido',
-        collaborators: [],
         duration: entry.duration || 0,
         source: 'youtube',
         url: getVideoUrl(entry),
@@ -303,7 +334,6 @@ export default function Musica() {
       addTrack({
         title: entry.title,
         artist: (entry.channel as string) || 'Artista Desconocido',
-        collaborators: [],
         duration: entry.duration || 0,
         source: 'youtube',
         url: entry.webpage_url,
@@ -379,16 +409,27 @@ export default function Musica() {
     ? tracks.filter(t => t.isFavorite)
     : (showAllLibrary ? libraryTracks : libraryTracks.slice(0, 25));
 
-  const now = new Date();
-  const weeklyListeningTime = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(now);
-    d.setDate(d.getDate() - (6 - i));
-    return dailyMusicTime[d.toISOString().slice(0, 10)] || 0;
-  }).reduce((a, b) => a + b, 0);
-  const monthKey = now.toISOString().slice(0, 7);
-  const monthlyListeningTime = Object.entries(dailyMusicTime)
-    .filter(([day]) => day.startsWith(monthKey))
-    .reduce((sum, [, val]) => sum + val, 0);
+  const weeklyListeningTime = useMemo(() => {
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+    let total = 0;
+    for (let i = 0; i <= dayOfWeek; i++) {
+      const dateStr = format(addDays(subDays(today, dayOfWeek), i), 'yyyy-MM-dd');
+      total += dailyMusicTime[dateStr] || 0;
+    }
+    return total;
+  }, [dailyMusicTime]);
+
+  const monthlyListeningTime = useMemo(() => {
+    const monthKey = format(new Date(), 'yyyy-MM');
+    let total = 0;
+    for (const [dateStr, seconds] of Object.entries(dailyMusicTime)) {
+      if (dateStr.startsWith(monthKey)) {
+        total += seconds;
+      }
+    }
+    return total;
+  }, [dailyMusicTime]);
 
   return (
     <div className="page-container" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto' }}>
@@ -457,10 +498,10 @@ export default function Musica() {
       {/* â”€â”€ NAVIGATION TABS & SEARCH BAR â”€â”€ */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28, borderBottom: '1px solid var(--border-subtle)', paddingBottom: 16, gap: 16 }}>
         <div style={{ display: 'flex', gap: 24, flexShrink: 0 }}>
-          {(['biblioteca', 'artistas', 'favoritas', 'explorar'] as const).map(tab => (
+          {(['biblioteca', 'artistas', 'playlists', 'favoritas', 'explorar'] as const).map(tab => (
             <button
               key={tab}
-              onClick={() => setActiveTab(tab)}
+              onClick={() => { setActiveTab(tab); if (tab !== 'artistas') setSelectedArtist(null); if (tab !== 'playlists') setSelectedPlaylistId(null); }}
               style={{
                 background: 'transparent', border: 'none', cursor: 'pointer',
                 fontSize: 14, fontWeight: activeTab === tab ? 600 : 500,
@@ -549,64 +590,82 @@ export default function Musica() {
             ))}
           </div>
 
-          {/* PLAYLISTS VIEW */}
+          {/* ARTISTAS VIEW */}
           {activeTab === 'artistas' && (
             <div>
               {!selectedArtist ? (
-                <div className="bento-card" style={{ padding: '24px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                <div className="bento-card" style={{ padding: '28px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
                     <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>Tus Artistas</h3>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{artists.length} artistas guardados</span>
+                    <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                      <button onClick={() => { setEditingArtistId('new'); setEditArtistName(''); setEditArtistImage(''); setArtistSelectedTrackIds([]); }} className="btn-primary" style={{ height: 32, padding: '0 16px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, borderRadius: 16 }}>
+                        <Plus size={13} /> Crear artista
+                      </button>
+                      <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{artists.length} artistas</span>
                     </div>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 24 }}>
                     {artists.map(artist => {
                       const artistTracks = tracks.filter(t => t.artist === artist.name);
                       return (
-                        <div key={artist.id} className="bento-card hover-lift" style={{ padding: 20, border: '1px solid var(--border-subtle)', transition: 'all 200ms', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, position: 'relative', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
-                          <div onClick={() => setSelectedArtist(artist.name)} style={{ width: 80, height: 80, borderRadius: '50%', background: artist.profileImage ? 'var(--bg-surface)' : 'linear-gradient(135deg, var(--accent), #3B82F6)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 24, fontWeight: 700, boxShadow: '0 4px 12px rgba(0,0,0,0.3)', cursor: 'pointer', overflow: 'hidden' }}>
+                        <div key={artist.id} className="hover-lift" style={{ padding: '32px 20px', borderRadius: 16, border: '1px solid var(--border-subtle)', transition: 'all 250ms', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, position: 'relative', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', cursor: 'pointer' }}
+                          onClick={() => setSelectedArtist(artist.name)}>
+                          <div style={{ width: 110, height: 110, borderRadius: '50%', background: artist.profileImage ? 'var(--bg-surface)' : `color-mix(in srgb, var(--accent) 30%, var(--bg-deep))`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 32, fontWeight: 700, boxShadow: '0 6px 20px rgba(0,0,0,0.35)', overflow: 'hidden' }}>
                             {artist.profileImage ? <img src={artist.profileImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : artist.name.slice(0, 2).toUpperCase()}
                           </div>
-                          <div style={{ textAlign: 'center', cursor: 'pointer' }} onClick={() => setSelectedArtist(artist.name)}>
-                            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>{artist.name}</div>
-                            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>{artistTracks.length} canciones</div>
+                          <div style={{ textAlign: 'center' }}>
+                            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>{artist.name}</div>
+                            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 6 }}>{artistTracks.length} canciones</div>
                           </div>
-                          <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 4 }}>
-                            <button onClick={(e) => { e.stopPropagation(); setEditingArtistId(artist.id); setEditArtistName(artist.name); setEditArtistImage(artist.profileImage || ''); }} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: '50%', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-tertiary)', cursor: 'pointer' }}><Edit2 size={12} /></button>
-                            <button onClick={(e) => { e.stopPropagation(); if (confirm(`¿Borrar artista "${artist.name}"?`)) deleteArtist(artist.id); }} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: '50%', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--error)', cursor: 'pointer' }}><Trash2 size={12} /></button>
+                          <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', gap: 6 }}>
+                            <button onClick={(e) => { e.stopPropagation(); setEditingArtistId(artist.id); setEditArtistName(artist.name); setEditArtistImage(artist.profileImage || ''); setArtistSelectedTrackIds(tracks.filter(t => t.artist === artist.name).map(t => t.id)); }} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: '50%', width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-tertiary)', cursor: 'pointer' }}><Edit2 size={13} /></button>
+                            <button onClick={(e) => { e.stopPropagation(); if (confirm(`¿Borrar artista "${artist.name}"?`)) deleteArtist(artist.id); }} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: '50%', width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--error)', cursor: 'pointer' }}><Trash2 size={13} /></button>
                           </div>
                         </div>
                       );
                     })}
                     {artists.length === 0 && (
-                      <div style={{ gridColumn: '1 / -1', padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)', borderRadius: 12, border: '1px dashed var(--border-subtle)' }}>
+                      <div style={{ gridColumn: '1 / -1', padding: '48px 20px', textAlign: 'center', color: 'var(--text-muted)', borderRadius: 12, border: '1px dashed var(--border-subtle)' }}>
                         <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)' }}>No tienes artistas guardados</div>
-                        <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>Puedes agregar artistas desde el modal de Editar Canción.</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>Puedes agregar artistas desde Editar Canción.</div>
                       </div>
                     )}
                   </div>
                 </div>
               ) : (() => {
                 const artistTracks = tracks.filter(t => t.artist === selectedArtist);
+                const firstCover = artistTracks.find(t => t.coverImage)?.coverImage;
+                const isPlayingAll = currentTrackId && artistTracks.some(t => t.id === currentTrackId) && isPlayingMusic;
                 return (
                   <div style={{ position: 'relative', borderRadius: 16, overflow: 'hidden' }}>
-                    <div style={{ position: 'relative', padding: '28px', borderRadius: 16 }}>
-                      <button onClick={() => setSelectedArtist(null)} className="btn-ghost" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 16, padding: '6px 12px', borderRadius: 8 }}>
+                    {/* Blurred cover background */}
+                    {firstCover && (
+                      <div style={{ position: 'absolute', inset: 0, background: `url(${firstCover}) center/cover no-repeat`, filter: 'blur(80px) saturate(1.8)', opacity: 0.5 }} />
+                    )}
+                    <div style={{ position: 'relative', padding: '32px', background: firstCover ? 'rgba(0,0,0,0.25)' : 'transparent' }}>
+                      <button onClick={() => setSelectedArtist(null)} className="btn-ghost" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 20, padding: '6px 12px', borderRadius: 8 }}>
                         <ArrowLeft size={14} /> Volver a artistas
                       </button>
 
-                      <div style={{ display: 'flex', gap: 28, alignItems: 'flex-end', marginBottom: 28 }}>
-                        <div style={{ width: 140, height: 140, borderRadius: '50%', background: tracks.find(t => t.artist === selectedArtist)?.coverImage ? 'var(--bg-surface)' : 'linear-gradient(135deg, var(--accent), #3B82F6)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 40, fontWeight: 700, boxShadow: '0 8px 32px rgba(0,0,0,0.6)', flexShrink: 0, overflow: 'hidden' }}>
+                      <div style={{ display: 'flex', gap: 32, alignItems: 'flex-end', marginBottom: 32 }}>
+                        <div style={{ width: 160, height: 160, borderRadius: '50%', background: firstCover ? 'var(--bg-surface)' : `color-mix(in srgb, var(--accent) 25%, var(--bg-deep))`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 48, fontWeight: 700, boxShadow: '0 10px 40px rgba(0,0,0,0.5)', flexShrink: 0, overflow: 'hidden' }}>
                           {artists.find(a => a.name === selectedArtist)?.profileImage ? <img src={artists.find(a => a.name === selectedArtist)?.profileImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : selectedArtist.slice(0, 2).toUpperCase()}
                         </div>
                         <div style={{ flex: 1 }}>
                           <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8, opacity: 0.8 }}>ARTISTA</div>
-                          <h2 style={{ fontSize: 32, fontWeight: 800, color: 'var(--text-primary)', margin: 0, lineHeight: 1.15 }}>{selectedArtist}</h2>
+                          <h2 style={{ fontSize: 34, fontWeight: 800, color: 'var(--text-primary)', margin: 0, lineHeight: 1.15 }}>{selectedArtist}</h2>
                           <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 8 }}>{artistTracks.length} canciones</div>
                           <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-                            <button onClick={() => { if (artistTracks.length > 0) playTrack(artistTracks[0].id); }} className="btn-primary" style={{ height: 36, padding: '0 24px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, borderRadius: 20 }}>
-                              <Play size={15} fill="#fff" /> Reproducir
+                            <button onClick={() => {
+                              if (artistTracks.length === 0) return;
+                              const allIds = artistTracks.map(t => t.id);
+                              setQueueSource({ pool: allIds });
+                              const rest = allIds.slice(1);
+                              setMusicQueue(rest);
+                              handlePlayWithTabCb(allIds[0]);
+                            }} className="btn-primary" style={{ height: 38, padding: '0 28px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, borderRadius: 20 }}>
+                              {isPlayingAll ? <Pause size={15} fill="#fff" /> : <Play size={15} fill="#fff" />}
+                              {isPlayingAll ? 'Reproduciendo' : 'Reproducir'}
                             </button>
                           </div>
                         </div>
@@ -614,14 +673,16 @@ export default function Musica() {
 
                       {/* Track List */}
                       {artistTracks.length > 0 ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 20 }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                           {artistTracks.map((t, idx) => {
                             const isPlaying = currentTrackId === t.id && isPlayingMusic;
                             return (
-                              <div key={t.id} onClick={() => playTrack(t.id)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', borderRadius: 8, cursor: 'pointer', background: isPlaying ? 'var(--accent-dim)' : 'transparent', transition: 'background 150ms' }} onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-surface)'} onMouseLeave={e => e.currentTarget.style.background = isPlaying ? 'var(--accent-dim)' : 'transparent'}>
+                              <div key={t.id} onClick={() => handlePlayWithTabCb(t.id)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 10, cursor: 'pointer', background: isPlaying ? 'var(--accent-dim)' : 'transparent', transition: 'background 150ms' }}
+                                onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-surface)'}
+                                onMouseLeave={e => e.currentTarget.style.background = isPlaying ? 'var(--accent-dim)' : 'transparent'}>
                                 <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-tertiary)', width: 24, textAlign: 'center' }}>{isPlaying ? <Play size={10} fill="var(--accent)" style={{ color: 'var(--accent)' }} /> : idx + 1}</span>
-                                <div style={{ width: 32, height: 32, borderRadius: 4, overflow: 'hidden', flexShrink: 0, background: 'var(--bg-surface)' }}>
-                                  {t.coverImage ? <img src={t.coverImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={14} style={{ margin: 9, color: 'var(--text-muted)', opacity: 0.3 }} />}
+                                <div style={{ width: 36, height: 36, borderRadius: 6, overflow: 'hidden', flexShrink: 0, background: t.coverImage ? 'transparent' : `color-mix(in srgb, var(--accent) 15%, var(--bg-deep))`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  {t.coverImage ? <img src={t.coverImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={16} style={{ color: 'var(--text-muted)', opacity: 0.4 }} />}
                                 </div>
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                   <div style={{ fontSize: 13, fontWeight: isPlaying ? 600 : 500, color: isPlaying ? 'var(--accent)' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</div>
@@ -632,15 +693,246 @@ export default function Musica() {
                           })}
                         </div>
                       ) : (
-                        <div style={{ padding: '30px 20px', textAlign: 'center', color: 'var(--text-muted)', background: 'rgba(0,0,0,0.2)', borderRadius: 12, marginBottom: 20 }}>
-                          <Music size={28} style={{ margin: '0 auto 10px', opacity: 0.3 }} />
-                          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>Sin canciones</div>
+                        <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)', background: 'rgba(0,0,0,0.15)', borderRadius: 12 }}>
+                          <Music size={32} style={{ margin: '0 auto 10px', opacity: 0.3 }} />
+                          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>Sin canciones de este artista</div>
                         </div>
                       )}
                     </div>
                   </div>
                 );
               })()}
+            </div>
+          )}
+
+          {/* PLAYLISTS VIEW */}
+          {activeTab === 'playlists' && (
+            <div>
+              {!selectedPlaylistId ? (
+                <div className="bento-card" style={{ padding: '28px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+                    <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>Tus Playlists</h3>
+                    <button onClick={() => { setShowCreatePlaylist(true); setNewPlaylistName(''); setSelectedTrackIds(new Set()); }} style={{ padding: '8px 18px', borderRadius: 10, fontSize: 12, fontWeight: 600, background: 'var(--accent)', color: '#fff', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Plus size={14} /> Nueva
+                    </button>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 24 }}>
+                    {playlists.map(pl => {
+                      const plTracks = pl.trackIds.map(id => tracks.find(t => t.id === id)).filter((t): t is Track => !!t);
+                      const firstCover = plTracks.find(t => t.coverImage)?.coverImage || pl.coverImage;
+                      return (
+                        <div key={pl.id} className="hover-lift" style={{ padding: '24px', borderRadius: 16, border: '1px solid var(--border-subtle)', transition: 'all 250ms', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, position: 'relative', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', cursor: 'pointer' }}
+                          onClick={() => setSelectedPlaylistId(pl.id)}>
+                          <div style={{ width: 150, height: 150, borderRadius: 16, background: firstCover ? 'var(--bg-surface)' : `color-mix(in srgb, var(--accent) 25%, var(--bg-deep))`, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 28px rgba(0,0,0,0.35)', overflow: 'hidden', position: 'relative' }}>
+                            {firstCover ? <img src={firstCover} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={40} style={{ color: 'var(--text-muted)', opacity: 0.3 }} />}
+                          </div>
+                          <div style={{ textAlign: 'center' }}>
+                            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>{pl.name}</div>
+                            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>{plTracks.length} canciones</div>
+                          </div>
+                          <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', gap: 6 }}>
+                            <button onClick={(e) => { e.stopPropagation(); setEditingPlaylistId(pl.id); setShowCreatePlaylist(true); setNewPlaylistName(pl.name); setSelectedTrackIds(new Set(pl.trackIds)); }} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: '50%', width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-tertiary)', cursor: 'pointer' }}><Edit2 size={13} /></button>
+                            <button onClick={(e) => { e.stopPropagation(); if (confirm(`¿Borrar playlist "${pl.name}"?`)) deletePlaylist(pl.id); }} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: '50%', width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--error)', cursor: 'pointer' }}><Trash2 size={13} /></button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {playlists.length === 0 && (
+                      <div style={{ gridColumn: '1 / -1', padding: '60px 20px', textAlign: 'center', color: 'var(--text-muted)', borderRadius: 12, border: '1px dashed var(--border-subtle)' }}>
+                        <Music size={40} style={{ margin: '0 auto 12px', opacity: 0.2 }} />
+                        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)' }}>No tienes playlists</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>Crea una playlist con tus canciones favoritas.</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (() => {
+                const pl = playlists.find(p => p.id === selectedPlaylistId);
+                if (!pl) return null;
+                const plTracks = pl.trackIds.map(id => tracks.find(t => t.id === id)).filter((t): t is Track => !!t);
+                const firstCover = plTracks.find(t => t.coverImage)?.coverImage || pl.coverImage;
+                const isPlayingAll = currentTrackId && plTracks.some(t => t.id === currentTrackId) && isPlayingMusic;
+                return (
+                  <div style={{ position: 'relative', borderRadius: 16, overflow: 'hidden' }}>
+                    {firstCover && (
+                      <div style={{ position: 'absolute', inset: 0, background: `url(${firstCover}) center/cover no-repeat`, filter: 'blur(80px) saturate(1.8)', opacity: 0.5 }} />
+                    )}
+                    <div style={{ position: 'relative', padding: '32px', background: firstCover ? 'rgba(0,0,0,0.25)' : 'transparent' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
+                        <button onClick={() => setSelectedPlaylistId(null)} className="btn-ghost" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-tertiary)', padding: '6px 12px', borderRadius: 8 }}>
+                          <ArrowLeft size={14} /> Volver a playlists
+                        </button>
+                        <button onClick={() => { setEditingPlaylistId(pl.id); setShowCreatePlaylist(true); setNewPlaylistName(pl.name); setSelectedTrackIds(new Set(pl.trackIds)); }} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: '6px 12px', fontSize: 11, color: 'var(--text-tertiary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <Edit2 size={12} /> Editar
+                        </button>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: 32, alignItems: 'flex-end', marginBottom: 32 }}>
+                        <div style={{ width: 200, height: 200, borderRadius: 18, background: firstCover ? 'var(--bg-surface)' : `color-mix(in srgb, var(--accent) 25%, var(--bg-deep))`, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 12px 48px rgba(0,0,0,0.5)', flexShrink: 0, overflow: 'hidden', position: 'relative', cursor: 'pointer' }}
+                          onClick={() => {
+                            const input = document.createElement('input');
+                            input.type = 'file';
+                            input.accept = 'image/*';
+                            input.onchange = (e: any) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                const reader = new FileReader();
+                                reader.onload = (e) => updatePlaylist(pl.id, { coverImage: e.target?.result as string });
+                                reader.readAsDataURL(file);
+                              }
+                            };
+                            input.click();
+                          }}>
+                          {firstCover ? <img src={firstCover} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={56} style={{ color: 'var(--text-muted)', opacity: 0.25 }} />}
+                          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.3)', opacity: 0, transition: 'opacity 200ms', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            onMouseEnter={e => (e.currentTarget as HTMLElement).style.opacity = '1'}
+                            onMouseLeave={e => (e.currentTarget as HTMLElement).style.opacity = '0'}>
+                            <Upload size={24} style={{ color: '#fff', opacity: 0.8 }} />
+                          </div>
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8, opacity: 0.8 }}>PLAYLIST</div>
+                          <h2 style={{ fontSize: 34, fontWeight: 800, color: 'var(--text-primary)', margin: 0, lineHeight: 1.15 }}>{pl.name}</h2>
+                          <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 8 }}>{plTracks.length} canciones</div>
+                          <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+                            <button onClick={() => {
+                              if (plTracks.length === 0) return;
+                              const allIds = plTracks.map(t => t.id);
+                              setQueueSource({ pool: allIds });
+                              const rest = allIds.slice(1);
+                              setMusicQueue(rest);
+                              handlePlayWithTabCb(allIds[0]);
+                            }} className="btn-primary" style={{ height: 38, padding: '0 28px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, borderRadius: 20 }}>
+                              {isPlayingAll ? <Pause size={15} fill="#fff" /> : <Play size={15} fill="#fff" />}
+                              {isPlayingAll ? 'Reproduciendo' : 'Reproducir'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {plTracks.length > 0 ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          {plTracks.map((t, idx) => {
+                            const isPlaying = currentTrackId === t.id && isPlayingMusic;
+                            return (
+                              <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 10, cursor: 'pointer', background: isPlaying ? 'var(--accent-dim)' : 'transparent', transition: 'background 150ms' }}
+                                onClick={() => handlePlayWithTabCb(t.id)}
+                                onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-surface)'}
+                                onMouseLeave={e => e.currentTarget.style.background = isPlaying ? 'var(--accent-dim)' : 'transparent'}>
+                                <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-tertiary)', width: 24, textAlign: 'center' }}>{isPlaying ? <Play size={10} fill="var(--accent)" style={{ color: 'var(--accent)' }} /> : idx + 1}</span>
+                                <div style={{ width: 36, height: 36, borderRadius: 6, overflow: 'hidden', flexShrink: 0, background: t.coverImage ? 'transparent' : `color-mix(in srgb, var(--accent) 15%, var(--bg-deep))`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  {t.coverImage ? <img src={t.coverImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={16} style={{ color: 'var(--text-muted)', opacity: 0.4 }} />}
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontSize: 13, fontWeight: isPlaying ? 600 : 500, color: isPlaying ? 'var(--accent)' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</div>
+                                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 1 }}>{t.artist}</div>
+                                </div>
+                                <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{formatTime(t.duration)}</span>
+                                <button onClick={(e) => {
+                                  e.stopPropagation();
+                                  const newIds = pl.trackIds.filter(id => id !== t.id);
+                                  updatePlaylist(pl.id, { trackIds: newIds });
+                                }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4, opacity: 0.5 }} title="Quitar de la playlist">
+                                  <X size={14} />
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)', background: 'rgba(0,0,0,0.15)', borderRadius: 12 }}>
+                          <Music size={32} style={{ margin: '0 auto 10px', opacity: 0.3 }} />
+                          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>Playlist vacía</div>
+                          <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>Agrega canciones desde el botón "Editar canciones".</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Create/Edit Playlist Dialog */}
+              {showCreatePlaylist && (
+                <div style={{ position: 'fixed', inset: 0, zIndex: 10050, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
+                  onClick={(e) => { if (e.target === e.currentTarget) { setShowCreatePlaylist(false); } }}>
+                  <div className="bento-card" style={{ width: 'min(480px, 90vw)', maxHeight: '80vh', display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}>
+                    <div style={{ padding: '24px 24px 16px', borderBottom: '1px solid var(--border-subtle)' }}>
+                      <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>{editingPlaylistId && newPlaylistName ? 'Editar playlist' : 'Nueva playlist'}</h3>
+                      <input autoFocus value={newPlaylistName} onChange={e => setNewPlaylistName(e.target.value)}
+                        placeholder="Nombre de la playlist"
+                        style={{ width: '100%', height: 40, padding: '0 14px', borderRadius: 10, border: '1px solid var(--border-default)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', fontSize: 14, outline: 'none', boxSizing: 'border-box' }}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); const target = e.currentTarget.parentElement?.parentElement?.querySelector('.save-playlist-btn') as HTMLButtonElement; target?.click(); } }} />
+                    </div>
+                    <div style={{ padding: '8px 24px', display: 'flex', gap: 8, alignItems: 'center', borderBottom: '1px solid var(--border-subtle)' }}>
+                      <select value={playlistArtistFilter} onChange={e => setPlaylistArtistFilter(e.target.value)}
+                        style={{ flex: 1, height: 34, padding: '0 10px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', fontSize: 12, outline: 'none' }}>
+                        <option value="">Todos los artistas</option>
+                        {[...new Set(tracks.filter(t => t.source === 'local').map(t => t.artist))].sort().map(a => (
+                          <option key={a} value={a}>{a}</option>
+                        ))}
+                      </select>
+                      {playlistArtistFilter && !artists.some(a => a.name.toLowerCase() === playlistArtistFilter.toLowerCase()) && (
+                        <button onClick={() => {
+                          addArtist(playlistArtistFilter);
+                        }} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', borderRadius: 8, border: 'none', background: 'var(--accent)', color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                          <Plus size={12} /> Crear "{playlistArtistFilter}"
+                        </button>
+                      )}
+                    </div>
+                    <div style={{ flex: 1, overflow: 'auto', padding: '12px 24px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <span style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Canciones en biblioteca</span>
+                      {tracks.filter(t => t.source === 'local').filter(t => !playlistArtistFilter || t.artist === playlistArtistFilter).map(t => {
+                        const selected = selectedTrackIds.has(t.id);
+                        return (
+                          <div key={t.id} onClick={() => {
+                            const next = new Set(selectedTrackIds);
+                            if (selected) next.delete(t.id); else next.add(t.id);
+                            setSelectedTrackIds(next);
+                          }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, cursor: 'pointer', background: selected ? 'var(--accent-dim)' : 'transparent', transition: 'background 100ms' }}>
+                            <div style={{ width: 32, height: 32, borderRadius: 6, overflow: 'hidden', flexShrink: 0, background: t.coverImage ? 'transparent' : `color-mix(in srgb, var(--accent) 15%, var(--bg-deep))`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              {t.coverImage ? <img src={t.coverImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={14} style={{ color: 'var(--text-muted)', opacity: 0.3 }} />}
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</div>
+                              <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{t.artist}</div>
+                            </div>
+                            <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${selected ? 'var(--accent)' : 'var(--border-default)'}`, background: selected ? 'var(--accent)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                              {selected && <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {tracks.filter(t => t.source === 'local').length === 0 && (
+                        <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                          <div style={{ fontSize: 13 }}>No hay canciones en la biblioteca</div>
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                      <button onClick={() => { setShowCreatePlaylist(false); setEditingPlaylistId(null); }} style={{ padding: '10px 20px', borderRadius: 10, fontSize: 12, border: '1px solid var(--border-default)', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                        Cancelar
+                      </button>
+                      <button className="save-playlist-btn" onClick={() => {
+                        const name = newPlaylistName.trim();
+                        if (!name) return;
+                        const ids = Array.from(selectedTrackIds);
+                        if (editingPlaylistId) {
+                          updatePlaylist(editingPlaylistId, { name, trackIds: ids });
+                        } else {
+                          // Auto-set cover from first selected track
+                          const firstSel = tracks.find(t => ids.includes(t.id));
+                          addPlaylist(name, ids, firstSel?.coverImage || undefined);
+                        }
+                        setShowCreatePlaylist(false);
+                        setEditingPlaylistId(null);
+                        setPlaylistArtistFilter('');
+                      }} style={{ padding: '10px 24px', borderRadius: 10, fontSize: 12, fontWeight: 600, background: 'var(--accent)', color: '#fff', border: 'none', cursor: 'pointer', opacity: newPlaylistName.trim() ? 1 : 0.5 }}>
+                        {editingPlaylistId ? 'Guardar cambios' : 'Crear playlist'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -654,11 +946,13 @@ export default function Musica() {
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16, minWidth: 0 }}>
                 {recentTracks.length > 0 ? recentTracks.slice(0, showAllRecents ? 10 : 5).map((track, i) => (
-                  <div key={track.id} onClick={() => playTrack(track.id)} style={{ minWidth: 0, padding: 14, borderRadius: 14, cursor: 'pointer', transition: 'all 250ms cubic-bezier(0.16, 1, 0.3, 1)', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.borderColor = 'var(--border-strong)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.25)'; }} onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.boxShadow = 'none'; }}>
+                  <div key={track.id} onClick={() => handlePlayWithTabCb(track.id)} style={{ minWidth: 0, padding: 14, borderRadius: 14, cursor: 'pointer', transition: 'all 250ms cubic-bezier(0.16, 1, 0.3, 1)', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.borderColor = 'var(--border-strong)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.25)'; }} onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.boxShadow = 'none'; }}>
                     <div style={{ width: '100%', aspectRatio: '1/1', borderRadius: 10, overflow: 'hidden', position: 'relative', background: 'var(--bg-deep)' }}>
                       {track.coverImage ? <img src={track.coverImage} alt={track.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={24} style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', color: 'var(--text-muted)', opacity: 0.3 }} />}
-                      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.15) 50%, transparent 100%)', opacity: 0, transition: 'opacity 250ms', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onMouseEnter={e => e.currentTarget.style.opacity = '1'} onMouseLeave={e => e.currentTarget.style.opacity = '0'}>
-                        <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 14px rgba(0,0,0,0.5)' }}>
+                      <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.12)', borderRadius: 10, opacity: 0, transition: 'opacity 180ms', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        onMouseEnter={e => { e.currentTarget.style.opacity = '1'; }}
+                        onMouseLeave={e => { e.currentTarget.style.opacity = '0'; }}>
+                        <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 10px rgba(0,0,0,0.4)' }}>
                           <Play size={18} fill="#fff" style={{ marginLeft: 2 }} />
                         </div>
                       </div>
@@ -687,6 +981,21 @@ export default function Musica() {
                   {activeTab === 'favoritas' ? 'Tus Canciones Favoritas' : 'Biblioteca de Canciones'} ({displayTracks.length})
                 </span>
                 <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                  {activeTab === 'favoritas' && displayTracks.length > 0 && (
+                    <button
+                      onClick={() => {
+                        const allIds = displayTracks.map(t => t.id);
+                        setQueueSource({ pool: allIds });
+                        const rest = allIds.slice(1);
+                        setMusicQueue(rest);
+                         handlePlayWithTabCb(allIds[0]);
+                      }}
+                      className="btn-primary"
+                      style={{ height: 30, padding: '0 16px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, borderRadius: 15 }}
+                    >
+                      <Play size={11} fill="#fff" /> Reproducir todo
+                    </button>
+                  )}
                   {activeTab === 'biblioteca' && libraryTracks.length > 25 && (
                     <button
                       onClick={() => setShowAllLibrary(!showAllLibrary)}
@@ -735,7 +1044,7 @@ export default function Musica() {
                       return (
                         <div
                           key={track.id}
-                          onClick={() => playTrack(track.id)}
+                          onClick={() => handlePlayWithTabCb(track.id)}
                           style={{
                             display: 'grid', gridTemplateColumns: '40px 3.5fr 1.5fr 80px 130px', padding: '10px 12px',
                             borderRadius: 8, alignItems: 'center', cursor: 'pointer', transition: 'all 150ms',
@@ -801,41 +1110,47 @@ export default function Musica() {
                   </div>
                 </>
               ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 8 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
                   {displayTracks.length > 0 ? displayTracks.map((track, i) => {
                     const isPlaying = currentTrackId === track.id && isPlayingMusic;
                     return (
                       <div
                         key={track.id}
-                        onClick={() => playTrack(track.id)}
-                        className="bento-card hover-lift"
+                        onClick={() => handlePlayWithTabCb(track.id)}
                         style={{
-                          padding: 10, display: 'flex', flexDirection: 'column', gap: 8, cursor: 'pointer',
+                          padding: '10px 10px 12px', display: 'flex', flexDirection: 'column', gap: 10, cursor: 'pointer',
+                          borderRadius: 12,
                           background: isPlaying ? 'var(--accent-dim)' : 'var(--bg-deep)',
                           border: isPlaying ? '1px solid var(--accent-glow)' : '1px solid var(--border-subtle)',
+                          transition: 'transform 200ms ease, box-shadow 250ms ease, border-color 200ms',
+                          boxShadow: isPlaying ? '0 4px 16px rgba(0,0,0,0.12)' : '0 1px 3px rgba(0,0,0,0.04)',
                         }}
+                        onMouseEnter={e => { if (!isPlaying) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.10)'; e.currentTarget.style.borderColor = 'var(--accent-glow)'; } }}
+                        onMouseLeave={e => { if (!isPlaying) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.04)'; e.currentTarget.style.borderColor = 'var(--border-subtle)'; } }}
                       >
-                        <div style={{ position: 'relative', width: '100%', aspectRatio: '1', borderRadius: 6, overflow: 'hidden', background: 'var(--bg-surface)' }}>
-                          {track.coverImage ? <img src={track.coverImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} /> : <Music size={24} style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', color: 'var(--text-muted)', opacity: 0.3 }} />}
-                          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)', opacity: isPlaying ? 1 : 0, transition: 'opacity 200ms', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onMouseEnter={e => e.currentTarget.style.opacity = '1'} onMouseLeave={e => e.currentTarget.style.opacity = isPlaying ? '1' : '0'}>
-                            <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.5)' }}>
-                              {isPlaying ? <Pause size={20} fill="#fff" /> : <Play size={20} fill="#fff" style={{ marginLeft: 2 }} />}
+                        <div style={{ position: 'relative', width: '100%', aspectRatio: '1', borderRadius: 8, overflow: 'hidden', background: 'var(--bg-surface)' }}>
+                          {track.coverImage ? <img src={track.coverImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} /> : <Music size={28} style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', color: 'var(--text-muted)', opacity: 0.25 }} />}
+                          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.25) 0%, transparent 60%)', opacity: 0, transition: 'opacity 180ms', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 10 }}
+                            onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+                            onMouseLeave={e => e.currentTarget.style.opacity = isPlaying ? '1' : '0'}>
+                            <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'var(--accent)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 10px rgba(0,0,0,0.5)' }}>
+                              {isPlaying ? <Pause size={16} fill="#fff" /> : <Play size={16} fill="#fff" style={{ marginLeft: 2 }} />}
                             </div>
                           </div>
                         </div>
                         <div>
-                          <div style={{ fontSize: 12, fontWeight: 600, color: isPlaying ? 'var(--accent)' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{track.title}</div>
-                          <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{track.artist} · {formatTime(track.duration)}</div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: isPlaying ? 'var(--accent)' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>{track.title}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>{track.artist} <span style={{ opacity: 0.4 }}>·</span> {formatTime(track.duration)}</div>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-subtle)', paddingTop: 8 }}>
-                          <button onClick={(e) => { e.stopPropagation(); toggleTrackFavorite(track.id); }} className="btn-ghost" style={{ padding: 4, color: track.isFavorite ? 'var(--accent)' : 'var(--text-tertiary)' }}>
+                          <button onClick={(e) => { e.stopPropagation(); toggleTrackFavorite(track.id); }} className="btn-ghost" style={{ padding: 4, color: track.isFavorite ? 'var(--accent)' : 'var(--text-tertiary)', transition: 'color 200ms' }}>
                             <Heart size={14} style={{ fill: track.isFavorite ? 'var(--accent)' : 'transparent' }} />
                           </button>
                           <div style={{ display: 'flex', gap: 4 }}>
-                            <button onClick={(e) => { e.stopPropagation(); setEditingTrackId(track.id); setEditTitle(track.title); setEditArtist(track.artist); setEditCover(track.coverImage || ''); }} className="btn-ghost" style={{ padding: 4, color: 'var(--text-tertiary)' }}>
+                            <button onClick={(e) => { e.stopPropagation(); setEditingTrackId(track.id); setEditTitle(track.title); setEditArtist(track.artist); setEditCover(track.coverImage || ''); }} className="btn-ghost" style={{ padding: 4, color: 'var(--text-tertiary)', transition: 'color 200ms' }} onMouseEnter={e => e.currentTarget.style.color = 'var(--text-secondary)'} onMouseLeave={e => e.currentTarget.style.color = 'var(--text-tertiary)'}>
                               <Edit2 size={13} />
                             </button>
-                            <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(track.id); }} className="btn-ghost" style={{ padding: 4, color: 'var(--text-tertiary)' }}>
+                            <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(track.id); }} className="btn-ghost" style={{ padding: 4, color: 'var(--text-tertiary)', transition: 'color 200ms' }} onMouseEnter={e => e.currentTarget.style.color = 'var(--danger)'} onMouseLeave={e => e.currentTarget.style.color = 'var(--text-tertiary)'}>
                               <Trash2 size={13} />
                             </button>
                           </div>
@@ -1028,6 +1343,27 @@ export default function Musica() {
                 </div>
               )}
 
+              {/* No Results — Recommendation */}
+              {searchPerformed && searchResults.length === 0 && !isLoading && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: '40px 20px', marginBottom: 20 }}>
+                  <Music size={40} style={{ color: 'var(--text-muted)', opacity: 0.4 }} />
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>No se encontraron resultados</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-tertiary)', lineHeight: 1.5, maxWidth: 300 }}>
+                      No encontramos &ldquo;{searchQuery}&rdquo; en tu biblioteca o en YouTube.
+                    </div>
+                  </div>
+                  <button onClick={() => { setSearchMode('link'); setUrl(`https://www.youtube.com/results?search_query=${encodeURIComponent(searchQuery)}`); }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 24px', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer', border: 'none', background: 'var(--accent)', color: '#fff', transition: 'all 200ms' }}>
+                    <Plus size={16} /> Agregar canción &mdash; Buscar en YouTube
+                  </button>
+                  <button onClick={() => { setSearchResults([]); setSearchPerformed(false); setSearchQuery(''); }}
+                    style={{ fontSize: 11, color: 'var(--text-tertiary)', cursor: 'pointer', background: 'none', border: 'none', textDecoration: 'underline', textUnderlineOffset: 3 }}>
+                    Nueva búsqueda
+                  </button>
+                </div>
+              )}
+
               {/* Preview Area */}
               {preview && !isLoading && (
                 <div style={{ padding: 20, borderRadius: 12, border: '1px solid var(--border-default)', position: 'relative' }}>
@@ -1089,14 +1425,46 @@ export default function Musica() {
                     {isPlayingMusic ? 'Reproduciendo' : 'Pausado'}
                   </span>
                 </div>
-                <Heart size={16} style={{ color: currentTrack.isFavorite ? 'var(--accent)' : 'var(--text-muted)', fill: currentTrack.isFavorite ? 'var(--accent)' : 'none', cursor: 'pointer' }} onClick={() => toggleTrackFavorite(currentTrack.id)} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <Heart size={16} style={{ color: currentTrack.isFavorite ? 'var(--accent)' : 'var(--text-muted)', fill: currentTrack.isFavorite ? 'var(--accent)' : 'none', cursor: 'pointer' }} onClick={() => toggleTrackFavorite(currentTrack.id)} />
+                  <Edit2 size={13} style={{ color: 'var(--text-muted)', cursor: 'pointer', opacity: 0.5 }} onClick={() => { setEditingTrackId(currentTrack.id); setEditTitle(currentTrack.title); setEditArtist(currentTrack.artist); setEditCover(currentTrack.coverImage || ''); }} />
+                </div>
               </div>
 
-              <div style={{ width: '100%', aspectRatio: '1/1', borderRadius: 12, overflow: 'hidden', marginBottom: 20, boxShadow: '0 8px 24px rgba(0,0,0,0.6)', position: 'relative', background: 'var(--bg-surface)' }}>
+              <div onClick={() => currentTrack && setCoverModalTrackId(currentTrack.id)} style={{ width: '100%', aspectRatio: '1/1', borderRadius: 12, overflow: 'hidden', marginBottom: 20, boxShadow: '0 8px 24px rgba(0,0,0,0.6)', position: 'relative', background: 'var(--bg-surface)', cursor: 'pointer' }}
+                onMouseEnter={() => setCoverHover(true)}
+                onMouseLeave={() => setCoverHover(false)}>
                 {currentTrack.coverImage ? <img src={currentTrack.coverImage} alt={currentTrack.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={48} style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', color: 'var(--text-muted)', opacity: 0.15 }} />}
                 {isPlayingMusic && (
                   <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, transparent 60%, var(--accent-soft) 100%)', pointerEvents: 'none' }} />
                 )}
+                {/* Expand hint overlay */}
+                <div style={{
+                  position: 'absolute', inset: 0,
+                  background: 'rgba(0,0,0,0.2)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  opacity: coverHover ? 1 : 0,
+                  transition: 'opacity 200ms ease',
+                  borderRadius: 12,
+                  pointerEvents: 'none',
+                }}>
+                  <div style={{
+                    width: 36, height: 36,
+                    borderRadius: '50%',
+                    background: 'rgba(255,255,255,0.08)',
+                    backdropFilter: 'blur(6px)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    transform: coverHover ? 'scale(1)' : 'scale(0.85)',
+                    transition: 'transform 250ms cubic-bezier(0.32,0.72,0,1)',
+                  }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.85 }}>
+                      <path d="M8 3H5a2 2 0 0 0-2 2v3" />
+                      <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
+                      <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
+                      <path d="M3 16v3a2 2 0 0 0 2 2h3" />
+                    </svg>
+                  </div>
+                </div>
               </div>
 
               <div style={{ textAlign: 'center', marginBottom: 20, width: '100%' }}>
@@ -1127,17 +1495,17 @@ export default function Musica() {
                 </button>
                 <button onClick={() => {
                   const idx = tracks.findIndex(t => t.id === currentTrack.id);
-                  if (idx > 0) playTrack(tracks[idx - 1].id);
+                  if (idx > 0) handlePlayWithTabCb(tracks[idx - 1].id);
                 }} className="btn-ghost" style={{ padding: 8 }}>
                   <SkipBack size={20} style={{ color: 'var(--text-primary)' }} />
                 </button>
-                <button onClick={toggleMusicPlayback} style={{ width: 42, height: 42, borderRadius: '50%', background: 'var(--accent)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', cursor: 'pointer', transition: 'transform 0.15s' }} onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.08)'} onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}>
+                <button onClick={toggleMusicPlayback} style={{ width: 42, height: 42, borderRadius: '50%', background: 'var(--accent)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', cursor: 'pointer', transition: 'transform 120ms' }} onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.08)'} onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'} onMouseDown={e => e.currentTarget.style.transform = 'scale(0.94)'} onMouseUp={e => e.currentTarget.style.transform = 'scale(1.08)'}>
                   {isPlayingMusic ? <Pause size={18} fill="#fff" /> : <Play size={18} fill="#fff" style={{ marginLeft: 2 }} />}
                 </button>
                 <button onClick={() => {
                   const idx = tracks.findIndex(t => t.id === currentTrack.id);
-                  if (idx < tracks.length - 1) playTrack(tracks[idx + 1].id);
-                  else if (repeatMode === 'all' && tracks.length > 0) playTrack(tracks[0].id);
+                  if (idx < tracks.length - 1) handlePlayWithTabCb(tracks[idx + 1].id);
+                  else if (repeatMode === 'all' && tracks.length > 0) handlePlayWithTabCb(tracks[0].id);
                 }} className="btn-ghost" style={{ padding: 8 }}>
                   <SkipForward size={20} style={{ color: 'var(--text-primary)' }} />
                 </button>
@@ -1194,7 +1562,7 @@ export default function Musica() {
                     const t = tracks.find(tr => tr.id === trackId);
                     if (!t) return null;
                     return (
-                      <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', padding: '4px 0', borderRadius: 6 }} onClick={() => playTrack(t.id)} className="hover-lift">
+                      <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', padding: '4px 0', borderRadius: 6 }} onClick={() => handlePlayWithTabCb(t.id)} className="hover-lift">
                         <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', width: 16, textAlign: 'center' }}>{i + 1}</span>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</div>
@@ -1238,7 +1606,7 @@ export default function Musica() {
                   const idx = Math.min(days - 1, Math.max(0, Math.round(x * (days - 1))));
                   const date = new Date();
                   date.setDate(date.getDate() - (days - 1 - idx));
-                  const dayStr = date.toISOString().slice(0, 10);
+                  const dayStr = format(date, 'yyyy-MM-dd');
                   const val = dailyMusicTime[dayStr] || 0;
                   setChartTooltip({ text: formatTime(val), date: dayStr, x: e.clientX - rect.left, y: e.clientY - rect.top });
                 }}
@@ -1253,12 +1621,11 @@ export default function Musica() {
                 {(() => {
                   const days = statsPeriod === 'week' ? 7 : 30;
                   const now = new Date();
-                  const todayStr = now.toISOString().slice(0, 10);
                   const maxSecs = 14400; // 4 hours = max bar
                   const vals = Array.from({ length: days }, (_, i) => {
                     const date = new Date(now);
                     date.setDate(date.getDate() - (days - 1 - i));
-                    const dayStr = date.toISOString().slice(0, 10);
+                    const dayStr = format(date, 'yyyy-MM-dd');
                     const totalSecs = dailyMusicTime[dayStr] || 0;
                     return Math.max(2, Math.min(67, (totalSecs / maxSecs) * 67));
                   });
@@ -1279,7 +1646,7 @@ export default function Musica() {
                               onMouseEnter={(e) => {
                                 const date = new Date(now);
                                 date.setDate(date.getDate() - (days - 1 - i));
-                                const dayStr = date.toISOString().slice(0, 10);
+                                const dayStr = format(date, 'yyyy-MM-dd');
                                 const val = dailyMusicTime[dayStr] || 0;
                                 setChartTooltip({ text: formatTime(val), date: dayStr, x: parseFloat(e.currentTarget.getAttribute('cx') || '0') * 300 / 300 * 300, y: parseFloat(e.currentTarget.getAttribute('cy') || '0') });
                               }}
@@ -1421,8 +1788,12 @@ export default function Musica() {
                             filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp'] }]
                           });
                           if (file && typeof file === 'string') {
-                            // Convert to base64 if possible or use local path
-                            setEditCover(file);
+                            const data = await readFile(file);
+                            const ext = file.split('.').pop()?.toLowerCase() || 'png';
+                            const mime = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'webp' ? 'image/webp' : 'image/png';
+                            let binary = '';
+                            for (let i = 0; i < data.length; i++) binary += String.fromCharCode(data[i]);
+                            setEditCover(`data:${mime};base64,${btoa(binary)}`);
                           }
                         } catch {
                           const input = document.createElement('input');
@@ -1472,7 +1843,7 @@ export default function Musica() {
           background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
         }} onClick={() => setEditingArtistId(null)}>
           <div className="bento-card" style={{ padding: 28, width: 340, maxWidth: '90vw', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }} onClick={e => e.stopPropagation()}>
-            <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 20 }}>Editar Artista</h3>
+            <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 20 }}>{editingArtistId === 'new' ? 'Crear Artista' : 'Editar Artista'}</h3>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div>
@@ -1505,26 +1876,68 @@ export default function Musica() {
                   </div>
                 </div>
               )}
+
+              <div>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Canciones de este artista ({artistSelectedTrackIds.length} seleccionadas)</label>
+                <div style={{ maxHeight: 200, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4, borderRadius: 8, border: '1px solid var(--border-subtle)', padding: 6 }}>
+                  {tracks.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-tertiary)', padding: '12px 8px', textAlign: 'center' }}>No hay canciones</div>}
+                  {tracks.map(t => {
+                    const selected = artistSelectedTrackIds.includes(t.id);
+                    return (
+                      <div key={t.id} onClick={() => setArtistSelectedTrackIds(prev => prev.includes(t.id) ? prev.filter(id => id !== t.id) : [...prev, t.id])} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, cursor: 'pointer', background: selected ? 'var(--accent-alpha)' : 'transparent', transition: 'background 150ms', border: selected ? '1px solid var(--accent)' : '1px solid transparent' }}>
+                        <div style={{ width: 20, height: 20, borderRadius: 4, border: selected ? '2px solid var(--accent)' : '2px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', background: selected ? 'var(--accent)' : 'transparent', flexShrink: 0 }}>
+                          {selected && <CheckCircle size={14} color="#fff" />}
+                        </div>
+                        <div style={{ width: 28, height: 28, borderRadius: 4, overflow: 'hidden', background: 'var(--bg-deep)', flexShrink: 0 }}>
+                          {t.coverImage && <img src={t.coverImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{t.artist || 'Sin artista'}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
 
             <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 28 }}>
               <button onClick={() => setEditingArtistId(null)} className="btn-secondary" style={{ height: 38, padding: '0 20px', fontSize: 12 }}>Cancelar</button>
               <button onClick={() => {
-                const oldName = artists.find(a => a.id === editingArtistId)?.name;
-                if (editingArtistId) {
-                  // Update artist in the list
+                const artistName = editArtistName.trim();
+
+                if (editingArtistId === 'new') {
+                  if (!artistName) return;
+                  addArtist(artistName, editArtistImage || undefined);
+                  // Assign selected tracks to this artist
+                  artistSelectedTrackIds.forEach(trackId => {
+                    const track = tracks.find(t => t.id === trackId);
+                    if (track && track.artist !== artistName) updateTrack(trackId, { artist: artistName });
+                  });
+                } else {
+                  const oldName = artists.find(a => a.id === editingArtistId)?.name;
+
+                  // Update artist metadata
                   updateArtist(editingArtistId, {
-                    name: editArtistName.trim() || undefined,
+                    name: artistName || undefined,
                     profileImage: editArtistImage || undefined
                   });
 
-                  // Also update all tracks that have this artist if name changed
-                  if (oldName && editArtistName.trim() && oldName !== editArtistName.trim()) {
-                    tracks.forEach(t => {
-                      if (t.artist === oldName) updateTrack(t.id, { artist: editArtistName.trim() });
-                    });
-                  }
+                  // Selected tracks → assign to this artist
+                  artistSelectedTrackIds.forEach(trackId => {
+                    const track = tracks.find(t => t.id === trackId);
+                    if (track && track.artist !== (artistName || oldName)) updateTrack(trackId, { artist: artistName || oldName });
+                  });
+
+                  // Tracks that used to belong but are now deselected → clear artist
+                  tracks.forEach(t => {
+                    if (!artistSelectedTrackIds.includes(t.id) && (t.artist === oldName || t.artist === artistName)) {
+                      updateTrack(t.id, { artist: '' });
+                    }
+                  });
                 }
+
                 setEditingArtistId(null);
               }} className="btn-primary" style={{ height: 38, padding: '0 20px', fontSize: 12 }}>Guardar</button>
             </div>
@@ -1560,7 +1973,6 @@ export default function Musica() {
           </div>
         </div>
       )}
-
     </div>
   );
 }

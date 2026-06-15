@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::io::{BufRead, Write};
 use std::process::{Command, Stdio};
 use std::sync::Mutex;
-use tauri::{Emitter, Listener, Manager};
+use tauri::{Emitter, Manager};
 use tauri_plugin_shell::ShellExt;
 
 struct DownloadState {
@@ -51,49 +51,6 @@ fn run_ytdlp(app: &tauri::AppHandle, args: &[&str]) -> Result<String, String> {
     let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
     let code = output.status.code().unwrap_or(-1);
     Err(format!("yt-dlp exited with code {code}: {stderr}"))
-}
-
-#[tauri::command]
-fn open_floating_timer(app_handle: tauri::AppHandle) {
-    if let Some(existing) = app_handle.get_webview_window("floating-timer") {
-        let _ = existing.show();
-        let _ = existing.set_focus();
-        return;
-    }
-    let _ = tauri::WebviewWindowBuilder::new(
-        &app_handle,
-        "floating-timer",
-        tauri::WebviewUrl::App("index.html?window=timer".into()),
-    )
-    .title("")
-    .inner_size(320.0, 130.0)
-    .resizable(false)
-    .decorations(false)
-    .transparent(true)
-    .always_on_top(true)
-    .skip_taskbar(true)
-    .visible(false)
-    .build()
-    .and_then(|win| {
-        let _ = win.set_ignore_cursor_events(false);
-        let _ = win.show();
-        let _ = win.set_focus();
-        Ok(())
-    });
-}
-
-#[tauri::command]
-fn close_floating_timer(app_handle: tauri::AppHandle) {
-    if let Some(win) = app_handle.get_webview_window("floating-timer") {
-        let _ = win.close();
-    }
-}
-
-#[tauri::command]
-fn toggle_floating_timer_border(app_handle: tauri::AppHandle, show: bool) {
-    if let Some(win) = app_handle.get_webview_window("floating-timer") {
-        let _ = win.set_decorations(show);
-    }
 }
 
 fn ensure_simple_binaries(app_handle: &tauri::AppHandle) {
@@ -581,9 +538,6 @@ fn main() {
             path: Mutex::new(default_download_path),
         })
         .invoke_handler(tauri::generate_handler![
-            open_floating_timer,
-            close_floating_timer,
-            toggle_floating_timer_border,
             stream_youtube_audio,
             get_youtube_metadata,
             search_youtube,
@@ -597,12 +551,6 @@ fn main() {
         ])
         .setup(|app| {
             ensure_simple_binaries(app.handle());
-            let app_handle = app.handle().clone();
-            app.listen("timer:sync", move |event| {
-                if let Some(floating) = app_handle.get_webview_window("floating-timer") {
-                    let _ = floating.emit("timer:update", event.payload());
-                }
-            });
             Ok(())
         })
         .run(tauri::generate_context!())

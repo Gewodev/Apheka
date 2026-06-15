@@ -120,20 +120,8 @@ export function useTimer() {
   // UI event handlers â€“ thin wrappers that also keep the global context in sync
   // ---------------------------------------------------------------------------
   const handleToggle = useCallback(() => {
-    if (isTimerActive && sessionTime >= 10) {
-      addStudySession({
-        type: isRest ? 'break' : sessionType,
-        startedAt: new Date(Date.now() - sessionTime * 1000).toISOString(),
-        endedAt: new Date().toISOString(),
-        duration: sessionTime,
-        taskId: activeTaskId ?? undefined,
-        courseId: undefined,
-        pauseCount: 0,
-        pauseDuration: 0,
-      });
-    }
     setIsTimerActive(prev => !prev);
-  }, [isTimerActive, sessionTime, sessionType, isRest, activeTaskId, addStudySession, setIsTimerActive]);
+  }, [setIsTimerActive]);
 
   const handleReset = useCallback(() => {
     if (isTimerActive) {

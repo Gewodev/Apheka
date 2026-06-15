@@ -69,7 +69,7 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
     currentTrackId, isPlayingMusic, toggleMusicPlayback,
     tracks, musicVolume, setMusicVolume, setMusicProgress, musicProgress,
     musicDuration, shuffleMode, setShuffleMode, setRepeatMode, repeatMode,
-    playTrack, settings,
+    playTrack, settings, setCoverModalTrackId, coverModalTrackId,
   } = useApp();
 
   const progressRef = useRef<HTMLDivElement>(null);
@@ -85,12 +85,13 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
   const sidebarWidth = sidebarCollapsed ? 64 : 220;
   const hasTracks = tracks.length > 0;
   const acC = settings.accentColor || '#E11D48';
+  const [coverHover, setCoverHover] = useState(false);
 
   const barPadding = settings.playerBarEnabled
-    ? (settings.playerBarHeight === 'compact' ? '14px 24px 14px 16px'
-      : settings.playerBarHeight === 'large' ? '28px 32px 26px 24px'
-      : '22px 32px 20px 24px')
-    : '14px 24px 14px 16px';
+    ? (settings.playerBarHeight === 'compact' ? '16px 28px 16px 20px'
+      : settings.playerBarHeight === 'large' ? '30px 36px 28px 28px'
+      : '24px 36px 22px 28px')
+    : '16px 28px 16px 20px';
 
   // Compute bar track image URL (GIF or draw)
   const barTrackImage = useMemo(() => {
@@ -158,32 +159,32 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
     setMusicProgress(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)));
   };
 
-  if (!hasTracks) return null;
+  if (!hasTracks || !currentTrackId) return null;
+  if (coverModalTrackId) return null;
 
   return (
     <>
-      {/* Entry arrow — minimalist lines */}
+      {/* Entry arrow — minimal stroke only */}
       <div onClick={handleOpen}
         style={{
           position: 'fixed',
-          bottom: arrowVisible && !expanded ? 20 : 8,
+          bottom: arrowVisible && !expanded ? 24 : 8,
           left: `calc(50% + ${sidebarWidth / 2}px)`,
           transform: 'translateX(-50%)',
           cursor: 'pointer',
           opacity: arrowVisible && !expanded ? 1 : 0,
-          transition: 'opacity 250ms ease, bottom 300ms ease',
+          transition: 'opacity 350ms ease, bottom 400ms cubic-bezier(0.32,0.72,0,1)',
           zIndex: 9998,
           pointerEvents: arrowVisible && !expanded ? 'auto' : 'none',
           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
-          padding: '6px 10px',
+          padding: '10px 14px',
           userSelect: 'none',
         }}
         title="Abrir reproductor">
-        <svg width="24" height="16" viewBox="0 0 24 16" fill="none">
-          <path d="M4 11L12 4L20 11" stroke={acC} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M4 14L12 7L20 14" stroke={acC} strokeWidth="0.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.18" />
+        <svg width="28" height="18" viewBox="0 0 28 18" fill="none">
+          <path d="M5 12.5L14 4.5L23 12.5" stroke={acC} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M5 15.5L14 7.5L23 15.5" stroke={acC} strokeWidth="0.6" strokeLinecap="round" strokeLinejoin="round" opacity="0.10" />
         </svg>
-        <div style={{ width: 16, height: 1, borderRadius: 1, background: acC, opacity: 0.12 }} />
       </div>
 
       {/* Player panel */}
@@ -233,10 +234,13 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                 minWidth: 0, maxWidth: 360,
               }}>
                 <div style={{
-                  width: 56, height: 56, borderRadius: 12, overflow: 'hidden',
+                  width: 62, height: 62, borderRadius: 14, overflow: 'hidden',
                   background: 'var(--bg-deep)', flexShrink: 0,
-                  boxShadow: `0 2px 10px rgba(0,0,0,0.3)`,
-                }}>
+                  boxShadow: `0 2px 12px rgba(0,0,0,0.35)`,
+                  cursor: 'pointer', position: 'relative',
+                }} onClick={() => currentTrackId && setCoverModalTrackId(currentTrackId)}
+                  onMouseEnter={() => setCoverHover(true)}
+                  onMouseLeave={() => setCoverHover(false)}>
                   {currentTrack?.coverUrl || currentTrack?.coverImage ? (
                     <img src={currentTrack.coverUrl || currentTrack.coverImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                   ) : (
@@ -244,10 +248,27 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                       <Disc3 size={18} style={{ color: acC }} />
                     </div>
                   )}
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, marginRight: 4 }}>
+                  {/* Expand hint overlay */}
                   <div style={{
-                    fontSize: 14, fontWeight: 600,
+                    position: 'absolute', inset: 0,
+                    background: 'rgba(0,0,0,0.25)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    opacity: coverHover ? 1 : 0,
+                    transition: 'opacity 200ms ease',
+                    borderRadius: 12,
+                    pointerEvents: 'none',
+                  }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.9 }}>
+                      <path d="M8 3H5a2 2 0 0 0-2 2v3" />
+                      <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
+                      <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
+                      <path d="M3 16v3a2 2 0 0 0 2 2h3" />
+                    </svg>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, marginRight: 6 }}>
+                  <div style={{
+                    fontSize: 15, fontWeight: 600,
                     color: 'var(--text-primary)',
                     whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                     lineHeight: 1.3,
@@ -255,9 +276,9 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                     {currentTrack.title}
                   </div>
                   <div style={{
-                    fontSize: 12, color: 'var(--text-secondary)',
+                    fontSize: 12, color: 'var(--text-tertiary)',
                     whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                    lineHeight: 1.2, marginTop: 2,
+                    lineHeight: 1.2, marginTop: 3,
                   }}>
                     {currentTrack.artist}
                   </div>
@@ -295,18 +316,24 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                   </button>
                   <button onClick={toggleMusicPlayback}
                     style={{
-                      width: 44, height: 44, borderRadius: '50%',
-                      background: `linear-gradient(135deg, ${acC}, ${acC}dd)`,
+                      width: 52, height: 52, borderRadius: '50%',
+                      background: `linear-gradient(135deg, ${acC}, ${acC}cc)`,
                       color: '#fff',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       cursor: 'pointer', border: 'none',
-                      boxShadow: `0 3px 12px ${acC}40`,
-                      transition: 'transform 150ms, box-shadow 150ms',
+                      boxShadow: `0 2px 14px ${acC}40`,
+                      transition: 'all 250ms ease',
                     }}
-                    onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.06)'; e.currentTarget.style.boxShadow = `0 5px 20px ${acC}60`; }}
-                    onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = `0 3px 12px ${acC}40`; }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.background = `linear-gradient(135deg, ${acC}, ${acC}aa)`;
+                      e.currentTarget.style.boxShadow = `0 4px 20px ${acC}50`;
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.background = `linear-gradient(135deg, ${acC}, ${acC}cc)`;
+                      e.currentTarget.style.boxShadow = `0 2px 14px ${acC}40`;
+                    }}
                   >
-                    {isPlayingMusic ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" style={{ marginLeft: 2 }} />}
+                    {isPlayingMusic ? <Pause size={22} fill="currentColor" /> : <Play size={22} fill="currentColor" style={{ marginLeft: 2 }} />}
                   </button>
                   <button onClick={() => {
                     const idx = tracks.findIndex(t => t.id === currentTrackId);
@@ -360,9 +387,11 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                     <div style={{
                       position: 'absolute', inset: 0,
                       borderRadius: 4,
-                      background: barTrackImage
-                        ? `url(${barTrackImage}) center/cover no-repeat`
-                        : 'var(--bg-hover)',
+                      backgroundColor: barTrackImage ? 'transparent' : 'var(--bg-hover)',
+                      backgroundImage: barTrackImage ? `url(${barTrackImage})` : 'none',
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
+                      backgroundRepeat: 'no-repeat',
                       opacity: barTrackImage ? 0.15 : 1,
                     }} />
                     {/* Fill — progressive reveal via clip-path */}
@@ -371,10 +400,10 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                       borderRadius: 4,
                       clipPath: `inset(0 ${(1 - progressVal) * 100}% 0 0)`,
                       transition: isSeeking ? 'none' : 'clip-path 250ms linear',
-                      background: settings.playerBarEnabled && settings.playerBarTrackColor
+                      backgroundColor: settings.playerBarEnabled && settings.playerBarTrackColor
                         ? settings.playerBarTrackColor
                         : acC,
-                      backgroundImage: barTrackImage ? `url(${barTrackImage})` : undefined,
+                      backgroundImage: barTrackImage ? `url(${barTrackImage})` : 'none',
                       backgroundSize: 'cover',
                       backgroundPosition: 'center',
                       backgroundRepeat: 'no-repeat',
@@ -437,7 +466,7 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                   }}
                   onMouseEnter={e => { e.currentTarget.style.color = acC; e.currentTarget.style.background = 'var(--bg-hover)'; }}
                   onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-tertiary)'; e.currentTarget.style.background = 'none'; }}>
-                  {musicVolume === 0 ? <VolumeX size= {18} /> : <Volume2 size={18} />}
+                  {musicVolume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
                 </button>
                 <div style={{ width: 72, flexShrink: 0 }}>
                   <input type="range" min="0" max="1" step="0.005" value={musicVolume} onChange={handleVolumeChange}

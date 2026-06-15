@@ -1,1012 +1,1318 @@
-﻿import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { 
-  BookOpen, Clock, List as ListIcon, Layers, Star, Plus,
-  Target, GraduationCap, CheckCircle,
-  FileText, BrainCircuit, NotebookPen, ExternalLink,
-  Image as ImageIcon, Folder, X, Upload, MoreVertical,
-  Search, Filter, Trash2, Edit3, Eye, Check, Calendar,
-  CheckSquare, Play, RotateCw, FileQuestion, ThumbsUp,
-  AlertCircle, ArrowUp, ArrowDown, Share2, Paperclip,
-  BarChart2, PieChart, Sparkles, BookMarked, Globe,
-  Video, File, Circle, Loader, Award, HelpCircle, Wifi
+  GraduationCap, ChevronLeft, Pencil, PlusCircle, Layers, Trash2, 
+  Book, Upload, X, MoreVertical, Search, Filter, Play, Edit3, 
+  Plus, Eye, EyeOff, LayoutGrid, ChevronRight, HardDrive, RefreshCw,
+  File, Sigma, Lightbulb, Key, Type, HelpCircle, ListChecks, ExternalLink,
+  ChevronDown, Check, Folder, Sparkles
 } from 'lucide-react';
-import { useApp, Course, Task, Note, fmtClock } from '../../store/AppContext';
-import NotificationBell from '../ui/NotificationBell';
-import { format, addDays } from 'date-fns';
-import { es } from 'date-fns/locale';
-export default function Cursos({ initialCourseId }: { initialCourseId?: string }) {
-  const { 
-    courses, tasks, notes, addCourse, updateCourse, deleteCourse,
-    addTask, updateTask, deleteTask, toggleTaskStatus,
-    addNote, updateNote, deleteNote, addNotification,
-    settings,
-  } = useApp();
+import { 
+  DndContext, closestCorners, KeyboardSensor, PointerSensor, 
+  useSensor, useSensors, useDroppable, DragOverlay, DragStartEvent, DragEndEvent 
+} from '@dnd-kit/core';
+import { 
+  SortableContext, rectSortingStrategy, useSortable, arrayMove 
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { useApp, Course, SubjectGroup, SubjectTopic, SubjectMaterial } from '../../store/AppContext';
+import toast from 'react-hot-toast';
 
-  const [selectedCourseId, setSelectedCourseId] = useState<string>(
-    initialCourseId === 'NEW' ? (courses[0]?.id || '') : (initialCourseId || courses[0]?.id || '')
+export const MATERIAL_META = {
+  resource: { label: 'Recurso', icon: File },
+  formula: { label: 'Fórmula', icon: Sigma },
+  concept: { label: 'Concepto', icon: Lightbulb },
+  'key-data': { label: 'Dato Clave', icon: Key },
+  meaning: { label: 'Significado', icon: Type },
+  quiz: { label: 'Cuestionario', icon: HelpCircle },
+  procedure: { label: 'Procedimiento', icon: ListChecks },
+};
+
+type MaterialType = keyof typeof MATERIAL_META;
+
+// --- Droppable Column for Drag and Drop ---
+interface ColumnProps {
+  id: string;
+  items: SubjectMaterial[];
+  children: React.ReactNode;
+}
+
+function DroppableColumn({ id, items, children }: ColumnProps) {
+  const { setNodeRef } = useDroppable({ id });
+  return (
+    <SortableContext id={id} items={items.map(m => m.id)} strategy={rectSortingStrategy}>
+      <div 
+        ref={setNodeRef} 
+        className="aether-column" 
+        style={{ display: 'flex', flexDirection: 'column', gap: 16, minHeight: 320 }}
+      >
+        {children}
+      </div>
+    </SortableContext>
   );
-  const [activeTab, setActiveTab] = useState<'resumen' | 'tareas' | 'notas' | 'recursos' | 'repasos'>('resumen');
-  
-  // Real-time clock for header
-  const [currentTime, setCurrentTime] = useState(new Date());
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
+}
 
-  const timeStr = fmtClock(format(currentTime, 'HH:mm'), settings?.timeFormat);
-  const secondsStr = format(currentTime, 'ss');
-  const dateStr = format(currentTime, "EEEE, d 'de' MMMM, yyyy", { locale: es as any });
-  const dateStrCapitalized = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
+// --- Sortable Wrapper ---
+interface SortableWrapperProps {
+  id: string;
+  children: (dragProps: { attributes: any; listeners: any }) => React.ReactNode;
+}
 
-  // Modals & Forms state
-  const [showNewCourse, setShowNewCourse] = useState(initialCourseId === 'NEW');
-  const [showEditCourse, setShowEditCourse] = useState(false);
-  const [showNewTask, setShowNewTask] = useState(false);
-  const [showNewNote, setShowNewNote] = useState(false);
-  const [showNewResource, setShowNewResource] = useState(false);
-  const [showNewImage, setShowNewImage] = useState(false);
-  const [showNewRepaso, setShowNewRepaso] = useState(false);
-
-  useEffect(() => {
-    if (initialCourseId === 'NEW') {
-      setShowNewCourse(true);
-      if (courses[0]) setSelectedCourseId(courses[0].id);
-    } else if (initialCourseId) {
-      setSelectedCourseId(initialCourseId);
-    }
-  }, [initialCourseId, courses]);
-  
-  // Selected course object
-  const selectedCourseIndex = courses.findIndex(c => c.id === selectedCourseId);
-  const selectedCourse = courses[selectedCourseIndex] || courses[0];
-
-  const handlePrevCourse = () => {
-    if (courses.length <= 1) return;
-    const newIdx = (selectedCourseIndex - 1 + courses.length) % courses.length;
-    setSelectedCourseId(courses[newIdx].id);
+function SortableWrapper({ id, children }: SortableWrapperProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style = {
+    transform: CSS.Translate.toString(transform),
+    transition,
+    zIndex: isDragging ? 100 : 1,
+    opacity: isDragging ? 0.6 : 1,
   };
+  return (
+    <div ref={setNodeRef} style={style} className="relative">
+      {children({ attributes, listeners })}
+    </div>
+  );
+}
 
-  const handleNextCourse = () => {
-    if (courses.length <= 1) return;
-    const newIdx = (selectedCourseIndex + 1) % courses.length;
-    setSelectedCourseId(courses[newIdx].id);
-  };
+// --- Individual Material Card ---
+interface MaterialCardProps {
+  mat: SubjectMaterial;
+  dragAttributes?: any;
+  dragListeners?: any;
+  onEdit: (mat: SubjectMaterial) => void;
+  onDelete: (mat: SubjectMaterial) => void;
+  onOpenResource: (mat: SubjectMaterial) => void;
+}
 
-  // Course custom local state or fallbacks if not in Course interface
-  const courseDescription = selectedCourse?.description || 'Descripción breve del curso, objetivos principales y lo que aprenderás durante el semestre.';
-  const courseLevel = selectedCourse?.level || 'Nivel Intermedio';
-  const courseCredits = selectedCourse?.credits || '5 Créditos';
-  const courseCode = selectedCourse?.code || 'MAT-401';
-  const courseTeacher = selectedCourse?.teacher || 'Dr. Alexander Wright';
+function MaterialCard({ mat, dragAttributes, dragListeners, onEdit, onDelete, onOpenResource }: MaterialCardProps) {
+  const [expanded, setExpanded] = useState(false);
+  const meta = MATERIAL_META[mat.type];
+  const Icon = meta.icon;
+  const isKeyData = mat.type === 'key-data';
+  const isExpandable = ['concept', 'key-data', 'meaning', 'quiz', 'procedure'].includes(mat.type);
 
-  // Filtered items for selected course
-  const courseTasks = useMemo(() => tasks.filter(t => t.course === selectedCourse?.name), [tasks, selectedCourse]);
-  const courseNotes = useMemo(() => notes.filter(n => n.course === selectedCourse?.name), [notes, selectedCourse]);
-  
-  const completedTasksCount = courseTasks.filter(t => t.status === 'completado').length;
-  const pendingTasksCount = courseTasks.filter(t => t.status !== 'completado').length;
-  const progressPct = courseTasks.length > 0 ? Math.round((completedTasksCount / courseTasks.length) * 100) : 75;
-
-  // Anchored images array matching the screenshot exactly
-  const anchoredImages = selectedCourse?.anchoredImages || [
-    { id: '1', name: 'Esquema_Estructural_01.png', url: 'https://images.unsplash.com/photo-1544383835-bda2bc66a55d?q=80&w=600&auto=format&fit=crop', date: '2 May 2025', tag: 'Tema 1 - Cabecera' },
-    { id: '2', name: 'Tabla_Formulas_Avanzadas.webp', url: 'https://images.unsplash.com/photo-1509062522246-3755977927d7?q=80&w=600&auto=format&fit=crop', date: '28 Abr 2025', tag: 'Fórmulas Clave' },
-    { id: '3', name: 'Diagrama_Flujo_Proyecto.jpg', url: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=600&auto=format&fit=crop', date: '15 Abr 2025', tag: 'Anexo B - Laboratorio' }
-  ];
-
-  // Resources list matching the screenshot exactly
-  const defaultResources = [
-    { id: 'r1', title: 'Página del curso oficial', url: 'https://miscurso.edu/matematica', type: 'link', date: 'Hoy, 14:30' },
-    { id: 'r2', title: 'Documentos y Normativas oficiales', url: 'https://docs.miscurso.edu', type: 'doc', date: 'Ayer, 18:45' },
-    { id: 'r3', title: 'Biblioteca digital y Repositorio', url: 'https://biblio.miscurso.edu', type: 'link', date: '2 May, 16:20' },
-    { id: 'r4', title: 'Foro de dudas y discusión grupal', url: 'https://foro.miscurso.edu', type: 'link', date: '1 May, 20:10' },
-  ];
-  const resourcesList = selectedCourse?.resources || defaultResources;
-
-  // Flashcards / Repaso list matching the screenshot exactly
-  const defaultFlashcards = [
-    { id: 'fc1', question: '¿Cuál es la derivada de e^(2x)?', answer: '2e^(2x)', difficulty: 'bueno' as const, lastReviewed: 'Ayer', nextReview: '4 May' },
-    { id: 'fc2', question: 'Teorema Fundamental del Cálculo (Parte 1)', answer: 'La integral de la derivada de una función es la función original evaluada en los límites.', difficulty: 'dificil' as const, lastReviewed: 'Hace 3 días', nextReview: '5 May' },
-    { id: 'fc3', question: 'Definición de Límite de una función', answer: 'Para todo ε > 0 existe un δ > 0 tal que si 0 < |x - c| < δ entonces |f(x) - L| < ε.', difficulty: 'facil' as const, lastReviewed: 'Hace 5 días', nextReview: '10 May' },
-  ];
-  const flashcards = selectedCourse?.flashcards || defaultFlashcards;
-
-  const [activeFlashcardIndex, setActiveFlashcardIndex] = useState(0);
-  const [showFlashcardAnswer, setShowFlashcardAnswer] = useState(false);
-
-  // New Course Form State
-  const [newCourseName, setNewCourseName] = useState('');
-  const [newCourseColor, setNewCourseColor] = useState('#8B5CF6');
-
-  // Edit Course Form State
-  const [editDesc, setEditDesc] = useState(courseDescription);
-  const [editLevel, setEditLevel] = useState(courseLevel);
-  const [editCredits, setEditCredits] = useState(courseCredits);
-
-  // Sync Edit Form with Selected Course
-  useEffect(() => {
-    if (selectedCourse) {
-      setEditDesc(selectedCourse.description || 'Descripción breve del curso, objetivos principales y lo que aprenderás durante el semestre.');
-      setEditLevel(selectedCourse.level || 'Nivel Intermedio');
-      setEditCredits(selectedCourse.credits || '5 Créditos');
-      setActiveFlashcardIndex(0);
-      setShowFlashcardAnswer(false);
-    }
-  }, [selectedCourse]);
-
-  // New Task Form State
-  const [newTaskTitle, setNewTaskTitle] = useState('');
-  const [newTaskPriority, setNewTaskPriority] = useState<'high' | 'medium' | 'low'>('medium');
-  const [newTaskDueDate, setNewTaskDueDate] = useState('');
-
-  // New Note Form State
-  const [newNoteTitle, setNewNoteTitle] = useState('');
-  const [newNoteContent, setNewNoteContent] = useState('');
-
-  // New Resource Form State
-  const [newResTitle, setNewResTitle] = useState('');
-  const [newResUrl, setNewResUrl] = useState('');
-  const [newResType, setNewResType] = useState<'link' | 'pdf' | 'doc' | 'video'>('link');
-
-  // New Anchored Image Form State
-  const [newImgName, setNewImgName] = useState('');
-  const [newImgTag, setNewImgTag] = useState('');
-  const [newImgUrl, setNewImgUrl] = useState('');
-  const imageInputRef = useRef<HTMLInputElement>(null);
-
-  // New Flashcard Form State
-  const [newFcQuestion, setNewFcQuestion] = useState('');
-  const [newFcAnswer, setNewFcAnswer] = useState('');
-
-  // Preview Image Modal
-  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
-
-  // Handlers
-  const handleCreateCourse = () => {
-    if (!newCourseName.trim()) { addNotification('Ingresa el nombre del curso', 'error'); return; }
-    const newId = addCourse({
-      name: newCourseName.trim(),
-      color: newCourseColor,
-      progress: 0,
-      totalTasks: 0,
-      completedTasks: 0,
-      hoursStudied: 0
-    });
-    setSelectedCourseId(newId);
-    setNewCourseName('');
-    setShowNewCourse(false);
-  };
-
-  const handleSaveCourseEdit = () => {
-    updateCourse(selectedCourse.id, {
-      description: editDesc,
-      level: editLevel,
-      credits: editCredits,
-    });
-    setShowEditCourse(false);
-  };
-
-  const handleCreateTask = () => {
-    if (!newTaskTitle.trim()) { addNotification('Ingresa un título para la tarea', 'error'); return; }
-    addTask({
-      title: newTaskTitle.trim(),
-      course: selectedCourse.name,
-      courseColor: selectedCourse.color,
-      priority: newTaskPriority,
-      urgent: newTaskPriority === 'high',
-      important: newTaskPriority === 'high',
-      dueDate: newTaskDueDate || undefined,
-      estimatedMinutes: 60
-    });
-    setNewTaskTitle('');
-    setNewTaskDueDate('');
-    setShowNewTask(false);
-  };
-
-  const handleCreateNote = () => {
-    if (!newNoteTitle.trim()) { addNotification('Ingresa el título de la nota', 'error'); return; }
-    addNote({
-      title: newNoteTitle.trim(),
-      content: newNoteContent.trim() || '<p>Contenido de la nota...</p>',
-      course: selectedCourse.name,
-      courseColor: selectedCourse.color,
-      isPinned: false
-    });
-    setNewNoteTitle('');
-    setNewNoteContent('');
-    setShowNewNote(false);
-  };
-
-  const handleCreateResource = () => {
-    if (!newResTitle.trim() || !newResUrl.trim()) { addNotification('Completa todos los campos', 'error'); return; }
-    const newRes = {
-      id: Date.now().toString(),
-      title: newResTitle.trim(),
-      url: newResUrl.trim(),
-      type: newResType,
-      date: 'Hoy, ' + format(new Date(), 'HH:mm')
-    };
-    updateCourse(selectedCourse.id, { resources: [newRes, ...resourcesList] });
-    setNewResTitle('');
-    setNewResUrl('');
-    setShowNewResource(false);
-  };
-
-  const handleImageSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      setNewImgUrl(ev.target?.result as string);
-      if (!newImgName) setNewImgName(file.name);
-    };
-    reader.readAsDataURL(file);
-    e.target.value = '';
-  };
-
-  const handleAddAnchoredImage = () => {
-    if (!newImgName.trim() || !newImgUrl.trim() || !newImgTag.trim()) {
-      addNotification('Completa el nombre, la etiqueta de posición y selecciona una imagen', 'error');
-      return;
-    }
-    const updatedImages = [{
-      id: Date.now().toString(),
-      name: newImgName.trim(),
-      url: newImgUrl,
-      date: format(new Date(), "d MMM yyyy", { locale: es }),
-      tag: newImgTag.trim()
-    }, ...anchoredImages];
-    
-    updateCourse(selectedCourse.id, { anchoredImages: updatedImages });
-    setNewImgName('');
-    setNewImgTag('');
-    setNewImgUrl('');
-    setShowNewImage(false);
-  };
-
-  const handleDeleteAnchoredImage = (id: string) => {
-    const updatedImages = anchoredImages.filter(img => img.id !== id);
-    updateCourse(selectedCourse.id, { anchoredImages: updatedImages });
-  };
-
-  const handleCreateFlashcard = () => {
-    if (!newFcQuestion.trim() || !newFcAnswer.trim()) { addNotification('Ingresa Pregunta y Respuesta', 'error'); return; }
-    const newFc = {
-      id: Date.now().toString(),
-      question: newFcQuestion.trim(),
-      answer: newFcAnswer.trim(),
-      difficulty: 'bueno' as const,
-      lastReviewed: 'Nunca',
-      nextReview: 'Mañana'
-    };
-    updateCourse(selectedCourse.id, { flashcards: [...flashcards, newFc] });
-    setNewFcQuestion('');
-    setNewFcAnswer('');
-    setShowNewRepaso(false);
-  };
-
-  const handleRateFlashcard = (rating: 'facil' | 'bueno' | 'dificil') => {
-    const updatedFcs = flashcards.map((fc, i) => i === activeFlashcardIndex ? {
-      ...fc,
-      difficulty: rating,
-      lastReviewed: 'Hoy',
-      nextReview: rating === 'facil' ? 'En 5 días' : rating === 'bueno' ? 'En 3 días' : 'Mañana'
-    } : fc);
-    updateCourse(selectedCourse.id, { flashcards: updatedFcs });
-    setShowFlashcardAnswer(false);
-    setActiveFlashcardIndex((activeFlashcardIndex + 1) % flashcards.length);
-  };
-
-  const courseImageUrl = selectedCourse?.color ? `https://images.unsplash.com/photo-1544383835-bda2bc66a55d?q=80&w=1200&auto=format&fit=crop` : '';
+  // Helper getters
+  const title = mat.name || mat.title || mat.word || mat.question || 'Sin título';
+  const body = mat.content || mat.meaning || mat.answer || '';
 
   return (
-    <div className="page-container" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto' }}>
-      
-      {/* ── HERO HEADER with blurred cover ── */}
-      {selectedCourse && (
-        <div style={{ position: 'relative', marginBottom: 24, borderRadius: 16, overflow: 'hidden', minHeight: 200 }}>
-          {/* Blurred cover background */}
-          <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(135deg, ${selectedCourse.color}22 0%, var(--bg-base) 100%)`, opacity: 0.6 }} />
-          {selectedCourse.anchoredImages?.[0]?.url && (
-            <img src={selectedCourse.anchoredImages[0].url} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: 'blur(40px) saturate(1.2)', opacity: 0.25 }} />
-          )}
-          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(2,2,3,0.85) 0%, rgba(11,12,15,0.6) 100%)' }} />
+    <div className="aether-glass-card" style={{ display: 'flex', flexDirection: 'column', width: '100%', overflow: 'hidden' }}>
+      {/* Header bar */}
+      <div 
+        style={{ 
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
+          borderBottom: '1px solid var(--aether-border-glass)', padding: '6px 12px', background: 'rgba(0,0,0,0.1)' 
+        }}
+        className="group-hover-visible"
+      >
+        <button 
+          onClick={() => onEdit(mat)} 
+          className="btn-ghost" 
+          style={{ width: 26, height: 26, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: 'none', background: 'transparent', color: 'var(--text-secondary)' }}
+          title="Editar"
+        >
+          <Edit3 size={11} />
+        </button>
 
-          <div style={{ position: 'relative', padding: '28px 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
-                <div style={{ width: 10, height: 10, borderRadius: '50%', background: selectedCourse.color, boxShadow: `0 0 12px ${selectedCourse.color}` }} />
-                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{courseLevel.toUpperCase()} · {courseCode}</span>
-              </div>
-              <h1 style={{ fontSize: 36, fontWeight: 700, color: '#fff', lineHeight: 1.1, letterSpacing: '-0.02em', fontFamily: "'Outfit', 'Inter Tight', sans-serif" }}>
-                {selectedCourse.name}
-              </h1>
-              <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', marginTop: 8, fontWeight: 400, maxWidth: 480 }}>
-                {courseDescription}
+        <div 
+          {...dragAttributes} 
+          {...dragListeners} 
+          style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, cursor: 'grab', padding: '2px 0' }}
+          title="Arrastrar"
+        >
+          <Icon size={12} className="aether-text-primary" />
+          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-secondary)' }}>
+            {meta.label}
+          </span>
+        </div>
+
+        <button 
+          onClick={() => onDelete(mat)} 
+          className="btn-ghost text-red-500" 
+          style={{ width: 26, height: 26, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: 'none', background: 'transparent' }}
+          title="Eliminar"
+        >
+          <Trash2 size={11} />
+        </button>
+      </div>
+
+      {/* Body content */}
+      <div 
+        style={{ padding: 14, cursor: isExpandable ? 'pointer' : 'default' }}
+        onClick={() => isExpandable && setExpanded(!expanded)}
+      >
+        <h4 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6, lineHeight: 1.3 }}>
+          {title}
+        </h4>
+
+        {mat.type === 'formula' && mat.clarification && (
+          <p style={{ fontSize: 11, color: 'var(--text-tertiary)', fontStyle: 'italic', lineHeight: 1.4 }}>
+            {mat.clarification}
+          </p>
+        )}
+
+        {mat.type === 'procedure' && mat.description && (
+          <p style={{ fontSize: 11, color: 'var(--aether-primary)', fontStyle: 'italic', marginBottom: 8 }}>
+            {mat.description}
+          </p>
+        )}
+
+        {isExpandable && (
+          <p 
+            style={{ 
+              fontSize: 11.5, color: 'var(--text-secondary)', lineHeight: 1.5, 
+              whiteSpace: 'pre-wrap', display: expanded ? 'block' : '-webkit-box',
+              WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden'
+            }}
+          >
+            {body}
+          </p>
+        )}
+
+        {mat.image && expanded && (
+          <div style={{ marginTop: 10, width: '100%', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--aether-border-glass)', background: 'rgba(0,0,0,0.2)' }}>
+            <img src={mat.image} alt="" style={{ width: '100%', height: 'auto', display: 'block' }} />
+          </div>
+        )}
+
+        {mat.type === 'resource' && (
+          <button 
+            onClick={(e) => { e.stopPropagation(); onOpenResource(mat); }}
+            className="aether-text-primary"
+            style={{ padding: 0, height: 'auto', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 10, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, marginTop: 8 }}
+          >
+            Ver archivo <ExternalLink size={10} />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// --- Main Cursos Detailed Component ---
+export default function Cursos({ initialCourseId }: { initialCourseId?: string }) {
+  const { courses = [], updateCourse, setNavigateTo } = useApp();
+
+  const [selectedCourseId, setSelectedCourseId] = useState<string>(initialCourseId || courses[0]?.id || '');
+  const [currentView, setCurrentView] = useState<'subject' | 'topic'>('subject');
+  const [activeTopicId, setActiveTopicId] = useState<string | null>(null);
+  const [filterMaterialType, setFilterMaterialType] = useState<MaterialType | 'all'>('all');
+
+  // Course updates fields
+  const [showEditCourse, setShowEditCourse] = useState(false);
+  const [editCourseName, setEditCourseName] = useState('');
+  const [editCourseCover, setEditCourseCover] = useState<string | undefined>(undefined);
+
+  // Group modals
+  const [showGroupModal, setShowGroupModal] = useState(false);
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [groupName, setGroupName] = useState('');
+  const [groupCover, setGroupCover] = useState<string | undefined>(undefined);
+  const [selectedTopicIds, setSelectedTopicIds] = useState<string[]>([]);
+
+  // Topic modals
+  const [showTopicModal, setShowTopicModal] = useState(false);
+  const [topicName, setTopicName] = useState('');
+  const [editingTopicId, setEditingTopicId] = useState<string | null>(null);
+
+  // Material modals
+  const [showMaterialModal, setShowMaterialModal] = useState(false);
+  const [materialType, setMaterialType] = useState<MaterialType | null>(null);
+  const [editingMaterial, setEditingMaterial] = useState<SubjectMaterial | null>(null);
+  const [materialColIndex, setMaterialColIndex] = useState(0);
+
+  // Material Form fields
+  const [mName, setMName] = useState('');
+  const [mClarification, setMClarification] = useState('');
+  const [mTitle, setMTitle] = useState('');
+  const [mContent, setMContent] = useState('');
+  const [mWord, setMWord] = useState('');
+  const [mMeaning, setMMeaning] = useState('');
+  const [mQuestion, setMQuestion] = useState('');
+  const [mAnswer, setMAnswer] = useState('');
+  const [mDescription, setMDescription] = useState('');
+  const [mImage, setMImage] = useState<string | undefined>(undefined);
+
+  // File Upload Refs
+  const courseCoverInputRef = useRef<HTMLInputElement>(null);
+  const groupCoverInputRef = useRef<HTMLInputElement>(null);
+  const resourceInputRef = useRef<HTMLInputElement>(null);
+  const materialImageInputRef = useRef<HTMLInputElement>(null);
+
+  // Active course resolution
+  const course = useMemo(() => courses.find(c => c.id === selectedCourseId) || courses[0], [courses, selectedCourseId]);
+
+  // Sync edits
+  useEffect(() => {
+    if (course) {
+      setEditCourseName(course.name);
+      setEditCourseCover(course.coverUrl || course.coverImage);
+    }
+  }, [course]);
+
+  // Active topic resolution
+  const activeTopic = useMemo(() => {
+    if (!course || !activeTopicId) return null;
+    return (course.studyTopics || []).find(t => t.id === activeTopicId) || null;
+  }, [course, activeTopicId]);
+
+  if (!course) {
+    return (
+      <div className="page-container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', background: 'var(--bg-base)' }}>
+        <p style={{ color: 'var(--text-secondary)', fontSize: 16 }}>Asignatura no encontrada.</p>
+        <button onClick={() => setNavigateTo('cursos')} className="aether-btn-primary" style={{ marginTop: 16, height: 38, padding: '0 20px', border: 'none', cursor: 'pointer' }}>
+          Volver a Asignaturas
+        </button>
+      </div>
+    );
+  }
+
+  // --- Sub-View Functions ---
+
+  const handleSaveCourseSettings = () => {
+    if (!editCourseName.trim()) return;
+    updateCourse(course.id, {
+      name: editCourseName.trim(),
+      coverImage: editCourseCover,
+      coverUrl: editCourseCover,
+    });
+    setShowEditCourse(false);
+    toast.success('Configuración guardada');
+  };
+
+  const handleAddTopic = () => {
+    if (!topicName.trim()) return;
+    const currentTopics = course.studyTopics || [];
+    
+    if (editingTopicId) {
+      // Edit
+      const updated = currentTopics.map(t => 
+        t.id === editingTopicId ? { ...t, title: topicName.trim() } : t
+      );
+      updateCourse(course.id, { studyTopics: updated });
+      toast.success('Tema actualizado');
+    } else {
+      // Create
+      const newTopic: SubjectTopic = {
+        id: Math.random().toString(),
+        title: topicName.trim(),
+        status: 'pending',
+        createdAt: Date.now(),
+        reviewLevel: 0,
+        nextReview: Date.now(),
+        materials: []
+      };
+      updateCourse(course.id, { studyTopics: [...currentTopics, newTopic] });
+      toast.success('Tema integrado');
+    }
+    
+    setTopicName('');
+    setEditingTopicId(null);
+    setShowTopicModal(false);
+  };
+
+  const handleDeleteTopic = (id: string) => {
+    const currentTopics = course.studyTopics || [];
+    updateCourse(course.id, {
+      studyTopics: currentTopics.filter(t => t.id !== id)
+    });
+    toast.success('Tema eliminado');
+  };
+
+  const handleSaveGroup = () => {
+    if (!groupName.trim()) return;
+    const currentGroups = course.groups || [];
+    const groupId = editingGroupId || Math.random().toString();
+
+    let updatedGroups = [...currentGroups];
+    if (editingGroupId) {
+      updatedGroups = updatedGroups.map(g => 
+        g.id === editingGroupId ? { ...g, name: groupName.trim(), image: groupCover } : g
+      );
+    } else {
+      updatedGroups.push({
+        id: groupId,
+        name: groupName.trim(),
+        image: groupCover,
+        createdAt: Date.now()
+      });
+    }
+
+    // Assign topics' groupIds
+    const updatedTopics = (course.studyTopics || []).map(t => {
+      if (selectedTopicIds.includes(t.id)) {
+        return { ...t, groupId };
+      } else if (t.groupId === groupId) {
+        return { ...t, groupId: undefined };
+      }
+      return t;
+    });
+
+    updateCourse(course.id, {
+      groups: updatedGroups,
+      studyTopics: updatedTopics
+    });
+
+    setGroupName('');
+    setGroupCover(undefined);
+    setSelectedTopicIds([]);
+    setEditingGroupId(null);
+    setShowGroupModal(false);
+    toast.success(editingGroupId ? 'Agrupación actualizada' : 'Agrupación creada');
+  };
+
+  const startEditGroup = (g: SubjectGroup) => {
+    const members = (course.studyTopics || []).filter(t => t.groupId === g.id).map(t => t.id);
+    setEditingGroupId(g.id);
+    setGroupName(g.name);
+    setGroupCover(g.image);
+    setSelectedTopicIds(members);
+    setShowGroupModal(true);
+  };
+
+  const handleDeleteGroup = (groupId: string) => {
+    const currentGroups = course.groups || [];
+    const updatedTopics = (course.studyTopics || []).map(t => 
+      t.groupId === groupId ? { ...t, groupId: undefined } : t
+    );
+    updateCourse(course.id, {
+      groups: currentGroups.filter(g => g.id !== groupId),
+      studyTopics: updatedTopics
+    });
+    toast.success('Agrupación eliminada');
+  };
+
+  // --- Topic Material Management ---
+
+  const handleAddMaterialClick = (type: MaterialType, colIdx: number) => {
+    if (type === 'resource') {
+      setMaterialColIndex(colIdx);
+      resourceInputRef.current?.click();
+      return;
+    }
+    setMaterialType(type);
+    setMaterialColIndex(colIdx);
+    setEditingMaterial(null);
+    
+    // Clear forms
+    setMName('');
+    setMClarification('');
+    setMTitle('');
+    setMContent('');
+    setMWord('');
+    setMMeaning('');
+    setMQuestion('');
+    setMAnswer('');
+    setMDescription('');
+    setMImage(undefined);
+    
+    setShowMaterialModal(true);
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !activeTopic) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      const newMaterial: SubjectMaterial = {
+        id: Math.random().toString(),
+        type: 'resource',
+        createdAt: Date.now(),
+        columnIndex: materialColIndex,
+        name: file.name,
+        fileType: file.type,
+        dataUrl
+      };
+
+      const updatedTopics = (course.studyTopics || []).map(t => 
+        t.id === activeTopic.id ? { ...t, materials: [...(t.materials || []), newMaterial] } : t
+      );
+      updateCourse(course.id, { studyTopics: updatedTopics });
+      toast.success('Archivo integrado correctamente');
+    };
+    reader.readAsDataURL(file);
+    if (e.target) e.target.value = '';
+  };
+
+  const handleSaveMaterial = () => {
+    if (!materialType || !activeTopic) return;
+
+    let payload: Partial<SubjectMaterial> = {};
+    switch (materialType) {
+      case 'formula':
+        if (!mName.trim()) return;
+        payload = { name: mName.trim(), clarification: mClarification.trim(), image: mImage };
+        break;
+      case 'concept':
+        if (!mTitle.trim()) return;
+        payload = { title: mTitle.trim(), content: mContent.trim() };
+        break;
+      case 'key-data':
+        if (!mContent.trim()) return;
+        payload = { title: mTitle.trim(), content: mContent.trim() };
+        break;
+      case 'meaning':
+        if (!mWord.trim() || !mMeaning.trim()) return;
+        payload = { word: mWord.trim(), meaning: mMeaning.trim() };
+        break;
+      case 'quiz':
+        if (!mQuestion.trim() || !mAnswer.trim()) return;
+        payload = { question: mQuestion.trim(), answer: mAnswer.trim() };
+        break;
+      case 'procedure':
+        if (!mTitle.trim() || !mContent.trim()) return;
+        payload = { title: mTitle.trim(), description: mDescription.trim(), content: mContent.trim(), image: mImage };
+        break;
+    }
+
+    const currentTopics = course.studyTopics || [];
+    const updatedTopics = currentTopics.map(t => {
+      if (t.id === activeTopic.id) {
+        let updatedMaterials = t.materials || [];
+        if (editingMaterial) {
+          // Edit
+          updatedMaterials = updatedMaterials.map(m => 
+            m.id === editingMaterial.id ? { ...m, ...payload } : m
+          );
+        } else {
+          // Create
+          const newMaterial: SubjectMaterial = {
+            id: Math.random().toString(),
+            type: materialType,
+            createdAt: Date.now(),
+            columnIndex: materialColIndex,
+            ...payload
+          };
+          updatedMaterials = [...updatedMaterials, newMaterial];
+        }
+        return { ...t, materials: updatedMaterials };
+      }
+      return t;
+    });
+
+    updateCourse(course.id, { studyTopics: updatedTopics });
+    setShowMaterialModal(false);
+    toast.success(editingMaterial ? 'Material actualizado' : 'Material guardado');
+  };
+
+  const startEditMaterial = (mat: SubjectMaterial) => {
+    setEditingMaterial(mat);
+    setMaterialType(mat.type);
+    setMaterialColIndex(mat.columnIndex);
+    
+    setMName(mat.name || '');
+    setMClarification(mat.clarification || '');
+    setMTitle(mat.title || '');
+    setMContent(mat.content || '');
+    setMWord(mat.word || '');
+    setMMeaning(mat.meaning || '');
+    setMQuestion(mat.question || '');
+    setMAnswer(mat.answer || '');
+    setMDescription(mat.description || '');
+    setMImage(mat.image);
+
+    setShowMaterialModal(true);
+  };
+
+  const handleDeleteMaterial = (mat: SubjectMaterial) => {
+    if (!activeTopic) return;
+    const currentTopics = course.studyTopics || [];
+    const updatedTopics = currentTopics.map(t => {
+      if (t.id === activeTopic.id) {
+        return { ...t, materials: (t.materials || []).filter(m => m.id !== mat.id) };
+      }
+      return t;
+    });
+    updateCourse(course.id, { studyTopics: updatedTopics });
+    toast.success('Material removido');
+  };
+
+  const handleOpenResource = (mat: SubjectMaterial) => {
+    if (!mat.dataUrl) return;
+    const win = window.open();
+    if (win) {
+      win.document.write(
+        `<iframe src="${mat.dataUrl}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%; position:fixed;" allowfullscreen></iframe>`
+      );
+    } else {
+      toast.error('Las ventanas emergentes están bloqueadas por el navegador');
+    }
+  };
+
+  const setTopicReviewLevel = (topicId: string, level: number) => {
+    const currentTopics = course.studyTopics || [];
+    const updated = currentTopics.map(t => 
+      t.id === topicId ? { ...t, reviewLevel: level, status: level >= 4 ? ('done' as const) : ('studying' as const) } : t
+    );
+    updateCourse(course.id, { studyTopics: updated });
+    toast.success(`Nivel de retención: ${level}`);
+  };
+
+  // --- Drag and Drop Handlers for Materials ---
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+
+  const activeTopicMaterials = useMemo(() => {
+    if (!activeTopic) return [];
+    const all = activeTopic.materials || [];
+    return filterMaterialType === 'all' ? all : all.filter(m => m.type === filterMaterialType);
+  }, [activeTopic, filterMaterialType]);
+
+  const columns = useMemo(() => {
+    const cols: SubjectMaterial[][] = [[], [], []];
+    activeTopicMaterials.forEach(mat => {
+      const ci = mat.columnIndex;
+      if (typeof ci === 'number' && ci >= 0 && ci <= 2) {
+        cols[ci].push(mat);
+      } else {
+        cols[0].push(mat);
+      }
+    });
+    // Sort descending
+    cols.forEach(c => c.sort((a, b) => b.createdAt - a.createdAt));
+    return cols;
+  }, [activeTopicMaterials]);
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || !activeTopic) return;
+
+    const activeId = active.id as string;
+    const overId = over.id as string;
+
+    // Find containers (columns)
+    let activeColIdx = -1;
+    let overColIdx = -1;
+
+    for (let i = 0; i < 3; i++) {
+      if (columns[i].some(m => m.id === activeId)) activeColIdx = i;
+      if (columns[i].some(m => m.id === overId)) overColIdx = i;
+    }
+
+    if (overId.startsWith('col-')) {
+      overColIdx = parseInt(overId.split('-')[1]);
+    }
+
+    if (activeColIdx === -1 || overColIdx === -1) return;
+
+    // Reorder materials array
+    const currentMaterials = [...(activeTopic.materials || [])];
+    const targetMat = currentMaterials.find(m => m.id === activeId);
+
+    if (targetMat) {
+      targetMat.columnIndex = overColIdx;
+      targetMat.createdAt = Date.now(); // Put to top
+
+      const updatedTopics = (course.studyTopics || []).map(t => 
+        t.id === activeTopic.id ? { ...t, materials: currentMaterials } : t
+      );
+      updateCourse(course.id, { studyTopics: updatedTopics });
+    }
+  };
+
+  // UI calculations
+  const parsedTopics = course.studyTopics || [];
+  const groups = course.groups || [];
+  const ungroupedTopics = parsedTopics.filter(t => !t.groupId);
+
+  return (
+    <div className="page-container" style={{ height: '100%', overflowY: 'auto', background: 'var(--bg-base)' }}>
+      
+      {/* ────────────────── VIEW: SUBJECT DETAILS (TOPICS GRID) ────────────────── */}
+      {currentView === 'subject' && (
+        <div className="animate-in fade-in duration-300 pb-16">
+          {/* Cover Banner */}
+          <div 
+            style={{ 
+              position: 'relative', width: '100%', height: 260, 
+              background: `linear-gradient(135deg, ${course.color}33 0%, var(--bg-surface) 100%)`,
+              overflow: 'hidden' 
+            }}
+          >
+            {(course.coverUrl || course.coverImage) ? (
+              <img 
+                src={course.coverUrl || course.coverImage} 
+                alt="" 
+                style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.8 }} 
+              />
+            ) : (
+              <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(to bottom right, ${course.color}22, rgba(0,0,0,0.6))` }} />
+            )}
+            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, var(--bg-base) 0%, transparent 80%)' }} />
+
+            {/* Back Button */}
+            <button 
+              onClick={() => setNavigateTo('cursos')} 
+              className="aether-glass-card"
+              style={{ 
+                position: 'absolute', top: 20, left: 24, display: 'flex', alignItems: 'center', gap: 6, 
+                height: 34, padding: '0 14px', border: 'none', cursor: 'pointer', zIndex: 10, fontSize: 11, fontWeight: 700, uppercase: 'true' 
+              }}
+            >
+              <ChevronLeft size={16} className="aether-text-primary" /> Asignaturas
+            </button>
+
+            {/* Title Banner */}
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'end', paddingBottom: 28 }}>
+              <h2 style={{ fontSize: 38, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.02em', textShadow: '0 2px 20px rgba(0,0,0,0.8)', fontFamily: "'Inter Tight', sans-serif" }}>
+                {course.name}
+              </h2>
+              <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--aether-primary)', marginTop: 6 }}>
+                Repositorio Académico
               </p>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px', borderRadius: 20, border: '1px solid rgba(255,255,255,0.15)', fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.8)' }}>
-                <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--success)', boxShadow: '0 0 8px var(--success)' }} />
-                Conectado
-              </div>
-              <NotificationBell />
-              <div style={{ borderLeft: '1px solid rgba(255,255,255,0.15)', paddingLeft: 20, textAlign: 'right' }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, justifyContent: 'flex-end' }}>
-                  <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 52, fontWeight: 200, lineHeight: 0.85, color: selectedCourse.color, letterSpacing: '0.02em', textShadow: `0 0 30px ${selectedCourse.color}66` }}>
-                    {timeStr}
-                  </span>
-                  <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 18, fontWeight: 200, color: selectedCourse.color, opacity: 0.7 }}>
-                    {secondsStr}
-                  </span>
+            {/* Actions top-right */}
+            <div style={{ position: 'absolute', top: 20, right: 24, display: 'flex', gap: 10, zIndex: 10 }}>
+              <button 
+                onClick={() => setShowEditCourse(true)} 
+                className="aether-glass-card" 
+                style={{ width: 36, height: 36, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', cursor: 'pointer' }}
+                title="Configurar asignatura"
+              >
+                <Pencil size={14} style={{ color: 'var(--text-primary)' }} />
+              </button>
+              <button 
+                onClick={() => { setEditingTopicId(null); setTopicName(''); setShowTopicModal(true); }} 
+                className="aether-glass-card" 
+                style={{ width: 36, height: 36, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', cursor: 'pointer' }}
+                title="Añadir tema"
+              >
+                <PlusCircle size={14} style={{ color: 'var(--text-primary)' }} />
+              </button>
+              <button 
+                onClick={() => { setEditingGroupId(null); setGroupName(''); setGroupCover(undefined); setSelectedTopicIds([]); setShowGroupModal(true); }} 
+                className="aether-glass-card" 
+                style={{ width: 36, height: 36, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', cursor: 'pointer' }}
+                title="Agrupar temas"
+              >
+                <Layers size={14} style={{ color: 'var(--text-primary)' }} />
+              </button>
+            </div>
+          </div>
+
+          {/* Grid content */}
+          <div style={{ maxWidth: 1200, margin: '32px auto 0', padding: '0 24px' }}>
+            
+            {/* Thematic Groups */}
+            {groups.length > 0 && (
+              <div style={{ marginBottom: 40 }}>
+                <h3 style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--aether-primary)', opacity: 0.7, marginBottom: 16 }}>
+                  Agrupaciones Temáticas
+                </h3>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 20 }}>
+                  {groups.map(group => {
+                    const members = parsedTopics.filter(t => t.groupId === group.id);
+                    return (
+                      <div 
+                        key={group.id} 
+                        className="aether-glass-card group" 
+                        style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}
+                      >
+                        {/* Edit Group trigger */}
+                        <button 
+                          onClick={() => startEditGroup(group)}
+                          className="btn-ghost"
+                          style={{ position: 'absolute', top: 10, right: 10, width: 28, height: 28, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.4)', border: 'none', cursor: 'pointer', zIndex: 5, color: '#fff', opacity: 0, transition: 'opacity 150ms' }}
+                          className="group-hover-visible"
+                        >
+                          <Edit3 size={11} />
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteGroup(group.id)}
+                          className="btn-ghost text-red-500"
+                          style={{ position: 'absolute', top: 10, right: 42, width: 28, height: 28, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.4)', border: 'none', cursor: 'pointer', zIndex: 5, opacity: 0, transition: 'opacity 150ms' }}
+                          className="group-hover-visible"
+                        >
+                          <Trash2 size={11} />
+                        </button>
+
+                        <div style={{ height: 80, position: 'relative', overflow: 'hidden', background: 'linear-gradient(135deg, var(--aether-primary) 0%, var(--bg-surface) 100%)' }}>
+                          {group.image && <img src={group.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <h4 style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>{group.name}</h4>
+                          </div>
+                        </div>
+
+                        <div style={{ padding: 14, background: 'rgba(0,0,0,0.05)', flex: 1 }}>
+                          <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 10 }}>
+                            {members.length} temas integrados
+                          </p>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {members.map(t => (
+                              <div 
+                                key={t.id}
+                                onClick={() => { setActiveTopicId(t.id); setCurrentView('topic'); }}
+                                style={{ fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
+                                onMouseEnter={(e) => e.currentTarget.style.color = 'var(--aether-primary)'}
+                                onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-secondary)'}
+                              >
+                                <div style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--aether-primary)' }} />
+                                <span className="truncate">{t.title}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-                <div style={{ fontSize: 10, fontWeight: 500, color: 'rgba(255,255,255,0.5)', marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-                  {dateStrCapitalized}
-                </div>
               </div>
+            )}
+
+            {/* Independent Topics */}
+            <div>
+              <h3 style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--aether-primary)', opacity: 0.7, marginBottom: 16 }}>
+                Temas Independientes
+              </h3>
+              {ungroupedTopics.length > 0 ? (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 20 }}>
+                  {ungroupedTopics.map(topic => (
+                    <div 
+                      key={topic.id} 
+                      className="aether-glass-card group" 
+                      style={{ padding: 18, position: 'relative', display: 'flex', flexDirection: 'column', gap: 12 }}
+                    >
+                      {/* Left accent border */}
+                      <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: 3, background: 'var(--aether-primary)', borderRadius: '3px 0 0 3px' }} />
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <h4 
+                          onClick={() => { setActiveTopicId(topic.id); setCurrentView('topic'); }}
+                          style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer', flex: 1, marginRight: 12 }}
+                          onMouseEnter={(e) => e.currentTarget.style.color = 'var(--aether-primary)'}
+                          onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-primary)'}
+                        >
+                          {topic.title}
+                        </h4>
+
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button 
+                            onClick={() => { setEditingTopicId(topic.id); setTopicName(topic.title); setShowTopicModal(true); }}
+                            className="btn-ghost"
+                            style={{ width: 26, height: 26, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: 'none', cursor: 'pointer', opacity: 0, transition: 'opacity 150ms', color: 'var(--text-secondary)' }}
+                            className="group-hover-visible"
+                          >
+                            <Edit3 size={11} />
+                          </button>
+                          <button 
+                            onClick={() => handleDeleteTopic(topic.id)}
+                            className="btn-ghost text-red-500"
+                            style={{ width: 26, height: 26, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: 'none', cursor: 'pointer', opacity: 0, transition: 'opacity 150ms' }}
+                            className="group-hover-visible"
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Dots progress bar */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 'auto' }}>
+                        <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Familiaridad:</span>
+                        <div style={{ display: 'flex', gap: 3 }}>
+                          {[...Array(5)].map((_, i) => (
+                            <button
+                              key={i}
+                              onClick={() => setTopicReviewLevel(topic.id, i + 1)}
+                              style={{ 
+                                width: 10, height: 6, borderRadius: 3, border: 'none', cursor: 'pointer',
+                                background: i < topic.reviewLevel ? 'var(--aether-primary)' : 'rgba(255,255,255,0.05)',
+                                transition: 'all 200ms ease'
+                              }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ padding: '60px 20px', textAlign: 'center', opacity: 0.5 }}>
+                  <Book size={36} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Aún no hay temas agregados.</p>
+                </div>
+              )}
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* ────────────────── VIEW: TOPIC DETAILS (MATERIALS GRID) ────────────────── */}
+      {currentView === 'topic' && activeTopic && (
+        <div className="animate-in fade-in duration-300 pb-16" style={{ padding: '24px 32px' }}>
+          {/* Header row */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28, borderBottom: '1px solid var(--aether-border-glass)', paddingBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+              <button 
+                onClick={() => setCurrentView('subject')} 
+                className="btn-ghost" 
+                style={{ width: 34, height: 34, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: '1px solid var(--border-soft)', background: 'transparent', color: 'var(--text-secondary)' }}
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <div>
+                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--aether-primary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                  Tema de {course.name}
+                </span>
+                <h2 style={{ fontSize: 26, fontWeight: 300, color: 'var(--text-primary)', marginTop: 2, fontFamily: "'Inter Tight', sans-serif" }}>
+                  {activeTopic.title}
+                </h2>
+              </div>
+            </div>
+
+            {/* Retention Dots selector */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Comprensión:</span>
+              <div style={{ display: 'flex', gap: 4 }}>
+                {[...Array(5)].map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setTopicReviewLevel(activeTopic.id, i + 1)}
+                    style={{ 
+                      width: 14, height: 8, borderRadius: 4, border: 'none', cursor: 'pointer',
+                      background: i < activeTopic.reviewLevel ? 'var(--aether-primary)' : 'rgba(255,255,255,0.05)',
+                      transition: 'all 200ms ease'
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Filtering bar */}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 24, paddingBottom: 12, borderBottom: '1px dashed var(--aether-border-glass)' }}>
+            <button 
+              onClick={() => setFilterMaterialType('all')}
+              className={filterMaterialType === 'all' ? 'aether-btn-primary' : 'btn-ghost'}
+              style={{ height: 30, padding: '0 12px', fontSize: 11, borderRadius: 6, border: 'none', cursor: 'pointer', transition: 'all 150ms' }}
+            >
+              Todos ({activeTopic.materials?.length || 0})
+            </button>
+            {(Object.keys(MATERIAL_META) as MaterialType[]).map(type => {
+              const count = (activeTopic.materials || []).filter(m => m.type === type).length;
+              return (
+                <button
+                  key={type}
+                  onClick={() => setFilterMaterialType(type)}
+                  className={filterMaterialType === type ? 'aether-btn-primary' : 'btn-ghost'}
+                  style={{ height: 30, padding: '0 12px', fontSize: 11, borderRadius: 6, border: 'none', cursor: 'pointer', transition: 'all 150ms' }}
+                >
+                  {MATERIAL_META[type].label} ({count})
+                </button>
+              );
+            })}
+          </div>
+
+          {/* 3-Column layout with Drag and Drop */}
+          <DndContext 
+            sensors={sensors} 
+            collisionDetection={closestCorners} 
+            onDragEnd={handleDragEnd}
+          >
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 24 }}>
+              {[0, 1, 2].map(colIndex => {
+                const colItems = columns[colIndex] || [];
+                return (
+                  <div key={colIndex} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        Columna {colIndex + 1}
+                      </span>
+                      
+                      {/* Quick Add floating trigger for this column */}
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        <button 
+                          onClick={() => handleAddMaterialClick('concept', colIndex)}
+                          style={{ width: 20, height: 20, borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--aether-border-glass)', cursor: 'pointer', color: 'var(--text-secondary)' }}
+                          title="Añadir Concepto"
+                        >
+                          <Plus size={10} />
+                        </button>
+                        <button 
+                          onClick={() => handleAddMaterialClick('formula', colIndex)}
+                          style={{ width: 20, height: 20, borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--aether-border-glass)', cursor: 'pointer', color: 'var(--text-secondary)' }}
+                          title="Añadir Fórmula"
+                        >
+                          <Sigma size={10} />
+                        </button>
+                        <button 
+                          onClick={() => handleAddMaterialClick('resource', colIndex)}
+                          style={{ width: 20, height: 20, borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--aether-border-glass)', cursor: 'pointer', color: 'var(--text-secondary)' }}
+                          title="Subir archivo"
+                        >
+                          <Upload size={10} />
+                        </button>
+                      </div>
+                    </div>
+
+                    <DroppableColumn id={`col-${colIndex}`} items={colItems}>
+                      {colItems.map(mat => (
+                        <SortableWrapper key={mat.id} id={mat.id}>
+                          {({ attributes, listeners }) => (
+                            <MaterialCard 
+                              mat={mat}
+                              dragAttributes={attributes}
+                              dragListeners={listeners}
+                              onEdit={startEditMaterial}
+                              onDelete={handleDeleteMaterial}
+                              onOpenResource={handleOpenResource}
+                            />
+                          )}
+                        </SortableWrapper>
+                      ))}
+                      
+                      {colItems.length === 0 && (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: 140, opacity: 0.3, border: '1px dashed var(--aether-border-glass)', borderRadius: 8 }}>
+                          <span style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase' }}>Vacío</span>
+                        </div>
+                      )}
+                    </DroppableColumn>
+                  </div>
+                );
+              })}
+            </div>
+          </DndContext>
+
+          <input type="file" ref={resourceInputRef} style={{ display: 'none' }} onChange={handleFileUpload} />
+        </div>
+      )}
+
+      {/* ────────────────── MODALS & DIALOGS ────────────────── */}
+
+      {/* 1. Edit Course Modal */}
+      {showEditCourse && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }}
+          onClick={() => setShowEditCourse(false)}>
+          <div className="aether-glass-card" style={{ width: 420, padding: 28, background: 'var(--bg-surface)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <h3 style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)' }}>Configurar Asignatura</h3>
+              <button onClick={() => setShowEditCourse(false)} className="btn-ghost" style={{ padding: 6, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)' }}><X size={16} /></button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div>
+                <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Nombre</label>
+                <input
+                  type="text"
+                  value={editCourseName}
+                  onChange={e => setEditCourseName(e.target.value)}
+                  className="input-base"
+                  style={{ width: '100%', height: 38, fontSize: 13, padding: '0 12px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Banner (Imagen)</label>
+                {editCourseCover ? (
+                  <div style={{ position: 'relative', width: '100%', aspectRatio: '16/7', borderRadius: 10, overflow: 'hidden' }}>
+                    <img src={editCourseCover} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <button
+                      onClick={() => setEditCourseCover(undefined)}
+                      style={{ position: 'absolute', top: 6, right: 6, width: 24, height: 24, borderRadius: '50%', background: 'rgba(239,68,68,0.9)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => courseCoverInputRef.current?.click()}
+                    style={{
+                      width: '100%', height: 80, borderRadius: 10, border: '2px dashed var(--aether-border-glass)',
+                      background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer',
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6
+                    }}
+                  >
+                    <Upload size={16} />
+                    <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' }}>Subir Imagen</span>
+                  </button>
+                )}
+                <input type="file" ref={courseCoverInputRef} style={{ display: 'none' }} accept="image/*" onChange={(e) => {
+                  const f = e.target.files?.[0]; if (f) {
+                    const r = new FileReader(); r.onload = (ev) => setEditCourseCover(ev.target?.result as string); r.readAsDataURL(f);
+                  }
+                }} />
+              </div>
+
+              <button
+                onClick={handleSaveCourseSettings}
+                className="aether-btn-primary"
+                style={{ width: '100%', height: 38, border: 'none', cursor: 'pointer', marginTop: 8 }}
+              >
+                Guardar Configuración
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {selectedCourse ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 24, flex: 1 }}>
-          
-          {/* Workspace Tabs */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px 12px', borderBottom: '1px solid var(--border-subtle)', marginBottom: 4 }}>
-            <div style={{ display: 'flex', gap: 2, background: 'var(--bg-deep)', padding: 3, borderRadius: 10 }}>
-              {[
-                { id: 'resumen', label: 'Resumen', icon: Layers },
-                { id: 'tareas', label: 'Tareas', icon: ListIcon },
-                { id: 'notas', label: 'Notas', icon: NotebookPen },
-                { id: 'recursos', label: 'Recursos', icon: Globe },
-                { id: 'repasos', label: 'Repaso', icon: BrainCircuit },
-              ].map(tab => (
-                <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} style={{
-                  padding: '5px 14px', borderRadius: 7, fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                  border: 'none', background: activeTab === tab.id ? 'var(--accent)' : 'transparent',
-                  color: activeTab === tab.id ? '#fff' : 'var(--text-tertiary)',
-                  display: 'flex', alignItems: 'center', gap: 5, transition: 'all 200ms',
-                }}>
-                  <tab.icon size={13} />
-                  {tab.label}
-                  {tab.id === 'tareas' && pendingTasksCount > 0 && (
-                    <span style={{ padding: '1px 5px', borderRadius: 8, background: 'rgba(255,255,255,0.2)', fontSize: 9 }}>{pendingTasksCount}</span>
-                  )}
-                </button>
-              ))}
+      {/* 2. Add Topic Modal */}
+      {showTopicModal && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }}
+          onClick={() => setShowTopicModal(false)}>
+          <div className="aether-glass-card" style={{ width: 400, padding: 24, background: 'var(--bg-surface)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>{editingTopicId ? 'Editar Tema' : 'Nuevo Tema'}</h3>
+              <button onClick={() => setShowTopicModal(false)} className="btn-ghost" style={{ padding: 6, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)' }}><X size={16} /></button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <input
+                type="text"
+                value={topicName}
+                onChange={e => setTopicName(e.target.value)}
+                className="input-base"
+                style={{ width: '100%', height: 38, fontSize: 13, padding: '0 12px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)' }}
+                placeholder="Nombre del tema..."
+                autoFocus
+              />
+              <button
+                onClick={handleAddTopic}
+                className="aether-btn-primary"
+                disabled={!topicName.trim()}
+                style={{ width: '100%', height: 38, border: 'none', cursor: 'pointer' }}
+              >
+                {editingTopicId ? 'Guardar Cambios' : 'Integrar Tema'}
+              </button>
             </div>
           </div>
+        </div>
+      )}
 
-          {/* MAIN CONTENT AREA (GRID 1fr 300px) */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 24, flex: 1, alignItems: 'flex-start' }}>
-            
-            {/* LEFT COLUMN */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-              
-              {activeTab === 'resumen' && (
+      {/* 3. Group Topics Modal */}
+      {showGroupModal && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }}
+          onClick={() => setShowGroupModal(false)}>
+          <div className="aether-glass-card" style={{ width: 440, padding: 28, background: 'var(--bg-surface)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <h3 style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)' }}>
+                {editingGroupId ? 'Editar Agrupación' : 'Crear Agrupación'}
+              </h3>
+              <button onClick={() => setShowGroupModal(false)} className="btn-ghost" style={{ padding: 6, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)' }}><X size={16} /></button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div>
+                <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Nombre del Grupo</label>
+                <input
+                  type="text"
+                  value={groupName}
+                  onChange={e => setGroupName(e.target.value)}
+                  className="input-base"
+                  style={{ width: '100%', height: 38, fontSize: 13, padding: '0 12px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)' }}
+                  placeholder="Ej: Álgebra Lineal, Mecánica de Fluidos..."
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Banner (Opcional)</label>
+                {groupCover ? (
+                  <div style={{ position: 'relative', width: '100%', aspectRatio: '16/7', borderRadius: 10, overflow: 'hidden' }}>
+                    <img src={groupCover} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <button
+                      onClick={() => setGroupCover(undefined)}
+                      style={{ position: 'absolute', top: 6, right: 6, width: 24, height: 24, borderRadius: '50%', background: 'rgba(239,68,68,0.9)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => groupCoverInputRef.current?.click()}
+                    style={{
+                      width: '100%', height: 70, borderRadius: 10, border: '2px dashed var(--aether-border-glass)',
+                      background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer',
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6
+                    }}
+                  >
+                    <Upload size={14} />
+                    <span style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase' }}>Subir Banner</span>
+                  </button>
+                )}
+                <input type="file" ref={groupCoverInputRef} style={{ display: 'none' }} accept="image/*" onChange={(e) => {
+                  const f = e.target.files?.[0]; if (f) {
+                    const r = new FileReader(); r.onload = (ev) => setGroupCover(ev.target?.result as string); r.readAsDataURL(f);
+                  }
+                }} />
+              </div>
+
+              <div>
+                <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', display: 'block', marginBottom: 8 }}>Seleccionar Temas</label>
+                <div style={{ maxHeight: 150, overflowY: 'auto', border: '1px solid var(--aether-border-glass)', borderRadius: 8, padding: 8, display: 'flex', flexDirection: 'column', gap: 6, background: 'rgba(0,0,0,0.15)' }}>
+                  {parsedTopics.map(t => (
+                    <label key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer', color: 'var(--text-secondary)' }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedTopicIds.includes(t.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedTopicIds([...selectedTopicIds, t.id]);
+                          } else {
+                            setSelectedTopicIds(selectedTopicIds.filter(id => id !== t.id));
+                          }
+                        }}
+                      />
+                      <span>{t.title}</span>
+                    </label>
+                  ))}
+                  {parsedTopics.length === 0 && (
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', padding: '12px 0' }}>No hay temas disponibles.</span>
+                  )}
+                </div>
+              </div>
+
+              <button
+                onClick={handleSaveGroup}
+                className="aether-btn-primary"
+                disabled={!groupName.trim()}
+                style={{ width: '100%', height: 38, border: 'none', cursor: 'pointer', marginTop: 8 }}
+              >
+                {editingGroupId ? 'Guardar Cambios' : 'Crear Agrupación'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4. Add/Edit Material Modal */}
+      {showMaterialModal && materialType && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }}
+          onClick={() => setShowMaterialModal(false)}>
+          <div className="aether-glass-card" style={{ width: 440, padding: 28, background: 'var(--bg-surface)', maxHeight: '85vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <h3 style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                {editingMaterial ? 'Editar ' : 'Añadir '} {MATERIAL_META[materialType].label}
+              </h3>
+              <button onClick={() => setShowMaterialModal(false)} className="btn-ghost" style={{ padding: 6, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)' }}><X size={16} /></button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* Type specific fields */}
+              {materialType === 'formula' && (
                 <>
-                  {/* Top Stats Bar — minimal premium */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-                    {[
-                      { label: 'Progreso', value: `${progressPct}%`, sub: 'Completado', icon: CheckCircle, color: 'var(--success)' },
-                      { label: 'Tareas', value: courseTasks.length || 12, sub: `${pendingTasksCount || 3} pendientes`, icon: CheckSquare, color: 'var(--warning)' },
-                      { label: 'Notas', value: courseNotes.length || 8, sub: 'Guardadas', icon: FileText, color: 'var(--info)' },
-                      { label: 'Horas', value: '24h 30m', sub: 'Estudiadas', icon: Clock, color: 'var(--accent)' },
-                    ].map(stat => (
-                      <div key={stat.label} className="bento-card" style={{ padding: '14px 16px', border: '1px solid var(--border-subtle)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                          <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{stat.label}</div>
-                          <div style={{ width: 28, height: 28, borderRadius: 8, background: `${stat.color}18`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <stat.icon size={13} color={stat.color} />
-                          </div>
-                        </div>
-                        <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)', marginTop: 8, fontFamily: "'Inter Tight', sans-serif" }}>{stat.value}</div>
-                        <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 1 }}>{stat.sub}</div>
-                      </div>
-                    ))}
+                  <div>
+                    <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Nombre de la Fórmula</label>
+                    <input type="text" value={mName} onChange={e => setMName(e.target.value)} className="input-base" style={{ width: '100%', height: 36, padding: '0 10px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)' }} placeholder="Ej: E = mc²" />
                   </div>
-
-                  {/* Imágenes Ancladas */}
-                  <div className="bento-card" style={{ padding: '20px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                      <h3 style={{ fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-primary)' }}>
-                        <ImageIcon size={16} /> Imágenes Ancladas
-                      </h3>
-                      <button onClick={() => setShowNewImage(true)} className="btn-secondary" style={{ fontSize: 11, fontWeight: 600, padding: '4px 12px', height: 28 }}>
-                        + Añadir
-                      </button>
-                    </div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-                      {anchoredImages.map(img => (
-                        <div key={img.id} style={{ borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
-                          <div onClick={() => setPreviewImageUrl(img.url)} style={{ width: '100%', height: 130, overflow: 'hidden', cursor: 'pointer', position: 'relative' }}>
-                            <img src={img.url} alt={img.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                            <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 200ms' }} onMouseEnter={e => e.currentTarget.style.opacity = '1'} onMouseLeave={e => e.currentTarget.style.opacity = '0'}>
-                              <Eye size={18} color="#fff" />
-                            </div>
-                          </div>
-                          <div style={{ padding: '8px 10px' }}>
-                            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{img.name}</div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 3 }}>
-                              <span style={{ fontSize: 9, color: 'var(--accent)', fontWeight: 600 }}>{img.tag}</span>
-                              <span style={{ fontSize: 9, color: 'var(--text-tertiary)' }}>{img.date}</span>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Recursos del Curso */}
-                  <div className="bento-card" style={{ padding: '20px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                      <h3 style={{ fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-primary)' }}>
-                        <Globe size={16} /> Recursos del Curso
-                      </h3>
-                      <button onClick={() => setShowNewResource(true)} className="btn-secondary" style={{ fontSize: 11, fontWeight: 600, padding: '4px 12px', height: 28 }}>
-                        + Añadir
-                      </button>
-                    </div>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {resourcesList.map(res => (
-                        <a key={res.id} href={res.url} target="_blank" rel="noopener noreferrer" style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', textDecoration: 'none', transition: 'background 200ms' }} onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-                            {res.type === 'pdf' ? <FileText size={15} color="var(--error)" /> : res.type === 'doc' ? <File size={15} color="var(--info)" /> : <Globe size={15} color="var(--accent)" />}
-                            <div style={{ minWidth: 0 }}>
-                              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{res.title}</div>
-                              <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{res.url}</div>
-                            </div>
-                          </div>
-                          <ExternalLink size={14} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
-                        </a>
-                      ))}
-                    </div>
+                  <div>
+                    <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Explicación o Variables</label>
+                    <textarea value={mClarification} onChange={e => setMClarification(e.target.value)} className="input-base" style={{ width: '100%', minHeight: 60, padding: 10, borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)', resize: 'vertical' }} placeholder="Describe las constantes o aplicación..." />
                   </div>
                 </>
               )}
 
-              {/* TAREAS TAB */}
-              {activeTab === 'tareas' && (
-                <div className="bento-card" style={{ padding: '24px 20px', minHeight: 400 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                    <h2 style={{ fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-primary)' }}>
-                      <CheckSquare size={17} /> Gestión de Tareas
-                    </h2>
-                    <button onClick={() => setShowNewTask(true)} className="btn-primary" style={{ fontSize: 11, fontWeight: 600, padding: '0 14px', height: 32, display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <Plus size={14} /> Nueva tarea
-                    </button>
+              {materialType === 'concept' && (
+                <>
+                  <div>
+                    <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Título del Concepto</label>
+                    <input type="text" value={mTitle} onChange={e => setMTitle(e.target.value)} className="input-base" style={{ width: '100%', height: 36, padding: '0 10px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)' }} placeholder="Ej: Ley de Inercia" />
                   </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {courseTasks.map(task => {
-                      const isDone = task.status === 'completado';
-                      return (
-                        <div key={task.id} style={{ padding: '12px 14px', borderRadius: 8, border: '1px solid var(--border-subtle)', borderLeft: '3px solid ' + (task.priority === 'high' ? 'var(--error)' : task.priority === 'medium' ? 'var(--warning)' : 'var(--border-default)'), display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                            <button onClick={() => toggleTaskStatus(task.id)} style={{ width: 20, height: 20, borderRadius: '50%', border: isDone ? 'none' : '2px solid var(--border-default)', background: isDone ? 'var(--success)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                              {isDone && <Check size={11} color="#fff" />}
-                            </button>
-                            <div>
-                              <div style={{ fontSize: 13, fontWeight: 600, color: isDone ? 'var(--text-tertiary)' : 'var(--text-primary)', textDecoration: isDone ? 'line-through' : 'none' }}>{task.title}</div>
-                              <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 2 }}>Fecha límite: {task.dueDate ? format(new Date(task.dueDate), "d MMMM yyyy", { locale: es }) : 'Sin fecha'}</div>
-                            </div>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            {task.priority !== 'none' ? (
-                            <span style={{ fontSize: 10, fontWeight: 600, padding: '3px 7px', borderRadius: 5, background: task.priority === 'high' ? 'var(--error-dim)' : task.priority === 'medium' ? 'var(--warning-dim)' : 'var(--success-dim)', color: task.priority === 'high' ? 'var(--error)' : task.priority === 'medium' ? 'var(--warning)' : 'var(--success)' }}>
-                              {task.priority === 'high' ? 'Alta' : task.priority === 'medium' ? 'Media' : 'Baja'}
-                            </span>
-                            ) : (
-                            <span style={{ fontSize: 10, fontWeight: 400, padding: '3px 7px', borderRadius: 5, background: 'var(--bg-hover)', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                              Sin prioridad
-                            </span>
-                            )}
-                            <button onClick={() => deleteTask(task.id)} className="btn-ghost" style={{ padding: 4, borderRadius: 6 }}><Trash2 size={14} /></button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {courseTasks.length === 0 && (
-                      <div style={{ padding: '48px 0', textAlign: 'center', color: 'var(--text-tertiary)' }}>
-                        <CheckSquare size={40} style={{ opacity: 0.3, marginBottom: 10 }} />
-                        <div style={{ fontSize: 13, fontWeight: 600 }}>No hay tareas registradas para este curso.</div>
-                      </div>
-                    )}
+                  <div>
+                    <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Desarrollo del Concepto</label>
+                    <textarea value={mContent} onChange={e => setMContent(e.target.value)} className="input-base" style={{ width: '100%', minHeight: 120, padding: 10, borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)', resize: 'vertical' }} placeholder="Escribe la explicación teórica..." />
                   </div>
-                </div>
+                </>
               )}
 
-              {/* NOTAS TAB */}
-              {activeTab === 'notas' && (
-                <div className="bento-card" style={{ padding: '24px 20px', minHeight: 400 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                    <h2 style={{ fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-primary)' }}>
-                      <NotebookPen size={17} /> Apuntes y Notas
-                    </h2>
-                    <button onClick={() => setShowNewNote(true)} className="btn-primary" style={{ fontSize: 11, fontWeight: 600, padding: '0 14px', height: 32, display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <Plus size={14} /> Nueva nota
-                    </button>
+              {materialType === 'key-data' && (
+                <>
+                  <div>
+                    <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Título (Opcional)</label>
+                    <input type="text" value={mTitle} onChange={e => setMTitle(e.target.value)} className="input-base" style={{ width: '100%', height: 36, padding: '0 10px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)' }} placeholder="Ej: Constante G" />
                   </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
-                    {courseNotes.map(note => (
-                      <div key={note.id} style={{ padding: 16, borderRadius: 10, border: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{note.title}</h3>
-                          <button onClick={() => deleteNote(note.id)} className="btn-ghost" style={{ padding: 3, borderRadius: 5 }}><Trash2 size={13} /></button>
-                        </div>
-                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.6, flex: 1, display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }} dangerouslySetInnerHTML={{ __html: note.content }} />
-                        <div style={{ fontSize: 10, color: 'var(--text-tertiary)', borderTop: '1px solid var(--border-subtle)', paddingTop: 8 }}>
-                          Actualizado: {format(new Date(note.updatedAt), "d MMM yyyy", { locale: es })}
-                        </div>
-                      </div>
-                    ))}
-                    {courseNotes.length === 0 && (
-                      <div style={{ gridColumn: '1 / -1', padding: '48px 0', textAlign: 'center', color: 'var(--text-tertiary)' }}>
-                        <NotebookPen size={40} style={{ opacity: 0.3, marginBottom: 10 }} />
-                        <div style={{ fontSize: 13, fontWeight: 600 }}>No hay notas guardadas para este curso.</div>
-                      </div>
-                    )}
+                  <div>
+                    <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Dato Clave</label>
+                    <textarea value={mContent} onChange={e => setMContent(e.target.value)} className="input-base" style={{ width: '100%', minHeight: 60, padding: 10, borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)', resize: 'vertical' }} placeholder="Define el dato clave indispensable..." />
                   </div>
-                </div>
+                </>
               )}
 
-              {/* RECURSOS TAB */}
-              {activeTab === 'recursos' && (
-                <div className="bento-card" style={{ padding: '24px 20px', minHeight: 400 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                    <h2 style={{ fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-primary)' }}>
-                      <Globe size={17} /> Recursos y Bibliografía
-                    </h2>
-                    <button onClick={() => setShowNewResource(true)} className="btn-primary" style={{ fontSize: 11, fontWeight: 600, padding: '0 14px', height: 32, display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <Plus size={14} /> Añadir recurso
-                    </button>
+              {materialType === 'meaning' && (
+                <>
+                  <div>
+                    <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Término o Palabra</label>
+                    <input type="text" value={mWord} onChange={e => setMWord(e.target.value)} className="input-base" style={{ width: '100%', height: 36, padding: '0 10px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)' }} placeholder="Ej: Mitosis" />
                   </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {resourcesList.map(res => (
-                      <div key={res.id} style={{ padding: '12px 14px', borderRadius: 8, border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                          {res.type === 'pdf' ? <FileText size={16} color="var(--error)" /> : res.type === 'doc' ? <File size={16} color="var(--info)" /> : <Globe size={16} color="var(--accent)" />}
-                          <div>
-                            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{res.title}</div>
-                            <span style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 1, display: 'flex', alignItems: 'center', gap: 4 }}>
-                              {res.url} <ExternalLink size={10} />
-                            </span>
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{res.date}</span>
-                          <button onClick={() => updateCourse(selectedCourse.id, { resources: resourcesList.filter(r => r.id !== res.id) })} className="btn-ghost" style={{ padding: 4, borderRadius: 6 }}><Trash2 size={13} /></button>
-                        </div>
-                      </div>
-                    ))}
+                  <div>
+                    <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Significado / Definición</label>
+                    <textarea value={mMeaning} onChange={e => setMMeaning(e.target.value)} className="input-base" style={{ width: '100%', minHeight: 80, padding: 10, borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)', resize: 'vertical' }} placeholder="Define el concepto..." />
                   </div>
-                </div>
+                </>
               )}
 
-              {/* REPASO TAB */}
-              {activeTab === 'repasos' && (
-                <div className="bento-card" style={{ padding: '24px 20px', minHeight: 400 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                    <h2 style={{ fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-primary)' }}>
-                      <BrainCircuit size={17} /> Repaso Activo (Flashcards)
-                    </h2>
-                    <button onClick={() => setShowNewRepaso(true)} className="btn-primary" style={{ fontSize: 11, fontWeight: 600, padding: '0 14px', height: 32, display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <Plus size={14} /> Crear tarjeta
-                    </button>
+              {materialType === 'quiz' && (
+                <>
+                  <div>
+                    <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Pregunta de Evaluación</label>
+                    <input type="text" value={mQuestion} onChange={e => setMQuestion(e.target.value)} className="input-base" style={{ width: '100%', height: 36, padding: '0 10px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)' }} placeholder="Ej: ¿Qué acelera una reacción química?" />
                   </div>
+                  <div>
+                    <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Respuesta Correcta</label>
+                    <textarea value={mAnswer} onChange={e => setMAnswer(e.target.value)} className="input-base" style={{ width: '100%', minHeight: 80, padding: 10, borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)', resize: 'vertical' }} placeholder="Escribe la respuesta..." />
+                  </div>
+                </>
+              )}
 
-                  {flashcards.length > 0 ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20, maxWidth: 560, margin: '0 auto', padding: '16px 0' }}>
-                      <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)' }}>
-                        <span>Tarjeta {activeFlashcardIndex + 1} de {flashcards.length}</span>
-                        <span style={{ color: 'var(--accent)' }}>Dificultad: {flashcards[activeFlashcardIndex]?.difficulty?.toUpperCase() || 'BUENO'}</span>
-                      </div>
+              {materialType === 'procedure' && (
+                <>
+                  <div>
+                    <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Título del Procedimiento</label>
+                    <input type="text" value={mTitle} onChange={e => setMTitle(e.target.value)} className="input-base" style={{ width: '100%', height: 36, padding: '0 10px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)' }} placeholder="Ej: Destilación simple" />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Descripción rápida (Opcional)</label>
+                    <input type="text" value={mDescription} onChange={e => setMDescription(e.target.value)} className="input-base" style={{ width: '100%', height: 36, padding: '0 10px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)' }} placeholder="Resumen del procedimiento..." />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Pasos / Instrucciones</label>
+                    <textarea value={mContent} onChange={e => setMContent(e.target.value)} className="input-base" style={{ width: '100%', minHeight: 120, padding: 10, borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)', resize: 'vertical' }} placeholder="Paso 1: ...&#10;Paso 2: ..." />
+                  </div>
+                </>
+              )}
 
-                      <div onClick={() => setShowFlashcardAnswer(!showFlashcardAnswer)} style={{ width: '100%', minHeight: 260, borderRadius: 12, border: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '28px 24px', cursor: 'pointer', position: 'relative' }}>
-                        <div style={{ position: 'absolute', top: 12, right: 14, fontSize: 9, fontWeight: 600, color: 'var(--text-tertiary)' }}>
-                          Clic para voltear
-                        </div>
-                        {!showFlashcardAnswer ? (
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-                            <HelpCircle size={32} style={{ color: 'var(--accent)', opacity: 0.4 }} />
-                            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Pregunta</span>
-                            <h3 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>{flashcards[activeFlashcardIndex]?.question}</h3>
-                          </div>
-                        ) : (
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-                            <Sparkles size={32} style={{ color: 'var(--success)', opacity: 0.4 }} />
-                            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--success)', textTransform: 'uppercase' }}>Respuesta</span>
-                            <p style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>{flashcards[activeFlashcardIndex]?.answer}</p>
-                          </div>
-                        )}
-                      </div>
-
-                      {showFlashcardAnswer && (
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, width: '100%' }}>
-                          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)' }}>¿Qué tan fácil fue recordar?</span>
-                          <div style={{ display: 'flex', gap: 10, width: '100%' }}>
-                            {[
-                              { label: 'Difícil', rating: 'dificil' as const, color: 'var(--error)', bg: 'var(--error-dim)' },
-                              { label: 'Bueno', rating: 'bueno' as const, color: 'var(--warning)', bg: 'var(--warning-dim)' },
-                              { label: 'Fácil', rating: 'facil' as const, color: 'var(--success)', bg: 'var(--success-dim)' },
-                            ].map(opt => (
-                              <button key={opt.rating} onClick={() => handleRateFlashcard(opt.rating)} style={{ flex: 1, padding: '10px', borderRadius: 8, background: opt.bg, border: `1px solid ${opt.color}`, color: opt.color, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>{opt.label}</button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      <div style={{ display: 'flex', gap: 12 }}>
-                        <button onClick={() => { setShowFlashcardAnswer(false); setActiveFlashcardIndex((activeFlashcardIndex - 1 + flashcards.length) % flashcards.length); }} className="btn-secondary" style={{ padding: '6px 16px', fontSize: 11, fontWeight: 600 }}>Anterior</button>
-                        <button onClick={() => { setShowFlashcardAnswer(false); setActiveFlashcardIndex((activeFlashcardIndex + 1) % flashcards.length); }} className="btn-secondary" style={{ padding: '6px 16px', fontSize: 11, fontWeight: 600 }}>Siguiente</button>
-                      </div>
+              {/* Supportive image block (for formula and procedure) */}
+              {['formula', 'procedure'].includes(materialType) && (
+                <div>
+                  <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Imagen Ilustrativa (Opcional)</label>
+                  {mImage ? (
+                    <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', borderRadius: 10, overflow: 'hidden', border: '1px solid var(--aether-border-glass)' }}>
+                      <img src={mImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', background: 'rgba(0,0,0,0.2)' }} />
+                      <button
+                        onClick={() => setMImage(undefined)}
+                        style={{ position: 'absolute', top: 6, right: 6, width: 24, height: 24, borderRadius: '50%', background: 'rgba(239,68,68,0.9)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      >
+                        <X size={12} />
+                      </button>
                     </div>
                   ) : (
-                    <div style={{ padding: '48px 0', textAlign: 'center', color: 'var(--text-tertiary)' }}>
-                      <BrainCircuit size={40} style={{ opacity: 0.3, marginBottom: 10 }} />
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>No hay tarjetas de repaso creadas para este curso.</div>
-                    </div>
+                    <button
+                      onClick={() => materialImageInputRef.current?.click()}
+                      style={{
+                        width: '100%', height: 64, borderRadius: 8, border: '2px dashed var(--aether-border-glass)',
+                        background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer',
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4
+                      }}
+                    >
+                      <Upload size={12} />
+                      <span style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase' }}>Cargar Imagen</span>
+                    </button>
                   )}
+                  <input type="file" ref={materialImageInputRef} style={{ display: 'none' }} accept="image/*" onChange={(e) => {
+                    const f = e.target.files?.[0]; if (f) {
+                      const r = new FileReader(); r.onload = (ev) => setMImage(ev.target?.result as string); r.readAsDataURL(f);
+                    }
+                  }} />
                 </div>
               )}
 
+              <button
+                onClick={handleSaveMaterial}
+                className="aether-btn-primary"
+                style={{ width: '100%', height: 38, border: 'none', cursor: 'pointer', marginTop: 8 }}
+              >
+                {editingMaterial ? 'Guardar Cambios' : 'Guardar Material'}
+              </button>
             </div>
-
-            {/* RIGHT COLUMN */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              
-              {/* Información del Curso */}
-              <div className="bento-card" style={{ padding: '20px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                  <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>Información del Curso</h3>
-                  <button onClick={() => setShowEditCourse(true)} className="btn-ghost" style={{ padding: 4, borderRadius: 6 }}><Edit3 size={14} /></button>
-                </div>
-                <p style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 16 }}>
-                  {courseDescription}
-                </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
-                  {['ASIGNATURA', courseLevel.toUpperCase(), courseCredits.toUpperCase()].map(label => (
-                    <span key={label} style={{ fontSize: 9, fontWeight: 700, padding: '5px 10px', borderRadius: 6, border: '1px solid var(--border-subtle)', color: 'var(--text-tertiary)', letterSpacing: '0.06em', background: 'var(--bg-deep)' }}>{label}</span>
-                  ))}
-                </div>
-                <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>{courseTeacher}</div>
-                  <div style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 600 }}>{courseCode}</div>
-                </div>
-              </div>
-
-              {/* Tarjetas de Repaso sidebar */}
-              <div className="bento-card" style={{ padding: '20px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-                  <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>Tarjetas de Repaso</h3>
-                  <button onClick={() => setShowNewRepaso(true)} className="btn-ghost" style={{ padding: 4, borderRadius: 6 }}><Plus size={14} /></button>
-                </div>
-
-                {flashcards.length > 0 ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    <div style={{ padding: '16px 14px', border: '1px solid var(--border-subtle)', borderRadius: 10, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, background: 'var(--bg-elevated)' }}>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{flashcards[activeFlashcardIndex]?.question}</span>
-                      {showFlashcardAnswer && (
-                        <div style={{ padding: '10px', borderRadius: 6, fontSize: 11, color: 'var(--success)', fontWeight: 600, width: '100%' }}>
-                          {flashcards[activeFlashcardIndex]?.answer}
-                        </div>
-                      )}
-                    </div>
-
-                    {!showFlashcardAnswer ? (
-                      <button onClick={() => setShowFlashcardAnswer(true)} className="btn-primary" style={{ width: '100%', height: 34, fontSize: 11, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        Ver Respuesta
-                      </button>
-                    ) : (
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        {[
-                          { label: 'Difícil', rating: 'dificil' as const, color: 'var(--error)', bg: 'var(--error-dim)' },
-                          { label: 'Bueno', rating: 'bueno' as const, color: 'var(--warning)', bg: 'var(--warning-dim)' },
-                          { label: 'Fácil', rating: 'facil' as const, color: 'var(--success)', bg: 'var(--success-dim)' },
-                        ].map(opt => (
-                          <button key={opt.rating} onClick={() => handleRateFlashcard(opt.rating)} style={{ flex: 1, padding: '6px', borderRadius: 6, background: opt.bg, border: `1px solid ${opt.color}`, color: opt.color, fontSize: 9, fontWeight: 700, cursor: 'pointer' }}>{opt.label.toUpperCase()}</button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 11 }}>
-                    No hay tarjetas de repaso creadas.
-                  </div>
-                )}
-              </div>
-
-            </div>
-
-          </div>
-
-        </div>
-      ) : (
-        <div style={{ padding: '128px 0', textAlign: 'center', color: 'var(--text-tertiary)' }}>
-          <GraduationCap size={64} style={{ opacity: 0.3, marginBottom: 16 }} />
-          <div style={{ fontSize: 16, fontWeight: 600 }}>Selecciona un curso o crea uno nuevo</div>
-          <button onClick={() => setShowNewCourse(true)} className="btn-primary" style={{ marginTop: 16, padding: '0 24px', height: 40, fontSize: 13, fontWeight: 600 }}>Crear nuevo curso</button>
-        </div>
-      )}
-
-      {/* â”€â”€ MODALS & FORMS â”€â”€ */}
-      
-      {/* NEW COURSE MODAL */}
-      {showNewCourse && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(12px)' }} onClick={() => setShowNewCourse(false)}>
-          <div className="bento-card" style={{ width: 440, padding: 28, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h2 style={{ fontSize: 18, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-primary)' }}>
-                <GraduationCap size={22} className="text-accent" /> Nuevo Curso
-              </h2>
-              <button onClick={() => setShowNewCourse(false)} className="btn-ghost" style={{ padding: 6, borderRadius: '50%' }}><X size={18} /></button>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-              <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Nombre del Curso</label>
-                <input type="text" value={newCourseName} onChange={e => setNewCourseName(e.target.value)} placeholder="Ej. Álgebra Lineal Avanzada" className="input-base" style={{ width: '100%', height: 40, fontSize: 13 }} autoFocus />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Color Distintivo</label>
-                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', padding: 16, borderRadius: 12, border: '1px solid var(--border-subtle)' }}>
-                  {['#EF4444', '#F97316', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6', '#EC4899', '#64748B'].map(color => (
-                    <button key={color} onClick={() => setNewCourseColor(color)} style={{ width: 32, height: 32, borderRadius: 8, background: color, border: newCourseColor === color ? '2px solid #fff' : 'none', cursor: 'pointer', transform: newCourseColor === color ? 'scale(1.1)' : 'none', transition: 'all 200ms', boxShadow: newCourseColor === color ? `0 0 12px ${color}` : 'none' }} />
-                  ))}
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 12 }}>
-                <button onClick={() => setShowNewCourse(false)} className="btn-secondary" style={{ padding: '0 20px', height: 40, fontSize: 13, fontWeight: 600 }}>Cancelar</button>
-                <button onClick={handleCreateCourse} disabled={!newCourseName.trim()} className="btn-primary hover-lift" style={{ padding: '0 24px', height: 40, fontSize: 13, fontWeight: 600 }}>Crear curso</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* EDIT COURSE MODAL */}
-      {showEditCourse && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(12px)' }} onClick={() => setShowEditCourse(false)}>
-          <div className="bento-card" style={{ width: 440, padding: 28, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h2 style={{ fontSize: 18, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-primary)' }}>
-                <Edit3 size={22} className="text-accent" /> Editar Información
-              </h2>
-              <button onClick={() => setShowEditCourse(false)} className="btn-ghost" style={{ padding: 6, borderRadius: '50%' }}><X size={18} /></button>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-              <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Descripción del curso</label>
-                <textarea value={editDesc} onChange={e => setEditDesc(e.target.value)} placeholder="Descripción breve..." className="input-base" style={{ width: '100%', height: 80, fontSize: 13, padding: 12 }} />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Nivel Académico</label>
-                  <input type="text" value={editLevel} onChange={e => setEditLevel(e.target.value)} placeholder="Ej. Nivel Intermedio" className="input-base" style={{ width: '100%', height: 40, fontSize: 13 }} />
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Créditos</label>
-                  <input type="text" value={editCredits} onChange={e => setEditCredits(e.target.value)} placeholder="Ej. 5 Créditos" className="input-base" style={{ width: '100%', height: 40, fontSize: 13 }} />
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 12 }}>
-                <button onClick={() => setShowEditCourse(false)} className="btn-secondary" style={{ padding: '0 20px', height: 40, fontSize: 13, fontWeight: 600 }}>Cancelar</button>
-                <button onClick={handleSaveCourseEdit} className="btn-primary hover-lift" style={{ padding: '0 24px', height: 40, fontSize: 13, fontWeight: 600 }}>Guardar cambios</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* NEW TASK MODAL */}
-      {showNewTask && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(12px)' }} onClick={() => setShowNewTask(false)}>
-          <div className="bento-card" style={{ width: 440, padding: 28, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h2 style={{ fontSize: 18, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-primary)' }}>
-                <CheckSquare size={22} className="text-accent" /> Nueva Tarea
-              </h2>
-              <button onClick={() => setShowNewTask(false)} className="btn-ghost" style={{ padding: 6, borderRadius: '50%' }}><X size={18} /></button>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-              <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Título de la tarea</label>
-                <input type="text" value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} placeholder="Ej. Resolver guía de ejercicios..." className="input-base" style={{ width: '100%', height: 40, fontSize: 13 }} autoFocus />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Prioridad</label>
-                  <select value={newTaskPriority} onChange={e => setNewTaskPriority(e.target.value as any)} className="input-base" style={{ width: '100%', height: 40, fontSize: 13, background: 'var(--bg-surface)' }}>
-                    <option value="high">Alta</option>
-                    <option value="medium">Media</option>
-                    <option value="low">Baja</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Fecha límite</label>
-                  <input type="date" value={newTaskDueDate} onChange={e => setNewTaskDueDate(e.target.value)} className="input-base" style={{ width: '100%', height: 40, fontSize: 13 }} />
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 12 }}>
-                <button onClick={() => setShowNewTask(false)} className="btn-secondary" style={{ padding: '0 20px', height: 40, fontSize: 13, fontWeight: 600 }}>Cancelar</button>
-                <button onClick={handleCreateTask} disabled={!newTaskTitle.trim()} className="btn-primary hover-lift" style={{ padding: '0 24px', height: 40, fontSize: 13, fontWeight: 600 }}>Crear tarea</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* NEW NOTE MODAL */}
-      {showNewNote && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(12px)' }} onClick={() => setShowNewNote(false)}>
-          <div className="bento-card" style={{ width: 480, padding: 28, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h2 style={{ fontSize: 18, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-primary)' }}>
-                <NotebookPen size={22} className="text-accent" /> Nueva Nota
-              </h2>
-              <button onClick={() => setShowNewNote(false)} className="btn-ghost" style={{ padding: 6, borderRadius: '50%' }}><X size={18} /></button>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-              <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Título de la nota</label>
-                <input type="text" value={newNoteTitle} onChange={e => setNewNoteTitle(e.target.value)} placeholder="Ej. Resumen Capítulo 4..." className="input-base" style={{ width: '100%', height: 40, fontSize: 13 }} autoFocus />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Contenido / Apuntes</label>
-                <textarea value={newNoteContent} onChange={e => setNewNoteContent(e.target.value)} placeholder="Escribe tus apuntes, ideas o resúmenes aquí..." className="input-base" style={{ width: '100%', height: 160, fontSize: 13, padding: 12 }} />
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 12 }}>
-                <button onClick={() => setShowNewNote(false)} className="btn-secondary" style={{ padding: '0 20px', height: 40, fontSize: 13, fontWeight: 600 }}>Cancelar</button>
-                <button onClick={handleCreateNote} disabled={!newNoteTitle.trim()} className="btn-primary hover-lift" style={{ padding: '0 24px', height: 40, fontSize: 13, fontWeight: 600 }}>Guardar nota</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* NEW RESOURCE MODAL */}
-      {showNewResource && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(12px)' }} onClick={() => setShowNewResource(false)}>
-          <div className="bento-card" style={{ width: 440, padding: 28, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h2 style={{ fontSize: 18, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-primary)' }}>
-                <Globe size={22} className="text-accent" /> Añadir Recurso
-              </h2>
-              <button onClick={() => setShowNewResource(false)} className="btn-ghost" style={{ padding: 6, borderRadius: '50%' }}><X size={18} /></button>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-              <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Tipo de recurso</label>
-                <div style={{ display: 'flex', gap: 8, padding: 6, borderRadius: 12, border: '1px solid var(--border-subtle)' }}>
-                  {(['link', 'pdf', 'doc', 'video'] as const).map(type => (
-                    <button key={type} onClick={() => setNewResType(type)} style={{ flex: 1, padding: '8px 0', borderRadius: 8, border: 'none', background: newResType === type ? 'var(--accent)' : 'transparent', color: newResType === type ? '#fff' : 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all 200ms' }}>
-                      {type === 'link' ? 'Web' : type === 'pdf' ? 'PDF' : type === 'doc' ? 'Doc' : 'Video'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Título del recurso</label>
-                <input type="text" value={newResTitle} onChange={e => setNewResTitle(e.target.value)} placeholder="Ej. Repositorio de exámenes pasados..." className="input-base" style={{ width: '100%', height: 40, fontSize: 13 }} autoFocus />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>URL o Enlace</label>
-                <input type="text" value={newResUrl} onChange={e => setNewResUrl(e.target.value)} placeholder="https://..." className="input-base" style={{ width: '100%', height: 40, fontSize: 13 }} />
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 12 }}>
-                <button onClick={() => setShowNewResource(false)} className="btn-secondary" style={{ padding: '0 20px', height: 40, fontSize: 13, fontWeight: 600 }}>Cancelar</button>
-                <button onClick={handleCreateResource} disabled={!newResTitle.trim() || !newResUrl.trim()} className="btn-primary hover-lift" style={{ padding: '0 24px', height: 40, fontSize: 13, fontWeight: 600 }}>Añadir recurso</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* NEW ANCHORED IMAGE MODAL */}
-      {showNewImage && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(12px)' }} onClick={() => setShowNewImage(false)}>
-          <div className="bento-card" style={{ width: 440, padding: 28, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h2 style={{ fontSize: 18, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-primary)' }}>
-                <ImageIcon size={22} className="text-accent" /> Añadir Imagen Anclada
-              </h2>
-              <button onClick={() => setShowNewImage(false)} className="btn-ghost" style={{ padding: 6, borderRadius: '50%' }}><X size={18} /></button>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-              <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Nombre del archivo / Imagen</label>
-                <input type="text" value={newImgName} onChange={e => setNewImgName(e.target.value)} placeholder="Ej. Esquema_Tema_04.png" className="input-base" style={{ width: '100%', height: 40, fontSize: 13 }} autoFocus />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Etiqueta de Posicionamiento / Tema</label>
-                <input type="text" value={newImgTag} onChange={e => setNewImgTag(e.target.value)} placeholder="Ej. Tema 4 - Cabecera" className="input-base" style={{ width: '100%', height: 40, fontSize: 13 }} />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Seleccionar Imagen</label>
-                <input type="file" ref={imageInputRef} onChange={handleImageSelected} style={{ display: 'none' }} accept="image/*" />
-                <div style={{ display: 'flex', gap: 12 }}>
-                  <input type="text" value={newImgUrl} onChange={e => setNewImgUrl(e.target.value)} placeholder="URL de la imagen o subir archivo..." className="input-base" style={{ flex: 1, height: 40, fontSize: 13 }} />
-                  <button onClick={() => imageInputRef.current?.click()} className="btn-secondary" style={{ padding: '0 16px', height: 40, display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Upload size={16} /> Subir
-                  </button>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 12 }}>
-                <button onClick={() => setShowNewImage(false)} className="btn-secondary" style={{ padding: '0 20px', height: 40, fontSize: 13, fontWeight: 600 }}>Cancelar</button>
-                <button onClick={handleAddAnchoredImage} disabled={!newImgName.trim() || !newImgTag.trim() || !newImgUrl.trim()} className="btn-primary hover-lift" style={{ padding: '0 24px', height: 40, fontSize: 13, fontWeight: 600 }}>Anclar imagen</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* NEW FLASHCARD MODAL */}
-      {showNewRepaso && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(12px)' }} onClick={() => setShowNewRepaso(false)}>
-          <div className="bento-card" style={{ width: 440, padding: 28, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h2 style={{ fontSize: 18, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-primary)' }}>
-                <BrainCircuit size={22} className="text-accent" /> Crear Tarjeta de Repaso
-              </h2>
-              <button onClick={() => setShowNewRepaso(false)} className="btn-ghost" style={{ padding: 6, borderRadius: '50%' }}><X size={18} /></button>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-              <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Pregunta o Concepto</label>
-                <input type="text" value={newFcQuestion} onChange={e => setNewFcQuestion(e.target.value)} placeholder="Ej. ¿Cuál es la fórmula de la velocidad de escape?" className="input-base" style={{ width: '100%', height: 40, fontSize: 13 }} autoFocus />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Respuesta o Explicación</label>
-                <textarea value={newFcAnswer} onChange={e => setNewFcAnswer(e.target.value)} placeholder="Ej. v = âˆš(2GM/R)..." className="input-base" style={{ width: '100%', height: 100, fontSize: 13, padding: 12 }} />
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 12 }}>
-                <button onClick={() => setShowNewRepaso(false)} className="btn-secondary" style={{ padding: '0 20px', height: 40, fontSize: 13, fontWeight: 600 }}>Cancelar</button>
-                <button onClick={handleCreateFlashcard} disabled={!newFcQuestion.trim() || !newFcAnswer.trim()} className="btn-primary hover-lift" style={{ padding: '0 24px', height: 40, fontSize: 13, fontWeight: 600 }}>Crear tarjeta</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* IMAGE PREVIEW MODAL */}
-      {previewImageUrl && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.9)', backdropFilter: 'blur(12px)' }} onClick={() => setPreviewImageUrl(null)}>
-          <div style={{ position: 'relative', maxWidth: '90vw', maxHeight: '90vh', borderRadius: 12, overflow: 'hidden', border: '1px solid var(--border-subtle)' }} onClick={e => e.stopPropagation()}>
-            <img src={previewImageUrl} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'contain', maxHeight: '90vh' }} />
-            <button onClick={() => setPreviewImageUrl(null)} className="btn-ghost" style={{ position: 'absolute', top: 16, right: 16, background: 'rgba(0,0,0,0.8)', padding: 8, borderRadius: '50%', color: '#fff' }}>
-              <X size={20} />
-            </button>
           </div>
         </div>
       )}
@@ -1014,4 +1320,3 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
     </div>
   );
 }
-
