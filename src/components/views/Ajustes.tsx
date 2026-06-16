@@ -31,12 +31,13 @@ import {
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 const GOOGLE_CLIENT_SECRET = import.meta.env.VITE_GOOGLE_CLIENT_SECRET || '';
 
-type SettingsTab = 'perfil' | 'Apariencia' | 'estudio' | 'Notificaciones' | 'sistema';
+type SettingsTab = 'perfil' | 'Apariencia' | 'estudio' | 'Notificaciones' | 'sistema' | 'musica';
 
 const TABS: { id: SettingsTab; label: string; icon: React.ComponentType<{ size?: number }> }[] = [
   { id: 'perfil', label: 'Perfil', icon: User },
   { id: 'Apariencia', label: 'Apariencia', icon: Palette },
   { id: 'estudio', label: 'Estudio', icon: Brain },
+  { id: 'musica', label: 'Música', icon: Music },
   { id: 'sistema', label: 'Sistema', icon: Shield },
   { id: 'Notificaciones', label: 'Sonidos y Alertas', icon: Bell },
 ];
@@ -1440,6 +1441,99 @@ export default function Ajustes() {
                 </div>
               </section>
             )}
+
+            {/* MÚSICA */}
+            {activeTab === 'musica' && (
+              <section style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                <div>
+                  <h2 style={{ fontSize: 20, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em', marginBottom: 4 }}>Configuración de Música</h2>
+                  <p style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 300, letterSpacing: '0.02em' }}>Preferencias de audio, descargas y reproducción</p>
+                </div>
+
+                {/* Audio Format */}
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16, display: 'block' }}>
+                    Formato de Descarga
+                  </span>
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    {[
+                      { id: 'mp3' as const, label: 'MP3', desc: 'Compatibilidad universal' },
+                      { id: 'm4a' as const, label: 'M4A', desc: 'Mejor calidad por tamaño' },
+                    ].map(opt => {
+                      const active = (settings.downloadFormat || 'mp3') === opt.id;
+                      return (
+                        <button key={opt.id} onClick={() => updateSettings({ downloadFormat: opt.id })} style={{
+                          flex: 1, padding: '12px 8px', borderRadius: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                          background: active ? 'var(--accent)' : 'var(--bg-deep)', border: '1px solid var(--border-default)',
+                          color: active ? '#fff' : 'var(--text-secondary)', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                          transition: 'all 200ms',
+                        }}>
+                          <span>{opt.label}</span>
+                          <span style={{ fontSize: 9, fontWeight: 300, opacity: 0.65 }}>{opt.desc}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Audio Quality */}
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16, display: 'block' }}>
+                    Calidad de Audio
+                  </span>
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    {[
+                      { id: '3', label: 'Normal', desc: '128-192 kbps' },
+                      { id: '2', label: 'Alta', desc: '192-256 kbps' },
+                      { id: '1', label: 'Extrema', desc: '256-320 kbps' },
+                    ].map(opt => {
+                      const active = (settings.audioQuality || '3') === opt.id;
+                      return (
+                        <button key={opt.id} onClick={() => updateSettings({ audioQuality: opt.id })} style={{
+                          flex: 1, padding: '12px 8px', borderRadius: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                          background: active ? 'var(--accent)' : 'var(--bg-deep)', border: '1px solid var(--border-default)',
+                          color: active ? '#fff' : 'var(--text-secondary)', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                          transition: 'all 200ms',
+                        }}>
+                          <span>{opt.label}</span>
+                          <span style={{ fontSize: 9, fontWeight: 300, opacity: 0.65 }}>{opt.desc}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Cover Art */}
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16, display: 'block' }}>
+                    Portada de Descarga
+                  </span>
+                  <Toggle checked={settings.includeCover !== false} onChange={v => updateSettings({ includeCover: v })}
+                    label="Incluir portada" desc="Incrustar la imagen de portada en el archivo de audio descargado." />
+                </div>
+
+                {/* Playback retries */}
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16, display: 'block' }}>
+                    Reproducción
+                  </span>
+                  <Toggle checked={settings.autoRetryOnError !== false} onChange={v => updateSettings({ autoRetryOnError: v })}
+                    label="Reintentar al fallar" desc="Reintentar automáticamente la reproducción hasta 3 veces si ocurre un error de audio." />
+                </div>
+
+                {/* Download path info */}
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16, display: 'block' }}>
+                    Carpeta de Descargas
+                  </span>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12, lineHeight: 1.4 }}>
+                    Las canciones descargadas se guardan en la carpeta configurada del sistema. 
+                    Puedes cambiarla desde la sección de música.
+                  </div>
+                </div>
+              </section>
+            )}
+
             {activeTab === 'Notificaciones' && (
               <section style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
                 <div>

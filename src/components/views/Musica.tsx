@@ -839,13 +839,18 @@ export default function Musica() {
                             );
                           })}
                         </div>
-                      ) : (
-                        <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)', background: 'rgba(0,0,0,0.15)', borderRadius: 12 }}>
-                          <Music size={32} style={{ margin: '0 auto 10px', opacity: 0.3 }} />
-                          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>Playlist vacía</div>
-                          <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>Agrega canciones desde el botón "Editar canciones".</div>
-                        </div>
+                  ) : (
+                    <div style={{ gridColumn: '1 / -1', padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                      <Music size={32} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
+                      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)' }}>No hay canciones</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>Añade Música desde Explorar o sube audio local</div>
+                      {searchQuery && (
+                        <button onClick={() => { setActiveTab('explorar'); setSearchMode('query'); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 24px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'var(--accent)', color: '#fff', border: 'none', marginTop: 20, transition: 'all 200ms' }}>
+                          <Globe size={14} /> Buscar &ldquo;{searchQuery}&rdquo; en internet
+                        </button>
                       )}
+                    </div>
+                  )}
                     </div>
                   </div>
                 );
@@ -1100,11 +1105,16 @@ export default function Musica() {
                           </div>
                         </div>
                       )
-                    }) : (
+                    }                    ) : (
                       <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
                         <Music size={32} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
                         <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)' }}>No hay canciones</div>
                         <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>Añade Música desde Explorar o sube audio local</div>
+                        {searchQuery && (
+                          <button onClick={() => { setActiveTab('explorar'); setSearchMode('query'); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 24px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'var(--accent)', color: '#fff', border: 'none', marginTop: 20, transition: 'all 200ms' }}>
+                            <Globe size={14} /> Buscar &ldquo;{searchQuery}&rdquo; en internet
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1681,64 +1691,79 @@ export default function Musica() {
             </div>
           </div>
 
-          {/* DOWNLOADS CARD */}
-          {downloadQueue.length > 0 && (
-            <div className="bento-card" style={{ padding: '16px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <span className="section-header" style={{ marginBottom: 0, fontSize: 12, color: 'var(--text-primary)' }}>Descargas</span>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>
-                    {downloadQueue.filter(d => d.status === 'queued').length} en cola
-                    {downloadQueue.some(d => d.status === 'downloading') ? ` · ${Math.round(downloadQueue.filter(d => d.status === 'downloading').reduce((a, d) => a + d.progress * 100, 0) / Math.max(1, downloadQueue.filter(d => d.status === 'downloading').length))}%` : ''}
-                  </span>
-                  {completedDownloads.length > 0 && (
-                    <button onClick={clearCompletedDownloads} className="btn-ghost" style={{ fontSize: 10, padding: '2px 6px', color: 'var(--text-tertiary)' }}>Limpiar</button>
-                  )}
-                </div>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 220, overflowY: 'auto' }}>
-                {downloadQueue.map(item => {
-                  const statusIcon = item.status === 'downloading' ? <Loader size={12} style={{ animation: 'spin 1s linear infinite', color: 'var(--accent)' }} />
-                    : item.status === 'completed' ? <CheckCircle size={12} style={{ color: 'var(--success)' }} />
-                      : item.status === 'error' ? <AlertCircle size={12} style={{ color: 'var(--error)' }} />
-                        : <Clock size={12} style={{ color: 'var(--text-tertiary)' }} />;
-                  return (
-                    <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 8px', borderRadius: 6, background: item.status === 'error' ? 'rgba(239,68,68,0.08)' : 'transparent' }}>
-                      <div style={{ width: 28, height: 28, borderRadius: 4, background: 'var(--bg-surface)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        {item.thumbnail ? <img src={item.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={12} />}
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          {statusIcon}
-                          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                          <div className="progress-track" style={{ flex: 1, height: 3, borderRadius: 2 }}>
-                            <div className="progress-fill" style={{ width: `${item.progress * 100}%`, height: '100%', borderRadius: 2, background: item.status === 'completed' ? 'var(--success)' : item.status === 'error' ? 'var(--error)' : 'var(--accent)', transition: 'width 300ms' }} />
-                          </div>
-                          <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-tertiary)', minWidth: 28, textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
-                            {item.status === 'queued' ? 'Cola' : item.status === 'error' ? 'Error' : `${Math.round(item.progress * 100)}%`}
-                          </span>
-                        </div>
-                        {item.errorMessage && item.status === 'error' && (
-                          <div style={{ fontSize: 9, color: 'var(--error)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.errorMessage}</div>
-                        )}
-                      </div>
-                      {(item.status === 'downloading' || item.status === 'queued') && (
-                        <button onClick={() => handleCancelDownload(item.id)} style={{ padding: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', opacity: 0.6, transition: 'opacity 150ms' }} onMouseEnter={e => e.currentTarget.style.opacity = '1'} onMouseLeave={e => e.currentTarget.style.opacity = '0.6'} title="Cancelar descarga">
-                          <X size={12} />
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+          {/* DOWNLOADS CARD (inline - replaced by floating panel below) */}
 
         </div>
 
       </div>
+
+      {/* FLOATING DOWNLOAD QUEUE PANEL */}
+      {downloadQueue.length > 0 && (
+        <div style={{
+          position: 'fixed', bottom: 100, right: 24, zIndex: 50,
+          width: 340, maxHeight: 380,
+          borderRadius: 12,
+          background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)',
+          border: '1px solid var(--border-subtle)',
+          boxShadow: '0 12px 48px rgba(0,0,0,0.5)',
+          display: 'flex', flexDirection: 'column',
+          animation: 'fadeIn 200ms ease',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', borderBottom: '1px solid var(--border-subtle)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Download size={14} style={{ color: 'var(--accent)' }} />
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>Descargas</span>
+              <span style={{ fontSize: 10, color: 'var(--text-tertiary)', fontWeight: 500 }}>
+                {downloadQueue.filter(d => d.status === 'queued').length} en cola
+                {downloadQueue.some(d => d.status === 'downloading') ? ` · ${Math.round(downloadQueue.filter(d => d.status === 'downloading').reduce((a, d) => a + d.progress * 100, 0) / Math.max(1, downloadQueue.filter(d => d.status === 'downloading').length))}%` : ''}
+              </span>
+            </div>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {completedDownloads.length > 0 && (
+                <button onClick={clearCompletedDownloads} className="btn-ghost" style={{ fontSize: 10, padding: '4px 8px', color: 'var(--text-tertiary)' }}>Limpiar</button>
+              )}
+              <button onClick={() => { /* collapse - could add state */ }} className="btn-ghost" style={{ padding: 4, color: 'var(--text-tertiary)' }}><X size={14} /></button>
+            </div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '8px 10px', overflowY: 'auto', maxHeight: 300, flex: 1 }}>
+            {downloadQueue.map(item => {
+              const statusIcon = item.status === 'downloading' ? <Loader size={12} style={{ animation: 'spin 1s linear infinite', color: 'var(--accent)' }} />
+                : item.status === 'completed' ? <CheckCircle size={12} style={{ color: 'var(--success)' }} />
+                  : item.status === 'error' ? <AlertCircle size={12} style={{ color: 'var(--error)' }} />
+                    : <Clock size={12} style={{ color: 'var(--text-tertiary)' }} />;
+              return (
+                <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, background: item.status === 'error' ? 'rgba(239,68,68,0.08)' : 'var(--bg-deep)', border: '1px solid var(--border-subtle)' }}>
+                  <div style={{ width: 30, height: 30, borderRadius: 6, background: 'var(--bg-surface)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    {item.thumbnail ? <img src={item.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={14} />}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {statusIcon}
+                      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                      <div className="progress-track" style={{ flex: 1, height: 3, borderRadius: 2 }}>
+                        <div className="progress-fill" style={{ width: `${item.progress * 100}%`, height: '100%', borderRadius: 2, background: item.status === 'completed' ? 'var(--success)' : item.status === 'error' ? 'var(--error)' : 'var(--accent)', transition: 'width 300ms' }} />
+                      </div>
+                      <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-tertiary)', minWidth: 28, textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
+                        {item.status === 'queued' ? 'Cola' : item.status === 'error' ? 'Error' : `${Math.round(item.progress * 100)}%`}
+                      </span>
+                    </div>
+                    {item.errorMessage && item.status === 'error' && (
+                      <div style={{ fontSize: 9, color: 'var(--error)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.errorMessage}</div>
+                    )}
+                  </div>
+                  {(item.status === 'downloading' || item.status === 'queued') && (
+                    <button onClick={() => handleCancelDownload(item.id)} style={{ padding: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', opacity: 0.6, transition: 'opacity 150ms' }} onMouseEnter={e => e.currentTarget.style.opacity = '1'} onMouseLeave={e => e.currentTarget.style.opacity = '0.6'} title="Cancelar descarga">
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
 
 

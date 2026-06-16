@@ -250,43 +250,49 @@ export default function CursosHub({ onSelectCourse }: CursosHubProps) {
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <button onClick={() => setShowAddModal(true)}
               style={{
-                display: "flex", alignItems: "center", gap: 6,
-                padding: "6px 14px", fontSize: 11, fontWeight: 600,
-                border: "none", borderRadius: 16,
-                cursor: "pointer", background: "var(--accent)", color: "#fff",
-                fontFamily: "var(--font-primary)",
+                display: "flex", alignItems: "center", gap: 8,
+                height: 38, borderRadius: 10,
+                padding: "0 18px", fontSize: 12, fontWeight: 700,
+                border: "none", cursor: "pointer",
+                background: "var(--accent)", color: "#fff",
+                fontFamily: "'Outfit', sans-serif",
+                boxShadow: "0 4px 15px var(--accent-dim)",
                 transition: "all 200ms " + EASE,
               }}
-              className="hover:shadow-[0_0_14px_var(--accent-glow)]">
+              onMouseEnter={e => { e.currentTarget.style.filter = 'brightness(1.15)'; }}
+              onMouseLeave={e => { e.currentTarget.style.filter = 'none'; }}>
               <PlusCircle size={14} /> Añadir
             </button>
-            <div style={{ width: 1, height: 18, background: "var(--border-subtle)" }} />
             <button onClick={() => importInputRef.current?.click()}
               style={{
-                display: "flex", alignItems: "center", gap: 6,
-                padding: "5px 12px", fontSize: 10, fontWeight: 500,
-                border: "1px solid var(--border-default)", borderRadius: 16,
-                cursor: "pointer",
-                background: "linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-base) 100%)",
-                color: "var(--text-secondary)", fontFamily: "var(--font-primary)",
+                display: "flex", alignItems: "center", gap: 8,
+                height: 38, borderRadius: 10,
+                padding: "0 18px", fontSize: 12, fontWeight: 600,
+                border: "1px solid var(--border-subtle)", cursor: "pointer",
+                background: "transparent",
+                color: "var(--text-secondary)", fontFamily: "'Outfit', sans-serif",
                 transition: "all 200ms " + EASE,
-              }}>
-              <Upload size={12} /> Importar
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
+              <Upload size={13} /> Importar
             </button>
             <button onClick={handleExport}
               style={{
-                display: "flex", alignItems: "center", gap: 6,
-                padding: "5px 12px", fontSize: 10, fontWeight: 500,
-                border: "1px solid var(--border-default)", borderRadius: 16,
-                cursor: "pointer",
-                background: "linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-base) 100%)",
-                color: "var(--text-secondary)", fontFamily: "var(--font-primary)",
+                display: "flex", alignItems: "center", gap: 8,
+                height: 38, borderRadius: 10,
+                padding: "0 18px", fontSize: 12, fontWeight: 600,
+                border: "1px solid var(--border-subtle)", cursor: "pointer",
+                background: "transparent",
+                color: "var(--text-secondary)", fontFamily: "'Outfit', sans-serif",
                 transition: "all 200ms " + EASE,
-              }}>
-              <Download size={12} /> Exportar
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
+              <Download size={13} /> Exportar
             </button>
           </div>
         </div>
@@ -341,7 +347,7 @@ export default function CursosHub({ onSelectCourse }: CursosHubProps) {
                   e.currentTarget.style.borderColor = 'var(--border-strong)';
                 }}
                 style={{
-                  position: 'relative', overflow: 'hidden',
+                  position: 'relative',
                   aspectRatio: '16 / 10',
                   cursor: isLongPressed ? 'grabbing' : 'pointer',
                   opacity: isDragging ? 0.4 : 1,
@@ -353,6 +359,7 @@ export default function CursosHub({ onSelectCourse }: CursosHubProps) {
                   border: '1px solid var(--border-subtle)',
                   borderRadius: 'var(--radius-lg)',
                   transition: isDragging ? "none" : "all 400ms " + EASE,
+                  isolation: 'isolate',
                 }}
               >
                 {/* Cover image */}
@@ -362,7 +369,7 @@ export default function CursosHub({ onSelectCourse }: CursosHubProps) {
                     alt=""
                     style={{
                       position: 'absolute', inset: 0, width: '100%', height: '100%',
-                      objectFit: 'cover',
+                      objectFit: 'cover', borderRadius: 'var(--radius-lg)',
                       transition: "transform 600ms " + EASE,
                     }}
                     onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.06)'}
@@ -372,7 +379,7 @@ export default function CursosHub({ onSelectCourse }: CursosHubProps) {
 
                 {/* Gradient overlay */}
                 <div style={{
-                  position: 'absolute', inset: 0,
+                  position: 'absolute', inset: 0, borderRadius: 'var(--radius-lg)',
                   background: course.coverUrl
                     ? 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.2) 50%, transparent 80%)'
                     : 'linear-gradient(135deg, var(--accent-dim) 0%, transparent 100%)',
@@ -393,7 +400,7 @@ export default function CursosHub({ onSelectCourse }: CursosHubProps) {
                 {/* Drag handle — visible on long press */}
                 {isLongPressed && (
                   <div style={{
-                    position: 'absolute', top: 10, left: 10, zIndex: 3,
+                    position: 'absolute', top: 10, left: 10, zIndex: 5,
                     width: 28, height: 28, borderRadius: 'var(--radius-sm)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     background: 'rgba(0,0,0,0.5)', color: 'rgba(255,255,255,0.9)',
@@ -410,24 +417,24 @@ export default function CursosHub({ onSelectCourse }: CursosHubProps) {
                     e.stopPropagation();
                     setPendingDeleteId(course.id);
                   }}
-                  style={{
-                    position: 'absolute', top: 10, right: 10, zIndex: 2,
-                    width: 28, height: 28, borderRadius: 'var(--radius-sm)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    background: 'rgba(0,0,0,0.5)', border: 'none',
-                    cursor: 'pointer', color: 'rgba(255,255,255,0.7)',
-                    opacity: 0, transition: 'opacity 200ms ' + EASE,
-                    backdropFilter: 'blur(4px)',
-                  }}
-                  className="delete-btn-hover"
                   onMouseEnter={(e) => {
                     e.currentTarget.style.opacity = '1';
                     e.currentTarget.style.background = 'rgba(239,68,68,0.8)';
                     e.currentTarget.style.color = '#fff';
                   }}
                   onMouseLeave={(e) => {
-                    const parent = e.currentTarget.closest('[class]');
-                    if (parent) e.currentTarget.style.opacity = '0';
+                    e.currentTarget.style.opacity = '0';
+                    e.currentTarget.style.background = 'rgba(0,0,0,0.5)';
+                    e.currentTarget.style.color = 'rgba(255,255,255,0.7)';
+                  }}
+                  style={{
+                    position: 'absolute', top: 10, right: 10, zIndex: 4,
+                    width: 28, height: 28, borderRadius: 'var(--radius-sm)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: 'rgba(0,0,0,0.5)', border: 'none',
+                    cursor: 'pointer', color: 'rgba(255,255,255,0.7)',
+                    opacity: 0, transition: 'opacity 200ms ' + EASE,
+                    backdropFilter: 'blur(4px)',
                   }}
                 >
                   <Trash2 size={12} />

@@ -25,11 +25,12 @@ const H_END   = 23;
 const H_PX    = 64; 
 const DAY_LABELS = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
 
-type PlanView = 'week' | 'day' | 'month';
+type PlanView = 'week' | 'day' | 'month' | 'year';
 const VIEW_LABELS: Record<PlanView, string> = {
   week: 'Vista Semanal',
   day: 'Vista Diaria',
   month: 'Vista Mensual',
+  year: 'Vista Anual',
 };
 
 function timeToFrac(t: string): number {
@@ -180,12 +181,14 @@ export default function Planificacion() {
   const weekRows   = calDays.reduce<Date[][]>((a, d, i) => { if (i%7===0) a.push([]); a[a.length-1].push(d); return a; }, []);
 
   const nav = (dir: 1 | -1) => {
-    if (planView === 'month') setNavDate(dir===1 ? addMonths(navDate,1) : subMonths(navDate,1));
+    if (planView === 'year') setNavDate(dir===1 ? addMonths(navDate,12) : subMonths(navDate,12));
+    else if (planView === 'month') setNavDate(dir===1 ? addMonths(navDate,1) : subMonths(navDate,1));
     else if (planView === 'week') setNavDate(dir===1 ? addWeeks(navDate,1) : subWeeks(navDate,1));
     else if (planView === 'day') setNavDate(dir===1 ? addDays(navDate,1) : subDays(navDate,1));
   };
 
   const navLabel = useMemo(() => {
+    if (planView==='year')  return format(navDate,'yyyy',{locale:es as any});
     if (planView==='month') return format(navDate,'MMMM yyyy',{locale:es as any});
     if (planView==='week')  return `${format(weekDays[0],'d MMM',{locale:es as any})} - ${format(weekDays[6],'d MMM yyyy',{locale:es as any})}`;
     if (planView==='day')   return format(navDate,"EEEE d 'de' MMMM yyyy",{locale:es as any});
@@ -299,34 +302,82 @@ export default function Planificacion() {
         <div style={{ display:'flex', alignItems:'center', gap:12 }}>
           {/* Segmented view tabs — exclusive */}
           <div style={{ display: 'flex', gap: 4, padding: 4, borderRadius: 12, background: showScheduleBuilder ? 'var(--bg-secondary)' : 'var(--surface-elevated)', border: '1px solid var(--border-soft)', opacity: showScheduleBuilder ? 0.4 : 1, pointerEvents: showScheduleBuilder ? 'none' : 'auto', transition: 'opacity 200ms' }}>
-            {(['week', 'day', 'month'] as PlanView[]).map(v => (
+            {(['week', 'day', 'month', 'year'] as PlanView[]).map(v => (
               <button key={v} onClick={() => setPlanView(v)}
-                style={{ padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer', transition: 'all 200ms', background: planView === v ? 'var(--accent)' : 'transparent', color: planView === v ? '#fff' : 'var(--text-secondary)', fontFamily: "'Outfit',sans-serif" }}>
+                style={{ padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer', transition: 'all 200ms', background: planView === v ? 'var(--accent)' : 'transparent', color: planView === v ? '#fff' : 'var(--text-secondary)', fontFamily: "'Outfit',sans-serif" }}>
                 {VIEW_LABELS[v]}
               </button>
             ))}
           </div>
 
           {!showScheduleBuilder && (
-            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-              <button onClick={()=>nav(-1)} className="btn-secondary" style={{ padding:'8px 10px', borderRadius:10, height:36, border: 'none' }}><ChevronLeft size={16}/></button>
-              <button onClick={()=>setNavDate(new Date())} className="btn-secondary" style={{ fontSize:13, fontWeight:600, padding:'0 20px', height:36, borderRadius:10, border: 'none' }}>Hoy</button>
-              <button onClick={()=>nav(1)}  className="btn-secondary" style={{ padding:'8px 10px', borderRadius:10, height:36, border: 'none' }}><ChevronRight size={16}/></button>
-              <span style={{ fontSize:16, fontWeight:300, color:'var(--text-primary)', textTransform:'capitalize', minWidth:260, fontFamily: "'Outfit', sans-serif", textAlign: 'right', letterSpacing: '-0.01em' }}>{navLabel}</span>
+            <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+              <button onClick={()=>nav(-1)}
+                style={{
+                  height:36, width:36, borderRadius:10, border:'1px solid var(--border-subtle)',
+                  background:'transparent', color:'var(--text-secondary)', cursor:'pointer',
+                  display:'flex', alignItems:'center', justifyContent:'center',
+                  transition:'all 200ms',
+                }}
+                onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--border-hover)';e.currentTarget.style.color='var(--text-primary)';}}
+                onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border-subtle)';e.currentTarget.style.color='var(--text-secondary)';}}
+              ><ChevronLeft size={15}/></button>
+              <button onClick={()=>setNavDate(new Date())}
+                style={{
+                  height:36, borderRadius:10, border:'1px solid var(--border-subtle)',
+                  background:'transparent', color:'var(--text-secondary)', cursor:'pointer',
+                  fontSize:12, fontWeight:600, padding:'0 16px', fontFamily:"'Outfit',sans-serif",
+                  transition:'all 200ms',
+                }}
+                onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--border-hover)';e.currentTarget.style.color='var(--text-primary)';}}
+                onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border-subtle)';e.currentTarget.style.color='var(--text-secondary)';}}
+              >Hoy</button>
+              <button onClick={()=>nav(1)}
+                style={{
+                  height:36, width:36, borderRadius:10, border:'1px solid var(--border-subtle)',
+                  background:'transparent', color:'var(--text-secondary)', cursor:'pointer',
+                  display:'flex', alignItems:'center', justifyContent:'center',
+                  transition:'all 200ms',
+                }}
+                onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--border-hover)';e.currentTarget.style.color='var(--text-primary)';}}
+                onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border-subtle)';e.currentTarget.style.color='var(--text-secondary)';}}
+              ><ChevronRight size={15}/></button>
+              <span style={{ fontSize:15, fontWeight:300, color:'var(--text-primary)', textTransform:'capitalize', minWidth:260, fontFamily: "'Outfit', sans-serif", textAlign: 'right', letterSpacing: '-0.01em' }}>{navLabel}</span>
             </div>
           )}
         </div>
 
         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-          <button onClick={() => setShowScheduleBuilder(!showScheduleBuilder)} className="btn-secondary" style={{ fontSize: 12, fontWeight: 600, padding: '9px 18px', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 6, border: showScheduleBuilder ? '1px solid var(--accent)' : '1px solid var(--border-soft)', background: showScheduleBuilder ? 'rgba(225,29,72,0.08)' : 'transparent' }}>
+          <button onClick={() => setShowScheduleBuilder(!showScheduleBuilder)}
+            style={{
+              height:38, borderRadius:10, padding:'0 18px',
+              fontSize:12, fontWeight:600, fontFamily:"'Outfit',sans-serif",
+              display:'flex', alignItems:'center', gap:8,
+              border: showScheduleBuilder ? '1px solid var(--accent)' : '1px solid var(--border-subtle)',
+              background: showScheduleBuilder ? 'rgba(225,29,72,0.08)' : 'transparent',
+              color: showScheduleBuilder ? 'var(--accent)' : 'var(--text-secondary)',
+              cursor:'pointer', transition:'all 200ms',
+            }}
+            onMouseEnter={e=>{if(!showScheduleBuilder){e.currentTarget.style.borderColor='var(--border-hover)';e.currentTarget.style.color='var(--text-primary)';}}}
+            onMouseLeave={e=>{if(!showScheduleBuilder){e.currentTarget.style.borderColor='var(--border-subtle)';e.currentTarget.style.color='var(--text-secondary)';}}}
+          >
             <Calendar size={14} /> {showScheduleBuilder ? 'Cerrar Horario' : 'Horario'}
           </button>
           <button
             onClick={() => { setModalDefaults({ date: format(new Date(), 'yyyy-MM-dd') }); setEditingEvent(null); setShowEventModal(true); }}
-            className="btn-primary"
-            style={{ display:'flex', alignItems:'center', gap:8, fontSize:14, fontWeight:600, padding:'10px 24px', boxShadow:'0 8px 32px var(--accent-glow)', borderRadius: 14 }}
+            style={{
+              display:'flex', alignItems:'center', gap:8,
+              height:38, borderRadius:10, padding:'0 20px',
+              fontSize:12, fontWeight:700, fontFamily:"'Outfit',sans-serif",
+              border:'none', cursor:'pointer',
+              background:'var(--accent)', color:'#fff',
+              boxShadow:'0 4px 15px var(--accent-dim)',
+              transition:'all 200ms',
+            }}
+            onMouseEnter={e=>e.currentTarget.style.filter='brightness(1.15)'}
+            onMouseLeave={e=>e.currentTarget.style.filter='none'}
           >
-            <Plus size={18}/> Nuevo Evento
+            <Plus size={16}/> Nuevo Evento
           </button>
         </div>
       </div>
@@ -551,7 +602,7 @@ export default function Planificacion() {
                       return (
                         <div key={di}
                           onClick={()=>{ setSelectedItem({ type: 'day', date: day, events: dayEvs, tasks: dayTasks }); }}
-                          style={{ height:130, padding:'10px 12px', cursor:'pointer', overflow:'hidden', borderRight:di<6?'1px solid var(--border-soft)':'none', background:tod?'rgba(225,29,72,0.05)':'transparent', opacity, transition:'background 200ms' }}
+                          style={{ height:130, padding:'10px 12px', cursor:'pointer', overflow:'hidden', borderRight:di<6?'1px solid var(--border-soft)':'none', background:tod?'rgba(225,29,72,0.05)':'transparent', opacity, transition:'background 200ms', position:'relative' }}
                           onMouseEnter={e=>!tod && (e.currentTarget.style.background='var(--surface-hover)')}
                           onMouseLeave={e=>!tod && (e.currentTarget.style.background='transparent')}
                         >
@@ -569,6 +620,84 @@ export default function Planificacion() {
               </div>
             </>
           )}
+
+          {/* YEAR VIEW */}
+          {planView === 'year' && (
+            <div style={{ flex:1, overflowY:'auto', padding:16 }}>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:16 }}>
+                {Array.from({ length: 12 }, (_, mi) => {
+                  const monthDate = new Date(navDate.getFullYear(), mi, 1);
+                  const mStart = startOfMonth(monthDate);
+                  const mEnd = endOfMonth(monthDate);
+                  const calStart2 = startOfWeek(mStart, { weekStartsOn: 1 });
+                  const calEnd2 = endOfWeek(mEnd, { weekStartsOn: 1 });
+                  const days = eachDayOfInterval({ start: calStart2, end: calEnd2 });
+                  const weeks: Date[][] = [];
+                  days.forEach((d, i) => { if (i % 7 === 0) weeks.push([]); weeks[weeks.length - 1].push(d); });
+                  const thisMonth = mi === new Date().getMonth() && navDate.getFullYear() === new Date().getFullYear();
+                  return (
+                    <div key={mi}
+                      style={{
+                        borderRadius:'var(--radius-lg)',
+                        border:'1px solid var(--border-soft)',
+                        background: thisMonth ? 'rgba(225,29,72,0.04)' : 'transparent',
+                        padding:12, cursor:'default',
+                        transition:'all 200ms',
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface-hover)'; e.currentTarget.style.borderColor = 'var(--border-strong)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = thisMonth ? 'rgba(225,29,72,0.04)' : 'transparent'; e.currentTarget.style.borderColor = 'var(--border-soft)'; }}
+                    >
+                      <div
+                        onClick={() => { setNavDate(new Date(navDate.getFullYear(), mi, 1)); setPlanView('month'); }}
+                        style={{ fontSize:14, fontWeight:600, color:'var(--text-primary)', fontFamily:"'Outfit',sans-serif", marginBottom:12, letterSpacing:'-0.01em', textTransform:'uppercase', cursor:'pointer' }}
+                        onMouseEnter={e => e.currentTarget.style.color = 'var(--accent)'}
+                        onMouseLeave={e => e.currentTarget.style.color = 'var(--text-primary)'}
+                      >
+                        {format(monthDate, 'MMMM', { locale: es as any })}
+                      </div>
+                      <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:2, marginBottom:4 }}>
+                        {['L','M','M','J','V','S','D'].map(l => (
+                          <div key={l} style={{ fontSize:8, fontWeight:700, color:'var(--text-tertiary)', textAlign:'center', textTransform:'uppercase', letterSpacing:'0.04em' }}>{l}</div>
+                        ))}
+                      </div>
+                      {weeks.map((week, wi) => (
+                        <div key={wi} style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:2 }}>
+                          {week.map((day, di) => {
+                            const inc = isSameMonth(day, monthDate);
+                            const tod = isToday(day);
+                            const iso = format(day, 'yyyy-MM-dd');
+                            const hasEvent = getEventsForDate(iso).length > 0;
+                            const dayEvs2 = getEventsForDate(iso);
+                            const dayTasks2 = tasks.filter(t => t.dueDate && format(new Date(t.dueDate),'yyyy-MM-dd')===iso && t.status !== 'completado');
+                            return (
+                              <div key={di}
+                                onClick={(e) => { e.stopPropagation(); if (inc) setSelectedItem({ type: 'day', date: day, events: dayEvs2, tasks: dayTasks2 }); }}
+                                style={{
+                                  width:'100%', aspectRatio:'1', borderRadius:4,
+                                  display:'flex', alignItems:'center', justifyContent:'center',
+                                  fontSize: inc ? 10 : 8,
+                                  fontWeight: tod ? 800 : (inc ? 500 : 300),
+                                  color: tod ? '#fff' : (inc ? 'var(--text-primary)' : 'var(--text-muted)'),
+                                  background: tod ? 'var(--accent)' : (hasEvent ? 'rgba(225,29,72,0.08)' : 'transparent'),
+                                  opacity: inc ? 1 : 0.3,
+                                  cursor: inc ? 'pointer' : 'default',
+                                  transition:'background 150ms',
+                                }}
+                                onMouseEnter={e => { if (inc && !tod) e.currentTarget.style.background = 'var(--surface-hover)'; }}
+                                onMouseLeave={e => { if (inc && !tod) e.currentTarget.style.background = hasEvent ? 'rgba(225,29,72,0.08)' : 'transparent'; }}
+                              >
+                                {format(day, 'd')}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </div>
       )}
@@ -579,6 +708,7 @@ export default function Planificacion() {
         onEditEvent={(ev) => { setEditingEvent(ev); setShowEventModal(true); setSelectedItem(null); }}
         onDeleteEvent={(id) => { deleteEvent(id); }}
         onViewTask={(id) => { setSelectedItem(null); setNavigateTo(`tareas`); }}
+        onAddEvent={(date) => { setModalDefaults({ date: format(date, 'yyyy-MM-dd') }); setEditingEvent(null); setShowEventModal(true); setSelectedItem(null); }}
       />
 
       {showEventModal && (

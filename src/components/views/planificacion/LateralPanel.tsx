@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Calendar, Clock, BookOpen, FileText, ExternalLink, Trash2, CheckCircle2, Link as LinkIcon, Repeat } from 'lucide-react';
+import { X, Calendar, Clock, BookOpen, FileText, ExternalLink, Trash2, CheckCircle2, Link as LinkIcon, Repeat, Plus } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { PlanEvent } from './EventModal';
@@ -17,9 +17,10 @@ interface LateralPanelProps {
   onEditEvent?: (ev: PlanEvent) => void;
   onDeleteEvent?: (evId: string) => void;
   onViewTask?: (taskId: string) => void;
+  onAddEvent?: (date: Date) => void;
 }
 
-export default function LateralPanel({ item, onClose, onSelectEvent, onEditEvent, onDeleteEvent, onViewTask }: LateralPanelProps) {
+export default function LateralPanel({ item, onClose, onSelectEvent, onEditEvent, onDeleteEvent, onViewTask, onAddEvent }: LateralPanelProps) {
   const { settings } = useApp();
   const tf = settings?.timeFormat;
   if (!item) return null;
@@ -74,7 +75,7 @@ export default function LateralPanel({ item, onClose, onSelectEvent, onEditEvent
         {/* Content */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '36px' }}>
           {item.type === 'day' && (
-            <DayDetails item={item} onSelectEvent={onSelectEvent} onViewTask={onViewTask} timeFormat={tf} />
+            <DayDetails item={item} onSelectEvent={onSelectEvent} onViewTask={onViewTask} timeFormat={tf} onAddEvent={onAddEvent} />
           )}
           {item.type === 'event' && (
             <EventDetails item={item} onEdit={onEditEvent} onDelete={onDeleteEvent} timeFormat={tf} />
@@ -88,7 +89,7 @@ export default function LateralPanel({ item, onClose, onSelectEvent, onEditEvent
   );
 }
 
-function DayDetails({ item, onSelectEvent, onViewTask, timeFormat }: { item: Extract<SelectedItem, {type: 'day'}>, onSelectEvent?: (ev: PlanEvent) => void, onViewTask?: (taskId: string) => void, timeFormat?: '24h' | '12h' }) {
+function DayDetails({ item, onSelectEvent, onViewTask, timeFormat, onAddEvent }: { item: Extract<SelectedItem, {type: 'day'}>, onSelectEvent?: (ev: PlanEvent) => void, onViewTask?: (taskId: string) => void, timeFormat?: '24h' | '12h', onAddEvent?: (date: Date) => void }) {
   const { date, events, tasks } = item;
   const formattedDate = format(date, "EEEE d 'de' MMMM", { locale: es });
   
@@ -159,6 +160,23 @@ function DayDetails({ item, onSelectEvent, onViewTask, timeFormat }: { item: Ext
             <div style={{ fontSize: 14, marginTop: 8, opacity: 0.7 }}>No hay eventos ni entregas programadas.</div>
           </div>
         )}
+
+        <button
+          onClick={() => onAddEvent?.(date)}
+          style={{
+            display:'flex', alignItems:'center', justifyContent:'center', gap:8,
+            height:42, borderRadius:12, padding:'0 24px',
+            fontSize:13, fontWeight:700, fontFamily:"'Outfit',sans-serif",
+            border:'none', cursor:'pointer',
+            background:'var(--accent)', color:'#fff',
+            boxShadow:'0 4px 15px var(--accent-dim)',
+            transition:'all 200ms', marginTop:8,
+          }}
+          onMouseEnter={e=>e.currentTarget.style.filter='brightness(1.15)'}
+          onMouseLeave={e=>e.currentTarget.style.filter='none'}
+        >
+          <Plus size={16}/> Agregar Evento
+        </button>
       </div>
     </div>
   );

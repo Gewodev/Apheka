@@ -378,6 +378,11 @@ export interface Settings {
   coverBgMode?: 'auto' | 'black' | 'gray' | 'theme';
   timeFormat?: '24h' | '12h';
   studyGoals?: Record<string, number>; // day of week -> minutes, e.g. { "monday": 120, "tuesday": 180 }
+  // Music settings
+  downloadFormat?: 'mp3' | 'm4a';
+  audioQuality?: string;
+  includeCover?: boolean;
+  autoRetryOnError?: boolean;
 }
 
 export interface AppNotification {
@@ -658,6 +663,10 @@ const defaultSettings: Settings = {
   playerBarTrackHeight: 3,
   useThreeColors: false,
   timeFormat: '24h',
+  downloadFormat: 'mp3',
+  audioQuality: '3',
+  includeCover: true,
+  autoRetryOnError: true,
 };
 
 const defaultFolders: NoteFolder[] = [
@@ -1296,6 +1305,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Sync settings to floating timer window
   useEffect(() => {
+    const appBgColor = settings.useThreeColors && settings.surfaceColor
+      ? settings.surfaceColor
+      : '#020203';
     const payload = {
       floatingBgMode: settings.floatingBgMode,
       floatingBgColor: settings.floatingBgColor,
@@ -1305,6 +1317,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       timerFocusColor: settings.timerFocusColor,
       timerBreakColor: settings.timerBreakColor,
       timerChronoColor: settings.timerChronoColor,
+      appBgColor,
+      accentColor: settings.accentColor,
     };
     emit('settings:sync', JSON.stringify(payload));
   }, [settings.floatingBgMode, settings.floatingBgColor, settings.floatingFont, settings.floatingHideInFocus, settings.floatingAnimationType, settings.timerFocusColor, settings.timerBreakColor, settings.timerChronoColor]);
@@ -1312,6 +1326,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Respond to settings and timer sync requests from floating timer
   useEffect(() => {
     const unlistenSettings = listen('settings:sync:request', () => {
+      const appBgColor = settings.useThreeColors && settings.surfaceColor
+        ? settings.surfaceColor
+        : '#020203';
       const payload = {
         floatingBgMode: settings.floatingBgMode,
         floatingBgColor: settings.floatingBgColor,
@@ -1321,6 +1338,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         timerFocusColor: settings.timerFocusColor,
         timerBreakColor: settings.timerBreakColor,
         timerChronoColor: settings.timerChronoColor,
+        appBgColor,
+        accentColor: settings.accentColor,
       };
       emit('settings:sync', JSON.stringify(payload));
       emit('timer:sync', JSON.stringify({

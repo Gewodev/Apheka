@@ -356,11 +356,14 @@ export default function NowPlayingView({ sidebarCollapsed, activeView }: { sideb
 
   // Compute solid base background according to coverBgMode
   const coverBaseBg = (() => {
+    const appBg = settings.useThreeColors && settings.surfaceColor
+      ? settings.surfaceColor
+      : isDarkMode ? '#020203' : '#f5f0ea';
     switch (coverBgMode) {
       case 'black': return '#000';
       case 'gray': return '#1a1a1a';
-      case 'theme': return settings.surfaceColor || (isDarkMode ? '#0a0a0a' : '#f5f0ea');
-      default: return hasCover ? '#000' : (settings.surfaceColor || (isDarkMode ? '#0a0a0a' : '#f5f0ea'));
+      case 'theme': return appBg;
+      default: return hasCover ? '#000' : appBg;
     }
   })();
 
@@ -398,6 +401,19 @@ export default function NowPlayingView({ sidebarCollapsed, activeView }: { sideb
             filter: 'blur(100px) saturate(2.2)',
             transform: visible ? 'scale(1.1)' : 'scale(1.35)',
             transition: 'background-image 600ms ease, transform 500ms ease',
+          }}
+        />
+      )}
+
+      {/* Edge darkening vignette — smooth radial fade to black at corners */}
+      {showBlurredCover && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.55) 100%)',
+            pointerEvents: 'none',
+            zIndex: 1,
           }}
         />
       )}

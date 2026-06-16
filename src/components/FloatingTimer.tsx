@@ -34,6 +34,8 @@ interface SettingsSync {
   timerFocusColor?: string;
   timerBreakColor?: string;
   timerChronoColor?: string;
+  appBgColor?: string;
+  accentColor?: string;
 }
 
 export default function FloatingTimer() {
@@ -55,7 +57,7 @@ export default function FloatingTimer() {
 
   function applySettings(p: SettingsSync) {
     const bgMode = p.floatingBgMode || 'custom';
-    setBgColor(bgMode === 'app' ? '#0a0a0c' : (p.floatingBgColor || '#020203'));
+    setBgColor(bgMode === 'app' ? (p.appBgColor || '#020203') : (p.floatingBgColor || '#020203'));
     setFontKey(p.floatingFont && FONTS[p.floatingFont] ? p.floatingFont : 'led');
     setHideInFocus(!!p.floatingHideInFocus);
     if (p.floatingAnimationType && ANIMATIONS[p.floatingAnimationType]) {
