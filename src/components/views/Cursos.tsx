@@ -644,10 +644,10 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
             <button 
               onClick={() => setNavigateTo('cursos')} 
               className="aether-glass-card"
-              style={{ 
-                position: 'absolute', top: 20, left: 24, display: 'flex', alignItems: 'center', gap: 6, 
-                height: 34, padding: '0 14px', border: 'none', cursor: 'pointer', zIndex: 10, fontSize: 11, fontWeight: 700, uppercase: 'true' 
-              }}
+                style={{ 
+                  position: 'absolute', top: 20, left: 24, display: 'flex', alignItems: 'center', gap: 6, 
+                  height: 34, padding: '0 14px', border: 'none', cursor: 'pointer', zIndex: 10, fontSize: 11, fontWeight: 700, textTransform: 'uppercase' 
+                }}
             >
               <ChevronLeft size={16} className="aether-text-primary" /> Asignaturas
             </button>
@@ -712,17 +712,15 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
                         {/* Edit Group trigger */}
                         <button 
                           onClick={() => startEditGroup(group)}
-                          className="btn-ghost"
+                          className="btn-ghost group-hover-visible"
                           style={{ position: 'absolute', top: 10, right: 10, width: 28, height: 28, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.4)', border: 'none', cursor: 'pointer', zIndex: 5, color: '#fff', opacity: 0, transition: 'opacity 150ms' }}
-                          className="group-hover-visible"
                         >
                           <Edit3 size={11} />
                         </button>
                         <button 
                           onClick={() => handleDeleteGroup(group.id)}
-                          className="btn-ghost text-red-500"
+                          className="btn-ghost text-red-500 group-hover-visible"
                           style={{ position: 'absolute', top: 10, right: 42, width: 28, height: 28, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.4)', border: 'none', cursor: 'pointer', zIndex: 5, opacity: 0, transition: 'opacity 150ms' }}
-                          className="group-hover-visible"
                         >
                           <Trash2 size={11} />
                         </button>
@@ -789,17 +787,15 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
                         <div style={{ display: 'flex', gap: 6 }}>
                           <button 
                             onClick={() => { setEditingTopicId(topic.id); setTopicName(topic.title); setShowTopicModal(true); }}
-                            className="btn-ghost"
+                            className="btn-ghost group-hover-visible"
                             style={{ width: 26, height: 26, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: 'none', cursor: 'pointer', opacity: 0, transition: 'opacity 150ms', color: 'var(--text-secondary)' }}
-                            className="group-hover-visible"
                           >
                             <Edit3 size={11} />
                           </button>
                           <button 
                             onClick={() => handleDeleteTopic(topic.id)}
-                            className="btn-ghost text-red-500"
+                            className="btn-ghost text-red-500 group-hover-visible"
                             style={{ width: 26, height: 26, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: 'none', cursor: 'pointer', opacity: 0, transition: 'opacity 150ms' }}
-                            className="group-hover-visible"
                           >
                             <Trash2 size={11} />
                           </button>

@@ -55,7 +55,7 @@ export default function FloatingTimer() {
 
   function applySettings(p: SettingsSync) {
     const bgMode = p.floatingBgMode || 'custom';
-    setBgColor(bgMode === 'app' ? (getComputedStyle(document.documentElement).getPropertyValue('--bg-base').trim() || '#0a0a0c') : (p.floatingBgColor || '#020203'));
+    setBgColor(bgMode === 'app' ? '#0a0a0c' : (p.floatingBgColor || '#020203'));
     setFontKey(p.floatingFont && FONTS[p.floatingFont] ? p.floatingFont : 'led');
     setHideInFocus(!!p.floatingHideInFocus);
     if (p.floatingAnimationType && ANIMATIONS[p.floatingAnimationType]) {

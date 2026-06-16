@@ -1,1702 +1,1673 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+﻿import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
-  Search, Plus, Folder as FolderIcon, Pin, Trash2, Edit3,
-  ChevronLeft, FolderPlus, FileText, Download, Check, X,
-  Bold, Italic, Underline, List, Code, CheckCircle, Clock,
-  Image as ImageIcon, Palette, Highlighter, Type, Link, Upload,
-  MoreVertical, Share2, HelpCircle, AlertCircle, Copy, Move, ArrowLeft,
-  ChevronDown, BookOpen, Star, RefreshCw, PenTool, Calculator, Sigma,
-  Eye, Info, AlertTriangle, FileVideo, Music, Paperclip
-} from 'lucide-react';
-import { useApp, Note, NoteFolder, NoteAttachment } from '../../store/AppContext';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
-import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { motion, AnimatePresence } from 'framer-motion';
-import toast from 'react-hot-toast';
+  Search, Plus, Folder as FolderIcon, Pin, Trash2, FileText, Download, X, Copy, Move,
+  AlertTriangle, Check, Bold, Italic, Underline, List, Code, Link, Paperclip,
+  Image as ImageIcon, Type, BookOpen, Star, PenTool,
+  ArrowLeft, Info, Clock, AlignJustify,
+  ChevronDown, ChevronRight, MoreHorizontal, Share2,
+  ListOrdered, Quote, Upload, Lock,
+  History, Table, File,
+  Layers, Edit3, FileOutput,
+  Filter, SortAsc, Tag, RefreshCw,
+} from "lucide-react";
+import { useApp, Note, NoteFolder } from "../../store/AppContext";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
+import toast from "react-hot-toast";
 
-// ── SORTABLE NOTE CARD COMPONENT ──
-interface SortableNoteCardProps {
-  note: Note;
-  isSelected: boolean;
-  onClick: () => void;
-  onContextMenu: (e: React.MouseEvent, note: Note) => void;
+const EASE = "cubic-bezier(0.16, 1, 0.3, 1)";
+type ViewMode = "lista" | "estante";
+type SortMode = "updated" | "created" | "title" | "course" | "visits" | "priority";
+type ActiveView = "explorer" | "editor";
+
+const SPINE_COLORS = [
+  "#E11D48", "#3B82F6", "#10B981", "#F59E0B", "#8B5CF6",
+  "#EC4899", "#06B6D4", "#84CC16", "#F97316", "#6366F1",
+  "#14B8A6", "#D946EF", "#0EA5E9", "#22C55E", "#EAB308",
+];
+
+function getSpineColor(id: string): string {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) hash = ((hash << 5) - hash) + id.charCodeAt(i);
+  return SPINE_COLORS[Math.abs(hash) % SPINE_COLORS.length];
 }
 
-function SortableNoteCard({ note, isSelected, onClick, onContextMenu }: SortableNoteCardProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: note.id });
+function formatTimeAgo(date: string): string {
+  const diff = Date.now() - new Date(date).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "Ahora";
+  if (mins < 60) return "Hace " + mins + " min";
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return "Hace " + hrs + "h";
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return "Hace " + days + " d\u00edas";
+  try { return format(new Date(date), "d MMM", { locale: es }); } catch { return ""; }
+}
 
-  const style = {
-    transform: CSS.Translate.toString(transform),
-    transition,
-    opacity: isDragging ? 0.4 : 1,
-    zIndex: isDragging ? 50 : 'auto',
-  };
+function getWordCount(html: string): number {
+  return html.replace(/<[^>]+>/g, "").split(/\s+/).filter(Boolean).length;
+}
 
-  const hasCover = note.coverImage || note.coverColor;
+function getCharCount(html: string): number {
+  return html.replace(/<[^>]+>/g, "").length;
+}
+
+function getPageCount(html: string): number {
+  const wc = getWordCount(html);
+  return Math.max(1, Math.ceil(wc / 250));
+}
+
+function getReadTime(html: string): number {
+  return Math.max(1, Math.ceil(getWordCount(html) / 200));
+}
+
+/* ====== BLOCK STRIP CARD (lista view) ====== */
+interface NoteCardProps {
+  note: Note;
+  isSelected: boolean;
+  onSelect: () => void;
+  onOpen: () => void;
+  onContextMenu: (e: React.MouseEvent) => void;
+  onDragStart: (e: React.DragEvent) => void;
+  onDragOver: (e: React.DragEvent) => void;
+  onDrop: (e: React.DragEvent) => void;
+  index: number;
+}
+
+const cardHov: React.CSSProperties = {
+  borderColor: "var(--border-strong)",
+  boxShadow: "var(--shadow-card), 0 0 0 1px var(--accent-glow)",
+  transform: "translateY(-2px)",
+};
+
+function NoteCard({ note, isSelected, onSelect, onOpen, onContextMenu, onDragStart, onDragOver, onDrop, index }: NoteCardProps) {
+  const spineColor = note.courseColor || getSpineColor(note.id);
+  const preview = useMemo(() => {
+    const text = note.content.replace(/<[^>]+>/g, "").trim();
+    return text.slice(0, 80) || "Sin contenido";
+  }, [note.content]);
+  const [hov, setHov] = useState(false);
 
   return (
     <div
-      ref={setNodeRef}
-      style={style}
-      className={`note-card rounded-xl border ${
-        isSelected
-          ? 'border-[var(--accent)] bg-[var(--accent-dim)]'
-          : 'border-[var(--border-subtle)] bg-[var(--bg-surface)]'
-      } overflow-hidden flex flex-col`}
-      onClick={onClick}
-      onContextMenu={(e) => onContextMenu(e, note)}
+      draggable
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      onClick={onSelect}
+      onDoubleClick={onOpen}
+      onContextMenu={onContextMenu}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      className="bento-card"
+      style={{
+        display: "flex", gap: 14,
+        padding: "14px 16px", cursor: "pointer",
+        background: isSelected
+          ? "linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)"
+          : "linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)",
+        border: "1px solid " + (isSelected ? "var(--accent)" : "var(--border-subtle)"),
+        borderRadius: "var(--radius-lg)",
+        transition: "all 400ms " + EASE,
+        transform: hov && !isSelected ? "translateY(-2px)" : "none",
+        boxShadow: isSelected
+          ? "var(--shadow-card), 0 0 0 1px var(--accent-glow)"
+          : hov ? "var(--shadow-card)" : "none",
+        position: "relative",
+      }}
     >
-      {/* Cover image or color block */}
-      {hasCover && (
-        <div
-          className="note-card-cover"
-          style={{
-            backgroundImage: note.coverImage ? `url(${note.coverImage})` : 'none',
-            backgroundColor: note.coverColor || 'transparent',
-          }}
-        >
-          <div className="absolute top-2 right-2 text-white/90 drop-shadow">
-            {note.isPinned && <Pin size={12} fill="white" />}
-          </div>
+      {/* Left accent indicator */}
+      <div style={{
+        position: "absolute", left: 0, top: 10, bottom: 10, width: 4,
+        background: "linear-gradient(180deg, " + spineColor + ", " + spineColor + "88)",
+        borderRadius: "0 4px 4px 0",
+        opacity: isSelected || hov ? 1 : 0,
+        transition: "opacity 300ms " + EASE,
+      }} />
+
+      {/* Icon — only colored element */}
+      <div style={{
+        width: 42, height: 42, borderRadius: "var(--radius-sm)", flexShrink: 0,
+        background: "linear-gradient(135deg, " + spineColor + "18, " + spineColor + "06)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        border: "1px solid " + spineColor + "12",
+      }}>
+        <FileText size={19} style={{ color: spineColor }} />
+      </div>
+
+      {/* Main content */}
+      <div style={{
+        flex: 1, minWidth: 0, display: "flex", flexDirection: "column",
+        gap: 5, justifyContent: "center",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{
+            fontSize: 14, fontWeight: 600, color: "var(--text-primary)",
+            fontFamily: "var(--font-heading)",
+            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+          }}>{note.title || "Sin t\u00edtulo"}</span>
+          {note.isPinned && <Star size={10} fill="#F59E0B" style={{ color: "#F59E0B", flexShrink: 0 }} />}
         </div>
-      )}
-
-      <div className="p-4 flex flex-col gap-2 flex-grow relative">
-        {/* Course color spine on left if it belongs to a course and has no cover */}
-        {!hasCover && note.courseColor && (
-          <div
-            className="absolute left-0 top-0 bottom-0 w-1.5"
-            style={{ backgroundColor: note.courseColor }}
-          />
-        )}
-
-        <div className="flex items-start justify-between gap-2">
-          <h4 className="font-bold text-sm text-[var(--text-primary)] line-clamp-1 flex-grow">
-            {note.title || 'Sin título'}
-          </h4>
-          {!hasCover && note.isPinned && (
-            <Pin size={11} fill="var(--accent)" className="text-[var(--accent)] shrink-0 mt-0.5" />
+        <div style={{
+          fontSize: 12, color: "var(--text-tertiary)", lineHeight: 1.45,
+          display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical",
+          overflow: "hidden",
+        }}>{preview}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+          {note.course && (
+            <span style={{
+              fontSize: 10, fontWeight: 600, color: spineColor,
+              background: spineColor + "14", padding: "2px 10px", borderRadius: "var(--radius-sm)",
+              letterSpacing: "0.01em",
+            }}>{note.course}</span>
+          )}
+          {note.tags && note.tags.length > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              {note.tags.slice(0, 2).map((t) => (
+                <span key={t} style={{
+                  fontSize: 9, color: "var(--text-muted)",
+                  background: "var(--bg-hover)", padding: "1px 7px", borderRadius: 4,
+                }}>{t}</span>
+              ))}
+              {note.tags.length > 2 && (
+                <span style={{ fontSize: 9, color: "var(--text-muted)" }}>+{note.tags.length - 2}</span>
+              )}
+            </div>
+          )}
+          {note.attachments && note.attachments.length > 0 && (
+            <Paperclip size={10} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
           )}
         </div>
+      </div>
 
-        {note.subtitle && (
-          <p className="text-xs text-[var(--text-secondary)] line-clamp-1 italic">
-            {note.subtitle}
-          </p>
-        )}
-
-        <div
-          className="text-xs text-[var(--text-muted)] line-clamp-2 leading-relaxed"
-          dangerouslySetInnerHTML={{
-            __html: note.content ? note.content.replace(/<[^>]*>/g, ' ') : 'Sin contenido...',
+      {/* Right: time above menu */}
+      <div style={{
+        display: "flex", flexDirection: "column", alignItems: "flex-end",
+        justifyContent: "space-between", flexShrink: 0, padding: "2px 0",
+      }}>
+        <span style={{
+          fontSize: 10, color: "var(--text-muted)",
+          fontFamily: "var(--font-mono)", whiteSpace: "nowrap",
+          background: "var(--bg-hover)", padding: "1px 7px", borderRadius: 6,
+        }}>
+          {formatTimeAgo(note.updatedAt)}
+        </span>
+        <button onClick={(e) => { e.stopPropagation(); onContextMenu(e); }}
+          style={{
+            background: "none", border: "none", cursor: "pointer",
+            color: "var(--text-muted)", padding: 6, display: "flex",
+            borderRadius: 6,
+            opacity: hov ? 1 : 0, transition: "opacity 200ms " + EASE,
           }}
-        />
-
-        <div className="flex items-center justify-between mt-2 pt-2 border-t border-[var(--border-subtle)] text-[10px] text-[var(--text-tertiary)]">
-          <span>{format(new Date(note.updatedAt), 'd MMM, yyyy', { locale: es })}</span>
-          <div className="flex gap-1">
-            {note.tags && note.tags.slice(0, 2).map(t => (
-              <span key={t} className="px-1.5 py-0.5 rounded bg-[var(--bg-deep)] text-[var(--text-secondary)]">
-                #{t}
-              </span>
-            ))}
-          </div>
-        </div>
+          className="hover:bg-[var(--bg-hover)]">
+          <MoreHorizontal size={16} />
+        </button>
       </div>
     </div>
   );
 }
 
-// ── MAIN NOTAS MODULE ──
-export default function Notas() {
-  const {
-    notes = [],
-    noteFolders = [],
-    courses = [],
-    settings,
-    addNote,
-    updateNote,
-    deleteNote,
-    addNoteFolder,
-    deleteNoteFolder,
-    reorderNotes,
-    updateNoteFolder,
-    duplicateNote,
-  } = useApp();
+/* ====== BOOKSHELF BOOK (estante view) ====== */
+interface BookshelfBookProps {
+  note: Note;
+  isSelected: boolean;
+  onSelect: () => void;
+  onDoubleClick: () => void;
+  onContextMenu: (e: React.MouseEvent) => void;
+  maxHeight: number;
+  minHeight: number;
+}
 
-  // Navigation states
-  const [activeFolderId, setActiveFolderId] = useState<string | 'all' | 'pinned'>('all');
-  const [selectedTag, setSelectedTag] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
+function BookshelfBook({ note, isSelected, onSelect, onDoubleClick, onContextMenu, maxHeight, minHeight }: BookshelfBookProps) {
+  const spineColor = note.courseColor || getSpineColor(note.id);
+  const [hov, setHov] = useState(false);
+  const wordCount = useMemo(() => getWordCount(note.content || ""), [note.content]);
+  const pageCount = useMemo(() => getPageCount(note.content || ""), [note.content]);
+  const bookHeight = useMemo(() => {
+    const raw = minHeight + (wordCount / 500) * (maxHeight - minHeight);
+    return Math.min(maxHeight, Math.max(minHeight, raw));
+  }, [wordCount, maxHeight, minHeight]);
+  const bookWidth = 64 + (pageCount > 5 ? Math.min(pageCount * 2, 20) : 0);
 
-  // Time & Clock state
-  const [currentTime, setCurrentTime] = useState(new Date());
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
+  return (
+    <div style={{
+      display: "flex", flexDirection: "column", alignItems: "center", gap: 0,
+      position: "relative", cursor: "pointer",
+      transform: hov ? "translateY(-6px)" : "translateY(0)",
+      transition: "transform 500ms " + EASE,
+    }}
+      onClick={onSelect}
+      onDoubleClick={onDoubleClick}
+      onContextMenu={onContextMenu}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+    >
+      <div style={{
+        width: bookWidth, height: bookHeight,
+        position: "relative",
+        borderRadius: "3px 6px 6px 3px",
+        background: "linear-gradient(160deg, #faf8f4 0%, #f0ece4 100%)",
+        boxShadow: isSelected
+          ? "0 6px 20px rgba(0,0,0,0.3), 0 0 0 2px var(--accent)"
+          : hov
+            ? "0 10px 30px rgba(0,0,0,0.25), 0 2px 6px rgba(0,0,0,0.1)"
+            : "0 3px 8px rgba(0,0,0,0.12)",
+        transition: "box-shadow 400ms " + EASE,
+        overflow: "hidden",
+        display: "flex", flexDirection: "column", justifyContent: "flex-end",
+      }}>
+        {/* Colored spine strip */}
+        <div style={{
+          position: "absolute", left: 0, top: 0, bottom: 0, width: 10,
+          background: "linear-gradient(180deg, " + spineColor + ", " + spineColor + "cc)",
+          borderRadius: "3px 0 0 3px",
+        }} />
+        <div style={{
+          position: "absolute", left: 10, top: 0, bottom: 0, width: 1,
+          background: "linear-gradient(180deg, " + spineColor + "88, " + spineColor + "33)",
+        }} />
+        <div style={{
+          position: "absolute", right: 0, top: 2, bottom: 2, width: 3,
+          background: "linear-gradient(90deg, #e8e4dc, #ddd8d0)",
+          borderRadius: "0 4px 4px 0",
+        }} />
+        <div style={{
+          padding: "12px 8px 8px 16px",
+          display: "flex", flexDirection: "column",
+          justifyContent: "flex-end", flex: 1,
+        }}>
+          {note.isPinned && (
+            <div style={{ marginBottom: 4 }}>
+              <Star size={7} fill="#F59E0B" style={{ color: "#F59E0B" }} />
+            </div>
+          )}
+          <div style={{
+            fontSize: 7 + (bookHeight > 180 ? 1 : 0),
+            fontWeight: 700, color: "var(--text-primary)",
+            fontFamily: "var(--font-heading)", lineHeight: 1.2,
+            display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical",
+            overflow: "hidden", letterSpacing: "-0.01em",
+          }}>{note.title || "Nota"}</div>
+          {note.course && (
+            <div style={{
+              fontSize: 5, fontWeight: 600, color: "var(--text-tertiary)",
+              marginTop: 3, textTransform: "uppercase",
+              letterSpacing: "0.06em", whiteSpace: "nowrap",
+              overflow: "hidden", textOverflow: "ellipsis",
+            }}>{note.course}</div>
+          )}
+        </div>
+        {bookHeight > 160 && (
+          <div style={{
+            padding: "2px 6px 5px 16px", display: "flex", alignItems: "center", gap: 3,
+          }}>
+            <div style={{
+              flex: 1, height: 2, borderRadius: 1,
+              background: "rgba(0,0,0,0.06)",
+              overflow: "hidden",
+            }}>
+              <div style={{
+                width: Math.min(100, Math.round(pageCount * 6)) + "%",
+                height: "100%",
+                background: spineColor + "66",
+                borderRadius: 1,
+              }} />
+            </div>
+            <span style={{
+              fontSize: 5, fontWeight: 600, color: "var(--text-tertiary)",
+              whiteSpace: "nowrap",
+            }}>{pageCount}p</span>
+          </div>
+        )}
+      </div>
+      <div style={{
+        width: bookWidth + 24, height: 5,
+        background: "radial-gradient(ellipse at center, rgba(0,0,0,0.12) 0%, transparent 70%)",
+        marginTop: -1, opacity: hov ? 0.7 : 0.3,
+        transition: "opacity 400ms " + EASE,
+      }} />
+    </div>
+  );
+}
 
-  const timeStr = format(currentTime, settings?.timeFormat === '12h' ? 'hh:mm' : 'HH:mm');
-  const periodStr = settings?.timeFormat === '12h' ? format(currentTime, ' a') : '';
-  const dateStr = format(currentTime, "EEEE, d 'de' MMMM, yyyy", { locale: es });
-  const dateStrCapitalized = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
+/* ====== FILTER BAR ====== */
+interface FilterBarProps {
+  folders: NoteFolder[];
+  notes: Note[];
+  selectedFolderId: string | null;
+  selectedTag: string | null;
+  onSelectFolder: (id: string | null) => void;
+  onSelectTag: (tag: string | null) => void;
+}
 
-  // Editor states
-  const selectedNote = useMemo(() => notes.find(n => n.id === selectedNoteId), [notes, selectedNoteId]);
-  const editorRef = useRef<HTMLDivElement>(null);
-  const titleInputRef = useRef<HTMLInputElement>(null);
-  const subtitleInputRef = useRef<HTMLInputElement>(null);
-  const [editorWordCount, setEditorWordCount] = useState(0);
-  const [editorCharCount, setEditorCharCount] = useState(0);
-  const [editorReadingTime, setEditorReadingTime] = useState(0);
-  const [isSaved, setIsSaved] = useState(false);
-  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Floating tools panels state
-  const [showCalculator, setShowCalculator] = useState(false);
-  const [showWhiteboard, setShowWhiteboard] = useState(false);
-  const [showFormulaEditor, setShowFormulaEditor] = useState(false);
-
-  // Context Menu state
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; note: Note } | null>(null);
-
-  // Modals state
-  const [showNewFolderModal, setShowNewFolderModal] = useState(false);
-  const [newFolderName, setNewFolderName] = useState('');
-  const [newFolderColor, setNewFolderColor] = useState('#E11D48');
-  const [newFolderDesc, setNewFolderDesc] = useState('');
-
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
-  const [showMoveFolderModal, setShowMoveFolderModal] = useState<string | null>(null);
-  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
-
-  // Floating formatting popup state
-  const [formatPopup, setFormatPopup] = useState<{ x: number; y: number; show: boolean }>({ x: 0, y: 0, show: false });
-
-  // Tag creation / editing state
-  const [newTagInput, setNewTagInput] = useState('');
-  const [editingTag, setEditingTag] = useState<string | null>(null);
-  const [editingTagValue, setEditingTagValue] = useState('');
-  const [tagToDelete, setTagToDelete] = useState<string | null>(null);
-
-  // Auto-fill editor content when selecting a note
-  useEffect(() => {
-    if (editorRef.current && selectedNote) {
-      if (editorRef.current.innerHTML !== selectedNote.content) {
-        editorRef.current.innerHTML = selectedNote.content;
-      }
-      updateEditorStats();
-    }
-  }, [selectedNoteId]);
-
-  // Handle escape & clicks outside to close floating elements
-  useEffect(() => {
-    const handleGlobalClick = (e: MouseEvent) => {
-      if (contextMenu) setContextMenu(null);
-      if (showDownloadMenu) setShowDownloadMenu(false);
-    };
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setShowNewFolderModal(false);
-        setShowDeleteConfirm(null);
-        setShowMoveFolderModal(null);
-        setContextMenu(null);
-        setShowCalculator(false);
-        setShowWhiteboard(false);
-        setShowFormulaEditor(false);
-      }
-    };
-    window.addEventListener('click', handleGlobalClick);
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('click', handleGlobalClick);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [contextMenu, showDownloadMenu]);
-
-  // ── AUTO-SAVE WITH DEBOUNCE ──
-  const triggerAutoSave = useCallback(() => {
-    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
-    autoSaveTimerRef.current = setTimeout(() => {
-      if (!selectedNoteId) return;
-      const html = editorRef.current?.innerHTML || '';
-      const title = titleInputRef.current?.value || 'Sin título';
-      const subtitle = subtitleInputRef.current?.value || '';
-
-      updateNote(selectedNoteId, {
-        content: html,
-        title,
-        subtitle,
-        updatedAt: new Date().toISOString(),
-      });
-      setIsSaved(true);
-      setTimeout(() => setIsSaved(false), 1200);
-    }, 500);
-  }, [selectedNoteId, updateNote]);
-
-  // Update statistics
-  const updateEditorStats = () => {
-    const text = editorRef.current?.innerText || '';
-    const words = text.trim().split(/\s+/).filter(Boolean).length;
-    const chars = text.length;
-    const minutes = Math.ceil(words / 200); // Average reading speed
-
-    setEditorWordCount(words);
-    setEditorCharCount(chars);
-    setEditorReadingTime(minutes);
-  };
-
-  // Selection change for floating formatting bar
-  const handleSelectionChange = () => {
-    const sel = window.getSelection();
-    if (!sel || sel.isCollapsed || !editorRef.current) {
-      setFormatPopup(prev => ({ ...prev, show: false }));
-      return;
-    }
-    const range = sel.getRangeAt(0);
-    const rect = range.getBoundingClientRect();
-    const editorRect = editorRef.current.getBoundingClientRect();
-
-    if (rect.top >= editorRect.top && rect.bottom <= editorRect.bottom) {
-      setFormatPopup({
-        x: rect.left - editorRect.left + rect.width / 2,
-        y: rect.top - editorRect.top - 48,
-        show: true
-      });
-    }
-  };
-
-  // ── FORMAT COMMANDS ──
-  const applyFormat = (command: string, value: string = '') => {
-    document.execCommand(command, false, value);
-    triggerAutoSave();
-    updateEditorStats();
-  };
-
-  // ── TAGS COMPUTATION ──
+function FilterBar({ folders, notes, selectedFolderId, selectedTag, onSelectFolder, onSelectTag }: FilterBarProps) {
   const allTags = useMemo(() => {
-    const map = new Map<string, number>();
-    notes.forEach(n => {
-      (n.tags || []).forEach(tag => {
-        map.set(tag, (map.get(tag) || 0) + 1);
-      });
-    });
-    return Array.from(map.entries()).map(([name, count]) => ({ name, count }));
+    const set = new Set<string>();
+    notes.forEach((n) => n.tags?.forEach((t) => set.add(t)));
+    return Array.from(set);
   }, [notes]);
 
-  const handleCreateTag = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTagInput.trim() || !selectedNote) return;
-    const tag = newTagInput.trim().toLowerCase();
-    const currentTags = selectedNote.tags || [];
-    if (!currentTags.includes(tag)) {
-      updateNote(selectedNote.id, { tags: [...currentTags, tag] });
-    }
-    setNewTagInput('');
-  };
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap",
+    }}>
+      {folders.slice(0, 5).map((f) => {
+        const count = notes.filter((n) => n.folderId === f.id).length;
+        if (count === 0) return null;
+        const sel = selectedFolderId === f.id;
+        return (
+          <button key={f.id} onClick={() => onSelectFolder(sel ? null : f.id)}
+            style={{
+              display: "flex", alignItems: "center", gap: 5,
+              padding: "4px 10px", borderRadius: "var(--radius-full)",
+              border: "1px solid " + (sel ? "var(--accent)" : "var(--border-subtle)"),
+              background: sel ? "var(--accent-soft)" : "linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)",
+              color: sel ? "var(--accent)" : "var(--text-secondary)",
+              cursor: "pointer", fontSize: 11, fontWeight: 500,
+              fontFamily: "var(--font-primary)",
+              transition: "all 200ms " + EASE,
+            }}>
+            <FolderIcon size={12} style={{ color: f.color || "var(--text-tertiary)" }} />
+            {f.name}
+            <span style={{ fontSize: 9, opacity: 0.7 }}>{count}</span>
+          </button>
+        );
+      })}
+      {allTags.slice(0, 3).map((tag) => {
+        const count = notes.filter((n) => n.tags?.includes(tag)).length;
+        const sel = selectedTag === tag;
+        return (
+          <button key={tag} onClick={() => onSelectTag(sel ? null : tag)}
+            style={{
+              display: "flex", alignItems: "center", gap: 5,
+              padding: "4px 10px", borderRadius: "var(--radius-full)",
+              border: "1px solid " + (sel ? "var(--accent)" : "var(--border-subtle)"),
+              background: sel ? "var(--accent-soft)" : "linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)",
+              color: sel ? "var(--accent)" : "var(--text-secondary)",
+              cursor: "pointer", fontSize: 11, fontWeight: 500,
+              fontFamily: "var(--font-primary)",
+              transition: "all 200ms " + EASE,
+            }}>
+            <Tag size={12} />
+            {tag}
+            <span style={{ fontSize: 9, opacity: 0.7 }}>{count}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
-  const handleRenameTagGlobal = (oldTag: string, newTag: string) => {
-    if (!newTag.trim() || oldTag === newTag) {
-      setEditingTag(null);
-      return;
-    }
-    notes.forEach(n => {
-      if (n.tags?.includes(oldTag)) {
-        const nextTags = n.tags.map(t => t === oldTag ? newTag.trim() : t);
-        updateNote(n.id, { tags: nextTags });
-      }
-    });
-    if (selectedTag === oldTag) setSelectedTag(newTag);
-    setEditingTag(null);
-    toast.success('Etiqueta renombrada');
-  };
+/* ====== LIBRARY SIDEBAR ====== */
+interface LibrarySidebarProps {
+  folders: NoteFolder[];
+  notes: Note[];
+  selectedFolderId: string | null;
+  selectedTag: string | null;
+  onSelectFolder: (id: string | null) => void;
+  onSelectTag: (tag: string | null) => void;
+  onNewFolder: () => void;
+}
 
-  const handleDeleteTagGlobal = (tag: string) => {
-    notes.forEach(n => {
-      if (n.tags?.includes(tag)) {
-        updateNote(n.id, { tags: n.tags.filter(t => t !== tag) });
-      }
-    });
-    if (selectedTag === tag) setSelectedTag(null);
-    setTagToDelete(null);
-    toast.success('Etiqueta eliminada');
-  };
+const TAG_COLORS: Record<string, string> = {
+  Importante: "#E11D48", Examen: "#F59E0B", Proyecto: "#8B5CF6",
+  Pendiente: "#3B82F6", Leer: "#10B981", Revisar: "#EC4899", Finalizado: "#6B7280",
+};
 
-  // ── FOLDER DEFINITIONS ──
-  const allFolders = useMemo(() => {
-    const courseFolders: NoteFolder[] = courses.map(c => ({
-      id: `course-${c.id}`,
-      name: c.name,
-      color: c.color,
-      courseId: c.id,
-      isManual: false
-    }));
-    return [...courseFolders, ...noteFolders];
-  }, [courses, noteFolders]);
+function LibrarySidebar({ folders, notes, selectedFolderId, selectedTag,
+  onSelectFolder, onSelectTag, onNewFolder }: LibrarySidebarProps) {
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+  const [showTagSection, setShowTagSection] = useState(true);
 
-  const activeFolderName = useMemo(() => {
-    if (activeFolderId === 'all') return 'Todas las notas';
-    if (activeFolderId === 'pinned') return 'Destacadas';
-    const f = allFolders.find(x => x.id === activeFolderId);
-    return f ? f.name : 'Carpeta';
-  }, [activeFolderId, allFolders]);
+  const allTags = useMemo(() => {
+    const tagSet = new Set<string>();
+    notes.forEach((n) => n.tags?.forEach((t) => tagSet.add(t)));
+    return Array.from(tagSet);
+  }, [notes]);
 
-  const handleCreateFolderSubmit = () => {
-    if (!newFolderName.trim()) return;
-    addNoteFolder({
-      name: newFolderName.trim(),
-      color: newFolderColor,
-      isManual: true,
-      description: newFolderDesc
-    });
-    setNewFolderName('');
-    setNewFolderDesc('');
-    setShowNewFolderModal(false);
-    toast.success('Carpeta creada');
-  };
-
-  // ── FILTERED NOTES LIST ──
-  const filteredNotes = useMemo(() => {
-    let result = notes;
-    if (activeFolderId === 'pinned') {
-      result = result.filter(n => n.isPinned);
-    } else if (activeFolderId !== 'all') {
-      // Find if it matches a course folder or custom folder
-      const folder = allFolders.find(f => f.id === activeFolderId);
-      if (folder) {
-        if (folder.courseId) {
-          // It's a course folder, filter by course name matching
-          result = result.filter(n => n.course === folder.name);
-        } else {
-          result = result.filter(n => n.folderId === folder.id);
-        }
-      }
-    }
-    if (selectedTag) {
-      result = result.filter(n => n.tags?.includes(selectedTag));
-    }
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      result = result.filter(n =>
-        n.title.toLowerCase().includes(q) ||
-        (n.subtitle && n.subtitle.toLowerCase().includes(q)) ||
-        n.content.toLowerCase().includes(q)
-      );
-    }
-    // Sort by sortOrder then updatedAt descending
-    return [...result].sort((a, b) => {
-      const sortA = a.sortOrder ?? 99999;
-      const sortB = b.sortOrder ?? 99999;
-      if (sortA !== sortB) return sortA - sortB;
-      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-    });
-  }, [notes, activeFolderId, selectedTag, searchQuery, allFolders]);
-
-  // DND kit reordering
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (over && active.id !== over.id) {
-      const activeIdx = filteredNotes.findIndex(n => n.id === active.id);
-      const overIdx = filteredNotes.findIndex(n => n.id === over.id);
-      const newOrderIds = [...filteredNotes.map(n => n.id)];
-      // move activeIdx to overIdx
-      newOrderIds.splice(activeIdx, 1);
-      newOrderIds.splice(overIdx, 0, active.id as string);
-      reorderNotes(newOrderIds);
-    }
-  };
-
-  // Create Note
-  const handleCreateNote = () => {
-    // Determine course or folder
-    let courseName = 'General';
-    let courseColor = '#E11D48';
-    let folderId: string | undefined = undefined;
-
-    if (activeFolderId !== 'all' && activeFolderId !== 'pinned') {
-      const folder = allFolders.find(f => f.id === activeFolderId);
-      if (folder) {
-        if (folder.courseId) {
-          courseName = folder.name;
-          courseColor = folder.color;
-        } else {
-          folderId = folder.id;
-        }
-      }
-    }
-
-    const newId = addNote({
-      title: 'Nueva nota',
-      subtitle: 'Descripción breve',
-      content: 'Comienza a escribir...',
-      course: courseName,
-      courseColor,
-      folderId,
-      isPinned: false,
-      tags: selectedTag ? [selectedTag] : [],
-      attachments: [],
-      coverColor: '#0F172A'
-    });
-
-    setSelectedNoteId(newId);
-    toast.success('Nota creada');
-  };
-
-  // Delete Note
-  const handleDeleteNoteConfirm = () => {
-    if (!showDeleteConfirm) return;
-    deleteNote(showDeleteConfirm);
-    if (selectedNoteId === showDeleteConfirm) setSelectedNoteId(null);
-    setShowDeleteConfirm(null);
-    toast.success('Nota eliminada');
-  };
-
-  // Move Folder note
-  const handleMoveFolder = (folderId: string | undefined) => {
-    if (!showMoveFolderModal) return;
-    updateNote(showMoveFolderModal, { folderId });
-    setShowMoveFolderModal(null);
-    toast.success('Nota movida de carpeta');
-  };
-
-  // Context Menu triggers
-  const handleContextMenu = (e: React.MouseEvent, note: Note) => {
-    e.preventDefault();
-    setContextMenu({
-      x: e.clientX,
-      y: e.clientY,
-      note
+  const toggleFolder = (id: string) => {
+    setExpandedFolders((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
     });
   };
 
-  // File Attachments base64 convert
-  const handleFileAttachmentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !selectedNote) return;
-
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const dataUrl = ev.target?.result as string;
-      const type: NoteAttachment['type'] = file.type.startsWith('image/') ? 'image'
-        : file.type.startsWith('video/') ? 'video'
-        : file.type.startsWith('audio/') ? 'audio'
-        : file.type === 'application/pdf' ? 'pdf'
-        : 'file';
-
-      const attachment: NoteAttachment = {
-        id: Date.now().toString(),
-        name: file.name,
-        type,
-        dataUrl,
-        size: file.size
-      };
-
-      const prevAttachments = selectedNote.attachments || [];
-      updateNote(selectedNote.id, {
-        attachments: [...prevAttachments, attachment]
-      });
-
-      // Insert link/preview directly in editor
-      if (type === 'image') {
-        document.execCommand('insertHTML', false, `<img src="${dataUrl}" alt="${file.name}" style="max-width:100%; border-radius:10px; margin: 12px 0;" />`);
-      } else if (type === 'video') {
-        document.execCommand('insertHTML', false, `<video src="${dataUrl}" controls style="max-width:100%; border-radius:10px; margin: 12px 0;"></video>`);
-      } else if (type === 'audio') {
-        document.execCommand('insertHTML', false, `<audio src="${dataUrl}" controls style="width:100%; margin: 8px 0;"></audio>`);
-      } else {
-        document.execCommand('insertHTML', false, `<a href="${dataUrl}" download="${file.name}" style="color:var(--accent); text-decoration: underline; font-weight:600;">📎 ${file.name}</a>`);
-      }
-      triggerAutoSave();
-      updateEditorStats();
-    };
-    reader.readAsDataURL(file);
-    e.target.value = '';
-  };
-
-  // HTML / TXT download logic
-  const downloadNote = (type: 'html' | 'txt') => {
-    if (!selectedNote) return;
-    let filename = `${selectedNote.title.replace(/\s+/g, '_')}`;
-    let blob: Blob;
-
-    if (type === 'html') {
-      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${selectedNote.title}</title>
-<style>
-body{font-family:'Inter',sans-serif;max-width:760px;margin:40px auto;padding:0 20px;color:#1e293b;line-height:1.8;background:#f8fafc;}
-.container{background:#ffffff;padding:40px;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.05);}
-h1{font-size:32px;font-weight:800;color:#0f172a;margin-bottom:6px;}
-h2{font-size:20px;font-weight:400;color:#64748b;margin-bottom:24px;border-bottom:1px solid #e2e8f0;padding-bottom:12px;}
-blockquote{border-left:4px solid #E11D48;padding:12px 20px;margin:20px 0;background:#fff1f2;border-radius:0 8px 8px 0;font-style:italic;}
-pre{background:#0f172a;color:#f8fafc;padding:16px;border-radius:8px;font-family:monospace;overflow-x:auto;}
-code{background:#f1f5f9;padding:2px 6px;border-radius:4px;font-family:monospace;color:#e11d48;}
-pre code{background:none;color:inherit;padding:0;}
-img{max-width:100%;border-radius:8px;}
-a{color:#E11D48;text-decoration:none;}
-a:hover{text-decoration:underline;}
-</style></head>
-<body><div class="container">
-<h1>${selectedNote.title}</h1>
-${selectedNote.subtitle ? `<h2>${selectedNote.subtitle}</h2>` : ''}
-<div>${selectedNote.content}</div>
-</div></body></html>`;
-      blob = new Blob([html], { type: 'text/html' });
-      filename += '.html';
-    } else {
-      const text = `${selectedNote.title}\n${selectedNote.subtitle || ''}\n\n${editorRef.current?.innerText || ''}`;
-      blob = new Blob([text], { type: 'text/plain' });
-      filename += '.txt';
-    }
-
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success(`Nota descargada como ${type.toUpperCase()}`);
-  };
-
-  // ── FLOATING PANEL - CALCULATOR ──
-  const [calcExpr, setCalcExpr] = useState('');
-  const [calcRes, setCalcRes] = useState('0');
-  const [isDeg, setIsDeg] = useState(true);
-
-  const handleCalcPress = (val: string) => {
-    if (val === 'C') {
-      setCalcExpr('');
-      setCalcRes('0');
-    } else if (val === '=') {
-      try {
-        let clean = calcExpr
-          .replace(/×/g, '*')
-          .replace(/÷/g, '/')
-          .replace(/π/g, 'Math.PI')
-          .replace(/sin\(/g, isDeg ? 'Math.sin(Math.PI/180*' : 'Math.sin(')
-          .replace(/cos\(/g, isDeg ? 'Math.cos(Math.PI/180*' : 'Math.cos(')
-          .replace(/tan\(/g, isDeg ? 'Math.tan(Math.PI/180*' : 'Math.tan(')
-          .replace(/log\(/g, 'Math.log10(')
-          .replace(/ln\(/g, 'Math.log(')
-          .replace(/√\(/g, 'Math.sqrt(')
-          .replace(/\^/g, '**');
-
-        const openP = (clean.match(/\(/g) || []).length;
-        const closeP = (clean.match(/\)/g) || []).length;
-        if (openP > closeP) clean += ')'.repeat(openP - closeP);
-
-        const evalRes = new Function(`return (${clean})`)();
-        if (typeof evalRes === 'number' && !isNaN(evalRes)) {
-          setCalcRes(Number(evalRes.toFixed(8)).toString());
-        } else {
-          setCalcRes('Error');
-        }
-      } catch {
-        setCalcRes('Error');
-      }
-    } else {
-      setCalcExpr(prev => prev + val);
-    }
-  };
-
-  const insertCalcResult = () => {
-    if (calcRes === 'Error') return;
-    document.execCommand('insertHTML', false, ` <code class="px-2 py-0.5 bg-[var(--bg-elevated)] text-[var(--accent)] font-mono rounded">${calcRes}</code> `);
-    triggerAutoSave();
-  };
-
-  // ── FLOATING PANEL - WHITEBOARD ──
-  const wbCanvasRef = useRef<HTMLCanvasElement>(null);
-  const [wbColor, setWbColor] = useState('#FFFFFF');
-  const [wbBrushSize, setWbBrushSize] = useState(5);
-  const [wbTool, setWbTool] = useState<'pen' | 'eraser'>('pen');
-  const isDrawingRef = useRef(false);
-
-  const initWhiteboard = () => {
-    const canvas = wbCanvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.fillStyle = '#0e0e14';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-  };
-
-  useEffect(() => {
-    if (showWhiteboard) {
-      setTimeout(initWhiteboard, 50);
-    }
-  }, [showWhiteboard]);
-
-  const handleWbStart = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
-    isDrawingRef.current = true;
-    const canvas = wbCanvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const x = ('touches' in e) ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
-    const y = ('touches' in e) ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
-
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.strokeStyle = wbTool === 'eraser' ? '#0e0e14' : wbColor;
-    ctx.lineWidth = wbBrushSize;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-  };
-
-  const handleWbDraw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
-    if (!isDrawingRef.current) return;
-    const canvas = wbCanvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const x = ('touches' in e) ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
-    const y = ('touches' in e) ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
-
-    ctx.lineTo(x, y);
-    ctx.stroke();
-  };
-
-  const handleWbEnd = () => {
-    isDrawingRef.current = false;
-  };
-
-  const insertWhiteboard = () => {
-    const canvas = wbCanvasRef.current;
-    if (!canvas) return;
-    const dataUrl = canvas.toDataURL('image/png');
-    document.execCommand('insertHTML', false, `<img src="${dataUrl}" alt="Whiteboard Drawing" style="max-width:100%; border-radius:10px; border: 1px solid var(--border-subtle); margin:12px 0;" />`);
-    setShowWhiteboard(false);
-    triggerAutoSave();
-  };
-
-  // ── FLOATING PANEL - FORMULA EDITOR ──
-  const [formulaInput, setFormulaInput] = useState('');
-  const parsedFormulaHTML = useMemo(() => {
-    let html = formulaInput;
-    const symbols: Record<string, string> = {
-      alpha: 'α', beta: 'β', theta: 'θ', delta: 'Δ', Delta: 'Δ', pi: 'π',
-      sum: '∑', int: '∫', inf: '∞', neq: '≠', leq: '≤', geq: '≥', pm: '±',
-      times: '×', div: '÷'
-    };
-    Object.entries(symbols).forEach(([k, v]) => {
-      const reg = new RegExp(`\\\\${k}\\b`, 'g');
-      html = html.replace(reg, v);
-    });
-
-    html = html.replace(/sqrt\(([^)]+)\)/g, '<div class="formula-sqrt"><span class="formula-sqrt-content">$1</span></div>');
-    html = html.replace(/([^/\s()]+)\/([^/\s()]+)/g, '<div class="formula-fraction"><span class="formula-fraction-num">$1</span><span class="formula-fraction-bar"></span><span class="formula-fraction-den">$2</span></div>');
-    html = html.replace(/\(([^)]+)\)\/\(([^)]+)\)/g, '<div class="formula-fraction"><span class="formula-fraction-num">$1</span><span class="formula-fraction-bar"></span><span class="formula-fraction-den">$2</span></div>');
-
-    html = html.replace(/\^([^^(\s]+)/g, '<sup>$1</sup>');
-    html = html.replace(/\^\(([^)]+)\)/g, '<sup>$1</sup>');
-
-    html = html.replace(/_([^_(\s]+)/g, '<sub>$1</sub>');
-    html = html.replace(/_\(([^)]+)\)/g, '<sub>$1</sub>');
-
-    return `<span class="formula-rendered">${html}</span>`;
-  }, [formulaInput]);
-
-  const insertFormula = () => {
-    if (!formulaInput.trim()) return;
-    document.execCommand('insertHTML', false, parsedFormulaHTML);
-    setFormulaInput('');
-    setShowFormulaEditor(false);
-    triggerAutoSave();
+  const subfolders: Record<string, string[]> = {
+    "Apuntes": ["Res\u00famenes", "Ejercicios", "Laboratorio"],
+    "Proyectos": ["Investigaci\u00f3n", "Documentaci\u00f3n", "Recursos"],
+    "Evaluaciones": ["Ex\u00e1menes", "Formularios", "Trabajos"],
   };
 
   return (
-    <div className="flex flex-col h-full bg-[var(--bg-base)] text-[var(--text-primary)] select-none">
-      
-      {/* ── HEADER ── */}
-      <div className="flex justify-between items-center px-6 py-4 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] shrink-0 font-sans">
-        <div>
-          <h2 className="text-xl font-bold font-headline text-white flex items-center gap-2">
-            <FileText className="text-[var(--accent)]" size={20} />
-            Módulo de Notas
-          </h2>
-          <p className="text-xs text-[var(--text-muted)] mt-1">Organización y editor avanzado de apuntes</p>
+    <div style={{
+      width: 260, minWidth: 260, flexShrink: 0, display: "flex", flexDirection: "column",
+      paddingRight: 20, overflow: "hidden",
+      borderRight: "1px solid var(--border-subtle)",
+    }}>
+      <div style={{ flex: 1, overflow: "auto" }}>
+        {/* Carpetas header */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 6, marginBottom: 8, paddingLeft: 4,
+        }}>
+          <span style={{
+            fontSize: 9, fontWeight: 700, color: "var(--text-tertiary)",
+            textTransform: "uppercase", letterSpacing: "0.08em",
+          }}>Carpetas</span>
+          <button onClick={onNewFolder} title="Nueva carpeta"
+            style={{
+              width: 18, height: 18,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              background: "none", border: "1px dashed var(--border-default)",
+              borderRadius: 5, color: "var(--accent)", cursor: "pointer",
+              padding: 0, marginLeft: 2, transition: "all 200ms " + EASE,
+            }}
+            className="hover:border-[var(--accent)] hover:bg-[var(--accent-dim)]">
+            <Plus size={10} />
+          </button>
         </div>
 
-        <div className="text-right shrink-0">
-          <div className="flex items-baseline gap-1.5 justify-end">
-            <span className="font-mono text-3xl font-extralight text-[var(--accent)] text-shadow-glow">
-              {timeStr}
-            </span>
-            {periodStr && <span className="text-xs text-[var(--accent)] font-semibold">{periodStr}</span>}
+        <button onClick={() => onSelectFolder(null)}
+          style={{
+            display: "flex", alignItems: "center", gap: 8, width: "100%",
+            padding: "7px 8px",
+            background: !selectedFolderId ? "linear-gradient(135deg, var(--accent-dim) 0%, transparent 100%)" : "transparent",
+            border: "none", borderRadius: "var(--radius-sm)",
+            color: !selectedFolderId ? "var(--accent)" : "var(--text-secondary)",
+            cursor: "pointer", fontSize: 12, fontFamily: "var(--font-primary)",
+            textAlign: "left", transition: "all 200ms " + EASE,
+          }}
+          className="hover:bg-[var(--bg-hover)]">
+          <Layers size={14} />
+          Todos los cuadernos
+          <span style={{
+            marginLeft: "auto", fontSize: 9, color: !selectedFolderId ? "var(--accent)" : "var(--text-muted)",
+            background: !selectedFolderId ? "var(--accent-soft)" : "var(--bg-hover)",
+            padding: "1px 7px", borderRadius: 8, fontWeight: 600,
+          }}>{notes.length}</span>
+        </button>
+
+        {folders.map((f) => {
+          const isExpanded = expandedFolders.has(f.id);
+          const count = notes.filter((n) => n.folderId === f.id).length;
+          const subs = subfolders[f.name] || [];
+          return (
+            <div key={f.id}>
+              <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                {subs.length > 0 && (
+                  <button onClick={() => toggleFolder(f.id)}
+                    style={{
+                      background: "none", border: "none", color: "var(--text-muted)",
+                      cursor: "pointer", padding: 4, display: "flex",
+                      transition: "transform 300ms " + EASE,
+                      transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)",
+                    }}>
+                    <ChevronRight size={12} />
+                  </button>
+                )}
+                {subs.length === 0 && <div style={{ width: 20 }} />}
+                <button onClick={() => onSelectFolder(f.id)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 8, flex: 1,
+                    padding: "7px 8px",
+                    background: selectedFolderId === f.id ? "linear-gradient(135deg, var(--accent-dim) 0%, transparent 100%)" : "transparent",
+                    border: "none", borderRadius: "var(--radius-sm)",
+                    color: selectedFolderId === f.id ? "var(--accent)" : "var(--text-secondary)",
+                    cursor: "pointer", fontSize: 12, fontFamily: "var(--font-primary)",
+                    textAlign: "left", transition: "all 200ms " + EASE,
+                  }}
+                  className="hover:bg-[var(--bg-hover)]">
+                  <FolderIcon size={14} style={{ color: f.color || "var(--text-tertiary)" }} />
+                  {f.name}
+                  <span style={{
+                    marginLeft: "auto", fontSize: 9, color: selectedFolderId === f.id ? "var(--accent)" : "var(--text-muted)",
+                    background: selectedFolderId === f.id ? "var(--accent-soft)" : "var(--bg-hover)",
+                    padding: "1px 7px", borderRadius: 8, fontWeight: 600,
+                  }}>{count}</span>
+                </button>
+              </div>
+              {subs.length > 0 && (
+                <div style={{
+                  overflow: "hidden",
+                  maxHeight: isExpanded ? subs.length * 36 : 0,
+                  transition: "max-height 300ms " + EASE,
+                }}>
+                  {subs.map((sub) => (
+                    <button key={sub} onClick={() => onSelectFolder(f.id)}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 8,
+                        width: "100%", padding: "5px 8px 5px 48px",
+                        background: "none", border: "none", borderRadius: "var(--radius-sm)",
+                        color: "var(--text-tertiary)", cursor: "pointer",
+                        fontSize: 11, fontFamily: "var(--font-primary)", textAlign: "left",
+                        transition: "all 200ms " + EASE,
+                      }}
+                      className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-secondary)]">
+                      <FileText size={12} style={{ color: "var(--text-muted)" }} />
+                      {sub}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {allTags.length > 0 && (
+          <div style={{ marginTop: 24 }}>
+            <button onClick={() => setShowTagSection(!showTagSection)}
+              style={{
+                display: "flex", alignItems: "center", gap: 6, width: "100%",
+                background: "none", border: "none", color: "var(--text-tertiary)",
+                cursor: "pointer", padding: "4px", fontSize: 9, fontWeight: 700,
+                textTransform: "uppercase", letterSpacing: "0.08em",
+                fontFamily: "var(--font-primary)", textAlign: "left",
+                transition: "all 200ms " + EASE,
+              }}
+              className="hover:text-[var(--text-secondary)]">
+              <Tag size={13} style={{ color: "var(--accent)" }} />
+              Etiquetas
+              <span style={{
+                fontSize: 9, color: "var(--text-muted)",
+                background: "var(--bg-hover)", padding: "0 6px", borderRadius: 8,
+                marginLeft: 4, fontWeight: 600,
+              }}>{allTags.length}</span>
+              <ChevronDown size={11} style={{
+                marginLeft: "auto",
+                transform: showTagSection ? "rotate(0deg)" : "rotate(-90deg)",
+                transition: "transform 300ms " + EASE,
+              }} />
+            </button>
+            <div style={{
+              overflow: "hidden", maxHeight: showTagSection ? 400 : 0,
+              transition: "max-height 300ms " + EASE,
+            }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 6 }}>
+                {allTags.map((tag) => {
+                  const count = notes.filter((n) => n.tags?.includes(tag)).length;
+                  const dotColor = TAG_COLORS[tag] || "var(--accent)";
+                  return (
+                    <button key={tag} onClick={() => onSelectTag(selectedTag === tag ? null : tag)}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 8, width: "100%",
+                        padding: "6px 8px",
+                        background: selectedTag === tag ? "linear-gradient(135deg, var(--accent-dim) 0%, transparent 100%)" : "transparent",
+                        border: "none", borderRadius: "var(--radius-sm)",
+                        color: selectedTag === tag ? "var(--accent)" : "var(--text-secondary)",
+                        cursor: "pointer", fontSize: 11, fontFamily: "var(--font-primary)",
+                        textAlign: "left", transition: "all 200ms " + EASE,
+                        borderLeft: "3px solid " + (selectedTag === tag ? dotColor : "transparent"),
+                      }}
+                      className="hover:bg-[var(--bg-hover)]">
+                      <div style={{
+                        width: 8, height: 8, borderRadius: "50%",
+                        background: dotColor, flexShrink: 0,
+                        boxShadow: selectedTag === tag ? "0 0 10px " + dotColor + "99" : "none",
+                        transition: "box-shadow 200ms " + EASE,
+                      }} />
+                      <span style={{
+                        textTransform: "capitalize", flex: 1, minWidth: 0,
+                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        fontWeight: selectedTag === tag ? 600 : 400,
+                      }}>{tag}</span>
+                      <span style={{
+                        fontSize: 9, color: selectedTag === tag ? "var(--accent)" : "var(--text-muted)",
+                        background: selectedTag === tag ? "var(--accent-soft)" : "var(--bg-hover)",
+                        padding: "0 7px", borderRadius: 8,
+                        fontWeight: 600, minWidth: 20, textAlign: "center",
+                      }}>{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
-          <p className="text-[10px] text-[var(--text-tertiary)] uppercase tracking-wider mt-1">{dateStrCapitalized}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ====== EDITOR TOOLBAR ====== */
+interface EditorToolbarProps {
+  onFormat: (cmd: string, value?: string) => void;
+}
+
+const toolBtn: React.CSSProperties = {
+  background: "none", border: "none", color: "var(--text-secondary)",
+  cursor: "pointer", width: 30, height: 30, borderRadius: "var(--radius-sm)",
+  display: "flex", alignItems: "center", justifyContent: "center",
+  transition: "all 150ms " + EASE, fontSize: 11,
+  fontFamily: "var(--font-primary)", flexShrink: 0,
+};
+
+const toolDiv: React.CSSProperties = {
+  width: 1, height: 20, background: "var(--border-subtle)", margin: "0 4px", flexShrink: 0,
+};
+
+function EditorToolbar({ onFormat }: EditorToolbarProps) {
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 2, flexWrap: "wrap",
+      padding: "6px 12px",
+      background: "linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-base) 100%)",
+      border: "1px solid var(--border-default)", borderRadius: "var(--radius-lg)",
+      boxShadow: "var(--shadow-card)",
+    }}>
+      {[
+        { cmd: "formatBlock", value: "<h1>", label: "H1", w: 700, s: 13 },
+        { cmd: "formatBlock", value: "<h2>", label: "H2", w: 600, s: 12 },
+        { cmd: "formatBlock", value: "<h3>", label: "H3", w: 600, s: 11 },
+      ].map((b) => (
+        <button key={b.label} onClick={() => onFormat(b.cmd, b.value)}
+          style={{ ...toolBtn, fontWeight: b.w, fontSize: b.s, width: 34 }}>
+          {b.label}
+        </button>
+      ))}
+      <div style={toolDiv} />
+      <button onClick={() => onFormat("bold")} style={toolBtn} title="Negrita"><Bold size={15} /></button>
+      <button onClick={() => onFormat("italic")} style={toolBtn} title="Cursiva"><Italic size={15} /></button>
+      <button onClick={() => onFormat("underline")} style={toolBtn} title="Subrayado"><Underline size={15} /></button>
+      <div style={toolDiv} />
+      <button onClick={() => onFormat("insertUnorderedList")} style={toolBtn} title="Lista"><List size={15} /></button>
+      <button onClick={() => onFormat("insertOrderedList")} style={toolBtn} title="Lista ordenada"><ListOrdered size={15} /></button>
+      <button onClick={() => onFormat("insertHTML")} value='<input type="checkbox" />' style={toolBtn} title="Checklist"><Check size={15} /></button>
+      <div style={toolDiv} />
+      <button onClick={() => onFormat("formatBlock", "<pre>")} style={toolBtn} title="C\u00f3digo"><Code size={15} /></button>
+      <button onClick={() => onFormat("createLink")} style={toolBtn} title="Enlace"><Link size={15} /></button>
+      <button onClick={() => onFormat("formatBlock", "<blockquote>")} style={toolBtn} title="Cita"><Quote size={15} /></button>
+      <div style={toolDiv} />
+      <button onClick={() => onFormat("insertImage")} style={toolBtn} title="Imagen"><ImageIcon size={15} /></button>
+      <button onClick={() => onFormat("insertHTML", "<table><tr><td></td></tr></table>")} style={toolBtn} title="Tabla"><Table size={15} /></button>
+      <div style={toolDiv} />
+      <button style={toolBtn} title="Historial"><History size={15} /></button>
+      <button style={toolBtn} title="Compartir"><Share2 size={15} /></button>
+      <button style={toolBtn} title="Exportar"><Download size={15} /></button>
+    </div>
+  );
+}
+
+/* ====== MAIN COMPONENT ====== */
+export default function Notas() {
+  const { notes, noteFolders: folders, addNote, updateNote, deleteNote, addNoteFolder, deleteNoteFolder, duplicateNote, reorderNotes } = useApp();
+
+  const [activeView, setActiveView] = useState<ActiveView>("explorer");
+  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>("lista");
+  const [sortMode, setSortMode] = useState<SortMode>("updated");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; noteId: string } | null>(null);
+  const [showNewFolderModal, setShowNewFolderModal] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showMoveModal, setShowMoveModal] = useState(false);
+  const [showPopupEditor, setShowPopupEditor] = useState(false);
+  const [editorContent, setEditorContent] = useState("");
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "pending">("saved");
+  const [timeStr, setTimeStr] = useState(() => format(new Date(), "HH:mm"));
+  const [secStr, setSecStr] = useState(() => format(new Date(), "ss"));
+
+  const editorRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const tick = () => {
+      const now = new Date();
+      setTimeStr(format(now, "HH:mm"));
+      setSecStr(format(now, "ss"));
+    };
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const dateStr = useMemo(() => {
+    try {
+      const d = format(new Date(), "EEEE, d 'de' MMMM 'de' yyyy", { locale: es });
+      return d.charAt(0).toUpperCase() + d.slice(1);
+    } catch { return ""; }
+  }, []);
+
+  const selectedNote = useMemo(
+    () => notes.find((n) => n.id === selectedNoteId) || null,
+    [notes, selectedNoteId],
+  );
+
+  const currentFolder = useMemo(
+    () => folders.find((f) => f.id === selectedFolderId),
+    [folders, selectedFolderId],
+  );
+
+  const filteredNotes = useMemo(() => {
+    let result = [...notes];
+    if (selectedFolderId) result = result.filter((n) => n.folderId === selectedFolderId);
+    if (selectedTag) result = result.filter((n) => n.tags?.includes(selectedTag));
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter((n) =>
+        n.title.toLowerCase().includes(q) ||
+        (n.subtitle && n.subtitle.toLowerCase().includes(q)) ||
+        (n.content && n.content.toLowerCase().includes(q)) ||
+        (n.tags && n.tags.some((t) => t.toLowerCase().includes(q))),
+      );
+    }
+    result.sort((a, b) => {
+      if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
+      if (sortMode === "priority") {
+        const order = { high: 0, medium: 1, low: 2, none: 3 };
+        return (order[a.priority || "none"] - order[b.priority || "none"]);
+      }
+      if (sortMode === "course") {
+        if (a.course !== b.course) return a.course.localeCompare(b.course);
+        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+      }
+      if (sortMode === "visits") {
+        return (b.sortOrder || 0) - (a.sortOrder || 0);
+      }
+      switch (sortMode) {
+        case "updated": return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+        case "created": return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        case "title": return a.title.localeCompare(b.title);
+        default: return 0;
+      }
+    });
+    return result;
+  }, [notes, selectedFolderId, selectedTag, searchQuery, sortMode]);
+
+  const handleCreateNote = useCallback(() => {
+    const id = addNote({
+      title: "Nuevo cuaderno", content: "", subtitle: "",
+      folderId: selectedFolderId || undefined,
+      courseColor: currentFolder?.color || "#8B5CF6",
+      isPinned: false, course: currentFolder?.name || "", tags: [],
+    });
+    setSelectedNoteId(id);
+    setEditorContent("");
+    setActiveView("editor");
+  }, [addNote, selectedFolderId, currentFolder]);
+
+  const handleSaveNote = useCallback(() => {
+    if (!selectedNote || !editorRef.current) return;
+    const content = editorRef.current.innerHTML;
+    const text = editorRef.current.innerText || "";
+    const title = text.split("\n")[0].slice(0, 100) || "Sin t\u00edtulo";
+    updateNote(selectedNote.id, { content, title, subtitle: text.slice(0, 200) });
+    setSaveStatus("saved");
+  }, [selectedNote, updateNote]);
+
+  const handleSelectNote = useCallback((noteId: string) => {
+    setSelectedNoteId(noteId);
+    const note = notes.find((n) => n.id === noteId);
+    if (note) setEditorContent(note.content || "");
+  }, [notes]);
+
+  const handleOpenNote = useCallback(() => {
+    if (selectedNote) setActiveView("editor");
+  }, [selectedNote]);
+
+  const handleDeleteNote = useCallback(() => {
+    if (!selectedNoteId && !contextMenu) return;
+    const id = contextMenu ? contextMenu.noteId : selectedNoteId!;
+    deleteNote(id);
+    if (selectedNoteId === id) { setSelectedNoteId(null); setActiveView("explorer"); }
+    setContextMenu(null); setShowDeleteConfirm(false);
+    toast.success("Cuaderno eliminado");
+  }, [contextMenu, selectedNoteId, deleteNote]);
+
+  const handleContextMenu = useCallback((e: React.MouseEvent, noteId: string) => {
+    e.preventDefault(); e.stopPropagation();
+    setContextMenu({ x: e.clientX, y: e.clientY, noteId });
+  }, []);
+
+  const handleEditorInput = useCallback(() => {
+    setSaveStatus("pending");
+    if (editorRef.current && selectedNote) {
+      updateNote(selectedNote.id, { content: editorRef.current.innerHTML });
+    }
+  }, [selectedNote, updateNote]);
+
+  const handleFormat = useCallback((cmd: string, value?: string) => {
+    document.execCommand(cmd, false, value);
+    editorRef.current?.focus();
+    setSaveStatus("pending");
+  }, []);
+
+  const handleDuplicate = useCallback(() => {
+    if (!selectedNoteId) return;
+    const newId = duplicateNote(selectedNoteId);
+    if (newId) { setSelectedNoteId(newId); toast.success("Duplicado"); }
+  }, [selectedNoteId, duplicateNote]);
+
+  const handleMoveToFolder = useCallback((folderId: string | undefined) => {
+    if (!selectedNoteId) return;
+    updateNote(selectedNoteId, { folderId });
+    setShowMoveModal(false);
+    toast.success("Movido");
+  }, [selectedNoteId, updateNote]);
+
+  const handleDragStart = useCallback((e: React.DragEvent, index: number) => {
+    setDragIndex(index);
+    e.dataTransfer.effectAllowed = "move";
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+    if (dragIndex === null || dragIndex === dropIndex) return;
+    const ids = [...filteredNotes.map((n) => n.id)];
+    const [moved] = ids.splice(dragIndex, 1);
+    ids.splice(dropIndex, 0, moved);
+    reorderNotes(ids);
+    setDragIndex(null);
+  }, [dragIndex, filteredNotes, reorderNotes]);
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handler = () => setContextMenu(null);
+    window.addEventListener("click", handler);
+    return () => window.removeEventListener("click", handler);
+  }, [contextMenu]);
+
+  useEffect(() => {
+    if (activeView !== "editor" || !selectedNote) return;
+    const id = setInterval(() => { handleSaveNote(); }, 30000);
+    return () => clearInterval(id);
+  }, [activeView, selectedNote, handleSaveNote]);
+
+  useEffect(() => {
+    if (activeView !== "editor") return;
+    const timer = setTimeout(() => { setSaveStatus("saved"); }, 2000);
+    return () => clearTimeout(timer);
+  }, [editorContent, activeView]);
+
+  const sortLabels: Record<SortMode, string> = {
+    updated: "Recientes", created: "Creados", title: "T\u00edtulo",
+    course: "Curso", visits: "Visitas", priority: "Prioridad",
+  };
+
+  return (
+    <div className="page-container" style={{
+      display: "flex", flexDirection: "column", height: "100%",
+      overflow: "hidden", gap: 20, padding: "20px 28px",
+    }}>
+      {/* ===== HEADER ===== */}
+      <header style={{
+        display: "flex", justifyContent: "space-between", alignItems: "flex-end",
+        flexShrink: 0,
+      }}>
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 12 }}>
+          <div style={{
+            width: 40, height: 40, borderRadius: "var(--radius-sm)",
+            background: "linear-gradient(135deg, var(--accent-dim), var(--accent)22)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            flexShrink: 0, marginBottom: 4,
+          }}>
+            <BookOpen size={21} style={{ color: "var(--accent)" }} />
+          </div>
+          <h1 style={{
+            fontFamily: "'Inter Tight', sans-serif", fontWeight: 700,
+            fontSize: 32, lineHeight: 1.15, letterSpacing: "-0.02em",
+            color: "var(--accent)", margin: 0,
+            textShadow: "0 0 20px var(--accent-glow)",
+          }}>Notas</h1>
+          {currentFolder && (
+            <span style={{ fontSize: 13, color: "var(--text-tertiary)", fontWeight: 500, paddingBottom: 6 }}>
+              / {currentFolder.name}
+            </span>
+          )}
+        </div>
+        <div style={{
+          display: "flex", alignItems: "center", gap: 12,
+          paddingLeft: 16, borderLeft: "1px solid var(--border-subtle)",
+          position: "relative",
+        }}>
+          <div style={{
+            position: "absolute", top: "50%", right: 0,
+            width: 150, height: 100,
+            background: "radial-gradient(circle at center, var(--accent-dim) 0%, transparent 70%)",
+            opacity: 0.4, transform: "translateY(-50%)",
+            pointerEvents: "none", zIndex: 0,
+          }} />
+          <div style={{ textAlign: "right", position: "relative", zIndex: 1 }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 2, justifyContent: "flex-end" }}>
+              <span style={{
+                fontFamily: "'Inter Tight', sans-serif", fontSize: 68,
+                fontWeight: 200, lineHeight: 0.9, color: "var(--accent)",
+                letterSpacing: "0.02em",
+                textShadow: "0 0 20px var(--accent-glow)",
+              }}>{timeStr}</span>
+              <span style={{
+                fontFamily: "'Inter Tight', sans-serif", fontSize: 22,
+                fontWeight: 200, color: "var(--accent)", opacity: 0.7,
+                letterSpacing: "0.02em",
+              }}>{secStr}</span>
+            </div>
+            <span style={{
+              fontSize: 9, fontWeight: 700, color: "var(--text-tertiary)",
+              textTransform: "uppercase", letterSpacing: "0.08em", marginTop: 4, display: "block",
+            }}>{dateStr}</span>
+          </div>
+        </div>
+      </header>
+
+      {/* ===== SEARCH + TOOLS ===== */}
+      <div style={{
+        display: "flex", flexDirection: "column", gap: 12, flexShrink: 0,
+        maxWidth: 600, margin: "0 auto", width: "100%",
+      }}>
+        <div style={{
+          display: "flex", alignItems: "center", gap: 10,
+          justifyContent: "center",
+        }}>
+          <div style={{ position: "relative", flex: 1 }}>
+            <Search size={16} style={{
+              position: "absolute", left: 14, top: "50%",
+              transform: "translateY(-50%)", color: "var(--text-muted)",
+              pointerEvents: "none", zIndex: 1,
+            }} />
+            <input type="text" placeholder="Buscar en todas las notas..."
+              value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+              className="input-base"
+              style={{
+                width: "100%", height: 44,
+                borderRadius: "var(--radius-lg)",
+                padding: "0 14px 0 42px",
+              }} />
+          </div>
+          <button onClick={handleCreateNote} title="Nueva nota"
+            className="btn-primary hover:shadow-[0_0_14px_var(--accent-glow)]"
+            style={{
+              width: 44, height: 44,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              border: "none", borderRadius: "var(--radius-md)",
+              cursor: "pointer", flexShrink: 0,
+              background: "var(--accent)", color: "#fff",
+              transition: "all 200ms " + EASE,
+            }}>
+            <Plus size={20} />
+          </button>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "center" }}>
+          {(["lista", "estante"] as const).map((v) => {
+            const Icon = v === "lista" ? AlignJustify : BookOpen;
+            const sel = viewMode === v;
+            return (
+              <button key={v} onClick={() => setViewMode(v)}
+                className={sel ? "btn-primary" : "btn-secondary"}
+                style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  padding: "8px 22px", borderRadius: "var(--radius-full)",
+                  border: "1px solid " + (sel ? "var(--accent)" : "var(--border-default)"),
+                  background: sel ? "var(--accent)" : "linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-base) 100%)",
+                  color: sel ? "#fff" : "var(--text-secondary)",
+                  cursor: "pointer", fontSize: 12, fontWeight: 600,
+                  fontFamily: "var(--font-primary)",
+                  transition: "all 250ms " + EASE,
+                  boxShadow: sel ? "0 2px 12px var(--accent-glow)" : "none",
+                }}>
+                <Icon size={16} />
+                {v === "lista" ? "Bloques" : "Estante"}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* ── MAIN GRID ── */}
-      <div className="flex flex-1 overflow-hidden font-sans">
-        
-        {/* ── SIDEBAR ── */}
-        <div className="w-[280px] border-r border-[var(--border-subtle)] bg-[var(--bg-surface)] flex flex-col shrink-0">
-          <div className="p-4 shrink-0">
-            <div className="relative">
-              <Search className="absolute left-3 top-2.5 text-[var(--text-tertiary)]" size={14} />
-              <input
-                type="text"
-                placeholder="Buscar apuntes..."
-                className="w-full pl-9 pr-4 py-2 bg-[var(--bg-deep)] border border-[var(--border-subtle)] rounded-lg text-xs outline-none text-white focus:border-[var(--accent)]"
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-              />
-            </div>
-          </div>
+      {/* ===== MAIN CONTENT ===== */}
+      <div style={{
+        display: "flex", flex: 1, minHeight: 0, gap: 0, overflow: "hidden",
+      }}>
+        {/* LEFT: LibrarySidebar */}
+        <LibrarySidebar folders={folders} notes={notes}
+          selectedFolderId={selectedFolderId} selectedTag={selectedTag}
+          onSelectFolder={setSelectedFolderId} onSelectTag={setSelectedTag}
+          onNewFolder={() => setShowNewFolderModal(true)} />
 
-          <div className="flex-grow overflow-y-auto notes-sidebar p-3 space-y-4">
-            
-            {/* General buttons */}
-            <div className="space-y-1">
-              <button
-                className={`notes-sidebar-item ${activeFolderId === 'all' ? 'active' : ''}`}
-                onClick={() => { setActiveFolderId('all'); setSelectedTag(null); }}
-              >
-                <div className="flex items-center gap-2">
-                  <FileText size={15} />
-                  <span>Todos los apuntes</span>
+        {/* CENTER */}
+        <div style={{
+          flex: 1, minWidth: 0, display: "flex", flexDirection: "column",
+          overflow: "hidden", paddingLeft: 20,
+        }}>
+          {activeView === "explorer" ? (
+            <>
+              <div style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                marginBottom: 12, flexShrink: 0,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{
+                    fontSize: 14, fontWeight: 600, color: "var(--text-primary)",
+                    fontFamily: "var(--font-heading)",
+                  }}>Todas las notas</span>
+                  <span style={{
+                    fontSize: 9, color: "var(--text-muted)",
+                    background: "var(--bg-hover)", padding: "1px 8px", borderRadius: 8,
+                    fontFamily: "var(--font-mono)", fontWeight: 600,
+                  }}>{filteredNotes.length}</span>
                 </div>
-                <span className="count-badge">{notes.length}</span>
-              </button>
-              <button
-                className={`notes-sidebar-item ${activeFolderId === 'pinned' ? 'active' : ''}`}
-                onClick={() => { setActiveFolderId('pinned'); setSelectedTag(null); }}
-              >
-                <div className="flex items-center gap-2">
-                  <Star size={15} />
-                  <span>Destacadas</span>
-                </div>
-                <span className="count-badge">{notes.filter(n => n.isPinned).length}</span>
-              </button>
-            </div>
+                <select value={sortMode} onChange={(e) => setSortMode(e.target.value as SortMode)}
+                  style={{
+                    background: "linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)",
+                    border: "1px solid var(--border-subtle)",
+                    borderRadius: "var(--radius-sm)", padding: "4px 10px",
+                    color: "var(--text-secondary)", fontSize: 11, fontWeight: 500,
+                    fontFamily: "var(--font-primary)", cursor: "pointer",
+                    outline: "none",
+                  }}>
+                  {Object.entries(sortLabels).map(([k, v]) => (
+                    <option key={k} value={k}>{v}</option>
+                  ))}
+                </select>
+              </div>
 
-            {/* Folder section */}
-            <div className="notes-sidebar-section">
-              <div className="notes-sidebar-section-title">
-                <span>Carpetas</span>
-                <button
-                  className="p-1 hover:bg-[var(--bg-hover)] rounded"
-                  onClick={() => setShowNewFolderModal(true)}
-                >
-                  <FolderPlus size={13} />
+              {/* Filter chips */}
+              <div style={{ marginBottom: 12, flexShrink: 0 }}>
+                <FilterBar folders={folders} notes={notes}
+                  selectedFolderId={selectedFolderId} selectedTag={selectedTag}
+                  onSelectFolder={setSelectedFolderId} onSelectTag={setSelectedTag} />
+              </div>
+
+              {viewMode === "lista" ? (
+                <div style={{
+                  flex: 1, overflow: "auto", display: "flex", flexDirection: "column", gap: 4,
+                  paddingRight: 4,
+                }}>
+                  {filteredNotes.length === 0 ? (
+                    <div style={{
+                      display: "flex", flexDirection: "column", alignItems: "center",
+                      justifyContent: "center", height: 200, gap: 8, color: "var(--text-muted)",
+                    }}>
+                      <FileText size={32} style={{ opacity: 0.3 }} />
+                      <span style={{ fontSize: 12 }}>
+                        {searchQuery ? "Sin resultados" : "No hay notas"}
+                      </span>
+                    </div>
+                  ) : (
+                    filteredNotes.map((note, i) => (
+                      <NoteCard key={note.id} note={note}
+                        isSelected={selectedNoteId === note.id}
+                        onSelect={() => handleSelectNote(note.id)}
+                        onOpen={() => { handleSelectNote(note.id); handleOpenNote(); }}
+                        onContextMenu={(e) => handleContextMenu(e, note.id)}
+                        onDragStart={(e) => handleDragStart(e, i)}
+                        onDragOver={handleDragOver}
+                        onDrop={(e) => handleDrop(e, i)}
+                        index={i} />
+                    ))
+                  )}
+                </div>
+              ) : (
+                <div style={{
+                  flex: 1, overflow: "auto", paddingRight: 4,
+                  position: "relative",
+                }}>
+                  {filteredNotes.length === 0 ? (
+                    <div style={{
+                      display: "flex", flexDirection: "column", alignItems: "center",
+                      justifyContent: "center", height: 200, gap: 8, color: "var(--text-muted)",
+                    }}>
+                      <FileText size={32} style={{ opacity: 0.3 }} />
+                      <span style={{ fontSize: 12 }}>
+                        {searchQuery ? "Sin resultados" : "No hay notas"}
+                      </span>
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{
+                        display: "flex", flexWrap: "wrap", gap: 16, justifyContent: "flex-start",
+                        alignItems: "flex-end", paddingBottom: 8, minHeight: 260,
+                      }}>
+                        {filteredNotes.slice(0, 25).map((note) => (
+                          <BookshelfBook key={note.id} note={note}
+                            isSelected={selectedNoteId === note.id}
+                            onSelect={() => handleSelectNote(note.id)}
+                            onDoubleClick={() => { handleSelectNote(note.id); handleOpenNote(); }}
+                            onContextMenu={(e) => handleContextMenu(e, note.id)}
+                            maxHeight={220}
+                            minHeight={110} />
+                        ))}
+                        {filteredNotes.length > 25 && (
+                          <div style={{
+                            width: "100%", textAlign: "center", padding: 12,
+                            fontSize: 11, color: "var(--text-muted)",
+                          }}>+{filteredNotes.length - 25} m\u00e1s</div>
+                        )}
+                      </div>
+                      <div style={{
+                        position: "sticky", bottom: 0, left: 0, right: 0,
+                        height: 14,
+                        background: "linear-gradient(180deg, #3a2a1a 0%, #2a1a0a 50%, #1a0a00 100%)",
+                        borderRadius: "4px 4px 0 0",
+                        boxShadow: "0 -2px 10px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)",
+                        marginTop: -6,
+                        display: "flex", alignItems: "center",
+                      }}>
+                        <div style={{
+                          width: "100%", height: 2,
+                          background: "linear-gradient(90deg, transparent 2%, rgba(255,255,255,0.06) 50%, transparent 98%)",
+                        }} />
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </>
+          ) : selectedNote ? (
+            /* ===== EDITOR ===== */
+            <div style={{ display: "flex", flexDirection: "column", height: "100%", gap: 0 }}>
+              {/* Back button */}
+              <div style={{ marginBottom: 12, flexShrink: 0 }}>
+                <button onClick={() => setActiveView("explorer")}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 6,
+                    background: "none", border: "none", color: "var(--text-secondary)",
+                    cursor: "pointer", fontSize: 12, fontFamily: "var(--font-primary)",
+                    padding: "4px 0", transition: "all 200ms " + EASE,
+                  }}
+                  className="hover:text-[var(--text-primary)]">
+                  <ArrowLeft size={16} />
+                  Volver
                 </button>
               </div>
 
-              <div className="space-y-1 mt-1">
-                {allFolders.map(folder => {
-                  const isCourse = !!folder.courseId;
-                  const count = notes.filter(n => isCourse ? n.course === folder.name : n.folderId === folder.id).length;
-                  return (
-                    <button
-                      key={folder.id}
-                      className={`notes-sidebar-item ${activeFolderId === folder.id ? 'active' : ''}`}
-                      onClick={() => { setActiveFolderId(folder.id); setSelectedTag(null); }}
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <FolderIcon size={14} style={{ color: folder.color }} className="shrink-0" />
-                        <span className="truncate">{folder.name}</span>
-                        {isCourse && (
-                          <span className="text-[8px] bg-[var(--bg-deep)] text-[var(--text-tertiary)] px-1 py-0.5 rounded leading-none shrink-0 font-semibold uppercase">
-                            Curso
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span className="count-badge">{count}</span>
-                        {folder.isManual && (
-                          <Trash2
-                            size={12}
-                            className="text-red-500 hover:text-red-400 ml-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              deleteNoteFolder(folder.id);
-                              if (activeFolderId === folder.id) setActiveFolderId('all');
-                            }}
-                          />
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+              <EditorToolbar onFormat={handleFormat} />
 
-            {/* Tag section */}
-            <div className="notes-sidebar-section">
-              <div className="notes-sidebar-section-title">
-                <span>Etiquetas</span>
-                {selectedTag && (
-                  <button
-                    className="text-[9px] text-[var(--accent)] font-semibold lowercase tracking-normal"
-                    onClick={() => setSelectedTag(null)}
-                  >
-                    Limpiar
-                  </button>
-                )}
-              </div>
-
-              <div className="flex flex-wrap gap-1.5 mt-2">
-                {allTags.map(({ name, count }) => {
-                  const isEditing = editingTag === name;
-                  const isConfirming = tagToDelete === name;
-
-                  return (
-                    <div
-                      key={name}
-                      className={`tag-chip ${selectedTag === name ? 'active' : ''} group flex items-center gap-1`}
-                      onClick={() => !isEditing && setSelectedTag(name === selectedTag ? null : name)}
-                    >
-                      {isEditing ? (
-                        <input
-                          type="text"
-                          className="bg-transparent text-white border-0 outline-none w-16 text-[10px]"
-                          defaultValue={name}
-                          autoFocus
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleRenameTagGlobal(name, e.currentTarget.value);
-                            if (e.key === 'Escape') setEditingTag(null);
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      ) : isConfirming ? (
-                        <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
-                          <span className="text-[9px]">¿Borrar?</span>
-                          <button onClick={() => handleDeleteTagGlobal(name)} className="hover:text-green-400 font-bold">Sí</button>
-                          <button onClick={() => setTagToDelete(null)} className="hover:text-red-400 font-bold">No</button>
-                        </div>
-                      ) : (
-                        <>
-                          <span>#{name}</span>
-                          <span className="text-[9px] opacity-60">({count})</span>
-                          <div className="hidden group-hover:flex items-center gap-0.5 ml-1" onClick={e => e.stopPropagation()}>
-                            <button
-                              className="hover:text-white"
-                              onClick={() => {
-                                setEditingTag(name);
-                                setEditingTagValue(name);
-                              }}
-                            >
-                              <Edit3 size={9} />
-                            </button>
-                            <button
-                              className="hover:text-white"
-                              onClick={() => setTagToDelete(name)}
-                            >
-                              <Trash2 size={9} />
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
-                {allTags.length === 0 && (
-                  <span className="text-[10px] text-[var(--text-muted)] italic">Sin etiquetas</span>
-                )}
-              </div>
-            </div>
-
-          </div>
-        </div>
-
-        {/* ── NOTES LIST OR EDITOR AREA ── */}
-        <div className="flex-1 flex overflow-hidden relative">
-          
-          {selectedNoteId ? (
-            // ── EDITOR VIEW ──
-            <div className="flex-grow flex flex-col h-full bg-[var(--bg-deep)] relative overflow-hidden">
-              
-              {/* Editor Header */}
-              <div className="px-6 py-3 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] flex justify-between items-center shrink-0">
-                <div className="flex items-center gap-3">
-                  <button
-                    className="p-1.5 hover:bg-[var(--bg-hover)] rounded-lg text-[var(--text-secondary)]"
-                    onClick={() => setSelectedNoteId(null)}
-                  >
-                    <ArrowLeft size={16} />
-                  </button>
-                  <div className="flex flex-col">
-                    <input
-                      ref={titleInputRef}
-                      type="text"
-                      className="bg-transparent font-bold text-sm text-white outline-none border-b border-transparent focus:border-[var(--accent)] w-[260px]"
-                      placeholder="Título"
-                      defaultValue={selectedNote?.title}
-                      onChange={triggerAutoSave}
-                    />
-                    <input
-                      ref={subtitleInputRef}
-                      type="text"
-                      className="bg-transparent text-[11px] text-[var(--text-secondary)] mt-0.5 outline-none border-b border-transparent focus:border-[var(--accent)] w-[260px] italic"
-                      placeholder="Añadir subtítulo..."
-                      defaultValue={selectedNote?.subtitle}
-                      onChange={triggerAutoSave}
-                    />
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {/* Saved Status */}
-                  <span className="text-[10px] text-[var(--text-muted)] select-none mr-2">
-                    {isSaved ? 'Guardado ✅' : 'Autoguardando...'}
-                  </span>
-
-                  <button
-                    className={`p-2 rounded-lg border border-[var(--border-subtle)] ${
-                      selectedNote?.isPinned
-                        ? 'bg-[var(--accent-soft)] text-[var(--accent)]'
-                        : 'bg-transparent text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'
-                    }`}
-                    onClick={() => {
-                      if (selectedNote) updateNote(selectedNote.id, { isPinned: !selectedNote.isPinned });
+              <div style={{ flex: 1, display: "flex", gap: 20, overflow: "hidden", marginTop: 12 }}>
+                {/* Editor area */}
+                <div style={{
+                  flex: 1, minWidth: 0, display: "flex", flexDirection: "column",
+                  overflow: "hidden", paddingRight: 4,
+                }}>
+                  <div
+                    ref={titleRef}
+                    contentEditable
+                    suppressContentEditableWarning
+                    style={{
+                      fontSize: 28, fontWeight: 700, color: "var(--text-primary)",
+                      fontFamily: "'Outfit', sans-serif",
+                      letterSpacing: "-0.02em", lineHeight: 1.2,
+                      padding: "0 0 4px", outline: "none", marginBottom: 4,
+                      caretColor: "var(--accent)",
                     }}
-                  >
-                    <Pin size={14} fill={selectedNote?.isPinned ? 'var(--accent)' : 'none'} />
-                  </button>
-
-                  {/* Download Selector */}
-                  <div className="relative">
-                    <button
-                      className="p-2 bg-transparent text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] border border-[var(--border-subtle)] rounded-lg flex items-center gap-1"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowDownloadMenu(prev => !prev);
-                      }}
-                    >
-                      <Download size={14} />
-                      <ChevronDown size={12} />
-                    </button>
-                    {showDownloadMenu && (
-                      <div className="absolute right-0 mt-2 bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-xl shadow-xl py-1 w-48 z-50">
-                        <button
-                          className="w-full text-left px-4 py-2 hover:bg-[var(--bg-hover)] text-xs text-white flex items-center gap-2 border-none"
-                          onClick={() => downloadNote('txt')}
-                        >
-                          <FileText size={13} className="text-blue-400" /> Descargar (.txt)
-                        </button>
-                        <button
-                          className="w-full text-left px-4 py-2 hover:bg-[var(--bg-hover)] text-xs text-white flex items-center gap-2 border-none"
-                          onClick={() => downloadNote('html')}
-                        >
-                          <Code size={13} className="text-red-400" /> Descargar (.html)
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  <button
-                    className="p-2 bg-transparent text-red-500 hover:bg-red-500/10 border border-red-500/20 rounded-lg"
-                    onClick={() => selectedNote && setShowDeleteConfirm(selectedNote.id)}
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Metadata & Tags bar */}
-              <div className="px-6 py-2 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]/50 flex items-center justify-between gap-4 shrink-0 overflow-x-auto no-scrollbar">
-                <div className="flex items-center gap-3">
-                  {/* Folder Selector */}
-                  <div className="flex items-center gap-1.5 text-xs">
-                    <FolderIcon size={13} className="text-[var(--text-secondary)]" />
-                    <select
-                      className="bg-transparent border-0 outline-none text-white font-semibold cursor-pointer text-xs"
-                      value={selectedNote?.folderId || ''}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        updateNote(selectedNoteId, { folderId: val || undefined });
-                        toast.success('Carpeta actualizada');
-                      }}
-                    >
-                      <option value="" className="bg-[var(--bg-surface)] text-white">Sin carpeta</option>
-                      {allFolders.filter(f => f.isManual).map(f => (
-                        <option key={f.id} value={f.id} className="bg-[var(--bg-surface)] text-white">{f.name}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Course Indicator */}
-                  {selectedNote?.course && (
-                    <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-[var(--bg-deep)] border border-[var(--border-subtle)] text-[10px] text-white">
-                      <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: selectedNote.courseColor }} />
-                      <span>{selectedNote.course}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Edit Tags of selected note */}
-                <form onSubmit={handleCreateTag} className="flex items-center gap-2 shrink-0">
-                  <div className="flex items-center gap-1">
-                    {selectedNote?.tags?.map(t => (
-                      <span
-                        key={t}
-                        className="px-2 py-0.5 rounded-full bg-[var(--accent-dim)] text-[var(--accent)] text-[9px] font-semibold flex items-center gap-1"
-                      >
-                        #{t}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const next = selectedNote.tags?.filter(tag => tag !== t) || [];
-                            updateNote(selectedNote.id, { tags: next });
-                          }}
-                          className="hover:text-white border-none bg-transparent p-0 cursor-pointer"
-                        >
-                          <X size={8} />
+                    dangerouslySetInnerHTML={{ __html: selectedNote.title }}
+                  />
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 6, flexShrink: 0 }}>
+                    {selectedNote.tags?.map((tag) => (
+                      <span key={tag} style={{
+                        display: "flex", alignItems: "center", gap: 4, fontSize: 10,
+                        color: "var(--text-secondary)", background: "var(--bg-hover)",
+                        padding: "2px 8px", borderRadius: 8,
+                      }}>
+                        {tag}
+                        <button onClick={() => updateNote(selectedNote.id, { tags: (selectedNote.tags || []).filter((t) => t !== tag) })}
+                          style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", padding: 0, display: "flex" }}>
+                          <X size={9} />
                         </button>
                       </span>
                     ))}
-                  </div>
-                  <input
-                    type="text"
-                    placeholder="+ etiqueta..."
-                    className="bg-transparent border border-dashed border-[var(--border-subtle)] rounded-full px-2 py-0.5 text-[9px] text-white outline-none w-16 focus:w-24 focus:border-[var(--accent)] transition-all"
-                    value={newTagInput}
-                    onChange={e => setNewTagInput(e.target.value)}
-                  />
-                </form>
-              </div>
-
-              {/* Rich Text Format Toolbar */}
-              <div className="px-6 py-2 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]/90 flex items-center gap-1 shrink-0 overflow-x-auto no-scrollbar">
-                
-                {/* Format buttons */}
-                <button className="editor-toolbar-btn border-none" onClick={() => applyFormat('bold')} data-tooltip="Negrita"><Bold size={14} /></button>
-                <button className="editor-toolbar-btn border-none" onClick={() => applyFormat('italic')} data-tooltip="Cursiva"><Italic size={14} /></button>
-                <button className="editor-toolbar-btn border-none" onClick={() => applyFormat('underline')} data-tooltip="Subrayado"><Underline size={14} /></button>
-                
-                <div className="editor-toolbar-divider" />
-                
-                <button className="editor-toolbar-btn border-none text-xs font-bold" onClick={() => applyFormat('formatBlock', '<h1>')} data-tooltip="Título 1">H1</button>
-                <button className="editor-toolbar-btn border-none text-xs font-bold" onClick={() => applyFormat('formatBlock', '<h2>')} data-tooltip="Título 2">H2</button>
-                <button className="editor-toolbar-btn border-none text-xs font-bold" onClick={() => applyFormat('formatBlock', '<h3>')} data-tooltip="Título 3">H3</button>
-
-                <div className="editor-toolbar-divider" />
-
-                <button className="editor-toolbar-btn border-none" onClick={() => applyFormat('insertUnorderedList')} data-tooltip="Lista Viñetas"><List size={14} /></button>
-                <button className="editor-toolbar-btn border-none" onClick={() => applyFormat('insertOrderedList')} data-tooltip="Lista Numérica"><span className="text-[10px] font-bold">1.</span></button>
-                
-                <div className="editor-toolbar-divider" />
-
-                <button
-                  className="editor-toolbar-btn border-none"
-                  onClick={() => {
-                    const code = prompt('Ingresa bloque de código:');
-                    if (code) applyFormat('insertHTML', `<pre><code>${code}</code></pre>`);
-                  }}
-                  data-tooltip="Código"
-                >
-                  <Code size={14} />
-                </button>
-                <button
-                  className="editor-toolbar-btn border-none"
-                  onClick={() => {
-                    const quote = prompt('Ingresa cita:');
-                    if (quote) applyFormat('insertHTML', `<blockquote>${quote}</blockquote>`);
-                  }}
-                  data-tooltip="Cita"
-                >
-                  <Type size={14} />
-                </button>
-                <button
-                  className="editor-toolbar-btn border-none"
-                  onClick={() => {
-                    const text = prompt('Mensaje del Callout:');
-                    if (text) applyFormat('insertHTML', `<div class="note-callout note-callout-info"><div>ℹ️</div><div>${text}</div></div>`);
-                  }}
-                  data-tooltip="Callout"
-                >
-                  <Info size={14} />
-                </button>
-
-                <div className="editor-toolbar-divider" />
-
-                <button
-                  className="editor-toolbar-btn border-none"
-                  onClick={() => {
-                    const url = prompt('URL de la imagen:');
-                    if (url) applyFormat('insertImage', url);
-                  }}
-                  data-tooltip="Insertar Imagen"
-                >
-                  <ImageIcon size={14} />
-                </button>
-                
-                <button
-                  className="editor-toolbar-btn border-none"
-                  onClick={() => {
-                    const url = prompt('URL del enlace:');
-                    if (url) {
-                      const sel = window.getSelection();
-                      if (sel && sel.toString()) {
-                        applyFormat('createLink', url);
-                      } else {
-                        applyFormat('insertHTML', `<a href="${url}" target="_blank" rel="noopener">${url}</a>`);
-                      }
-                    }
-                  }}
-                  data-tooltip="Insertar Enlace"
-                >
-                  <Link size={14} />
-                </button>
-
-                {/* File Attachment Input Trigger */}
-                <div className="relative">
-                  <label className="editor-toolbar-btn cursor-pointer" data-tooltip="Adjuntar archivo">
-                    <Paperclip size={14} />
-                    <input
-                      type="file"
-                      className="hidden"
-                      onChange={handleFileAttachmentUpload}
-                    />
-                  </label>
-                </div>
-
-                <div className="editor-toolbar-divider" />
-
-                {/* Dynamic Block Tools triggers */}
-                <button
-                  className={`editor-toolbar-btn border-none ${showWhiteboard ? 'active' : ''} flex items-center gap-1`}
-                  onClick={() => {
-                    setShowWhiteboard(!showWhiteboard);
-                    setShowCalculator(false);
-                    setShowFormulaEditor(false);
-                  }}
-                  data-tooltip="Pizarra / Whiteboard"
-                >
-                  <PenTool size={14} />
-                  <span className="text-[10px] font-bold">Dibujar</span>
-                </button>
-
-                <button
-                  className={`editor-toolbar-btn border-none ${showCalculator ? 'active' : ''} flex items-center gap-1`}
-                  onClick={() => {
-                    setShowCalculator(!showCalculator);
-                    setShowWhiteboard(false);
-                    setShowFormulaEditor(false);
-                  }}
-                  data-tooltip="Calculadora"
-                >
-                  <Calculator size={14} />
-                  <span className="text-[10px] font-bold">Calc</span>
-                </button>
-
-                <button
-                  className={`editor-toolbar-btn border-none ${showFormulaEditor ? 'active' : ''} flex items-center gap-1`}
-                  onClick={() => {
-                    setShowFormulaEditor(!showFormulaEditor);
-                    setShowCalculator(false);
-                    setShowWhiteboard(false);
-                  }}
-                  data-tooltip="Editor Fórmulas"
-                >
-                  <Sigma size={14} />
-                  <span className="text-[10px] font-bold">Fórmula</span>
-                </button>
-              </div>
-
-              {/* Main Content Editable Area */}
-              <div className="flex-grow overflow-y-auto p-8 relative bg-[#0B0C0E]/50">
-                
-                {/* Floating formatting Popup */}
-                {formatPopup.show && (
-                  <div
-                    className="format-popup"
-                    style={{ left: formatPopup.x, top: formatPopup.y }}
-                    onClick={e => e.stopPropagation()}
-                  >
-                    <button onClick={() => applyFormat('bold')} className="p-1 hover:bg-[var(--bg-hover)] text-white rounded border-none bg-transparent"><Bold size={11} /></button>
-                    <button onClick={() => applyFormat('italic')} className="p-1 hover:bg-[var(--bg-hover)] text-white rounded border-none bg-transparent"><Italic size={11} /></button>
-                    <button onClick={() => applyFormat('underline')} className="p-1 hover:bg-[var(--bg-hover)] text-white rounded border-none bg-transparent"><Underline size={11} /></button>
-                    <button
-                      onClick={() => {
-                        const url = prompt('URL del enlace:');
-                        if (url) applyFormat('createLink', url);
-                      }}
-                      className="p-1 hover:bg-[var(--bg-hover)] text-white rounded border-none bg-transparent"
-                    >
-                      <Link size={11} />
+                    <button onClick={() => {
+                      const t = prompt("Nueva etiqueta:");
+                      if (t && t.trim()) updateNote(selectedNote.id, { tags: [...(selectedNote.tags || []), t.trim()] });
+                    }}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 2,
+                        background: "none", border: "1px dashed var(--border-default)",
+                        borderRadius: 8, padding: "2px 8px", color: "var(--text-muted)",
+                        cursor: "pointer", fontSize: 10, fontFamily: "var(--font-primary)",
+                      }}>
+                      <Plus size={10} /> A\u00f1adir
                     </button>
                   </div>
-                )}
-
-                <div
-                  ref={editorRef}
-                  contentEditable
-                  className="notes-editor-area"
-                  onInput={() => {
-                    triggerAutoSave();
-                    updateEditorStats();
-                  }}
-                  onMouseUp={handleSelectionChange}
-                  onKeyUp={handleSelectionChange}
-                />
-              </div>
-
-              {/* Editor Footer Stats */}
-              <div className="px-6 py-2 border-t border-[var(--border-subtle)] bg-[var(--bg-surface)] flex justify-between text-[10px] text-[var(--text-tertiary)] shrink-0">
-                <div className="flex items-center gap-4">
-                  <span>Palabras: <b className="text-white">{editorWordCount}</b></span>
-                  <span>Caracteres: <b className="text-white">{editorCharCount}</b></span>
+                  <div style={{
+                    display: "flex", alignItems: "center", gap: 12,
+                    fontSize: 10, color: "var(--text-muted)", marginBottom: 8, flexShrink: 0,
+                  }}>
+                    <span>Creado {format(new Date(selectedNote.createdAt), "d MMM yy", { locale: es })}</span>
+                    <span>Modificado {formatTimeAgo(selectedNote.updatedAt)}</span>
+                    <div style={{ flex: 1 }} />
+                    <span style={{
+                      display: "flex", alignItems: "center", gap: 4,
+                      color: saveStatus === "saved" ? "var(--success)" :
+                             saveStatus === "saving" ? "var(--warning)" : "var(--text-muted)",
+                      transition: "color 300ms " + EASE,
+                    }}>
+                      {saveStatus === "saved" ? <Check size={11} /> : <RefreshCw size={11} />}
+                      {saveStatus === "saved" ? "Guardado" : saveStatus === "saving" ? "Guardando..." : "Pendiente"}
+                    </span>
+                  </div>
+                  <div
+                    ref={editorRef}
+                    contentEditable
+                    suppressContentEditableWarning
+                    dangerouslySetInnerHTML={{ __html: editorContent }}
+                    className="notes-editor-area"
+                    style={{
+                      flex: 1, overflow: "auto", outline: "none",
+                      maxWidth: 920, width: "100%",
+                      padding: "0 20px 40px",
+                      fontSize: 16, lineHeight: 1.8,
+                      color: "var(--text-primary)",
+                      fontFamily: "var(--font-primary)",
+                      caretColor: "var(--accent)",
+                    }}
+                    onKeyDown={(e) => {
+                      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+                        e.preventDefault(); handleSaveNote();
+                      }
+                    }}
+                    onInput={handleEditorInput}
+                  />
+                  <div style={{
+                    flexShrink: 0, display: "flex", alignItems: "center", gap: 16,
+                    padding: "6px 0", borderTop: "1px solid var(--border-subtle)",
+                    fontSize: 10, color: "var(--text-muted)",
+                  }}>
+                    <span>{getWordCount(selectedNote.content)} palabras</span>
+                    <span>{getCharCount(selectedNote.content)} caracteres</span>
+                    <span>{getReadTime(selectedNote.content)} min lectura</span>
+                  </div>
                 </div>
-                <span>Tiempo de lectura: <b className="text-white">{editorReadingTime} min</b></span>
-              </div>
 
-            </div>
-          ) : (
-            // ── NOTES LIST VIEW ──
-            <div className="flex-grow flex flex-col h-full bg-[#0B0C0E]/30 relative overflow-hidden">
-              
-              {/* Toolbar */}
-              <div className="px-6 py-4 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]/40 flex justify-between items-center shrink-0">
-                <div className="flex items-center gap-2.5">
-                  <h3 className="font-bold text-sm text-white">{activeFolderName}</h3>
-                  <span className="px-2 py-0.5 rounded-full bg-[var(--bg-deep)] text-[10px] font-semibold text-[var(--text-secondary)] border border-[var(--border-subtle)]">
-                    {filteredNotes.length} notas
-                  </span>
-                </div>
-
-                <button
-                  className="btn-primary flex items-center gap-1 text-xs py-1.5 px-3 cursor-pointer"
-                  onClick={handleCreateNote}
-                >
-                  <Plus size={14} /> Nueva nota
-                </button>
-              </div>
-
-              {/* Notes grid */}
-              <div className="flex-grow overflow-y-auto p-6">
-                {filteredNotes.length > 0 ? (
-                  <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                    <SortableContext items={filteredNotes} strategy={verticalListSortingStrategy}>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {filteredNotes.map(note => (
-                          <SortableNoteCard
-                            key={note.id}
-                            note={note}
-                            isSelected={selectedNoteId === note.id}
-                            onClick={() => setSelectedNoteId(note.id)}
-                            onContextMenu={handleContextMenu}
-                          />
-                        ))}
+                {/* RIGHT: Editor info panel */}
+                {selectedNote && (
+                  <div style={{
+                    width: 340, minWidth: 340, flexShrink: 0, display: "flex", flexDirection: "column",
+                    overflow: "auto",
+                    borderLeft: "1px solid var(--border-subtle)", paddingLeft: 20, marginLeft: 0,
+                  }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                      <div>
+                        <div style={{
+                          fontSize: 9, fontWeight: 700, color: "var(--text-tertiary)",
+                          textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10,
+                        }}>Informaci\u00f3n</div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                          {[
+                            { label: "Carpeta", value: folders.find((f) => f.id === selectedNote.folderId)?.name || "\u2014" },
+                            { label: "Curso", value: selectedNote.course || "\u2014" },
+                            { label: "Creado", value: format(new Date(selectedNote.createdAt), "d MMM yy", { locale: es }) },
+                            { label: "Modificado", value: formatTimeAgo(selectedNote.updatedAt) },
+                            { label: "Palabras", value: getWordCount(selectedNote.content) },
+                          ].map((s) => (
+                            <div key={s.label} style={{
+                              display: "flex", justifyContent: "space-between",
+                              fontSize: 11, color: "var(--text-secondary)",
+                              padding: "4px 0", borderBottom: "1px solid var(--border-soft)",
+                            }}>
+                              <span style={{ color: "var(--text-tertiary)" }}>{s.label}</span>
+                              <span>{s.value}</span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    </SortableContext>
-                  </DndContext>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-20 text-[var(--text-muted)] select-none">
-                    <FileText size={48} className="text-[var(--text-tertiary)] opacity-30 mb-3" />
-                    <p className="text-sm font-medium">No se encontraron apuntes</p>
-                    <p className="text-xs text-[var(--text-tertiary)] mt-1">Intenta cambiar de carpeta, filtro, o crea una nueva nota.</p>
+
+                      <div>
+                        <div style={{
+                          fontSize: 9, fontWeight: 700, color: "var(--text-tertiary)",
+                          textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8,
+                        }}>Etiquetas</div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                          {selectedNote.tags && selectedNote.tags.length > 0 ? selectedNote.tags.map((tag) => (
+                            <span key={tag} style={{
+                              display: "flex", alignItems: "center", gap: 4, fontSize: 10,
+                              color: "var(--text-secondary)", background: "var(--bg-hover)",
+                              padding: "3px 8px", borderRadius: 8,
+                            }}>
+                              <div style={{ width: 5, height: 5, borderRadius: "50%", background: TAG_COLORS[tag] || "var(--accent)" }} />
+                              {tag}
+                            </span>
+                          )) : (
+                            <span style={{ fontSize: 10, color: "var(--text-muted)" }}>Sin etiquetas</span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div style={{
+                          fontSize: 9, fontWeight: 700, color: "var(--text-tertiary)",
+                          textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8,
+                        }}>Relacionados</div>
+                        {(() => {
+                          const related = notes.filter((n) =>
+                            n.id !== selectedNote.id &&
+                            (n.folderId === selectedNote.folderId ||
+                             n.tags?.some((t) => selectedNote.tags?.includes(t)))
+                          ).slice(0, 4);
+                          if (related.length === 0) return (
+                            <span style={{ fontSize: 10, color: "var(--text-muted)" }}>Sin notas relacionadas</span>
+                          );
+                          return (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                              {related.map((r) => (
+                                <button key={r.id}
+                                  onClick={() => { handleSelectNote(r.id); setActiveView("editor"); }}
+                                  style={{
+                                    display: "flex", alignItems: "center", gap: 8, width: "100%",
+                                    padding: "7px 10px",
+                                    background: "linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)",
+                                    border: "1px solid var(--border-subtle)",
+                                    borderRadius: "var(--radius-sm)", cursor: "pointer",
+                                    textAlign: "left", fontSize: 11, color: "var(--text-secondary)",
+                                    fontFamily: "var(--font-primary)",
+                                    transition: "all 200ms " + EASE,
+                                  }}
+                                  className="hover:border-[var(--border-default)]">
+                                  <FileText size={12} style={{ color: getSpineColor(r.id), flexShrink: 0 }} />
+                                  <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.title}</span>
+                                  <span style={{ fontSize: 9, color: "var(--text-muted)", flexShrink: 0 }}>
+                                    {(r.course || "").slice(0, 8)}
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          );
+                        })()}
+                      </div>
+
+                      <div style={{ marginTop: "auto", paddingTop: 12, borderTop: "1px solid var(--border-subtle)" }}>
+                        <div style={{
+                          fontSize: 9, fontWeight: 700, color: "var(--text-tertiary)",
+                          textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8,
+                        }}>Acceso r\u00e1pido</div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                          {[
+                            { label: "Exportar PDF", icon: FileOutput, action: () => toast.success("Exportado") },
+                            { label: "Duplicar", icon: Copy, action: handleDuplicate },
+                            { label: "Editor emergente", icon: Edit3, action: () => setShowPopupEditor(true) },
+                          ].map((a) => {
+                            const Icon = a.icon;
+                            return (
+                              <button key={a.label} onClick={a.action}
+                                style={{
+                                  display: "flex", alignItems: "center", gap: 8, width: "100%",
+                                  padding: "6px 8px", background: "none", border: "none",
+                                  borderRadius: "var(--radius-sm)", color: "var(--text-secondary)",
+                                  cursor: "pointer", fontSize: 11, fontFamily: "var(--font-primary)",
+                                  textAlign: "left", transition: "all 150ms " + EASE,
+                                }}
+                                className="hover:bg-[var(--bg-hover)]">
+                                <Icon size={13} style={{ color: "var(--text-muted)" }} />
+                                {a.label}
+                              </button>
+                            );
+                          })}
+                          <div style={{ height: 1, background: "var(--border-subtle)", margin: "4px 0" }} />
+                          <button onClick={() => setShowDeleteConfirm(true)}
+                            style={{
+                              display: "flex", alignItems: "center", gap: 8, width: "100%",
+                              padding: "6px 8px", background: "none", border: "none",
+                              borderRadius: "var(--radius-sm)", color: "var(--error)",
+                              cursor: "pointer", fontSize: 11, fontFamily: "var(--font-primary)",
+                              textAlign: "left", transition: "all 150ms " + EASE,
+                            }}
+                            className="hover:bg-[var(--error-dim)]">
+                            <Trash2 size={13} />
+                            Eliminar
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
-
             </div>
-          )}
-
-          {/* ── FLOATING TOOL: SCIENTIFIC CALCULATOR ── */}
-          {showCalculator && (
-            <div className="tool-panel right-6 bottom-16 bg-[#0c0c10] shadow-2xl rounded-2xl border border-[var(--border-subtle)] p-4 w-[340px] flex flex-col gap-3">
-              <div className="flex justify-between items-center">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-1.5">
-                  <Calculator size={13} className="text-[var(--accent)]" /> Calculadora Científica
-                </h4>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setIsDeg(!isDeg)}
-                    className="px-1.5 py-0.5 rounded bg-[var(--bg-deep)] text-[9px] font-bold text-white hover:bg-[var(--bg-hover)] border-none cursor-pointer"
-                  >
-                    {isDeg ? 'DEG' : 'RAD'}
-                  </button>
-                  <button onClick={() => setShowCalculator(false)} className="text-white hover:text-red-400 border-none bg-transparent cursor-pointer"><X size={14} /></button>
-                </div>
-              </div>
-
-              {/* Display */}
-              <div className="bg-[#050508] border border-white/[0.02] rounded-lg p-3 text-right">
-                <p className="font-mono text-[10px] text-[var(--text-tertiary)] break-all min-h-[14px]">{calcExpr || '0'}</p>
-                <h3 className="font-mono text-2xl font-semibold text-white break-all">{calcRes}</h3>
-              </div>
-
-              {/* Grid buttons */}
-              <div className="grid grid-cols-4 gap-1.5 text-xs">
-                {/* Memory row */}
-                {['MC', 'MR', 'M+', 'M-'].map(btn => (
-                  <button key={btn} onClick={() => toast.success('Memoria guardada')} className="calc-btn calc-btn-mem py-2 border-none">{btn}</button>
-                ))}
-
-                {/* Trigonometry and functions */}
-                {['sin(', 'cos(', 'tan(', 'π'].map(btn => (
-                  <button key={btn} onClick={() => handleCalcPress(btn)} className="calc-btn calc-btn-fn py-2 border-none">{btn === 'π' ? 'π' : btn.slice(0, 3)}</button>
-                ))}
-
-                {['√(', 'x²', '^', 'log('].map(btn => {
-                  let lbl = btn;
-                  if (btn === '√(') lbl = '√';
-                  if (btn === 'x²') lbl = 'x²';
-                  if (btn === '^') lbl = 'xʸ';
-                  if (btn === 'log(') lbl = 'log';
-                  return (
-                    <button key={btn} onClick={() => handleCalcPress(btn === 'x²' ? '^2' : btn)} className="calc-btn calc-btn-fn py-2 border-none">{lbl}</button>
-                  );
-                })}
-
-                {/* Arithmetic operators & numbers */}
-                {['(', ')', '%', '÷'].map(btn => (
-                  <button key={btn} onClick={() => handleCalcPress(btn)} className="calc-btn calc-btn-op py-2 border-none">{btn}</button>
-                ))}
-
-                {['7', '8', '9', '×'].map(btn => (
-                  <button key={btn} onClick={() => handleCalcPress(btn === '×' ? '*' : btn)} className={`calc-btn py-2 border-none ${btn === '×' ? 'calc-btn-op' : 'calc-btn-num'}`}>{btn}</button>
-                ))}
-
-                {['4', '5', '6', '-'].map(btn => (
-                  <button key={btn} onClick={() => handleCalcPress(btn)} className={`calc-btn py-2 border-none ${btn === '-' ? 'calc-btn-op' : 'calc-btn-num'}`}>{btn}</button>
-                ))}
-
-                {['1', '2', '3', '+'].map(btn => (
-                  <button key={btn} onClick={() => handleCalcPress(btn)} className={`calc-btn py-2 border-none ${btn === '+' ? 'calc-btn-op' : 'calc-btn-num'}`}>{btn}</button>
-                ))}
-
-                <button onClick={() => handleCalcPress('C')} className="calc-btn calc-btn-clear py-2 border-none">C</button>
-                <button onClick={() => handleCalcPress('0')} className="calc-btn calc-btn-num py-2 border-none">0</button>
-                <button onClick={() => handleCalcPress('.')} className="calc-btn calc-btn-num py-2 border-none">.</button>
-                <button onClick={() => handleCalcPress('=')} className="calc-btn calc-btn-eq py-2 border-none">=</button>
-              </div>
-
-              <button
-                className="w-full btn-primary text-xs py-1.5 mt-1 border-none cursor-pointer"
-                onClick={insertCalcResult}
-              >
-                Insertar resultado en nota
-              </button>
-            </div>
-          )}
-
-          {/* ── FLOATING TOOL: WHITEBOARD ── */}
-          {showWhiteboard && (
-            <div className="tool-panel right-6 bottom-16 bg-[#0c0c10] shadow-2xl rounded-2xl border border-[var(--border-subtle)] p-4 flex flex-col gap-3 z-50">
-              <div className="flex justify-between items-center">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-1.5">
-                  <PenTool size={13} className="text-[var(--accent)]" /> Pizarra de Dibujo
-                </h4>
-                <button onClick={() => setShowWhiteboard(false)} className="text-white hover:text-red-400 border-none bg-transparent cursor-pointer"><X size={14} /></button>
-              </div>
-
-              {/* Canvas toolbar */}
-              <div className="flex items-center justify-between gap-4 bg-[var(--bg-deep)] p-2 rounded-lg border border-[var(--border-subtle)]">
-                <div className="flex gap-2">
-                  <button
-                    className={`p-1.5 rounded text-xs font-semibold border-none cursor-pointer ${wbTool === 'pen' ? 'bg-[var(--accent-soft)] text-[var(--accent)]' : 'text-white bg-transparent'}`}
-                    onClick={() => setWbTool('pen')}
-                  >
-                    Lápiz
-                  </button>
-                  <button
-                    className={`p-1.5 rounded text-xs font-semibold border-none cursor-pointer ${wbTool === 'eraser' ? 'bg-[var(--accent-soft)] text-[var(--accent)]' : 'text-white bg-transparent'}`}
-                    onClick={() => setWbTool('eraser')}
-                  >
-                    Borrador
-                  </button>
-                </div>
-
-                {/* Brush size slider */}
-                <div className="flex items-center gap-2 text-[10px]">
-                  <span>Pincel:</span>
-                  <input
-                    type="range"
-                    min="1"
-                    max="20"
-                    className="w-16 h-1 rounded-lg bg-[var(--bg-surface)] accent-[var(--accent)] cursor-pointer"
-                    value={wbBrushSize}
-                    onChange={e => setWbBrushSize(Number(e.target.value))}
-                  />
-                  <span>{wbBrushSize}px</span>
-                </div>
-
-                {/* Clear canvas */}
-                <button
-                  onClick={initWhiteboard}
-                  className="px-2 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded text-[10px] font-semibold border-none cursor-pointer"
-                >
-                  Limpiar
-                </button>
-              </div>
-
-              {/* Color dots row */}
-              <div className="flex gap-2 justify-center py-1">
-                {['#FFFFFF', '#E11D48', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#06B6D4'].map(c => (
-                  <button
-                    key={c}
-                    onClick={() => {
-                      setWbColor(c);
-                      setWbTool('pen');
-                    }}
-                    className="w-5 h-5 rounded-full border border-white/20 transition-all hover:scale-115 cursor-pointer"
-                    style={{
-                      backgroundColor: c,
-                      boxShadow: wbColor === c && wbTool === 'pen' ? `0 0 10px ${c}` : 'none',
-                      transform: wbColor === c && wbTool === 'pen' ? 'scale(1.15)' : 'scale(1)'
-                    }}
-                  />
-                ))}
-              </div>
-
-              {/* Canvas area */}
-              <canvas
-                ref={wbCanvasRef}
-                width={480}
-                height={320}
-                className="whiteboard-canvas rounded-lg border border-[var(--border-subtle)]"
-                onMouseDown={handleWbStart}
-                onMouseMove={handleWbDraw}
-                onMouseUp={handleWbEnd}
-                onMouseLeave={handleWbEnd}
-                onTouchStart={handleWbStart}
-                onTouchMove={handleWbDraw}
-                onTouchEnd={handleWbEnd}
-              />
-
-              <button
-                className="w-full btn-primary text-xs py-1.5 border-none cursor-pointer"
-                onClick={insertWhiteboard}
-              >
-                Insertar pizarra en nota
-              </button>
-            </div>
-          )}
-
-          {/* ── FLOATING TOOL: FORMULA EDITOR ── */}
-          {showFormulaEditor && (
-            <div className="tool-panel right-6 bottom-16 bg-[#0c0c10] shadow-2xl rounded-2xl border border-[var(--border-subtle)] p-4 w-[380px] flex flex-col gap-3 z-50">
-              <div className="flex justify-between items-center">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-1.5">
-                  <Sigma size={13} className="text-[var(--accent)]" /> Editor de Fórmulas Matemáticas
-                </h4>
-                <button onClick={() => setShowFormulaEditor(false)} className="text-white hover:text-red-400 border-none bg-transparent cursor-pointer"><X size={14} /></button>
-              </div>
-
-              {/* Preview */}
-              <div className="bg-[#050508] border border-white/[0.02] rounded-lg p-6 min-h-[90px] flex items-center justify-center overflow-x-auto">
-                <div dangerouslySetInnerHTML={{ __html: formulaInput ? parsedFormulaHTML : '<span class="italic text-[var(--text-muted)] text-xs">Vista previa de la fórmula...</span>' }} />
-              </div>
-
-              {/* Quick symbol triggers */}
-              <div className="flex flex-wrap gap-1">
-                {[
-                  { sym: '\\alpha', lbl: 'α' }, { sym: '\\beta', lbl: 'β' },
-                  { sym: '\\theta', lbl: 'θ' }, { sym: '\\Delta', lbl: 'Δ' },
-                  { sym: '\\pi', lbl: 'π' }, { sym: '\\sum', lbl: '∑' },
-                  { sym: '\\int', lbl: '∫' }, { sym: '\\inf', lbl: '∞' },
-                  { sym: '\\neq', lbl: '≠' }, { sym: '\\leq', lbl: '≤' },
-                  { sym: '\\geq', lbl: '≥' }, { sym: '\\pm', lbl: '±' },
-                  { sym: '\\times', lbl: '×' }, { sym: '\\div', lbl: '÷' },
-                  { sym: 'a/b', lbl: 'a/b' }, { sym: 'sqrt(x)', lbl: '√x' },
-                  { sym: '^', lbl: 'xʸ' }, { sym: '_', lbl: 'x₁' }
-                ].map(({ sym, lbl }) => (
-                  <button
-                    key={sym}
-                    onClick={() => {
-                      setFormulaInput(prev => prev + (sym === 'a/b' ? '(a)/(b)' : sym));
-                    }}
-                    className="px-2 py-1 bg-[var(--bg-deep)] hover:bg-[var(--bg-hover)] border border-[var(--border-subtle)] text-[11px] rounded font-mono text-[var(--text-secondary)] hover:text-white cursor-pointer"
-                  >
-                    {lbl}
-                  </button>
-                ))}
-              </div>
-
-              <input
-                type="text"
-                placeholder="Escribe la fórmula sintaxis (ej. sqrt(a/b))"
-                className="w-full bg-[var(--bg-deep)] border border-[var(--border-subtle)] rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-[var(--accent)] font-mono"
-                value={formulaInput}
-                onChange={e => setFormulaInput(e.target.value)}
-              />
-
-              <button
-                className="w-full btn-primary text-xs py-1.5 border-none cursor-pointer"
-                onClick={insertFormula}
-              >
-                Insertar fórmula en nota
-              </button>
-            </div>
-          )}
-
+          ) : null}
         </div>
       </div>
 
-      {/* ── CONTEXT MENU ── */}
-      {contextMenu && (
-        <div
-          className="notes-context-menu"
-          style={{ top: contextMenu.y, left: contextMenu.x }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <button
-            className="notes-context-menu-item border-none bg-transparent"
-            onClick={() => {
-              if (contextMenu) {
-                updateNote(contextMenu.note.id, { isPinned: !contextMenu.note.isPinned });
-                setContextMenu(null);
-                toast.success(contextMenu.note.isPinned ? 'Nota desfijada' : 'Nota fijada');
-              }
-            }}
-          >
-            <Pin size={13} /> {contextMenu.note.isPinned ? 'Desfijar' : 'Fijar nota'}
-          </button>
-
-          <button
-            className="notes-context-menu-item border-none bg-transparent"
-            onClick={() => {
-              if (contextMenu) {
-                duplicateNote(contextMenu.note.id);
-                setContextMenu(null);
-                toast.success('Nota duplicada');
-              }
-            }}
-          >
-            <Copy size={13} /> Duplicar nota
-          </button>
-
-          <button
-            className="notes-context-menu-item border-none bg-transparent"
-            onClick={() => {
-              if (contextMenu) {
-                setShowMoveFolderModal(contextMenu.note.id);
-                setContextMenu(null);
-              }
-            }}
-          >
-            <Move size={13} /> Mover de carpeta
-          </button>
-
-          <div className="notes-context-menu-divider" />
-
-          <button
-            className="notes-context-menu-item danger border-none bg-transparent"
-            onClick={() => {
-              if (contextMenu) {
-                setShowDeleteConfirm(contextMenu.note.id);
-                setContextMenu(null);
-              }
-            }}
-          >
-            <Trash2 size={13} /> Eliminar
-          </button>
-        </div>
-      )}
-
-      {/* ── MODAL: CREATE NEW FOLDER ── */}
-      {showNewFolderModal && (
-        <div className="notes-modal-overlay animate-fadeIn" onClick={() => setShowNewFolderModal(false)}>
-          <div className="notes-modal w-96 flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-white">Nueva Carpeta Personal</h3>
-              <button onClick={() => setShowNewFolderModal(false)} className="text-white hover:text-red-400 border-none bg-transparent cursor-pointer"><X size={16} /></button>
+      {/* ===== PREVIEW OVERLAY ===== */}
+      {selectedNote && activeView === "explorer" && (
+        <div style={{
+          position: "fixed", right: 28, top: "50%", zIndex: 100,
+          transform: "translateY(-50%)",
+          width: 400, maxHeight: "70vh",
+          background: "linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)",
+          border: "1px solid var(--border-default)",
+          borderRadius: "var(--radius-lg)",
+          boxShadow: "var(--shadow-elevated), 0 0 0 1px rgba(0,0,0,0.03)",
+          display: "flex", flexDirection: "column",
+          overflow: "hidden",
+        }}>
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "14px 16px 10px", borderBottom: "1px solid var(--border-subtle)",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <FileText size={15} style={{ color: getSpineColor(selectedNote.id) }} />
+              <span style={{
+                fontSize: 14, fontWeight: 700, color: "var(--text-primary)",
+                fontFamily: "var(--font-heading)",
+                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 200,
+              }}>{selectedNote.title || "Sin t\u00edtulo"}</span>
             </div>
-
-            <div className="flex flex-col gap-1.5 text-xs">
-              <span>Nombre de la carpeta:</span>
-              <input
-                type="text"
-                className="bg-[var(--bg-deep)] border border-[var(--border-subtle)] rounded-lg px-3 py-2 text-white outline-none focus:border-[var(--accent)]"
-                placeholder="Ej. Tesis / Proyectos"
-                value={newFolderName}
-                onChange={e => setNewFolderName(e.target.value)}
-              />
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <button onClick={(e) => { e.stopPropagation(); handleSelectNote(selectedNote.id); handleOpenNote(); }}
+                className="btn-primary"
+                style={{
+                  background: "var(--accent)", color: "#fff", border: "none",
+                  borderRadius: "var(--radius-sm)", padding: "5px 12px",
+                  fontSize: 10, fontWeight: 600, cursor: "pointer",
+                  fontFamily: "var(--font-primary)",
+                }}>Editar</button>
+              <button onClick={() => setSelectedNoteId(null)}
+                style={{
+                  background: "none", border: "none", color: "var(--text-muted)",
+                  cursor: "pointer", padding: 4, display: "flex",
+                }}>
+                <X size={14} />
+              </button>
             </div>
-
-            <div className="flex flex-col gap-1.5 text-xs">
-              <span>Descripción (opcional):</span>
-              <textarea
-                className="bg-[var(--bg-deep)] border border-[var(--border-subtle)] rounded-lg px-3 py-2 text-white outline-none focus:border-[var(--accent)] resize-none h-16"
-                placeholder="Breve reseña..."
-                value={newFolderDesc}
-                onChange={e => setNewFolderDesc(e.target.value)}
-              />
-            </div>
-
-            {/* Color Grid */}
-            <div className="flex flex-col gap-2 text-xs">
-              <span>Color identificador:</span>
-              <div className="flex flex-wrap gap-2.5">
-                {[
-                  '#E11D48', '#EF4444', '#F59E0B', '#10B981',
-                  '#06B6D4', '#3B82F6', '#6366F1', '#8B5CF6',
-                  '#EC4899', '#14B8A6', '#6B7280', '#0F172A'
-                ].map(c => (
-                  <button
-                    key={c}
-                    onClick={() => setNewFolderColor(c)}
-                    className={`folder-color-option border-none ${newFolderColor === c ? 'selected' : ''}`}
-                    style={{ backgroundColor: c }}
-                  />
+          </div>
+          <div style={{
+            flex: 1, overflow: "auto", padding: "14px 16px",
+            fontSize: 12, lineHeight: 1.7, color: "var(--text-secondary)",
+            fontFamily: "var(--font-primary)",
+          }}>
+            <div
+              dangerouslySetInnerHTML={{
+                __html: (selectedNote.content || "").slice(0, 800) + ((selectedNote.content || "").length > 800 ? "..." : "")
+              }}
+            />
+          </div>
+          <div style={{
+            display: "flex", alignItems: "center", gap: 10,
+            padding: "8px 16px", borderTop: "1px solid var(--border-subtle)",
+            fontSize: 10, color: "var(--text-muted)",
+          }}>
+            <span>{getWordCount(selectedNote.content)} palabras</span>
+            <span>{getPageCount(selectedNote.content)} p\u00e1ginas</span>
+            {selectedNote.tags && selectedNote.tags.length > 0 && (
+              <div style={{ display: "flex", gap: 3, marginLeft: "auto" }}>
+                {selectedNote.tags.slice(0, 2).map((t) => (
+                  <span key={t} style={{
+                    background: "var(--bg-hover)", padding: "1px 6px", borderRadius: 4,
+                  }}>{t}</span>
                 ))}
               </div>
-            </div>
-
-            <div className="flex justify-end gap-3 mt-2 text-xs">
-              <button className="btn-secondary px-4 py-2 border-none cursor-pointer font-bold" onClick={() => setShowNewFolderModal(false)}>Cancelar</button>
-              <button className="btn-primary px-4 py-2 border-none cursor-pointer font-bold" onClick={handleCreateFolderSubmit}>Crear Carpeta</button>
-            </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* ── MODAL: DELETE NOTE CONFIRMATION ── */}
-      {showDeleteConfirm && (
-        <div className="notes-modal-overlay" onClick={() => setShowDeleteConfirm(null)}>
-          <div className="notes-modal w-80 text-center flex flex-col items-center gap-4" onClick={(e) => e.stopPropagation()}>
-            <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center text-red-500">
-              <AlertTriangle size={24} />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-white uppercase">¿Eliminar apunte?</h3>
-              <p className="text-[11px] text-[var(--text-secondary)] mt-1.5">Esta acción no se puede deshacer. Se borrarán todos los bloques del repositorio.</p>
-            </div>
-            <div className="flex gap-3 w-full text-xs mt-2">
-              <button className="flex-1 btn-secondary py-2 border-none cursor-pointer font-bold" onClick={() => setShowDeleteConfirm(null)}>Cancelar</button>
-              <button className="flex-1 bg-red-600 hover:bg-red-700 text-white rounded-lg py-2 font-bold border-none cursor-pointer" onClick={handleDeleteNoteConfirm}>Eliminar</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── MODAL: MOVE NOTE TO FOLDER ── */}
-      {showMoveFolderModal && (
-        <div className="notes-modal-overlay" onClick={() => setShowMoveFolderModal(null)}>
-          <div className="notes-modal w-80 flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-white">Mover a carpeta</h3>
-              <button onClick={() => setShowMoveFolderModal(null)} className="text-white hover:text-red-400 border-none bg-transparent cursor-pointer"><X size={16} /></button>
-            </div>
-
-            <div className="flex flex-col gap-1.5 max-h-60 overflow-y-auto notes-sidebar">
-              <button
-                className="w-full text-left px-3 py-2 text-xs hover:bg-[var(--bg-hover)] rounded-lg text-white flex items-center gap-2 border-none bg-transparent cursor-pointer"
-                onClick={() => handleMoveFolder(undefined)}
-              >
-                <FolderIcon size={14} className="text-gray-400" />
-                <span>Sin carpeta (Notas sueltas)</span>
+      {/* ===== CONTEXT MENU ===== */}
+      {contextMenu && (
+        <div style={{
+          position: "fixed", top: contextMenu.y, left: contextMenu.x, zIndex: 10000,
+          background: "linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)",
+          border: "1px solid var(--border-default)",
+          borderRadius: "var(--radius-md)", padding: 4, minWidth: 170,
+          boxShadow: "var(--shadow-elevated)",
+        }}>
+          {[
+            { label: "Abrir", icon: BookOpen, action: () => { handleSelectNote(contextMenu.noteId); handleOpenNote(); } },
+            { label: "Duplicar", icon: Copy, action: handleDuplicate },
+            { label: "Fijar", icon: Star, action: () => { const n = notes.find(x => x.id === contextMenu.noteId); if (n) updateNote(n.id, { isPinned: !n.isPinned }); } },
+            { type: "divider" as const },
+            { label: "Mover a carpeta", icon: Move, action: () => { setShowMoveModal(true); } },
+            { type: "divider" as const },
+            { label: "Eliminar", icon: Trash2, action: () => { setShowDeleteConfirm(true); }, danger: true },
+          ].map((item, i) => {
+            if ("type" in item) return <div key={i} style={{ height: 1, background: "var(--border-subtle)", margin: "4px 6px" }} />;
+            const Icon = item.icon;
+            return (
+              <button key={i} onClick={() => { item.action(); setContextMenu(null); }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 8, width: "100%",
+                  padding: "6px 10px", background: "none", border: "none",
+                  borderRadius: "var(--radius-sm)",
+                  color: (item as any).danger ? "var(--error)" : "var(--text-secondary)",
+                  cursor: "pointer", fontSize: 12, fontFamily: "var(--font-primary)",
+                  textAlign: "left", transition: "all 150ms " + EASE,
+                }}
+                className="hover:bg-[var(--bg-hover)]">
+                <Icon size={14} /> {item.label}
               </button>
+            );
+          })}
+        </div>
+      )}
 
-              {allFolders.filter(f => f.isManual).map(f => (
-                <button
-                  key={f.id}
-                  className="w-full text-left px-3 py-2 text-xs hover:bg-[var(--bg-hover)] rounded-lg text-white flex items-center gap-2 border-none bg-transparent cursor-pointer"
-                  onClick={() => handleMoveFolder(f.id)}
-                >
-                  <FolderIcon size={14} style={{ color: f.color }} />
-                  <span>{f.name}</span>
+      {/* ===== MODALS ===== */}
+      {showNewFolderModal && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 10001,
+          background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <div style={{
+            background: "linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)",
+            border: "1px solid var(--border-default)",
+            borderRadius: "var(--radius-lg)", padding: 24, minWidth: 320, maxWidth: 420,
+            boxShadow: "var(--shadow-elevated)",
+          }}>
+            <h3 style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", margin: "0 0 12px", fontFamily: "var(--font-heading)" }}>
+              Nueva carpeta
+            </h3>
+            <input type="text" placeholder="Nombre de la carpeta"
+              value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && newFolderName.trim()) {
+                  addNoteFolder({ name: newFolderName.trim(), color: SPINE_COLORS[Math.floor(Math.random() * SPINE_COLORS.length)], isManual: true });
+                  setNewFolderName(""); setShowNewFolderModal(false);
+                }
+              }}
+              autoFocus
+              className="input-base"
+              style={{
+                width: "100%", borderRadius: "var(--radius-sm)",
+                padding: "8px 12px", boxSizing: "border-box",
+              }} />
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 14 }}>
+              <button onClick={() => { setShowNewFolderModal(false); setNewFolderName(""); }}
+                className="btn-secondary"
+                style={{
+                  background: "none", border: "1px solid var(--border-default)", borderRadius: "var(--radius-sm)",
+                  padding: "6px 14px", color: "var(--text-secondary)", fontSize: 12, cursor: "pointer",
+                  fontFamily: "var(--font-primary)",
+                }}>Cancelar</button>
+              <button onClick={() => {
+                if (newFolderName.trim()) {
+                  addNoteFolder({ name: newFolderName.trim(), color: SPINE_COLORS[Math.floor(Math.random() * SPINE_COLORS.length)], isManual: true });
+                  setNewFolderName(""); setShowNewFolderModal(false);
+                }
+              }}
+                className="btn-primary"
+                style={{
+                  background: "var(--accent)", color: "#fff", border: "none", borderRadius: "var(--radius-sm)",
+                  padding: "6px 14px", fontSize: 12, fontWeight: 500, cursor: "pointer",
+                  fontFamily: "var(--font-primary)",
+                }}>Crear</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDeleteConfirm && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 10001,
+          background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <div style={{
+            background: "linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)",
+            border: "1px solid var(--border-default)",
+            borderRadius: "var(--radius-lg)", padding: 24, minWidth: 320, maxWidth: 420,
+            boxShadow: "var(--shadow-elevated)",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              <AlertTriangle size={20} style={{ color: "var(--error)", flexShrink: 0 }} />
+              <h3 style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", margin: 0, fontFamily: "var(--font-heading)" }}>
+                Eliminar cuaderno
+              </h3>
+            </div>
+            <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: 0, lineHeight: 1.5 }}>
+              {"\u00bfEst\u00e1s seguro? Esta acci\u00f3n no se puede deshacer."}
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
+              <button onClick={() => setShowDeleteConfirm(false)}
+                className="btn-secondary"
+                style={{
+                  background: "none", border: "1px solid var(--border-default)", borderRadius: "var(--radius-sm)",
+                  padding: "6px 14px", color: "var(--text-secondary)", fontSize: 12, cursor: "pointer",
+                  fontFamily: "var(--font-primary)",
+                }}>Cancelar</button>
+              <button onClick={handleDeleteNote}
+                style={{
+                  background: "var(--error)", color: "#fff", border: "none", borderRadius: "var(--radius-sm)",
+                  padding: "6px 14px", fontSize: 12, fontWeight: 500, cursor: "pointer",
+                  fontFamily: "var(--font-primary)",
+                }}>Eliminar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showMoveModal && selectedNote && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 10001,
+          background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <div style={{
+            background: "linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)",
+            border: "1px solid var(--border-default)",
+            borderRadius: "var(--radius-lg)", padding: 24, minWidth: 320, maxWidth: 420,
+            boxShadow: "var(--shadow-elevated)",
+          }}>
+            <h3 style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", margin: "0 0 12px", fontFamily: "var(--font-heading)" }}>
+              Mover a carpeta
+            </h3>
+            <div style={{ display: "flex", flexDirection: "column", gap: 2, maxHeight: 200, overflow: "auto" }}>
+              <button onClick={() => { handleMoveToFolder(undefined); }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "7px 10px",
+                  background: !selectedNote.folderId ? "var(--accent-dim)" : "transparent",
+                  border: "none", borderRadius: "var(--radius-sm)",
+                  color: !selectedNote.folderId ? "var(--accent)" : "var(--text-secondary)",
+                  cursor: "pointer", fontSize: 12, fontFamily: "var(--font-primary)", textAlign: "left",
+                  transition: "all 150ms " + EASE,
+                }}
+                className="hover:bg-[var(--bg-hover)]">
+                <Layers size={14} /> Sin carpeta
+              </button>
+              {folders.map((f) => (
+                <button key={f.id} onClick={() => { handleMoveToFolder(f.id); }}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "7px 10px",
+                    background: selectedNote.folderId === f.id ? "var(--accent-dim)" : "transparent",
+                    border: "none", borderRadius: "var(--radius-sm)",
+                    color: selectedNote.folderId === f.id ? "var(--accent)" : "var(--text-secondary)",
+                    cursor: "pointer", fontSize: 12, fontFamily: "var(--font-primary)", textAlign: "left",
+                    transition: "all 150ms " + EASE,
+                  }}
+                  className="hover:bg-[var(--bg-hover)]">
+                  <FolderIcon size={14} style={{ color: f.color || "var(--text-tertiary)" }} /> {f.name}
                 </button>
               ))}
             </div>
@@ -1704,6 +1675,84 @@ ${selectedNote.subtitle ? `<h2>${selectedNote.subtitle}</h2>` : ''}
         </div>
       )}
 
+      {/* ===== POPUP EDITOR ===== */}
+      {showPopupEditor && selectedNote && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 10001,
+          background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }} onClick={() => setShowPopupEditor(false)}>
+          <div onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)",
+              border: "1px solid var(--border-default)",
+              borderRadius: "var(--radius-lg)", width: "90%", maxWidth: 800,
+              maxHeight: "85vh", overflow: "hidden",
+              display: "flex", flexDirection: "column",
+              boxShadow: "var(--shadow-elevated)",
+            }}>
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "10px 16px", borderBottom: "1px solid var(--border-subtle)",
+              flexShrink: 0,
+            }}>
+              <span style={{
+                fontSize: 12, fontWeight: 600, color: "var(--text-primary)",
+                fontFamily: "var(--font-heading)",
+              }}>{selectedNote.title}</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <button onClick={() => { handleSaveNote(); toast.success("Guardado"); }}
+                  className="btn-primary"
+                  style={{
+                    background: "var(--accent)", color: "#fff", border: "none",
+                    borderRadius: "var(--radius-sm)", padding: "5px 14px",
+                    fontSize: 11, fontWeight: 600, cursor: "pointer",
+                    fontFamily: "var(--font-primary)",
+                  }}>Guardar</button>
+                <button onClick={() => setShowPopupEditor(false)}
+                  style={{
+                    background: "none", border: "none", color: "var(--text-muted)",
+                    cursor: "pointer", padding: 4, display: "flex",
+                  }}>
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+            <div style={{
+              flex: 1, overflow: "auto", padding: "16px 20px",
+            }}>
+              <div
+                contentEditable
+                suppressContentEditableWarning
+                ref={editorRef}
+                dangerouslySetInnerHTML={{ __html: editorContent }}
+                style={{
+                  outline: "none", minHeight: 200,
+                  fontSize: 16, lineHeight: 1.8,
+                  color: "var(--text-primary)", fontFamily: "var(--font-primary)",
+                  caretColor: "var(--accent)",
+                  maxWidth: 720, margin: "0 auto",
+                }}
+                onKeyDown={(e) => {
+                  if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+                    e.preventDefault(); handleSaveNote();
+                  }
+                }}
+                onInput={handleEditorInput}
+              />
+            </div>
+            <div style={{
+              display: "flex", alignItems: "center", gap: 12,
+              padding: "6px 16px", borderTop: "1px solid var(--border-subtle)",
+              fontSize: 10, color: "var(--text-muted)", flexShrink: 0,
+            }}>
+              <span>{getWordCount(selectedNote.content)} palabras</span>
+              <span>{getCharCount(selectedNote.content)} caracteres</span>
+              <span>{getReadTime(selectedNote.content)} min lectura</span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
