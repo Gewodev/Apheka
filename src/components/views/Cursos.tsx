@@ -1,10 +1,9 @@
-import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { 
   GraduationCap, ChevronLeft, Pencil, PlusCircle, Layers, Trash2, 
-  Book, Upload, X, MoreVertical, Search, Filter, Play, Edit3, 
-  Plus, Eye, EyeOff, LayoutGrid, ChevronRight, HardDrive, RefreshCw,
-  File, Sigma, Lightbulb, Key, Type, HelpCircle, ListChecks, ExternalLink,
-  ChevronDown, Check, Folder, Sparkles
+  Book, Upload, X, Search, Edit3, 
+  Plus, File, Sigma, Lightbulb, Key, Type, HelpCircle, ListChecks, ExternalLink,
+  ChevronDown, Check,
 } from 'lucide-react';
 import { 
   DndContext, closestCorners, KeyboardSensor, PointerSensor, 
@@ -213,23 +212,23 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
   const [topicName, setTopicName] = useState('');
   const [editingTopicId, setEditingTopicId] = useState<string | null>(null);
 
+  // Search
+  const [topicSearch, setTopicSearch] = useState('');
+
   // Material modals
   const [showMaterialModal, setShowMaterialModal] = useState(false);
   const [materialType, setMaterialType] = useState<MaterialType | null>(null);
   const [editingMaterial, setEditingMaterial] = useState<SubjectMaterial | null>(null);
   const [materialColIndex, setMaterialColIndex] = useState(0);
 
-  // Material Form fields
-  const [mName, setMName] = useState('');
-  const [mClarification, setMClarification] = useState('');
-  const [mTitle, setMTitle] = useState('');
-  const [mContent, setMContent] = useState('');
-  const [mWord, setMWord] = useState('');
-  const [mMeaning, setMMeaning] = useState('');
-  const [mQuestion, setMQuestion] = useState('');
-  const [mAnswer, setMAnswer] = useState('');
-  const [mDescription, setMDescription] = useState('');
-  const [mImage, setMImage] = useState<string | undefined>(undefined);
+  // Material form state (single object)
+  const [materialForm, setMaterialForm] = useState({
+    name: '', clarification: '', title: '', content: '',
+    word: '', meaning: '', question: '', answer: '',
+    description: '', image: undefined as string | undefined,
+  });
+  const setForm = (partial: Partial<typeof materialForm>) => setMaterialForm(prev => ({ ...prev, ...partial }));
+  const resetForm = () => setMaterialForm({ name: '', clarification: '', title: '', content: '', word: '', meaning: '', question: '', answer: '', description: '', image: undefined });
 
   // File Upload Refs
   const courseCoverInputRef = useRef<HTMLInputElement>(null);
@@ -247,6 +246,20 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
       setEditCourseCover(course.coverUrl || course.coverImage);
     }
   }, [course]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showMaterialModal) setShowMaterialModal(false);
+        else if (showGroupModal) setShowGroupModal(false);
+        else if (showTopicModal) setShowTopicModal(false);
+        else if (showEditCourse) setShowEditCourse(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showMaterialModal, showGroupModal, showTopicModal, showEditCourse]);
 
   // Active topic resolution
   const activeTopic = useMemo(() => {
@@ -391,19 +404,7 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
     setMaterialType(type);
     setMaterialColIndex(colIdx);
     setEditingMaterial(null);
-    
-    // Clear forms
-    setMName('');
-    setMClarification('');
-    setMTitle('');
-    setMContent('');
-    setMWord('');
-    setMMeaning('');
-    setMQuestion('');
-    setMAnswer('');
-    setMDescription('');
-    setMImage(undefined);
-    
+    resetForm();
     setShowMaterialModal(true);
   };
 
@@ -437,31 +438,32 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
   const handleSaveMaterial = () => {
     if (!materialType || !activeTopic) return;
 
+    const { name, clarification, title, content, word, meaning, question, answer, description, image } = materialForm;
     let payload: Partial<SubjectMaterial> = {};
     switch (materialType) {
       case 'formula':
-        if (!mName.trim()) return;
-        payload = { name: mName.trim(), clarification: mClarification.trim(), image: mImage };
+        if (!name.trim()) return;
+        payload = { name: name.trim(), clarification: clarification.trim(), image };
         break;
       case 'concept':
-        if (!mTitle.trim()) return;
-        payload = { title: mTitle.trim(), content: mContent.trim() };
+        if (!title.trim()) return;
+        payload = { title: title.trim(), content: content.trim() };
         break;
       case 'key-data':
-        if (!mContent.trim()) return;
-        payload = { title: mTitle.trim(), content: mContent.trim() };
+        if (!content.trim()) return;
+        payload = { title: title.trim(), content: content.trim() };
         break;
       case 'meaning':
-        if (!mWord.trim() || !mMeaning.trim()) return;
-        payload = { word: mWord.trim(), meaning: mMeaning.trim() };
+        if (!word.trim() || !meaning.trim()) return;
+        payload = { word: word.trim(), meaning: meaning.trim() };
         break;
       case 'quiz':
-        if (!mQuestion.trim() || !mAnswer.trim()) return;
-        payload = { question: mQuestion.trim(), answer: mAnswer.trim() };
+        if (!question.trim() || !answer.trim()) return;
+        payload = { question: question.trim(), answer: answer.trim() };
         break;
       case 'procedure':
-        if (!mTitle.trim() || !mContent.trim()) return;
-        payload = { title: mTitle.trim(), description: mDescription.trim(), content: mContent.trim(), image: mImage };
+        if (!title.trim() || !content.trim()) return;
+        payload = { title: title.trim(), description: description.trim(), content: content.trim(), image };
         break;
     }
 
@@ -500,16 +502,18 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
     setMaterialType(mat.type);
     setMaterialColIndex(mat.columnIndex);
     
-    setMName(mat.name || '');
-    setMClarification(mat.clarification || '');
-    setMTitle(mat.title || '');
-    setMContent(mat.content || '');
-    setMWord(mat.word || '');
-    setMMeaning(mat.meaning || '');
-    setMQuestion(mat.question || '');
-    setMAnswer(mat.answer || '');
-    setMDescription(mat.description || '');
-    setMImage(mat.image);
+    setForm({
+      name: mat.name || '',
+      clarification: mat.clarification || '',
+      title: mat.title || '',
+      content: mat.content || '',
+      word: mat.word || '',
+      meaning: mat.meaning || '',
+      question: mat.question || '',
+      answer: mat.answer || '',
+      description: mat.description || '',
+      image: mat.image,
+    });
 
     setShowMaterialModal(true);
   };
@@ -734,7 +738,7 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
 
                         <div style={{ padding: 14, background: 'rgba(0,0,0,0.05)', flex: 1 }}>
                           <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 10 }}>
-                            {members.length} temas integrados
+                            {members.length} temas · {members.reduce((sum, m) => sum + (m.materials || []).length, 0)} materiales
                           </p>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                             {members.map(t => (
@@ -760,12 +764,30 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
 
             {/* Independent Topics */}
             <div>
-              <h3 style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--aether-primary)', opacity: 0.7, marginBottom: 16 }}>
-                Temas Independientes
-              </h3>
-              {ungroupedTopics.length > 0 ? (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <h3 style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--aether-primary)', opacity: 0.7 }}>
+                  Temas Independientes
+                </h3>
+                <div style={{ position: 'relative', width: 200 }}>
+                  <Search size={12} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+                  <input
+                    value={topicSearch}
+                    onChange={e => setTopicSearch(e.target.value)}
+                    placeholder="Buscar tema..."
+                    style={{
+                      width: '100%', height: 28, padding: '0 8px 0 26px',
+                      borderRadius: 6, fontSize: 11, border: '1px solid var(--border-subtle)',
+                      background: 'rgba(0,0,0,0.15)', color: 'var(--text-primary)',
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+              </div>
+              {ungroupedTopics.filter(t => !topicSearch || t.title.toLowerCase().includes(topicSearch.toLowerCase())).length > 0 ? (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 20 }}>
-                  {ungroupedTopics.map(topic => (
+                  {ungroupedTopics
+                    .filter(t => !topicSearch || t.title.toLowerCase().includes(topicSearch.toLowerCase()))
+                    .map(topic => (
                     <div 
                       key={topic.id} 
                       className="aether-glass-card group" 
@@ -802,21 +824,26 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
                         </div>
                       </div>
 
-                      {/* Dots progress bar */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 'auto' }}>
-                        <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Familiaridad:</span>
-                        <div style={{ display: 'flex', gap: 3 }}>
-                          {[...Array(5)].map((_, i) => (
-                            <button
-                              key={i}
-                              onClick={() => setTopicReviewLevel(topic.id, i + 1)}
-                              style={{ 
-                                width: 10, height: 6, borderRadius: 3, border: 'none', cursor: 'pointer',
-                                background: i < topic.reviewLevel ? 'var(--aether-primary)' : 'rgba(255,255,255,0.05)',
-                                transition: 'all 200ms ease'
-                              }}
-                            />
-                          ))}
+                      {/* Stats row */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto' }}>
+                        <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>
+                          {(topic.materials || []).length} material(es)
+                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Familiaridad:</span>
+                          <div style={{ display: 'flex', gap: 2 }}>
+                            {[...Array(5)].map((_, i) => (
+                              <button
+                                key={i}
+                                onClick={() => setTopicReviewLevel(topic.id, i + 1)}
+                                style={{ 
+                                  width: 8, height: 5, borderRadius: 2, border: 'none', cursor: 'pointer',
+                                  background: i < topic.reviewLevel ? 'var(--aether-primary)' : 'rgba(255,255,255,0.05)',
+                                  transition: 'all 200ms ease'
+                                }}
+                              />
+                            ))}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1188,11 +1215,11 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
                 <>
                   <div>
                     <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Nombre de la Fórmula</label>
-                    <input type="text" value={mName} onChange={e => setMName(e.target.value)} className="input-base" style={{ width: '100%', height: 36, padding: '0 10px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)' }} placeholder="Ej: E = mc²" />
+                    <input type="text" value={materialForm.name} onChange={e => setForm({ name: e.target.value })} className="input-base" style={{ width: '100%', height: 36, padding: '0 10px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)' }} placeholder="Ej: E = mc²" />
                   </div>
                   <div>
                     <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Explicación o Variables</label>
-                    <textarea value={mClarification} onChange={e => setMClarification(e.target.value)} className="input-base" style={{ width: '100%', minHeight: 60, padding: 10, borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)', resize: 'vertical' }} placeholder="Describe las constantes o aplicación..." />
+                    <textarea value={materialForm.clarification} onChange={e => setForm({ clarification: e.target.value })} className="input-base" style={{ width: '100%', minHeight: 60, padding: 10, borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)', resize: 'vertical' }} placeholder="Describe las constantes o aplicación..." />
                   </div>
                 </>
               )}
@@ -1201,11 +1228,11 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
                 <>
                   <div>
                     <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Título del Concepto</label>
-                    <input type="text" value={mTitle} onChange={e => setMTitle(e.target.value)} className="input-base" style={{ width: '100%', height: 36, padding: '0 10px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)' }} placeholder="Ej: Ley de Inercia" />
+                    <input type="text" value={materialForm.title} onChange={e => setForm({ title: e.target.value })} className="input-base" style={{ width: '100%', height: 36, padding: '0 10px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)' }} placeholder="Ej: Ley de Inercia" />
                   </div>
                   <div>
                     <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Desarrollo del Concepto</label>
-                    <textarea value={mContent} onChange={e => setMContent(e.target.value)} className="input-base" style={{ width: '100%', minHeight: 120, padding: 10, borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)', resize: 'vertical' }} placeholder="Escribe la explicación teórica..." />
+                    <textarea value={materialForm.content} onChange={e => setForm({ content: e.target.value })} className="input-base" style={{ width: '100%', minHeight: 120, padding: 10, borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)', resize: 'vertical' }} placeholder="Escribe la explicación teórica..." />
                   </div>
                 </>
               )}
@@ -1214,11 +1241,11 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
                 <>
                   <div>
                     <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Título (Opcional)</label>
-                    <input type="text" value={mTitle} onChange={e => setMTitle(e.target.value)} className="input-base" style={{ width: '100%', height: 36, padding: '0 10px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)' }} placeholder="Ej: Constante G" />
+                    <input type="text" value={materialForm.title} onChange={e => setForm({ title: e.target.value })} className="input-base" style={{ width: '100%', height: 36, padding: '0 10px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)' }} placeholder="Ej: Constante G" />
                   </div>
                   <div>
                     <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Dato Clave</label>
-                    <textarea value={mContent} onChange={e => setMContent(e.target.value)} className="input-base" style={{ width: '100%', minHeight: 60, padding: 10, borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)', resize: 'vertical' }} placeholder="Define el dato clave indispensable..." />
+                    <textarea value={materialForm.content} onChange={e => setForm({ content: e.target.value })} className="input-base" style={{ width: '100%', minHeight: 60, padding: 10, borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)', resize: 'vertical' }} placeholder="Define el dato clave indispensable..." />
                   </div>
                 </>
               )}
@@ -1227,11 +1254,11 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
                 <>
                   <div>
                     <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Término o Palabra</label>
-                    <input type="text" value={mWord} onChange={e => setMWord(e.target.value)} className="input-base" style={{ width: '100%', height: 36, padding: '0 10px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)' }} placeholder="Ej: Mitosis" />
+                    <input type="text" value={materialForm.word} onChange={e => setForm({ word: e.target.value })} className="input-base" style={{ width: '100%', height: 36, padding: '0 10px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)' }} placeholder="Ej: Mitosis" />
                   </div>
                   <div>
                     <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Significado / Definición</label>
-                    <textarea value={mMeaning} onChange={e => setMMeaning(e.target.value)} className="input-base" style={{ width: '100%', minHeight: 80, padding: 10, borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)', resize: 'vertical' }} placeholder="Define el concepto..." />
+                    <textarea value={materialForm.meaning} onChange={e => setForm({ meaning: e.target.value })} className="input-base" style={{ width: '100%', minHeight: 80, padding: 10, borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)', resize: 'vertical' }} placeholder="Define el concepto..." />
                   </div>
                 </>
               )}
@@ -1240,11 +1267,11 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
                 <>
                   <div>
                     <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Pregunta de Evaluación</label>
-                    <input type="text" value={mQuestion} onChange={e => setMQuestion(e.target.value)} className="input-base" style={{ width: '100%', height: 36, padding: '0 10px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)' }} placeholder="Ej: ¿Qué acelera una reacción química?" />
+                    <input type="text" value={materialForm.question} onChange={e => setForm({ question: e.target.value })} className="input-base" style={{ width: '100%', height: 36, padding: '0 10px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)' }} placeholder="Ej: ¿Qué acelera una reacción química?" />
                   </div>
                   <div>
                     <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Respuesta Correcta</label>
-                    <textarea value={mAnswer} onChange={e => setMAnswer(e.target.value)} className="input-base" style={{ width: '100%', minHeight: 80, padding: 10, borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)', resize: 'vertical' }} placeholder="Escribe la respuesta..." />
+                    <textarea value={materialForm.answer} onChange={e => setForm({ answer: e.target.value })} className="input-base" style={{ width: '100%', minHeight: 80, padding: 10, borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)', resize: 'vertical' }} placeholder="Escribe la respuesta..." />
                   </div>
                 </>
               )}
@@ -1253,15 +1280,15 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
                 <>
                   <div>
                     <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Título del Procedimiento</label>
-                    <input type="text" value={mTitle} onChange={e => setMTitle(e.target.value)} className="input-base" style={{ width: '100%', height: 36, padding: '0 10px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)' }} placeholder="Ej: Destilación simple" />
+                    <input type="text" value={materialForm.title} onChange={e => setForm({ title: e.target.value })} className="input-base" style={{ width: '100%', height: 36, padding: '0 10px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)' }} placeholder="Ej: Destilación simple" />
                   </div>
                   <div>
                     <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Descripción rápida (Opcional)</label>
-                    <input type="text" value={mDescription} onChange={e => setMDescription(e.target.value)} className="input-base" style={{ width: '100%', height: 36, padding: '0 10px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)' }} placeholder="Resumen del procedimiento..." />
+                    <input type="text" value={materialForm.description} onChange={e => setForm({ description: e.target.value })} className="input-base" style={{ width: '100%', height: 36, padding: '0 10px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)' }} placeholder="Resumen del procedimiento..." />
                   </div>
                   <div>
                     <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Pasos / Instrucciones</label>
-                    <textarea value={mContent} onChange={e => setMContent(e.target.value)} className="input-base" style={{ width: '100%', minHeight: 120, padding: 10, borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)', resize: 'vertical' }} placeholder="Paso 1: ...&#10;Paso 2: ..." />
+                    <textarea value={materialForm.content} onChange={e => setForm({ content: e.target.value })} className="input-base" style={{ width: '100%', minHeight: 120, padding: 10, borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-primary)', resize: 'vertical' }} placeholder="Paso 1: ...&#10;Paso 2: ..." />
                   </div>
                 </>
               )}
@@ -1270,11 +1297,11 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
               {['formula', 'procedure'].includes(materialType) && (
                 <div>
                   <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Imagen Ilustrativa (Opcional)</label>
-                  {mImage ? (
+                  {materialForm.image ? (
                     <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', borderRadius: 10, overflow: 'hidden', border: '1px solid var(--aether-border-glass)' }}>
-                      <img src={mImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', background: 'rgba(0,0,0,0.2)' }} />
+                      <img src={materialForm.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', background: 'rgba(0,0,0,0.2)' }} />
                       <button
-                        onClick={() => setMImage(undefined)}
+                        onClick={() => setForm({ image: undefined })}
                         style={{ position: 'absolute', top: 6, right: 6, width: 24, height: 24, borderRadius: '50%', background: 'rgba(239,68,68,0.9)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                       >
                         <X size={12} />
@@ -1295,7 +1322,7 @@ export default function Cursos({ initialCourseId }: { initialCourseId?: string }
                   )}
                   <input type="file" ref={materialImageInputRef} style={{ display: 'none' }} accept="image/*" onChange={(e) => {
                     const f = e.target.files?.[0]; if (f) {
-                      const r = new FileReader(); r.onload = (ev) => setMImage(ev.target?.result as string); r.readAsDataURL(f);
+                      const r = new FileReader(); r.onload = (ev) => setForm({ image: ev.target?.result as string }); r.readAsDataURL(f);
                     }
                   }} />
                 </div>

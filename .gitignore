@@ -28,6 +28,9 @@ dist-ssr
 *.sln
 *.sw?
 
+# AI worktrees
+.claude
+
 # Tauri
 src-tauri/target
 src-tauri/bin

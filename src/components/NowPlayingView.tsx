@@ -250,55 +250,22 @@ export default function NowPlayingView({ sidebarCollapsed, activeView }: { sideb
         ctx!.restore();
       }
 
-      // ─── Fuego y humo sutiles desde múltiples direcciones ───
+      // ─── Aura lumínica tenue desde los bordes ───
       {
-        const fireInten = Math.min(1, level * 2.5) * 0.10 + 0.01;
-        if (fireInten > 0.01) {
-          const fr = halfSide * (0.6 + Math.sin(firePhase * 0.3) * 0.15);
-
-          // Fuego desde 4 direcciones cardinales
-          const fireDirs = [
-            { ax: 0.4, ay: 0.1, phOff: 0 },     // arriba
-            { ax: -0.3, ay: 0.4, phOff: 2.1 },   // abajo-izq
-            { ax: 0.5, ay: -0.3, phOff: 4.2 },   // arriba-dcho
-            { ax: -0.4, ay: -0.4, phOff: 1.7 },  // abajo-dcho
-          ];
-          for (let d = 0; d < fireDirs.length; d++) {
-            const dir = fireDirs[d];
-            for (let fi = 0; fi < 2; fi++) {
-              const fx = cx + Math.sin(firePhase * dir.ax + fi * 2.1 + dir.phOff) * halfSide * 0.5;
-              const fy = cy + Math.cos(firePhase * dir.ay + fi * 1.7 + dir.phOff) * halfSide * 0.5;
-              const fs = fr * (0.25 + fi * 0.20 + Math.sin(firePhase + d) * 0.05);
-              const g = ctx!.createRadialGradient(fx, fy, 0, fx, fy, fs);
-              const a = fireInten * (1 - fi * 0.25) * (0.6 + d * 0.1);
-              g.addColorStop(0, `rgba(255,200,130,${a * 0.7})`);
-              g.addColorStop(0.3, `rgba(255,140,50,${a * 0.5})`);
-              g.addColorStop(0.6, `rgba(200,70,10,${a * 0.25})`);
-              g.addColorStop(1, `rgba(255,80,0,0)`);
-              ctx!.save();
-              ctx!.filter = `blur(${4 + fi * 5 + level * 3}px)`;
-              ctx!.fillStyle = g;
-              ctx!.beginPath();
-              ctx!.arc(fx, fy, fs, 0, Math.PI * 2);
-              ctx!.fill();
-              ctx!.restore();
-            }
-          }
-
-          // Humo gris desde los laterales
-          const smokeInten = fireInten * 0.5;
-          for (let si = 0; si < 6; si++) {
-            const sx = cx + Math.sin(firePhase * 0.2 + si * 1.05) * halfSide * (0.8 + Math.sin(firePhase * 0.1 + si) * 0.3);
-            const sy = cy + Math.cos(firePhase * 0.25 + si * 0.9) * halfSide * (0.8 + Math.cos(firePhase * 0.15 + si) * 0.3);
-            const ss = halfSide * (0.3 + si * 0.12 + Math.sin(firePhase * 0.4 + si * 0.5) * 0.1);
+        const auraInten = Math.min(1, level * 2.0) * 0.04 + 0.005;
+        if (auraInten > 0.005) {
+          for (let si = 0; si < 8; si++) {
+            const angle = firePhase * 0.15 + si * 1.256;
+            const sx = cx + Math.cos(angle) * halfSide * 0.7;
+            const sy = cy + Math.sin(angle) * halfSide * 0.7;
+            const ss = halfSide * (0.15 + si * 0.08);
             const sg = ctx!.createRadialGradient(sx, sy, 0, sx, sy, ss);
-            const sa = smokeInten * (0.15 - si * 0.02) * (0.5 + Math.sin(firePhase * 0.3 + si) * 0.3);
-            if (sa < 0.003) continue;
-            sg.addColorStop(0, `rgba(180,180,190,${sa})`);
-            sg.addColorStop(0.5, `rgba(120,120,130,${sa * 0.5})`);
-            sg.addColorStop(1, `rgba(80,80,90,0)`);
+            const sa = auraInten * (0.12 - si * 0.01);
+            if (sa < 0.002) continue;
+            sg.addColorStop(0, `rgba(255,255,255,${sa * 0.3})`);
+            sg.addColorStop(1, `rgba(255,255,255,0)`);
             ctx!.save();
-            ctx!.filter = `blur(${10 + si * 4}px)`;
+            ctx!.filter = `blur(${8 + si * 3}px)`;
             ctx!.fillStyle = sg;
             ctx!.beginPath();
             ctx!.arc(sx, sy, ss, 0, Math.PI * 2);
@@ -363,7 +330,7 @@ export default function NowPlayingView({ sidebarCollapsed, activeView }: { sideb
       case 'black': return '#000';
       case 'gray': return '#1a1a1a';
       case 'theme': return appBg;
-      default: return hasCover ? '#000' : appBg;
+      default: return hasCover ? 'transparent' : appBg;
     }
   })();
 
@@ -405,19 +372,6 @@ export default function NowPlayingView({ sidebarCollapsed, activeView }: { sideb
         />
       )}
 
-      {/* Edge darkening vignette — smooth radial fade to black at corners */}
-      {showBlurredCover && (
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            background: 'radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.55) 100%)',
-            pointerEvents: 'none',
-            zIndex: 1,
-          }}
-        />
-      )}
-
       {/* Fading old cover for crossfade (auto mode only) */}
       {showBlurredCover && fadeCover && (
         <div
@@ -433,17 +387,13 @@ export default function NowPlayingView({ sidebarCollapsed, activeView }: { sideb
         />
       )}
 
-      {/* Dark overlay — adjusted per coverBgMode */}
+      {/* Click-to-close overlay */}
       <div
         onClick={handleClose}
         style={{
           position: 'absolute',
           inset: 0,
-          background: coverBgMode === 'auto' && hasCover
-            ? 'linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.08) 100%)'
-            : coverBgMode === 'theme' || !hasCover
-              ? 'linear-gradient(180deg, rgba(0,0,0,0.03) 0%, rgba(0,0,0,0.08) 100%)'
-              : 'linear-gradient(180deg, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.20) 100%)',
+          background: 'transparent',
           cursor: 'pointer',
           opacity: visible ? 1 : 0,
           transition: 'opacity 400ms ease',

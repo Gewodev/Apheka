@@ -14,6 +14,8 @@ import { open, save } from '@tauri-apps/plugin-dialog';
 import { readFile } from '@tauri-apps/plugin-fs';
 import { format, subDays, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { emitTo } from '@tauri-apps/api/event';
 import {
   fetchMetadata, searchMusic, startDownload, cancelDownload,
   getDownloadPath, setDownloadPath,
@@ -99,6 +101,11 @@ export default function Musica() {
 
   const urlInputRef = useRef<HTMLInputElement>(null);
   const [colocarTrackId, setColocarTrackId] = useState<string | null>(null);
+  const [youtubePlayerUrl, setYoutubePlayerUrl] = useState<string | null>(null);
+  const [youtubePlayerTitle, setYoutubePlayerTitle] = useState('');
+  const [youtubePlayerThumb, setYoutubePlayerThumb] = useState('');
+
+  const [downloadSelection, setDownloadSelection] = useState<{ url: string; title: string; channel?: string; thumbnail?: string; duration?: number }[]>([]);
 
   const handlePlayWithTabCb = useCallback((trackOrId: string | Track, sourceTab?: TabId) => {
     const trackId = typeof trackOrId === 'string' ? trackOrId : trackOrId.id;
@@ -273,48 +280,35 @@ export default function Musica() {
   const handleDownloadAll = async () => {
     if (!preview) return;
     const entries = getEntries(preview);
-    const path = persistentDownloadPath;
-    const concurrency = 3;
-    const results: { entry: YouTubeMetadata; dlItemId: string }[] = [];
-
-    for (const entry of entries) {
-      const dlItemId = addToDownloadQueue({
-        title: entry.title || 'Unknown',
-        artist: entry.channel,
-        url: getVideoUrl(entry),
-        type: 'video',
-        totalItems: 1,
-        thumbnail: entry.thumbnail,
-        duration: entry.duration,
-      });
-      results.push({ entry, dlItemId });
-    }
-
-    for (let i = 0; i < results.length; i += concurrency) {
-      const batch = results.slice(i, i + concurrency);
-      await Promise.allSettled(batch.map(r => doDownload(r.entry, r.dlItemId, path)));
-    }
-
-    const completed = results.length;
-    addNotification(`Descarga completada: ${completed} canciones`, 'success');
+    // Add all entries to download selection panel
+    entries.forEach(entry => {
+      const videoUrl = getVideoUrl(entry);
+      if (videoUrl && !downloadSelection.some(s => s.url === videoUrl)) {
+        setDownloadSelection(prev => [...prev, { url: videoUrl, title: entry.title || 'Unknown', channel: entry.channel, thumbnail: entry.thumbnail, duration: entry.duration }]);
+      }
+    });
   };
 
-  const handleDownloadOne = async (entry: YouTubeMetadata) => {
+  const handleDownloadOne = (entry: YouTubeMetadata) => {
+    addToDownloadSelection(entry);
+  };
+
+  const addToDownloadSelection = (entry: YouTubeMetadata) => {
     const videoUrl = getVideoUrl(entry);
-    if (!videoUrl) {
-      addNotification('URL del video no disponible', 'error');
-      return;
+    if (!videoUrl) return;
+    if (downloadSelection.some(s => s.url === videoUrl)) return;
+    setDownloadSelection(prev => [...prev, { url: videoUrl, title: entry.title || 'Unknown', channel: entry.channel, thumbnail: entry.thumbnail, duration: entry.duration }]);
+  };
+
+  const startBulkDownload = async () => {
+    if (downloadSelection.length === 0) return;
+    for (const item of downloadSelection) {
+      const entry: YouTubeMetadata = { title: item.title, channel: item.channel || '', thumbnail: item.thumbnail || '', duration: item.duration || 0, id: '', webpage_url: item.url, url: item.url };
+      const dlItemId = addToDownloadQueue({ title: item.title, artist: item.channel || '', url: item.url, type: 'video', totalItems: downloadSelection.length, thumbnail: item.thumbnail, duration: item.duration });
+      doDownload(entry, dlItemId, persistentDownloadPath);
     }
-    const dlItemId = addToDownloadQueue({
-      title: entry.title || 'Unknown',
-      artist: entry.channel,
-      url: videoUrl,
-      type: 'video',
-      totalItems: 1,
-      thumbnail: entry.thumbnail,
-      duration: entry.duration,
-    });
-    await doDownload(entry, dlItemId, persistentDownloadPath);
+    setDownloadSelection([]);
+    addNotification(`Descargando ${downloadSelection.length} canciones`, 'success');
   };
 
   const handleCancelDownload = async (itemId: string) => {
@@ -1345,7 +1339,31 @@ export default function Musica() {
                         <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>{r.channel} · {formatDuration(r.duration)}</div>
                       </div>
                       <div style={{ display: 'flex', gap: 6 }}>
-                        <button onClick={() => window.open(r.webpage_url, '_blank')} className="btn-secondary" style={{ padding: '6px 12px', height: 32, fontSize: 11, display: 'flex', alignItems: 'center', gap: 6 }}><Play size={12} /> YouTube</button>
+                        <button onClick={async () => {
+                          try {
+                            const existing = await WebviewWindow.getByLabel('youtube-player');
+                            if (existing) { await existing.show(); await existing.setFocus(); return; }
+                            const win = new WebviewWindow('youtube-player', {
+                              url: '/',
+                              title: 'YouTube Player',
+                              width: 480, height: 360,
+                              minWidth: 320, minHeight: 240,
+                              resizable: true,
+                              decorations: false,
+                              alwaysOnTop: false,
+                              skipTaskbar: false,
+                              center: true,
+                            });
+                            win.once('tauri://error', () => {});
+                            setTimeout(async () => {
+                              try {
+                                await emitTo('youtube-player', 'youtube:load', { videoUrl: r.webpage_url, title: r.title, thumbnail: r.thumbnail || '' });
+                              } catch {}
+                            }, 500);
+                          } catch {
+                            setYoutubePlayerUrl(r.webpage_url); setYoutubePlayerTitle(r.title); setYoutubePlayerThumb(r.thumbnail || '');
+                          }
+                        }} className="btn-secondary" style={{ padding: '6px 12px', height: 32, fontSize: 11, display: 'flex', alignItems: 'center', gap: 6 }}><Play size={12} /> YouTube</button>
                         <button onClick={() => handleDownloadOne(r)} className="btn-primary" style={{ padding: '6px 12px', height: 32, fontSize: 11, display: 'flex', alignItems: 'center', gap: 6 }}><Download size={12} /> Descargar</button>
                       </div>
                     </div>
@@ -1697,75 +1715,87 @@ export default function Musica() {
 
       </div>
 
-      {/* FLOATING DOWNLOAD QUEUE PANEL */}
-      {downloadQueue.length > 0 && (
+
+
+      {/* DOWNLOAD SELECTION PANEL — lateral derecho con progreso integrado */}
+      {(downloadSelection.length > 0 || downloadQueue.some(d => d.status === 'downloading' || d.status === 'queued')) && (
         <div style={{
-          position: 'fixed', bottom: 100, right: 24, zIndex: 50,
-          width: 340, maxHeight: 380,
-          borderRadius: 12,
-          background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)',
-          border: '1px solid var(--border-subtle)',
-          boxShadow: '0 12px 48px rgba(0,0,0,0.5)',
+          position: 'fixed', right: 0, top: 0, bottom: 0, zIndex: 60,
+          width: 340,
+          background: 'linear-gradient(180deg, var(--bg-elevated) 0%, var(--bg-base) 100%)',
+          borderLeft: '1px solid var(--border-subtle)',
+          boxShadow: '-8px 0 40px rgba(0,0,0,0.4)',
           display: 'flex', flexDirection: 'column',
-          animation: 'fadeIn 200ms ease',
+          animation: 'slideInRight 250ms ease',
+          backdropFilter: 'blur(12px)',
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', borderBottom: '1px solid var(--border-subtle)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Download size={14} style={{ color: 'var(--accent)' }} />
-              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>Descargas</span>
-              <span style={{ fontSize: 10, color: 'var(--text-tertiary)', fontWeight: 500 }}>
-                {downloadQueue.filter(d => d.status === 'queued').length} en cola
-                {downloadQueue.some(d => d.status === 'downloading') ? ` · ${Math.round(downloadQueue.filter(d => d.status === 'downloading').reduce((a, d) => a + d.progress * 100, 0) / Math.max(1, downloadQueue.filter(d => d.status === 'downloading').length))}%` : ''}
-              </span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 18px', borderBottom: '1px solid var(--border-subtle)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+              <Download size={16} style={{ color: 'var(--accent)' }} />
+              Descargas
             </div>
-            <div style={{ display: 'flex', gap: 4 }}>
-              {completedDownloads.length > 0 && (
-                <button onClick={clearCompletedDownloads} className="btn-ghost" style={{ fontSize: 10, padding: '4px 8px', color: 'var(--text-tertiary)' }}>Limpiar</button>
-              )}
-              <button onClick={() => { /* collapse - could add state */ }} className="btn-ghost" style={{ padding: 4, color: 'var(--text-tertiary)' }}><X size={14} /></button>
-            </div>
+            <button onClick={() => {
+              setDownloadSelection([]);
+              clearCompletedDownloads();
+            }} className="btn-ghost" style={{ padding: 6, color: 'var(--text-tertiary)', borderRadius: '50%' }}><X size={16} /></button>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '8px 10px', overflowY: 'auto', maxHeight: 300, flex: 1 }}>
-            {downloadQueue.map(item => {
-              const statusIcon = item.status === 'downloading' ? <Loader size={12} style={{ animation: 'spin 1s linear infinite', color: 'var(--accent)' }} />
-                : item.status === 'completed' ? <CheckCircle size={12} style={{ color: 'var(--success)' }} />
-                  : item.status === 'error' ? <AlertCircle size={12} style={{ color: 'var(--error)' }} />
-                    : <Clock size={12} style={{ color: 'var(--text-tertiary)' }} />;
-              return (
-                <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, background: item.status === 'error' ? 'rgba(239,68,68,0.08)' : 'var(--bg-deep)', border: '1px solid var(--border-subtle)' }}>
-                  <div style={{ width: 30, height: 30, borderRadius: 6, background: 'var(--bg-surface)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    {item.thumbnail ? <img src={item.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={14} />}
+
+          {/* Download queue activo */}
+          {downloadQueue.filter(d => d.status === 'downloading' || d.status === 'queued').length > 0 && (
+            <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--border-subtle)' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+                Descargando...
+              </div>
+              {downloadQueue.filter(d => d.status === 'downloading' || d.status === 'queued').map(dl => (
+                <div key={dl.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 6, background: 'var(--bg-surface)', marginBottom: 4 }}>
+                  <div style={{ width: 24, height: 24, borderRadius: 4, background: 'var(--bg-deep)', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {dl.thumbnail ? <img src={dl.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={10} style={{ color: 'var(--text-muted)' }} />}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      {statusIcon}
-                      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
+                    <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{dl.title}</div>
+                    <div style={{ height: 2, borderRadius: 1, background: 'rgba(255,255,255,0.06)', marginTop: 3, overflow: 'hidden' }}>
+                      <div style={{ width: `${dl.progress * 100}%`, height: '100%', borderRadius: 1, background: 'var(--accent)', transition: 'width 300ms' }} />
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                      <div className="progress-track" style={{ flex: 1, height: 3, borderRadius: 2 }}>
-                        <div className="progress-fill" style={{ width: `${item.progress * 100}%`, height: '100%', borderRadius: 2, background: item.status === 'completed' ? 'var(--success)' : item.status === 'error' ? 'var(--error)' : 'var(--accent)', transition: 'width 300ms' }} />
-                      </div>
-                      <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-tertiary)', minWidth: 28, textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
-                        {item.status === 'queued' ? 'Cola' : item.status === 'error' ? 'Error' : `${Math.round(item.progress * 100)}%`}
-                      </span>
-                    </div>
-                    {item.errorMessage && item.status === 'error' && (
-                      <div style={{ fontSize: 9, color: 'var(--error)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.errorMessage}</div>
-                    )}
                   </div>
-                  {(item.status === 'downloading' || item.status === 'queued') && (
-                    <button onClick={() => handleCancelDownload(item.id)} style={{ padding: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', opacity: 0.6, transition: 'opacity 150ms' }} onMouseEnter={e => e.currentTarget.style.opacity = '1'} onMouseLeave={e => e.currentTarget.style.opacity = '0.6'} title="Cancelar descarga">
-                      <X size={12} />
-                    </button>
-                  )}
+                  <span style={{ fontSize: 9, color: 'var(--text-tertiary)', fontVariantNumeric: 'tabular-nums' }}>
+                    {Math.round(dl.progress * 100)}%
+                  </span>
                 </div>
-              );
-            })}
-          </div>
+              ))}
+            </div>
+          )}
+
+          {/* Selección pendiente */}
+          {downloadSelection.length > 0 && (
+            <>
+              <div style={{ padding: '8px 8px 0', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Pendientes ({downloadSelection.length})
+              </div>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, padding: '6px 10px', overflowY: 'auto' }}>
+                {downloadSelection.map((item, i) => (
+                  <div key={item.url} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 6, background: 'var(--bg-surface)', transition: 'all 150ms' }}>
+                    <div style={{ width: 24, height: 24, borderRadius: 4, background: 'var(--bg-deep)', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {item.thumbnail ? <img src={item.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={10} style={{ color: 'var(--text-muted)' }} />}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
+                    </div>
+                    <button onClick={() => setDownloadSelection(prev => prev.filter((_, idx) => idx !== i))} style={{ padding: 2, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', opacity: 0.4 }}><X size={9} /></button>
+                  </div>
+                ))}
+              </div>
+              <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border-subtle)' }}>
+                <button onClick={startBulkDownload} className="btn-primary" style={{ width: '100%', height: 40, fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 10 }}>
+                  <Download size={16} /> Descargar Todo ({downloadSelection.length})
+                </button>
+                <div style={{ textAlign: 'center', marginTop: 8, fontSize: 10, color: 'var(--text-tertiary)' }}>
+                  Owa Downloader procesará las descargas
+                </div>
+              </div>
+            </>
+          )}
         </div>
       )}
-
-
 
       {/* Edit Track Dialog */}
       {editingTrackId && (
@@ -1998,6 +2028,51 @@ export default function Musica() {
           </div>
         </div>
       )}
+
+      {/* YOUTUBE FLOATING PLAYER MODAL */}
+      {youtubePlayerUrl && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 10000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(8px)',
+        }} onClick={() => { setYoutubePlayerUrl(null); }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            width: '90%', maxWidth: 480,
+            borderRadius: 16, overflow: 'hidden',
+            background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)',
+            border: '1px solid var(--border-subtle)',
+            boxShadow: '0 24px 80px rgba(0,0,0,0.6)',
+            animation: 'fadeIn 200ms ease',
+          }}>
+            {/* Cover art */}
+            <div style={{ width: '100%', aspectRatio: '16/9', position: 'relative', background: '#000', overflow: 'hidden' }}>
+              {youtubePlayerThumb ? (
+                <img src={youtubePlayerThumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.3, filter: 'blur(20px)', position: 'absolute', inset: 0 }} />
+              ) : null}
+              <iframe
+                src={`https://www.youtube.com/embed/${new URL(youtubePlayerUrl).searchParams.get('v') || youtubePlayerUrl.split('/').pop()}?autoplay=1&rel=0&showinfo=0&color=white&iv_load_policy=3&modestbranding=1`}
+                title={youtubePlayerTitle}
+                style={{ width: '100%', height: '100%', border: 'none', position: 'relative', zIndex: 1 }}
+                allow="autoplay; encrypted-media; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
+            {/* Info bar */}
+            <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{youtubePlayerTitle}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>Reproduciendo desde YouTube</div>
+              </div>
+              <button onClick={() => setYoutubePlayerUrl(null)} style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(255,255,255,0.06)', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: 12 }}>
+                <X size={14} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+
+
     </div>
   );
 }

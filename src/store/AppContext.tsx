@@ -1321,7 +1321,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       accentColor: settings.accentColor,
     };
     emit('settings:sync', JSON.stringify(payload));
-  }, [settings.floatingBgMode, settings.floatingBgColor, settings.floatingFont, settings.floatingHideInFocus, settings.floatingAnimationType, settings.timerFocusColor, settings.timerBreakColor, settings.timerChronoColor]);
+  }, [settings.floatingBgMode, settings.floatingBgColor, settings.floatingFont, settings.floatingHideInFocus, settings.floatingAnimationType, settings.timerFocusColor, settings.timerBreakColor, settings.timerChronoColor, settings.backgroundImagePath, settings.backgroundImage, settings.useThreeColors, settings.surfaceColor]);
 
   // Respond to settings and timer sync requests from floating timer
   useEffect(() => {
