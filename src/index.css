@@ -1231,8 +1231,6 @@ h6,
   font-size: 15px;
   line-height: 1.85;
   color: var(--text-primary);
-  max-width: 760px;
-  margin: 0 auto;
   padding-bottom: 80px;
   caret-color: var(--accent);
 }
@@ -1329,6 +1327,109 @@ h6,
 }
 
 /* Editor Toolbar */
+/* Code block with copy button */
+.notes-code-block {
+  position: relative;
+  background: var(--bg-deep);
+  padding: 16px 20px;
+  border-radius: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-x: auto;
+  border: 1px solid var(--border-subtle);
+  margin: 16px 0;
+}
+.notes-code-block code {
+  display: block;
+  white-space: pre-wrap;
+  background: none;
+  padding: 0;
+  color: var(--text-primary);
+  font-size: 13px;
+}
+.copy-code-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 150ms;
+}
+.notes-code-block:hover .copy-code-btn {
+  opacity: 1;
+}
+.copy-code-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* Styled blockquote */
+.notes-styled-quote {
+  border-left: 3px solid var(--accent);
+  margin: 12px 0;
+  padding: 12px 16px;
+  background: var(--bg-hover);
+  border-radius: 0 8px 8px 0;
+  font-style: italic;
+  color: var(--text-secondary);
+}
+
+/* Editor table */
+.notes-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0;
+}
+
+/* Notes checkbox */
+.notes-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0;
+}
+
+/* Notes attachment */
+.notes-attachment {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  margin: 8px 0;
+  background: var(--bg-hover);
+}
+
+/* Editable image */
+.editable-image {
+  cursor: pointer;
+  transition: box-shadow 150ms;
+}
+.editable-image:hover {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+/* Image editor overlay */
+.image-editor-overlay {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  box-shadow: var(--shadow-elevated);
+}
+
 .editor-toolbar-btn {
   padding: 6px 10px;
   border-radius: 8px;
@@ -2020,16 +2121,16 @@ h6,
   box-shadow: 0 6px 20px rgba(0,0,0,0.15);
 }
 
-/* ── AETHER GLASS DESIGN ── */
+/* ── AETHER GLASS DESIGN (remapped to app theme) ── */
 :root {
-  --aether-primary: #758bfa;
-  --aether-primary-hover: #5c75f8;
-  --aether-primary-soft: rgba(117, 139, 250, 0.1);
-  --aether-primary-border: rgba(117, 139, 250, 0.25);
-  --aether-bg-glass: rgba(22, 22, 28, 0.45);
-  --aether-bg-glass-hover: rgba(28, 28, 36, 0.6);
-  --aether-border-glass: rgba(255, 255, 255, 0.06);
-  --aether-border-glass-hover: rgba(117, 139, 250, 0.35);
+  --aether-primary: var(--accent, #758bfa);
+  --aether-primary-hover: color-mix(in srgb, var(--accent, #758bfa) 80%, #000);
+  --aether-primary-soft: color-mix(in srgb, var(--accent, #758bfa) 10%, transparent);
+  --aether-primary-border: color-mix(in srgb, var(--accent, #758bfa) 25%, transparent);
+  --aether-bg-glass: var(--bg-elevated, rgba(22, 22, 28, 0.45));
+  --aether-bg-glass-hover: var(--bg-surface, rgba(28, 28, 36, 0.6));
+  --aether-border-glass: var(--border-subtle, rgba(255, 255, 255, 0.06));
+  --aether-border-glass-hover: color-mix(in srgb, var(--accent, #758bfa) 35%, transparent);
 }
 
 .aether-glass-card {

@@ -2,7 +2,7 @@
  * Planificacion.tsx â€” Enterprise Academic Planner (v2 Revamp)
  */
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   ChevronLeft, ChevronRight, Plus, Calendar, Clock, X, Trash2, Check
 } from 'lucide-react';
@@ -15,6 +15,11 @@ import {
 } from 'date-fns';
 import { es } from 'date-fns/locale';
 import NotificationBell from '../ui/NotificationBell';
+import {
+  DndContext, DragOverlay,
+  useDraggable, useDroppable,
+  PointerSensor, useSensor, useSensors,
+} from '@dnd-kit/core';
 
 import EventModal, { PlanEvent } from './planificacion/EventModal';
 import ScheduleBuilder, { ScheduleClass } from './planificacion/ScheduleBuilder';
@@ -132,7 +137,7 @@ function getMergedClasses(classes: ScheduleClass[]) {
 }
 
 export default function Planificacion() {
-  const { tasks, courses, setNavigateTo, addNotification, settings } = useApp();
+  const { tasks, courses, setNavigateTo, addNotification, settings, studySessions } = useApp();
 
   const [planView, setPlanView] = useState<PlanView>(() => {
     try { return (localStorage.getItem('owa_planner_view') as PlanView) || 'week'; }
@@ -150,8 +155,12 @@ export default function Planificacion() {
   
   const [selectedItem, setSelectedItem] = useState<SelectedItem | null>(null);
 
-  const [draggingEventId, setDraggingEventId] = useState<string | null>(null);
-  const [dragOver, setDragOver]               = useState<{ dayIdx: number; hour: number } | null>(null);
+  const [activeDragPlanId, setActiveDragPlanId] = useState<string | null>(null);
+  const [dragOverSlot, setDragOverSlot] = useState<{ dayIdx: number; hour: number } | null>(null);
+
+  const planSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { delay: 200, tolerance: 6 } })
+  );
 
   const imgInputRef = useRef<HTMLInputElement>(null);
   const [scheduleImageUrl, setScheduleImageUrl] = useState<string | null>(null);
@@ -179,6 +188,30 @@ export default function Planificacion() {
   const calEnd     = endOfWeek(endOfMonth(monthStart), { weekStartsOn: 1 });
   const calDays    = eachDayOfInterval({ start: calStart, end: calEnd });
   const weekRows   = calDays.reduce<Date[][]>((a, d, i) => { if (i%7===0) a.push([]); a[a.length-1].push(d); return a; }, []);
+
+  const handleDragEndPlan = useCallback((event: any) => {
+    const { active, over } = event;
+    setActiveDragPlanId(null);
+    setDragOverSlot(null);
+    if (!over || !active) return;
+    const overId = over.id as string;
+    if (!overId.startsWith('plan-slot-')) return;
+    const parts = overId.replace('plan-slot-', '').split('-');
+    if (parts.length !== 2) return;
+    const dayIdx = parseInt(parts[0], 10);
+    const hour = parseInt(parts[1], 10);
+    if (isNaN(dayIdx) || isNaN(hour)) return;
+    const evId = active.id as string;
+    const ev = events.find(e => e.id === evId);
+    if (!ev) return;
+    const dur = timeToFrac(ev.endTime) - timeToFrac(ev.startTime);
+    const newStart = Math.max(H_START, Math.min(H_END - dur, hour));
+    const newEnd = newStart + dur;
+    const newDate = format(weekDays[dayIdx], 'yyyy-MM-dd');
+    setEvents(p => p.map(e => e.id === evId
+      ? { ...e, date: newDate, startTime: fracToTime(newStart), endTime: fracToTime(newEnd) }
+      : e));
+  }, [events, weekDays]);
 
   const nav = (dir: 1 | -1) => {
     if (planView === 'year') setNavDate(dir===1 ? addMonths(navDate,12) : subMonths(navDate,12));
@@ -222,25 +255,29 @@ export default function Planificacion() {
   function getAllDayEventsForDate(iso: string): PlanEvent[] { return getEventsForDate(iso).filter(e => e.allDay); }
   function getClassesForDay(di: number): ScheduleClass[] { return getMergedClasses(classes.filter(c => c.dayOfWeek === di)); }
 
+  function isValidDateStr(d: string | undefined | null): d is string {
+    if (!d) return false;
+    const t = new Date(d).getTime();
+    return !isNaN(t);
+  }
+
+  function getStudySessionsForDate(iso: string) {
+    return studySessions.filter(s => {
+      if (!isValidDateStr(s.startedAt)) return false;
+      const sDate = format(new Date(s.startedAt), 'yyyy-MM-dd');
+      if (sDate === iso) return true;
+      if (isValidDateStr(s.endedAt)) {
+        const eDate = format(new Date(s.endedAt), 'yyyy-MM-dd');
+        return sDate <= iso && eDate >= iso;
+      }
+      return false;
+    });
+  }
+
   const isOld = (dateStr: string) => {
     const diff = (new Date().getTime() - new Date(dateStr + 'T12:00:00').getTime()) / 86400000;
     return diff > 4;
   };
-
-  function handleDrop(dayIdx: number, hour: number) {
-    if (!draggingEventId) { setDragOver(null); return; }
-    const ev = events.find(e => e.id === draggingEventId);
-    if (!ev) { setDragOver(null); setDraggingEventId(null); return; }
-    const dur = timeToFrac(ev.endTime) - timeToFrac(ev.startTime);
-    const newStart = Math.max(H_START, Math.min(H_END - dur, hour));
-    const newEnd   = newStart + dur;
-    const newDate  = format(weekDays[dayIdx], 'yyyy-MM-dd');
-    setEvents(p => p.map(e => e.id === draggingEventId
-      ? { ...e, date: newDate, startTime: fracToTime(newStart), endTime: fracToTime(newEnd) }
-      : e));
-    setDraggingEventId(null);
-    setDragOver(null);
-  }
 
   function deleteEvent(id: string) {
     setEvents(p => p.filter(e => e.id !== id));
@@ -430,6 +467,7 @@ export default function Planificacion() {
                   );
                 })}
               </div>
+              <DndContext sensors={planSensors} onDragStart={e => { if (!('dayOfWeek' in (events.find(ev => ev.id === e.active.id) || {} as any))) setActiveDragPlanId(e.active.id as string); }} onDragEnd={handleDragEndPlan}>
               <div ref={timelineRef} style={{ flex:1, overflowY:'auto' }}>
                 <div style={{ display:'grid', gridTemplateColumns:`60px repeat(7,1fr)`, minHeight:(H_END-H_START+1)*H_PX }}>
                   <div style={{ borderRight:'1px solid var(--border-soft)', background: 'var(--bg-primary)' }}>
@@ -452,15 +490,17 @@ export default function Planificacion() {
                     return (
                       <div key={di} style={{ position:'relative', borderLeft: di > 0 ? '1px solid var(--border-soft)' : 'none', background:tod?'rgba(225,29,72,0.02)':'transparent', opacity }}>
                         {HOURS.map(h => {
-                          const isOver = dragOver?.dayIdx===di && dragOver?.hour===h;
+                          const slotId = `plan-slot-${di}-${h}`;
+                          const isOver = dragOverSlot?.dayIdx===di && dragOverSlot?.hour===h;
                           return (
-                            <div key={h}
-                              onDragOver={e=>{ e.preventDefault(); setDragOver({dayIdx:di,hour:h}); }}
-                              onDragLeave={()=>setDragOver(null)}
-                              onDrop={()=>handleDrop(di,h)}
-                              onClick={()=>{ setModalDefaults({ date:iso, startTime:fracToTime(h), endTime:fracToTime(h+1) }); setEditingEvent(null); setShowEventModal(true); }}
-                              style={{ height:H_PX, borderBottom:'1px dashed var(--border-soft)', background:isOver?'rgba(225,29,72,0.08)':'transparent', transition:'background 100ms', cursor:'cell' }}
-                            />
+                            <DroppablePlanSlot key={h} id={slotId}>
+                              {({ setNodeRef, isOver: isOverDnd }) => (
+                                <div ref={setNodeRef}
+                                  onClick={()=>{ setModalDefaults({ date:iso, startTime:fracToTime(h), endTime:fracToTime(h+1) }); setEditingEvent(null); setShowEventModal(true); }}
+                                  style={{ height:H_PX, borderBottom:'1px dashed var(--border-soft)', background:isOver||isOverDnd?'rgba(225,29,72,0.08)':'transparent', transition:'background 100ms', cursor:'cell' }}
+                                />
+                              )}
+                            </DroppablePlanSlot>
                           );
                         })}
                         {[...schedCls, ...timedEvs].map(item => {
@@ -470,34 +510,71 @@ export default function Planificacion() {
                           const pos = layout.get(item.id) || { left: 0, width: 100 };
                           const itemColor = isClass && item.type === 'break' ? 'var(--text-muted)' : isClass && item.type === 'meal' ? '#f59e0b' : item.color;
                           
+                          if (isClass) {
+                            return (
+                              <div key={item.id}
+                                onClick={e => { e.stopPropagation(); setSelectedItem({ type: 'day', date: d, events: timedEvs, tasks: [] }); }}
+                                style={{
+                                  position:'absolute', top, left: `${pos.left}%`, width: `${pos.width}%`, height: hpx,
+                                  borderRadius: '4px',
+                                  background: `color-mix(in srgb, ${itemColor} 4%, transparent)`,
+                                  zIndex: 0, cursor: 'pointer', display:'flex', flexDirection:'column', padding: '4px 8px', overflow: 'hidden',
+                                  opacity: 0.55,
+                                }}
+                              >
+                                <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-muted)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{item.title}</span>
+                              </div>
+                            );
+                          }
+                          
                           return (
-                            <div key={item.id}
-                              draggable={!isClass}
-                              onDragStart={() => !isClass && setDraggingEventId(item.id)}
-                              onDragEnd={()=>{ setDraggingEventId(null); setDragOver(null); }}
-                              onClick={e => { e.stopPropagation(); isClass ? setSelectedItem({ type: 'day', date: d, events: timedEvs, tasks: [] }) : setSelectedItem({ type: 'event', event: item as PlanEvent }); }}
-                              style={{
-                                position:'absolute', top, left: `${pos.left}%`, width: `${pos.width}%`, height: hpx,
-                                borderLeft: isClass ? 'none' : `3px solid ${itemColor}`,
-                                borderRadius: '4px',
-                                background: isClass ? `color-mix(in srgb, ${itemColor} 4%, transparent)` : `color-mix(in srgb, ${itemColor} 12%, var(--bg-base))`,
-                                boxShadow: isClass ? 'none' : `inset 0 1px 0 ${itemColor}10, 0 2px 8px rgba(0,0,0,0.08)`,
-                                zIndex: isClass ? 0 : 3, cursor: isClass ? 'pointer' : 'grab', display:'flex', flexDirection:'column', padding: isClass ? '4px 8px' : '6px 10px', overflow: 'hidden',
-                                transition:'opacity 150ms',
-                                opacity: isClass ? 0.55 : 1,
-                                pointerEvents: isClass ? 'none' : 'auto',
-                              }}
-                              onMouseEnter={e=>{ if (!isClass) { e.currentTarget.style.boxShadow = `inset 0 1px 0 ${itemColor}20, 0 6px 20px rgba(0,0,0,0.25)`; e.currentTarget.style.zIndex='4'; } }}
-                              onMouseLeave={e=>{ if (!isClass) { e.currentTarget.style.boxShadow = `inset 0 1px 0 ${itemColor}10, 0 2px 8px rgba(0,0,0,0.08)`; e.currentTarget.style.zIndex='3'; } }}
-                            >
-                              <span style={{ fontSize: isClass ? 10 : 11, fontWeight: isClass ? 500 : 600, color: isClass ? 'var(--text-muted)' : itemColor, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{item.title}</span>
-                              {!isClass && hpx > 40 && (
-                                <div style={{ display:'flex', alignItems:'center', gap:4, marginTop:2 }}>
-                                  <Clock size={10} style={{ color:'var(--text-muted)', flexShrink:0 }} />
-                                  <span style={{ fontSize:10, color:'var(--text-muted)' }}>{fmtTimeRange(item.startTime, item.endTime, settings?.timeFormat)}</span>
+                            <DraggablePlanEvent key={item.id} id={item.id}>
+                              {({ attributes, listeners, setNodeRef, isDragging }) => (
+                                <div ref={setNodeRef} {...attributes} {...listeners}
+                                  onClick={e => { e.stopPropagation(); setSelectedItem({ type: 'event', event: item as PlanEvent }); }}
+                                  style={{
+                                    position:'absolute', top, left: `${pos.left}%`, width: `${pos.width}%`, height: hpx,
+                                    borderLeft: `3px solid ${itemColor}`,
+                                    borderRadius: '4px',
+                                    background: `color-mix(in srgb, ${itemColor} 12%, var(--bg-base))`,
+                                    boxShadow: `inset 0 1px 0 ${itemColor}10, 0 2px 8px rgba(0,0,0,0.08)`,
+                                    zIndex: 3, cursor: 'grab', display:'flex', flexDirection:'column', padding: '6px 10px', overflow: 'hidden',
+                                    opacity: isDragging ? 0.4 : 1,
+                                    transition: 'opacity 150ms',
+                                  }}
+                                  onMouseEnter={e=>{ e.currentTarget.style.boxShadow = `inset 0 1px 0 ${itemColor}20, 0 6px 20px rgba(0,0,0,0.25)`; e.currentTarget.style.zIndex='4'; }}
+                                  onMouseLeave={e=>{ e.currentTarget.style.boxShadow = `inset 0 1px 0 ${itemColor}10, 0 2px 8px rgba(0,0,0,0.08)`; e.currentTarget.style.zIndex='3'; }}
+                                >
+                                  <span style={{ fontSize: 11, fontWeight: 600, color: itemColor, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{item.title}</span>
+                                  {hpx > 40 && (
+                                    <div style={{ display:'flex', alignItems:'center', gap:4, marginTop:2 }}>
+                                      <Clock size={10} style={{ color:'var(--text-muted)', flexShrink:0 }} />
+                                      <span style={{ fontSize:10, color:'var(--text-muted)' }}>{fmtTimeRange(item.startTime, item.endTime, settings?.timeFormat)}</span>
+                                    </div>
+                                  )}
                                 </div>
                               )}
-                            </div>
+                            </DraggablePlanEvent>
+                          );
+                        })}
+                        {getStudySessionsForDate(iso).map(s => {
+                          if (!isValidDateStr(s.startedAt)) return null;
+                          const stD = new Date(s.startedAt);
+                          const stH = stD.getHours() + stD.getMinutes() / 60 + stD.getSeconds() / 3600;
+                          const durH = s.duration / 3600;
+                          const sTop = (stH - H_START) * H_PX;
+                          const sH = Math.max(durH * H_PX, 16);
+                          const isChrono = s.type === 'chrono';
+                          return (
+                            <div key={s.id} title={`Estudio: ${Math.round(s.duration/60)} min`}
+                              style={{
+                                position:'absolute', top: sTop, left: '2%', width: '96%', height: sH,
+                                borderRadius: 4, zIndex: 1, pointerEvents: 'none',
+                                background: isChrono ? 'rgba(16,185,129,0.08)' : 'rgba(59,130,246,0.08)',
+                                borderLeft: `2px solid ${isChrono ? 'rgba(16,185,129,0.25)' : 'rgba(59,130,246,0.25)'}`,
+                                opacity: 0.7,
+                              }}
+                            />
                           );
                         })}
                         {tod && nowH>=H_START && nowH<=H_END && (
@@ -510,6 +587,24 @@ export default function Planificacion() {
                   })}
                 </div>
               </div>
+              <DragOverlay dropAnimation={null}>
+                {activeDragPlanId ? (() => {
+                  const ev = events.find(e => e.id === activeDragPlanId);
+                  if (!ev) return null;
+                  return (
+                    <div style={{
+                      padding: '6px 12px', borderRadius: 6, borderLeft: `3px solid ${ev.color}`,
+                      background: `color-mix(in srgb, ${ev.color} 15%, var(--bg-base))`,
+                      boxShadow: '0 6px 24px rgba(0,0,0,0.35)',
+                      fontSize: 12, fontWeight: 600, color: ev.color,
+                      maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                      {ev.title}
+                    </div>
+                  );
+                })() : null}
+              </DragOverlay>
+              </DndContext>
             </>
           )}
 
@@ -573,6 +668,32 @@ export default function Planificacion() {
                         );
                       });
                     })()}
+                    {getStudySessionsForDate(format(navDate,'yyyy-MM-dd')).map(s => {
+                      if (!isValidDateStr(s.startedAt)) return null;
+                      const stD = new Date(s.startedAt);
+                      const stH = stD.getHours() + stD.getMinutes() / 60 + stD.getSeconds() / 3600;
+                      const durH = s.duration / 3600;
+                      const sTop = (stH - H_START) * H_PX;
+                      const sH = Math.max(durH * H_PX, 16);
+                      const isChrono = s.type === 'chrono';
+                      return (
+                        <div key={s.id} title={`Estudio: ${Math.round(s.duration/60)} min`}
+                          style={{
+                            position:'absolute', top: sTop, left: '2%', width: '96%', height: sH,
+                            borderRadius: 4, zIndex: 1, pointerEvents: 'none',
+                            background: isChrono ? 'rgba(16,185,129,0.08)' : 'rgba(59,130,246,0.08)',
+                            borderLeft: `2px solid ${isChrono ? 'rgba(16,185,129,0.25)' : 'rgba(59,130,246,0.25)'}`,
+                            opacity: 0.7, display:'flex', alignItems:'center', paddingLeft:10, gap:6,
+                          }}>
+                          <span style={{ fontSize:10, fontWeight:600, color:isChrono?'rgba(16,185,129,0.7)':'rgba(59,130,246,0.7)' }}>
+                            {((s.courseId ? courses.find(c=>c.id===s.courseId)?.name : (s.subjects?.[0] ? courses.find(c=>c.id===s.subjects![0])?.name : '')) || '').substring(0, 12)}
+                          </span>
+                          <span style={{ fontSize:9, fontWeight:400, color:'rgba(255,255,255,0.35)' }}>
+                            {Math.round(s.duration/60)}min
+                          </span>
+                        </div>
+                      );
+                    })}
                     {isToday(navDate) && nowH>=H_START && nowH<=H_END && (
                       <div style={{ position:'absolute', top:nowPx, left:0, right:0, height:2, background:'var(--accent)', zIndex:10, pointerEvents:'none', boxShadow:'0 0 16px var(--accent-glow)' }}>
                         <div style={{ position:'absolute', left:-4, top:-4, width:10, height:10, borderRadius:'50%', background:'var(--accent)', boxShadow:'0 0 20px var(--accent-glow)' }}/>
@@ -597,7 +718,7 @@ export default function Planificacion() {
                       const inc=isSameMonth(day,monthStart), tod=isToday(day);
                       const iso=format(day,'yyyy-MM-dd');
                       const dayEvs=[...getAllDayEventsForDate(iso), ...getTimedEventsForDate(iso)];
-                      const dayTasks=tasks.filter(t=>t.dueDate&&format(new Date(t.dueDate),'yyyy-MM-dd')===iso&&t.status!=='completado');
+                                            const dayTasks=tasks.filter(t=>{if(!t.dueDate||t.status==='completado')return false;try{return format(new Date(t.dueDate+'T12:00:00'),'yyyy-MM-dd')===iso}catch{return false}});
                       const opacity = isOld(iso) && !tod ? 0.35 : (inc ? 1 : 0.25);
                       return (
                         <div key={di}
@@ -668,7 +789,7 @@ export default function Planificacion() {
                             const iso = format(day, 'yyyy-MM-dd');
                             const hasEvent = getEventsForDate(iso).length > 0;
                             const dayEvs2 = getEventsForDate(iso);
-                            const dayTasks2 = tasks.filter(t => t.dueDate && format(new Date(t.dueDate),'yyyy-MM-dd')===iso && t.status !== 'completado');
+                            const dayTasks2 = tasks.filter(t => { if(!t.dueDate || t.status === 'completado') return false; try { return format(new Date(t.dueDate+'T12:00:00'),'yyyy-MM-dd')===iso } catch { return false } });
                             return (
                               <div key={di}
                                 onClick={(e) => { e.stopPropagation(); if (inc) setSelectedItem({ type: 'day', date: day, events: dayEvs2, tasks: dayTasks2 }); }}
@@ -728,6 +849,16 @@ export default function Planificacion() {
         onChange={e=>{ const f=e.target.files?.[0]; if(f){const url=URL.createObjectURL(f);setScheduleImageUrl(url);} }}/>
     </div>
   );
+}
+
+function DraggablePlanEvent({ id, children }: { id: string; children: (props: { attributes: any; listeners: any; setNodeRef: any; isDragging: boolean }) => React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id });
+  return <>{children({ attributes, listeners, setNodeRef, isDragging })}</>;
+}
+
+function DroppablePlanSlot({ id, children }: { id: string; children: (props: { setNodeRef: any; isOver: boolean }) => React.ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({ id });
+  return <>{children({ setNodeRef, isOver })}</>;
 }
 
 function AllDayBar({ events }: { events: PlanEvent[] }) {

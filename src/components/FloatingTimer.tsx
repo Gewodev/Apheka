@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { listen, emit } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { Coffee } from 'lucide-react';
 import { DigitSVG, ColonSVG } from './LEDDigits';
 import { ANIMATIONS } from './FloatingAnimations';
 
@@ -22,7 +23,11 @@ interface TimerSync {
   sessionType: string;
   pomodoroTime: number;
   shortBreakTime: number;
+  longBreakTime?: number;
   restStartTime?: number;
+  pomodoroSessions?: number;
+  pomodoroGoal?: number;
+  pomodoroComplete?: boolean;
 }
 
 interface SettingsSync {
@@ -33,6 +38,7 @@ interface SettingsSync {
   floatingAnimationType?: string;
   timerFocusColor?: string;
   timerBreakColor?: string;
+  timerLongBreakColor?: string;
   timerChronoColor?: string;
   appBgColor?: string;
   accentColor?: string;
@@ -49,7 +55,7 @@ export default function FloatingTimer() {
   const [decorated, setDecorated] = useState(true);
   const decoratedRef = useRef(true);
   const [showDecoBtn, setShowDecoBtn] = useState(false);
-  const customColors = useRef({ focus: '#E11D48', brk: '#10B981', chrono: '#3B82F6' });
+  const customColors = useRef({ focus: '#E11D48', brk: '#10B981', longBrk: '#F59E0B', chrono: '#3B82F6' });
   const lastSync = useRef<TimerSync & { ts: number }>({
     sessionTime: 0, isTimerActive: false, isRest: false,
     sessionType: 'pomodoro', pomodoroTime: 1500, shortBreakTime: 300, ts: 0,
@@ -66,11 +72,13 @@ export default function FloatingTimer() {
     customColors.current = {
       focus: p.timerFocusColor || '#E11D48',
       brk: p.timerBreakColor || '#10B981',
+      longBrk: p.timerLongBreakColor || '#F59E0B',
       chrono: p.timerChronoColor || '#3B82F6',
     };
     const s = lastSync.current;
     const cc = customColors.current;
-    setColor(s.isRest ? cc.brk : s.sessionType === 'pomodoro' ? cc.focus : cc.chrono);
+    const isLongBreak = s.isRest && s.pomodoroGoal && s.pomodoroSessions && s.pomodoroSessions > 0 && s.pomodoroSessions % s.pomodoroGoal === 0;
+    setColor(s.isRest ? (isLongBreak ? cc.longBrk : cc.brk) : s.sessionType === 'pomodoro' ? cc.focus : cc.chrono);
   }
 
   useEffect(() => {
@@ -112,10 +120,15 @@ export default function FloatingTimer() {
     const s = lastSync.current;
     const elapsed = s.sessionTime + (s.isTimerActive ? Math.floor((Date.now() - s.ts) / 1000) : 0);
     let display: number;
-    if (s.sessionType === 'pomodoro' && !s.isRest) {
+    if (s.pomodoroComplete && !s.isRest) {
+      display = 0;
+    } else if (s.sessionType === 'pomodoro' && !s.isRest) {
       display = Math.max(0, (s.pomodoroTime || 1500) - elapsed);
     } else if (s.isRest) {
-      display = Math.max(0, elapsed - (s.restStartTime || s.sessionTime));
+      const restElapsed = elapsed - (s.restStartTime ?? s.sessionTime);
+      const isLongBreak = s.pomodoroGoal && s.pomodoroSessions && s.pomodoroSessions > 0 && s.pomodoroSessions % s.pomodoroGoal === 0;
+      const restDuration = isLongBreak && s.longBreakTime ? s.longBreakTime : (s.shortBreakTime || 300);
+      display = Math.max(0, restDuration - restElapsed);
     } else {
       display = elapsed;
     }
@@ -125,15 +138,22 @@ export default function FloatingTimer() {
   }
 
   function updateLabel(s: TimerSync) {
-    if (s.isRest) setLabel('Descanso');
-    else if (s.isTimerActive) setLabel('Concentrado');
+    if (s.pomodoroComplete && !s.isRest) setLabel('Completado');
+    else if (s.isRest) {
+      const isLongBreak = s.pomodoroGoal && s.pomodoroSessions && s.pomodoroSessions > 0 && s.pomodoroSessions % s.pomodoroGoal === 0;
+      setLabel(isLongBreak ? 'Descanso largo' : 'Descanso');
+    } else if (s.isTimerActive) setLabel('Concentrado');
     else setLabel('Pausado');
   }
 
   function updateColor(s: TimerSync) {
     const cc = customColors.current;
-    if (s.isRest) setColor(cc.brk);
-    else if (s.sessionType === 'pomodoro') setColor(cc.focus);
+    if (s.pomodoroComplete && !s.isRest) {
+      setColor(cc.chrono);
+    } else if (s.isRest) {
+      const isLongBreak = s.pomodoroGoal && s.pomodoroSessions && s.pomodoroSessions > 0 && s.pomodoroSessions % s.pomodoroGoal === 0;
+      setColor(isLongBreak ? cc.longBrk : cc.brk);
+    } else if (s.sessionType === 'pomodoro') setColor(cc.focus);
     else setColor(cc.chrono);
   }
 
@@ -172,6 +192,7 @@ export default function FloatingTimer() {
   const AnimComponent = showAnimation && animType && ANIMATIONS[animType]
     ? ANIMATIONS[animType].component
     : null;
+  const pomodoroComplete = lastSync.current.pomodoroComplete && !lastSync.current.isRest;
 
   const digits = time.split('');
   const fontInfo = FONTS[fontKey] || FONTS.led;
@@ -212,7 +233,7 @@ export default function FloatingTimer() {
       </span>
 
       <div style={{ height: 18, display: 'flex', alignItems: 'center', marginTop: -10, marginBottom: 4 }}>
-        {!showAnimation && (
+        {!showAnimation && !pomodoroComplete && (
           <span style={{
             fontFamily: "'Inter', sans-serif", fontWeight: 600, fontSize: 9,
             color, letterSpacing: '0.1em', textTransform: 'uppercase',
@@ -226,11 +247,24 @@ export default function FloatingTimer() {
 
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2,
-        minHeight: 56,
-        opacity: (hideTime && !showAnimation) ? 0 : 1,
+        minHeight: 48,
+        opacity: (!pomodoroComplete && hideTime && !showAnimation) ? 0 : 1,
         transition: 'opacity 400ms',
       }}>
-        {showAnimation && AnimComponent ? (
+        {pomodoroComplete ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+            <div style={{ width: 32, height: 32, borderRadius: '50%', background: `${color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Coffee size={14} color={color} />
+            </div>
+            <span style={{
+              fontFamily: fontInfo.family, fontWeight: 350, fontSize: 24,
+              color, letterSpacing: '0.01em', lineHeight: 1.3, padding: '0 2px',
+              textAlign: 'center',
+            }}>
+              Te espera un descanso
+            </span>
+          </div>
+        ) : showAnimation && AnimComponent ? (
           <AnimComponent color={color} />
         ) : useLed ? (
           digits.map((ch, i) =>

@@ -20,6 +20,7 @@ import OAuthCallback from './components/OAuthCallback';
 import SupabaseCallback from './components/SupabaseCallback';
 import GlobalPlayer from './components/GlobalPlayer';
 import NowPlayingView from './components/NowPlayingView';
+import FloatingNote from './components/FloatingNote';
 import ReactPlayer from 'react-player';
 const Player = ReactPlayer as any;
 
@@ -30,7 +31,7 @@ interface AppContentProps {
 }
 
 function AppContent() {
-  const { settings, courses, navigateTo, setNavigateTo, importState, updateSettings, toastMessage, deleteOldCompletedTasks, youtubeVideoUrl, isPlayingMusic, musicVolume, musicProgress, musicDuration, setMusicProgress, setIsPlayingMusic, playTrack, musicQueue, setMusicQueue, shuffleMode, repeatMode, tracks, currentTrackId, setRepeatMode, coverModalTrackId } = useApp();
+  const { settings, courses, navigateTo, setNavigateTo, importState, updateSettings, toastMessage, deleteOldCompletedTasks, youtubeVideoUrl, isPlayingMusic, musicVolume, musicProgress, musicDuration, setMusicProgress, setIsPlayingMusic, playTrack, musicQueue, setMusicQueue, shuffleMode, repeatMode, tracks, currentTrackId, setRepeatMode, coverModalTrackId, showRestPrompt, handlePomodoroBannerClick, floatingNoteId, setFloatingNoteId, addNote } = useApp();
   const [activeView, setActiveView] = useState<ViewId>('inicio');
 
   // Auto-clean completed tasks older than 2 months on startup
@@ -59,6 +60,29 @@ function AppContent() {
       setIsSupabaseCallback(true);
     }
   }, []);
+
+  // Floating note keyboard shortcut (Cmd/Ctrl+Shift+N)
+  const floatingRef = useRef(floatingNoteId);
+  floatingRef.current = floatingNoteId;
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && floatingRef.current) {
+        setFloatingNoteId(null);
+        return;
+      }
+      if (e.key === 'N' && e.shiftKey && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        if (floatingRef.current) return;
+        const id = addNote({
+          title: 'Nota rápida', content: '', subtitle: '',
+          course: '', courseColor: '', tags: [], isPinned: false,
+        });
+        setFloatingNoteId(id);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [setFloatingNoteId, addNote]);
 
   // Close cursos popup when clicking outside
   useEffect(() => {
@@ -315,6 +339,21 @@ function AppContent() {
             {toastMessage.message}
           </div>
         )}
+        {showRestPrompt && activeView !== 'estudio' && (
+          <div onClick={() => { handlePomodoroBannerClick(); setActiveView('estudio'); }}
+            style={{
+              position: 'absolute', top: 16, left: '50%', transform: 'translateX(-50%)', zIndex: 9999,
+              padding: '12px 20px', borderRadius: 12, backdropFilter: 'blur(16px)',
+              background: 'rgba(245,158,11,0.12)',
+              border: '1px solid rgba(245,158,11,0.25)',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+              cursor: 'pointer',
+              fontSize: 13, fontWeight: 500, fontFamily: "'Inter Tight', sans-serif",
+              animation: 'fadeInDown 300ms ease-out',
+            }}>
+            <span style={{ color: '#fff' }}>Te espera un descanso</span>
+          </div>
+        )}
         {isSupabaseCallback ? (
           <SupabaseCallback />
         ) : isOAuthCallback ? (
@@ -354,6 +393,7 @@ function AppContent() {
         </div>}
         <GlobalPlayer sidebarCollapsed={isCollapsed} />
         <NowPlayingView sidebarCollapsed={isCollapsed} activeView={activeView} />
+        <FloatingNote />
       </main>
 
       {importState.active && (

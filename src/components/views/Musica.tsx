@@ -75,8 +75,7 @@ export default function Musica() {
   const [coverHover, setCoverHover] = useState(false);
   const [searchMode, setSearchMode] = useState<'link' | 'query'>('link');
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-  const [confirmDeleteText, setConfirmDeleteText] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState<{ type: 'track' | 'artist' | 'playlist'; id: string; name: string } | null>(null);
   const [showClearAllConfirm, setShowClearAllConfirm] = useState(false);
   const [searchPerformed, setSearchPerformed] = useState(false);
   const [statsPeriod, setStatsPeriod] = useState<'week' | 'month'>('week');
@@ -85,6 +84,7 @@ export default function Musica() {
   const [editArtistName, setEditArtistName] = useState('');
   const [editArtistImage, setEditArtistImage] = useState('');
   const [artistSelectedTrackIds, setArtistSelectedTrackIds] = useState<string[]>([]);
+  const [artistTrackSearch, setArtistTrackSearch] = useState('');
   // Playlist state
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
   const [showCreatePlaylist, setShowCreatePlaylist] = useState(false);
@@ -592,7 +592,7 @@ export default function Musica() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
                     <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>Tus Artistas</h3>
                     <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                      <button onClick={() => { setEditingArtistId('new'); setEditArtistName(''); setEditArtistImage(''); setArtistSelectedTrackIds([]); }} className="btn-primary" style={{ height: 32, padding: '0 16px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, borderRadius: 16 }}>
+                      <button onClick={() => { setEditingArtistId('new'); setEditArtistName(''); setEditArtistImage(''); setArtistSelectedTrackIds([]); setArtistTrackSearch(''); }} className="btn-primary" style={{ height: 32, padding: '0 16px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, borderRadius: 16 }}>
                         <Plus size={13} /> Crear artista
                       </button>
                       <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{artists.length} artistas</span>
@@ -612,8 +612,8 @@ export default function Musica() {
                             <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 6 }}>{artistTracks.length} canciones</div>
                           </div>
                           <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', gap: 6 }}>
-                            <button onClick={(e) => { e.stopPropagation(); setEditingArtistId(artist.id); setEditArtistName(artist.name); setEditArtistImage(artist.profileImage || ''); setArtistSelectedTrackIds(tracks.filter(t => t.artist === artist.name).map(t => t.id)); }} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: '50%', width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-tertiary)', cursor: 'pointer' }}><Edit2 size={13} /></button>
-                            <button onClick={(e) => { e.stopPropagation(); if (confirm(`¿Borrar artista "${artist.name}"?`)) deleteArtist(artist.id); }} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: '50%', width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--error)', cursor: 'pointer' }}><Trash2 size={13} /></button>
+                            <button onClick={(e) => { e.stopPropagation(); setEditingArtistId(artist.id); setEditArtistName(artist.name); setEditArtistImage(artist.profileImage || ''); setArtistSelectedTrackIds(tracks.filter(t => t.artist === artist.name).map(t => t.id)); setArtistTrackSearch(''); }} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: '50%', width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-tertiary)', cursor: 'pointer' }}><Edit2 size={13} /></button>
+                            <button onClick={(e) => { e.stopPropagation(); setConfirmDelete({ type: 'artist', id: artist.id, name: artist.name }); }} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: '50%', width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--error)', cursor: 'pointer' }}><Trash2 size={13} /></button>
                           </div>
                         </div>
                       );
@@ -726,7 +726,7 @@ export default function Musica() {
                           </div>
                           <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', gap: 6 }}>
                             <button onClick={(e) => { e.stopPropagation(); setEditingPlaylistId(pl.id); setShowCreatePlaylist(true); setNewPlaylistName(pl.name); setSelectedTrackIds(new Set(pl.trackIds)); }} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: '50%', width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-tertiary)', cursor: 'pointer' }}><Edit2 size={13} /></button>
-                            <button onClick={(e) => { e.stopPropagation(); if (confirm(`¿Borrar playlist "${pl.name}"?`)) deletePlaylist(pl.id); }} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: '50%', width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--error)', cursor: 'pointer' }}><Trash2 size={13} /></button>
+                            <button onClick={(e) => { e.stopPropagation(); setConfirmDelete({ type: 'playlist', id: pl.id, name: pl.name }); }} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: '50%', width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--error)', cursor: 'pointer' }}><Trash2 size={13} /></button>
                           </div>
                         </div>
                       );
@@ -1092,7 +1092,7 @@ export default function Musica() {
                             </button>
                             <button onClick={(e) => {
                               e.stopPropagation();
-                              setConfirmDelete(track.id);
+                              setConfirmDelete({ type: 'track', id: track.id, name: track.title });
                             }} className="btn-ghost" style={{ padding: 6, color: 'var(--text-tertiary)' }} title="Eliminar canción">
                               <Trash2 size={14} />
                             </button>
@@ -1154,7 +1154,7 @@ export default function Musica() {
                             <button onClick={(e) => { e.stopPropagation(); setEditingTrackId(track.id); setEditTitle(track.title); setEditArtist(track.artist); setEditCover(track.coverImage || ''); }} className="btn-ghost" style={{ padding: 4, color: 'var(--text-tertiary)', transition: 'color 200ms' }} onMouseEnter={e => e.currentTarget.style.color = 'var(--text-secondary)'} onMouseLeave={e => e.currentTarget.style.color = 'var(--text-tertiary)'}>
                               <Edit2 size={13} />
                             </button>
-                            <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(track.id); }} className="btn-ghost" style={{ padding: 4, color: 'var(--text-tertiary)', transition: 'color 200ms' }} onMouseEnter={e => e.currentTarget.style.color = 'var(--danger)'} onMouseLeave={e => e.currentTarget.style.color = 'var(--text-tertiary)'}>
+                            <button onClick={(e) => { e.stopPropagation(); setConfirmDelete({ type: 'track', id: track.id, name: track.title }); }} className="btn-ghost" style={{ padding: 4, color: 'var(--text-tertiary)', transition: 'color 200ms' }} onMouseEnter={e => e.currentTarget.style.color = 'var(--danger)'} onMouseLeave={e => e.currentTarget.style.color = 'var(--text-tertiary)'}>
                               <Trash2 size={13} />
                             </button>
                           </div>
@@ -1330,26 +1330,31 @@ export default function Musica() {
                     <button onClick={() => setSearchResults([])} className="btn-ghost" style={{ padding: 4 }}><X size={14} /></button>
                   </div>
                   {searchResults.map((r, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
-                      <div style={{ width: 48, height: 36, borderRadius: 6, background: 'var(--bg-surface)', overflow: 'hidden', flexShrink: 0 }}>
-                        {r.thumbnail ? <img src={r.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={16} />}
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+                      <div style={{ width: 44, height: 33, borderRadius: 6, background: 'var(--bg-surface)', overflow: 'hidden', flexShrink: 0 }}>
+                        {r.thumbnail ? <img src={r.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={14} />}
                       </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title}</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>{r.channel} · {formatDuration(r.duration)}</div>
+                      <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{r.title}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.channel} · {formatDuration(r.duration)}</div>
                       </div>
-                      <div style={{ display: 'flex', gap: 6 }}>
+                      <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
                         <button onClick={async () => {
                           try {
                             const existing = await WebviewWindow.getByLabel('youtube-player');
-                            if (existing) { await existing.show(); await existing.setFocus(); return; }
+                            if (existing) {
+                              await emitTo('youtube-player', 'youtube:load', { videoUrl: r.webpage_url, title: r.title, thumbnail: r.thumbnail || '' });
+                              await existing.show(); await existing.setFocus();
+                              return;
+                            }
+                            try { localStorage.setItem('owa_yt_pending', JSON.stringify({ videoUrl: r.webpage_url, title: r.title, thumbnail: r.thumbnail || '' })); } catch {}
                             const win = new WebviewWindow('youtube-player', {
                               url: '/',
                               title: 'YouTube Player',
                               width: 480, height: 360,
                               minWidth: 320, minHeight: 240,
                               resizable: true,
-                              decorations: false,
+                              decorations: true,
                               alwaysOnTop: false,
                               skipTaskbar: false,
                               center: true,
@@ -1359,12 +1364,12 @@ export default function Musica() {
                               try {
                                 await emitTo('youtube-player', 'youtube:load', { videoUrl: r.webpage_url, title: r.title, thumbnail: r.thumbnail || '' });
                               } catch {}
-                            }, 500);
+                            }, 1500);
                           } catch {
                             setYoutubePlayerUrl(r.webpage_url); setYoutubePlayerTitle(r.title); setYoutubePlayerThumb(r.thumbnail || '');
                           }
-                        }} className="btn-secondary" style={{ padding: '6px 12px', height: 32, fontSize: 11, display: 'flex', alignItems: 'center', gap: 6 }}><Play size={12} /> YouTube</button>
-                        <button onClick={() => handleDownloadOne(r)} className="btn-primary" style={{ padding: '6px 12px', height: 32, fontSize: 11, display: 'flex', alignItems: 'center', gap: 6 }}><Download size={12} /> Descargar</button>
+                        }} className="btn-secondary" style={{ padding: '5px 10px', height: 30, fontSize: 10, display: 'flex', alignItems: 'center', gap: 4 }}><Play size={11} /> YouTube</button>
+                        <button onClick={() => handleDownloadOne(r)} className="btn-primary" style={{ padding: '5px 10px', height: 30, fontSize: 10, display: 'flex', alignItems: 'center', gap: 4 }}><Download size={11} /> Descargar</button>
                       </div>
                     </div>
                   ))}
@@ -1564,9 +1569,6 @@ export default function Musica() {
           <div className="bento-card" style={{ padding: '20px', border: '1px solid var(--border-subtle)', position: 'relative', overflow: 'hidden', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <span className="section-header" style={{ marginBottom: 0, fontSize: 12, color: 'var(--text-primary)' }}>Cola de Reproducción</span>
-              {musicQueue.length > 0 && (
-                <span onClick={() => setMusicQueue([])} style={{ fontSize: 11, color: 'var(--text-tertiary)', cursor: 'pointer' }} className="hover:text-white">Borrar</span>
-              )}
             </div>
 
             {shuffleMode ? (
@@ -1709,93 +1711,103 @@ export default function Musica() {
             </div>
           </div>
 
-          {/* DOWNLOADS CARD (inline - replaced by floating panel below) */}
+          {/* DOWNLOADS CARD — inline en columna derecha */}
+          {(downloadSelection.length > 0 || downloadQueue.length > 0) && (
+            <div className="bento-card" style={{ padding: '16px 18px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+                  <Download size={14} style={{ color: 'var(--accent)' }} />
+                  Descargas
+                </div>
+                <button onClick={() => {
+                  setDownloadSelection([]);
+                  clearCompletedDownloads();
+                }} className="btn-ghost" style={{ padding: 4, color: 'var(--text-tertiary)', borderRadius: '50%' }}><X size={14} /></button>
+              </div>
+
+              {/* Activos: progress + Cancel (sin X) */}
+              {downloadQueue.filter(d => d.status === 'downloading' || d.status === 'queued').length > 0 && (
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+                    Descargando...
+                  </div>
+                  {downloadQueue.filter(d => d.status === 'downloading' || d.status === 'queued').map(dl => (
+                    <div key={dl.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8, background: 'var(--bg-surface)', marginBottom: 6 }}>
+                      <div style={{ width: 28, height: 28, borderRadius: 4, background: 'var(--bg-deep)', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {dl.thumbnail ? <img src={dl.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={12} style={{ color: 'var(--text-muted)' }} />}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{dl.title}</div>
+                        <div style={{ height: 3, borderRadius: 2, background: 'rgba(255,255,255,0.06)', marginTop: 4, overflow: 'hidden' }}>
+                          <div style={{ width: `${dl.progress * 100}%`, height: '100%', borderRadius: 2, background: 'var(--accent)', transition: 'width 300ms' }} />
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                        <span style={{ fontSize: 9, color: 'var(--text-tertiary)', fontVariantNumeric: 'tabular-nums' }}>
+                          {Math.round(dl.progress * 100)}%
+                        </span>
+                        <button onClick={() => handleCancelDownload(dl.id)} style={{ padding: '4px 8px', background: 'var(--bg-deep)', border: 'none', borderRadius: 4, fontSize: 9, fontWeight: 600, color: '#F59E0B', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Completados / Error / Cancelados: solo X (delete) */}
+              {downloadQueue.filter(d => d.status !== 'downloading' && d.status !== 'queued').length > 0 && (
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+                    Finalizadas
+                  </div>
+                  {downloadQueue.filter(d => d.status !== 'downloading' && d.status !== 'queued').map(dl => (
+                    <div key={dl.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 6, background: 'var(--bg-surface)', marginBottom: 4 }}>
+                      <div style={{ width: 24, height: 24, borderRadius: 4, background: 'var(--bg-deep)', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {dl.thumbnail ? <img src={dl.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={10} style={{ color: 'var(--text-muted)' }} />}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{dl.title}</div>
+                        <div style={{ fontSize: 9, color: dl.status === 'error' ? 'var(--error)' : 'var(--text-tertiary)', marginTop: 1 }}>
+                          {dl.status === 'completed' ? 'Completado' : dl.status === 'error' ? `Error: ${dl.errorMessage || 'desconocido'}` : 'Cancelado'}
+                        </div>
+                      </div>
+                      <button onClick={() => removeFromDownloadQueue(dl.id)} style={{ padding: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', opacity: 0.5, flexShrink: 0 }}><X size={10} /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Pendientes: selección para descargar */}
+              {downloadSelection.length > 0 && (
+                <>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+                    Pendientes ({downloadSelection.length})
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 10, maxHeight: 200, overflowY: 'auto' }}>
+                    {downloadSelection.map((item, i) => (
+                      <div key={item.url} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 8px', borderRadius: 6, background: 'var(--bg-surface)' }}>
+                        <div style={{ width: 22, height: 22, borderRadius: 3, background: 'var(--bg-deep)', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {item.thumbnail ? <img src={item.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={9} style={{ color: 'var(--text-muted)' }} />}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
+                        </div>
+                        <button onClick={() => setDownloadSelection(prev => prev.filter((_, idx) => idx !== i))} style={{ padding: 2, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', opacity: 0.4, flexShrink: 0 }}><X size={8} /></button>
+                      </div>
+                    ))}
+                  </div>
+                  <button onClick={startBulkDownload} className="btn-primary" style={{ width: '100%', height: 36, fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 8 }}>
+                    <Download size={14} /> Descargar Todo ({downloadSelection.length})
+                  </button>
+                </>
+              )}
+            </div>
+          )}
 
         </div>
 
       </div>
-
-
-
-      {/* DOWNLOAD SELECTION PANEL — lateral derecho con progreso integrado */}
-      {(downloadSelection.length > 0 || downloadQueue.some(d => d.status === 'downloading' || d.status === 'queued')) && (
-        <div style={{
-          position: 'fixed', right: 0, top: 0, bottom: 0, zIndex: 60,
-          width: 340,
-          background: 'linear-gradient(180deg, var(--bg-elevated) 0%, var(--bg-base) 100%)',
-          borderLeft: '1px solid var(--border-subtle)',
-          boxShadow: '-8px 0 40px rgba(0,0,0,0.4)',
-          display: 'flex', flexDirection: 'column',
-          animation: 'slideInRight 250ms ease',
-          backdropFilter: 'blur(12px)',
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 18px', borderBottom: '1px solid var(--border-subtle)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
-              <Download size={16} style={{ color: 'var(--accent)' }} />
-              Descargas
-            </div>
-            <button onClick={() => {
-              setDownloadSelection([]);
-              clearCompletedDownloads();
-            }} className="btn-ghost" style={{ padding: 6, color: 'var(--text-tertiary)', borderRadius: '50%' }}><X size={16} /></button>
-          </div>
-
-          {/* Download queue activo */}
-          {downloadQueue.filter(d => d.status === 'downloading' || d.status === 'queued').length > 0 && (
-            <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--border-subtle)' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
-                Descargando...
-              </div>
-              {downloadQueue.filter(d => d.status === 'downloading' || d.status === 'queued').map(dl => (
-                <div key={dl.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 6, background: 'var(--bg-surface)', marginBottom: 4 }}>
-                  <div style={{ width: 24, height: 24, borderRadius: 4, background: 'var(--bg-deep)', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    {dl.thumbnail ? <img src={dl.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={10} style={{ color: 'var(--text-muted)' }} />}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{dl.title}</div>
-                    <div style={{ height: 2, borderRadius: 1, background: 'rgba(255,255,255,0.06)', marginTop: 3, overflow: 'hidden' }}>
-                      <div style={{ width: `${dl.progress * 100}%`, height: '100%', borderRadius: 1, background: 'var(--accent)', transition: 'width 300ms' }} />
-                    </div>
-                  </div>
-                  <span style={{ fontSize: 9, color: 'var(--text-tertiary)', fontVariantNumeric: 'tabular-nums' }}>
-                    {Math.round(dl.progress * 100)}%
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Selección pendiente */}
-          {downloadSelection.length > 0 && (
-            <>
-              <div style={{ padding: '8px 8px 0', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                Pendientes ({downloadSelection.length})
-              </div>
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, padding: '6px 10px', overflowY: 'auto' }}>
-                {downloadSelection.map((item, i) => (
-                  <div key={item.url} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 6, background: 'var(--bg-surface)', transition: 'all 150ms' }}>
-                    <div style={{ width: 24, height: 24, borderRadius: 4, background: 'var(--bg-deep)', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      {item.thumbnail ? <img src={item.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={10} style={{ color: 'var(--text-muted)' }} />}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
-                    </div>
-                    <button onClick={() => setDownloadSelection(prev => prev.filter((_, idx) => idx !== i))} style={{ padding: 2, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', opacity: 0.4 }}><X size={9} /></button>
-                  </div>
-                ))}
-              </div>
-              <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border-subtle)' }}>
-                <button onClick={startBulkDownload} className="btn-primary" style={{ width: '100%', height: 40, fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 10 }}>
-                  <Download size={16} /> Descargar Todo ({downloadSelection.length})
-                </button>
-                <div style={{ textAlign: 'center', marginTop: 8, fontSize: 10, color: 'var(--text-tertiary)' }}>
-                  Owa Downloader procesará las descargas
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-      )}
 
       {/* Edit Track Dialog */}
       {editingTrackId && (
@@ -1804,9 +1816,9 @@ export default function Musica() {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
         }} onClick={() => setEditingTrackId(null)}>
-          <div className="bento-card" style={{ padding: 28, width: 340, maxWidth: '90vw', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }} onClick={e => e.stopPropagation()}>
+          <div className="bento-card" style={{ padding: 28, width: 380, maxWidth: '90vw', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }} onClick={e => e.stopPropagation()}>
             <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 16 }}>Editar Canción</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
                 <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>Título</label>
                 <input value={editTitle} onChange={e => setEditTitle(e.target.value)} className="input-base" style={{ width: '100%', height: 38, fontSize: 12 }} />
@@ -1815,15 +1827,23 @@ export default function Musica() {
                 <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>Artista</label>
                 <div style={{ display: 'flex', gap: 8, flexDirection: 'column' }}>
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <input value={editArtist} onChange={e => setEditArtist(e.target.value)} className="input-base" placeholder="Nuevo artista o elige de la lista..." style={{ flex: 1, height: 38, fontSize: 12 }} />
+                    <input value={editArtist} onChange={e => setEditArtist(e.target.value)} className="input-base" placeholder="Escribe o elige un artista..." style={{ flex: 1, height: 38, fontSize: 12 }} />
                     <button onClick={() => { if (editArtist.trim()) { addArtist(editArtist.trim()); } }} className="btn-secondary" style={{ padding: '0 12px' }} title="Guardar a predeterminados"><Plus size={14} /></button>
                   </div>
                   {(artists || []).length > 0 && (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>
                       {(artists || []).map(a => (
-                        <div key={a.id} style={{ display: 'flex', alignItems: 'center', background: 'var(--surface-hover)', borderRadius: 12, padding: '4px 8px', fontSize: 11, color: 'var(--text-secondary)' }}>
-                          <span style={{ cursor: 'pointer', marginRight: 6 }} onClick={() => setEditArtist(a.name)}>{a.name}</span>
-                          <X size={10} style={{ cursor: 'pointer', opacity: 0.5 }} onClick={() => deleteArtist(a.id)} />
+                        <div key={a.id}
+                          onClick={() => setEditArtist(a.name)}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 6,
+                            background: editArtist === a.name ? 'var(--accent-alpha)' : 'var(--surface-hover)',
+                            borderRadius: 14, padding: '6px 12px', fontSize: 12, fontWeight: 500,
+                            color: editArtist === a.name ? 'var(--accent)' : 'var(--text-secondary)',
+                            cursor: 'pointer', border: editArtist === a.name ? '1px solid var(--accent)' : '1px solid transparent',
+                            transition: 'all 150ms',
+                          }}>
+                          {a.name}
                         </div>
                       ))}
                     </div>
@@ -1897,7 +1917,7 @@ export default function Musica() {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
         }} onClick={() => setEditingArtistId(null)}>
-          <div className="bento-card" style={{ padding: 28, width: 340, maxWidth: '90vw', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }} onClick={e => e.stopPropagation()}>
+          <div className="bento-card" style={{ padding: 28, width: 400, maxWidth: '92vw', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }} onClick={e => e.stopPropagation()}>
             <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 20 }}>{editingArtistId === 'new' ? 'Crear Artista' : 'Editar Artista'}</h3>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -1934,25 +1954,35 @@ export default function Musica() {
 
               <div>
                 <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Canciones de este artista ({artistSelectedTrackIds.length} seleccionadas)</label>
-                <div style={{ maxHeight: 200, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4, borderRadius: 8, border: '1px solid var(--border-subtle)', padding: 6 }}>
-                  {tracks.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-tertiary)', padding: '12px 8px', textAlign: 'center' }}>No hay canciones</div>}
-                  {tracks.map(t => {
-                    const selected = artistSelectedTrackIds.includes(t.id);
-                    return (
-                      <div key={t.id} onClick={() => setArtistSelectedTrackIds(prev => prev.includes(t.id) ? prev.filter(id => id !== t.id) : [...prev, t.id])} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, cursor: 'pointer', background: selected ? 'var(--accent-alpha)' : 'transparent', transition: 'background 150ms', border: selected ? '1px solid var(--accent)' : '1px solid transparent' }}>
-                        <div style={{ width: 20, height: 20, borderRadius: 4, border: selected ? '2px solid var(--accent)' : '2px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', background: selected ? 'var(--accent)' : 'transparent', flexShrink: 0 }}>
-                          {selected && <CheckCircle size={14} color="#fff" />}
-                        </div>
-                        <div style={{ width: 28, height: 28, borderRadius: 4, overflow: 'hidden', background: 'var(--bg-deep)', flexShrink: 0 }}>
-                          {t.coverImage && <img src={t.coverImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</div>
-                          <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{t.artist || 'Sin artista'}</div>
-                        </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, borderRadius: 8, border: '1px solid var(--border-subtle)', padding: 6 }}>
+                  <div style={{ position: 'relative' }}>
+                    <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)', pointerEvents: 'none' }} />
+                    <input value={artistTrackSearch} onChange={e => setArtistTrackSearch(e.target.value)} placeholder="Buscar canciones..." className="input-base" style={{ width: '100%', height: 34, fontSize: 12, paddingLeft: 30, borderRadius: 6 }} />
+                  </div>
+                  <div style={{ maxHeight: 220, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    {tracks.filter(t => !artistTrackSearch || t.title.toLowerCase().includes(artistTrackSearch.toLowerCase()) || t.artist?.toLowerCase().includes(artistTrackSearch.toLowerCase())).length === 0 && (
+                      <div style={{ fontSize: 12, color: 'var(--text-tertiary)', padding: '12px 8px', textAlign: 'center' }}>
+                        {artistTrackSearch ? 'Sin resultados' : 'No hay canciones'}
                       </div>
-                    );
-                  })}
+                    )}
+                    {tracks.filter(t => !artistTrackSearch || t.title.toLowerCase().includes(artistTrackSearch.toLowerCase()) || t.artist?.toLowerCase().includes(artistTrackSearch.toLowerCase())).map(t => {
+                      const selected = artistSelectedTrackIds.includes(t.id);
+                      return (
+                        <div key={t.id} onClick={() => setArtistSelectedTrackIds(prev => prev.includes(t.id) ? prev.filter(id => id !== t.id) : [...prev, t.id])} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, cursor: 'pointer', background: selected ? 'var(--accent-alpha)' : 'transparent', transition: 'background 150ms', border: selected ? '1px solid var(--accent)' : '1px solid transparent' }}>
+                          <div style={{ width: 20, height: 20, borderRadius: 4, border: selected ? '2px solid var(--accent)' : '2px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', background: selected ? 'var(--accent)' : 'transparent', flexShrink: 0 }}>
+                            {selected && <CheckCircle size={14} color="#fff" />}
+                          </div>
+                          <div style={{ width: 28, height: 28, borderRadius: 4, overflow: 'hidden', background: 'var(--bg-deep)', flexShrink: 0 }}>
+                            {t.coverImage && <img src={t.coverImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</div>
+                            <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{t.artist || 'Sin artista'}</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             </div>
@@ -2005,22 +2035,28 @@ export default function Musica() {
           position: 'fixed', inset: 0, zIndex: 1000,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
-        }} onClick={() => { setConfirmDelete(null); setConfirmDeleteText(''); }}>
+        }} onClick={() => setConfirmDelete(null)}>
           <div style={{ padding: 28, width: 340, maxWidth: '90vw', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 16 }} onClick={e => e.stopPropagation()}>
-            <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>Eliminar</h3>
+            <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>
+              {confirmDelete.type === 'artist' ? 'Eliminar Artista' : confirmDelete.type === 'playlist' ? 'Eliminar Playlist' : 'Eliminar Canción'}
+            </h3>
             <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginBottom: 24, lineHeight: 1.5 }}>
-              {tracks.find(t => t.id === confirmDelete)
-                ? `Se eliminará "${tracks.find(t => t.id === confirmDelete)?.title}" de tu biblioteca.`
-                : 'Se eliminará esta playlist de tu biblioteca.'}
+              {confirmDelete.type === 'track'
+                ? `Se eliminará "${confirmDelete.name}" de tu biblioteca.`
+                : confirmDelete.type === 'artist'
+                  ? `Se eliminará "${confirmDelete.name}" y se desvincularán sus canciones.`
+                  : `Se eliminará la playlist "${confirmDelete.name}" de tu biblioteca.`}
             </p>
             <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-              <button onClick={() => { setConfirmDelete(null); setConfirmDeleteText(''); }} style={{ height: 38, padding: '0 20px', fontSize: 12, fontWeight: 600, borderRadius: 8, cursor: 'pointer', border: '1px solid var(--border-default)', background: 'var(--bg-surface)', color: 'var(--text-secondary)' }}>
+              <button onClick={() => setConfirmDelete(null)} style={{ height: 38, padding: '0 20px', fontSize: 12, fontWeight: 600, borderRadius: 8, cursor: 'pointer', border: '1px solid var(--border-default)', background: 'var(--bg-surface)', color: 'var(--text-secondary)' }}>
                 Cancelar
               </button>
               <button onClick={() => {
-                deleteTrack(confirmDelete);
+                const d = confirmDelete;
+                if (d.type === 'track') deleteTrack(d.id);
+                else if (d.type === 'artist') deleteArtist(d.id);
+                else if (d.type === 'playlist') deletePlaylist(d.id);
                 setConfirmDelete(null);
-                setConfirmDeleteText('');
               }} style={{ height: 38, padding: '0 20px', fontSize: 12, fontWeight: 700, borderRadius: 8, cursor: 'pointer', border: 'none', background: '#EF4444', color: '#fff', display: 'flex', alignItems: 'center', gap: 6 }}>
                 Eliminar
               </button>

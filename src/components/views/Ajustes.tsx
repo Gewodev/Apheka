@@ -14,9 +14,9 @@ import { del } from 'idb-keyval';
 import { invoke } from '@tauri-apps/api/core';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { open } from '@tauri-apps/plugin-dialog';
+import { open, save } from '@tauri-apps/plugin-dialog';
 import NotificationBell from '../ui/NotificationBell';
-import { copyFile, mkdir, exists, readFile } from '@tauri-apps/plugin-fs';
+import { copyFile, mkdir, exists, readFile, writeFile, readTextFile } from '@tauri-apps/plugin-fs';
 import { appCacheDir, join, extname } from '@tauri-apps/api/path';
 import { getDownloadPath, setDownloadPath } from '../../lib/musicApi';
 import {
@@ -121,6 +121,7 @@ export default function Ajustes() {
     loadGoogleProfile,
     events, tasks, notes, clearAllMusicData, addNotification, deleteCompletedTasks,
     exportMusicLibrary, importMusicLibrary,
+    tracks, updateTrack,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<SettingsTab>('perfil');
@@ -1529,6 +1530,76 @@ export default function Ajustes() {
                   <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12, lineHeight: 1.4 }}>
                     Las canciones descargadas se guardan en la carpeta configurada del sistema. 
                     Puedes cambiarla desde la sección de música.
+                  </div>
+                </div>
+
+                {/* Import / Export metadata */}
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>
+                    Importar / Exportar Metadatos
+                  </span>
+                  <p style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.5, marginBottom: 14 }}>
+                    Exporta los metadatos y portadas de todas tus canciones a un archivo JSON.
+                    Al importar, se actualizan las canciones existentes usando su ID \u00fanico.
+                  </p>
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    <button onClick={async () => {
+                      try {
+                        const dest = await save({
+                          filters: [{ name: 'JSON', extensions: ['json'] }],
+                          defaultPath: 'owa_music_metadata.json',
+                          title: 'Exportar metadatos de música',
+                        });
+                        if (!dest) return;
+                        const metadata = tracks.map((t: any) => ({
+                          id: t.id, title: t.title, artist: t.artist,
+                          coverImage: t.coverImage,
+                          duration: t.duration, source: t.source,
+                          isFavorite: t.isFavorite,
+                        }));
+                        await writeFile(dest, new TextEncoder().encode(
+                          JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), tracks: metadata }, null, 2)
+                        ));
+                        addNotification(`Metadatos exportados: ${metadata.length} canciones`, 'success');
+                      } catch (e) {
+                        addNotification('Error al exportar metadatos', 'error');
+                        console.error(e);
+                      }
+                    }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.15)', color: '#3B82F6' }}>
+                      <Upload size={14} /> Exportar metadatos
+                    </button>
+                    <button onClick={async () => {
+                      try {
+                        const src = await open({
+                          filters: [{ name: 'JSON', extensions: ['json'] }],
+                          title: 'Importar metadatos de música',
+                          multiple: false,
+                        });
+                        if (!src) return;
+                        const content = await readTextFile(src as string);
+                        const data = JSON.parse(content);
+                        const imported = data.tracks || [];
+                        let updated = 0;
+                        for (const meta of imported) {
+                          const existing = tracks.find((t: any) => t.id === meta.id);
+                          if (existing) {
+                            updateTrack(meta.id, {
+                              title: meta.title,
+                              artist: meta.artist,
+                              coverImage: meta.coverImage,
+                              isFavorite: meta.isFavorite,
+                            });
+                            updated++;
+                          }
+                        }
+                        addNotification(`Metadatos importados: ${updated} canciones actualizadas de ${imported.length}`, 'success');
+                      } catch (e) {
+                        addNotification('Error al importar metadatos', 'error');
+                        console.error(e);
+                      }
+                    }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.15)', color: '#10B981' }}>
+                      <Download size={14} /> Importar metadatos
+                    </button>
                   </div>
                 </div>
               </section>

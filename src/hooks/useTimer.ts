@@ -42,27 +42,25 @@ export function useTimer() {
   const chronoGoal = settings.chronoGoal ?? 25 * 60; // seconds, default 25â€¯min
 
   const hasTriggeredRef = useRef(false);
-  const restStartRef = useRef(0);
+  const restStartRef = useRef(-1);
+  const sessionTimeRef = useRef(sessionTime);
+  sessionTimeRef.current = sessionTime;
+
+  // Freeze restStartRef when rest starts, reset when rest ends
+  useEffect(() => {
+    if (isRest) {
+      if (restStartRef.current === -1) {
+        restStartRef.current = sessionTimeRef.current;
+      }
+    } else {
+      restStartRef.current = -1;
+    }
+  }, [isRest]);
 
   // ---------------------------------------------------------------------------
   // Timer sideâ€‘effects â€“ runs when the timer is active
   // ---------------------------------------------------------------------------
   useEffect(() => {
-    // Pomodoro completion
-    if (
-      isTimerActive &&
-      !isRest &&
-      sessionType === 'pomodoro' &&
-      sessionTime >= (settings.pomodoroTime ?? 1500) &&
-      !hasTriggeredRef.current
-    ) {
-      hasTriggeredRef.current = true;
-      setIsRest(true);
-      restStartRef.current = sessionTime;
-      incrementPomodoroSessions();
-      setShowCompletion(true);
-    }
-
     // Cronómetro round detection â€“ count a round when the goal is reached
     if (
       isTimerActive &&
@@ -108,10 +106,12 @@ export function useTimer() {
       ? Math.min(100, (sessionTime / settings.pomodoroTime) * 100)
       : 0;
 
-  const restElapsed = isRest ? sessionTime - restStartRef.current : 0;
-  const restTimeLeft = isRest ? Math.max(0, (settings.shortBreakTime ?? 300) - restElapsed) : 0;
-  const restProgressPct = isRest && settings.shortBreakTime
-    ? Math.min(100, (restElapsed / settings.shortBreakTime) * 100)
+  const isLongBreak = isRest && pomodoroSessions > 0 && (pomodoroSessions % (settings.pomodoroGoal ?? 4)) === 0;
+  const restDuration = isLongBreak ? (settings.longBreakTime ?? 900) : (settings.shortBreakTime ?? 300);
+  const restElapsed = isRest ? sessionTime - Math.max(0, restStartRef.current) : 0;
+  const restTimeLeft = isRest ? Math.max(0, restDuration - restElapsed) : 0;
+  const restProgressPct = isRest && restDuration
+    ? Math.min(100, (restElapsed / restDuration) * 100)
     : 0;
 
   const currentProgress = isRest ? restProgressPct : progressPct;
@@ -124,7 +124,7 @@ export function useTimer() {
   }, [setIsTimerActive]);
 
   const handleReset = useCallback(() => {
-    if (isTimerActive) {
+    if (isTimerActive && !isRest) {
       return;
     }
     // Persist the session if it was long enough (>= 10s)
@@ -142,7 +142,7 @@ export function useTimer() {
     }
     // Reset timer state
     resetTimer();
-  }, [sessionTime, sessionType, activeTaskId, addStudySession, resetTimer, isTimerActive]);
+  }, [sessionTime, sessionType, activeTaskId, addStudySession, resetTimer, isTimerActive, isRest]);
 
   const handleTypeChange = useCallback(
     (type: 'pomodoro' | 'chrono') => {

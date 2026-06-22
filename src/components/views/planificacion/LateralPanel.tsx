@@ -200,9 +200,9 @@ function EventDetails({ item, onEdit, onDelete, timeFormat }: { item: Extract<Se
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <DetailRow icon={<Calendar size={18} strokeWidth={1.5} />} label="Fecha" value={format(new Date(event.date + 'T12:00:00'), "EEEE d 'de' MMMM yyyy", { locale: es })} />
+        <DetailRow icon={<Calendar size={18} strokeWidth={1.5} />} label="Fecha" value={(()=>{try{return format(new Date(event.date+'T12:00:00'),"EEEE d 'de' MMMM yyyy",{locale:es})}catch{return '—'}})()} />
         <DetailRow icon={<Clock size={18} strokeWidth={1.5} />} label="Hora" value={event.allDay ? 'Todo el día' : fmtTimeRange(event.startTime, event.endTime, timeFormat)} />
-        {event.repeat !== 'none' && <DetailRow icon={<Repeat size={18} strokeWidth={1.5} />} label="Repetición" value={event.repeat === 'daily' ? 'Diaria' : event.repeat === 'weekly' ? 'Semanal' : 'Días específicos'} subValue={event.repeatUntil ? `Hasta el ${format(new Date(event.repeatUntil + 'T12:00:00'), 'd MMM yyyy')}` : undefined} />}
+        {event.repeat !== 'none' && <DetailRow icon={<Repeat size={18} strokeWidth={1.5} />} label="Repetición" value={event.repeat === 'daily' ? 'Diaria' : event.repeat === 'weekly' ? 'Semanal' : 'Días específicos'} subValue={event.repeatUntil ? `Hasta el ${(()=>{try{return format(new Date(event.repeatUntil+'T12:00:00'),'d MMM yyyy')}catch{return '—'}})()}` : undefined} />}
       </div>
 
       {event.description && (
@@ -283,7 +283,7 @@ function TaskDetails({ item, onViewTask }: { item: Extract<SelectedItem, {type: 
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {task.dueDate && <DetailRow icon={<Calendar size={18} strokeWidth={1.5} />} label="Fecha de entrega" value={format(new Date(task.dueDate + 'T12:00:00'), "EEEE d 'de' MMMM yyyy", { locale: es })} />}
+                {task.dueDate && <DetailRow icon={<Calendar size={18} strokeWidth={1.5} />} label="Fecha de entrega" value={(()=>{try{return format(new Date(task.dueDate+'T12:00:00'),"EEEE d 'de' MMMM yyyy",{locale:es})}catch{return '—'}})()} />}
         <DetailRow icon={<CheckCircle2 size={18} strokeWidth={1.5} />} label="Estado" value={task.status === 'completado' ? 'Completado' : task.status === 'en-curso' ? 'En curso' : 'Pendiente'} />
       </div>
 

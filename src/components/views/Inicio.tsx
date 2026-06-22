@@ -121,7 +121,7 @@ function timeAgo(d: string): string {
   if (hrs < 24) return `Hace ${hrs}h`;
   const days = Math.floor(hrs / 24);
   if (days < 7) return `Hace ${days}d`;
-  return format(new Date(d), 'd MMM', { locale: es });
+  try { return format(new Date(d), 'd MMM', { locale: es }); } catch { return ''; }
 }
 
 export default function Inicio() {
@@ -502,7 +502,7 @@ export default function Inicio() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {tasks.filter(t => t.status !== 'completado').slice(0, 4).map(t => {
               const isDone = t.status === 'completado';
-              const tr = t.dueDate ? format(new Date(t.dueDate), 'd MMM', { locale: es }) : '';
+              const tr = t.dueDate ? (() => { try { return format(new Date(t.dueDate + 'T12:00:00'), 'd MMM', { locale: es }); } catch { return ''; } })() : '';
               return (
                 <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', borderRadius: 8, transition: 'all 150ms', opacity: isDone ? 0.5 : 1 }} className="hover:border-borderDark/60 group">
                   <div style={{ width: 14, height: 14, borderRadius: 4, background: t.status === 'completado' ? '#10B981' : t.status === 'progreso' ? `${t.courseColor}50` : 'var(--bg-base)', border: `2px solid ${t.status === 'completado' ? '#10B981' : t.courseColor}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 150ms' }}>

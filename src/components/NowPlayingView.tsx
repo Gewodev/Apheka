@@ -23,6 +23,7 @@ export default function NowPlayingView({ sidebarCollapsed, activeView }: { sideb
   const [mouseInside, setMouseInside] = useState(false);
   const visible = !!coverModalTrackId;
   const [progress, setProgress] = useState(0);
+  const [dominantColor, setDominantColor] = useState('#000');
   const coverRef = useRef<HTMLDivElement>(null);
   const auraCanvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number>(0);
@@ -82,13 +83,12 @@ export default function NowPlayingView({ sidebarCollapsed, activeView }: { sideb
 
   const handleClose = useCallback(() => {
     setCoverModalTrackId(null);
-    document.documentElement.style.removeProperty('--cover-dominant');
   }, [setCoverModalTrackId]);
 
-  // Extract dominant color from cover for sidebar tint
+  // Extract dominant color from cover
   useEffect(() => {
     if (!track?.coverImage) {
-      document.documentElement.style.removeProperty('--cover-dominant');
+      setDominantColor('#000');
       return;
     }
     const img = new Image();
@@ -101,17 +101,12 @@ export default function NowPlayingView({ sidebarCollapsed, activeView }: { sideb
       ctx2.drawImage(img, 0, 0, 50, 50);
       const d = ctx2.getImageData(0, 0, 50, 50).data;
       let r = 0, g = 0, b = 0, count = 0;
-      // Sample border pixels (more representative of cover edge)
-      for (let y = 0; y < 50; y++) {
-        for (let x = 0; x < 50; x++) {
-          if (x > 5 && x < 44 && y > 5 && y < 44) continue; // skip center
-          const idx = (y * 50 + x) * 4;
-          r += d[idx]; g += d[idx + 1]; b += d[idx + 2]; count++;
-        }
+      for (let i = 0; i < d.length; i += 4) {
+        r += d[i]; g += d[i + 1]; b += d[i + 2]; count++;
       }
       if (count > 0) {
         const hex = `#${((1 << 24) + (Math.round(r / count) << 16) + (Math.round(g / count) << 8) + Math.round(b / count)).toString(16).slice(1)}`;
-        document.documentElement.style.setProperty('--cover-dominant', hex);
+        setDominantColor(hex);
       }
     };
     img.src = track.coverImage;
@@ -330,13 +325,13 @@ export default function NowPlayingView({ sidebarCollapsed, activeView }: { sideb
       case 'black': return '#000';
       case 'gray': return '#1a1a1a';
       case 'theme': return appBg;
-      default: return hasCover ? 'transparent' : appBg;
+      default: return hasCover ? dominantColor : appBg;
     }
   })();
 
   // Whether to show blurred cover or not
   const showBlurredCover = coverBgMode === 'auto' && hasCover;
-  const isLightBg = hasCover ? false : !isDarkMode;
+  const isLightBg = hasCover ? isLight(dominantColor) : !isDarkMode;
   const textMain = isLightBg ? '#1a1a1a' : '#fff';
   const textMuted = isLightBg ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.5)';
   const textLow = isLightBg ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.3)';
@@ -363,10 +358,10 @@ export default function NowPlayingView({ sidebarCollapsed, activeView }: { sideb
         <div
           style={{
             position: 'absolute',
-            inset: -80,
+            inset: -200,
             background: `url(${bgImage}) center/cover no-repeat`,
-            filter: 'blur(100px) saturate(2.2)',
-            transform: visible ? 'scale(1.1)' : 'scale(1.35)',
+            filter: 'blur(120px) saturate(2.2)',
+            transform: visible ? 'scale(1.3)' : 'scale(1.5)',
             transition: 'background-image 600ms ease, transform 500ms ease',
           }}
         />
@@ -377,9 +372,9 @@ export default function NowPlayingView({ sidebarCollapsed, activeView }: { sideb
         <div
           style={{
             position: 'absolute',
-            inset: -80,
+            inset: -200,
             background: `url(${fadeCover}) center/cover no-repeat`,
-            filter: 'blur(100px) saturate(2.2)',
+            filter: 'blur(120px) saturate(2.2)',
             opacity: fadingOut ? 0 : 1,
             transition: 'opacity 700ms ease',
             zIndex: 1,

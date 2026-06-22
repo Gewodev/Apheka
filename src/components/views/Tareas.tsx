@@ -19,7 +19,7 @@ import { es } from 'date-fns/locale';
 import { isSignedIn, signIn, signOut, onAuthChange } from '../../lib/google';
 import NotificationBell from '../ui/NotificationBell';
 import {
-  DndContext, DragOverlay, closestCenter,
+  DndContext, DragOverlay, closestCenter, closestCorners,
   PointerSensor, useSensor, useSensors,
   useDraggable, useDroppable
 } from '@dnd-kit/core';
@@ -28,7 +28,7 @@ import {
   verticalListSortingStrategy, rectSortingStrategy
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { restrictToParentElement } from '@dnd-kit/modifiers';
+import { restrictToParentElement, snapCenterToCursor } from '@dnd-kit/modifiers';
 
 const s = {
   flex: (v: number) => ({ flex: v }),
@@ -49,8 +49,13 @@ const statusConfig: Record<string, { label: string; color: string; next: string 
   completado: { label: 'Completada', color: '#10B981', next: 'inicio' },
 };
 
+function localDate(d: string): Date {
+  const [y, m, day] = d.split('-').map(Number);
+  return new Date(y, m - 1, day);
+}
+
 function getTimeRemaining(dueDate: string): { label: string; text: string; urgent: boolean; overdue: boolean } {
-  const parsed = new Date(dueDate);
+  const parsed = localDate(dueDate);
   if (isNaN(parsed.getTime())) return { label: '', text: '', urgent: false, overdue: false };
   const diff = parsed.getTime() - Date.now();
   if (diff <= 0) return { label: 'Vencida', text: 'Vencida', urgent: true, overdue: true };
@@ -171,7 +176,7 @@ export default function Tareas() {
   const [confirmDeleteMaterial, setConfirmDeleteMaterial] = useState<{ taskId: string; fileId: string } | null>(null);
   const [confirmDeleteTask, setConfirmDeleteTask] = useState<string | null>(null);
 
-  const notificationCount = useMemo(() => tasks.filter(t => t.dueDate && new Date(t.dueDate).getTime() < Date.now() && t.status !== 'completado').length, [tasks]);
+  const notificationCount = useMemo(() => tasks.filter(t => t.dueDate && localDate(t.dueDate).getTime() < Date.now() && t.status !== 'completado').length, [tasks]);
 
   useEffect(() => { const timer = setInterval(() => setCurrentTime(new Date()), 1000); return () => clearInterval(timer); }, []);
 
@@ -194,7 +199,7 @@ export default function Tareas() {
     const completadas = tasks.filter(t => t.status === 'completado').length;
     const pendientes = tasks.filter(t => t.status === 'inicio').length;
     const progreso = tasks.filter(t => t.status === 'progreso').length;
-    const vencidas = tasks.filter(t => t.dueDate && new Date(t.dueDate).getTime() < Date.now() && t.status !== 'completado').length;
+    const vencidas = tasks.filter(t => t.dueDate && localDate(t.dueDate).getTime() < Date.now() && t.status !== 'completado').length;
     return { total, completadas, pendientes, progreso, vencidas, completadasPct: total ? Math.round((completadas / total) * 100) : 0 };
   }, [tasks]);
 
@@ -206,7 +211,7 @@ export default function Tareas() {
       const aDone = a.status === 'completado' ? 1 : 0;
       const bDone = b.status === 'completado' ? 1 : 0;
       if (aDone !== bDone) return aDone - bDone;
-      if (sortBy === 'fecha') { if (!a.dueDate) return 1; if (!b.dueDate) return -1; return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime(); }
+      if (sortBy === 'fecha') { if (!a.dueDate) return 1; if (!b.dueDate) return -1; return localDate(a.dueDate).getTime() - localDate(b.dueDate).getTime(); }
       return (a.course || '').localeCompare(b.course || '');
     });
   }, [tasks, courseFilter, searchQuery, sortBy]);
@@ -692,6 +697,29 @@ export default function Tareas() {
                         );
                       })}
                     </SortableContext>
+              <DragOverlay dropAnimation={null} modifiers={[snapCenterToCursor]}>
+                      {activeDragId ? (() => {
+                        const t = tasks.find(x => x.id === activeDragId);
+                        if (!t) return null;
+                        const sc = statusConfig[t.status]?.color || '#F59E0B';
+                        return (
+                          <div style={{
+                            display: 'flex', alignItems: 'center', gap: 8, padding: '0 12px 0 0', height: 48,
+                            background: 'var(--bg-surface)', borderRadius: 10,
+                            border: '1px solid var(--border-soft)', boxShadow: '0 8px 32px rgba(0,0,0,0.35)',
+                            width: 'max-content', maxWidth: 360,
+                          }}>
+                            <div style={{
+                              width: 28, height: 28, borderRadius: 6, margin: '10px',
+                              background: sc, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            }}>
+                              {t.status === 'completado' && <Check size={12} strokeWidth={3} style={{ color: '#fff' }} />}
+                            </div>
+                            <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.title}</span>
+                          </div>
+                        );
+                      })() : null}
+                    </DragOverlay>
                   </DndContext>
                 )}
                 {!isInitialLoading && filteredTasks.length === 0 && (
@@ -828,7 +856,7 @@ export default function Tareas() {
               {/* Calendar Header */}
               <div style={{ padding: '12px 16px', background: 'var(--bg-elevated)', borderBottom: '1px solid var(--border-soft)', borderRadius: '12px 12px 0 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <button onClick={() => { setCalendarDate(new Date()); const todayTasks = tasks.filter(t => t.dueDate && isSameDay(new Date(t.dueDate), new Date())); if (todayTasks.length > 0) setCalendarSelectedDay(new Date()); else setCalendarSelectedDay(new Date(0)); }} style={{ fontSize: 11, fontWeight: 500, padding: '5px 14px', borderRadius: 6, background: 'var(--bg-hover)', color: 'var(--text-secondary)', border: '1px solid var(--border-soft)', cursor: 'pointer', transition: 'all 150ms' }}>Hoy</button>
+                  <button onClick={() => { setCalendarDate(new Date()); const todayTasks = tasks.filter(t => t.dueDate && isSameDay(localDate(t.dueDate), new Date())); if (todayTasks.length > 0) setCalendarSelectedDay(new Date()); else setCalendarSelectedDay(new Date(0)); }} style={{ fontSize: 11, fontWeight: 500, padding: '5px 14px', borderRadius: 6, background: 'var(--bg-hover)', color: 'var(--text-secondary)', border: '1px solid var(--border-soft)', cursor: 'pointer', transition: 'all 150ms' }}>Hoy</button>
                   <div style={{ display: 'flex', gap: 1 }}>
                     <button onClick={handlePrevPeriod} style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--bg-hover)', border: '1px solid var(--border-soft)', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}><ChevronLeft size={14} /></button>
                     <button onClick={handleNextPeriod} style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--bg-hover)', border: '1px solid var(--border-soft)', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}><ChevronRight size={14} /></button>
@@ -867,15 +895,15 @@ export default function Tareas() {
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 14, borderBottom: '1px solid var(--border-soft)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
-                      <div style={{ width: 32, height: 32, borderRadius: 10, background: `linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 70%, #fff))`, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 16px color-mix(in srgb, var(--accent) 35%, transparent)' }}>
-                        <CalendarDays size={14} style={{ color: '#fff' }} />
+                      <div style={{ width: 34, height: 34, borderRadius: 10, background: 'var(--surface-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border-soft)' }}>
+                        <CalendarDays size={15} style={{ color: 'var(--accent)', strokeWidth: 1.5 }} />
                       </div>
                       <div>
                         <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', textTransform: 'capitalize', display: 'block', lineHeight: 1.3, fontFamily: "'Inter Tight', sans-serif" }}>
                           {format(calendarSelectedDay, "EEEE d", { locale: es })}
                         </span>
                         <span style={{ fontSize: 9.5, fontWeight: 500, color: 'var(--text-muted)' }}>
-                          {tasks.filter(t => t.dueDate && isSameDay(new Date(t.dueDate), calendarSelectedDay)).length} tareas
+                          {tasks.filter(t => t.dueDate && isSameDay(localDate(t.dueDate), calendarSelectedDay)).length} tareas
                         </span>
                       </div>
                     </div>
@@ -887,7 +915,7 @@ export default function Tareas() {
                   </div>
                   <div className="no-scrollbar" style={{ display: 'flex', flexDirection: 'column', gap: 8, overflowY: 'auto', flex: 1, paddingRight: 2 }}>
                     {(() => {
-                      const dayTasks = tasks.filter(t => t.dueDate && isSameDay(new Date(t.dueDate), calendarSelectedDay));
+                      const dayTasks = tasks.filter(t => t.dueDate && isSameDay(localDate(t.dueDate), calendarSelectedDay));
                       if (dayTasks.length === 0) {
                         return (
                           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 8, padding: '32px 0', color: 'var(--text-muted)' }}>
@@ -960,13 +988,13 @@ export default function Tareas() {
               </div>
 
               {/* Calendar Grid — más vertical */}
-              <DndContext onDragStart={e => setCalendarDragTaskId(e.active.id as string)} onDragEnd={handleDragEndCalendar}>
+              <DndContext collisionDetection={closestCorners} onDragStart={e => setCalendarDragTaskId(e.active.id as string)} onDragEnd={handleDragEndCalendar}>
               <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
                 {weekRows.map((week, wi) => {
                   return (
                     <div key={wi} style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', flex: 1, minHeight: 0 }}>
                       {week.map((day, di) => {
-                        const dayTasks = tasks.filter(t => t.dueDate && isSameDay(new Date(t.dueDate), day));
+                        const dayTasks = tasks.filter(t => t.dueDate && isSameDay(localDate(t.dueDate), day));
                         const isTodayDay = isToday(day);
                         const isCurrentMonth = isSameMonth(day, monthStart);
                         const isSel = isSameDay(day, calendarSelectedDay);
@@ -979,7 +1007,7 @@ export default function Tareas() {
                           <DroppableCalendarDay key={di} id={`day-${format(day, 'yyyy-MM-dd')}`}>
                             {({ setNodeRef, isOver }) => (
                               <div ref={setNodeRef}
-                                onClick={() => { const dt = tasks.filter(t => t.dueDate && isSameDay(new Date(t.dueDate), day)); if (dt.length > 0) setCalendarSelectedDay(day); }}
+                                onClick={() => { const dt = tasks.filter(t => t.dueDate && isSameDay(localDate(t.dueDate), day)); if (dt.length > 0) setCalendarSelectedDay(day); }}
                                 style={{
                                   borderRight: '1px solid var(--border-soft)',
                                   borderBottom: '1px solid var(--border-soft)',
@@ -1100,12 +1128,25 @@ export default function Tareas() {
                   );
                 })}
               </div>
-              <DragOverlay>
-                {calendarDragTaskId ? (
-                  <div style={{ padding: '4px 12px', borderRadius: 6, background: 'var(--accent-dim)', color: '#fff', fontSize: 11, fontWeight: 500, boxShadow: '0 4px 16px rgba(0,0,0,0.4)', borderLeft: '2px solid var(--accent)' }}>
-                    {tasks.find(t => t.id === calendarDragTaskId)?.title}
-                  </div>
-                ) : null}
+              <DragOverlay dropAnimation={null}>
+                {calendarDragTaskId ? (() => {
+                  const t = tasks.find(x => x.id === calendarDragTaskId);
+                  if (!t) return null;
+                  const isOverdueCal = t.dueDate && localDate(t.dueDate).getTime() < Date.now() && t.status !== 'completado';
+                  return (
+                    <div style={{
+                      borderRadius: 6, padding: '8px 14px', fontSize: 12, fontWeight: 600,
+                      color: t.status === 'completado' ? 'rgba(255,255,255,0.3)' : '#fff',
+                      background: t.status === 'completado' ? 'rgba(255,255,255,0.03)' : (isOverdueCal ? 'rgba(239,68,68,0.3)' : `${t.courseColor}25`),
+                      borderLeft: `3px solid ${isOverdueCal ? '#EF4444' : t.courseColor}`,
+                      boxShadow: '0 6px 24px rgba(0,0,0,0.4)',
+                      textDecoration: t.status === 'completado' ? 'line-through' : 'none',
+                      maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                      {t.title}
+                    </div>
+                  );
+                })() : null}
               </DragOverlay>
               </DndContext>
             </div>

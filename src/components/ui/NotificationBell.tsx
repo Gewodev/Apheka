@@ -60,7 +60,7 @@ export default function NotificationBell() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-primary)', lineHeight: 1.4, margin: 0 }}>{n.message}</p>
                     <p style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 3, margin: 0 }}>
-                      {fmtClock(format(new Date(n.timestamp), 'HH:mm'), settings?.timeFormat)}
+                      {(()=>{try{return fmtClock(format(new Date(n.timestamp),'HH:mm'),settings?.timeFormat)}catch{return '—'}})()}
                     </p>
                   </div>
                   <X size={10} style={{ color: 'var(--text-muted)', cursor: 'pointer', flexShrink: 0, marginTop: 2 }} onClick={() => removeNotification(n.id)} />

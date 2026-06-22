@@ -153,6 +153,7 @@ export interface Note {
   coverColor?: string;
   sortOrder?: number;
   attachments?: NoteAttachment[];
+  deletedAt?: string;
 }
 
 export interface NoteFolder {
@@ -292,6 +293,9 @@ export interface StudySession {
   pauseCount: number;  // for concentration calc
   pauseDuration: number; // seconds
   perception?: number;  // 1-10 self-rating after session
+  volmeter?: number;    // 1-20 self-rating
+  evaluatedAt?: string; // ISO date when evaluated
+  isDistraction?: boolean;
   subjects?: string[];  // course IDs studied during session
   mode?: 'rendimiento' | 'tiempo';
   discomfort?: number;  // 0-10 self-rated distraction
@@ -439,6 +443,10 @@ interface AppState {
   calendarSyncEnabled: boolean;
   lastCalendarSync: string | null;
   showCompletion: boolean;
+  showRestPrompt: boolean;
+  setShowRestPrompt: Dispatch<SetStateAction<boolean>>;
+  handlePomodoroBannerClick: () => void;
+  setFloatingNoteId: Dispatch<SetStateAction<string | null>>;
   importState: ImportState;
   artists: { id: string; name: string; profileImage?: string }[];
   trackHistory: string[];
@@ -458,6 +466,7 @@ interface AppState {
   coverModalTrackId: string | null;
   youtubeVideoUrl: string | null;
   isPlayingMusic: boolean;
+  floatingNoteId: string | null;
 }
 
 export type ViewId = 'inicio' | 'tareas' | 'apuntes' | 'estudio' | 'cursos' | 'analiticas' | 'chat' | 'ajustes' | 'musica' | 'flujo' | 'canvas';
@@ -482,6 +491,8 @@ interface AppContextType extends AppState {
   addNote: (note: Omit<Note, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateNote: (id: string, updates: Partial<Note>) => void;
   deleteNote: (id: string) => void;
+  restoreNote: (id: string) => void;
+  permanentlyDeleteNote: (id: string) => void;
   addNoteFolder: (folder: Omit<NoteFolder, 'id'>) => void;
   deleteNoteFolder: (id: string) => void;
   reorderNotes: (noteIds: string[]) => void;
@@ -718,6 +729,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [sessionType, setSessionType] = useState<'pomodoro' | 'chrono'>('pomodoro');
   const [showCompletion, setShowCompletion] = useState(false);
   const [roundsCompleted, setRoundsCompleted] = useState(0);
+  const [showRestPrompt, setShowRestPrompt] = useState(false);
+  const [floatingNoteId, setFloatingNoteId] = useState<string | null>(null);
 
   // Pause tracking and time distribution
   const [accumulatedPauseTime, setAccumulatedPauseTime] = useState(0);
@@ -990,6 +1003,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
           if (data.sessionTime) setSessionTime(data.sessionTime);
           if (data.sessionType) setSessionType(data.sessionType);
+          if (data.isRest) setIsRest(true);
           if (data.weeklyStudyTime) setWeeklyStudyTime(data.weeklyStudyTime);
           const today = format(new Date(), 'yyyy-MM-dd');
           if (data.dailyStudyTime !== undefined && data.dailyStudyDate === today) {
@@ -1003,6 +1017,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
             if (data.currentTrackId) restoreSeekRef.current = data.musicProgress;
           }
           if (data.musicDuration !== undefined) setMusicDuration(data.musicDuration);
+          // Fallback: sync localStorage backup (written on every track change and beforeunload)
+          try {
+            const savedId = localStorage.getItem('owa_current_track_id');
+            if (savedId && !data.currentTrackId) {
+              setCurrentTrackId(savedId);
+            }
+            const savedProgress = localStorage.getItem('owa_music_progress');
+            if (savedProgress && data.musicProgress === undefined) {
+              const p = parseFloat(savedProgress);
+              setMusicProgress(p);
+              if (savedId && savedId !== data.currentTrackId) restoreSeekRef.current = p;
+            }
+          } catch {}
           if (data.musicListeningTime !== undefined) {
             const today = format(new Date(), 'yyyy-MM-dd');
             if (data.musicListeningDate === today) {
@@ -1130,7 +1157,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const sessionTimeRef = useRef(sessionTime);
   sessionTimeRef.current = sessionTime;
   const isRestRef = useRef(isRest);
-  const restStartTimeRef = useRef(0);
+  const restStartTimeRef = useRef(-1);
   isRestRef.current = isRest;
   const sessionTypeRef = useRef(sessionType);
   sessionTypeRef.current = sessionType;
@@ -1153,21 +1180,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
             const next = prev + 1;
             sessionTimeRef.current = next;
             const isRestNow = isRestRef.current;
+            const typeNow = sessionTypeRef.current;
             emit('timer:sync', JSON.stringify({
               sessionTime: next,
               isTimerActive: true,
               activeTaskId: activeTaskIdRef.current,
               isRest: isRestNow,
-              sessionType: sessionTypeRef.current,
+              sessionType: typeNow,
               pomodoroTime: settings.pomodoroTime,
               shortBreakTime: settings.shortBreakTime,
+              longBreakTime: settings.longBreakTime,
               accumulatedPauseTime: accumulatedPauseTimeRef.current,
               pauseStartTime: pauseStartTimeRef.current,
               distractionCount: distractionCountRef.current,
               pomodoroSessions: pomodoroSessionsRef.current,
               pomodoroGoal: settings.pomodoroGoal,
               sessionsCount: sessionsCountRef.current,
-              restStartTime: isRestNow ? (restStartTimeRef.current || next) : 0,
+              restStartTime: isRestNow ? restStartTimeRef.current : 0,
+              pomodoroComplete: !isRestNow && typeNow === 'pomodoro' && next >= settings.pomodoroTime,
             }));
           return next;
         });
@@ -1214,6 +1244,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         sessionType: sessionTypeRef.current,
         pomodoroTime: settings.pomodoroTime,
         shortBreakTime: settings.shortBreakTime,
+        longBreakTime: settings.longBreakTime,
         accumulatedPauseTime: accumulatedPauseTimeRef.current,
         pauseStartTime: pauseStartTimeRef.current,
         distractionCount: distractionCountRef.current,
@@ -1221,14 +1252,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         pomodoroGoal: settings.pomodoroGoal,
         sessionsCount: sessionsCountRef.current,
         restStartTime: restStartTimeRef.current,
+        pomodoroComplete: false,
       }));
     }
   }, [isTimerActive, settings.pomodoroTime, settings.shortBreakTime]);
 
   // Sync timer state instantly when isRest, isTimerActive, or sessionType changes
   useEffect(() => {
-    if (isRest) restStartTimeRef.current = sessionTimeRef.current;
-    else restStartTimeRef.current = 0;
     emit('timer:sync', JSON.stringify({
       sessionTime: sessionTimeRef.current,
       isTimerActive: isTimerActive,
@@ -1237,6 +1267,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       sessionType: sessionType,
       pomodoroTime: settings.pomodoroTime,
       shortBreakTime: settings.shortBreakTime,
+      longBreakTime: settings.longBreakTime,
       accumulatedPauseTime: accumulatedPauseTime,
       pauseStartTime: pauseStartTime,
       distractionCount: distractionCount,
@@ -1244,8 +1275,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
       pomodoroGoal: settings.pomodoroGoal,
       sessionsCount: studySessions.length,
       restStartTime: restStartTimeRef.current,
+      pomodoroComplete: !isRest && sessionType === 'pomodoro' && sessionTime >= settings.pomodoroTime,
     }));
-  }, [isRest, isTimerActive, sessionType, settings.pomodoroTime, settings.shortBreakTime, accumulatedPauseTime, pauseStartTime, distractionCount, pomodoroSessions, settings.pomodoroGoal, studySessions.length]);
+  }, [isRest, isTimerActive, sessionType, settings.pomodoroTime, settings.shortBreakTime, settings.longBreakTime, accumulatedPauseTime, pauseStartTime, distractionCount, pomodoroSessions, settings.pomodoroGoal, studySessions.length, sessionTime]);
+
+  // Freeze restStartTimeRef when rest starts, reset when rest ends
+  useEffect(() => {
+    if (isRest) {
+      if (restStartTimeRef.current === -1) {
+        restStartTimeRef.current = sessionTimeRef.current;
+        localStorage.setItem('owa_rest_start_time', String(restStartTimeRef.current));
+      }
+    } else {
+      restStartTimeRef.current = -1;
+      localStorage.removeItem('owa_rest_start_time');
+    }
+  }, [isRest]);
+
+  // Global pomodoro completion detection — works even when not in Estudio
+  const pomodoroCompletedRef = useRef(false);
+  const completionSessionTimeRef = useRef(0);
+  useEffect(() => {
+    if (isTimerActive && !isRest && sessionType === 'pomodoro' && sessionTime >= settings.pomodoroTime && !pomodoroCompletedRef.current) {
+      pomodoroCompletedRef.current = true;
+      completionSessionTimeRef.current = sessionTimeRef.current;
+      setShowRestPrompt(true);
+    }
+    if (sessionTime < settings.pomodoroTime) {
+      pomodoroCompletedRef.current = false;
+      completionSessionTimeRef.current = 0;
+    }
+  }, [sessionTime, isTimerActive, isRest, sessionType, settings.pomodoroTime]);
 
   const prevIsTimerActiveRef = useRef(isTimerActive);
   useEffect(() => {
@@ -1259,7 +1319,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const pauseSecs = Math.floor((Date.now() - pauseStartTime) / 1000);
           if (pauseSecs > 0) {
             setAccumulatedPauseTime(prev => prev + pauseSecs);
-            if (pauseSecs > 600 && !isRest) {
+            if (pauseSecs > 600) {
               setDistractionCount(prev => prev + 1);
               addNotification('Distracción detectada (pausa mayor a 10 min)', 'info');
             }
@@ -1276,9 +1336,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const t = setTimeout(() => {
       set(STORAGE_KEY, JSON.stringify({
         tasks, notes, noteFolders, courses, events, studySessions,
-        settings, sessionTime, sessionType, weeklyStudyTime, dailyStudyTime, dailyStudyDate, pomodoroSessions,
+        settings, sessionTime, sessionType, isRest, isTimerActive, weeklyStudyTime, dailyStudyTime, dailyStudyDate, pomodoroSessions,
         trackHistory, playCounts, musicQueue, musicVolume, shuffleMode, repeatMode, artists, playlists,
-        currentTrackId, isPlayingMusic, musicListeningTime, musicListeningDate, dailyMusicTime,
+        currentTrackId, isPlayingMusic: isPlayingMusic && !globalAudio.paused, musicListeningTime, musicListeningDate, dailyMusicTime,
         weeklyMusicTime, monthlyMusicTime, weeklyResetSunday, monthlyResetKey,
         musicProgress, musicDuration, downloadPath,
         accumulatedPauseTime, pauseStartTime, distractionCount,
@@ -1307,7 +1367,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const appBgColor = settings.useThreeColors && settings.surfaceColor
       ? settings.surfaceColor
-      : '#020203';
+      : settings.theme === 'claro' ? '#f8fafc'
+      : settings.theme === 'vibrante' ? '#0c0a1a'
+      : settings.theme === 'sistema'
+        ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? '#0a0a0c' : '#f8fafc')
+        : '#0a0a0c';
     const payload = {
       floatingBgMode: settings.floatingBgMode,
       floatingBgColor: settings.floatingBgColor,
@@ -1316,19 +1380,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
       floatingAnimationType: settings.floatingAnimationType,
       timerFocusColor: settings.timerFocusColor,
       timerBreakColor: settings.timerBreakColor,
+      timerLongBreakColor: settings.timerLongBreakColor,
       timerChronoColor: settings.timerChronoColor,
       appBgColor,
       accentColor: settings.accentColor,
     };
     emit('settings:sync', JSON.stringify(payload));
-  }, [settings.floatingBgMode, settings.floatingBgColor, settings.floatingFont, settings.floatingHideInFocus, settings.floatingAnimationType, settings.timerFocusColor, settings.timerBreakColor, settings.timerChronoColor, settings.backgroundImagePath, settings.backgroundImage, settings.useThreeColors, settings.surfaceColor]);
+  }, [settings.floatingBgMode, settings.floatingBgColor, settings.floatingFont, settings.floatingHideInFocus, settings.floatingAnimationType, settings.timerFocusColor, settings.timerBreakColor, settings.timerLongBreakColor, settings.timerChronoColor, settings.backgroundImagePath, settings.backgroundImage, settings.useThreeColors, settings.surfaceColor, settings.theme]);
 
   // Respond to settings and timer sync requests from floating timer
   useEffect(() => {
     const unlistenSettings = listen('settings:sync:request', () => {
       const appBgColor = settings.useThreeColors && settings.surfaceColor
         ? settings.surfaceColor
-        : '#020203';
+        : settings.theme === 'claro' ? '#f8fafc'
+        : settings.theme === 'vibrante' ? '#0c0a1a'
+        : settings.theme === 'sistema'
+          ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? '#0a0a0c' : '#f8fafc')
+          : '#0a0a0c';
       const payload = {
         floatingBgMode: settings.floatingBgMode,
         floatingBgColor: settings.floatingBgColor,
@@ -1337,6 +1406,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         floatingAnimationType: settings.floatingAnimationType,
         timerFocusColor: settings.timerFocusColor,
         timerBreakColor: settings.timerBreakColor,
+        timerLongBreakColor: settings.timerLongBreakColor,
         timerChronoColor: settings.timerChronoColor,
         appBgColor,
         accentColor: settings.accentColor,
@@ -1350,6 +1420,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         sessionType: sessionTypeRef.current,
         pomodoroTime: settings.pomodoroTime,
         shortBreakTime: settings.shortBreakTime,
+        longBreakTime: settings.longBreakTime,
         restStartTime: isRestRef.current ? sessionTimeRef.current : 0,
         accumulatedPauseTime: accumulatedPauseTimeRef.current,
         pauseStartTime: pauseStartTimeRef.current,
@@ -1357,6 +1428,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         pomodoroSessions: pomodoroSessionsRef.current,
         pomodoroGoal: settings.pomodoroGoal,
         sessionsCount: studySessions.length,
+        pomodoroComplete: !isRestRef.current && sessionTypeRef.current === 'pomodoro' && sessionTimeRef.current >= settings.pomodoroTime,
       }));
     });
     const unlistenTimer = listen('timer:sync:request', () => {
@@ -1368,6 +1440,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         sessionType: sessionTypeRef.current,
         pomodoroTime: settings.pomodoroTime,
         shortBreakTime: settings.shortBreakTime,
+        longBreakTime: settings.longBreakTime,
         restStartTime: isRestRef.current ? sessionTimeRef.current : 0,
         accumulatedPauseTime: accumulatedPauseTimeRef.current,
         pauseStartTime: pauseStartTimeRef.current,
@@ -1375,10 +1448,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         pomodoroSessions: pomodoroSessionsRef.current,
         pomodoroGoal: settings.pomodoroGoal,
         sessionsCount: studySessions.length,
+        pomodoroComplete: !isRestRef.current && sessionTypeRef.current === 'pomodoro' && sessionTimeRef.current >= settings.pomodoroTime,
       }));
     });
     return () => { unlistenSettings.then(fn => fn()); unlistenTimer.then(fn => fn()); };
-  }, [settings.floatingBgMode, settings.floatingBgColor, settings.floatingFont, settings.floatingHideInFocus, settings.floatingAnimationType, settings.timerFocusColor, settings.timerBreakColor, settings.timerChronoColor]);
+  }, [settings.floatingBgMode, settings.floatingBgColor, settings.floatingFont, settings.floatingHideInFocus, settings.floatingAnimationType, settings.timerFocusColor, settings.timerBreakColor, settings.timerLongBreakColor, settings.timerChronoColor, settings.longBreakTime, settings.theme, settings.useThreeColors, settings.surfaceColor]);
 
   // Pause audio when closing window
   useEffect(() => {
@@ -1402,7 +1476,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const savedPlaying = overrideIsPlaying !== undefined ? overrideIsPlaying : isPlayingMusic;
     set(STORAGE_KEY, JSON.stringify({
       tasks, notes, noteFolders, courses, events, studySessions,
-      settings, sessionTime, sessionType, weeklyStudyTime, dailyStudyTime, dailyStudyDate, pomodoroSessions,
+      settings, sessionTime, sessionType, isRest, isTimerActive: false, weeklyStudyTime, dailyStudyTime, dailyStudyDate, pomodoroSessions,
       trackHistory, playCounts, musicQueue, musicVolume, shuffleMode, repeatMode, artists,
       currentTrackId, isPlayingMusic: savedPlaying, musicListeningTime, musicListeningDate, dailyMusicTime,
       weeklyMusicTime, monthlyMusicTime, weeklyResetSunday, monthlyResetKey,
@@ -1411,10 +1485,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       focusPomodoroTime, focusChronoTime, breakTime, dailyBreakTime,
       dailyFocusPomodoro, dailyFocusChrono,
     })).catch((e: any) => console.error("Error saving data on unload:", e));
-    set(MUSIC_STATS_KEY, JSON.stringify({
-      musicListeningTime, musicListeningDate, dailyMusicTime,
-      weeklyMusicTime, monthlyMusicTime, weeklyResetSunday, monthlyResetKey,
-    })).catch((e: any) => console.error("Error saving music stats on unload:", e));
+    try {
+      localStorage.setItem('owa_current_track_id', currentTrackIdRef.current || '');
+      localStorage.setItem('owa_music_progress', String(liveProgress));
+      localStorage.setItem('owa_music_duration', String(musicDuration));
+    } catch {}
   };
 
   // â”€â”€ TASKS â”€â”€
@@ -1522,6 +1597,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const deleteNote = useCallback((id: string) => {
+    setNotes(prev => prev.map(n => n.id === id ? { ...n, deletedAt: new Date().toISOString() } : n));
+  }, []);
+
+  const restoreNote = useCallback((id: string) => {
+    setNotes(prev => prev.map(n => n.id === id ? { ...n, deletedAt: undefined } : n));
+  }, []);
+
+  const permanentlyDeleteNote = useCallback((id: string) => {
     setNotes(prev => prev.filter(n => n.id !== id));
   }, []);
 
@@ -1840,8 +1923,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setIsPlayingMusic(true);
         return;
       }
-      // Audio has a valid source — resume from paused/ended
-      if (globalAudio.src && globalAudio.src !== '') {
+      // Verify audio has a valid, playable source before reusing cached state
+      if (globalAudio.src && globalAudio.src !== '' && globalAudio.readyState >= 2) {
         if (globalAudio.ended) globalAudio.currentTime = 0;
         setIsPlayingMusic(true);
         setCurrentTrackStartTime(Date.now() / 1000);
@@ -1850,10 +1933,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         playAudioInstance(playSessionId);
         return;
       }
-      // Audio still loading (src set but not ready) — wait for existing load
-      autoPlayRef.current = true;
-      setIsPlayingMusic(true);
-      return;
+      // Source invalid or not ready — force a full reload
+      loadedTrackIdRef.current = null;
+      loadingTrackIdRef.current = null;
     }
 
     // Same track currently being loaded async — just mark to auto-play
@@ -1895,6 +1977,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setIsPlayingMusic(!resumeStayPausedRef.current);
     setMusicProgress(0);
     setMusicDuration(0);
+    try { localStorage.setItem('owa_current_track_id', id); } catch {}
 
     const track = tracks.find(t => t.id === id);
     if (!track || !track.url) {
@@ -1919,10 +2002,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     setYoutubeVideoUrl(null);
 
-    // If playing from queue, skip tracks before the selected one and remove it
+    // Remove only the played track from queue (keep earlier and later tracks)
     setMusicQueue(prev => {
       const idx = prev.indexOf(id);
-      if (idx >= 0) return prev.slice(idx + 1);
+      if (idx >= 0) return [...prev.slice(0, idx), ...prev.slice(idx + 1)];
       return prev;
     });
 
@@ -2043,17 +2126,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setMusicQueue(prev => {
       const after = prev.filter(tid => tid !== id);
       if (after.length >= 5) return after;
-      const recentIds = new Set(trackHistoryRef.current.slice(0, 5));
-      recentIds.add(id);
+      const history = trackHistoryRef.current;
       const pool = queueSourceRef.current?.pool ?? tracksRef.current.map(t => t.id);
-      const available = pool.filter(tid => !recentIds.has(tid) && !after.includes(tid));
+      // 95% distance: exclude history entries until most of pool is played
+      const threshold = Math.floor(pool.length * 0.95);
+      const excludeIds = new Set(history.length < threshold ? history : []);
+      excludeIds.add(id);
+      const available = pool.filter(tid => !excludeIds.has(tid) && !after.includes(tid));
       if (shuffleModeRef.current) {
         const shuffled = shuffleArray([...available]);
         return [...after, ...shuffled].slice(0, 5);
       }
       const currentIdx = pool.indexOf(id);
       const ordered = pool.slice(currentIdx + 1)
-        .filter(tid => !recentIds.has(tid) && !after.includes(tid));
+        .filter(tid => !excludeIds.has(tid) && !after.includes(tid));
       return [...after, ...ordered].slice(0, 5);
     });
 
@@ -2080,14 +2166,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Cancel any pending auto-play
-    autoPlayRef.current = false;
-
     const audio = globalAudio;
     const hasSrc = !!audio.src;
 
     if (!hasSrc || audio.ended) {
       // Audio has no source or ended — (re)load and play
+      autoPlayRef.current = false;
       if (isPlayingMusicRef.current) {
         activePlaySessionIdRef.current = null;
         setIsPlayingMusic(false);
@@ -2104,6 +2188,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Clear any pending fade-out
       if (fadeRampRef.current !== null) { clearInterval(fadeRampRef.current); fadeRampRef.current = null; }
       audio.volume = musicVolumeRef.current;
+      // Audio still loading — defer to canplay
+      if (audio.readyState < 2 && hasSrc) {
+        // Toggle off if already waiting for canplay
+        if (autoPlayRef.current) {
+          autoPlayRef.current = false;
+          setIsPlayingMusic(false);
+          return;
+        }
+        autoPlayRef.current = true;
+        setIsPlayingMusic(true);
+        return;
+      }
+      autoPlayRef.current = false;
       setIsPlayingMusic(true);
       setCurrentTrackStartTime(Date.now() / 1000);
       playAudioInstance(playSessionId);
@@ -2118,6 +2215,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         });
       }
       setCurrentTrackStartTime(null);
+      autoPlayRef.current = false;
       // Fade out
       const steps = 8;
       const stepMs = 12;
@@ -2184,8 +2282,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (repeatModeRef.current === 'one') {
           globalAudio.currentTime = 0;
           globalAudio.play().catch(() => {});
-          _setRepeatMode('none');
-          return;
+          return; // stay in repeat-one, keep looping
         }
         let nextId: string | null = null;
         const q = musicQueueRef.current;
@@ -2207,10 +2304,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (nextId) {
           setMusicQueue(prev => {
             if (prev.length >= 5) return prev;
-            const recentIds = new Set(trackHistoryRef.current.slice(0, 5));
-            recentIds.add(nextId);
+            const history = trackHistoryRef.current;
             const pool = queueSourceRef.current?.pool ?? tracksRef.current.map(t => t.id);
-            const available = pool.filter(tid => !recentIds.has(tid) && !prev.includes(tid));
+            // 95% distance: exclude history until most of pool is played
+            const threshold = Math.floor(pool.length * 0.95);
+            const excludeIds = new Set(history.length < threshold ? history : []);
+            excludeIds.add(nextId);
+            const available = pool.filter(tid => !excludeIds.has(tid) && !prev.includes(tid));
             const shuffled = shuffleModeRef.current ? shuffleArray([...available]) : available;
             return [...prev, ...shuffled].slice(0, 5);
           });
@@ -2303,7 +2403,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const onVisibilityChange = () => {
       if (document.hidden) {
         // Tab hidden → save listening time, pause audio
-        wasPlayingBeforeHiddenRef.current = isPlayingMusicRef.current;
+        wasPlayingBeforeHiddenRef.current = !globalAudio.paused;
         if (currentTrackStartTimeRef.current !== null && currentTrackIdRef.current) {
           const endTime = Date.now() / 1000;
           const durationPlayed = endTime - currentTrackStartTimeRef.current;
@@ -2324,9 +2424,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } else {
         // Tab visible again — resume if we were playing
         if (wasPlayingBeforeHiddenRef.current && currentTrackIdRef.current && loadedTrackIdRef.current) {
-          setCurrentTrackStartTime(Date.now() / 1000);
-          setIsPlayingMusic(true);
-          globalAudio.play().catch(() => {});
+          globalAudio.play().then(() => {
+            if (activePlaySessionIdRef.current) {
+              setIsPlayingMusic(true);
+              setCurrentTrackStartTime(Date.now() / 1000);
+            }
+          }).catch(() => {
+            if (activePlaySessionIdRef.current) {
+              setIsPlayingMusic(false);
+              setCurrentTrackStartTime(null);
+            }
+          });
         }
         wasPlayingBeforeHiddenRef.current = false;
       }
@@ -2402,6 +2510,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [studySessions, settings.dailyGoal, settings.studyGoals]);
 
   const updateStudySession = useCallback((id: string, updates: Partial<StudySession>) => {
+    if (isRestRef.current) return;
     setStudySessions(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
     setTimeout(() => recalcDailyPerformance(new Date().toISOString().slice(0, 10)), 0);
   }, []);
@@ -2452,6 +2561,48 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setPauseStartTime(null);
     setDistractionCount(0);
   }, []);
+
+  const handlePomodoroBannerClick = useCallback(() => {
+    const actualDuration = completionSessionTimeRef.current || sessionTimeRef.current;
+    if (actualDuration < 1) return;
+    if (isRestRef.current) { setShowRestPrompt(false); return; }
+    addStudySession({
+      type: 'pomodoro',
+      startedAt: new Date(Date.now() - actualDuration * 1000).toISOString(),
+      endedAt: new Date().toISOString(),
+      duration: actualDuration,
+      taskId: activeTaskIdRef.current || undefined,
+      courseId: undefined,
+      pauseCount: distractionCountRef.current,
+      pauseDuration: accumulatedPauseTimeRef.current,
+    });
+    incrementPomodoroSessions();
+    setIsRest(true);
+    setSessionTime(0);
+    setIsTimerActive(true);
+    setShowRestPrompt(false);
+  }, [addStudySession, incrementPomodoroSessions, setSessionTime, setIsTimerActive]);
+
+  // Listen for timer:startRest from FloatingTimer window
+  useEffect(() => {
+    const unlisten = listen('timer:startRest', () => {
+      handlePomodoroBannerClick();
+      setNavigateTo('estudio');
+    });
+    return () => { unlisten.then(fn => fn()); };
+  }, [handlePomodoroBannerClick, setNavigateTo]);
+
+  // BroadcastChannel listener for SAVE_NOTE from floating-note-window
+  useEffect(() => {
+    const ch = new BroadcastChannel('owa_notes_sync');
+    const handler = (e: MessageEvent) => {
+      if (e.data?.type === 'SAVE_NOTE' && e.data.noteId && e.data.updates) {
+        updateNote(e.data.noteId, e.data.updates);
+      }
+    };
+    ch.addEventListener('message', handler);
+    return () => { ch.removeEventListener('message', handler); ch.close(); };
+  }, [updateNote]);
 
   // â”€â”€ DOWNLOADS â”€â”€
   const addToDownloadQueue = useCallback((item: Omit<DownloadItem, 'id' | 'progress' | 'status' | 'completedItems'>): string => {
@@ -2725,12 +2876,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     tasks, notes, noteFolders, courses, events, tracks, studySessions,
     settings, sessionTime, sessionType, weeklyStudyTime, dailyStudyTime, pomodoroSessions,
     activeTaskId, timerLocked, isTimerActive, roundsCompleted, showCompletion,
+    showRestPrompt, setShowRestPrompt, handlePomodoroBannerClick, floatingNoteId, setFloatingNoteId,
     currentTrackId, coverModalTrackId, youtubeVideoUrl, isPlayingMusic, isAudioLoading, musicVolume, musicProgress, musicDuration, musicListeningTime, dailyMusicTime, weeklyMusicTime, monthlyMusicTime, shuffleMode, repeatMode,
     trackHistory, playCounts, musicQueue, queueSource, downloadQueue, artists,
     googleConnected, calendarSyncEnabled, lastCalendarSync, importState,
     addTask, updateTask, deleteTask, toggleTaskStatus, clearAllTasks, deleteCompletedTasks, deleteOldCompletedTasks,
     addSubTask, toggleSubTask, deleteSubTask, addTaskFile, removeTaskFile, incrementTaskStudyTime,
-    addNote, updateNote, deleteNote, addNoteFolder, deleteNoteFolder, reorderNotes, updateNoteFolder, duplicateNote,
+    addNote, updateNote, deleteNote, restoreNote, permanentlyDeleteNote, addNoteFolder, deleteNoteFolder, reorderNotes, updateNoteFolder, duplicateNote,
     addCourse, updateCourse, deleteCourse, reorderCourses,
     addEvent, updateEvent, deleteEvent,
     addTrack, updateTrack, deleteTrack, toggleTrackFavorite, importLocalTracks,
