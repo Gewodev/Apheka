@@ -29,3 +29,18 @@ Three root causes fixed:
 - Completed/cancelled/error items show X to delete
 - Cancel sets status to `'cancelled'`, then X appears
 - Build passes with zero errors
+
+## Notas — Sidebar & Context Header
+### Carpetas
+- Each folder shows a **neutral count badge** (`var(--text-tertiary)` / `var(--bg-hover)`), no color tint.
+- No edit button in sidebar. Instead, when a folder is selected, a **context header** appears at the top of the main panel showing the folder name + a `PenTool` edit button (uses folder color for visibility on any background).
+- PenTool opens the folder edit modal (rename + color grid + **Eliminar carpeta** button inside).
+- **Course folder delete**: soft-hide (folder stays in DB, hidden from sidebar list). Restore button appears in the **Papelera section** ("Carpetas ocultas").
+- Regular folder delete: moves notes to papelera, calls `deleteNoteFolder`.
+
+### Etiquetas
+- Each tag shows a `Hash` icon with just the tag's color, **no background container**.
+- `Palette` button (replaces `MoreHorizontal`) opens a **full edit modal** (rename input + color grid + delete button).
+- Color reactivity fixed: `tagColors` useMemo depends on `tagColorEdit` (re-reads localStorage on modal close).
+- **Tag rename** updates the tag name across all notes and migrates custom colors in localStorage.
+- Context header also shows `Hash` + tag name + edit button when a tag is selected in the main panel.

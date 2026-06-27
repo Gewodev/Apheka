@@ -49,11 +49,16 @@ function calculateStreak(w: Record<string, number>, dailyGoalMin: number, dailyG
 }
 
 const TomatoIcon = ({ size = 24, color = 'currentColor', style }: { size?: number; color?: string; style?: React.CSSProperties }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={style}>
-    <path d="M12 2v2" />
-    <path d="M10 3a2 2 0 0 0 4 0" />
-    <path d="M17 6c-2-1-5-1-7-1s-5 0-7 1c-1.5.5-2.5 2-2.5 4 0 4.5 3 11 11.5 11S23.5 14.5 23.5 10c0-2-1-3.5-2.5-4Z" />
-    <path d="M10 8s1-1 2-1 2 1 2 1" />
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={style}>
+    <path d="M12 4.5c-2.8 0-5.5 1.2-6.5 3.5C4.5 10 5 15 12 22c7-7 7.5-12 6.5-14.5-1-2.3-3.7-3.5-6.5-3.5Z" />
+    <path d="M12 4.5c-1 0-2.5.6-2.5 2.5s1.2 2.5 2.5 2.5 2.5-.6 2.5-2.5-1.5-2.5-2.5-2.5Z" opacity="0.15" />
+    <path d="M8 8c-.8.5-1.2 1.2-1.2 2" />
+    <path d="M16 8c.8.5 1.2 1.2 1.2 2" />
+    <path d="M12 15.5l-1 .5v1.5l1 1 1-1v-1.5l-1-.5Z" fill={color} fillOpacity="0.2" />
+    <path d="M12 2.5c-.3 0-.5.2-.5.5v1.5h1V3c0-.3-.2-.5-.5-.5Z" />
+    <path d="M9.5 3.2l-.3.7 1.3.6.3-.7-1.3-.6Z" />
+    <path d="M14.5 3.2l.3.7-1.3.6-.3-.7 1.3-.6Z" />
+    <path d="M12 3l1.5.8-1.5.7-1.5-.7L12 3Z" fill={color} fillOpacity="0.3" />
   </svg>
 );
 
@@ -79,6 +84,8 @@ interface ActivityEntry {
   status: 'completado' | 'mitad' | 'interrumpido' | 'ronda';
   meta?: string;
   pauseCount?: number;
+  pauseDuration?: number;
+  sessionEff?: number;
   evaluated?: boolean;
   volmeter?: number;
   perception?: number;
@@ -272,17 +279,6 @@ export default function Estudio() {
   }, [sessionTime, isTimerActive, sessionType, isRest, settings.pomodoroTime, distractionCount, activeTaskId, tasks, updateTask]);
 
   useEffect(() => {
-    if (!mountedRef.current) {
-      if (sessionType === 'chrono' && chronoGoal > 0) {
-        const r = Math.floor(sessionTime / chronoGoal);
-        if (r > 0) {
-          lastChronoRoundRef.current = r;
-          saveChronoRound(r);
-        }
-      }
-      mountedRef.current = true;
-      return;
-    }
     if (isTimerActive && sessionType === 'chrono' && chronoGoal > 0) {
       const r = Math.floor(sessionTime / chronoGoal);
       if (r > 0 && r > lastChronoRoundRef.current) {
@@ -413,9 +409,15 @@ export default function Estudio() {
   const studyM = Math.floor((studyTotalSecs % 3600) / 60);
   const studyFormatted = studyH > 0 ? `${studyH}h ${studyM}m` : `${studyM}m`;
 
-  const efficiencyPct = studyTotalSecs + accumulatedPauseTime > 0
-    ? Math.max(0, Math.min(100, Math.round(100 * studyTotalSecs / (studyTotalSecs + accumulatedPauseTime + distractionCount * 30))))
-    : 100;
+  const efficiencyPct = useMemo(() => {
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const todaysSessions = studySessions.filter(s => s.startedAt.startsWith(todayStr));
+    const focusSecs = todaysSessions.reduce((acc, s) => acc + s.duration, 0);
+    const pauseSecs = todaysSessions.reduce((acc, s) => acc + (s.pauseDuration || 0), 0);
+    const distractions = todaysSessions.reduce((acc, s) => acc + (s.pauseCount || 0), 0);
+    const total = focusSecs + pauseSecs + distractions * 60;
+    return total > 0 ? Math.round(100 * focusSecs / total) : todaysSessions.length > 0 ? 100 : 0;
+  }, [studySessions]);
 
   // Daily trend: compare today vs yesterday
   const yesterdayStr = format(subDays(new Date(), 1), 'yyyy-MM-dd');
@@ -451,6 +453,10 @@ export default function Estudio() {
         status: status as any,
         meta: completionTime,
         pauseCount: s.pauseCount || 0,
+        pauseDuration: s.pauseDuration || 0,
+        sessionEff: s.duration + s.pauseDuration + (s.pauseCount || 0) * 60 > 0
+          ? Math.round(100 * s.duration / (s.duration + s.pauseDuration + (s.pauseCount || 0) * 60))
+          : 100,
         evaluated: s.perception !== undefined,
         volmeter: s.volmeter,
         perception: s.perception,
@@ -594,7 +600,7 @@ export default function Estudio() {
                 { id: 'chrono', label: 'Cronómetro', icon: Timer },
               ].map(mode => {
                 const active = sessionType === mode.id && !isBreakTime;
-                const blocked = (isTimerActive || isBreakTime) && !active;
+                const blocked = (isTimerActive || isBreakTime || sessionTime > 0) && !active;
                 const Icon = mode.icon;
                 return (
                   <button key={mode.id} onClick={() => handleTypeChange(mode.id as any)}
@@ -735,6 +741,12 @@ export default function Estudio() {
                   pauseCount: distractionCount,
                   pauseDuration: accumulatedPauseTime,
                 });
+                hasTriggeredRef.current = false;
+                if (sessionType === 'chrono') {
+                  lastChronoRoundRef.current = chronoGoal > 0 ? Math.floor(nowSessionTime / chronoGoal) : 0;
+                  saveChronoRound(lastChronoRoundRef.current);
+                }
+                lastPauseTimeRef.current = accumulatedPauseTime;
                 setSessionTime(0);
                 setEvalSessionId(sessionId || null);
                 setEvalVolmeter(Math.min(20, Math.max(1, 10 - distractionCount + 5)));
@@ -801,22 +813,22 @@ export default function Estudio() {
             <div className="bento-card" style={{
               padding: '20px 24px', display: 'flex', flexDirection: 'column', justifyContent: 'center',
               background: `linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)`,
-              border: `1px solid ${dailyStudyTime >= (settings?.dailyGoal || 240) * 60 ? '#10B98130' : 'var(--border-subtle)'}`,
+              border: `1px solid ${dailyStudyTime >= (settings?.dailyGoal || 240) * 60 ? `${settings?.accentColor || 'var(--accent)'}30` : 'var(--border-subtle)'}`,
               position: 'relative', overflow: 'hidden',
             }}>
               {dailyStudyTime >= (settings?.dailyGoal || 240) * 60 && (
-                <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(circle at 80% 30%, #10B98115 0%, transparent 60%)', pointerEvents: 'none' }} />
+                <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(circle at 80% 30%, ${settings?.accentColor || 'var(--accent)'}15 0%, transparent 60%)`, pointerEvents: 'none' }} />
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-primary)', letterSpacing: '0.12em', textTransform: 'uppercase', fontFamily: "'Inter', sans-serif" }}>Progreso de Hoy</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   {dailyStudyTime >= (settings?.dailyGoal || 240) * 60 && (
-                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#10B981', boxShadow: '0 0 8px #10B98180' }} />
+                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: settings?.accentColor || 'var(--accent)', boxShadow: `0 0 8px ${settings?.accentColor || 'var(--accent)'}80` }} />
                   )}
                   <span style={{
                     fontSize: 9, fontWeight: 700,
-                    color: dailyStudyTime >= (settings?.dailyGoal || 240) * 60 ? '#10B981' : 'var(--text-secondary)',
-                    background: dailyStudyTime >= (settings?.dailyGoal || 240) * 60 ? '#10B98110' : 'var(--bg-deep)',
+                    color: dailyStudyTime >= (settings?.dailyGoal || 240) * 60 ? (settings?.accentColor || 'var(--accent)') : 'var(--text-secondary)',
+                    background: dailyStudyTime >= (settings?.dailyGoal || 240) * 60 ? `${settings?.accentColor || 'var(--accent)'}10` : 'var(--bg-deep)',
                     padding: '2px 8px', borderRadius: 4,
                   }}>
                     {dailyStudyTime >= (settings?.dailyGoal || 240) * 60 ? 'META' : `${Math.min(100, Math.round((dailyStudyTime / ((settings?.dailyGoal || 240) * 60)) * 100))}%`}
@@ -833,14 +845,10 @@ export default function Estudio() {
               <div style={{ width: '100%', height: 6, background: 'var(--bg-deep)', borderRadius: 4, overflow: 'hidden', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.15)' }}>
                 <div style={{
                   height: '100%', borderRadius: 4,
-                  background: dailyStudyTime >= (settings?.dailyGoal || 240) * 60
-                    ? 'linear-gradient(90deg, #10B981, #34D399)'
-                    : `linear-gradient(90deg, ${settings?.accentColor || 'var(--accent)'}, #8B5CF6)`,
+                  background: `linear-gradient(90deg, ${settings?.accentColor || 'var(--accent)'}, ${settings?.accentColor || 'var(--accent)'}cc)`,
                   width: `${Math.min(100, (dailyStudyTime / ((settings?.dailyGoal || 240) * 60)) * 100)}%`,
                   transition: 'width 500ms ease',
-                  boxShadow: dailyStudyTime >= (settings?.dailyGoal || 240) * 60
-                    ? '0 0 12px #10B98160'
-                    : `0 0 8px ${settings?.accentColor || 'var(--accent)'}40`,
+                  boxShadow: `0 0 8px ${settings?.accentColor || 'var(--accent)'}60`,
                 }} />
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10 }}>
@@ -939,30 +947,30 @@ export default function Estudio() {
                     const statusCol = entry.status === 'completado' ? 'var(--success)' : entry.status === 'mitad' ? '#F59E0B' : 'var(--error)';
                     const pct = entry.type === 'pomodoro' && settings.pomodoroTime > 0 ? Math.min(100, Math.round(entry.duration / settings.pomodoroTime * 100)) : 100;
                     const r = 10, circ = 2 * Math.PI * r;
+                    const eff = entry.sessionEff ?? 100;
                     return (
-                      <div key={entry.id || i} onClick={() => entry.type !== 'break' ? handleViewSession(entry.id) : undefined}
+                      <div key={entry.id || i}
                         style={{
-                          display: 'grid', gridTemplateColumns: '32px 1fr auto 48px', gap: 10,
+                          display: 'grid', gridTemplateColumns: '32px 1fr auto auto', gap: 8,
                           padding: '8px 10px', borderRadius: 8, alignItems: 'center',
-                          cursor: entry.type !== 'break' ? 'pointer' : 'default',
-                          transition: 'background 180ms ease, transform 120ms ease',
-                          transform: 'scale(1)',
-                        }}
-                        onMouseEnter={e => { if (entry.type !== 'break') { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.transform = 'scale(1.01)'; } }}
-                        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.transform = 'scale(1)'; }}>
+                          cursor: 'default',
+                          transition: 'background 180ms ease',
+                        }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 8, background: `${c}12`, flexShrink: 0 }}>
                           <Icon size={13} color={c} />
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
-                          <span style={{ fontSize: 12, fontWeight: 550, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                          <span style={{ fontSize: 12, fontWeight: 550, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em', whiteSpace: 'nowrap' }}>
                             {mins > 0 ? `${mins}m` : ''}{secs > 0 && mins === 0 ? ` ${secs}s` : ''}
                           </span>
                           {isPomo && (
-                            <div style={{ width: 40, height: 3, borderRadius: 2, background: 'var(--bg-deep)', overflow: 'hidden', flexShrink: 0 }}>
+                            <div style={{ width: 36, height: 3, borderRadius: 2, background: 'var(--bg-deep)', overflow: 'hidden', flexShrink: 0 }}>
                               <div style={{ width: `${pct}%`, height: '100%', borderRadius: 2, background: statusCol, transition: 'width 400ms ease' }} />
                             </div>
                           )}
-                          {notEvaled && <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#F59E0B', boxShadow: '0 0 6px #F59E0B', flexShrink: 0 }} title="Evaluación pendiente" />}
+                          <span style={{ fontSize: 8, fontWeight: 600, color: eff > 80 ? 'var(--success)' : eff > 50 ? '#F59E0B' : 'var(--error)', whiteSpace: 'nowrap' }}>
+                            {eff}%
+                          </span>
                           {(entry.pauseCount ?? 0) > 0 && (
                             <span style={{ fontSize: 7, color: '#F59E0B', fontWeight: 700, background: '#F59E0B15', padding: '0 5px', borderRadius: 4, lineHeight: '14px', whiteSpace: 'nowrap' }}>
                               {entry.pauseCount}p
@@ -1077,31 +1085,32 @@ export default function Estudio() {
                       const statusCol = entry.status === 'completado' ? 'var(--success)' : entry.status === 'mitad' ? '#F59E0B' : 'var(--error)';
                       const pct = entry.type === 'pomodoro' && settings.pomodoroTime > 0 ? Math.min(100, Math.round(entry.duration / settings.pomodoroTime * 100)) : 100;
                       const r = 10, circ = 2 * Math.PI * r;
+                      const eff = entry.sessionEff ?? 100;
                       return (
-                        <div key={entry.id || i} onClick={() => entry.type !== 'break' ? handleViewSession(entry.id) : undefined}
+                        <div key={entry.id || i}
                           style={{
-                            display: 'grid', gridTemplateColumns: '32px 1fr auto 40px', gap: 10,
+                            display: 'grid', gridTemplateColumns: '28px 1fr auto auto', gap: 8,
                             padding: '7px 10px', borderRadius: 8, alignItems: 'center',
-                            cursor: entry.type !== 'break' ? 'pointer' : 'default',
+                            cursor: 'default',
                             transition: 'background 180ms ease',
-                          }}
-                          onMouseEnter={e => { if (entry.type !== 'break') e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 8, background: `${c}10`, flexShrink: 0 }}>
-                            <Icon size={12} color={c} />
+                          }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, borderRadius: 6, background: `${c}10`, flexShrink: 0 }}>
+                            <Icon size={11} color={c} />
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
-                            <span style={{ fontSize: 11, fontWeight: 550, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                            <span style={{ fontSize: 11, fontWeight: 550, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em', whiteSpace: 'nowrap' }}>
                               {mins > 0 ? `${mins}m` : ''}{secs > 0 && mins === 0 ? ` ${secs}s` : ''}
                             </span>
                             {isPomo && (
-                              <div style={{ width: 36, height: 3, borderRadius: 2, background: 'var(--bg-deep)', overflow: 'hidden', flexShrink: 0 }}>
+                              <div style={{ width: 32, height: 3, borderRadius: 2, background: 'var(--bg-deep)', overflow: 'hidden', flexShrink: 0 }}>
                                 <div style={{ width: `${pct}%`, height: '100%', borderRadius: 2, background: statusCol, transition: 'width 400ms ease' }} />
                               </div>
                             )}
-                            {notEvaled && <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#F59E0B', boxShadow: '0 0 6px #F59E0B', flexShrink: 0 }} title="Evaluación pendiente" />}
+                            <span style={{ fontSize: 8, fontWeight: 600, color: eff > 80 ? 'var(--success)' : eff > 50 ? '#F59E0B' : 'var(--error)' }}>
+                              {eff}%
+                            </span>
                             {(entry.pauseCount ?? 0) > 0 && (
-                              <span style={{ fontSize: 7, color: '#F59E0B', fontWeight: 700, background: '#F59E0B15', padding: '0 5px', borderRadius: 4, lineHeight: '14px', whiteSpace: 'nowrap' }}>
+                              <span style={{ fontSize: 7, color: '#F59E0B', fontWeight: 700, background: '#F59E0B15', padding: '0 4px', borderRadius: 4, lineHeight: '14px', whiteSpace: 'nowrap' }}>
                                 {entry.pauseCount}p
                               </span>
                             )}

@@ -375,20 +375,21 @@ export default function Inicio() {
           const doneMins = Math.round(dailyStudyTime / 60);
           const pct = Math.min(100, (dailyStudyTime / goalSecs) * 100);
           const remaining = Math.max(0, goalMins - doneMins);
+          const accent = settings?.accentColor || 'var(--accent)';
           return (
             <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 5, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 12, justifyContent: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                   <span style={{ fontSize: 8, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em' }}>META DIARIA</span>
                 </div>
-                <span style={{ fontSize: 9, fontWeight: 600, color: remaining <= 0 ? '#10B981' : 'var(--text-tertiary)' }}>
+                <span style={{ fontSize: 9, fontWeight: 600, color: remaining <= 0 ? accent : 'var(--text-tertiary)' }}>
                   {doneMins}/{goalMins}min
                 </span>
               </div>
               <div style={{ width: '100%', height: 6, background: 'var(--bg-deep)', borderRadius: 3, overflow: 'hidden' }}>
-                <div style={{ height: '100%', borderRadius: 3, background: remaining <= 0 ? '#10B981' : `linear-gradient(90deg, ${settings?.accentColor || 'var(--accent)'}, #8B5CF6)`, width: `${pct}%`, transition: 'width 400ms ease', boxShadow: remaining <= 0 ? '0 0 8px #10B98180' : `0 0 8px var(--accent-glow)` }} />
+                <div style={{ height: '100%', borderRadius: 3, background: `linear-gradient(90deg, ${accent}, ${accent}cc)`, width: `${pct}%`, transition: 'width 400ms ease', boxShadow: `0 0 8px ${accent}60` }} />
               </div>
-              <span style={{ fontSize: 9, fontWeight: 500, color: remaining <= 0 ? '#10B981' : 'var(--text-secondary)' }}>
+              <span style={{ fontSize: 9, fontWeight: 500, color: remaining <= 0 ? accent : 'var(--text-secondary)' }}>
                 {remaining <= 0
                   ? 'Meta alcanzada'
                   : `Faltan ${remaining}min para alcanzar la meta`}

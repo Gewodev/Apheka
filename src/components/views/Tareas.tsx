@@ -53,6 +53,9 @@ function localDate(d: string): Date {
   const [y, m, day] = d.split('-').map(Number);
   return new Date(y, m - 1, day);
 }
+function toLocalDateStr(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+}
 
 function getTimeRemaining(dueDate: string): { label: string; text: string; urgent: boolean; overdue: boolean } {
   const parsed = localDate(dueDate);
@@ -207,7 +210,9 @@ export default function Tareas() {
     let filtered = tasks;
     if (courseFilter) filtered = filtered.filter(t => t.course === courseFilter);
     if (searchQuery) filtered = filtered.filter(t => t.title.toLowerCase().includes(searchQuery.toLowerCase()));
+    const allHaveSortOrder = filtered.length > 0 && filtered.every(t => t.sortOrder !== undefined);
     return [...filtered].sort((a, b) => {
+      if (allHaveSortOrder) return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
       const aDone = a.status === 'completado' ? 1 : 0;
       const bDone = b.status === 'completado' ? 1 : 0;
       if (aDone !== bDone) return aDone - bDone;
@@ -216,8 +221,8 @@ export default function Tareas() {
     });
   }, [tasks, courseFilter, searchQuery, sortBy]);
 
+  const { reorderTasks } = useApp();
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
-  const [taskOrder, setTaskOrder] = useState<Task[] | null>(null);
   const [calendarDragTaskId, setCalendarDragTaskId] = useState<string | null>(null);
 
   const sensors = useSensors(
@@ -227,14 +232,14 @@ export default function Tareas() {
   const handleDragEndList = useCallback((event: any) => {
     const { active, over } = event;
     if (over && active.id !== over.id) {
-      const currentTasks = taskOrder || filteredTasks;
-      const oldIndex = currentTasks.findIndex(t => t.id === active.id);
-      const newIndex = currentTasks.findIndex(t => t.id === over.id);
-      const newOrder = arrayMove([...currentTasks], oldIndex, newIndex);
-      setTaskOrder(newOrder);
+      const ids = filteredTasks.map(t => t.id);
+      const oldIndex = ids.indexOf(active.id);
+      const newIndex = ids.indexOf(over.id);
+      const newIds = arrayMove([...ids], oldIndex, newIndex);
+      reorderTasks(newIds);
     }
     setActiveDragId(null);
-  }, [filteredTasks, taskOrder]);
+  }, [filteredTasks, reorderTasks]);
 
   const handleDragEndCalendar = useCallback((event: any) => {
     const { active, over } = event;
@@ -246,10 +251,6 @@ export default function Tareas() {
     }
     setCalendarDragTaskId(null);
   }, [updateTask]);
-
-  useEffect(() => {
-    setTaskOrder(null);
-  }, [courseFilter, searchQuery, sortBy]);
 
   const selectedTask = tasks.find(t => t.id === selectedTaskId);
 
@@ -273,7 +274,7 @@ export default function Tareas() {
     e.preventDefault();
     const taskId = e.dataTransfer.getData('text/plain');
     if (taskId) {
-      updateTask(taskId, { dueDate: targetDate.toISOString().split('T')[0] });
+      updateTask(taskId, { dueDate: toLocalDateStr(targetDate) });
     }
   };
 
@@ -289,7 +290,7 @@ export default function Tareas() {
       priority: quickPriority,
       urgent: false,
       important: false,
-      dueDate: calendarSelectedDay ? calendarSelectedDay.toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+      dueDate: calendarSelectedDay ? toLocalDateStr(calendarSelectedDay) : toLocalDateStr(new Date()),
       estimatedMinutes: 60,
     });
     setQuickTitle('');
@@ -518,7 +519,6 @@ export default function Tareas() {
     { label: 'Completadas', val: stats.completadas, color: '#10B981' },
     { label: 'Pendientes', val: stats.pendientes, color: '#F59E0B' },
     { label: 'En progreso', val: stats.progreso, color: '#3B82F6' },
-    { label: 'Vencidas', val: stats.vencidas, color: '#EF4444' },
   ].filter(s => s.val > 0);
   const totalStatus = statusData.reduce((a, s) => a + s.val, 0);
 
@@ -596,7 +596,7 @@ export default function Tareas() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 18px', borderBottom: '1px solid var(--border-soft)', flexShrink: 0, background: 'var(--bg-elevated)', borderRadius: '12px 12px 0 0' }}>
                 <span style={{ width: 24, flexShrink: 0 }} />
                 <span style={{ flex: 4, fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Tarea</span>
-                <span style={{ flex: 2, fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Curso</span>
+                <span style={{ flex: 2, fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', textAlign: 'center' }}>Curso</span>
                 <span style={{ flex: 1.2, fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Prioridad</span>
                 <span style={{ flex: 1.6, fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Fecha</span>
                 <span style={{ width: 24, flexShrink: 0 }} />
@@ -617,9 +617,8 @@ export default function Tareas() {
                 )) : (
                   <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={e => setActiveDragId(e.active.id as string)} onDragEnd={handleDragEndList} modifiers={[restrictToParentElement]}>
                     <SortableContext items={filteredTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
-                      {(taskOrder || filteredTasks).map(task => {
-                        const displayTasks = taskOrder || filteredTasks;
-                        const t = displayTasks.find(t => t.id === task.id)!;
+                      {filteredTasks.map(task => {
+                        const t = task;
                         const tr = t.dueDate ? getTimeRemaining(t.dueDate) : null;
                         const isDone = t.status === 'completado';
                         const isOverdue = tr?.overdue && !isDone;
@@ -653,7 +652,7 @@ export default function Tareas() {
                                       {t.title}
                                     </span>
                                   </div>
-                                  <div style={{ flex: 2, minWidth: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                  <div style={{ flex: 2, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                                     {t.course && t.course !== 'Sin curso' ? (
                                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 500, padding: '3px 10px', borderRadius: 6, background: t.courseColor + '12', color: t.courseColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%', border: t.status === 'progreso' ? `1px solid ${t.courseColor}50` : '1px solid transparent' }}>
                                       <span style={{ width: 5, height: 5, borderRadius: '50%', background: t.courseColor, flexShrink: 0, boxShadow: t.status === 'progreso' ? `0 0 6px ${t.courseColor}80` : 'none' }} />
@@ -988,7 +987,7 @@ export default function Tareas() {
               </div>
 
               {/* Calendar Grid — más vertical */}
-              <DndContext collisionDetection={closestCorners} onDragStart={e => setCalendarDragTaskId(e.active.id as string)} onDragEnd={handleDragEndCalendar}>
+              <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={e => setCalendarDragTaskId(e.active.id as string)} onDragEnd={handleDragEndCalendar}>
               <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
                 {weekRows.map((week, wi) => {
                   return (
@@ -1007,7 +1006,7 @@ export default function Tareas() {
                           <DroppableCalendarDay key={di} id={`day-${format(day, 'yyyy-MM-dd')}`}>
                             {({ setNodeRef, isOver }) => (
                               <div ref={setNodeRef}
-                                onClick={() => { const dt = tasks.filter(t => t.dueDate && isSameDay(localDate(t.dueDate), day)); if (dt.length > 0) setCalendarSelectedDay(day); }}
+                                onClick={() => setCalendarSelectedDay(day)}
                                 style={{
                                   borderRight: '1px solid var(--border-soft)',
                                   borderBottom: '1px solid var(--border-soft)',
@@ -1228,7 +1227,6 @@ export default function Tareas() {
                         { label: 'Completadas', val: stats.completadas, color: '#10B981' },
                         { label: 'En curso', val: stats.progreso, color: '#3B82F6' },
                         { label: 'Pendientes', val: stats.pendientes, color: '#F59E0B' },
-                        { label: 'Vencidas', val: stats.vencidas, color: '#EF4444' },
                       ].map(item => (
                         <div key={item.label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: isBoard ? '2px 0' : '4px 0' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>

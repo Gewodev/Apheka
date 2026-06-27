@@ -2,18 +2,30 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   Search, Plus, Folder as FolderIcon, Pin, Trash2, FileText, Download, X, Copy, Move,
   AlertTriangle, Check, Bold, Italic, Underline, List, Code, Link, Paperclip,
-  Image as ImageIcon, Type,   BookOpen, Library, Star, PenTool,
+  Image as ImageIcon, Type,   BookOpen, Library, Star,
   Info, Clock, AlignJustify,
-  ChevronDown, ChevronRight, MoreHorizontal,
+  ChevronDown, ChevronLeft, ChevronRight, MoreHorizontal,
   ListOrdered, Quote, Upload, Lock,
   History, Table, File,
   Layers, Edit3, FileOutput,
-  Filter, SortAsc, Tag, Hash, Maximize2, Minimize2, CheckSquare, Palette, ArrowLeft, Unlink,
+  Filter, SortAsc, Tag, Hash, Maximize2, Minimize2, CheckSquare, Palette, ArrowLeft, Unlink, Minus,
   Briefcase, GraduationCap, Compass, Target, Brain, Award, Coffee, Activity, Shield,
   Heart, Lightbulb, Zap, Globe, Feather, Sun, Moon, CloudRain, Mountain, Music,
-  Camera, Eye, Flag, Gift, Anchor, Key, Rocket, Scissors, Watch, Wifi, StickyNote
+  Camera, Eye, Flag, Gift, Anchor, Key, Rocket, Scissors, Watch, Wifi, StickyNote,
+  Strikethrough, AlignLeft, AlignCenter, AlignRight, Heading1, Heading2, Heading3,
+  Eraser, Sigma
 } from "lucide-react";
 import { useApp, Note, NoteFolder, NoteAttachment } from "../../store/AppContext";
+import {
+  DndContext, closestCenter,
+  PointerSensor, useSensor, useSensors,
+} from '@dnd-kit/core';
+import {
+  SortableContext, useSortable, arrayMove,
+  verticalListSortingStrategy
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { restrictToParentElement } from '@dnd-kit/modifiers';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -165,14 +177,17 @@ interface NoteCardProps {
 
 function NoteCard({ note, isSelected, onSelect, onOpen, onContextMenu, onDragStart, onDragOver, onDrop, tagColors }: NoteCardProps) {
   const spineColor = note.coverColor || note.courseColor || getSpineColor(note.id);
+  const folderName = note.course;
+  const folderColor = note.coverColor || note.courseColor || spineColor;
   const preview = useMemo(() => {
     const text = note.content.replace(/<[^>]+>/g, "").trim();
     return text || "Sin contenido adicional en este cuaderno.";
   }, [note.content]);
   const [hov, setHov] = useState(false);
+  const hasTags = note.tags && note.tags.length > 0;
 
   return (
-    <div style={{ position: "relative", height: "100%" }}>
+    <div style={{ position: "relative", height: "100%", minWidth: 0 }}>
       <div
         draggable
         onDragStart={onDragStart}
@@ -185,84 +200,108 @@ function NoteCard({ note, isSelected, onSelect, onOpen, onContextMenu, onDragSta
         onMouseLeave={() => setHov(false)}
         className="bento-card"
         style={{
-          display: "flex", flexDirection: "column", gap: 4,
-          padding: "12px", cursor: "pointer", height: "100%",
-          background: isSelected
-            ? "linear-gradient(135deg, " + spineColor + "06, " + spineColor + "01)"
-            : "linear-gradient(135deg, rgba(255,255,255,0.02) 0%, rgba(0,0,0,0.03) 100%)",
-          border: "1px solid " + (isSelected ? spineColor + "55" : "var(--border-subtle)"),
+          display: "flex", flexDirection: "column", gap: 0,
+          padding: "18px 18px 14px", cursor: "pointer", height: "100%",
+          background: "var(--bg-elevated)",
+          border: "1px solid " + (isSelected ? spineColor + "40" : hov ? "var(--border-default)" : "var(--border-subtle)"),
           borderRadius: "var(--radius-xl)",
           transition: "all 250ms " + EASE,
-          transform: hov && !isSelected ? "translateY(-2px)" : "none",
-          boxShadow: isSelected
-            ? "0 4px 16px " + spineColor + "22"
-            : hov ? "0 6px 18px rgba(0,0,0,0.18)" : "var(--shadow-sm)",
+          transform: hov ? "translateY(-2px)" : "none",
+          boxShadow: hov
+            ? "0 8px 24px rgba(0,0,0,0.10)"
+            : "0 1px 3px rgba(0,0,0,0.04)",
           position: "relative", overflow: "hidden",
         }}
       >
-        {/* Top row: icon + title + date + menu */}
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+        {isSelected && (
           <div style={{
-            width: 36, height: 36, borderRadius: "var(--radius-md)", flexShrink: 0,
-            background: "linear-gradient(135deg, " + spineColor + "15, " + spineColor + "05)",
+            position: "absolute", bottom: 0, left: 0, right: 0, height: 3,
+            background: "linear-gradient(90deg, " + spineColor + " 0%, " + spineColor + "cc 100%)",
+            boxShadow: "0 0 16px " + spineColor + "50",
+            zIndex: 2,
+          }} />
+        )}
+        <div style={{
+          position: "absolute", inset: 0, opacity: isSelected ? 0.04 : 0,
+          background: "linear-gradient(180deg, " + spineColor + " 0%, transparent 60%)",
+          transition: "opacity 250ms " + EASE,
+          pointerEvents: "none",
+        }} />
+        {/* Top section: bigger icon + bigger title + 3-dot */}
+        <div style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 10 }}>
+          <div style={{
+            width: 44, height: 44, borderRadius: "var(--radius-md)", flexShrink: 0,
+            background: "linear-gradient(145deg, " + spineColor + "14, " + spineColor + "06)",
             display: "flex", alignItems: "center", justifyContent: "center",
-            border: "1px solid " + spineColor + "20",
-            boxShadow: "0 2px 8px " + spineColor + "15",
+            border: "1px solid " + spineColor + "16",
           }}>
-            <NoteIconRenderer iconName={note.coverImage} color={spineColor} size={16} />
+            <NoteIconRenderer iconName={note.coverImage} color={spineColor} size={20} />
           </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 1, justifyContent: "center", paddingTop: 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <span style={{
-                fontSize: 13, fontWeight: 600, color: "var(--text-primary)",
+                fontSize: 14, fontWeight: 660, color: "var(--text-primary)",
                 fontFamily: "var(--font-heading)",
                 whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                letterSpacing: "-0.015em",
               }}>{note.title || "Sin título"}</span>
-              {note.isPinned && <Star size={10} fill="#F59E0B" style={{ color: "#F59E0B", flexShrink: 0 }} />}
+              {note.isPinned && <Star size={11} fill="#F59E0B" style={{ color: "#F59E0B", flexShrink: 0 }} />}
             </div>
-            <div style={{ fontSize: 9.5, color: "var(--text-tertiary)", marginTop: 1 }}>
-              {formatTimeAgo(note.updatedAt)}
-            </div>
+            <span style={{ fontSize: 10.5, color: "var(--text-tertiary)", fontWeight: 500 }}>
+              {formatTimeAgo(note.updatedAt)} · {folderName || "Sin carpeta"}
+            </span>
           </div>
           <button onClick={(e) => { e.stopPropagation(); onContextMenu(e); }}
             style={{
-              background: "var(--bg-surface)", border: "1px solid var(--border-default)",
+              background: "transparent", border: "1px solid transparent",
               cursor: "pointer", color: "var(--text-tertiary)",
-              padding: 2, display: "flex", borderRadius: 6, flexShrink: 0, alignSelf: "flex-start",
+              padding: 4, display: "flex", borderRadius: 6, flexShrink: 0,
+              transition: "all 150ms",
+              marginTop: 2,
             }}
-            className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+            className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-secondary)] hover:border-[var(--border-default)]"
             title="Más opciones">
-            <MoreHorizontal size={11} />
+            <MoreHorizontal size={13} />
           </button>
         </div>
 
-        {/* Preview text — fixed height, never expands card */}
+        {/* Divider */}
+        <div style={{ height: 1, background: "var(--border-subtle)", opacity: 0.3, marginBottom: 8 }} />
+
+        {/* Preview text — fixed 2 lines */}
         <div style={{
-          fontSize: 11, color: "var(--text-secondary)", lineHeight: 1.4,
+          fontSize: 12.5, color: "var(--text-secondary)", lineHeight: 1.5,
           display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
-          overflow: "hidden", opacity: 0.8,
-          maxHeight: "3em", minHeight: "3em", flexShrink: 0,
+          overflow: "hidden", opacity: 0.5,
+          maxHeight: "3.3em", minHeight: "3.3em", flexShrink: 0,
         }}>{preview}</div>
-        
-        {/* Tags row */}
-        <div style={{ display: "flex", alignItems: "center", gap: 3, flexWrap: "wrap", marginTop: "auto" }}>
-          {note.tags && note.tags.slice(0, 3).map((t) => {
-            const tc = tagColors[t] || DEFAULT_TAG_COLORS[t] || spineColor;
-            return (
-              <span key={t} style={{
-                fontSize: 8, fontWeight: 600, color: tc,
-                border: "1px solid " + tc + "30", background: tc + "0a",
-                padding: "0px 5px", borderRadius: 3, lineHeight: "16px",
-              }}>{t}</span>
-            );
-          })}
-          {note.tags && note.tags.length > 3 && (
-            <span style={{
-              fontSize: 8, fontWeight: 600, color: "var(--text-tertiary)",
-              padding: "0px 4px",
-            }}>+{note.tags.length - 3}</span>
-          )}
-        </div>
+
+        {/* Spacer to push footer down */}
+        <div style={{ flex: 1, minHeight: 4 }} />
+
+        {/* Footer area: tags row only (folder moved to header) */}
+        {hasTags && (
+          <div style={{ display: "flex", alignItems: "center", gap: 3, flexWrap: "wrap", minHeight: 18, paddingTop: 8, marginTop: "auto" }}>
+            {note.tags!.slice(0, 3).map((t) => {
+              const tc = tagColors[t] || DEFAULT_TAG_COLORS[t] || spineColor;
+              return (
+                <span key={t} style={{
+                  fontSize: 9, fontWeight: 650, color: tc,
+                  background: tc + "0d", lineHeight: "18px",
+                  padding: "0 7px", borderRadius: 4,
+                  letterSpacing: "0.01em",
+                }}>{t}</span>
+              );
+            })}
+            {note.tags && note.tags.length > 3 && (
+              <span style={{
+                fontSize: 8.5, fontWeight: 600, color: "var(--text-tertiary)",
+                lineHeight: "18px", padding: "0 6px", borderRadius: 4,
+                background: "var(--bg-deep)",
+              }}>+{note.tags.length - 3} más</span>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -695,64 +734,246 @@ interface EditorToolbarProps {
   onFormat: (cmd: string, value?: string) => void;
 }
 
+const TEXT_COLORS = [
+  { name: "Por defecto", value: "var(--text-primary)" },
+  { name: "Rojo", value: "#EF4444" },
+  { name: "Naranja", value: "#F97316" },
+  { name: "Amarillo", value: "#F59E0B" },
+  { name: "Verde", value: "#10B981" },
+  { name: "Azul", value: "#3B82F6" },
+  { name: "Morado", value: "#8B5CF6" },
+  { name: "Rosa", value: "#EC4899" },
+];
+
+const HIGHLIGHT_COLORS = [
+  { name: "Transparente", value: "transparent" },
+  { name: "Resaltado Rojo", value: "rgba(239, 68, 68, 0.25)" },
+  { name: "Resaltado Naranja", value: "rgba(249, 115, 22, 0.25)" },
+  { name: "Resaltado Amarillo", value: "rgba(245, 158, 11, 0.25)" },
+  { name: "Resaltado Verde", value: "rgba(16, 185, 129, 0.25)" },
+  { name: "Resaltado Azul", value: "rgba(59, 130, 246, 0.25)" },
+  { name: "Resaltado Morado", value: "rgba(139, 92, 246, 0.25)" },
+  { name: "Resaltado Rosa", value: "rgba(236, 72, 153, 0.25)" },
+];
+
 function EditorToolbar({ onFormat }: EditorToolbarProps) {
   const [showLinkInput, setShowLinkInput] = useState(false);
   const [linkUrl, setLinkUrl] = useState("");
   const linkInputRef = useRef<HTMLInputElement>(null);
 
+  const [showColorMenu, setShowColorMenu] = useState(false);
+  const [showTablePicker, setShowTablePicker] = useState(false);
+  const [tableRows, setTableRows] = useState(3);
+  const [tableCols, setTableCols] = useState(3);
+  const colorMenuRef = useRef<HTMLDivElement>(null);
+  const tablePickerRef = useRef<HTMLDivElement>(null);
+
+  const trackCmds = ["bold", "italic", "underline", "strikeThrough", "insertUnorderedList", "insertOrderedList"];
+  const [activeFormats, setActiveFormats] = useState<Record<string, boolean>>({});
+  const [activeHeading, setActiveHeading] = useState("p");
+  useEffect(() => {
+    const check = () => {
+      try {
+        const state: Record<string, boolean> = {};
+        trackCmds.forEach(cmd => { state[cmd] = document.queryCommandState(cmd); });
+        setActiveFormats(state);
+        const block = document.queryCommandValue("formatBlock") || "p";
+        setActiveHeading(block.replace(/[<>]/g, "").toLowerCase());
+      } catch {}
+    };
+    document.addEventListener("selectionchange", check);
+    document.addEventListener("keyup", check);
+    document.addEventListener("mouseup", check);
+    const id = setInterval(check, 300);
+    check();
+    return () => {
+      document.removeEventListener("selectionchange", check);
+      document.removeEventListener("keyup", check);
+      document.removeEventListener("mouseup", check);
+      clearInterval(id);
+    };
+  }, []);
+
   useEffect(() => {
     if (showLinkInput) linkInputRef.current?.focus();
   }, [showLinkInput]);
 
-  const items = [
-    { cmd: "bold", icon: Bold, label: "Negrita" },
-    { cmd: "italic", icon: Italic, label: "Cursiva" },
-    { cmd: "underline", icon: Underline, label: "Subrayado" },
-    { type: "divider" as const },
-    { cmd: "insertUnorderedList", icon: List, label: "Lista viñetas" },
-    { cmd: "insertOrderedList", icon: ListOrdered, label: "Lista numerada" },
-    { cmd: "insertCheckbox", icon: CheckSquare, label: "Checklist" },
-    { type: "divider" as const },
-    { cmd: "codeBlock", icon: Code, label: "Bloque código" },
-    { cmd: "styledQuote", icon: Quote, label: "Cita elaborada" },
-    { cmd: "insertTable", icon: Table, label: "Insertar tabla" },
-    { type: "divider" as const },
-    { cmd: "link", icon: Link, label: "Enlace" },
-    { cmd: "insertFile", icon: Paperclip, label: "Adjuntar archivo" },
-    { cmd: "removeLink", icon: Unlink, label: "Quitar enlace" },
-  ];
-
-  const handleCheckbox = useCallback(() => {
-    const html = `<div class="notes-checkbox" style="display:flex;align-items:center;gap:8px;margin:4px 0;"><input type="checkbox" style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent);" /> <span>Lista de tareas</span></div>`;
-    onFormat("insertHTML", html);
-  }, [onFormat]);
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (colorMenuRef.current && !colorMenuRef.current.contains(event.target as Node)) {
+        setShowColorMenu(false);
+      }
+      if (tablePickerRef.current && !tablePickerRef.current.contains(event.target as Node)) {
+        setShowTablePicker(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   return (
     <div style={{
-      display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap", position: "relative",
+      display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", position: "relative",
     }}>
-      {items.map((item, i) => {
-        if ("type" in item) return <div key={i} style={{ width: 1, height: 16, background: "var(--border-default)", margin: "0 4px" }} />;
-        const Icon = item.icon;
-        return (
-          <button key={i} onClick={() => {
-            if (item.cmd === "link") { setShowLinkInput(true); setLinkUrl(""); return; }
-            if (item.cmd === "insertCheckbox") { handleCheckbox(); return; }
-            if (item.cmd === "insertFile") { onFormat("insertFile"); return; }
-            onFormat(item.cmd, (item as any).value);
-          }}
-            title={item.label}
-            style={{
-              width: 28, height: 28, borderRadius: 6, border: "none",
-              background: "transparent", color: "var(--text-secondary)",
-              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-              transition: "all 150ms",
-            }}
-            className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
-            <Icon size={14} />
-          </button>
-        );
-      })}
+      {/* 1. HEADINGS — inline grid */}
+      <div style={{ display: "flex", gap: 2, alignItems: "stretch" }}>
+        {([
+          { tag: "p", label: "P", size: 11, weight: 400 },
+          { tag: "h1", label: "H1", size: 14, weight: 700 },
+          { tag: "h2", label: "H2", size: 12.5, weight: 600 },
+          { tag: "h3", label: "H3", size: 11.5, weight: 550 },
+        ] as const).map(({ tag, label, size, weight }) => {
+          const active = activeHeading === tag;
+          return (
+            <button key={tag} onClick={() => onFormat("formatBlock", `<${tag}>`)}
+              title={`${tag === "p" ? "Texto normal" : `Título ${tag.toUpperCase()}`}`}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "center",
+                minWidth: 30, padding: "0 6px", height: 26,
+                borderRadius: 6, border: `1px solid ${active ? 'var(--accent)' : 'var(--border-default)'}`,
+                background: active ? "var(--accent-dim)" : "transparent",
+                color: active ? "var(--accent)" : "var(--text-tertiary)",
+                fontSize: size, fontWeight: weight, cursor: "pointer",
+                fontFamily: "'Inter Tight', sans-serif",
+                letterSpacing: "-0.02em",
+                transition: "all 120ms",
+              }}
+              className={active ? "" : "hover:border-[var(--border-strong)] hover:text-[var(--text-secondary)]"}>
+              {label}
+            </button>
+          );
+        })}
+      </div>
+
+      <div style={{ width: 1, height: 16, background: "var(--border-default)", margin: "0 4px" }} />
+
+      {/* 2. INLINE STYLING — only bold, italic, underline, strikethrough */}
+      <button onClick={() => onFormat("bold")} title="Negrita (Ctrl+B)"
+        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: activeFormats.bold ? "var(--accent-dim)" : "transparent", color: activeFormats.bold ? "var(--accent)" : "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
+        className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
+        <Bold size={14} />
+      </button>
+      <button onClick={() => onFormat("italic")} title="Cursiva (Ctrl+I)"
+        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: activeFormats.italic ? "var(--accent-dim)" : "transparent", color: activeFormats.italic ? "var(--accent)" : "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
+        className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
+        <Italic size={14} />
+      </button>
+      <button onClick={() => onFormat("underline")} title="Subrayado (Ctrl+U)"
+        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: activeFormats.underline ? "var(--accent-dim)" : "transparent", color: activeFormats.underline ? "var(--accent)" : "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
+        className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
+        <Underline size={14} />
+      </button>
+      <button onClick={() => onFormat("strikeThrough")} title="Tachado"
+        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: activeFormats.strikeThrough ? "var(--accent-dim)" : "transparent", color: activeFormats.strikeThrough ? "var(--accent)" : "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
+        className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
+        <Strikethrough size={14} />
+      </button>
+
+      <div style={{ width: 1, height: 16, background: "var(--border-default)", margin: "0 4px" }} />
+
+      {/* 3. LISTS + BLOCKS */}
+      <button onClick={() => onFormat("insertUnorderedList")} title="Lista con viñetas"
+        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: activeFormats.insertUnorderedList ? "var(--accent-dim)" : "transparent", color: activeFormats.insertUnorderedList ? "var(--accent)" : "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
+        className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
+        <List size={14} />
+      </button>
+      <button onClick={() => onFormat("insertOrderedList")} title="Lista numerada"
+        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: activeFormats.insertOrderedList ? "var(--accent-dim)" : "transparent", color: activeFormats.insertOrderedList ? "var(--accent)" : "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
+        className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
+        <ListOrdered size={14} />
+      </button>
+      <button onClick={() => onFormat("codeBlock")} title="Bloque de código"
+        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
+        className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
+        <Code size={14} />
+      </button>
+      <button onClick={() => onFormat("styledQuote")} title="Cita"
+        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
+        className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
+        <Quote size={14} />
+      </button>
+      <button onClick={() => onFormat("insertHR")} title="Separador"
+        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
+        className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
+        <Minus size={14} />
+      </button>
+
+      <div style={{ width: 1, height: 16, background: "var(--border-default)", margin: "0 4px" }} />
+
+      {/* 4. ALIGNMENT */}
+      <button onClick={() => onFormat("justifyLeft")} title="Alinear a la izquierda"
+        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
+        className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
+        <AlignLeft size={14} />
+      </button>
+      <button onClick={() => onFormat("justifyCenter")} title="Centrar"
+        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
+        className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
+        <AlignCenter size={14} />
+      </button>
+      <button onClick={() => onFormat("justifyRight")} title="Alinear a la derecha"
+        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
+        className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
+        <AlignRight size={14} />
+      </button>
+
+      {/* 5. LINKS & FILES */}
+      <button onClick={() => { setShowLinkInput(true); setLinkUrl(""); }} title="Insertar enlace"
+        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
+        className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
+        <Link size={14} />
+      </button>
+      <button onClick={() => onFormat("insertFile")} title="Adjuntar archivo"
+        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
+        className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
+        <Paperclip size={14} />
+      </button>
+      <div ref={tablePickerRef} style={{ position: "relative" }}>
+        <button onClick={() => setShowTablePicker(!showTablePicker)} title="Insertar tabla"
+          style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
+          className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
+          <Table size={14} />
+        </button>
+        {showTablePicker && (
+          <div style={{
+            position: "absolute", top: "100%", left: 0, marginTop: 6, zIndex: 300,
+            background: "var(--bg-elevated)", border: "1px solid var(--border-strong)",
+            borderRadius: "var(--radius-md)", padding: 12,
+            boxShadow: "var(--shadow-elevated)", minWidth: 200,
+          }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <span style={{ fontSize: 10, color: "var(--text-tertiary)" }}>{tableCols}</span>
+                <input type="range" min={1} max={6} value={tableCols} onChange={e => setTableCols(Number(e.target.value))}
+                  style={{ width: 60, accentColor: "var(--accent)" }} />
+              </div>
+              <span style={{ fontSize: 10, color: "var(--text-tertiary)" }}>×</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <span style={{ fontSize: 10, color: "var(--text-tertiary)" }}>{tableRows}</span>
+                <input type="range" min={1} max={8} value={tableRows} onChange={e => setTableRows(Number(e.target.value))}
+                  style={{ width: 60, accentColor: "var(--accent)" }} />
+              </div>
+            </div>
+            <div style={{
+              display: "grid", gridTemplateColumns: `repeat(${tableCols}, 1fr)`, gap: 2, marginBottom: 8,
+            }}>
+              {Array.from({ length: tableCols * tableRows }).map((_, i) => (
+                <div key={i} style={{
+                  width: 18, height: 14, borderRadius: 2,
+                  background: "var(--accent)", opacity: 0.3, border: "1px solid var(--accent)",
+                }} />
+              ))}
+            </div>
+            <button onClick={() => { onFormat("insertTable", `${tableCols}x${tableRows}`); setShowTablePicker(false); }}
+              style={{
+                width: "100%", background: "var(--accent)", color: "#fff", border: "none",
+                borderRadius: 6, padding: "6px 12px", fontSize: 11, fontWeight: 600, cursor: "pointer",
+              }}>Insertar {tableCols}×{tableRows}</button>
+          </div>
+        )}
+      </div>
 
       {showLinkInput && (
         <div style={{
@@ -819,19 +1040,71 @@ export default function Notas() {
   const [viewMode, setViewMode] = useState<ViewMode>("estante");
   const [sortMode, setSortMode] = useState<SortMode>("updated");
   const [searchQuery, setSearchQuery] = useState("");
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; noteId: string } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; noteId: string; arrowLeft: boolean; arrowY: number } | null>(null);
   
   const [showNewFolderModal, setShowNewFolderModal] = useState(false);
   const [showNewTagModal, setShowNewTagModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showMoveModal, setShowMoveModal] = useState(false);
+  const [trashSelectedIds, setTrashSelectedIds] = useState<Set<string>>(new Set());
   const [switchTargetId, setSwitchTargetId] = useState<string | null>(null);
   const [drawerTab, setDrawerTab] = useState<"contenido" | "informacion" | "historial">("contenido");
+  const [linkPreviewUrl, setLinkPreviewUrl] = useState<string | null>(null);
+  const [linkPreviewError, setLinkPreviewError] = useState(false);
+  const [lightboxImage, setLightboxImage] = useState<{ src: string; el: HTMLElement } | null>(null);
+  const [lightboxBorderColor, setLightboxBorderColor] = useState("#000000");
+  const [showImageDeleteConfirm, setShowImageDeleteConfirm] = useState(false);
 
   // EDIT STATE
   const [isEditing, setIsEditing] = useState(false);
   const [showDetailsPanel, setShowDetailsPanel] = useState(true);
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "pending">("saved");
+  const [slashMenuPos, setSlashMenuPos] = useState<{ x: number; y: number } | null>(null);
+  const [slashFilter, setSlashFilter] = useState("");
+  const slashMenuRef = useRef<HTMLDivElement>(null);
+  const slashRangeRef = useRef<Range | null>(null);
+  const slashFilterInputRef = useRef<HTMLInputElement>(null);
+  type SlashOpt = { label: string; icon: React.ComponentType<{ size?: number; style?: React.CSSProperties }>; cmd: string; value?: string };
+  const buildSlashItems = useCallback((): { cat: string; opts: SlashOpt[] }[] => [
+    { cat: "Texto", opts: [
+      { label: "Texto normal", icon: Type, cmd: "formatBlock", value: "<p>" },
+      { label: "Título grande", icon: Heading1, cmd: "formatBlock", value: "<h1>" },
+      { label: "Título mediano", icon: Heading2, cmd: "formatBlock", value: "<h2>" },
+      { label: "Título pequeño", icon: Heading3, cmd: "formatBlock", value: "<h3>" },
+    ]},
+    { cat: "Listas", opts: [
+      { label: "Lista con viñetas", icon: List, cmd: "insertUnorderedList" },
+      { label: "Lista numerada", icon: ListOrdered, cmd: "insertOrderedList" },
+    ]},
+    { cat: "Bloques", opts: [
+      { label: "Bloque de código", icon: Code, cmd: "codeBlock" },
+      { label: "Cita", icon: Quote, cmd: "styledQuote" },
+      { label: "Callout", icon: Lightbulb, cmd: "calloutBlock" },
+      { label: "Fórmula", icon: Sigma, cmd: "mathBlock" },
+      { label: "Separador", icon: Minus, cmd: "insertHR" },
+    ]},
+  ], []);
+
+  const cleanUpSlashText = useCallback(() => {
+    const stored = slashRangeRef.current;
+    if (!stored) return;
+    try {
+      const node = stored.startContainer;
+      if (node.nodeType === Node.TEXT_NODE && node.textContent) {
+        const start = stored.startOffset - 1;
+        const end = stored.startOffset + slashFilter.length;
+        if (start >= 0 && end <= node.textContent.length) {
+          node.textContent = node.textContent.substring(0, start) + node.textContent.substring(end);
+          const range = document.createRange();
+          range.setStart(node, start);
+          range.collapse(true);
+          const sel = window.getSelection();
+          if (sel) { sel.removeAllRanges(); sel.addRange(range); }
+        }
+      }
+      slashRangeRef.current = null;
+    } catch {}
+  }, [slashFilter]);
 
   useEffect(() => {
     const mql = window.matchMedia('(max-width: 800px)');
@@ -841,6 +1114,18 @@ export default function Notas() {
     mql.addEventListener('change', handler);
     handler(mql);
     return () => mql.removeEventListener('change', handler);
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setLightboxImage(null);
+        setShowImageDeleteConfirm(false);
+        setLinkPreviewUrl(null);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
   }, []);
 
   // Expanded View Drawer state
@@ -853,6 +1138,15 @@ export default function Notas() {
 
   const [bookshelfPage, setBookshelfPage] = useState(0);
   const [bookshelfDir, setBookshelfDir] = useState<1 | -1>(1);
+  const [showShelfArrows, setShowShelfArrows] = useState(false);
+  const [editFolderId, setEditFolderId] = useState<string | null>(null);
+  const [editFolderName, setEditFolderName] = useState("");
+  const [editFolderColor, setEditFolderColor] = useState("");
+  const [tagColorEdit, setTagColorEdit] = useState<string | null>(null);
+  const [editTagName, setEditTagName] = useState("");
+  const [deleteFolderId, setDeleteFolderId] = useState<string | null>(null);
+  const [deleteFolderName, setDeleteFolderName] = useState("");
+  const [deletedFolderIds, setDeletedFolderIds] = useState<Set<string>>(new Set());
 
   // Custom Tag colors map (persisted)
   const [customTagColors, setCustomTagColors] = useState<Record<string, string>>(() => {
@@ -917,7 +1211,7 @@ export default function Notas() {
       result = result.filter(n => !n.deletedAt);
     }
 
-    if (selectedFolderId && !activeSidebarTab.startsWith("tag_")) {
+    if (selectedFolderId) {
       result = result.filter((n) => n.folderId === selectedFolderId);
     }
     if (selectedTag) {
@@ -957,6 +1251,12 @@ export default function Notas() {
     return result;
   }, [notes, selectedFolderId, selectedTag, searchQuery, sortMode, activeSidebarTab]);
 
+  const totalPagesBS = useMemo(() => {
+    if (viewMode !== "estante") return 1;
+    const PER_PAGE_BS = 10;
+    return Math.max(1, Math.ceil(filteredNotes.length / PER_PAGE_BS));
+  }, [filteredNotes.length, viewMode]);
+
   const handleCreateNote = useCallback(() => {
     const id = addNote({
       title: "Nuevo cuaderno", content: "Comienza a escribir tus notas aquí...", subtitle: "",
@@ -978,6 +1278,19 @@ export default function Notas() {
     }
   }, [selectedNoteId, isEditing]);
 
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (slashMenuRef.current && !slashMenuRef.current.contains(event.target as Node)) {
+        setSlashMenuPos(null);
+        setSlashFilter("");
+        cleanUpSlashText();
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [cleanUpSlashText]);
+
+  const lastContentRef = useRef("");
   const handleSaveNote = useCallback(() => {
     if (!selectedNote) return;
     let content = selectedNote.content;
@@ -990,7 +1303,19 @@ export default function Notas() {
       title = titleRef.current.value || "Sin título";
     }
 
-    updateNote(selectedNote.id, { content, title, subtitle: content.replace(/<[^>]+>/g, "").slice(0, 150) });
+    const plain = content.replace(/<[^>]+>/g, "").trim();
+    if (plain !== lastContentRef.current && plain) {
+      lastContentRef.current = plain;
+      const preview = plain.slice(0, 80);
+      const versions = JSON.parse(localStorage.getItem("owa_note_versions_" + selectedNote.id) || "[]");
+      if (!versions.length || versions[0].preview !== preview) {
+        versions.unshift({ timestamp: new Date().toISOString(), preview, wordCount: plain.split(/\s+/).length, content });
+        if (versions.length > 10) versions.length = 10;
+        localStorage.setItem("owa_note_versions_" + selectedNote.id, JSON.stringify(versions));
+      }
+    }
+
+    updateNote(selectedNote.id, { content, title, subtitle: plain.slice(0, 150) });
     setSaveStatus("saved");
   }, [selectedNote, updateNote]);
 
@@ -1059,13 +1384,84 @@ export default function Notas() {
     toast.success("Eliminada permanentemente");
   }, [permanentlyDeleteNote, selectedNoteId]);
 
+  const toggleTrashSelect = useCallback((id: string) => {
+    setTrashSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const handleBatchRestore = useCallback(() => {
+    if (trashSelectedIds.size === 0) return;
+    trashSelectedIds.forEach(id => restoreNote(id));
+    const count = trashSelectedIds.size;
+    setTrashSelectedIds(new Set());
+    toast.success(`${count} nota${count !== 1 ? "s" : ""} restaurada${count !== 1 ? "s" : ""}`);
+  }, [trashSelectedIds, restoreNote]);
+
+  const handleBatchDelete = useCallback(() => {
+    if (trashSelectedIds.size === 0) return;
+    trashSelectedIds.forEach(id => {
+      permanentlyDeleteNote(id);
+      if (selectedNoteId === id) {
+        setSelectedNoteId(null);
+        setIsEditing(false);
+      }
+    });
+    const count = trashSelectedIds.size;
+    setTrashSelectedIds(new Set());
+    toast.success(`${count} nota${count !== 1 ? "s" : ""} eliminada${count !== 1 ? "s" : ""} permanentemente`);
+  }, [trashSelectedIds, permanentlyDeleteNote, selectedNoteId]);
+
+  const handleSelectAllTrash = useCallback((allIds: string[]) => {
+    setTrashSelectedIds(prev => {
+      if (prev.size === allIds.length) return new Set();
+      return new Set(allIds);
+    });
+  }, []);
+
   const handleContextMenu = useCallback((e: React.MouseEvent, noteId: string) => {
     e.preventDefault(); e.stopPropagation();
-    const menuW = 172, menuH = 180;
-    let x = e.clientX, y = e.clientY;
-    if (x + menuW > window.innerWidth - 8) x = window.innerWidth - menuW - 8;
-    if (y + menuH > window.innerHeight - 8) y = window.innerHeight - menuH - 8;
-    setContextMenu({ x: Math.max(4, x), y: Math.max(4, y), noteId });
+    const menuW = 180, menuH = 184;
+    let btnRect: DOMRect | null = null;
+    let anchorX: number, anchorY: number;
+    if (e.type === 'click') {
+      btnRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      anchorX = btnRect.left + btnRect.width / 2;
+      anchorY = btnRect.top + btnRect.height / 2;
+    } else {
+      anchorX = e.clientX;
+      anchorY = e.clientY;
+    }
+    let x: number, arrowLeft: boolean;
+    if (btnRect) {
+      const spR = window.innerWidth - btnRect.right, spL = btnRect.left;
+      if (spR >= menuW) {
+        x = btnRect.right - 2; arrowLeft = true;
+      } else if (spL >= menuW) {
+        x = btnRect.left - menuW + 2; arrowLeft = false;
+      } else if (spR >= spL) {
+        x = Math.max(2, window.innerWidth - menuW - 2); arrowLeft = true;
+      } else {
+        x = 2; arrowLeft = false;
+      }
+    } else {
+      const spR = window.innerWidth - anchorX, spL = anchorX;
+      if (spR >= menuW) {
+        x = anchorX - 2; arrowLeft = true;
+      } else if (spL >= menuW) {
+        x = anchorX - menuW + 2; arrowLeft = false;
+      } else if (spR >= spL) {
+        x = Math.max(2, window.innerWidth - menuW - 2); arrowLeft = true;
+      } else {
+        x = 2; arrowLeft = false;
+      }
+    }
+    let y = anchorY - Math.round(menuH / 2);
+    y = Math.max(2, Math.min(y, window.innerHeight - menuH - 2));
+    const arrowY = Math.max(10, Math.min(menuH - 16, anchorY - y));
+    setContextMenu({ x, y, noteId, arrowLeft, arrowY });
   }, []);
 
   const handleEditorInput = useCallback(() => {
@@ -1075,36 +1471,449 @@ export default function Notas() {
     }
   }, [selectedNote, updateNote]);
 
-  const handleEditorPaste = useCallback((e: React.ClipboardEvent) => {
-    const items = e.clipboardData.items;
-    for (let i = 0; i < items.length; i++) {
-      if (items[i].type.startsWith("image/")) {
+  const handleEditorKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    // 1. Tab indentation / outdentation
+    if (e.key === "Tab") {
+      e.preventDefault();
+      let insideList = false;
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        let parent = sel.getRangeAt(0).startContainer.parentElement;
+        while (parent && parent !== editorRef.current) {
+          if (parent.tagName === "LI" || parent.tagName === "UL" || parent.tagName === "OL") {
+            insideList = true;
+            break;
+          }
+          parent = parent.parentElement;
+        }
+      }
+      
+      if (insideList) {
+        if (e.shiftKey) {
+          document.execCommand("outdent", false);
+        } else {
+          document.execCommand("indent", false);
+        }
+      } else {
+        document.execCommand("insertHTML", false, "&nbsp;&nbsp;&nbsp;&nbsp;");
+      }
+      setSaveStatus("pending");
+      return;
+    }
+
+    // 1b. / Slash command trigger — insert "/" and show menu
+    if (e.key === "/" && !e.ctrlKey && !e.metaKey && !slashMenuPos) {
+      e.preventDefault();
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        document.execCommand("insertHTML", false, "/");
+        const newRange = sel.getRangeAt(0);
+        slashRangeRef.current = newRange.cloneRange();
+        const rect = newRange.getBoundingClientRect();
+        setSlashFilter("");
+        setSlashMenuPos({
+          x: Math.max(0, Math.min(rect.left, window.innerWidth - 280)),
+          y: rect.bottom + 4,
+        });
+        // Auto-focus search input after next render
+        requestAnimationFrame(() => slashFilterInputRef.current?.focus());
+      }
+      return;
+    }
+
+    // 1b2. Filter tracking while slash menu is open
+    if (slashMenuPos && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      if (e.key === "Enter") {
         e.preventDefault();
-        const file = items[i].getAsFile();
-        if (!file) continue;
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-          const dataUrl = ev.target?.result as string;
-          if (!dataUrl || !editorRef.current) return;
-          const img = `<img src="${dataUrl}" alt="Imagen pegada" style="max-width:100%;border-radius:8px;margin:8px 0;" class="editable-image" />`;
-          document.execCommand("insertHTML", false, img);
-          setSaveStatus("pending");
-          if (selectedNote) updateNote(selectedNote.id, { content: editorRef.current.innerHTML });
-        };
-        reader.readAsDataURL(file);
+        const allItems = buildSlashItems();
+        const low = slashFilter.toLowerCase();
+        let first: { cmd: string; value?: string } | null = null;
+        for (const s of allItems) {
+          for (const o of s.opts) {
+            if (o.label.toLowerCase().includes(low)) { first = o; break; }
+          }
+          if (first) break;
+        }
+        if (first) handleSlashSelect(first.cmd, first.value);
         return;
       }
+      if (e.key === "Backspace") {
+        e.preventDefault();
+        document.execCommand("delete", false);
+        setSlashFilter(prev => prev.slice(0, -1));
+        return;
+      }
+      if (e.key.length === 1) {
+        e.preventDefault();
+        document.execCommand("insertHTML", false, e.key);
+        setSlashFilter(prev => prev + e.key);
+        return;
+      }
+    }
+
+    // 1c. Escape closes slash menu → remove "/" + filter text
+    if (e.key === "Escape" && slashMenuPos) {
+      e.preventDefault();
+      setSlashMenuPos(null);
+      setSlashFilter("");
+      cleanUpSlashText();
+      slashRangeRef.current = null;
+      return;
+    }
+
+    // 2. Intercept selection and get node
+    let sel: Selection | null;
+    let range: Range;
+    let node: Node;
+    try {
+      sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0) return;
+      range = sel.getRangeAt(0);
+      node = range.startContainer;
+    } catch { return; }
+
+    // Find parent components
+    let parent = node.parentElement;
+    let isCheckbox = false;
+    let checkboxParent: HTMLElement | null = null;
+    let isCallout = false;
+    let calloutParent: HTMLElement | null = null;
+
+    while (parent && parent !== editorRef.current) {
+      if (parent.classList.contains("notes-checkbox")) {
+        isCheckbox = true;
+        checkboxParent = parent;
+      }
+      if (parent.classList.contains("notes-callout")) {
+        isCallout = true;
+        calloutParent = parent;
+      }
+      parent = parent.parentElement;
+    }
+
+    // 3. Checklist Enter & Backspace Handlers
+    if (isCheckbox && checkboxParent) {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        const textContent = checkboxParent.textContent?.replace(/\u200B/g, "").trim() || "";
+        if (textContent === "") {
+          checkboxParent.remove();
+          document.execCommand("insertHTML", false, "<p><br></p>");
+        } else {
+          const html = `<div class="notes-checkbox" style="display:flex;align-items:center;gap:8px;margin:4px 0;"><input type="checkbox" style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent);" /> <span>&nbsp;</span></div>`;
+          document.execCommand("insertHTML", false, html);
+        }
+        setSaveStatus("pending");
+        return;
+      }
+
+      if (e.key === "Backspace") {
+        const offset = range.startOffset;
+        const isAtBeginning = offset === 0 || (node.nodeType === Node.ELEMENT_NODE && range.startOffset === 0);
+        if (isAtBeginning) {
+          e.preventDefault();
+          const contentSpan = checkboxParent.querySelector("span");
+          const textContent = contentSpan ? contentSpan.innerHTML : "";
+          const p = document.createElement("p");
+          p.innerHTML = textContent || "<br>";
+          checkboxParent.replaceWith(p);
+
+          const newRange = document.createRange();
+          newRange.selectNodeContents(p);
+          newRange.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(newRange);
+
+          handleEditorInput();
+          return;
+        }
+      }
+    }
+
+    // 4. Callout Enter Handler
+    if (isCallout && calloutParent) {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        const p = document.createElement("p");
+        p.innerHTML = "<br>";
+        calloutParent.after(p);
+
+        const newRange = document.createRange();
+        newRange.selectNodeContents(p);
+        newRange.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(newRange);
+
+        handleEditorInput();
+        return;
+      }
+    }
+
+    // 4b. Enter on empty list item: exit list
+    if (e.key === "Enter" && !e.shiftKey) {
+      try {
+        let listItem: HTMLElement | null = null;
+        let lp = node.parentElement;
+        while (lp && lp !== editorRef.current) {
+          if (lp.tagName === "LI") {
+            listItem = lp;
+            break;
+          }
+          lp = lp.parentElement;
+        }
+        if (listItem) {
+          const text = listItem.textContent?.trim() || "";
+          if (text === "") {
+            e.preventDefault();
+            const list = listItem.closest("ul, ol");
+            const p = document.createElement("p");
+            p.innerHTML = "<br>";
+            const parent = listItem.parentElement;
+            listItem.remove();
+            if (list && !list.querySelector("li")) {
+              list.after(p);
+              list.remove();
+            } else if (parent) {
+              parent.after(p);
+            }
+            const newRange = document.createRange();
+            newRange.selectNodeContents(p);
+            newRange.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(newRange);
+            setSaveStatus("pending");
+            return;
+          }
+        }
+      } catch {}
+    }
+
+    // 4c. Backspace at start of block: merge with previous
+    if (e.key === "Backspace") {
+      try {
+        const isAtStart = range.startOffset === 0;
+        if (isAtStart && node.nodeType === Node.TEXT_NODE) {
+          let currentBlock = node.parentElement;
+          while (currentBlock && currentBlock !== editorRef.current &&
+                 !["P", "H1", "H2", "H3", "LI", "BLOCKQUOTE"].includes(currentBlock.tagName)) {
+            currentBlock = currentBlock.parentElement;
+          }
+          if (currentBlock && currentBlock !== editorRef.current && currentBlock.previousElementSibling) {
+            const prev = currentBlock.previousElementSibling as HTMLElement;
+            if (!prev.classList.contains("notes-checkbox") &&
+                !prev.classList.contains("notes-callout") &&
+                !prev.classList.contains("notes-code-block") &&
+                !prev.classList.contains("notes-attachment") &&
+                prev.tagName !== "TABLE") {
+              e.preventDefault();
+              const html = currentBlock.innerHTML;
+              currentBlock.remove();
+              prev.insertAdjacentHTML("beforeend", html);
+              const newRange = document.createRange();
+              newRange.selectNodeContents(prev);
+              newRange.collapse(false);
+              sel.removeAllRanges();
+              sel.addRange(newRange);
+              setSaveStatus("pending");
+              return;
+            }
+          }
+        }
+      } catch {}
+    }
+
+    // 5. Markdown Triggers on Space
+    if (e.key === " ") {
+      if (node.nodeType === Node.TEXT_NODE) {
+        const text = node.textContent || "";
+        const offset = range.startOffset;
+        const textBeforeCursor = text.substring(0, offset);
+
+        let cmd = "";
+        let htmlToInsert = "";
+
+        if (textBeforeCursor === "#") {
+          cmd = "h1";
+        } else if (textBeforeCursor === "##") {
+          cmd = "h2";
+        } else if (textBeforeCursor === "###") {
+          cmd = "h3";
+        } else if (textBeforeCursor === "[]") {
+          cmd = "checklist";
+          htmlToInsert = `<div class="notes-checkbox" style="display:flex;align-items:center;gap:8px;margin:4px 0;"><input type="checkbox" style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent);" /> <span>&nbsp;</span></div>`;
+        } else if (textBeforeCursor === "-" || textBeforeCursor === "*") {
+          cmd = "ul";
+        } else if (textBeforeCursor === "1.") {
+          cmd = "ol";
+        } else if (textBeforeCursor === ">") {
+          cmd = "quote";
+        }
+
+        if (cmd) {
+          e.preventDefault();
+          const textNode = node as Text;
+          textNode.deleteData(0, offset);
+
+          if (cmd === "h1") {
+            document.execCommand("formatBlock", false, "<h1>");
+          } else if (cmd === "h2") {
+            document.execCommand("formatBlock", false, "<h2>");
+          } else if (cmd === "h3") {
+            document.execCommand("formatBlock", false, "<h3>");
+          } else if (cmd === "quote") {
+            document.execCommand("formatBlock", false, "<blockquote>");
+          } else if (cmd === "ul") {
+            document.execCommand("insertUnorderedList", false);
+          } else if (cmd === "ol") {
+            document.execCommand("insertOrderedList", false);
+          } else if (cmd === "checklist") {
+            document.execCommand("insertHTML", false, htmlToInsert);
+          }
+          setSaveStatus("pending");
+        }
+      }
+    }
+  }, [handleEditorInput, slashMenuPos]);
+
+  const handleEditorPaste = useCallback((e: React.ClipboardEvent) => {
+    const sel = window.getSelection();
+    const range = sel && sel.rangeCount > 0 ? sel.getRangeAt(0) : null;
+    let inCodeBlock = false;
+    let codeBlockEl: HTMLElement | null = null;
+    if (range) {
+      let el = range.startContainer.parentElement;
+      while (el && el !== editorRef.current) {
+        if (el.classList.contains("notes-code-block")) {
+          inCodeBlock = true;
+          codeBlockEl = el;
+          break;
+        }
+        el = el.parentElement;
+      }
+    }
+    if (inCodeBlock && codeBlockEl) {
+      e.preventDefault();
+      const text = e.clipboardData.getData("text/plain");
+      const wrapper = document.createElement("div");
+      wrapper.innerHTML = text
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/\n{2,}/g, "</p><p>").replace(/\n/g, "<br>");
+      const html = wrapper.innerHTML ? `<p>${wrapper.innerHTML}</p>` : "<p><br></p>";
+      codeBlockEl.insertAdjacentHTML("afterend", html);
+      const newRange = document.createRange();
+      const newP = codeBlockEl.nextElementSibling;
+      if (newP) {
+        newRange.selectNodeContents(newP);
+        newRange.collapse(true);
+        sel?.removeAllRanges();
+        sel?.addRange(newRange);
+      }
+      setSaveStatus("pending");
+      return;
+    }
+    const items = e.clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+      const file = items[i].getAsFile();
+      if (file) {
+        const isImg = file.type.startsWith("image/");
+        const isAudio = file.type.startsWith("audio/");
+        const isVideo = file.type.startsWith("video/");
+        if (isImg || isAudio || isVideo) {
+          e.preventDefault();
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            const dataUrl = ev.target?.result as string;
+            if (!dataUrl || !editorRef.current) return;
+            let html = "";
+            if (isImg) {
+              html = `<img src="${dataUrl}" alt="${file.name}" style="max-width:100%;border-radius:8px;margin:8px 0;" class="editable-image" />`;
+            } else if (isAudio) {
+              html = `<div class="notes-attachment" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--border-default);border-radius:10px;margin:8px 0;background:var(--bg-hover);"><span style="font-size:22px;">🎵</span><div style="flex:1;min-width:0"><div style="font-size:12;font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${file.name}</div><audio controls src="${dataUrl}" style="width:100%;height:36px;margin-top:4px;">${file.name}</audio></div><span style="font-size:10px;color:var(--text-tertiary);flex-shrink:0;">${(file.size / 1024).toFixed(0)} KB</span></div>`;
+            } else if (isVideo) {
+              html = `<div class="notes-attachment" style="display:flex;flex-direction:column;gap:6px;padding:10px 14px;border:1px solid var(--border-default);border-radius:10px;margin:8px 0;background:var(--bg-hover);"><div style="display:flex;align-items:center;gap:8px;"><span style="font-size:18px;">🎬</span><span style="font-size:12;font-weight:600;color:var(--text-primary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${file.name}</span><span style="font-size:10px;color:var(--text-tertiary);flex-shrink:0;">${(file.size / 1024).toFixed(0)} KB</span></div><video controls src="${dataUrl}" style="width:100%;max-height:400px;border-radius:6px;">${file.name}</video></div>`;
+            }
+            document.execCommand("insertHTML", false, html);
+            setSaveStatus("pending");
+            if (selectedNote) updateNote(selectedNote.id, { content: editorRef.current.innerHTML });
+          };
+          reader.readAsDataURL(file);
+          return;
+        }
+      }
+    }
+    // Rich text paste: preserve formatting, adapt to theme
+    const htmlData = e.clipboardData.getData("text/html");
+    if (htmlData) {
+      e.preventDefault();
+      const temp = document.createElement("div");
+      temp.innerHTML = htmlData;
+      // Remove problematic inline styles that conflict with theme
+      const all = temp.querySelectorAll("*");
+      for (const el of all) {
+        const style = (el as HTMLElement).style;
+        style.removeProperty("background-color");
+        style.removeProperty("background");
+        style.removeProperty("color");
+        style.removeProperty("font-family");
+        style.removeProperty("margin");
+        style.removeProperty("padding");
+        // Keep font-size, font-weight, font-style, text-decoration, text-align
+        el.removeAttribute("bgcolor");
+        el.removeAttribute("face");
+        el.removeAttribute("class");
+      }
+      const cleaned = temp.innerHTML
+        .replace(/<meta[^>]*>/gi, "")
+        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+        .replace(/<!--[\s\S]*?-->/g, "")
+        .replace(/<o:p[^>]*>[\s\S]*?<\/o:p>/gi, "")
+        .replace(/<span[^>]*>/gi, "<span>");
+      document.execCommand("insertHTML", false, cleaned);
+      setSaveStatus("pending");
     }
   }, [selectedNote, updateNote]);
 
   const handleFormat = useCallback((cmd: string, value?: string) => {
     if (cmd === "codeBlock") {
       const sel = window.getSelection();
-      const text = sel ? sel.toString() : "";
-      const html = `<pre class="notes-code-block"><code>${text || "Código"}</code><button class="copy-code-btn" onclick="(function(btn){var code=btn.parentElement.querySelector('code').textContent;navigator.clipboard.writeText(code);btn.textContent='Copiado';setTimeout(function(){btn.textContent='Copiar'},2000);})(this)">Copiar</button></pre>`;
-      document.execCommand("insertHTML", false, html);
+      if (!sel || !sel.rangeCount) { editorRef.current?.focus(); return; }
+      const range = sel.getRangeAt(0);
+      let el: HTMLElement | null = range.startContainer.parentElement;
+      let inCodeBlock = false;
+      while (el && el !== editorRef.current) {
+        if (el.classList.contains("notes-code-block")) { inCodeBlock = true; break; }
+        el = el.parentElement;
+      }
+      if (inCodeBlock) {
+        const text = el!.querySelector("code")?.textContent || "";
+        const p = document.createElement("p");
+        p.textContent = text;
+        el!.parentNode?.replaceChild(p, el!);
+        const newRange = document.createRange();
+        newRange.selectNodeContents(p);
+        newRange.collapse(false);
+        sel.removeAllRanges();
+        sel.addRange(newRange);
+      } else {
+        const text = sel.toString();
+        const html = `<pre class="notes-code-block"><code>${text || "Código"}</code><button class="copy-code-btn" data-code="${encodeURIComponent(text || "")}">Copiar</button></pre>`;
+        document.execCommand("insertHTML", false, html);
+      }
     } else if (cmd === "insertTable") {
-      const html = `<table class="notes-table" style="width:100%;border-collapse:collapse;margin:8px 0;"><thead><tr><th style="border:1px solid var(--border-default);padding:8px;background:var(--bg-hover);font-weight:600;">Columna 1</th><th style="border:1px solid var(--border-default);padding:8px;background:var(--bg-hover);font-weight:600;">Columna 2</th></tr></thead><tbody><tr><td style="border:1px solid var(--border-default);padding:8px;">Dato</td><td style="border:1px solid var(--border-default);padding:8px;">Dato</td></tr></tbody></table><br>`;
+      const dims = value ? value.split("x").map(Number) : [3, 3];
+      const cols = dims[0] || 3;
+      const rows = dims[1] || 3;
+      let thead = "<thead><tr>";
+      for (let c = 1; c <= cols; c++) thead += `<th style="border:1px solid var(--border-default);padding:8px;background:var(--bg-hover);font-weight:600;">Columna ${c}</th>`;
+      thead += "</tr></thead>";
+      let tbody = "<tbody>";
+      for (let r = 1; r <= rows; r++) {
+        tbody += "<tr>";
+        for (let c = 1; c <= cols; c++) tbody += `<td style="border:1px solid var(--border-default);padding:8px;">Dato ${r}-${c}</td>`;
+        tbody += "</tr>";
+      }
+      tbody += "</tbody>";
+      const html = `<table class="notes-table" style="width:100%;border-collapse:collapse;margin:8px 0;">${thead}${tbody}</table><br>`;
       document.execCommand("insertHTML", false, html);
     } else if (cmd === "insertFile") {
       fileInputRef.current?.click();
@@ -1119,12 +1928,52 @@ export default function Notas() {
       }
     } else if (cmd === "removeLink") {
       document.execCommand("unlink", false);
+    } else if (cmd === "mathInline") {
+      const formula = prompt("Ingresa la fórmula matemática inline (LaTeX):", "E=mc^2");
+      if (formula) {
+        document.execCommand("insertHTML", false, `$${formula}$`);
+      }
+    } else if (cmd === "mathBlock") {
+      const formula = prompt("Ingresa la fórmula en bloque (LaTeX):", "\\int_{a}^{b} f(x)\\,dx = F(b) - F(a)");
+      if (formula) {
+        document.execCommand("insertHTML", false, `$$${formula}$$`);
+      }
+    } else if (cmd === "calloutBlock") {
+      const text = prompt("Ingresa el texto para el bloque destacado (Callout):", "Nota importante...");
+      if (text) {
+        const html = `<div class="notes-callout" style="display:flex;gap:12px;padding:12px 16px;background:var(--bg-elevated);border-left:4px solid var(--accent);border-radius:8px;margin:12px 0;color:var(--text-secondary);align-items:center;"><span style="font-size:18px;">💡</span><div style="flex:1;font-size:14px;line-height:1.5;">${text}</div></div><br>`;
+        document.execCommand("insertHTML", false, html);
+      }
+    } else if (cmd === "insertHR") {
+      document.execCommand("insertHTML", false, "<hr style='border:none;border-top:1px solid var(--border-default);margin:16px 0;' />");
+    } else if (cmd === "formatBlock") {
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount) {
+        let el: HTMLElement | null = sel.getRangeAt(0).startContainer.parentElement;
+        while (el && el !== editorRef.current && el.tagName !== "P" && el.tagName !== "H1" && el.tagName !== "H2" && el.tagName !== "H3" && el.tagName !== "H4" && el.tagName !== "BLOCKQUOTE" && el.tagName !== "PRE" && el.tagName !== "LI") {
+          el = el.parentElement;
+        }
+        if (el && el !== editorRef.current && el.tagName.toLowerCase() === (value || "").replace(/[<>]/g, "")) {
+          document.execCommand("formatBlock", false, "<p>");
+        } else {
+          document.execCommand("formatBlock", false, value || "<p>");
+        }
+      } else {
+        document.execCommand("formatBlock", false, value || "<p>");
+      }
     } else {
       document.execCommand(cmd, false, value);
     }
     editorRef.current?.focus();
     setSaveStatus("pending");
   }, []);
+
+  const handleSlashSelect = useCallback((cmd: string, value?: string) => {
+    setSlashMenuPos(null);
+    setSlashFilter("");
+    cleanUpSlashText();
+    handleFormat(cmd, value);
+  }, [handleFormat]);
 
   const handleDuplicate = useCallback(() => {
     const targetId = contextMenu ? contextMenu.noteId : selectedNoteId;
@@ -1208,6 +2057,11 @@ export default function Notas() {
     const updatedColors = { ...customTagColors, [name]: color };
     setCustomTagColors(updatedColors);
     localStorage.setItem("owa_custom_tag_colors", JSON.stringify(updatedColors));
+    const existing = JSON.parse(localStorage.getItem("owa_created_tags") || "[]");
+    if (!existing.includes(name)) {
+      existing.push(name);
+      localStorage.setItem("owa_created_tags", JSON.stringify(existing));
+    }
     setShowNewTagModal(false);
     toast.success("Etiqueta creada");
   }, [customTagColors]);
@@ -1227,6 +2081,28 @@ export default function Notas() {
     return () => clearInterval(id);
   }, [selectedNote, isEditing, handleSaveNote]);
 
+  // Save a history entry when opening the editor
+  useEffect(() => {
+    if (!isEditing || !selectedNote) return;
+    const plain = selectedNote.content.replace(/<[^>]+>/g, "").trim();
+    if (plain) {
+      const preview = plain.slice(0, 80);
+      const versions = JSON.parse(localStorage.getItem("owa_note_versions_" + selectedNote.id) || "[]");
+      if (!versions.length || versions[0].preview !== preview) {
+        versions.unshift({ timestamp: new Date().toISOString(), preview, wordCount: plain.split(/\s+/).length, content: selectedNote.content });
+        if (versions.length > 10) versions.length = 10;
+        localStorage.setItem("owa_note_versions_" + selectedNote.id, JSON.stringify(versions));
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditing, selectedNote?.id]);
+
+  useEffect(() => {
+    if (selectedNote) {
+      lastContentRef.current = selectedNote.content.replace(/<[^>]+>/g, "").trim();
+    }
+  }, [selectedNote]);
+
   const sortLabels: Record<SortMode, string> = {
     updated: "Recientes", created: "Creados", title: "Título",
     course: "Curso", visits: "Visitas", priority: "Prioridad",
@@ -1243,6 +2119,24 @@ export default function Notas() {
       overflow: "hidden", gap: 0, padding: "26px 28px 16px",
       position: "relative",
     }}>
+      <style>{`
+        .notes-editor-area ul { padding-left: 24px; margin: 8px 0; list-style: disc; }
+        .notes-editor-area ol { padding-left: 24px; margin: 8px 0; list-style: decimal; }
+        .notes-editor-area li { margin: 2px 0; line-height: 1.7; }
+        .notes-editor-area ul ul { list-style: circle; }
+        .notes-editor-area ul ul ul { list-style: square; }
+        .notes-table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+        .notes-table th { padding: 8px; background: var(--bg-hover); font-weight: 600; border: 1px solid var(--border-default); font-size: 13px; }
+        .notes-table td { padding: 8px; border: 1px solid var(--border-default); font-size: 12.5px; }
+        .notes-editor-area h1 { margin: 28px 0 12px; font-size: 26px; font-weight: 700; line-height: 1.3; }
+        .notes-editor-area h2 { margin: 24px 0 10px; font-size: 22px; font-weight: 650; line-height: 1.35; }
+        .notes-editor-area h3 { margin: 20px 0 8px; font-size: 18px; font-weight: 600; line-height: 1.4; }
+        .notes-editor-area p { margin: 6px 0; }
+        .notes-editor-area blockquote { margin: 12px 0; line-height: 1.7; }
+        .notes-preview-area ul { padding-left: 20px; margin: 6px 0; list-style: disc; }
+        .notes-preview-area ol { padding-left: 20px; margin: 6px 0; list-style: decimal; }
+        .notes-preview-area li { margin: 2px 0; line-height: 1.6; }
+      `}</style>
       {/* ===== HEADER: Estudio-style as card ===== */}
       <header style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
@@ -1345,28 +2239,6 @@ export default function Notas() {
                       <Check size={12} />
                     </span>
                     
-                    {/* Note Icon custom picker toggle */}
-                    <div style={{ position: "relative" }}>
-                      <button onClick={() => setShowIconPicker(!showIconPicker)}
-                        style={{
-                          background: "none", border: "1px solid var(--border-default)",
-                          color: "var(--text-primary)", padding: 6, borderRadius: 8, display: "flex", cursor: "pointer",
-                        }}>
-                        <Palette size={14} />
-                      </button>
-                      {showIconPicker && (
-                        <IconPicker
-                          currentIcon={selectedNote?.coverImage}
-                          currentColor={selectedNote?.coverColor}
-                          onSelect={(ico, col) => {
-                            updateNote(selectedNote!.id, { coverImage: ico, coverColor: col });
-                            toast.success("Icono de nota actualizado");
-                          }}
-                          onClose={() => setShowIconPicker(false)}
-                        />
-                      )}
-                    </div>
-
                     <button onClick={() => setShowDetailsPanel(!showDetailsPanel)}
                       style={{
                         background: showDetailsPanel ? "var(--accent-dim)" : "none",
@@ -1385,11 +2257,19 @@ export default function Notas() {
                   if (file && editorRef.current) {
                     const url = URL.createObjectURL(file);
                     const isImg = file.type.startsWith("image/");
+                    const isAudio = file.type.startsWith("audio/");
+                    const isVideo = file.type.startsWith("video/");
+                    let html = "";
                     if (isImg) {
-                      document.execCommand("insertHTML", false, `<img src="${url}" alt="${file.name}" style="max-width:100%;border-radius:8px;margin:8px 0;" class="editable-image" />`);
+                      html = `<img src="${url}" alt="${file.name}" style="max-width:100%;border-radius:8px;margin:8px 0;" class="editable-image" />`;
+                    } else if (isAudio) {
+                      html = `<div class="notes-attachment" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--border-default);border-radius:10px;margin:8px 0;background:var(--bg-hover);"><span style="font-size:22px;">🎵</span><div style="flex:1;min-width:0"><div style="font-size:12;font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${file.name}</div><audio controls src="${url}" style="width:100%;height:36px;margin-top:4px;">${file.name}</audio></div><span style="font-size:10px;color:var(--text-tertiary);flex-shrink:0;">${(file.size / 1024).toFixed(0)} KB</span></div>`;
+                    } else if (isVideo) {
+                      html = `<div class="notes-attachment" style="display:flex;flex-direction:column;gap:6px;padding:10px 14px;border:1px solid var(--border-default);border-radius:10px;margin:8px 0;background:var(--bg-hover);"><div style="display:flex;align-items:center;gap:8px;"><span style="font-size:18px;">🎬</span><span style="font-size:12;font-weight:600;color:var(--text-primary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${file.name}</span><span style="font-size:10px;color:var(--text-tertiary);flex-shrink:0;">${(file.size / 1024).toFixed(0)} KB</span></div><video controls src="${url}" style="width:100%;max-height:400px;border-radius:6px;">${file.name}</video></div>`;
                     } else {
-                      document.execCommand("insertHTML", false, `<div class="notes-attachment" style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--border-default);border-radius:8px;margin:8px 0;background:var(--bg-hover);"><span style="font-size:20px;">📎</span><a href="${url}" target="_blank" style="color:var(--accent);font-weight:600;">${file.name}</a><span style="font-size:10px;color:var(--text-tertiary);margin-left:auto;">${(file.size / 1024).toFixed(0)} KB</span></div>`);
+                      html = `<div class="notes-attachment" style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--border-default);border-radius:8px;margin:8px 0;background:var(--bg-hover);"><span style="font-size:20px;">📎</span><a href="${url}" target="_blank" style="color:var(--accent);font-weight:600;">${file.name}</a><span style="font-size:10px;color:var(--text-tertiary);margin-left:auto;">${(file.size / 1024).toFixed(0)} KB</span></div>`;
                     }
+                    document.execCommand("insertHTML", false, html);
                     setSaveStatus("pending");
                     if (selectedNote) updateNote(selectedNote.id, { content: editorRef.current.innerHTML });
                   }
@@ -1401,10 +2281,10 @@ export default function Notas() {
                   <EditorToolbar onFormat={handleFormat} />
                 </div>
 
-                {/* Write panel — full width with professional margins */}
+                {/* Write panel — adaptive margins, professional width */}
                 <div style={{
                   flex: 1, display: "flex", flexDirection: "column", overflow: "auto",
-                  padding: "24px 40px 40px", width: "100%", boxSizing: "border-box",
+                  padding: "32px 0 64px", width: "100%", boxSizing: "border-box",
                 }}>
                   {/* Clean text input for title */}
                   <input
@@ -1413,17 +2293,19 @@ export default function Notas() {
                     defaultValue={selectedNote?.title || ""}
                     placeholder="Título del cuaderno"
                     style={{
-                      fontSize: 26, fontWeight: 700, color: "var(--text-primary)",
-                      fontFamily: "'Outfit', sans-serif",
+                      fontSize: 28, fontWeight: 700, color: "var(--text-primary)",
+                      fontFamily: "'Outfit', system-ui, sans-serif",
                       background: "transparent", border: "none", outline: "none",
-                      width: "100%", padding: "0 0 10px", marginBottom: 16,
-                      borderBottom: "1px solid var(--border-default)",
+                      width: "100%", padding: "0 0 12px", marginBottom: 20,
+                      borderBottom: "1px solid var(--border-subtle)",
                       caretColor: "var(--accent)", boxSizing: "border-box",
+                      letterSpacing: "-0.02em",
+                      maxWidth: 760, margin: "0 auto 20px",
                     }}
                     onBlur={handleSaveNote}
                   />
 
-                  {/* Content editor — fills full width, academic-ready */}
+                  {/* Content editor — adaptive width, professional reading experience */}
                   <div
                     ref={editorRef}
                     contentEditable
@@ -1431,40 +2313,72 @@ export default function Notas() {
                     className="notes-editor-area"
                     style={{
                       flex: 1, outline: "none", minHeight: "100%",
-                      fontSize: 15.5, lineHeight: 1.85,
+                      fontSize: 16, lineHeight: 1.75,
                       color: "var(--text-primary)",
-                      fontFamily: "'Atkinson Hyperlegible', 'Source Serif 4', system-ui, serif",
+                      fontFamily: "'Atkinson Hyperlegible', system-ui, serif",
                       caretColor: "var(--accent)",
-                      width: "100%", boxSizing: "border-box",
+                      maxWidth: 760, width: "100%", boxSizing: "border-box",
+                      margin: "0 auto",
+                    }}
+                    onDoubleClick={(e) => {
+                      const target = e.target as HTMLElement;
+                      // Double-click on code block: exit cursor below it
+                      const codeBlock = target.closest(".notes-code-block");
+                      if (codeBlock && codeBlock.parentElement) {
+                        const p = document.createElement("p");
+                        p.innerHTML = "<br>";
+                        codeBlock.parentElement.insertBefore(p, codeBlock.nextSibling);
+                        const range = document.createRange();
+                        range.selectNodeContents(p);
+                        range.collapse(true);
+                        const sel = window.getSelection();
+                        if (sel) { sel.removeAllRanges(); sel.addRange(range); }
+                        editorRef.current?.focus();
+                        setSaveStatus("pending");
+                      }
                     }}
                     onClick={(e) => {
                       const target = e.target as HTMLElement;
+                      if (target.classList.contains("copy-code-btn")) {
+                        const code = decodeURIComponent(target.getAttribute("data-code") || "");
+                        if (code) {
+                          navigator.clipboard.writeText(code).catch(() => {
+                            const ta = document.createElement("textarea");
+                            ta.value = code; ta.style.position = "fixed"; ta.style.opacity = "0";
+                            document.body.appendChild(ta); ta.select();
+                            document.execCommand("copy"); ta.remove();
+                          });
+                          target.textContent = "¡Copiado!";
+                          setTimeout(() => { target.textContent = "Copiar"; }, 2000);
+                        }
+                        return;
+                      }
+                      if (target.tagName === "A") {
+                        const href = (target as HTMLAnchorElement).getAttribute("href");
+                        if (href && (href.startsWith("http://") || href.startsWith("https://"))) {
+                          e.preventDefault();
+                          setLinkPreviewUrl(href);
+                          setLinkPreviewError(false);
+                          return;
+                        }
+                      }
+                      if (target.tagName === "INPUT" && (target as HTMLInputElement).type === "checkbox") {
+                        const cb = target as HTMLInputElement;
+                        if (cb.checked) {
+                          cb.setAttribute("checked", "true");
+                        } else {
+                          cb.removeAttribute("checked");
+                        }
+                        handleEditorInput();
+                      }
                       if (target.tagName === "IMG" && target.classList.contains("editable-image")) {
-                        const existing = editorRef.current?.querySelector(".image-editor-overlay");
-                        if (existing) existing.remove();
-                        const overlay = document.createElement("div");
-                        overlay.className = "image-editor-overlay";
-                        overlay.contentEditable = "false";
-                        overlay.style.cssText = "display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--bg-elevated);border:1px solid var(--border-default);border-radius:8px;box-shadow:var(--shadow-elevated);position:absolute;z-index:50;margin-top:4px;";
-                        const resizeInp = document.createElement("input");
-                        resizeInp.type = "range";
-                        resizeInp.min = "20"; resizeInp.max = "100"; resizeInp.value = "100";
-                        resizeInp.style.cssText = "width:80px;height:4px;accent-color:var(--accent);cursor:pointer;";
-                        resizeInp.oninput = () => { target.style.width = resizeInp.value + "%"; };
-                        const delBtn = document.createElement("button");
-                        delBtn.innerHTML = "✕";
-                        delBtn.style.cssText = "background:none;border:none;color:var(--error);cursor:pointer;font-size:14px;padding:2px 4px;";
-                        delBtn.onclick = () => { target.remove(); overlay.remove(); };
-                        const colorInp = document.createElement("input");
-                        colorInp.type = "color";
-                        colorInp.value = "#000000";
-                        colorInp.style.cssText = "width:24px;height:24px;border:none;border-radius:4px;cursor:pointer;padding:0;background:none;";
-                        colorInp.oninput = () => { target.style.border = "2px solid " + colorInp.value; };
-                        overlay.append(resizeInp, colorInp, delBtn);
-                        target.parentElement?.style.position === "relative" ? null : target.parentElement ? target.parentElement.style.position = "relative" : null;
-                        target.parentElement?.appendChild(overlay);
+                        e.preventDefault();
+                        const currentBorder = target.style.borderColor ? target.style.borderColor : "#000000";
+                        setLightboxBorderColor(currentBorder);
+                        setLightboxImage({ src: (target as HTMLImageElement).src, el: target });
                       }
                     }}
+                    onKeyDown={handleEditorKeyDown}
                     onPaste={handleEditorPaste}
                     onInput={handleEditorInput}
                     onBlur={handleSaveNote}
@@ -1472,122 +2386,267 @@ export default function Notas() {
                 </div>
               </div>
 
-              {/* Collapsible Details Panel right — using app theme colors */}
+              {slashMenuPos && (() => {
+                const allItems = buildSlashItems();
+                const low = slashFilter.toLowerCase();
+                const filtered = allItems
+                  .map(s => ({ ...s, opts: s.opts.filter(o => o.label.toLowerCase().includes(low)) }))
+                  .filter(s => s.opts.length > 0);
+                return (
+                  <div ref={slashMenuRef} style={{
+                    position: "fixed", left: slashMenuPos.x, top: slashMenuPos.y,
+                    zIndex: 10000, minWidth: 220, maxHeight: 320, overflow: "auto",
+                    background: "var(--bg-elevated)", border: "1px solid var(--border-strong)",
+                    borderRadius: "var(--radius-md)", boxShadow: "var(--shadow-elevated)",
+                    padding: 4,
+                  }}>
+                    <div style={{
+                      display: "flex", alignItems: "center", gap: 4, padding: "4px 4px 4px 8px",
+                      borderBottom: "1px solid var(--border-subtle)", marginBottom: 2,
+                    }}>
+                      <input ref={slashFilterInputRef}
+                        type="text" placeholder="Filtrar..."
+                        value={slashFilter}
+                        onChange={e => setSlashFilter(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === "Enter" && filtered.length > 0 && filtered[0].opts.length > 0) {
+                            const first = filtered[0].opts[0];
+                            handleSlashSelect(first.cmd, first.value);
+                          }
+                          if (e.key === "Escape") {
+                            setSlashMenuPos(null);
+                            setSlashFilter("");
+                            cleanUpSlashText();
+                          }
+                          e.stopPropagation();
+                        }}
+                        style={{
+                          flex: 1, border: "none", background: "transparent",
+                          color: "var(--text-primary)", fontSize: 12, outline: "none",
+                          padding: "4px 0",
+                        }} />
+                      <button onClick={() => { setSlashMenuPos(null); setSlashFilter(""); cleanUpSlashText(); }}
+                        title="Cerrar"
+                        style={{
+                          width: 22, height: 22, borderRadius: 4, border: "none",
+                          background: "transparent", color: "var(--text-tertiary)",
+                          cursor: "pointer", display: "flex", alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                        className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-secondary)]">
+                        <X size={13} />
+                      </button>
+                    </div>
+                    {filtered.length === 0 ? (
+                      <div style={{ padding: "16px 8px", textAlign: "center", color: "var(--text-tertiary)", fontSize: 11.5 }}>
+                        Sin resultados para "<span style={{ color: "var(--text-secondary)" }}>{slashFilter}</span>"
+                      </div>
+                    ) : filtered.map(section => (
+                      <div key={section.cat}>
+                        <div style={{
+                          fontSize: 9.5, fontWeight: 700, color: "var(--text-tertiary)",
+                          textTransform: "uppercase", letterSpacing: "0.06em",
+                          padding: "6px 8px 2px",
+                        }}>{section.cat}</div>
+                        {section.opts.map(opt => (
+                          <button key={opt.label} onClick={() => handleSlashSelect(opt.cmd, opt.value)}
+                            style={{
+                              display: "flex", alignItems: "center", gap: 8, padding: "6px 8px",
+                              width: "100%", textAlign: "left", border: "none",
+                              background: "transparent", color: "var(--text-primary)",
+                              fontSize: 12, cursor: "pointer", borderRadius: 4,
+                              transition: "background 100ms",
+                            }}
+                            className="hover:bg-[var(--bg-hover)]">
+                            <opt.icon size={14} style={{ color: "var(--text-secondary)", flexShrink: 0 }} />
+                            <span>{opt.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+
+              {/* Collapsible Details Panel right — redesigned professional */}
               {showDetailsPanel && selectedNote && (() => {
                 const pColor = selectedNote.coverColor || selectedNote.courseColor || "var(--accent)";
+                const allTags = Object.keys(mergedTagColors);
+                const noteTags = selectedNote.tags || [];
+                const handleTagToggle = (tagName: string) => {
+                  const current = selectedNote.tags || [];
+                  const next = current.includes(tagName)
+                    ? current.filter(t => t !== tagName)
+                    : [...current, tagName];
+                  updateNote(selectedNote.id, { tags: next });
+                };
                 return (
                 <div style={{
                   width: 280, minWidth: 280, display: "flex", flexDirection: "column",
+                  padding: "20px 16px", overflowY: "auto", overflowX: "hidden",
+                  gap: 14, borderLeft: "1px solid var(--border-subtle)",
                   background: "var(--bg-surface)",
-                  padding: 16, overflow: "auto",
-                  gap: 16, borderLeft: "1px solid var(--border-subtle)",
                 }}>
-                  <div>
-                    <h3 style={{ fontSize: 9.5, fontWeight: 700, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>
-                      <Info size={10} style={{ marginRight: 4 }} /> Metadatos
+                  {/* Metadatos */}
+                  <div style={{
+                    background: "var(--bg-elevated)",
+                    border: "1px solid var(--border-subtle)", borderRadius: 10, padding: "14px 14px",
+                    transition: "border-color 200ms",
+                  }}>
+                    <h3 style={{
+                      fontSize: 9, fontWeight: 500, color: "var(--text-tertiary)",
+                      letterSpacing: "0.14em", textTransform: "uppercase",
+                      marginBottom: 12, fontFamily: "'Inter', sans-serif",
+                      display: "flex", alignItems: "center", gap: 5,
+                    }}>
+                      <Info size={9} /> Información
                     </h3>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, alignItems: "center" }}>
-                        <span style={{ color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 4 }}><FolderIcon size={10} /> Carpeta</span>
-                        <span style={{ fontWeight: 600, color: pColor, fontSize: 11.5 }}>
-                          ● {selectedNote.course || "Sin carpeta"}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, alignItems: "center" }}>
+                        <span style={{ color: "var(--text-tertiary)" }}>Carpeta</span>
+                        <span style={{ fontWeight: 500, color: pColor, fontSize: 10.5 }}>
+                          {selectedNote.course || "—"}
                         </span>
                       </div>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
-                        <span style={{ color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 4 }}><Clock size={10} /> Creada</span>
-                        <span style={{ color: "var(--text-primary)", fontSize: 11.5 }}>
+                      <div style={{ height: 1, background: "var(--border-subtle)", opacity: 0.5 }} />
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
+                        <span style={{ color: "var(--text-tertiary)" }}>Creada</span>
+                        <span style={{ color: "var(--text-secondary)", fontSize: 10.5 }}>
                           {safeFormat(selectedNote.createdAt, "d MMM, HH:mm")}
                         </span>
                       </div>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
-                        <span style={{ color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 4 }}><Edit3 size={10} /> Modificada</span>
-                        <span style={{ color: "var(--text-primary)", fontSize: 11.5 }}>
+                      <div style={{ height: 1, background: "var(--border-subtle)", opacity: 0.5 }} />
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
+                        <span style={{ color: "var(--text-tertiary)" }}>Modificada</span>
+                        <span style={{ color: "var(--text-secondary)", fontSize: 10.5 }}>
                           {safeFormat(selectedNote.updatedAt, "d MMM, HH:mm")}
                         </span>
                       </div>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
-                        <span style={{ color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 4 }}><FileText size={10} /> Palabras</span>
-                        <span style={{ color: "var(--text-primary)", fontSize: 11.5 }}>{getWordCount(selectedNote.content)}</span>
+                      <div style={{ height: 1, background: "var(--border-subtle)", opacity: 0.5 }} />
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
+                        <span style={{ color: "var(--text-tertiary)" }}>Palabras</span>
+                        <span style={{ color: "var(--text-secondary)", fontSize: 10.5 }}>{getWordCount(selectedNote.content)}</span>
                       </div>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
-                        <span style={{ color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 4 }}><Type size={10} /> Caracteres</span>
-                        <span style={{ color: "var(--text-primary)", fontSize: 11.5 }}>{getCharCount(selectedNote.content)}</span>
+                      <div style={{ height: 1, background: "var(--border-subtle)", opacity: 0.5 }} />
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
+                        <span style={{ color: "var(--text-tertiary)" }}>Caracteres</span>
+                        <span style={{ color: "var(--text-secondary)", fontSize: 10.5 }}>{getCharCount(selectedNote.content)}</span>
                       </div>
                     </div>
                   </div>
 
-                  <div style={{ height: 1, background: "var(--border-subtle)" }} />
-
-                  {/* Related notes links */}
-                  <div>
-                    <h3 style={{ fontSize: 9.5, fontWeight: 700, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>
-                      <Link size={10} style={{ marginRight: 4 }} /> Relacionados
+                  {/* Etiquetas */}
+                  <div style={{
+                    background: "var(--bg-elevated)",
+                    border: "1px solid var(--border-subtle)", borderRadius: 10, padding: "14px 14px",
+                  }}>
+                    <h3 style={{
+                      fontSize: 9, fontWeight: 500, color: "var(--text-tertiary)",
+                      letterSpacing: "0.14em", textTransform: "uppercase",
+                      marginBottom: 10, fontFamily: "'Inter', sans-serif",
+                      display: "flex", alignItems: "center", gap: 5,
+                    }}>
+                      <Hash size={9} /> Etiquetas
                     </h3>
-                    {relatedNotes.length > 0 ? (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                        {relatedNotes.map(rn => (
-                          <div key={rn.id} onClick={() => setSwitchTargetId(rn.id)}
-                            style={{
-                              display: "flex", alignItems: "center", gap: 8, padding: "6px 8px",
-                              borderRadius: 6, background: "var(--bg-elevated)",
-                              border: "1px solid var(--border-default)", cursor: "pointer",
-                            }}
-                            className="hover:brightness-110">
-                            <NoteIconRenderer iconName={rn.coverImage} color={rn.coverColor || rn.courseColor || "var(--accent)"} size={12} />
-                            <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{rn.title}</span>
-                            <ChevronRight size={10} style={{ color: "var(--text-tertiary)", marginLeft: "auto", flexShrink: 0 }} />
-                          </div>
-                        ))}
+                    {allTags.length > 0 ? (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                        {allTags.map(tag => {
+                          const tc = mergedTagColors[tag] || "var(--accent)";
+                          const active = noteTags.includes(tag);
+                          return (
+                            <button key={tag} onClick={() => handleTagToggle(tag)}
+                              style={{
+                                display: "flex", alignItems: "center", gap: 7,
+                                padding: "6px 8px", borderRadius: 6, width: "100%",
+                                border: "none",
+                                background: active ? `${tc}14` : "transparent",
+                                color: active ? tc : "var(--text-secondary)",
+                                fontSize: 11.5, fontWeight: active ? 550 : 400,
+                                cursor: "pointer", textAlign: "left",
+                                transition: "all 120ms ease",
+                              }}
+                              className={active ? "" : "hover:bg-[var(--bg-hover)]"}>
+                              <span style={{
+                                width: 6, height: 6, borderRadius: "50%",
+                                background: tc, flexShrink: 0,
+                                opacity: active ? 1 : 0.5,
+                                transition: "opacity 150ms",
+                              }} />
+                              <span style={{
+                                flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                                fontFamily: "'Inter', sans-serif",
+                              }}>
+                                {tag}
+                              </span>
+                              {active && <span style={{ fontSize: 8, opacity: 0.6 }}>✓</span>}
+                            </button>
+                          );
+                        })}
                       </div>
                     ) : (
-                      <span style={{ color: "var(--text-tertiary)", fontSize: 11 }}>Sin relaciones</span>
+                      <span style={{ color: "var(--text-tertiary)", fontSize: 11, fontStyle: "italic" }}>
+                        Sin etiquetas
+                      </span>
                     )}
                   </div>
 
-                  <div style={{ height: 1, background: "var(--border-subtle)" }} />
-
                   {/* Acceso Rápido */}
-                  <div>
-                    <h3 style={{ fontSize: 9.5, fontWeight: 700, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>
-                      <Zap size={10} style={{ marginRight: 4 }} /> Acceso Rápido
+                  <div style={{
+                    background: "var(--bg-elevated)",
+                    border: "1px solid var(--border-subtle)", borderRadius: 10, padding: "14px 14px",
+                  }}>
+                    <h3 style={{
+                      fontSize: 9, fontWeight: 500, color: "var(--text-tertiary)",
+                      letterSpacing: "0.14em", textTransform: "uppercase",
+                      marginBottom: 10, fontFamily: "'Inter', sans-serif",
+                      display: "flex", alignItems: "center", gap: 5,
+                    }}>
+                      <Zap size={9} /> Acciones
                     </h3>
                     <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
                       <button onClick={() => { openFloatingNote(selectedNote!); }}
-                        title="Abrir en ventana flotante nativa"
                         style={{
-                          display: "flex", alignItems: "center", gap: 6, padding: "7px 10px",
-                          borderRadius: 6, border: "1px solid var(--accent)", background: "var(--accent-dim)",
-                          color: "var(--accent)", fontSize: 11.5, fontWeight: 600, cursor: "pointer",
-                          transition: "all 150ms",
+                          display: "flex", alignItems: "center", gap: 7, padding: "7px 10px",
+                          borderRadius: 7, border: "1px solid var(--border-default)",
+                          background: "transparent",
+                          color: "var(--accent)", fontSize: 11, fontWeight: 500,
+                          cursor: "pointer", transition: "all 120ms",
                         }}
-                        className="hover:brightness-110">
-                        <StickyNote size={13} /> Abrir en flotante
+                        className="hover:bg-[var(--accent-dim)]">
+                        <StickyNote size={12} /> Flotante
                       </button>
                       <button onClick={handleDuplicate}
                         style={{
-                          display: "flex", alignItems: "center", gap: 6, padding: "6px 10px",
-                          borderRadius: 6, border: "1px solid var(--border-default)", background: "var(--bg-elevated)",
-                          color: "var(--text-primary)", fontSize: 11.5, cursor: "pointer",
+                          display: "flex", alignItems: "center", gap: 7, padding: "7px 10px",
+                          borderRadius: 7, border: "1px solid var(--border-default)",
+                          background: "transparent",
+                          color: "var(--text-secondary)", fontSize: 11, cursor: "pointer",
+                          transition: "all 120ms",
                         }}
-                        className="hover:bg-[var(--bg-hover)]">
+                        className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
                         <Copy size={12} /> Duplicar
                       </button>
                       <button onClick={() => handleExportPDF()}
                         style={{
-                          display: "flex", alignItems: "center", gap: 6, padding: "6px 10px",
-                          borderRadius: 6, border: "1px solid var(--border-default)", background: "var(--bg-elevated)",
-                          color: "var(--text-primary)", fontSize: 11.5, cursor: "pointer",
+                          display: "flex", alignItems: "center", gap: 7, padding: "7px 10px",
+                          borderRadius: 7, border: "1px solid var(--border-default)",
+                          background: "transparent",
+                          color: "var(--text-secondary)", fontSize: 11, cursor: "pointer",
+                          transition: "all 120ms",
                         }}
-                        className="hover:bg-[var(--bg-hover)]">
+                        className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
                         <Download size={12} /> Exportar PDF
                       </button>
+                      <div style={{ height: 1, background: "var(--border-subtle)", margin: "2px 0" }} />
                       <button onClick={() => setShowDeleteConfirm(true)}
                         style={{
-                          display: "flex", alignItems: "center", gap: 6, padding: "6px 10px",
-                          borderRadius: 6, border: "1px solid var(--border-default)", background: "var(--bg-elevated)",
-                          color: "var(--error)", fontSize: 11.5, cursor: "pointer",
+                          display: "flex", alignItems: "center", gap: 7, padding: "7px 10px",
+                          borderRadius: 7, border: "1px solid transparent",
+                          background: "transparent",
+                          color: "var(--text-tertiary)", fontSize: 11, cursor: "pointer",
+                          transition: "all 120ms",
                         }}
-                        className="hover:bg-[var(--bg-hover)]">
+                        className="hover:bg-[var(--error-dim)] hover:text-[var(--error)]">
                         <Trash2 size={12} /> Eliminar
                       </button>
                     </div>
@@ -1618,6 +2677,30 @@ export default function Notas() {
                   onNewTag={() => setShowNewTagModal(true)}
                   activeSidebarTab={activeSidebarTab}
                   setActiveSidebarTab={setActiveSidebarTab}
+                  editFolderId={editFolderId}
+                  setEditFolderId={setEditFolderId}
+                  editFolderName={editFolderName}
+                  setEditFolderName={setEditFolderName}
+                  editFolderColor={editFolderColor}
+                  setEditFolderColor={setEditFolderColor}
+                  tagColorEdit={tagColorEdit}
+                  setTagColorEdit={setTagColorEdit}
+                  editTagName={editTagName}
+                  setEditTagName={setEditTagName}
+                  deleteFolderId={deleteFolderId}
+                  setDeleteFolderId={setDeleteFolderId}
+                  deleteFolderName={deleteFolderName}
+                  setDeleteFolderName={setDeleteFolderName}
+                  deletedFolderIds={deletedFolderIds}
+                  setDeletedFolderIds={setDeletedFolderIds}
+                  mergedTagColors={mergedTagColors}
+                  onTagColorsChange={(colors) => {
+                    setCustomTagColors(colors);
+                    localStorage.setItem("owa_custom_tag_colors", JSON.stringify(colors));
+                  }}
+                  onTagReorder={(tags) => {
+                    localStorage.setItem("owa_tag_order", JSON.stringify(tags));
+                  }}
                 />
               </div>
 
@@ -1628,49 +2711,57 @@ export default function Notas() {
               }}>
                 {/* Top bar: view toggle (left), search + actions (right) */}
                 <div style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
-                  flexShrink: 0, padding: "10px 14px 0",
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+                  flexShrink: 0, padding: "8px 16px 8px",
                   borderBottom: "1px solid var(--border-subtle)",
                   background: "var(--bg-elevated)",
                 }}>
-                  {/* View toggle — left side, improved aesthetics */}
+                  {/* View toggle — larger text, pill design */}
                   <div style={{
-                    display: "flex", background: "var(--bg-surface)",
-                    border: "1px solid var(--border-subtle)", borderRadius: 12, padding: 4, height: 44,
-                    boxSizing: "border-box", gap: 3,
-                    boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+                    display: "flex",
+                    background: "var(--bg-deep)",
+                    border: "1px solid var(--border-subtle)",
+                    borderRadius: 10, padding: 3, height: 38,
+                    boxSizing: "border-box", gap: 2,
+                    boxShadow: "inset 0 1px 2px rgba(0,0,0,0.15)",
                   }}>
                     <button onClick={() => setViewMode("estante")}
                       title="Vista de Estantería"
                       style={{
-                        width: 36, height: 36, borderRadius: 8, border: "none",
-                        background: viewMode === "estante" ? "linear-gradient(135deg, var(--accent) 0%, color-mix(in srgb, var(--accent) 80%, #000) 100%)" : "transparent",
+                        height: 30, borderRadius: 7, border: "none",
+                        background: viewMode === "estante" ? "var(--accent)" : "var(--bg-surface)",
                         color: viewMode === "estante" ? "#fff" : "var(--text-tertiary)",
-                        cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                        cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+                        padding: "0 12px", fontSize: 12, fontWeight: 450,
+                        letterSpacing: "0.01em",
                         transition: "all 200ms",
-                        boxShadow: viewMode === "estante" ? "0 2px 8px var(--accent-glow)" : "none",
+                        boxShadow: viewMode === "estante" ? "0 2px 8px var(--accent-glow)" : "0 1px 2px rgba(0,0,0,0.08)",
                       }}
                       className="hover:brightness-110">
-                      <Library size={16} />
+                      <Library size={13} />
+                      <span>Estante</span>
                     </button>
                     <button onClick={() => setViewMode("lista")}
                       title="Vista de Bloques"
                       style={{
-                        width: 36, height: 36, borderRadius: 8, border: "none",
-                        background: viewMode === "lista" ? "linear-gradient(135deg, var(--accent) 0%, color-mix(in srgb, var(--accent) 80%, #000) 100%)" : "transparent",
+                        height: 30, borderRadius: 7, border: "none",
+                        background: viewMode === "lista" ? "var(--accent)" : "var(--bg-surface)",
                         color: viewMode === "lista" ? "#fff" : "var(--text-tertiary)",
-                        cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                        cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+                        padding: "0 12px", fontSize: 12, fontWeight: 450,
+                        letterSpacing: "0.01em",
                         transition: "all 200ms",
-                        boxShadow: viewMode === "lista" ? "0 2px 8px var(--accent-glow)" : "none",
+                        boxShadow: viewMode === "lista" ? "0 2px 8px var(--accent-glow)" : "0 1px 2px rgba(0,0,0,0.08)",
                       }}
                       className="hover:brightness-110">
-                      <AlignJustify size={16} />
+                      <AlignJustify size={13} />
+                      <span>Bloques</span>
                     </button>
                   </div>
 
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <div style={{ position: "relative", width: 200 }}>
-                      <Search size={14} style={{
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ position: "relative", width: 220 }}>
+                      <Search size={13} style={{
                         position: "absolute", left: 10, top: "50%",
                         transform: "translateY(-50%)", color: "var(--text-tertiary)",
                         pointerEvents: "none", zIndex: 1,
@@ -1679,24 +2770,85 @@ export default function Notas() {
                         value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
                         className="input-base"
                         style={{
-                          width: "100%", height: 32, borderRadius: 8, padding: "0 12px 0 30px", fontSize: 12,
+                          width: "100%", height: 30, borderRadius: 8, padding: "0 10px 0 30px", fontSize: 12,
+                          background: "var(--bg-surface)",
                         }} />
                     </div>
                     <button onClick={handleCreateNote}
                       style={{
-                        display: "flex", alignItems: "center", gap: 5, height: 32, padding: "0 14px",
+                        display: "flex", alignItems: "center", gap: 5, height: 30, padding: "0 12px",
                         background: "var(--accent)", color: "#fff", border: "none", borderRadius: 8,
-                        fontSize: 12, fontWeight: 600, cursor: "pointer",
-                        boxShadow: "0 2px 8px var(--accent-glow)", whiteSpace: "nowrap",
+                        fontSize: 11.5, fontWeight: 600, cursor: "pointer",
+                        boxShadow: "0 2px 6px var(--accent-glow)", whiteSpace: "nowrap",
                         transition: "transform 150ms, box-shadow 150ms",
                       }}
                       className="active:scale-[0.97]">
-                      <Plus size={14} /> Nueva nota
+                      <Plus size={13} /> Nueva nota
                     </button>
                   </div>
                 </div>
 
 
+
+                {/* Context header for folder/tag */}
+                {(selectedFolderId || selectedTag) && activeSidebarTab !== "trash" && (
+                  <div style={{
+                    display: "flex", alignItems: "center", gap: 8,
+                    padding: "10px 16px 4px", flexShrink: 0,
+                    borderBottom: "1px solid var(--border-subtle)",
+                    marginBottom: 4,
+                  }}>
+                    {selectedFolderId && currentFolder && (() => {
+                      const fc = currentFolder.color;
+                      return (
+                        <>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <span style={{ fontSize: 16, fontWeight: 700, color: fc, letterSpacing: "0.02em" }}>
+                              {currentFolder.name}
+                            </span>
+                          </div>
+                          <button onClick={() => { setEditFolderId(currentFolder.id); setEditFolderName(currentFolder.name); setEditFolderColor(fc); }}
+                            style={{
+                              width: 28, height: 28, flexShrink: 0,
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                              border: "none", background: fc + "14",
+                              color: fc, cursor: "pointer", padding: 0, borderRadius: 6,
+                              transition: "all 150ms", opacity: 0.8, marginLeft: "auto",
+                            }}
+                            className="hover:opacity-100"
+                            title="Editar carpeta">
+                            <Edit3 size={13} />
+                          </button>
+                        </>
+                      );
+                    })()}
+                    {selectedTag && !selectedFolderId && (() => {
+                      const dotColor = mergedTagColors[selectedTag] || "var(--accent)";
+                      return (
+                        <>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
+                            <Hash size={14} style={{ color: dotColor, flexShrink: 0 }} />
+                            <span style={{ fontSize: 16, fontWeight: 700, color: dotColor, letterSpacing: "0.02em" }}>
+                              {selectedTag}
+                            </span>
+                          </div>
+                          <button onClick={() => { setTagColorEdit(selectedTag); setEditTagName(selectedTag); }}
+                            style={{
+                              width: 28, height: 28, flexShrink: 0,
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                              border: "none", background: dotColor + "14",
+                              color: dotColor, cursor: "pointer", padding: 0, borderRadius: 6,
+                              transition: "all 150ms", opacity: 0.8, marginLeft: "auto",
+                            }}
+                            className="hover:opacity-100"
+                            title="Editar etiqueta">
+                            <Edit3 size={13} />
+                          </button>
+                        </>
+                      );
+                    })()}
+                  </div>
+                )}
 
                 <div style={{
                   flex: 1, display: "flex", flexDirection: "column", overflow: "hidden",
@@ -1704,78 +2856,101 @@ export default function Notas() {
                 }}>
               {/* Trash view */}
               {activeSidebarTab === "trash" ? (
-                <div style={{ flex: 1, overflow: "auto", padding: "12px 16px" }}>
+                <div style={{ flex: 1, overflow: "auto", padding: "12px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
                   {filteredNotes.length === 0 ? (
                     <div style={{
                       display: "flex", flexDirection: "column", alignItems: "center",
-                      justifyContent: "center", height: "100%", gap: 8, color: "var(--text-tertiary)",
+                      justifyContent: "center", flex: 1, gap: 8, color: "var(--text-tertiary)",
                     }}>
                       <Trash2 size={24} style={{ opacity: 0.4 }} />
                       <span style={{ fontSize: 13, fontWeight: 600 }}>Papelera vacía</span>
                       <span style={{ fontSize: 11, opacity: 0.6 }}>Las notas eliminadas aparecerán aquí</span>
                     </div>
                   ) : (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                      {filteredNotes.map(note => {
-                        const delTime = note.deletedAt ? formatDeletionTime(note.deletedAt) : "";
-                        return (
-                          <div key={note.id} style={{
-                            display: "flex", alignItems: "center", gap: 12, padding: "10px 14px",
-                            background: "var(--bg-surface)", borderRadius: "var(--radius-md)",
-                            border: "1px solid var(--border-default)",
-                          }}>
-                            <div style={{
-                              width: 32, height: 32, borderRadius: 6, flexShrink: 0,
-                              background: "linear-gradient(135deg, var(--accent)10, transparent)",
-                              display: "flex", alignItems: "center", justifyContent: "center",
-                              border: "1px solid var(--border-soft)",
+                    <>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 14px", background: "var(--bg-surface)", borderRadius: "var(--radius-md)", border: "1px solid var(--border-default)" }}>
+                        <button onClick={() => handleSelectAllTrash(filteredNotes.map(n => n.id))}
+                          style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", color: "var(--text-tertiary)" }}
+                          title="Seleccionar todo">
+                          <CheckSquare size={14} style={{ opacity: trashSelectedIds.size === filteredNotes.length ? 1 : 0.4 }} />
+                        </button>
+                        <span style={{ fontSize: 10.5, color: "var(--text-tertiary)", fontWeight: 500 }}>
+                          {trashSelectedIds.size > 0
+                            ? `${trashSelectedIds.size} seleccionada${trashSelectedIds.size !== 1 ? "s" : ""}`
+                            : `${filteredNotes.length} nota${filteredNotes.length !== 1 ? "s" : ""}`}
+                        </span>
+                        {trashSelectedIds.size > 0 && (
+                          <div style={{ display: "flex", gap: 4, marginLeft: "auto" }}>
+                            <button onClick={handleBatchRestore}
+                              style={{ background: "none", border: "1px solid var(--border-default)", borderRadius: 6, padding: "3px 8px", cursor: "pointer", color: "var(--success)", fontSize: 9.5, fontWeight: 600 }}
+                              className="hover:bg-[var(--bg-hover)]">
+                              Restaurar {trashSelectedIds.size > 1 ? `(${trashSelectedIds.size})` : ""}
+                            </button>
+                            <button onClick={handleBatchDelete}
+                              style={{ background: "none", border: "1px solid var(--error)30", borderRadius: 6, padding: "3px 8px", cursor: "pointer", color: "var(--error)", fontSize: 9.5, fontWeight: 600 }}
+                              className="hover:bg-[var(--bg-hover)]">
+                              Eliminar {trashSelectedIds.size > 1 ? `(${trashSelectedIds.size})` : ""}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        {filteredNotes.map(note => {
+                          const delTime = note.deletedAt ? formatDeletionTime(note.deletedAt) : "";
+                          const isSelected = trashSelectedIds.has(note.id);
+                          return (
+                            <div key={note.id} style={{
+                              display: "flex", alignItems: "center", gap: 8, padding: "8px 12px",
+                              background: isSelected ? "var(--accent)08" : "var(--bg-surface)",
+                              borderRadius: "var(--radius-md)",
+                              border: isSelected ? "1px solid var(--accent)30" : "1px solid var(--border-default)",
+                              transition: "all 120ms",
                             }}>
-                              <FileText size={14} style={{ color: "var(--text-secondary)" }} />
-                            </div>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text-primary)", marginBottom: 2 }}>{note.title || "Sin título"}</div>
-                              <div style={{ fontSize: 10, color: "var(--text-tertiary)" }}>
-                                {delTime} · {note.tags?.slice(0, 2).join(", ") || "sin etiquetas"}
+                              <button onClick={() => toggleTrashSelect(note.id)}
+                                style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", flexShrink: 0, color: isSelected ? "var(--accent)" : "var(--text-tertiary)" }}>
+                                <CheckSquare size={13} />
+                              </button>
+                              <div style={{
+                                width: 28, height: 28, borderRadius: 6, flexShrink: 0,
+                                background: "linear-gradient(135deg, var(--accent)10, transparent)",
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                                border: "1px solid var(--border-soft)",
+                              }}>
+                                <FileText size={12} style={{ color: "var(--text-secondary)" }} />
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)", marginBottom: 1 }}>{note.title || "Sin título"}</div>
+                                <div style={{ fontSize: 9.5, color: "var(--text-tertiary)" }}>
+                                  {delTime} · {note.tags?.slice(0, 2).join(", ") || "sin etiquetas"}
+                                </div>
+                              </div>
+                              <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
+                                <button onClick={() => handleRestoreNote(note.id)}
+                                  style={{
+                                    background: "none", border: "1px solid var(--border-default)",
+                                    borderRadius: 5, padding: "4px 7px", cursor: "pointer",
+                                    color: "var(--success)", fontSize: 9, fontWeight: 600,
+                                  }}
+                                  className="hover:bg-[var(--bg-hover)]"
+                                  title="Restaurar">
+                                  Restaurar
+                                </button>
+                                <button onClick={() => handlePermanentDelete(note.id)}
+                                  style={{
+                                    background: "none", border: "1px solid var(--error)30",
+                                    borderRadius: 5, padding: "4px 7px", cursor: "pointer",
+                                    color: "var(--error)", fontSize: 9, fontWeight: 600,
+                                  }}
+                                  className="hover:bg-[var(--bg-hover)]"
+                                  title="Eliminar permanentemente">
+                                  <Trash2 size={10} />
+                                </button>
                               </div>
                             </div>
-                            <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-                              <button onClick={() => handleRestoreNote(note.id)}
-                                style={{
-                                  background: "none", border: "1px solid var(--border-default)",
-                                  borderRadius: 6, padding: "5px 8px", cursor: "pointer",
-                                  color: "var(--success)", fontSize: 10, fontWeight: 600,
-                                  display: "flex", alignItems: "center", gap: 4,
-                                }}
-                                className="hover:bg-[var(--bg-hover)]"
-                                title="Restaurar">
-                                Restaurar
-                              </button>
-                              <button onClick={() => handleExportPDF(note.id)}
-                                style={{
-                                  background: "none", border: "1px solid var(--border-default)",
-                                  borderRadius: 6, padding: "5px 8px", cursor: "pointer",
-                                  color: "var(--text-secondary)", fontSize: 10, fontWeight: 600,
-                                  display: "flex", alignItems: "center", gap: 4,
-                                }}
-                                className="hover:bg-[var(--bg-hover)]"
-                                title="Exportar PDF">
-                                <Download size={11} />
-                              </button>
-                              <button onClick={() => handlePermanentDelete(note.id)}
-                                style={{
-                                  background: "none", border: "1px solid var(--error)30",
-                                  borderRadius: 6, padding: "5px 8px", cursor: "pointer",
-                                  color: "var(--error)", fontSize: 10, fontWeight: 600,
-                                }}
-                                className="hover:bg-[var(--bg-hover)]"
-                                title="Eliminar permanentemente">
-                                <Trash2 size={11} />
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                          );
+                        })}
+                      </div>
+                    </>
                   )}
                 </div>
               ) : filteredNotes.length === 0 ? (
@@ -1792,9 +2967,9 @@ export default function Notas() {
                   /* Upgraded Blocks View: Grid of 2 columns */
                   <div style={{
                     flex: 1, overflow: "auto", display: "grid",
-                    gridTemplateColumns: "repeat(2, 1fr)",
+                    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
                     gridAutoRows: "max-content",
-                    gap: 10, padding: "6px 4px",
+                    gap: 14, padding: "18px 14px 14px",
                   }}>
                     {filteredNotes.map((note, i) => (
                       <NoteCard key={note.id} note={note}
@@ -1809,7 +2984,7 @@ export default function Notas() {
                     ))}
                   </div>
                 ) : (
-                  /* Bookshelf View: non-scrollable, pagination at top center */
+                  /* Bookshelf View: non-scrollable, pagination at top */
                   <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
                     {(() => {
                       const PER_PAGE_BS = 10; // 2 shelves of 5
@@ -1824,63 +2999,45 @@ export default function Notas() {
 
                       return (
                         <>
-                          {/* Pagination at top, centered */}
+                          {/* Books — with side arrows on hover */}
+                          {/* Books — with side arrows on hover */}
                           <div style={{
-                            display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                            padding: "4px 14px 2px", flexShrink: 0,
-                          }}>
-                            <button onClick={() => safePageBS > 0 && setBookshelfPage(safePageBS - 1)}
-                              disabled={safePageBS === 0}
-                              style={{
-                                background: safePageBS === 0 ? "var(--bg-surface)" : "var(--bg-elevated)",
-                                border: "1px solid var(--border-default)", borderRadius: 8,
-                                padding: "6px 12px", fontSize: 11, cursor: safePageBS === 0 ? "default" : "pointer",
-                                color: safePageBS === 0 ? "var(--text-muted)" : "var(--text-secondary)",
-                                opacity: safePageBS === 0 ? 0.4 : 1,
-                                display: "flex", alignItems: "center", gap: 4, fontWeight: 550,
-                                transition: "all 150ms",
-                              }}
-                              className={safePageBS > 0 ? "hover:bg-[var(--bg-hover)]" : ""}>
-                              <ChevronRight size={13} style={{ transform: "rotate(180deg)" }} />
-                              Anterior
-                            </button>
-                            <div style={{
-                              display: "flex", alignItems: "center", gap: 4,
-                              background: "var(--bg-surface)", borderRadius: 8,
-                              padding: "4px 8px", border: "1px solid var(--border-subtle)",
-                            }}>
-                              {Array.from({ length: totalPagesBS }, (_, i) => (
-                                <button key={i} onClick={() => setBookshelfPage(i)}
-                                  style={{
-                                    width: i === safePageBS ? 20 : 7, height: 7, borderRadius: "55%",
-                                    border: "none", cursor: "pointer",
-                                    background: i === safePageBS ? "var(--accent)" : "var(--border-default)",
-                                    padding: 0, transition: "all 200ms " + EASE,
-                                  }} />
-                              ))}
-                              <span style={{
-                                fontSize: 9.5, color: "var(--text-tertiary)", fontWeight: 600,
-                                marginLeft: 4, paddingLeft: 6, borderLeft: "1px solid var(--border-soft)",
-                              }}>
-                                {safePageBS + 1}/{totalPagesBS}
-                              </span>
-                            </div>
-                            <button onClick={() => safePageBS < totalPagesBS - 1 && setBookshelfPage(safePageBS + 1)}
-                              disabled={safePageBS >= totalPagesBS - 1}
-                              style={{
-                                background: safePageBS >= totalPagesBS - 1 ? "var(--bg-surface)" : "var(--bg-elevated)",
-                                border: "1px solid var(--border-default)", borderRadius: 8,
-                                padding: "6px 12px", fontSize: 11, cursor: safePageBS >= totalPagesBS - 1 ? "default" : "pointer",
-                                color: safePageBS >= totalPagesBS - 1 ? "var(--text-muted)" : "var(--text-secondary)",
-                                opacity: safePageBS >= totalPagesBS - 1 ? 0.4 : 1,
-                                display: "flex", alignItems: "center", gap: 4, fontWeight: 550,
-                                transition: "all 150ms",
-                              }}
-                              className={safePageBS < totalPagesBS - 1 ? "hover:bg-[var(--bg-hover)]" : ""}>
-                              Siguiente
-                              <ChevronRight size={13} />
-                            </button>
-                          </div>
+                            flex: 1, display: "flex", flexDirection: "column",
+                            justifyContent: "center", gap: 8, padding: "0px 12px 0",
+                            overflow: "hidden", position: "relative",
+                          }}
+                            onMouseEnter={() => setShowShelfArrows(true)}
+                            onMouseLeave={() => setShowShelfArrows(false)}>
+                            {showShelfArrows && safePageBS > 0 && !selectedNote && (
+                              <button onClick={() => setBookshelfPage(safePageBS - 1)}
+                                style={{
+                                  position: "absolute", left: 0, top: 16, bottom: 16,
+                                  zIndex: 10, width: 36, borderRadius: "0 10px 10px 0",
+                                  border: "1px solid var(--border-subtle)", background: "var(--bg-surface)",
+                                  color: "var(--text-secondary)", cursor: "pointer",
+                                  display: "flex", alignItems: "center", justifyContent: "center",
+                                  boxShadow: "2px 0 16px rgba(0,0,0,0.15)",
+                                  transition: "all 200ms",
+                                }}
+                                className="hover:bg-[var(--bg-hover)] hover:text-[var(--accent)]">
+                                <ChevronLeft size={22} />
+                              </button>
+                            )}
+                            {showShelfArrows && safePageBS < totalPagesBS - 1 && !selectedNote && (
+                              <button onClick={() => setBookshelfPage(safePageBS + 1)}
+                                style={{
+                                  position: "absolute", right: 0, top: 16, bottom: 16,
+                                  zIndex: 10, width: 36, borderRadius: "10px 0 0 10px",
+                                  border: "1px solid var(--border-subtle)", background: "var(--bg-surface)",
+                                  color: "var(--text-secondary)", cursor: "pointer",
+                                  display: "flex", alignItems: "center", justifyContent: "center",
+                                  boxShadow: "-2px 0 16px rgba(0,0,0,0.15)",
+                                  transition: "all 200ms",
+                                }}
+                                className="hover:bg-[var(--bg-hover)] hover:text-[var(--accent)]">
+                                <ChevronRight size={22} />
+                              </button>
+                            )}
 
                           {/* Books — non-scrollable, fills remaining space */}
                           <div style={{
@@ -1892,7 +3049,7 @@ export default function Notas() {
                               <div key={ri} style={{ display: "flex", flexDirection: "column", width: "100%" }}>
                                 <div style={{
                                   display: "flex", justifyContent: "space-evenly", alignItems: "flex-end",
-                                  paddingBottom: 0, width: "100%", height: 218, gap: 8,
+                                  paddingBottom: 0, width: "100%", height: 218, gap: 4,
                                 }}>
                                   {row.map((note, ci) => {
                                     const noteIdx = safePageBS * PER_PAGE_BS + ri * 5 + ci;
@@ -1924,6 +3081,79 @@ export default function Notas() {
                                 <ShelfPlank />
                               </div>
                             ))}
+                            {/* Pagination — compact numbered with overflow */}
+                            {totalPagesBS > 1 && (
+                              <div style={{
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                                padding: "2px 0", gap: 1, flexShrink: 0,
+                              }}>
+                                {(() => {
+                                  const total = totalPagesBS;
+                                  const cur = safePageBS;
+                                  const pages: (number | string)[] = [];
+                                  if (total <= 7) {
+                                    for (let i = 0; i < total; i++) pages.push(i);
+                                  } else {
+                                    pages.push(0);
+                                    if (cur > 2) pages.push('...');
+                                    const s = Math.max(1, cur - 1);
+                                    const e = Math.min(cur + 1, total - 2);
+                                    for (let i = s; i <= e; i++) pages.push(i);
+                                    if (cur < total - 3) pages.push('...');
+                                    pages.push(total - 1);
+                                  }
+                                  return (
+                                    <>
+                                      {cur > 0 && (
+                                        <button onClick={() => setBookshelfPage(cur - 1)}
+                                          style={{
+                                            width: 24, height: 24, borderRadius: 5, border: "none",
+                                            background: "transparent", color: "var(--text-tertiary)",
+                                            cursor: "pointer", display: "flex", alignItems: "center",
+                                            justifyContent: "center", fontSize: 12,
+                                          }}
+                                          className="hover:bg-[var(--bg-hover)]">
+                                          <ChevronLeft size={12} />
+                                        </button>
+                                      )}
+                                      {pages.map((p, idx) =>
+                                        p === '...' ? (
+                                          <span key={'e' + idx} style={{
+                                            width: 16, textAlign: "center", fontSize: 10,
+                                            color: "var(--text-tertiary)",
+                                          }}>...</span>
+                                        ) : (
+                                          <button key={p} onClick={() => setBookshelfPage(p as number)}
+                                            style={{
+                                              minWidth: 22, height: 22, borderRadius: 5, border: "none",
+                                              background: p === cur ? "var(--accent)" : "transparent",
+                                              color: p === cur ? "#fff" : "var(--text-secondary)",
+                                              cursor: "pointer", fontSize: 11.5,
+                                              fontWeight: p === cur ? 700 : 500, padding: "0 4px",
+                                            }}
+                                            className={p !== cur ? "hover:bg-[var(--bg-hover)]" : ""}>
+                                            {(p as number) + 1}
+                                          </button>
+                                        )
+                                      )}
+                                      {cur < total - 1 && (
+                                        <button onClick={() => setBookshelfPage(cur + 1)}
+                                          style={{
+                                            width: 24, height: 24, borderRadius: 5, border: "none",
+                                            background: "transparent", color: "var(--text-tertiary)",
+                                            cursor: "pointer", display: "flex", alignItems: "center",
+                                            justifyContent: "center", fontSize: 12,
+                                          }}
+                                          className="hover:bg-[var(--bg-hover)]">
+                                          <ChevronRight size={12} />
+                                        </button>
+                                      )}
+                                    </>
+                                  );
+                                })()}
+                              </div>
+                            )}
+                          </div>
                           </div>
                         </>
                       );
@@ -1992,15 +3222,21 @@ export default function Notas() {
                             <Star size={12} fill={selectedNote.isPinned ? "#F59E0B" : "none"} />
                           </button>
 
-                          <button onClick={() => setShowMoveModal(true)}
-                            title="Mover"
-                            style={{
-                              background: "none", border: "1px solid var(--border-default)",
-                              color: "var(--text-secondary)", width: 30, height: 30, borderRadius: 6,
-                              display: "flex", cursor: "pointer", alignItems: "center", justifyContent: "center",
-                            }}>
-                            <FolderIcon size={12} />
-                          </button>
+                          {(() => {
+                            const fc = folders.find(f => f.id === selectedNote.folderId);
+                            return (
+                              <button onClick={() => setShowMoveModal(true)}
+                                title="Mover"
+                                style={{
+                                  background: "none", border: "1px solid " + (fc ? fc.color + "30" : "var(--border-default)"),
+                                  color: fc ? fc.color : "var(--text-secondary)",
+                                  width: 30, height: 30, borderRadius: 6,
+                                  display: "flex", cursor: "pointer", alignItems: "center", justifyContent: "center",
+                                }}>
+                                <FolderIcon size={12} />
+                              </button>
+                            );
+                          })()}
 
                           <button onClick={() => { handleSelectNote(selectedNote!.id); handleOpenNote(); }}
                             title="Editar"
@@ -2011,17 +3247,7 @@ export default function Notas() {
                               alignItems: "center", justifyContent: "center",
                               boxShadow: "0 2px 8px var(--accent-glow)",
                             }}>
-                            <PenTool size={12} />
-                          </button>
-                          <button onClick={() => { openFloatingNote(selectedNote!); }}
-                            title="Abrir en flotante"
-                            style={{
-                              background: "none", border: "1px solid var(--border-default)",
-                              color: "var(--text-secondary)", width: 30, height: 30, borderRadius: 6,
-                              display: "flex", cursor: "pointer", alignItems: "center", justifyContent: "center",
-                            }}
-                            className="hover:bg-[var(--bg-hover)]">
-                            <StickyNote size={12} />
+                            <Edit3 size={12} />
                           </button>
 
                           <button onClick={() => setShowDeleteConfirm(true)}
@@ -2038,55 +3264,59 @@ export default function Notas() {
 
                       {/* Tabs */}
                       <div style={{
-                        display: "flex", background: "rgba(255,255,255,0.01)",
-                        borderBottom: "1px solid var(--border-default)", padding: "0 16px",
+                        display: "flex", gap: 2,
+                        borderBottom: "1px solid var(--border-default)", padding: "0 12px",
+                        background: "var(--bg-elevated)",
                       }}>
                         {["contenido", "informacion", "historial"].map((tab) => (
                           <button key={tab} onClick={() => setDrawerTab(tab as any)}
                             style={{
-                              padding: "12px 14px", border: "none", background: "none",
-                              color: drawerTab === tab ? "var(--accent)" : "var(--text-secondary)",
-                              fontSize: 12, fontWeight: 600, cursor: "pointer",
-                              borderBottom: "2px solid " + (drawerTab === tab ? "var(--accent)" : "transparent"),
+                              padding: "10px 12px", border: "none", background: drawerTab === tab ? "var(--bg-surface)" : "none",
+                              color: drawerTab === tab ? "var(--accent)" : "var(--text-tertiary)",
+                              fontSize: 11.5, fontWeight: 600, cursor: "pointer",
+                              borderRadius: "8px 8px 0 0",
                               textTransform: "capitalize", transition: "all 150ms",
-                            }}>
+                              marginBottom: -1, borderBottom: "2px solid " + (drawerTab === tab ? "var(--accent)" : "transparent"),
+                            }}
+                            className={drawerTab !== tab ? "hover:text-[var(--text-secondary)]" : ""}>
                             {tab === "contenido" ? "Contenido" : tab === "informacion" ? "Metadatos" : "Historial"}
                           </button>
                         ))}
                       </div>
 
                       {/* Tab panel content */}
-                      <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
+                      <div style={{ flex: 1, overflow: "auto", padding: "16px 20px 24px" }}>
                         {drawerTab === "contenido" && (
-                          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                              {selectedNote.course && (
-                                <span style={{
-                                  fontSize: 9.5, fontWeight: 700, color: selectedNote.coverColor || selectedNote.courseColor || "var(--accent)",
-                                  background: (selectedNote.coverColor || selectedNote.courseColor || "var(--accent)") + "14",
-                                  padding: "1px 6px", borderRadius: 4,
-                                }}>
-                                  ● {selectedNote.course}
-                                </span>
-                              )}
-                            </div>
-
+                          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                             <h2 style={{
                               fontFamily: "'Outfit', sans-serif", fontSize: 24, fontWeight: 600,
-                              color: "var(--text-primary)", margin: "4px 0 0", letterSpacing: "-0.01em",
+                              color: "var(--text-primary)", margin: 0, letterSpacing: "-0.01em",
                             }}>
                               {selectedNote.title}
                             </h2>
 
                             {/* HTML math formatted preview content */}
-                            <div
-                              dangerouslySetInnerHTML={{ __html: formatMathContent(selectedNote.content) }}
-                              style={{
-                                fontSize: 13.5, lineHeight: 1.75, color: "var(--text-primary)",
-                                fontFamily: "var(--font-primary)",
-                              }}
-                              className="notes-preview-area"
-                            />
+                            <div onClick={(e) => {
+                              const t = e.target as HTMLElement;
+                              if (t.tagName === "A") {
+                                const href = (t as HTMLAnchorElement).getAttribute("href");
+                                if (href && (href.startsWith("http://") || href.startsWith("https://"))) {
+                                  e.preventDefault();
+                                  setLinkPreviewUrl(href);
+                                  setLinkPreviewError(false);
+                                }
+                              }
+                            }}>
+                              <div
+                                dangerouslySetInnerHTML={{ __html: formatMathContent(selectedNote.content) }}
+                                style={{
+                                  fontSize: 13.5, lineHeight: 1.75, color: "var(--text-primary)",
+                                  fontFamily: "var(--font-primary)",
+                                  padding: "4px 0",
+                                }}
+                                className="notes-preview-area"
+                              />
+                            </div>
 
                             {/* Attachments */}
                             {selectedNote.attachments && selectedNote.attachments.length > 0 && (
@@ -2112,6 +3342,35 @@ export default function Notas() {
 
                         {drawerTab === "informacion" && (
                           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                            {/* Folder / Course card */}
+                            {selectedNote.course && (() => {
+                              const fc = selectedNote.coverColor || selectedNote.courseColor || "var(--accent)";
+                              return (
+                                <div style={{
+                                  display: "flex", alignItems: "center", gap: 10,
+                                  padding: "12px 14px",
+                                  background: "var(--bg-elevated)", borderRadius: "var(--radius-md)",
+                                  border: "1px solid " + fc + "20",
+                                }}>
+                                  <div style={{
+                                    width: 32, height: 32, borderRadius: 8,
+                                    background: fc + "18", display: "flex", alignItems: "center", justifyContent: "center",
+                                    border: "1px solid " + fc + "25", flexShrink: 0,
+                                  }}>
+                                    <BookOpen size={15} style={{ color: fc }} />
+                                  </div>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontSize: 9, fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                                      Carpeta
+                                    </div>
+                                    <div style={{ fontSize: 14, fontWeight: 700, color: fc }}>
+                                      {selectedNote.course}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                            {/* Stats grid */}
                             <div style={{
                               display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8,
                             }}>
@@ -2148,18 +3407,29 @@ export default function Notas() {
                                   {((selectedNote.content.length) / 1024).toFixed(1)} <span style={{ fontSize: 10, color: "var(--text-tertiary)" }}>KB</span>
                                 </div>
                               </div>
-                              <div style={{
-                                padding: "10px 12px", background: "var(--bg-elevated)",
-                                borderRadius: "var(--radius-md)", border: "1px solid var(--border-soft)",
-                              }}>
-                                <div style={{ fontSize: 9, color: "var(--text-tertiary)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 4, display: "flex", alignItems: "center", gap: 3 }}>
-                                  <BookOpen size={10} /> Asignatura
+                              {selectedNote.tags && selectedNote.tags.length > 0 && (
+                                <div style={{
+                                  padding: "10px 12px", background: "var(--bg-elevated)",
+                                  borderRadius: "var(--radius-md)", border: "1px solid var(--border-soft)",
+                                }}>
+                                  <div style={{ fontSize: 9, color: "var(--text-tertiary)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 4, display: "flex", alignItems: "center", gap: 3 }}>
+                                    <Hash size={10} /> Etiquetas
+                                  </div>
+                                  <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
+                                    {selectedNote.tags.map(t => {
+                                      const tc = mergedTagColors[t] || "var(--accent)";
+                                      return (
+                                        <span key={t} style={{
+                                          fontSize: 10, fontWeight: 600, padding: "1px 5px",
+                                          borderRadius: 3, background: tc + "18", color: tc,
+                                        }}>{t}</span>
+                                      );
+                                    })}
+                                  </div>
                                 </div>
-                                <div style={{ fontSize: 14, fontWeight: 700, color: selectedNote.coverColor || selectedNote.courseColor || "var(--text-primary)" }}>
-                                  {selectedNote.course || "—"}
-                                </div>
-                              </div>
+                              )}
                             </div>
+                            {/* Timestamps */}
                             <div style={{
                               display: "flex", flexDirection: "column", gap: 6,
                               background: "var(--bg-elevated)", borderRadius: "var(--radius-md)",
@@ -2183,69 +3453,95 @@ export default function Notas() {
                           </div>
                         )}
 
-                        {drawerTab === "historial" && (
-                          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                            <div style={{ position: "relative", paddingLeft: 22 }}>
-                              {/* Timeline connecting path */}
-                              <div style={{
-                                position: "absolute", left: 10, top: 10, bottom: 8,
-                                width: 2,
-                                background: "linear-gradient(180deg, var(--accent) 0%, var(--accent) 40%, var(--border-default) 100%)",
-                                opacity: 0.35, borderRadius: 2,
-                              }} />
-                              {/* Recent edit */}
-                              <div style={{ position: "relative", paddingBottom: 16 }}>
+                        {drawerTab === "historial" && (() => {
+                          type VersionEntry = { timestamp: string; preview: string; wordCount: number; content?: string };
+                          const versions: VersionEntry[] = JSON.parse(localStorage.getItem("owa_note_versions_" + selectedNote.id) || "[]");
+                          return (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                              <div style={{ position: "relative", paddingLeft: 22 }}>
                                 <div style={{
-                                  position: "absolute", left: -16, top: 5, width: 10, height: 10,
-                                  borderRadius: "50%", background: "var(--accent)",
-                                  border: "2px solid var(--bg-surface)",
-                                  boxShadow: "0 0 0 3px var(--accent-glow), 0 2px 6px rgba(0,0,0,0.15)",
-                                  zIndex: 2,
+                                  position: "absolute", left: 10, top: 10, bottom: 8,
+                                  width: 2, background: "var(--border-subtle)",
+                                  opacity: 0.35, borderRadius: 2,
                                 }} />
-                                <div style={{
-                                  marginLeft: 2, padding: "10px 12px",
-                                  background: "var(--bg-elevated)", borderRadius: "var(--radius-md)",
-                                  border: "1px solid var(--border-soft)",
-                                }}>
-                                  <div style={{
-                                    fontSize: 12, fontWeight: 600, color: "var(--text-primary)",
-                                    fontFamily: "var(--font-heading)", marginBottom: 2,
-                                  }}>
-                                    Edición reciente
+                                {versions.length === 0 ? (
+                                  <div style={{ padding: "10px 12px", fontSize: 12, color: "var(--text-tertiary)" }}>
+                                    Aún no hay cambios guardados.
                                   </div>
-                                  <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10.5, color: "var(--text-tertiary)" }}>
-                                    <Clock size={9} /> {safeFormat(selectedNote.updatedAt, "d MMM yyyy, HH:mm")}
-                                    <span style={{ marginLeft: "auto", fontSize: 9, background: "var(--bg-hover)", padding: "0px 5px", borderRadius: 3 }}>{getWordCount(selectedNote.content)} palabras</span>
-                                  </div>
-                                </div>
+                                ) : (
+                                  versions.map((v, i) => (
+                                    <div key={v.timestamp} style={{ position: "relative", paddingBottom: i < versions.length - 1 ? 12 : 0 }}>
+                                      <div style={{
+                                        position: "absolute", left: -16, top: 5, width: 8, height: 8,
+                                        borderRadius: "50%",
+                                        background: i === 0 ? "var(--accent)" : "var(--border-default)",
+                                        border: "2px solid var(--bg-surface)",
+                                        boxShadow: i === 0 ? "0 0 0 3px var(--accent-glow)" : "none",
+                                        zIndex: 2,
+                                      }} />
+                                      <div style={{
+                                        marginLeft: 2, padding: "10px 12px",
+                                        background: i === 0 ? "var(--bg-elevated)" : "transparent",
+                                        borderRadius: "var(--radius-md)",
+                                        border: i === 0 ? "1px solid var(--border-soft)" : "none",
+                                      }}>
+                                        <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--text-primary)", marginBottom: 1 }}>
+                                          {safeFormat(v.timestamp, "d MMM HH:mm")}
+                                        </div>
+                                        <div style={{ fontSize: 10, color: "var(--text-tertiary)", lineHeight: 1.4 }}>
+                                          {v.preview}
+                                        </div>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
+                                          <span style={{ fontSize: 9, color: "var(--text-muted)" }}>
+                                            {v.wordCount} palabras
+                                          </span>
+                                          {v.content && (
+                                            <button onClick={(e) => {
+                                              e.stopPropagation();
+                                              const currentHtml = editorRef.current?.innerHTML || selectedNote.content;
+                                              if (currentHtml === v.content) {
+                                                toast("Ya estás en esta versión", { icon: "ℹ️", duration: 2000 });
+                                              } else {
+                                                if (editorRef.current) {
+                                                  editorRef.current.innerHTML = v.content!;
+                                                }
+                                                lastContentRef.current = v.content!.replace(/<[^>]+>/g, "").trim();
+                                                toast.success("Versión restaurada");
+                                              }
+                                              setSaveStatus("pending");
+                                            }}
+                                              style={{
+                                                fontSize: 9, fontWeight: 600, padding: "1px 6px",
+                                                border: "1px solid var(--border-soft)",
+                                                borderRadius: 4, background: "transparent",
+                                                color: "var(--accent)", cursor: "pointer",
+                                                lineHeight: "18px",
+                                              }}>
+                                              Restaurar
+                                            </button>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))
+                                )}
                               </div>
-                              {/* Created */}
-                              <div style={{ position: "relative" }}>
+                              <div style={{ position: "relative", paddingLeft: 22 }}>
                                 <div style={{
                                   position: "absolute", left: -14, top: 5, width: 7, height: 7,
                                   borderRadius: "50%", background: "var(--border-default)",
-                                  border: "2px solid var(--bg-surface)",
-                                  zIndex: 2,
+                                  border: "2px solid var(--bg-surface)", zIndex: 2,
                                 }} />
-                                <div style={{
-                                  marginLeft: 2, padding: "10px 12px",
-                                  background: "var(--bg-elevated)", borderRadius: "var(--radius-md)",
-                                  border: "1px solid var(--border-soft)",
-                                }}>
-                                  <div style={{
-                                    fontSize: 12, fontWeight: 600, color: "var(--text-secondary)",
-                                    marginBottom: 2,
-                                  }}>
-                                    Nota creada
-                                  </div>
-                                  <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10.5, color: "var(--text-tertiary)" }}>
-                                    <Clock size={9} /> {safeFormat(selectedNote.createdAt, "d MMM yyyy, HH:mm")}
+                                <div style={{ marginLeft: 2, padding: "6px 12px" }}>
+                                  <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--text-secondary)" }}>Nota creada</div>
+                                  <div style={{ fontSize: 10, color: "var(--text-tertiary)" }}>
+                                    {safeFormat(selectedNote.createdAt, "d MMM yyyy, HH:mm")}
                                   </div>
                                 </div>
                               </div>
                             </div>
-                          </div>
-                        )}
+                          );
+                        })()}
                       </div>
 
                       {/* Footer statistics */}
@@ -2292,11 +3588,22 @@ export default function Notas() {
           position: "fixed", top: contextMenu.y, left: contextMenu.x, zIndex: 10000,
           background: "linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-base) 100%)",
           border: "1px solid var(--border-default)",
-          borderRadius: "var(--radius-md)", padding: 4, minWidth: 160,
-          boxShadow: "var(--shadow-elevated)",
+          borderRadius: "var(--radius-md)", padding: 4, minWidth: 164,
+          boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
         }}>
+          <div style={{
+            position: "absolute",
+            top: contextMenu.arrowY,
+            [contextMenu.arrowLeft ? 'left' : 'right']: -5,
+            width: 8, height: 8,
+            background: "var(--bg-surface)",
+            borderLeft: "1px solid var(--border-default)",
+            borderTop: "1px solid var(--border-default)",
+            transform: contextMenu.arrowLeft ? 'rotate(315deg)' : 'rotate(135deg)',
+            borderRadius: 1,
+          }} />
           {[
-            { label: "Editar", icon: PenTool, action: () => { setSelectedNoteId(contextMenu.noteId); setContextMenu(null); setIsEditing(true); } },
+            { label: "Editar", icon: Edit3, action: () => { setSelectedNoteId(contextMenu.noteId); setContextMenu(null); setIsEditing(true); } },
             { label: "Abrir en flotante", icon: StickyNote, action: () => { const t = notes.find(n => n.id === contextMenu.noteId); if (t) openFloatingNote(t); } },
             { type: "divider" as const },
             { label: "Editar icono", icon: ImageIcon, action: () => { const target = notes.find(n => n.id === contextMenu.noteId); if (target) { setIconPickerTarget(contextMenu.noteId); setShowIconPicker(true); } } },
@@ -2312,10 +3619,10 @@ export default function Notas() {
               <button key={i} onClick={() => { item.action(); setContextMenu(null); }}
                 style={{
                   display: "flex", alignItems: "center", gap: 8, width: "100%",
-                  padding: "6px 10px", background: "none", border: "none",
+                  padding: "7px 10px", background: "none", border: "none",
                   borderRadius: "var(--radius-sm)",
                   color: (item as any).danger ? "var(--error)" : "var(--text-secondary)",
-                  cursor: "pointer", fontSize: 12, textAlign: "left", transition: "all 150ms",
+                  cursor: "pointer", fontSize: 12.5, textAlign: "left", transition: "all 150ms",
                 }}
                 className="hover:bg-[var(--bg-hover)]">
                 <Icon size={13} /> {item.label}
@@ -2419,47 +3726,222 @@ export default function Notas() {
       {showMoveModal && (
         <div style={{
           position: "fixed", inset: 0, zIndex: 10001,
-          background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)",
+          background: "rgba(0,0,0,0.55)", backdropFilter: "blur(6px)",
           display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
-          <div style={{
-            background: "linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-base) 100%)",
+        }} onClick={() => setShowMoveModal(false)}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background: "var(--bg-surface)",
             border: "1px solid var(--border-default)",
-            borderRadius: "var(--radius-lg)", padding: 24, minWidth: 320, maxWidth: 400,
-            boxShadow: "var(--shadow-elevated)",
+            borderRadius: 16, padding: "20px 0 0", minWidth: 320, maxWidth: 380,
+            boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+            overflow: "hidden",
           }}>
-            <h3 style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", margin: "0 0 12px", fontFamily: "var(--font-heading)" }}>
-              Mover a carpeta
-            </h3>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 240, overflow: "auto" }}>
-              <button onClick={() => { handleMoveToFolder(undefined); }}
+            <div style={{ padding: "0 20px 16px" }}>
+              <h3 style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", margin: 0, fontFamily: "var(--font-heading)", letterSpacing: "-0.01em" }}>
+                Mover a carpeta
+              </h3>
+              <p style={{ fontSize: 12, color: "var(--text-tertiary)", margin: "4px 0 0" }}>
+                Selecciona el destino para este cuaderno
+              </p>
+            </div>
+            <div style={{ maxHeight: 260, overflow: "auto", padding: "0 8px" }}>
+              <button onClick={() => { handleMoveToFolder(undefined); setShowMoveModal(false); }}
                 style={{
-                  display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "7px 10px",
-                  background: "transparent", border: "none", borderRadius: 6,
-                  color: "var(--text-secondary)", cursor: "pointer", fontSize: 12, textAlign: "left",
+                  display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "9px 12px",
+                  background: "transparent", border: "none", borderRadius: 8,
+                  color: "var(--text-secondary)", cursor: "pointer", fontSize: 12.5, fontWeight: 500, textAlign: "left",
+                  transition: "all 150ms",
                 }}
                 className="hover:bg-[var(--bg-hover)]">
-                <Layers size={14} /> Sin carpeta
+                <div style={{
+                  width: 20, height: 20, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center",
+                  background: "var(--bg-deep)", border: "1px solid var(--border-subtle)",
+                }}>
+                  <Layers size={12} style={{ color: "var(--text-tertiary)" }} />
+                </div>
+                <span>Sin carpeta</span>
               </button>
+              <div style={{ height: 1, background: "var(--border-subtle)", margin: "4px 0" }} />
               {folders.map((f) => (
-                <button key={f.id} onClick={() => { handleMoveToFolder(f.id); }}
+                <button key={f.id} onClick={() => { handleMoveToFolder(f.id); setShowMoveModal(false); }}
                   style={{
-                    display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "7px 10px",
-                    background: "transparent", border: "none", borderRadius: 6,
-                    color: "var(--text-secondary)", cursor: "pointer", fontSize: 12, textAlign: "left",
+                    display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "9px 12px",
+                    background: "transparent", border: "none", borderRadius: 8,
+                    color: "var(--text-secondary)", cursor: "pointer", fontSize: 12.5, fontWeight: 500, textAlign: "left",
+                    transition: "all 150ms",
                   }}
                   className="hover:bg-[var(--bg-hover)]">
-                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: f.color }} /> {f.name}
+                  <div style={{
+                    width: 20, height: 20, borderRadius: 6, flexShrink: 0,
+                    background: f.color + "18", display: "flex", alignItems: "center", justifyContent: "center",
+                    border: "1px solid " + f.color + "25",
+                  }}>
+                    <FolderIcon size={11} style={{ color: f.color }} />
+                  </div>
+                  <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</span>
+                  <span style={{
+                    fontSize: 9.5, color: "var(--text-tertiary)", background: "var(--bg-hover)",
+                    padding: "1px 6px", borderRadius: 4, fontWeight: 650,
+                  }}>{notes.filter(n => n.folderId === f.id).length}</span>
                 </button>
               ))}
             </div>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
+            <div style={{ padding: "12px 20px", borderTop: "1px solid var(--border-subtle)", display: "flex", justifyContent: "flex-end" }}>
               <button onClick={() => setShowMoveModal(false)}
-                className="btn-secondary"
                 style={{
-                  background: "none", border: "1px solid var(--border-default)", borderRadius: 6,
-                  padding: "6px 14px", color: "var(--text-secondary)", fontSize: 12, cursor: "pointer",
-                }}>Cancelar</button>
+                  background: "var(--accent)", color: "#fff", border: "none", borderRadius: 8,
+                  padding: "8px 20px", fontSize: 12.5, fontWeight: 600, cursor: "pointer",
+                  transition: "all 150ms",
+                }}
+                className="hover:opacity-90">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== LINK WEB PREVIEW ===== */}
+      {linkPreviewUrl && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 10002,
+          background: "rgba(0,0,0,0.65)", backdropFilter: "blur(8px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          padding: 24,
+        }} onClick={() => setLinkPreviewUrl(null)}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background: "var(--bg-surface)",
+            border: "1px solid var(--border-default)",
+            borderRadius: 16, width: "90%", maxWidth: 900, height: "85%",
+            display: "flex", flexDirection: "column", overflow: "hidden",
+            boxShadow: "0 24px 80px rgba(0,0,0,0.4)",
+          }}>
+            <div style={{
+              display: "flex", alignItems: "center", gap: 8,
+              padding: "10px 14px", borderBottom: "1px solid var(--border-soft)",
+              background: "var(--bg-elevated)", flexShrink: 0,
+            }}>
+              <Globe size={14} style={{ color: "var(--text-tertiary)", flexShrink: 0 }} />
+              <div style={{
+                flex: 1, fontSize: 12, color: "var(--text-secondary)",
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              }}>{linkPreviewUrl}</div>
+              <a href={linkPreviewUrl} target="_blank" rel="noopener noreferrer"
+                style={{
+                  fontSize: 11, fontWeight: 600, padding: "4px 10px",
+                  border: "1px solid var(--border-default)", borderRadius: 6,
+                  color: "var(--accent)", textDecoration: "none", flexShrink: 0,
+                }}
+                className="hover:bg-[var(--bg-hover)]">
+                Abrir
+              </a>
+              <button onClick={() => setLinkPreviewUrl(null)}
+                style={{
+                  width: 26, height: 26, flexShrink: 0,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  border: "none", background: "transparent",
+                  color: "var(--text-tertiary)", cursor: "pointer", borderRadius: 6,
+                }}
+                className="hover:bg-[var(--bg-hover)]">
+                <X size={14} />
+              </button>
+            </div>
+            <div style={{ flex: 1, position: "relative", background: "#fff" }}>
+              {linkPreviewError ? (
+                <div style={{
+                  display: "flex", flexDirection: "column", alignItems: "center",
+                  justifyContent: "center", height: "100%", gap: 8,
+                  color: "var(--text-tertiary)", padding: 24,
+                }}>
+                  <Globe size={32} style={{ opacity: 0.3 }} />
+                  <span style={{ fontSize: 13, fontWeight: 600 }}>No se puede previsualizar</span>
+                  <span style={{ fontSize: 11, textAlign: "center", maxWidth: 400 }}>
+                    Este sitio no permite ser incrustado.
+                    <br />
+                    <a href={linkPreviewUrl} target="_blank" rel="noopener noreferrer"
+                      style={{ color: "var(--accent)", fontWeight: 600 }}>Abrir en nueva pestaña</a>
+                  </span>
+                </div>
+              ) : (
+                <iframe
+                  src={linkPreviewUrl}
+                  style={{ width: "100%", height: "100%", border: "none" }}
+                  title="Vista previa de enlace"
+                  sandbox="allow-scripts allow-same-origin allow-forms"
+                  onError={() => setLinkPreviewError(true)}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== IMAGE LIGHTBOX ===== */}
+      {lightboxImage && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 10003,
+          background: "rgba(0,0,0,0.8)", backdropFilter: "blur(10px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          padding: 24,
+        }} onClick={() => { setLightboxImage(null); setShowImageDeleteConfirm(false); }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            display: "flex", flexDirection: "column", alignItems: "center",
+            gap: 16, maxWidth: "90vw", maxHeight: "90vh",
+          }}>
+            <img src={lightboxImage.src} alt=""
+              style={{
+                maxWidth: "100%", maxHeight: "70vh", borderRadius: 12,
+                border: lightboxBorderColor && lightboxBorderColor !== "#000000" ? "3px solid " + lightboxBorderColor : "none",
+                boxShadow: "0 8px 40px rgba(0,0,0,0.5)",
+                objectFit: "contain",
+              }}
+            />
+            <div style={{
+              display: "flex", alignItems: "center", gap: 10,
+              padding: "10px 16px", background: "rgba(255,255,255,0.08)",
+              borderRadius: 12, backdropFilter: "blur(4px)",
+            }}>
+              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.6)", fontWeight: 600 }}>Borde</span>
+              <input type="color" value={lightboxBorderColor}
+                onChange={(e) => {
+                  const c = e.target.value;
+                  setLightboxBorderColor(c);
+                  lightboxImage.el.style.border = "2px solid " + c;
+                }}
+                style={{ width: 28, height: 28, border: "none", borderRadius: 6, cursor: "pointer", padding: 0, background: "none" }}
+              />
+              <div style={{ width: 1, height: 20, background: "rgba(255,255,255,0.15)" }} />
+              <input type="range" min="20" max="100" defaultValue="100"
+                onChange={(e) => { lightboxImage.el.style.width = e.target.value + "%"; }}
+                style={{ width: 80, height: 4, accentColor: "var(--accent)", cursor: "pointer" }}
+              />
+              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.6)", fontWeight: 600 }}>Tamaño</span>
+              <div style={{ width: 1, height: 20, background: "rgba(255,255,255,0.15)" }} />
+              {!showImageDeleteConfirm ? (
+                <button onClick={() => setShowImageDeleteConfirm(true)}
+                  style={{
+                    background: "none", border: "1px solid rgba(255,255,255,0.2)",
+                    borderRadius: 6, padding: "4px 8px",
+                    color: "#fff", cursor: "pointer", fontSize: 10, fontWeight: 600,
+                  }}>Borrar</button>
+              ) : (
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 10, color: "rgba(255,255,255,0.7)" }}>¿Eliminar?</span>
+                  <button onClick={() => {
+                    lightboxImage.el.remove();
+                    setLightboxImage(null);
+                    setShowImageDeleteConfirm(false);
+                    setSaveStatus("pending");
+                  }}
+                    style={{
+                      background: "var(--error)", border: "none", borderRadius: 6,
+                      padding: "4px 10px", color: "#fff", cursor: "pointer", fontSize: 10, fontWeight: 600,
+                    }}>Sí</button>
+                  <button onClick={() => setShowImageDeleteConfirm(false)}
+                    style={{
+                      background: "none", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 6,
+                      padding: "4px 10px", color: "#fff", cursor: "pointer", fontSize: 10, fontWeight: 600,
+                    }}>No</button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -2469,6 +3951,18 @@ export default function Notas() {
 }
 
 /* ====== SIDEBAR SUB-COMPONENT ====== */
+function SortableFolderRow({ f, children }: { f: NoteFolder; children: (props: { attributes: any; listeners: any; setNodeRef: any; style: any; isDragging: boolean }) => React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: f.id });
+  const style = { transform: CSS.Translate.toString(transform), transition, zIndex: isDragging ? 10 : 'auto', opacity: isDragging ? 0.4 : 1 };
+  return <div ref={setNodeRef} style={style}>{children({ attributes, listeners, setNodeRef, style, isDragging })}</div>;
+}
+
+function SortableTagRow({ tag, children }: { tag: string; children: (props: { attributes: any; listeners: any; setNodeRef: any; style: any; isDragging: boolean }) => React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: tag });
+  const style = { transform: CSS.Translate.toString(transform), transition, zIndex: isDragging ? 10 : 'auto', opacity: isDragging ? 0.4 : 1 };
+  return <div ref={setNodeRef} style={style}>{children({ attributes, listeners, setNodeRef, style, isDragging })}</div>;
+}
+
 interface LibrarySidebarProps {
   folders: NoteFolder[];
   notes: Note[];
@@ -2480,16 +3974,79 @@ interface LibrarySidebarProps {
   onNewTag: () => void;
   activeSidebarTab: string;
   setActiveSidebarTab: (tab: string) => void;
+  editFolderId: string | null;
+  setEditFolderId: (id: string | null) => void;
+  editFolderName: string;
+  setEditFolderName: (name: string) => void;
+  editFolderColor: string;
+  setEditFolderColor: (color: string) => void;
+  tagColorEdit: string | null;
+  setTagColorEdit: (tag: string | null) => void;
+  editTagName: string;
+  setEditTagName: (name: string) => void;
+  deleteFolderId: string | null;
+  setDeleteFolderId: (id: string | null) => void;
+  deleteFolderName: string;
+  setDeleteFolderName: (name: string) => void;
+  deletedFolderIds: Set<string>;
+  setDeletedFolderIds: (set: Set<string> | ((prev: Set<string>) => Set<string>)) => void;
+  mergedTagColors: Record<string, string>;
+  onTagColorsChange: (colors: Record<string, string>) => void;
+  onTagReorder: (tags: string[]) => void;
 }
 
 function LibrarySidebar({
   folders, notes, selectedFolderId, selectedTag,
   onSelectFolder, onSelectTag, onNewFolder, onNewTag,
-  activeSidebarTab, setActiveSidebarTab
+  activeSidebarTab, setActiveSidebarTab,
+  editFolderId, setEditFolderId, editFolderName, setEditFolderName, editFolderColor, setEditFolderColor,
+  tagColorEdit, setTagColorEdit, editTagName, setEditTagName,
+  deleteFolderId, setDeleteFolderId, deleteFolderName, setDeleteFolderName,
+  deletedFolderIds, setDeletedFolderIds,
+  mergedTagColors,
+  onTagColorsChange,
+  onTagReorder,
 }: LibrarySidebarProps) {
+  const { reorderFolders, deleteNoteFolder, updateNoteFolder, updateNote, addNotification, courses } = useApp();
   const [showTagSection, setShowTagSection] = useState(true);
+  const [activeFolderDragId, setActiveFolderDragId] = useState<string | null>(null);
+  const [activeTagDragId, setActiveTagDragId] = useState<string | null>(null);
+  const [showTagDeleteConfirm, setShowTagDeleteConfirm] = useState(false);
+  const [localTagOrder, setLocalTagOrder] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem("owa_tag_order") || "[]"); } catch { return []; }
+  });
+  const folderSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+  );
+  const tagSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+  );
+  const handleFolderDragEnd = useCallback((event: any) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const ids = folders.map(f => f.id);
+      const oldIndex = ids.indexOf(active.id);
+      const newIndex = ids.indexOf(over.id);
+      const newIds = arrayMove([...ids], oldIndex, newIndex);
+      reorderFolders(newIds);
+    }
+    setActiveFolderDragId(null);
+  }, [folders, reorderFolders]);
 
-  // Retrieve custom tag colors from LocalStorage (persisted)
+  const handleTagDragEnd = useCallback((event: any) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const oldIndex = localTagOrder.indexOf(active.id);
+      const newIndex = localTagOrder.indexOf(over.id);
+      const newOrder = arrayMove([...localTagOrder], oldIndex, newIndex);
+      setLocalTagOrder(newOrder);
+      localStorage.setItem("owa_tag_order", JSON.stringify(newOrder));
+      onTagReorder(newOrder);
+    }
+    setActiveTagDragId(null);
+  }, [localTagOrder, onTagReorder]);
+
+  // Retrieve custom tag colors from LocalStorage (persisted via modal close)
   const tagColors = useMemo(() => {
     try {
       const saved = localStorage.getItem("owa_custom_tag_colors");
@@ -2497,197 +4054,568 @@ function LibrarySidebar({
     } catch {
       return {};
     }
-  }, [selectedTag]);
+  }, [tagColorEdit, mergedTagColors]);
 
   const allTags = useMemo(() => {
     const tagSet = new Set<string>();
     notes.forEach((n) => n.tags?.forEach((t) => tagSet.add(t)));
-    return Array.from(tagSet);
-  }, [notes]);
-
-  const favoritesCount = useMemo(() => notes.filter(n => n.isPinned).length, [notes]);
-  const recentCount = useMemo(() => {
-    const cutoff = Date.now() - 3 * 24 * 60 * 60 * 1000;
-    return notes.filter(n => new Date(n.updatedAt).getTime() > cutoff).length;
-  }, [notes]);
+    try {
+      const orphan = JSON.parse(localStorage.getItem("owa_created_tags") || "[]");
+      orphan.forEach((t: string) => tagSet.add(t));
+    } catch {}
+    const tags = Array.from(tagSet);
+    if (localTagOrder.length > 0) {
+      const orderMap = new Map(localTagOrder.map((t, i) => [t, i]));
+      tags.sort((a, b) => {
+        const ai = orderMap.get(a);
+        const bi = orderMap.get(b);
+        if (ai !== undefined && bi !== undefined) return ai - bi;
+        if (ai !== undefined) return -1;
+        if (bi !== undefined) return 1;
+        return a.localeCompare(b);
+      });
+    }
+    return tags;
+  }, [notes, localTagOrder]);
 
 const trashCount = notes.filter(n => n.deletedAt).length;
 
-const listItems = [
-    { id: "favs", label: "Favoritas", count: favoritesCount, icon: Star },
-    { id: "trash", label: "Papelera", count: trashCount, icon: Trash2 },
-];
-
   return (
     <div style={{
-      width: 220, minWidth: 220, display: "flex", flexDirection: "column",
+      width: 260, minWidth: 260, display: "flex", flexDirection: "column",
       padding: "20px 14px 14px 20px", overflow: "hidden",
       borderRight: "1px solid var(--border-subtle)",
       flex: 1, minHeight: 0,
     }}>
       <style dangerouslySetInnerHTML={{__html: `
-        .sidebar-scroll-notas::-webkit-scrollbar { width: 4px; }
-        .sidebar-scroll-notas::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: 4px; }
-        .sidebar-scroll-notas { scrollbar-width: thin; }
+        .sidebar-scroll-notas::-webkit-scrollbar { display: none; }
+        .sidebar-scroll-notas { scrollbar-width: none; -ms-overflow-style: none; }
       `}} />
-      <div className="sidebar-scroll-notas" style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          {listItems.map((item) => {
-            const isSel = activeSidebarTab === item.id;
-            const Icon = item.icon;
-            return (
-              <button key={item.id}
-                onClick={() => {
-                  setActiveSidebarTab(item.id);
-                  if (item.id === "favs") { onSelectFolder(null); onSelectTag(null); }
-                }}
-                style={{
-                  display: "flex", alignItems: "center", gap: 10, width: "100%",
-                  padding: "10px 12px",
-                  background: isSel ? "linear-gradient(135deg, var(--accent-dim) 0%, transparent 100%)" : "transparent",
-                  border: "none", borderRadius: "var(--radius-sm)",
-                  color: isSel ? "var(--accent)" : "var(--text-secondary)",
-                  cursor: "pointer", fontSize: 14, fontWeight: isSel ? 650 : 500,
-                  textAlign: "left", transition: "all 150ms " + EASE,
-                }}
-                className="hover:bg-[var(--bg-hover)]">
-                <Icon size={16} style={{ color: isSel ? "var(--accent)" : "var(--text-tertiary)" }} />
-                {item.label}
-                <span style={{
-                  marginLeft: "auto", fontSize: 10, color: isSel ? "var(--accent)" : "var(--text-tertiary)",
-                  background: isSel ? "var(--accent-soft)" : "var(--bg-hover)",
-                  padding: "2px 7px", borderRadius: 6, fontWeight: 600,
-                }}>{item.count}</span>
-              </button>
-            );
-          })}
-        </div>
+      <div className="sidebar-scroll-notas" style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
 
         {/* CARPETAS */}
         <div>
           <div style={{
             display: "flex", alignItems: "center", justifyContent: "space-between",
-            marginBottom: 4, paddingLeft: 6,
+            marginBottom: 8, paddingLeft: 4,
           }}>
             <span style={{
-              fontSize: 9, fontWeight: 750, color: "var(--text-muted)",
-              textTransform: "uppercase", letterSpacing: "0.08em",
+              fontSize: 13, fontWeight: 700, color: "var(--text-primary)",
+              letterSpacing: "0.06em", textTransform: "uppercase",
             }}>Carpetas</span>
             <button onClick={onNewFolder} title="Nueva carpeta"
               style={{
-                width: 16, height: 16,
+                width: 26, height: 26,
                 display: "flex", alignItems: "center", justifyContent: "center",
-                background: "none", border: "1px dashed var(--border-subtle)",
-                borderRadius: 4, color: "var(--accent)", cursor: "pointer", padding: 0,
+                background: "transparent", border: "1px solid var(--border-subtle)",
+                borderRadius: 6, color: "var(--accent)", cursor: "pointer", padding: 0,
+                transition: "all 150ms",
               }}
               className="hover:border-[var(--accent)] hover:bg-[var(--accent-dim)]">
-              <Plus size={9} />
+              <Plus size={14} />
             </button>
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-            {folders.map((f) => {
-              const count = notes.filter((n) => n.folderId === f.id).length;
-              const isSel = selectedFolderId === f.id;
-              return (
-                <button key={f.id} onClick={() => { setActiveSidebarTab("folder_" + f.id); onSelectFolder(selectedFolderId === f.id ? null : f.id); }}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 8, width: "100%",
-                    padding: "6px 10px",
-                    background: isSel ? "linear-gradient(135deg, var(--accent-dim) 0%, transparent 100%)" : "transparent",
-                    border: "none", borderRadius: "var(--radius-sm)",
-                    color: isSel ? "var(--accent)" : "var(--text-secondary)",
-                    cursor: "pointer", fontSize: 12.5, fontWeight: isSel ? 600 : 500,
-                    textAlign: "left", transition: "all 150ms " + EASE,
-                  }}
-                  className="hover:bg-[var(--bg-hover)]">
-                  <FolderIcon size={13} style={{ color: f.color, flexShrink: 0 }} />
-                  <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</span>
-                  <span style={{
-                    flexShrink: 0, fontSize: 9.5, color: isSel ? "var(--accent)" : "var(--text-tertiary)",
-                    background: isSel ? "var(--accent-soft)" : "var(--bg-hover)",
-                    padding: "0.5px 5px", borderRadius: 6, fontWeight: 600,
-                  }}>{count}</span>
-                </button>
-              );
-            })}
-          </div>
+          <DndContext sensors={folderSensors} collisionDetection={closestCenter} onDragStart={e => setActiveFolderDragId(e.active.id as string)} onDragEnd={handleFolderDragEnd} modifiers={[restrictToParentElement]}>
+            <SortableContext items={folders.map(f => f.id)} strategy={verticalListSortingStrategy}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                {folders.filter(f => !deletedFolderIds.has(f.id)).map((f) => {
+                  const count = notes.filter((n) => n.folderId === f.id).length;
+                  const isSel = selectedFolderId === f.id;
+                  const isDragging = activeFolderDragId === f.id;
+                  return (
+                    <SortableFolderRow key={f.id} f={f}>
+                      {({ attributes, listeners, setNodeRef, style: dndStyle }) => (
+                        <div ref={setNodeRef} className="folder-sidebar-item hover:bg-[var(--bg-hover)]" style={{ ...dndStyle, display: "flex", alignItems: "center", gap: 10, width: "100%",
+                          padding: "10px 14px 10px 6px",
+                          background: isSel ? "var(--bg-hover)" : "transparent",
+                          border: isSel ? "1px solid var(--border-soft)" : "1px solid transparent",
+                          borderLeft: isSel ? "2px solid " + f.color : "2px solid transparent",
+                          borderRadius: "var(--radius-md)",
+                          cursor: "pointer", fontSize: 13.5, fontWeight: 500,
+                          textAlign: "left", transition: "all 200ms " + EASE,
+                          color: isSel ? f.color : "var(--text-secondary)", opacity: isDragging ? 0.4 : 1,
+                        }}
+                          {...attributes} {...listeners}
+                          onClick={() => { setActiveSidebarTab("folder_" + f.id); onSelectFolder(selectedFolderId === f.id ? null : f.id); onSelectTag(null); }}>
+                          <div style={{
+                            width: 24, height: 24, borderRadius: 6, flexShrink: 0,
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            background: isSel
+                              ? f.color + "20"
+                              : f.color + "0d",
+                            border: "1px solid " + f.color + (isSel ? "35" : "15"),
+                            boxShadow: isSel ? "0 0 0 1px " + f.color + "30" : "none",
+                            transition: "all 200ms " + EASE,
+                          }}>
+                            <FolderIcon size={12} style={{ color: isSel ? f.color : f.color + "cc" }} />
+                          </div>
+                          <span style={{
+                            flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                            fontWeight: 500, fontSize: 13.5,
+                          }}>{f.name}</span>
+                          <span style={{
+                            flexShrink: 0, fontSize: 10, fontWeight: 480, lineHeight: 1.3,
+                            color: "var(--text-tertiary)",
+                            background: "var(--bg-hover)",
+                            padding: "0px 7px", borderRadius: 5, minWidth: 18, textAlign: "center",
+                          }}>{count}</span>
+                        </div>
+                      )}
+                    </SortableFolderRow>
+                  );
+                })}
+              </div>
+            </SortableContext>
+          </DndContext>
         </div>
 
+        {/* subtle section divider */}
+        {allTags.length > 0 && (
+          <div style={{ height: 1, background: "var(--border-subtle)", margin: "0 4px" }} />
+        )}
+
         {/* ETIQUETAS */}
-        <div>
-          <div style={{
-            display: "flex", alignItems: "center", gap: 6, marginBottom: 4, paddingLeft: 6,
-          }}>
-            <span style={{
-              fontSize: 9, fontWeight: 750, color: "var(--text-muted)",
-              textTransform: "uppercase", letterSpacing: "0.08em",
-            }}>Etiquetas</span>
-            <button onClick={onNewTag}
-              title="Nueva etiqueta"
-              style={{
-                width: 16, height: 16,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                background: "none", border: "1px dashed var(--border-subtle)",
-                borderRadius: 4, color: "var(--accent)", cursor: "pointer", padding: 0,
-              }}
-              className="hover:border-[var(--accent)] hover:bg-[var(--accent-dim)]">
-              <Plus size={9} />
-            </button>
-            <button onClick={() => setShowTagSection(!showTagSection)}
-              style={{
-                background: "none", border: "none", color: "var(--text-muted)",
-                cursor: "pointer", padding: 0, display: "flex", marginLeft: "auto",
-              }}>
-              <ChevronDown size={12} style={{
-                transform: showTagSection ? "rotate(0deg)" : "rotate(-90deg)",
-                transition: "transform 250ms " + EASE,
-              }} />
-            </button>
-          </div>
-          {allTags.length > 0 && (
+        {allTags.length > 0 && (
+          <div>
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              marginBottom: 8, paddingLeft: 4,
+            }}>
+              <span style={{
+                fontSize: 13, fontWeight: 700, color: "var(--text-primary)",
+                letterSpacing: "0.06em", textTransform: "uppercase",
+              }}>Etiquetas</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <button onClick={() => setShowTagSection(!showTagSection)}
+                  style={{
+                    width: 26, height: 26,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    background: "transparent", border: "1px solid transparent",
+                    color: "var(--text-muted)", cursor: "pointer", padding: 0,
+                    borderRadius: 6, transition: "all 150ms",
+                  }}
+                  className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-secondary)]"
+                  title={showTagSection ? "Ocultar etiquetas" : "Mostrar etiquetas"}>
+                  <ChevronDown size={14} style={{
+                    transform: showTagSection ? "rotate(0deg)" : "rotate(-90deg)",
+                    transition: "transform 250ms " + EASE,
+                  }} />
+                </button>
+                <button onClick={onNewTag}
+                  title="Nueva etiqueta"
+                  style={{
+                    width: 26, height: 26,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    background: "transparent", border: "1px solid var(--border-subtle)",
+                    borderRadius: 6, color: "var(--accent)", cursor: "pointer", padding: 0,
+                    transition: "all 150ms",
+                  }}
+                  className="hover:border-[var(--accent)] hover:bg-[var(--accent-dim)]">
+                  <Plus size={14} />
+                </button>
+              </div>
+            </div>
             <div style={{
               overflow: "hidden", maxHeight: showTagSection ? 10000 : 0,
               transition: "max-height 300ms " + EASE,
             }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 4 }}>
-                {allTags.map((tag) => {
-                  const count = notes.filter((n) => n.tags?.includes(tag)).length;
-                  const dotColor = tagColors[tag] || DEFAULT_TAG_COLORS[tag] || "var(--accent)";
-                  const isSel = selectedTag === tag;
-                  return (
-                    <button key={tag} onClick={() => { setActiveSidebarTab("tag_" + tag); onSelectTag(selectedTag === tag ? null : tag); }}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 8, width: "100%",
-                        padding: "6px 10px",
-                        background: isSel ? "linear-gradient(135deg, var(--accent-dim) 0%, transparent 100%)" : "transparent",
-                        border: "none", borderRadius: "var(--radius-sm)",
-                        color: isSel ? "var(--accent)" : "var(--text-secondary)",
-                        cursor: "pointer", fontSize: 12,
-                        textAlign: "left", transition: "all 150ms " + EASE,
-                      }}
-                      className="hover:bg-[var(--bg-hover)]">
-                      <Hash size={13} style={{ color: isSel ? dotColor : dotColor + "aa" }} />
-                      <span style={{
-                        flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                        color: isSel ? dotColor : "var(--text-secondary)",
-                        fontWeight: isSel ? 600 : 500,
-                      }}>
-                        {tag}
-                      </span>
-                      <span style={{
-                        fontSize: 9.5, color: isSel ? "#fff" : "var(--text-tertiary)",
-                        background: isSel ? dotColor : "var(--bg-hover)",
-                        padding: "0.5px 5px", borderRadius: 6, fontWeight: 600,
-                      }}>{count}</span>
-                    </button>
-                  );
-                })}
+              <DndContext sensors={tagSensors} collisionDetection={closestCenter} onDragStart={e => setActiveTagDragId(e.active.id as string)} onDragEnd={handleTagDragEnd} modifiers={[restrictToParentElement]}>
+                <SortableContext items={allTags} strategy={verticalListSortingStrategy}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 1, marginTop: 2 }}>
+                    {allTags.map((tag) => {
+                      const count = notes.filter((n) => n.tags?.includes(tag)).length;
+                      const dotColor = mergedTagColors[tag] || "var(--accent)";
+                      const isSel = selectedTag === tag;
+                      const isDragging = activeTagDragId === tag;
+                      return (
+                        <SortableTagRow key={tag} tag={tag}>
+                          {({ attributes, listeners, setNodeRef, style: dndStyle }) => (
+                            <div ref={setNodeRef}
+                              style={{
+                                ...dndStyle,
+                                display: "flex", alignItems: "center", gap: 8, width: "100%",
+                                padding: "9px 14px 9px 4px",
+                                background: isSel ? "var(--bg-hover)" : "transparent",
+                                border: isSel ? "1px solid var(--border-soft)" : "1px solid transparent",
+                                borderLeft: isSel ? "2px solid " + dotColor : "2px solid transparent",
+                                borderRadius: "var(--radius-md)",
+                                cursor: "pointer", fontSize: 13.5, fontWeight: 500,
+                                textAlign: "left", transition: "all 200ms " + EASE,
+                                color: isSel ? dotColor : "var(--text-secondary)",
+                                opacity: isDragging ? 0.4 : 1,
+                              }}
+                              {...attributes} {...listeners}
+                              className="hover:bg-[var(--bg-hover)]"
+                              onClick={() => { setActiveSidebarTab("tag_" + tag); onSelectTag(selectedTag === tag ? null : tag); onSelectFolder(null); }}>
+                              <Hash size={14} style={{ color: dotColor, opacity: isSel ? 1 : 0.6, flexShrink: 0 }} />
+                              <span style={{
+                                flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                                fontWeight: 500, fontSize: 13.5,
+                              }}>
+                                {tag}
+                              </span>
+                              <span style={{
+                                flexShrink: 0, fontSize: 10, fontWeight: 480, lineHeight: 1.3,
+                                color: "var(--text-tertiary)",
+                                background: "var(--bg-hover)",
+                                padding: "0px 7px", borderRadius: 5, minWidth: 18, textAlign: "center",
+                              }}>{count}</span>
+                            </div>
+                          )}
+                        </SortableTagRow>
+                      );
+                    })}
+                  </div>
+                </SortableContext>
+              </DndContext>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Tag edit modal (rename + color + delete) */}
+      {tagColorEdit && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 10002,
+          background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }} onClick={() => setTagColorEdit(null)}>
+          <div style={{
+            background: "var(--bg-surface)", border: "1px solid var(--border-default)",
+            borderRadius: "var(--radius-lg)", padding: 24, minWidth: 320, maxWidth: 380,
+            boxShadow: "var(--shadow-elevated)",
+          }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", margin: "0 0 12px", display: "flex", alignItems: "center", gap: 6 }}>
+              <Hash size={14} style={{ color: tagColors[tagColorEdit] || DEFAULT_TAG_COLORS[tagColorEdit] || "var(--accent)" }} />
+              Editar etiqueta
+            </h3>
+            {/* Rename */}
+            <div style={{ marginBottom: 12 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", display: "block", marginBottom: 4 }}>Nombre</span>
+              <input type="text" placeholder="Nombre de la etiqueta"
+                value={editTagName} onChange={(e) => setEditTagName(e.target.value)}
+                autoFocus
+                className="input-base"
+                style={{ width: "100%", borderRadius: 6, padding: "8px 12px", boxSizing: "border-box" }} />
+            </div>
+            {/* Color */}
+            <div style={{ marginBottom: 12 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", display: "block", marginBottom: 6 }}>Color</span>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 6 }}>
+                {SPINE_COLORS.map(c => (
+                  <button key={c} onClick={() => {
+                    const colors = { ...tagColors, [tagColorEdit]: c };
+                    localStorage.setItem("owa_custom_tag_colors", JSON.stringify(colors));
+                    onTagColorsChange(colors);
+                  }}
+                    style={{
+                      width: 28, height: 28, borderRadius: "50%", background: c,
+                      border: (tagColors[tagColorEdit] || DEFAULT_TAG_COLORS[tagColorEdit]) === c ? "2px solid #fff" : "none",
+                      cursor: "pointer",
+                    }} />
+                ))}
               </div>
             </div>
-          )}
+            {/* Delete tag option */}
+            <button onClick={() => setShowTagDeleteConfirm(true)}
+              style={{
+                display: "flex", alignItems: "center", gap: 8, width: "100%",
+                padding: "8px 12px", background: "none", border: "1px solid var(--border-soft)",
+                borderRadius: 8, color: "var(--error)", cursor: "pointer",
+                fontSize: 12, transition: "all 150ms",
+              }}
+              className="hover:bg-[var(--error-dim)]">
+              <Trash2 size={13} /> Eliminar etiqueta
+            </button>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
+              <button onClick={() => setTagColorEdit(null)}
+                style={{ background: "none", border: "1px solid var(--border-default)", borderRadius: 6, padding: "6px 14px", color: "var(--text-secondary)", fontSize: 12, cursor: "pointer" }}>Cancelar</button>
+              <button onClick={() => {
+                const newName = editTagName.trim();
+                const oldName = tagColorEdit;
+                if (!newName) return;
+                if (newName !== oldName) {
+                  // Update all notes that have the old tag
+                  notes.filter(n => n.tags?.includes(oldName)).forEach(n => {
+                    const newTags = (n.tags || []).map(t => t === oldName ? newName : t);
+                    updateNote(n.id, { tags: newTags });
+                  });
+                  // Migrate color to new name
+                  const colors = { ...tagColors };
+                  if (colors[oldName]) {
+                    colors[newName] = colors[oldName];
+                    delete colors[oldName];
+                  }
+                  localStorage.setItem("owa_custom_tag_colors", JSON.stringify(colors));
+                  onTagColorsChange(colors);
+                  // Migrate created tags list
+                  try {
+                    const created = JSON.parse(localStorage.getItem("owa_created_tags") || "[]");
+                    const newCreated = created.map((t: string) => t === oldName ? newName : t);
+                    localStorage.setItem("owa_created_tags", JSON.stringify(newCreated));
+                  } catch {}
+                  // Migrate tag order
+                  try {
+                    const order = JSON.parse(localStorage.getItem("owa_tag_order") || "[]");
+                    const newOrder = order.map((t: string) => t === oldName ? newName : t);
+                    localStorage.setItem("owa_tag_order", JSON.stringify(newOrder));
+                  } catch {}
+                  // If the renamed tag was selected, update selection
+                  if (selectedTag === oldName) {
+                    onSelectTag(newName);
+                  }
+                  addNotification(`Etiqueta renombrada a "${newName}"`, 'success');
+                } else {
+                  addNotification("Color actualizado", 'success');
+                }
+                setTagColorEdit(null);
+              }}
+                style={{
+                  background: "var(--accent)", color: "#fff", border: "none", borderRadius: 6,
+                  padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                }}>Guardar</button>
+            </div>
+          </div>
         </div>
+      )}
+
+      {/* Tag delete confirmation */}
+      {showTagDeleteConfirm && tagColorEdit && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 10003,
+          background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }} onClick={() => setShowTagDeleteConfirm(false)}>
+          <div style={{
+            background: "var(--bg-surface)", border: "1px solid var(--border-default)",
+            borderRadius: "var(--radius-lg)", padding: 24, minWidth: 320, maxWidth: 380,
+            boxShadow: "var(--shadow-elevated)",
+          }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--error)", margin: "0 0 8px" }}>
+              Eliminar etiqueta
+            </h3>
+            <p style={{ fontSize: 12.5, color: "var(--text-secondary)", margin: 0, lineHeight: 1.5 }}>
+              ¿Eliminar la etiqueta <strong>{tagColorEdit}</strong> de todas las notas?
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
+              <button onClick={() => setShowTagDeleteConfirm(false)}
+                style={{ background: "none", border: "1px solid var(--border-default)", borderRadius: 6, padding: "6px 14px", color: "var(--text-secondary)", fontSize: 12, cursor: "pointer" }}>Cancelar</button>
+              <button onClick={() => {
+                notes.filter(n => n.tags?.includes(tagColorEdit)).forEach(n => {
+                  updateNote(n.id, { tags: (n.tags || []).filter(t => t !== tagColorEdit) });
+                });
+                const created = JSON.parse(localStorage.getItem("owa_created_tags") || "[]");
+                localStorage.setItem("owa_created_tags", JSON.stringify(created.filter((t: string) => t !== tagColorEdit)));
+                const order = JSON.parse(localStorage.getItem("owa_tag_order") || "[]");
+                localStorage.setItem("owa_tag_order", JSON.stringify(order.filter((t: string) => t !== tagColorEdit)));
+                const colors = JSON.parse(localStorage.getItem("owa_custom_tag_colors") || "{}");
+                delete colors[tagColorEdit];
+                localStorage.setItem("owa_custom_tag_colors", JSON.stringify(colors));
+                onTagColorsChange(colors);
+                if (selectedTag === tagColorEdit) onSelectTag(null);
+                setShowTagDeleteConfirm(false);
+                setTagColorEdit(null);
+                addNotification(`Etiqueta "${tagColorEdit}" eliminada`, 'info');
+              }}
+                style={{ background: "var(--error)", color: "#fff", border: "none", borderRadius: 6, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Eliminar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Folder edit modal */}
+      {editFolderId && (() => {
+        const f = folders.find(x => x.id === editFolderId);
+        if (!f) return null;
+        const isFromCourse = courses.some(c => c.id === f.courseId);
+        return (
+          <div style={{
+            position: "fixed", inset: 0, zIndex: 10002,
+            background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <div style={{
+              background: "linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-base) 100%)",
+              border: "1px solid var(--border-default)",
+              borderRadius: "var(--radius-lg)", padding: 24, minWidth: 320, maxWidth: 400,
+              boxShadow: "var(--shadow-elevated)", display: "flex", flexDirection: "column", gap: 14,
+            }}>
+              <h3 style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", margin: 0, fontFamily: "var(--font-heading)" }}>
+                Editar carpeta
+              </h3>
+              <input type="text" placeholder="Nombre de la carpeta"
+                value={editFolderName} onChange={(e) => setEditFolderName(e.target.value)}
+                autoFocus
+                className="input-base"
+                style={{ width: "100%", borderRadius: 6, padding: "8px 12px", boxSizing: "border-box" }} />
+              <div>
+                <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase" }}>Color</span>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 6, marginTop: 8 }}>
+                  {SPINE_COLORS.map(c => (
+                    <button key={c} onClick={() => setEditFolderColor(c)}
+                      style={{
+                        width: 22, height: 22, borderRadius: "50%", background: c,
+                        border: editFolderColor === c ? "2px solid #fff" : "none",
+                        cursor: "pointer", transform: editFolderColor === c ? "scale(1.1)" : "none",
+                      }} />
+                  ))}
+                </div>
+              </div>
+              {/* Delete button inside edit modal */}
+              {f.id !== "default" && (
+                <button onClick={() => { setEditFolderId(null); setDeleteFolderId(f.id); setDeleteFolderName(f.name); }}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 8, width: "100%",
+                    padding: "8px 12px", background: "none", border: "1px solid var(--border-soft)",
+                    borderRadius: 8, color: "var(--error)", cursor: "pointer",
+                    fontSize: 12, fontWeight: 500, textAlign: "left", transition: "all 150ms",
+                    marginTop: 4,
+                  }}
+                  className="hover:bg-[var(--error-dim)]">
+                  <Trash2 size={13} /> Eliminar carpeta
+                </button>
+              )}
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 4 }}>
+                <button onClick={() => setEditFolderId(null)}
+                  style={{ background: "none", border: "1px solid var(--border-default)", borderRadius: 6, padding: "6px 14px", color: "var(--text-secondary)", fontSize: 12, cursor: "pointer" }}>Cancelar</button>
+                <button onClick={() => {
+                  if (editFolderName.trim()) {
+                    updateNoteFolder(editFolderId, { name: editFolderName.trim(), color: editFolderColor });
+                    setEditFolderId(null);
+                    addNotification("Carpeta actualizada", 'success');
+                  }
+                }}
+                  style={{ background: editFolderColor, color: "#fff", border: "none", borderRadius: 6, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", boxShadow: "0 2px 6px " + editFolderColor + "33" }}>Guardar</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Folder delete confirmation */}
+      {deleteFolderId && (() => {
+        const f = folders.find(x => x.id === deleteFolderId);
+        if (!f) return null;
+        const isFromCourse = courses.some(c => c.id === f.courseId);
+        const noteCount = notes.filter(n => n.folderId === f.id).length;
+        return (
+          <div style={{
+            position: "fixed", inset: 0, zIndex: 10002,
+            background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }} onClick={() => setDeleteFolderId(null)}>
+            <div style={{
+              background: "linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-base) 100%)",
+              border: "1px solid var(--border-default)",
+              borderRadius: "var(--radius-lg)", padding: 24, minWidth: 340, maxWidth: 420,
+              boxShadow: "var(--shadow-elevated)",
+            }} onClick={e => e.stopPropagation()}>
+              <h3 style={{ fontSize: 15, fontWeight: 600, color: "var(--error)", margin: "0 0 8px", fontFamily: "var(--font-heading)" }}>
+                Eliminar carpeta
+              </h3>
+              {isFromCourse && (
+                <p style={{ fontSize: 12, color: "var(--warning)", margin: "0 0 8px", lineHeight: 1.5, background: "var(--warning-dim)", padding: "8px 10px", borderRadius: 6 }}>
+                  Esta carpeta pertenece al curso <strong>{f.name}</strong>. La carpeta se ocultará y podrás restaurarla desde la papelera.
+                </p>
+              )}
+              <p style={{ fontSize: 12.5, color: "var(--text-secondary)", margin: 0, lineHeight: 1.5 }}>
+                {isFromCourse
+                  ? <>Se moverán las notas a la papelera y la carpeta quedará oculta. Podrás restaurarla después.</>
+                  : <>¿Eliminar la carpeta <strong>{f.name}</strong>? Las notas se moverán a la papelera.</>
+                }
+              </p>
+              {noteCount > 0 && (
+                <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "8px 0", lineHeight: 1.5 }}>
+                  {noteCount} nota{noteCount !== 1 ? 's' : ''} será{noteCount === 1 ? '' : 'n'} movida{noteCount === 1 ? '' : 's'} a la papelera.
+                </p>
+              )}
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
+                <button onClick={() => setDeleteFolderId(null)}
+                  style={{ background: "none", border: "1px solid var(--border-default)", borderRadius: 6, padding: "6px 14px", color: "var(--text-secondary)", fontSize: 12, cursor: "pointer" }}>Cancelar</button>
+                <button onClick={() => {
+                  notes.filter(n => n.folderId === deleteFolderId).forEach(n => {
+                    updateNote(n.id, { folderId: undefined, deletedAt: new Date().toISOString() });
+                  });
+                  if (isFromCourse) {
+                    setDeletedFolderIds(prev => new Set([...prev, deleteFolderId!]));
+                    addNotification(`Carpeta "${deleteFolderName}" ocultada. Puedes restaurarla desde la papelera.`, 'info');
+                  } else {
+                    deleteNoteFolder(deleteFolderId!);
+                    addNotification(`Carpeta "${deleteFolderName}" eliminada.`, 'info');
+                  }
+                  setDeleteFolderId(null);
+                }}
+                  style={{
+                    background: "var(--error)", color: "#fff", border: "none", borderRadius: 6,
+                    padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                  }}>Eliminar</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Papelera — pinned at bottom */}
+      <div style={{ flexShrink: 0 }}>
+        <div style={{ height: 1, background: "var(--border-subtle)", marginBottom: 6, marginLeft: 4, marginRight: 4 }} />
+        {(() => {
+          const isSel = activeSidebarTab === "trash";
+          return (
+            <button onClick={() => {
+              if (isSel) { setActiveSidebarTab("all"); } else { setActiveSidebarTab("trash"); }
+              onSelectFolder(null); onSelectTag(null);
+            }}
+              style={{
+                display: "flex", alignItems: "center", gap: 10, width: "100%",
+                padding: "7px 10px",
+                background: isSel ? "var(--accent-dim)" : "transparent",
+                border: "1px solid " + (isSel ? "var(--accent-soft)" : "transparent"),
+                borderRadius: "var(--radius-md)",
+                color: isSel ? "var(--accent)" : "var(--text-secondary)",
+                cursor: "pointer", fontSize: 12, fontWeight: 500,
+                textAlign: "left", transition: "all 180ms " + EASE,
+              }}
+              className="hover:bg-[var(--bg-hover)]">
+              <Trash2 size={13} style={{ color: isSel ? "var(--accent)" : "var(--text-tertiary)" }} />
+              <span>Papelera</span>
+              <span style={{
+                marginLeft: "auto", fontSize: 9,
+                color: isSel ? "#fff" : "var(--text-tertiary)",
+                background: isSel ? "var(--accent)" : "var(--bg-hover)",
+                padding: "1px 6px", borderRadius: 4, fontWeight: 650,
+              }}>{trashCount}</span>
+            </button>
+          );
+        })()}
+        {/* Restore hidden course folders */}
+        {deletedFolderIds.size > 0 && (
+          <div style={{ marginTop: 6, padding: "4px 4px", background: "var(--warning-dim)", borderRadius: 6, border: "1px solid var(--border-soft)" }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: "var(--warning)", textTransform: "uppercase", display: "block", marginBottom: 4, paddingLeft: 4 }}>
+              Carpetas ocultas
+            </span>
+            {Array.from(deletedFolderIds).map(id => {
+              const df = folders.find(x => x.id === id);
+              if (!df) return null;
+              return (
+                <div key={id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 4px", borderRadius: 4 }}>
+                  <FolderIcon size={10} style={{ color: df.color, flexShrink: 0 }} />
+                  <span style={{ flex: 1, fontSize: 11, color: "var(--text-secondary)", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{df.name}</span>
+                  <button onClick={() => {
+                    setDeletedFolderIds(prev => { const next = new Set(prev); next.delete(id); return next; });
+                    addNotification(`Carpeta "${df.name}" restaurada.`, 'success');
+                  }}
+                    style={{
+                      background: "var(--accent)", color: "#fff", border: "none", borderRadius: 4,
+                      padding: "2px 8px", fontSize: 10, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
+                    }}>Restaurar</button>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
+
     </div>
   );
 }

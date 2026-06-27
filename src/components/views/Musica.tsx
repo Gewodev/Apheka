@@ -92,12 +92,19 @@ export default function Musica() {
   const [editingPlaylistId, setEditingPlaylistId] = useState<string | null>(null);
   const [selectedTrackIds, setSelectedTrackIds] = useState<Set<string>>(new Set());
   const [playlistArtistFilter, setPlaylistArtistFilter] = useState<string>('');
+  const [playlistSongSearch, setPlaylistSongSearch] = useState('');
 
   const [viewMode, setViewMode] = useState<'lista' | 'bloques'>('lista');
   const [editingTrackId, setEditingTrackId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editArtist, setEditArtist] = useState('');
   const [editCover, setEditCover] = useState('');
+
+  const mainContainerRef = useRef<HTMLDivElement>(null);
+  const [showRightSidebar, setShowRightSidebar] = useState(true);
+  const [showSidebarArrow, setShowSidebarArrow] = useState(false);
+  const [sidebarArrowPos, setSidebarArrowPos] = useState(0);
+  const sidebarArrowTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const urlInputRef = useRef<HTMLInputElement>(null);
   const [colocarTrackId, setColocarTrackId] = useState<string | null>(null);
@@ -556,8 +563,29 @@ export default function Musica() {
         </div>
       </div>
 
-      {/* â”€â”€ MAIN CONTENT AREA (GRID 1fr 320px) â”€â”€ */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 24, flex: 1, alignItems: 'flex-start' }}>
+      {/* â”€â”€ MAIN CONTENT AREA â”€â”€ */}
+      <div ref={mainContainerRef} style={{ position: 'relative', flex: 1, display: 'flex', minHeight: 0 }}
+        onMouseMove={(e) => {
+          const rect = e.currentTarget.getBoundingClientRect();
+          const rightEdge = rect.right;
+          const dist = rightEdge - e.clientX;
+          const near = dist < 60 && dist >= 0;
+          if (near) {
+            setSidebarArrowPos(Math.max(0, Math.min(e.clientY - rect.top - 16, rect.height - 32)));
+            if (!showSidebarArrow) setShowSidebarArrow(true);
+            if (sidebarArrowTimeoutRef.current) { clearTimeout(sidebarArrowTimeoutRef.current); sidebarArrowTimeoutRef.current = null; }
+          } else if (showSidebarArrow && !showRightSidebar) {
+            if (!sidebarArrowTimeoutRef.current) {
+              sidebarArrowTimeoutRef.current = setTimeout(() => { setShowSidebarArrow(false); }, 500);
+            }
+          }
+        }}
+        onMouseLeave={() => {
+          if (!showRightSidebar && sidebarArrowTimeoutRef.current) { clearTimeout(sidebarArrowTimeoutRef.current); sidebarArrowTimeoutRef.current = null; }
+          setShowSidebarArrow(false);
+        }}
+      >
+      <div style={{ display: 'grid', gridTemplateColumns: showRightSidebar ? '1fr 320px' : '1fr', gap: 24, flex: 1, alignItems: 'flex-start' }}>
 
         {/* LEFT COLUMN */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
@@ -879,8 +907,14 @@ export default function Musica() {
                       )}
                     </div>
                     <div style={{ flex: 1, overflow: 'auto', padding: '12px 24px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <span style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Canciones en biblioteca</span>
-                      {tracks.filter(t => t.source === 'local').filter(t => !playlistArtistFilter || t.artist === playlistArtistFilter).map(t => {
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                        <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Canciones en biblioteca</span>
+                        <div style={{ position: 'relative', flex: 1, maxWidth: 200 }}>
+                          <Search size={12} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+                          <input value={playlistSongSearch} onChange={e => setPlaylistSongSearch(e.target.value)} placeholder="Buscar canción..." className="input-base" style={{ width: '100%', height: 28, fontSize: 11, paddingLeft: 26, borderRadius: 6 }} />
+                        </div>
+                      </div>
+                      {tracks.filter(t => t.source === 'local').filter(t => !playlistArtistFilter || t.artist === playlistArtistFilter).filter(t => !playlistSongSearch || t.title.toLowerCase().includes(playlistSongSearch.toLowerCase()) || t.artist.toLowerCase().includes(playlistSongSearch.toLowerCase())).map(t => {
                         const selected = selectedTrackIds.has(t.id);
                         return (
                           <div key={t.id} onClick={() => {
@@ -904,6 +938,11 @@ export default function Musica() {
                       {tracks.filter(t => t.source === 'local').length === 0 && (
                         <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)' }}>
                           <div style={{ fontSize: 13 }}>No hay canciones en la biblioteca</div>
+                        </div>
+                      )}
+                      {tracks.filter(t => t.source === 'local').length > 0 && tracks.filter(t => t.source === 'local').filter(t => !playlistArtistFilter || t.artist === playlistArtistFilter).filter(t => !playlistSongSearch || t.title.toLowerCase().includes(playlistSongSearch.toLowerCase()) || t.artist.toLowerCase().includes(playlistSongSearch.toLowerCase())).length === 0 && (
+                        <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                          <div style={{ fontSize: 13 }}>Sin resultados</div>
                         </div>
                       )}
                     </div>
@@ -1446,6 +1485,7 @@ export default function Musica() {
         </div>
 
         {/* RIGHT COLUMN (REPRODUCIENDO, COLA, ESTADÍSTICAS) */}
+        {showRightSidebar && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
 
           {/* REPRODUCIENDO CARD */}
@@ -1806,7 +1846,27 @@ export default function Musica() {
           )}
 
         </div>
+        )}
 
+      </div>
+
+      {/* Floating arrow to show sidebar when hidden - inside mainContainerRef to avoid mouseleave issues */}
+      {!showRightSidebar && showSidebarArrow && (
+        <div style={{
+          position: 'absolute', top: sidebarArrowPos, right: 0, zIndex: 50,
+          width: 28, height: 28, borderRadius: '8px 0 0 8px',
+          background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)',
+          borderRight: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'pointer', color: 'var(--text-secondary)', transition: 'all 200ms',
+          boxShadow: '-2px 0 8px rgba(0,0,0,0.15)',
+        }}
+          onClick={() => { setShowRightSidebar(true); setShowSidebarArrow(false); }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-elevated)'; }}
+        >
+          <ArrowLeft size={14} />
+        </div>
+      )}
       </div>
 
       {/* Edit Track Dialog */}

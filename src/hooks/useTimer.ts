@@ -146,13 +146,13 @@ export function useTimer() {
 
   const handleTypeChange = useCallback(
     (type: 'pomodoro' | 'chrono') => {
-      if (isTimerActive || isRest) {
+      if (isTimerActive || isRest || sessionTime > 0) {
         return;
       }
       setSessionType(type);
       setSessionTime(0);
     },
-    [isTimerActive, isRest, setSessionType, setSessionTime],
+    [isTimerActive, isRest, sessionTime, setSessionType, setSessionTime],
   );
 
   // ---------------------------------------------------------------------------

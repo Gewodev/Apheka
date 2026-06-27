@@ -126,6 +126,7 @@ export interface Task {
   files: TaskFile[];
   notes: string;       // rich text / description
   studyTime: number;   // seconds studied on this task
+  sortOrder?: number;
 }
 
 export interface NoteAttachment {
@@ -163,6 +164,7 @@ export interface NoteFolder {
   courseId?: string;    // auto-created from course
   isManual: boolean;
   description?: string;
+  sortOrder?: number;
 }
 
 export interface SubjectGroup {
@@ -478,6 +480,7 @@ interface AppContextType extends AppState {
   clearAllTasks: () => void;
   deleteCompletedTasks: () => void;
   deleteOldCompletedTasks: () => void;
+  reorderTasks: (taskIds: string[]) => void;
   updateTask: (id: string, updates: Partial<Task>) => void;
   deleteTask: (id: string) => void;
   toggleTaskStatus: (id: string) => void;
@@ -495,6 +498,7 @@ interface AppContextType extends AppState {
   permanentlyDeleteNote: (id: string) => void;
   addNoteFolder: (folder: Omit<NoteFolder, 'id'>) => void;
   deleteNoteFolder: (id: string) => void;
+  reorderFolders: (folderIds: string[]) => void;
   reorderNotes: (noteIds: string[]) => void;
   updateNoteFolder: (id: string, updates: Partial<NoteFolder>) => void;
   duplicateNote: (noteId: string) => string | null;
@@ -681,11 +685,11 @@ const defaultSettings: Settings = {
 };
 
 const defaultFolders: NoteFolder[] = [
-  { id: 'f1', name: 'Matemáticas', color: '#6366f1', courseId: '1', isManual: false },
-  { id: 'f2', name: 'Física', color: '#10b981', courseId: '2', isManual: false },
-  { id: 'f3', name: 'Historia', color: '#f59e0b', courseId: '3', isManual: false },
-  { id: 'f4', name: 'Inglés', color: '#ec4899', courseId: '4', isManual: false },
-  { id: 'f5', name: 'Computación', color: '#06b6d4', courseId: '5', isManual: false },
+  { id: 'f1', name: 'Matemáticas', color: '#6366f1', courseId: '1', isManual: false, sortOrder: 0 },
+  { id: 'f2', name: 'Física', color: '#10b981', courseId: '2', isManual: false, sortOrder: 1 },
+  { id: 'f3', name: 'Historia', color: '#f59e0b', courseId: '3', isManual: false, sortOrder: 2 },
+  { id: 'f4', name: 'Inglés', color: '#ec4899', courseId: '4', isManual: false, sortOrder: 3 },
+  { id: 'f5', name: 'Computación', color: '#06b6d4', courseId: '5', isManual: false, sortOrder: 4 },
 ];
 
 const STORAGE_KEY = 'owa_studio_data';
@@ -1100,7 +1104,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
               setMusicListeningTime(statsData.musicListeningTime);
             }
           }
-          if (statsData.dailyMusicTime) setDailyMusicTime(statsData.dailyMusicTime);
+          if (statsData.dailyMusicTime) {
+            setDailyMusicTime(prev => {
+              if (Object.keys(prev).length > 0) return prev;
+              return statsData.dailyMusicTime;
+            });
+          }
           // Restore weekly stats if same week
           if (statsData.weeklyMusicTime !== undefined && statsData.weeklyResetSunday) {
             const now = new Date();
@@ -1530,6 +1539,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const reorderTasks = useCallback((taskIds: string[]) => {
+    setTasks(prev => {
+      const result = taskIds.map((id, i) => {
+        const t = prev.find(x => x.id === id);
+        return t ? { ...t, sortOrder: i } : null;
+      }).filter(Boolean) as Task[];
+      const remaining = prev.filter(t => !taskIds.includes(t.id));
+      return [...result, ...remaining];
+    });
+  }, []);
+
   const updateTask = useCallback((id: string, updates: Partial<Task>) => {
     setTasks(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
   }, []);
@@ -1609,11 +1629,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addNoteFolder = useCallback((folder: Omit<NoteFolder, 'id'>) => {
-    setNoteFolders(prev => [...prev, { ...folder, id: Date.now().toString() }]);
+    setNoteFolders(prev => [...prev, { ...folder, id: Date.now().toString(), sortOrder: prev.length }]);
   }, []);
 
   const deleteNoteFolder = useCallback((id: string) => {
     setNoteFolders(prev => prev.filter(f => f.id !== id));
+  }, []);
+
+  const reorderFolders = useCallback((folderIds: string[]) => {
+    setNoteFolders(prev => {
+      const result = folderIds.map((id, i) => {
+        const f = prev.find(x => x.id === id);
+        return f ? { ...f, sortOrder: i } : null;
+      }).filter(Boolean) as NoteFolder[];
+      const remaining = prev.filter(f => !folderIds.includes(f.id));
+      return [...result, ...remaining];
+    });
   }, []);
 
   const reorderNotes = useCallback((noteIds: string[]) => {
@@ -1654,7 +1685,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const updateCourse = useCallback((id: string, updates: Partial<Course>) => {
-    setCourses(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
+    setCourses(prev => {
+      const old = prev.find(c => c.id === id);
+      if (old && updates.name && updates.name !== old.name) {
+        const oldName = old.name;
+        setTasks(pt => pt.map(t => t.course === oldName ? { ...t, course: updates.name!, courseColor: updates.color || t.courseColor } : t));
+        setNotes(pn => pn.map(n => n.course === oldName ? { ...n, course: updates.name! } : n));
+      }
+      return prev.map(c => c.id === id ? { ...c, ...updates } : c);
+    });
   }, []);
 
   const deleteCourse = useCallback((id: string) => {
@@ -2128,8 +2167,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (after.length >= 5) return after;
       const history = trackHistoryRef.current;
       const pool = queueSourceRef.current?.pool ?? tracksRef.current.map(t => t.id);
-      // 95% distance: exclude history entries until most of pool is played
-      const threshold = Math.floor(pool.length * 0.95);
+      // 85% distance: exclude history entries until most of pool is played
+      const threshold = Math.floor(pool.length * 0.85);
       const excludeIds = new Set(history.length < threshold ? history : []);
       excludeIds.add(id);
       const available = pool.filter(tid => !excludeIds.has(tid) && !after.includes(tid));
@@ -2230,8 +2269,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (i >= steps) {
           if (fadeRampRef.current !== null) { clearInterval(fadeRampRef.current); fadeRampRef.current = null; }
           intentionalPauseRef.current = true;
+          // Save progress directly from audio element before pausing
+          const liveProgress = globalAudio.duration && isFinite(globalAudio.duration) && globalAudio.duration > 0
+            ? globalAudio.currentTime / globalAudio.duration : 0;
+          setMusicProgress(liveProgress);
           audio.pause();
           audio.volume = musicVolumeRef.current;
+          activePlaySessionIdRef.current = null;
           setIsPlayingMusic(false);
           intentionalPauseRef.current = false;
         }
@@ -2249,6 +2293,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const clearCurrentTrack = useCallback(() => {
     setCurrentTrackId(null);
     setYoutubeVideoUrl(null);
+    const liveProgress = globalAudio.duration && isFinite(globalAudio.duration) && globalAudio.duration > 0
+      ? globalAudio.currentTime / globalAudio.duration : 0;
+    setMusicProgress(liveProgress);
     setIsPlayingMusic(false);
     globalAudio.pause();
     globalAudio.src = '';
@@ -2306,8 +2353,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             if (prev.length >= 5) return prev;
             const history = trackHistoryRef.current;
             const pool = queueSourceRef.current?.pool ?? tracksRef.current.map(t => t.id);
-            // 95% distance: exclude history until most of pool is played
-            const threshold = Math.floor(pool.length * 0.95);
+            // 85% distance: exclude history until most of pool is played
+            const threshold = Math.floor(pool.length * 0.85);
             const excludeIds = new Set(history.length < threshold ? history : []);
             excludeIds.add(nextId);
             const available = pool.filter(tid => !excludeIds.has(tid) && !prev.includes(tid));
@@ -2416,6 +2463,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
         setCurrentTrackStartTime(null);
         setIsPlayingMusic(false);
+        activePlaySessionIdRef.current = null;
         if (!globalAudio.paused) {
           intentionalPauseRef.current = true;
           globalAudio.pause();
@@ -2424,13 +2472,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } else {
         // Tab visible again — resume if we were playing
         if (wasPlayingBeforeHiddenRef.current && currentTrackIdRef.current && loadedTrackIdRef.current) {
+          const playSessionId = activePlaySessionIdRef.current;
           globalAudio.play().then(() => {
-            if (activePlaySessionIdRef.current) {
+            if (activePlaySessionIdRef.current === playSessionId && activePlaySessionIdRef.current) {
               setIsPlayingMusic(true);
               setCurrentTrackStartTime(Date.now() / 1000);
             }
           }).catch(() => {
-            if (activePlaySessionIdRef.current) {
+            if (activePlaySessionIdRef.current === playSessionId && activePlaySessionIdRef.current) {
               setIsPlayingMusic(false);
               setCurrentTrackStartTime(null);
             }
@@ -2880,9 +2929,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     currentTrackId, coverModalTrackId, youtubeVideoUrl, isPlayingMusic, isAudioLoading, musicVolume, musicProgress, musicDuration, musicListeningTime, dailyMusicTime, weeklyMusicTime, monthlyMusicTime, shuffleMode, repeatMode,
     trackHistory, playCounts, musicQueue, queueSource, downloadQueue, artists,
     googleConnected, calendarSyncEnabled, lastCalendarSync, importState,
-    addTask, updateTask, deleteTask, toggleTaskStatus, clearAllTasks, deleteCompletedTasks, deleteOldCompletedTasks,
+    addTask, updateTask, deleteTask, toggleTaskStatus, clearAllTasks, deleteCompletedTasks, deleteOldCompletedTasks, reorderTasks,
     addSubTask, toggleSubTask, deleteSubTask, addTaskFile, removeTaskFile, incrementTaskStudyTime,
-    addNote, updateNote, deleteNote, restoreNote, permanentlyDeleteNote, addNoteFolder, deleteNoteFolder, reorderNotes, updateNoteFolder, duplicateNote,
+    addNote, updateNote, deleteNote, restoreNote, permanentlyDeleteNote, addNoteFolder, deleteNoteFolder, reorderFolders, reorderNotes, updateNoteFolder, duplicateNote,
     addCourse, updateCourse, deleteCourse, reorderCourses,
     addEvent, updateEvent, deleteEvent,
     addTrack, updateTrack, deleteTrack, toggleTrackFavorite, importLocalTracks,
