@@ -225,8 +225,11 @@ export default function Tareas() {
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [calendarDragTaskId, setCalendarDragTaskId] = useState<string | null>(null);
 
-  const sensors = useSensors(
+  const listSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+  );
+  const calendarSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 2 } })
   );
 
   const handleDragEndList = useCallback((event: any) => {
@@ -615,7 +618,7 @@ export default function Tareas() {
                     </div>
                   </div>
                 )) : (
-                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={e => setActiveDragId(e.active.id as string)} onDragEnd={handleDragEndList} modifiers={[restrictToParentElement]}>
+                  <DndContext sensors={listSensors} collisionDetection={closestCenter} onDragStart={e => setActiveDragId(e.active.id as string)} onDragEnd={handleDragEndList} modifiers={[restrictToParentElement]}>
                     <SortableContext items={filteredTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
                       {filteredTasks.map(task => {
                         const t = task;
@@ -664,7 +667,7 @@ export default function Tareas() {
                                     </span>
                                     )}
                                   </div>
-                                  <div style={{ flex: 1.2 }}>
+                                  <div style={{ flex: 1.2, paddingLeft: 8 }}>
                                     {t.priority !== 'none' ? (
                                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 9, fontWeight: 600, padding: '2px 8px', borderRadius: 6, textTransform: 'uppercase', letterSpacing: '0.04em', background: t.priority === 'high' ? 'rgba(239,68,68,0.15)' : t.priority === 'medium' ? 'rgba(245,158,11,0.15)' : 'rgba(16,185,129,0.15)', color: t.priority === 'high' ? '#EF4444' : t.priority === 'medium' ? '#F59E0B' : '#10B981' }}>
                                       {t.priority === 'high' ? 'Alta' : t.priority === 'medium' ? 'Media' : 'Baja'}
@@ -675,7 +678,7 @@ export default function Tareas() {
                                     </span>
                                     )}
                                   </div>
-                                  <div style={{ flex: 1.6, opacity: longPressedTaskId === t.id ? 0 : 1, transition: 'opacity 200ms' }}>
+                                  <div style={{ flex: 1.6, paddingLeft: 8, opacity: longPressedTaskId === t.id ? 0 : 1, transition: 'opacity 200ms' }}>
                                     {tr && (
                                       <span style={{ fontSize: 12, fontWeight: 500, color: dateColor }}>
                                         {tr.text}
@@ -987,7 +990,7 @@ export default function Tareas() {
               </div>
 
               {/* Calendar Grid — más vertical */}
-              <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={e => setCalendarDragTaskId(e.active.id as string)} onDragEnd={handleDragEndCalendar}>
+              <DndContext sensors={calendarSensors} collisionDetection={closestCorners} onDragStart={e => setCalendarDragTaskId(e.active.id as string)} onDragEnd={handleDragEndCalendar}>
               <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
                 {weekRows.map((week, wi) => {
                   return (

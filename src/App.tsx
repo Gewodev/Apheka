@@ -20,7 +20,6 @@ import OAuthCallback from './components/OAuthCallback';
 import SupabaseCallback from './components/SupabaseCallback';
 import GlobalPlayer from './components/GlobalPlayer';
 import NowPlayingView from './components/NowPlayingView';
-import FloatingNote from './components/FloatingNote';
 import ReactPlayer from 'react-player';
 const Player = ReactPlayer as any;
 
@@ -31,7 +30,7 @@ interface AppContentProps {
 }
 
 function AppContent() {
-  const { settings, courses, navigateTo, setNavigateTo, importState, updateSettings, toastMessage, deleteOldCompletedTasks, youtubeVideoUrl, isPlayingMusic, musicVolume, musicProgress, musicDuration, setMusicProgress, setIsPlayingMusic, playTrack, musicQueue, setMusicQueue, shuffleMode, repeatMode, tracks, currentTrackId, setRepeatMode, coverModalTrackId, showRestPrompt, handlePomodoroBannerClick, floatingNoteId, setFloatingNoteId, addNote } = useApp();
+  const { settings, courses, navigateTo, setNavigateTo, importState, updateSettings, toastMessage, deleteOldCompletedTasks, youtubeVideoUrl, isPlayingMusic, musicVolume, musicProgress, musicDuration, setMusicProgress, setIsPlayingMusic, playTrack, musicQueue, setMusicQueue, shuffleMode, repeatMode, tracks, currentTrackId, setRepeatMode, coverModalTrackId, showRestPrompt, handlePomodoroBannerClick } = useApp();
   const [activeView, setActiveView] = useState<ViewId>('inicio');
 
   // Auto-clean completed tasks older than 2 months on startup
@@ -60,29 +59,6 @@ function AppContent() {
       setIsSupabaseCallback(true);
     }
   }, []);
-
-  // Floating note keyboard shortcut (Cmd/Ctrl+Shift+N)
-  const floatingRef = useRef(floatingNoteId);
-  floatingRef.current = floatingNoteId;
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && floatingRef.current) {
-        setFloatingNoteId(null);
-        return;
-      }
-      if (e.key === 'N' && e.shiftKey && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        if (floatingRef.current) return;
-        const id = addNote({
-          title: 'Nota rápida', content: '', subtitle: '',
-          course: '', courseColor: '', tags: [], isPinned: false,
-        });
-        setFloatingNoteId(id);
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [setFloatingNoteId, addNote]);
 
   // Close cursos popup when clicking outside
   useEffect(() => {
@@ -393,7 +369,6 @@ function AppContent() {
         </div>}
         <GlobalPlayer sidebarCollapsed={isCollapsed} />
         <NowPlayingView sidebarCollapsed={isCollapsed} activeView={activeView} />
-        <FloatingNote />
       </main>
 
       {importState.active && (

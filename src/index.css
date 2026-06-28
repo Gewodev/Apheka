@@ -1231,7 +1231,7 @@ h6,
   font-size: 15px;
   line-height: 1.85;
   color: var(--text-primary);
-  padding: 0 24px 80px;
+  padding: 0 12px 80px;
   caret-color: var(--accent);
   max-width: 100%;
   word-wrap: break-word;

@@ -50,15 +50,15 @@ function calculateStreak(w: Record<string, number>, dailyGoalMin: number, dailyG
 
 const TomatoIcon = ({ size = 24, color = 'currentColor', style }: { size?: number; color?: string; style?: React.CSSProperties }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={style}>
-    <path d="M12 4.5c-2.8 0-5.5 1.2-6.5 3.5C4.5 10 5 15 12 22c7-7 7.5-12 6.5-14.5-1-2.3-3.7-3.5-6.5-3.5Z" />
-    <path d="M12 4.5c-1 0-2.5.6-2.5 2.5s1.2 2.5 2.5 2.5 2.5-.6 2.5-2.5-1.5-2.5-2.5-2.5Z" opacity="0.15" />
-    <path d="M8 8c-.8.5-1.2 1.2-1.2 2" />
-    <path d="M16 8c.8.5 1.2 1.2 1.2 2" />
-    <path d="M12 15.5l-1 .5v1.5l1 1 1-1v-1.5l-1-.5Z" fill={color} fillOpacity="0.2" />
-    <path d="M12 2.5c-.3 0-.5.2-.5.5v1.5h1V3c0-.3-.2-.5-.5-.5Z" />
-    <path d="M9.5 3.2l-.3.7 1.3.6.3-.7-1.3-.6Z" />
-    <path d="M14.5 3.2l.3.7-1.3.6-.3-.7 1.3-.6Z" />
-    <path d="M12 3l1.5.8-1.5.7-1.5-.7L12 3Z" fill={color} fillOpacity="0.3" />
+    <path d="M12 3c-1 0-4 1-4 4 0-3 3-4 4-4z" fill={color} fillOpacity="0.2" />
+    <ellipse cx="12" cy="14" rx="7" ry="6" fill={color} fillOpacity="0.12" />
+    <path d="M12 3c1 0 4 1 4 4 0-3-3-4-4-4z" fill={color} fillOpacity="0.25" />
+    <path d="M12 3C6.5 3 5 10 5 14c0 4 3 7 7 7s7-3 7-7c0-4-1.5-11-7-11z" />
+    <path d="M12 3C6.5 3 5 10 5 14c0 4 3 7 7 7s7-3 7-7c0-4-1.5-11-7-11z" stroke={color} fill="none" />
+    <path d="M12 6c-3.5 0-5 5-5 8" stroke={color} strokeWidth="1" fill="none" />
+    <path d="M12 3c-1.5 2-3 4-3.5 6" stroke={color} strokeWidth="0.8" fill="none" opacity="0.4" />
+    <path d="M15 7l1.5-1" strokeWidth="1.2" />
+    <path d="M9 7l-1.5-1" strokeWidth="1.2" />
   </svg>
 );
 
@@ -132,7 +132,6 @@ export default function Estudio() {
   const [evalFreeText, setEvalFreeText] = useState('');
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  const restStartRef = useRef(-1);
   const hasTriggeredRef = useRef(false);
   const breakNotifiedRef = useRef(false);
 
@@ -143,6 +142,9 @@ export default function Estudio() {
     setShowSessionEval(false);
     setShowFreeStudyPrompt(false);
     setShowRestPrompt(false);
+    if (isRest) {
+      return;
+    }
     if (sessionType === 'pomodoro') {
       incrementPomodoroSessions();
       setIsRest(true);
@@ -151,17 +153,9 @@ export default function Estudio() {
       setIsTimerActive(false);
     }
     setSessionTime(0);
-  }, [evalSessionId, sessionType, updateStudySession, incrementPomodoroSessions, setIsRest, setSessionTime, setIsTimerActive, setShowRestPrompt]);
+  }, [evalSessionId, sessionType, isRest, updateStudySession, incrementPomodoroSessions, setIsRest, setSessionTime, setIsTimerActive, setShowRestPrompt]);
 
-  // Sync restStartRef when rest transitions (handles banner / FloatingTimer path)
-  useEffect(() => {
-    if (isRest && restStartRef.current === -1) {
-      const saved = parseInt(localStorage.getItem('owa_rest_start_time') || '-1', 10);
-      restStartRef.current = saved >= 0 ? saved : sessionTime;
-    } else if (!isRest) {
-      restStartRef.current = -1;
-    }
-  }, [isRest]);
+  // No restStartRef needed — sessionTime is always reset to 0 when rest starts
 
   // Persistent chrono round tracking (survives unmount/remount)
   const CHRONO_KEY_EST = 'owa_chrono_last_round'; // shared key with useTimer
@@ -219,11 +213,12 @@ export default function Estudio() {
   };
 
   // Determine if current break should be long
-  const isLongBreak = isRest && pomodoroSessions > 0 && pomodoroSessions % (settings.pomodoroGoal || 4) === 0;
+  const pomoGoal2 = (settings.pomodoroGoal || 4) || 1;
+  const isLongBreak = isRest && pomodoroSessions > 0 && pomodoroSessions % pomoGoal2 === 0;
   const currentBreakLimit = isLongBreak ? (settings.longBreakTime || 900) : (settings.shortBreakTime || 300);
-  const restElapsed = isRest ? sessionTime - Math.max(0, restStartRef.current) : 0;
+  const restElapsed = isRest ? sessionTime : 0;
   const computedRest = Math.max(0, currentBreakLimit - restElapsed);
-  const computedDisplay = sessionType === 'pomodoro' ? Math.max(0, settings.pomodoroTime - sessionTime) : sessionTime;
+  const computedDisplay = sessionType === 'pomodoro' ? Math.max(0, (settings.pomodoroTime || 1500) - sessionTime) : sessionTime;
 
   useEffect(() => {
     if (isTimerActive && !isRest && sessionTime >= settings.pomodoroTime && !hasTriggeredRef.current && sessionType === 'pomodoro') {
@@ -360,7 +355,7 @@ export default function Estudio() {
       addNotification(isLongBreak ? 'Descanso largo completado' : 'Descanso completado', 'success');
     }
     if (!isRest) breakNotifiedRef.current = false;
-  }, [restElapsed, isRest, currentBreakLimit, isLongBreak, addStudySession]);
+  }, [sessionTime, isRest, currentBreakLimit, isLongBreak, addStudySession]);
 
   const unlinkTask = () => { 
     if (isTimerActive) return;
@@ -676,9 +671,8 @@ export default function Estudio() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 28, marginTop: 28, marginBottom: 8 }}>
               <div style={{ position: 'relative', width: 56, height: 56 }}>
                 {isBreakTime && isTimerActive && (() => {
-                  const breakElapsed = sessionTime - (restStartRef.current === -1 ? 0 : restStartRef.current);
                   const totalBreak = isLongBreak && settings.longBreakTime ? settings.longBreakTime : (settings.shortBreakTime || 300);
-                  const pct = Math.min(100, Math.max(0, Math.round((breakElapsed / totalBreak) * 100)));
+                  const pct = Math.min(100, Math.max(0, Math.round((sessionTime / totalBreak) * 100)));
                   const r = 25;
                   const circ = 2 * Math.PI * r;
                   const offset = circ - (pct / 100) * circ;
@@ -689,19 +683,19 @@ export default function Estudio() {
                     </svg>
                   );
                 })()}
-                <button onClick={() => setShowResetConfirm(true)}
+                <button onClick={() => { if (isTimerActive && !isBreakTime) return; setShowResetConfirm(true); }}
                   style={{
                     width: 56, height: 56, borderRadius: '50%',
-                    cursor: 'pointer',
+                    cursor: isTimerActive && !isBreakTime ? 'not-allowed' : 'pointer',
                     border: isBreakTime && isTimerActive ? `1px solid #F59E0B50` : '1px solid var(--border-soft)',
-                    background: isBreakTime && isTimerActive ? '#F59E0B10' : 'var(--bg-deep)',
-                    color: isBreakTime && isTimerActive ? '#F59E0B' : 'var(--text-secondary)',
+                    background: isTimerActive && !isBreakTime ? 'var(--bg-deep)' : (isBreakTime && isTimerActive ? '#F59E0B10' : 'var(--bg-deep)'),
+                    color: isTimerActive && !isBreakTime ? 'var(--text-muted)' : (isBreakTime && isTimerActive ? '#F59E0B' : 'var(--text-secondary)'),
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     transition: 'all 200ms',
-                    opacity: isTimerActive && !isBreakTime ? 0.35 : 1,
+                    opacity: isTimerActive && !isBreakTime ? 0.3 : 1,
                     position: 'relative',
                   }}
-                  title="Reiniciar (se considera distracción)">
+                  title={isTimerActive && !isBreakTime ? "No puedes reiniciar mientras el temporizador está corriendo" : "Reiniciar"}>
                   <RotateCcw size={20} />
                 </button>
               </div>
@@ -904,36 +898,41 @@ export default function Estudio() {
             </div>
           </div>
 
-          {/* DETAILED ACTIVITY HISTORY CARD (Max 5) */}
+          {/* DETAILED ACTIVITY HISTORY CARD (Max 6) — Professional List */}
           <div className="bento-card" style={{ flex: 1, padding: '24px', display: 'flex', flexDirection: 'column', minHeight: 320 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ width: 22, height: 22, borderRadius: 6, background: 'var(--bg-deep)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Timer size={11} style={{ color: 'var(--text-tertiary)' }} />
+                <div style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--bg-deep)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border-soft)' }}>
+                  <Timer size={13} style={{ color: 'var(--text-secondary)' }} />
                 </div>
-                <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-                  Actividad
-                </span>
+                <div>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>
+                    Actividad de hoy
+                  </span>
+                  <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-muted)', marginLeft: 8 }}>{activityFeed.length} bloques</span>
+                </div>
               </div>
               {activityFeed.length > 0 && (
-                <button onClick={() => setShowAllActivity(true)} style={{ fontSize: 9, fontWeight: 600, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, padding: '4px 8px', borderRadius: 6, transition: 'background 150ms' }}
-                  onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
-                  <Eye size={10} /> Ver todo ({activityFeed.length})
+                <button onClick={() => setShowAllActivity(true)} style={{ fontSize: 10, fontWeight: 500, color: 'var(--accent)', background: 'var(--accent-dim)', border: 'none', cursor: 'pointer', padding: '6px 12px', borderRadius: 8, transition: 'all 150ms', fontFamily: "'Inter Tight', sans-serif" }}
+                  className="hover:opacity-80">
+                  Ver todo
                 </button>
               )}
             </div>
             
-            <div className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', margin: '0 -4px', padding: '0 4px' }}>
+            {activityFeed.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 0 8px 0', fontSize: 8, fontWeight: 500, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', borderBottom: '1px solid var(--border-subtle)', marginBottom: 4 }}>
+                <span style={{ width: 28, flexShrink: 0 }} />
+                <span style={{ flex: 1 }}>Duración</span>
+                <span style={{ width: 40, textAlign: 'right', flexShrink: 0 }}>Rend.</span>
+                <span style={{ width: 70, textAlign: 'right', flexShrink: 0 }}>Hora</span>
+              </div>
+            )}
+
+            <div className="no-scrollbar" style={{ flex: 1, overflowY: 'auto' }}>
               {activityFeed.length > 0 ? (
-                <>
-                    <div style={{ display: 'grid', gridTemplateColumns: '32px 1fr auto 48px', gap: 10, padding: '0 10px 8px', fontSize: 8, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', borderBottom: '1px solid var(--border-soft)', marginBottom: 6 }}>
-                    <span />
-                    <span>Duración</span>
-                    <span>Hora</span>
-                    <span style={{ textAlign: 'center' }}>Rend.</span>
-                  </div>
-                  {activityFeed.slice(0, 5).map((entry, i) => {
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  {activityFeed.slice(0, 6).map((entry, i) => {
                     const isPomo = entry.type === 'pomodoro';
                     const isChrono = entry.type === 'chrono';
                     const isBreakEntry = entry.type === 'break';
@@ -942,76 +941,57 @@ export default function Estudio() {
                     const mins = Math.floor(entry.duration / 60);
                     const secs = entry.duration % 60;
                     const timeStr = entry.endedAt ? (() => { try { return format(new Date(entry.endedAt), 'HH:mm'); } catch { return '—'; } })() : '—';
-                    const notEvaled = !entry.evaluated && (entry.type === 'pomodoro' || entry.type === 'chrono');
-                    const StatusIcon = entry.status === 'completado' ? Check : entry.status === 'mitad' ? Minus : X;
-                    const statusCol = entry.status === 'completado' ? 'var(--success)' : entry.status === 'mitad' ? '#F59E0B' : 'var(--error)';
-                    const pct = entry.type === 'pomodoro' && settings.pomodoroTime > 0 ? Math.min(100, Math.round(entry.duration / settings.pomodoroTime * 100)) : 100;
-                    const r = 10, circ = 2 * Math.PI * r;
+                    const denom = entry.type === 'chrono' ? (chronoGoal || 900) : (settings.pomodoroTime || 1500);
+                    const pct = (entry.type === 'pomodoro' || entry.type === 'chrono') && denom > 0 ? Math.min(100, Math.round(entry.duration / denom * 100)) : 100;
                     const eff = entry.sessionEff ?? 100;
+                    const barColor = eff >= 85 ? '#10B981' : eff >= 60 ? '#F59E0B' : '#EF4444';
+                    const statusLabel = entry.status === 'completado' ? 'Hecho' : entry.status === 'mitad' ? 'Medio' : 'Corte';
+                    const statusCol = entry.status === 'completado' ? 'var(--success)' : entry.status === 'mitad' ? '#F59E0B' : 'var(--error)';
                     return (
                       <div key={entry.id || i}
+                        onClick={() => handleViewSession(entry.id || '')}
                         style={{
-                          display: 'grid', gridTemplateColumns: '32px 1fr auto auto', gap: 8,
-                          padding: '8px 10px', borderRadius: 8, alignItems: 'center',
-                          cursor: 'default',
-                          transition: 'background 180ms ease',
-                        }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 8, background: `${c}12`, flexShrink: 0 }}>
-                          <Icon size={13} color={c} />
+                          display: 'flex', alignItems: 'center', gap: 6,
+                          padding: '9px 4px', borderRadius: 8,
+                          cursor: 'pointer', transition: 'background 150ms',
+                          borderBottom: i < Math.min(activityFeed.length, 6) - 1 ? '1px solid var(--border-subtle)' : 'none',
+                        }}
+                        className="hover:bg-[var(--bg-hover)]">
+                        <div style={{ width: 28, height: 28, borderRadius: 7, background: `${c}10`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <Icon size={12} color={c} />
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-                          <span style={{ fontSize: 12, fontWeight: 550, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em', whiteSpace: 'nowrap' }}>
-                            {mins > 0 ? `${mins}m` : ''}{secs > 0 && mins === 0 ? ` ${secs}s` : ''}
-                          </span>
-                          {isPomo && (
-                            <div style={{ width: 36, height: 3, borderRadius: 2, background: 'var(--bg-deep)', overflow: 'hidden', flexShrink: 0 }}>
-                              <div style={{ width: `${pct}%`, height: '100%', borderRadius: 2, background: statusCol, transition: 'width 400ms ease' }} />
-                            </div>
-                          )}
-                          <span style={{ fontSize: 8, fontWeight: 600, color: eff > 80 ? 'var(--success)' : eff > 50 ? '#F59E0B' : 'var(--error)', whiteSpace: 'nowrap' }}>
-                            {eff}%
-                          </span>
-                          {(entry.pauseCount ?? 0) > 0 && (
-                            <span style={{ fontSize: 7, color: '#F59E0B', fontWeight: 700, background: '#F59E0B15', padding: '0 5px', borderRadius: 4, lineHeight: '14px', whiteSpace: 'nowrap' }}>
-                              {entry.pauseCount}p
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 3 }}>
+                            <span style={{ fontSize: 12, fontWeight: 550, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>
+                              {mins > 0 ? `${mins}m ${secs}s` : `${secs}s`}
                             </span>
-                          )}
-                        </div>
-                        <span style={{ fontSize: 9, color: 'var(--text-tertiary)', fontWeight: 450, fontFamily: "'Inter Tight', sans-serif", letterSpacing: '0.01em' }}>{entry.meta ?? timeStr}</span>
-                        <div style={{ width: 28, height: 28, position: 'relative', flexShrink: 0, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          {entry.volmeter !== undefined ? (
-                            <div style={{ textAlign: 'center' }}>
-                              <div style={{ fontSize: 10, fontWeight: 700, color: entry.volmeter >= 14 ? '#10B981' : entry.volmeter >= 8 ? '#F59E0B' : '#EF4444', lineHeight: 1 }}>{entry.volmeter}</div>
-                              <div style={{ fontSize: 6, color: 'var(--text-muted)', lineHeight: 1, marginTop: 1 }}>/20</div>
+                            <span style={{ fontSize: 8, fontWeight: 500, color: 'var(--text-muted)' }}>{entry.type === 'pomodoro' ? 'Pomo' : entry.type === 'chrono' ? 'Chrono' : 'Break'}</span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <div style={{ flex: '0 1 60px', height: 3, borderRadius: 2, background: 'var(--bg-deep)', overflow: 'hidden' }}>
+                              <div style={{ width: `${pct}%`, height: '100%', borderRadius: 2, background: barColor, transition: 'width 500ms ease' }} />
                             </div>
-                          ) : (
-                            <>
-                              <svg width={28} height={28} viewBox="0 0 28 28" style={{ position: 'absolute', inset: 0 }}>
-                                <circle cx={14} cy={14} r={r} fill="none" stroke="var(--bg-deep)" strokeWidth={2.5} />
-                                <circle cx={14} cy={14} r={r} fill="none" stroke={statusCol} strokeWidth={2.5}
-                                  strokeDasharray={`${circ * pct / 100} ${circ * (100 - pct) / 100}`}
-                                  strokeLinecap="round"
-                                  transform="rotate(-90 14 14)"
-                                  style={{ transition: 'stroke-dasharray 600ms ease', opacity: pct > 0 ? 0.85 : 0.3 }} />
-                              </svg>
-                              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <StatusIcon size={9} color={statusCol} strokeWidth={2.5} />
-                              </div>
-                            </>
-                          )}
+                            {(entry.pauseCount ?? 0) > 0 && (
+                              <span style={{ fontSize: 7, color: '#F59E0B', fontWeight: 600, background: '#F59E0B10', padding: '0 4px', borderRadius: 3, lineHeight: '14px', flexShrink: 0 }}>
+                                {entry.pauseCount}p
+                              </span>
+                            )}
+                          </div>
                         </div>
+                        <span style={{ width: 40, textAlign: 'right', fontSize: 11, fontWeight: 600, color: barColor, fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{eff}%</span>
+                        <span style={{ width: 70, textAlign: 'right', fontSize: 10, fontWeight: 450, color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{entry.meta ?? timeStr}</span>
                       </div>
                     );
                   })}
-                </>
+                </div>
               ) : (
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, padding: '30px 0' }}>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, padding: '40px 0' }}>
                   <div style={{ width: 44, height: 44, borderRadius: 14, background: 'var(--bg-deep)', border: '1px dashed var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <TomatoIcon size={18} style={{ color: 'var(--text-muted)', opacity: 0.3 }} />
+                    <TomatoIcon size={18} style={{ color: 'var(--text-muted)', opacity: 0.4 }} />
                   </div>
                   <div style={{ textAlign: 'center' }}>
-                    <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-tertiary)', display: 'block', marginBottom: 3 }}>Sin actividad hoy</span>
-                    <span style={{ fontSize: 9, color: 'var(--text-muted)', lineHeight: 1.5 }}>Inicia un bloque de estudio para registrar tu progreso.</span>
+                    <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-tertiary)', display: 'block', marginBottom: 4 }}>Sin actividad hoy</span>
+                    <span style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.5 }}>Inicia un bloque de estudio para ver tu progreso aquí.</span>
                   </div>
                 </div>
               )}
@@ -1064,87 +1044,73 @@ export default function Estudio() {
                       Total: <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{(Math.floor(activityFeed.reduce((s, e) => s + e.duration, 0) / 3600)) > 0 ? `${Math.floor(activityFeed.reduce((s, e) => s + e.duration, 0) / 3600)}h ` : ''}{Math.floor((activityFeed.reduce((s, e) => s + e.duration, 0) % 3600) / 60)}m</span> · {activityFeed.length} {activityFeed.length === 1 ? 'sesión' : 'sesiones'}
                     </div>
 
-                    {/* Table header */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '32px 1fr auto 40px', gap: 10, padding: '0 10px 8px', fontSize: 8, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', borderBottom: '1px solid var(--border-soft)', marginBottom: 4 }}>
-                      <span />
-                      <span>Duración</span>
-                      <span>Hora</span>
-                      <span style={{ textAlign: 'center' }}>Rend.</span>
+                    {/* Column headers */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 0 8px 0', fontSize: 8, fontWeight: 500, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', borderBottom: '1px solid var(--border-subtle)', marginBottom: 4 }}>
+                      <span style={{ width: 28, flexShrink: 0 }} />
+                      <span style={{ flex: 1 }}>Duración</span>
+                      <span style={{ width: 40, textAlign: 'right', flexShrink: 0 }}>Rend.</span>
+                      <span style={{ width: 70, textAlign: 'right', flexShrink: 0 }}>Hora</span>
                     </div>
-                    {activityFeed.slice(0, 10).map((entry, i) => {
-                      const isPomo = entry.type === 'pomodoro';
-                      const isChrono = entry.type === 'chrono';
-                      const isBreakEntry = entry.type === 'break';
-                      const c = isPomo ? focusColor : isChrono ? chronoColor : breakColor;
-                      const Icon = isPomo ? TomatoIcon : isBreakEntry ? Coffee : Timer;
-                      const mins = Math.floor(entry.duration / 60);
-                      const secs = entry.duration % 60;
-                      const timeStr = entry.endedAt ? (() => { try { return fmtClock(format(new Date(entry.endedAt), 'HH:mm'), settings?.timeFormat); } catch { return '—'; } })() : '—';
-                      const notEvaled = !entry.evaluated && (entry.type === 'pomodoro' || entry.type === 'chrono');
-                      const StatusIcon = entry.status === 'completado' ? Check : entry.status === 'mitad' ? Minus : X;
-                      const statusCol = entry.status === 'completado' ? 'var(--success)' : entry.status === 'mitad' ? '#F59E0B' : 'var(--error)';
-                      const pct = entry.type === 'pomodoro' && settings.pomodoroTime > 0 ? Math.min(100, Math.round(entry.duration / settings.pomodoroTime * 100)) : 100;
-                      const r = 10, circ = 2 * Math.PI * r;
-                      const eff = entry.sessionEff ?? 100;
-                      return (
-                        <div key={entry.id || i}
-                          style={{
-                            display: 'grid', gridTemplateColumns: '28px 1fr auto auto', gap: 8,
-                            padding: '7px 10px', borderRadius: 8, alignItems: 'center',
-                            cursor: 'default',
-                            transition: 'background 180ms ease',
-                          }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, borderRadius: 6, background: `${c}10`, flexShrink: 0 }}>
-                            <Icon size={11} color={c} />
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-                            <span style={{ fontSize: 11, fontWeight: 550, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em', whiteSpace: 'nowrap' }}>
-                              {mins > 0 ? `${mins}m` : ''}{secs > 0 && mins === 0 ? ` ${secs}s` : ''}
-                            </span>
-                            {isPomo && (
-                              <div style={{ width: 32, height: 3, borderRadius: 2, background: 'var(--bg-deep)', overflow: 'hidden', flexShrink: 0 }}>
-                                <div style={{ width: `${pct}%`, height: '100%', borderRadius: 2, background: statusCol, transition: 'width 400ms ease' }} />
+
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      {activityFeed.map((entry, i) => {
+                        const isPomo = entry.type === 'pomodoro';
+                        const isChrono = entry.type === 'chrono';
+                        const isBreakEntry = entry.type === 'break';
+                        const c = isPomo ? focusColor : isChrono ? chronoColor : breakColor;
+                        const Icon = isPomo ? TomatoIcon : isBreakEntry ? Coffee : Timer;
+                        const mins = Math.floor(entry.duration / 60);
+                        const secs = entry.duration % 60;
+                        const timeStr = entry.endedAt ? (() => { try { return fmtClock(format(new Date(entry.endedAt), 'HH:mm'), settings?.timeFormat); } catch { return '—'; } })() : '—';
+                        const denom = entry.type === 'chrono' ? (chronoGoal || 900) : (settings.pomodoroTime || 1500);
+                        const pct = (entry.type === 'pomodoro' || entry.type === 'chrono') && denom > 0 ? Math.min(100, Math.round(entry.duration / denom * 100)) : 100;
+                        const eff = entry.sessionEff ?? 100;
+                        const barColor = eff >= 85 ? '#10B981' : eff >= 60 ? '#F59E0B' : '#EF4444';
+                        const statusLabel = entry.status === 'completado' ? '✓ Hecho' : entry.status === 'mitad' ? '— Medio' : '✕ Corte';
+                        const statusCol = entry.status === 'completado' ? 'var(--success)' : entry.status === 'mitad' ? '#F59E0B' : 'var(--error)';
+                        return (
+                          <div key={entry.id || i}
+                            onClick={() => { setShowAllActivity(false); setTimeout(() => handleViewSession(entry.id || ''), 100); }}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: 6,
+                              padding: '9px 4px', borderRadius: 8,
+                              cursor: 'pointer', transition: 'background 150ms',
+                              borderBottom: i < activityFeed.length - 1 ? '1px solid var(--border-subtle)' : 'none',
+                            }}
+                            className="hover:bg-[var(--bg-hover)]">
+                            <div style={{ width: 28, height: 28, borderRadius: 7, background: `${c}10`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                              <Icon size={12} color={c} />
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 3 }}>
+                                <span style={{ fontSize: 12, fontWeight: 550, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>
+                                  {mins > 0 ? `${mins}m ${secs}s` : `${secs}s`}
+                                </span>
+                                <span style={{ fontSize: 8, fontWeight: 500, color: 'var(--text-muted)' }}>{entry.type === 'pomodoro' ? 'Pomo' : entry.type === 'chrono' ? 'Chrono' : 'Break'}</span>
+                                <span style={{ fontSize: 8, fontWeight: 500, color: statusCol, marginLeft: 'auto' }}>{statusLabel}</span>
                               </div>
-                            )}
-                            <span style={{ fontSize: 8, fontWeight: 600, color: eff > 80 ? 'var(--success)' : eff > 50 ? '#F59E0B' : 'var(--error)' }}>
-                              {eff}%
-                            </span>
-                            {(entry.pauseCount ?? 0) > 0 && (
-                              <span style={{ fontSize: 7, color: '#F59E0B', fontWeight: 700, background: '#F59E0B15', padding: '0 4px', borderRadius: 4, lineHeight: '14px', whiteSpace: 'nowrap' }}>
-                                {entry.pauseCount}p
-                              </span>
-                            )}
-                          </div>
-                          <span style={{ fontSize: 9, color: 'var(--text-tertiary)', fontWeight: 450, fontFamily: "'Inter Tight', sans-serif" }}>{entry.meta ?? timeStr}</span>
-                          <div style={{ width: 28, height: 28, position: 'relative', flexShrink: 0, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            {entry.volmeter !== undefined ? (
-                              <div style={{ textAlign: 'center' }}>
-                                <div style={{ fontSize: 10, fontWeight: 700, color: entry.volmeter >= 14 ? '#10B981' : entry.volmeter >= 8 ? '#F59E0B' : '#EF4444', lineHeight: 1 }}>{entry.volmeter}</div>
-                                <div style={{ fontSize: 6, color: 'var(--text-muted)', lineHeight: 1, marginTop: 1 }}>/20</div>
-                              </div>
-                            ) : (
-                              <>
-                                <svg width={28} height={28} viewBox="0 0 28 28" style={{ position: 'absolute', inset: 0 }}>
-                                  <circle cx={14} cy={14} r={r} fill="none" stroke="var(--bg-deep)" strokeWidth={2.5} />
-                                  <circle cx={14} cy={14} r={r} fill="none" stroke={statusCol} strokeWidth={2.5}
-                                    strokeDasharray={`${circ * pct / 100} ${circ * (100 - pct) / 100}`}
-                                    strokeLinecap="round"
-                                    transform="rotate(-90 14 14)"
-                                    style={{ transition: 'stroke-dasharray 600ms ease', opacity: pct > 0 ? 0.85 : 0.3 }} />
-                                </svg>
-                                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                  <StatusIcon size={9} color={statusCol} strokeWidth={2.5} />
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <div style={{ flex: '0 1 60px', height: 3, borderRadius: 2, background: 'var(--bg-deep)', overflow: 'hidden' }}>
+                                  <div style={{ width: `${pct}%`, height: '100%', borderRadius: 2, background: barColor, transition: 'width 500ms ease' }} />
                                 </div>
-                              </>
-                            )}
+                                {(entry.pauseCount ?? 0) > 0 && (
+                                  <span style={{ fontSize: 7, color: '#F59E0B', fontWeight: 600, background: '#F59E0B10', padding: '0 4px', borderRadius: 3, lineHeight: '14px', flexShrink: 0 }}>
+                                    {entry.pauseCount}p
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <span style={{ width: 40, textAlign: 'right', fontSize: 11, fontWeight: 600, color: barColor, fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{eff}%</span>
+                            <span style={{ width: 70, textAlign: 'right', fontSize: 10, fontWeight: 450, color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{entry.meta ?? timeStr}</span>
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </>
                 ) : (
-                  <div style={{ padding: '60px 10px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                    No hay actividad registrada.
+                  <div style={{ padding: '60px 10px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+                    <TomatoIcon size={20} style={{ color: 'var(--text-muted)', opacity: 0.3 }} />
+                    Sin actividad hoy
                   </div>
                 )}
               </div>
@@ -1200,7 +1166,7 @@ export default function Estudio() {
                     ) : (
                       <Clock size={20} color={chronoColor} />
                     )}
-                    <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", marginTop: 2 }}>{detailSession.volmeter ?? '—'}%</span>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", marginTop: 2 }}>{detailSession.volmeter ?? '—'}<span style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-tertiary)' }}>/20</span></span>
                   </div>
                 </div>
               </div>
@@ -1327,10 +1293,7 @@ export default function Estudio() {
               <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>¿Reiniciar{isBreakTime ? ' descanso' : ''}?</span>
             </div>
             <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6, margin: '0 0 6px' }}>
-              {!isBreakTime && sessionTime >= 60 ? <>Esta acción se marcará como <strong style={{ color: '#F59E0B' }}>distracción</strong>.</> : isBreakTime ? <>El descanso no contará para tu recuperación.</> : '¿Seguro que deseas reiniciar?'}
-            </p>
-            <p style={{ fontSize: 12, color: 'var(--text-tertiary)', lineHeight: 1.5, margin: '0 0 20px' }}>
-              Aprovecha para repasar apuntes o tomar una pausa activa. Unos minutos mejoran tu retención.
+              {isBreakTime ? <>El descanso no contará para tu recuperación.</> : sessionTime >= 60 ? <>Esta acción se marcará como <strong style={{ color: '#F59E0B' }}>distracción</strong>.</> : '¿Seguro que deseas reiniciar?'}
             </p>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
               <button onClick={() => setShowResetConfirm(false)}
@@ -1348,7 +1311,7 @@ export default function Estudio() {
 
       {/* POST-SESSION EVALUATION — with linked task */}
       {showSessionEval && evalSessionId && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }} onClick={() => { handleEvalAndStartRest({ volmeter: evalVolmeter, evaluatedAt: new Date().toISOString() }); }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }} onClick={() => { handleEvalAndStartRest(); }}>
           <div onClick={e => e.stopPropagation()}
             style={{
               background: 'var(--bg-elevated)', borderRadius: 20,
@@ -1451,9 +1414,9 @@ export default function Estudio() {
             )}
 
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
-              <button onClick={() => { handleEvalAndStartRest({ volmeter: evalVolmeter, evaluatedAt: new Date().toISOString() }); }}
+              <button onClick={() => { handleEvalAndStartRest(); }}
                 style={{ padding: '8px 20px', borderRadius: 10, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
-                Cancelar
+                Omitir
               </button>
               <button onClick={() => {
                 handleEvalAndStartRest({
@@ -1563,9 +1526,9 @@ export default function Estudio() {
             </div>
 
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
-              <button onClick={() => { handleEvalAndStartRest({ volmeter: evalVolmeter, evaluatedAt: new Date().toISOString() }); }}
+              <button onClick={() => { handleEvalAndStartRest(); }}
                 style={{ padding: '8px 20px', borderRadius: 10, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
-                Cancelar
+                Omitir
               </button>
               <button onClick={() => {
                 handleEvalAndStartRest({

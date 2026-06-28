@@ -11,7 +11,7 @@ import {
   Filter, SortAsc, Tag, Hash, Maximize2, Minimize2, CheckSquare, Palette, ArrowLeft, Unlink, Minus,
   Briefcase, GraduationCap, Compass, Target, Brain, Award, Coffee, Activity, Shield,
   Heart, Lightbulb, Zap, Globe, Feather, Sun, Moon, CloudRain, Mountain, Music,
-  Camera, Eye, Flag, Gift, Anchor, Key, Rocket, Scissors, Watch, Wifi, StickyNote,
+  Camera, Eye, Flag, Gift, Anchor, Key, Rocket, Scissors, Watch, Wifi,
   Strikethrough, AlignLeft, AlignCenter, AlignRight, Heading1, Heading2, Heading3,
   Eraser, Sigma
 } from "lucide-react";
@@ -26,7 +26,6 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { restrictToParentElement } from '@dnd-kit/modifiers';
-import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import toast from "react-hot-toast";
@@ -126,11 +125,18 @@ function formatDeletionTime(date: string): string {
 }
 
 function getWordCount(html: string): number {
-  return html.replace(/<[^>]+>/g, "").split(/\s+/).filter(Boolean).length;
+  const text = html
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/\u00A0/g, ' ')
+    .trim();
+  if (!text) return 0;
+  return text.split(/[\s\n\r]+/).filter(w => w.length > 0).length;
 }
 
 function getCharCount(html: string): number {
-  return html.replace(/<[^>]+>/g, "").length;
+  return html.replace(/<[^>]+>/g, "").replace(/&nbsp;/g, ' ').length;
 }
 
 function getPageCount(html: string): number {
@@ -817,31 +823,28 @@ function EditorToolbar({ onFormat }: EditorToolbarProps) {
     <div style={{
       display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", position: "relative",
     }}>
-      {/* 1. HEADINGS — inline grid */}
+      {/* 1. HEADINGS — icon cuadritos */}
       <div style={{ display: "flex", gap: 2, alignItems: "stretch" }}>
         {([
-          { tag: "p", label: "P", size: 11, weight: 400 },
-          { tag: "h1", label: "H1", size: 14, weight: 700 },
-          { tag: "h2", label: "H2", size: 12.5, weight: 600 },
-          { tag: "h3", label: "H3", size: 11.5, weight: 550 },
-        ] as const).map(({ tag, label, size, weight }) => {
+          { tag: "p", icon: Type, title: "Texto normal" },
+          { tag: "h1", icon: Heading1, title: "Título 1" },
+          { tag: "h2", icon: Heading2, title: "Título 2" },
+          { tag: "h3", icon: Heading3, title: "Título 3" },
+        ] as const).map(({ tag, icon: Icon, title }) => {
           const active = activeHeading === tag;
           return (
             <button key={tag} onClick={() => onFormat("formatBlock", `<${tag}>`)}
-              title={`${tag === "p" ? "Texto normal" : `Título ${tag.toUpperCase()}`}`}
+              title={title}
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center",
-                minWidth: 30, padding: "0 6px", height: 26,
+                width: 28, height: 26,
                 borderRadius: 6, border: `1px solid ${active ? 'var(--accent)' : 'var(--border-default)'}`,
                 background: active ? "var(--accent-dim)" : "transparent",
                 color: active ? "var(--accent)" : "var(--text-tertiary)",
-                fontSize: size, fontWeight: weight, cursor: "pointer",
-                fontFamily: "'Inter Tight', sans-serif",
-                letterSpacing: "-0.02em",
-                transition: "all 120ms",
+                cursor: "pointer", transition: "all 120ms",
               }}
               className={active ? "" : "hover:border-[var(--border-strong)] hover:text-[var(--text-secondary)]"}>
-              {label}
+              <Icon size={13} />
             </button>
           );
         })}
@@ -869,6 +872,11 @@ function EditorToolbar({ onFormat }: EditorToolbarProps) {
         style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: activeFormats.strikeThrough ? "var(--accent-dim)" : "transparent", color: activeFormats.strikeThrough ? "var(--accent)" : "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
         className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
         <Strikethrough size={14} />
+      </button>
+      <button onClick={() => onFormat("hiliteColor")} title="Resaltar"
+        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms", fontSize: 14, fontWeight: 700, lineHeight: 1 }}
+        className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
+        <span style={{ background: "linear-gradient(135deg, #FFF176, #FFD54F)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>A</span>
       </button>
 
       <div style={{ width: 1, height: 16, background: "var(--border-default)", margin: "0 4px" }} />
@@ -918,6 +926,11 @@ function EditorToolbar({ onFormat }: EditorToolbarProps) {
         className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
         <AlignRight size={14} />
       </button>
+      <button onClick={() => onFormat("justifyFull")} title="Justificar"
+        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
+        className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
+        <AlignJustify size={14} />
+      </button>
 
       {/* 5. LINKS & FILES */}
       <button onClick={() => { setShowLinkInput(true); setLinkUrl(""); }} title="Insertar enlace"
@@ -940,37 +953,43 @@ function EditorToolbar({ onFormat }: EditorToolbarProps) {
           <div style={{
             position: "absolute", top: "100%", left: 0, marginTop: 6, zIndex: 300,
             background: "var(--bg-elevated)", border: "1px solid var(--border-strong)",
-            borderRadius: "var(--radius-md)", padding: 12,
-            boxShadow: "var(--shadow-elevated)", minWidth: 200,
+            borderRadius: "var(--radius-md)", padding: 14,
+            boxShadow: "var(--shadow-elevated)", minWidth: 220,
           }}>
-            <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <span style={{ fontSize: 10, color: "var(--text-tertiary)" }}>{tableCols}</span>
-                <input type="range" min={1} max={6} value={tableCols} onChange={e => setTableCols(Number(e.target.value))}
-                  style={{ width: 60, accentColor: "var(--accent)" }} />
-              </div>
-              <span style={{ fontSize: 10, color: "var(--text-tertiary)" }}>×</span>
-              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <span style={{ fontSize: 10, color: "var(--text-tertiary)" }}>{tableRows}</span>
-                <input type="range" min={1} max={8} value={tableRows} onChange={e => setTableRows(Number(e.target.value))}
-                  style={{ width: 60, accentColor: "var(--accent)" }} />
-              </div>
-            </div>
             <div style={{
-              display: "grid", gridTemplateColumns: `repeat(${tableCols}, 1fr)`, gap: 2, marginBottom: 8,
+              display: "grid", gridTemplateColumns: `repeat(${Math.max(tableCols, 1)}, 1fr)`, gap: 3, marginBottom: 10,
+              background: "var(--bg-base)", padding: 8, borderRadius: 8,
             }}>
-              {Array.from({ length: tableCols * tableRows }).map((_, i) => (
+              {Array.from({ length: Math.max(tableCols * tableRows, 1) }).map((_, i) => (
                 <div key={i} style={{
-                  width: 18, height: 14, borderRadius: 2,
-                  background: "var(--accent)", opacity: 0.3, border: "1px solid var(--accent)",
-                }} />
+                  width: 20, height: 16, borderRadius: 3,
+                  background: "var(--accent)", opacity: 0.25, border: "1px solid var(--accent)",
+                  transition: "all 100ms",
+                }}
+                  onMouseEnter={e => { e.currentTarget.style.opacity = '0.6'; e.currentTarget.style.transform = 'scale(1.1)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.opacity = '0.25'; e.currentTarget.style.transform = 'scale(1)'; }} />
               ))}
+            </div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary)", minWidth: 50, textAlign: "center" }}>{tableCols} × {tableRows}</span>
+              <div style={{ display: "flex", gap: 4 }}>
+                <button onClick={() => { setTableCols(Math.max(1, tableCols - 1)); }}
+                  style={{ width: 22, height: 22, borderRadius: 4, border: "1px solid var(--border-soft)", background: "var(--bg-hover)", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, lineHeight: 1 }}>−</button>
+                <button onClick={() => { setTableRows(Math.max(1, tableRows - 1)); }}
+                  style={{ width: 22, height: 22, borderRadius: 4, border: "1px solid var(--border-soft)", background: "var(--bg-hover)", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, lineHeight: 1 }}>−</button>
+                <button onClick={() => { setTableCols(Math.min(8, tableCols + 1)); }}
+                  style={{ width: 22, height: 22, borderRadius: 4, border: "1px solid var(--border-soft)", background: "var(--bg-hover)", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, lineHeight: 1 }}>+</button>
+                <button onClick={() => { setTableRows(Math.min(10, tableRows + 1)); }}
+                  style={{ width: 22, height: 22, borderRadius: 4, border: "1px solid var(--border-soft)", background: "var(--bg-hover)", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, lineHeight: 1 }}>+</button>
+              </div>
             </div>
             <button onClick={() => { onFormat("insertTable", `${tableCols}x${tableRows}`); setShowTablePicker(false); }}
               style={{
                 width: "100%", background: "var(--accent)", color: "#fff", border: "none",
-                borderRadius: 6, padding: "6px 12px", fontSize: 11, fontWeight: 600, cursor: "pointer",
-              }}>Insertar {tableCols}×{tableRows}</button>
+                borderRadius: 8, padding: "7px 12px", fontSize: 11.5, fontWeight: 600, cursor: "pointer",
+                transition: "all 120ms",
+              }}
+              className="active:scale-[0.97]">Insertar tabla {tableCols}×{tableRows}</button>
           </div>
         )}
       </div>
@@ -1032,12 +1051,18 @@ function ShelfPlank() {
 }
 
 export default function Notas() {
-  const { notes, noteFolders: folders, addNote, updateNote, deleteNote, restoreNote, permanentlyDeleteNote, addNoteFolder, duplicateNote, reorderNotes, floatingNoteId, setFloatingNoteId } = useApp();
+  const { notes, noteFolders: folders, addNote, updateNote, deleteNote, restoreNote, permanentlyDeleteNote, addNoteFolder, duplicateNote, reorderNotes } = useApp();
 
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
-  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
-  const [selectedTag, setSelectedTag] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>("estante");
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(() => {
+    try { const s = localStorage.getItem("owa_notes_folder_id"); return s || null; } catch { return null; }
+  });
+  const [selectedTag, setSelectedTag] = useState<string | null>(() => {
+    try { const s = localStorage.getItem("owa_notes_tag"); return s || null; } catch { return null; }
+  });
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    try { const s = localStorage.getItem("owa_notes_view_mode"); return (s === "lista" || s === "estante") ? s : "estante"; } catch { return "estante"; }
+  });
   const [sortMode, setSortMode] = useState<SortMode>("updated");
   const [searchQuery, setSearchQuery] = useState("");
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; noteId: string; arrowLeft: boolean; arrowY: number } | null>(null);
@@ -1052,8 +1077,7 @@ export default function Notas() {
   const [linkPreviewUrl, setLinkPreviewUrl] = useState<string | null>(null);
   const [linkPreviewError, setLinkPreviewError] = useState(false);
   const [lightboxImage, setLightboxImage] = useState<{ src: string; el: HTMLElement } | null>(null);
-  const [lightboxBorderColor, setLightboxBorderColor] = useState("#000000");
-  const [showImageDeleteConfirm, setShowImageDeleteConfirm] = useState(false);
+  const [pendingLink, setPendingLink] = useState<string | null>(null);
 
   // EDIT STATE
   const [isEditing, setIsEditing] = useState(false);
@@ -1075,14 +1099,20 @@ export default function Notas() {
     { cat: "Listas", opts: [
       { label: "Lista con viñetas", icon: List, cmd: "insertUnorderedList" },
       { label: "Lista numerada", icon: ListOrdered, cmd: "insertOrderedList" },
+      { label: "Lista de tareas", icon: CheckSquare, cmd: "insertCheckbox" },
     ]},
     { cat: "Bloques", opts: [
       { label: "Bloque de código", icon: Code, cmd: "codeBlock" },
-      { label: "Cita", icon: Quote, cmd: "styledQuote" },
-      { label: "Callout", icon: Lightbulb, cmd: "calloutBlock" },
-      { label: "Fórmula", icon: Sigma, cmd: "mathBlock" },
+      { label: "Cita destacada", icon: Quote, cmd: "styledQuote" },
+      { label: "Destacado (Callout)", icon: Lightbulb, cmd: "calloutBlock" },
+      { label: "Fórmula matemática", icon: Sigma, cmd: "mathBlock" },
+      { label: "Fórmula inline", icon: Sigma, cmd: "mathInline" },
       { label: "Separador", icon: Minus, cmd: "insertHR" },
     ]},
+    { cat: "Elementos", opts: [
+      { label: "Tabla", icon: Table, cmd: "insertTable" },
+      { label: "Adjuntar archivo", icon: Paperclip, cmd: "insertFile" },
+    ]}
   ], []);
 
   const cleanUpSlashText = useCallback(() => {
@@ -1120,7 +1150,6 @@ export default function Notas() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setLightboxImage(null);
-        setShowImageDeleteConfirm(false);
         setLinkPreviewUrl(null);
       }
     };
@@ -1146,7 +1175,9 @@ export default function Notas() {
   const [editTagName, setEditTagName] = useState("");
   const [deleteFolderId, setDeleteFolderId] = useState<string | null>(null);
   const [deleteFolderName, setDeleteFolderName] = useState("");
-  const [deletedFolderIds, setDeletedFolderIds] = useState<Set<string>>(new Set());
+  const [deletedFolderIds, setDeletedFolderIds] = useState<Set<string>>(() => {
+    try { const s = localStorage.getItem("owa_deleted_folder_ids"); return s ? new Set(JSON.parse(s)) : new Set(); } catch { return new Set(); }
+  });
 
   // Custom Tag colors map (persisted)
   const [customTagColors, setCustomTagColors] = useState<Record<string, string>>(() => {
@@ -1161,6 +1192,14 @@ export default function Notas() {
   const mergedTagColors = useMemo(() => {
     return { ...DEFAULT_TAG_COLORS, ...customTagColors };
   }, [customTagColors]);
+
+  useEffect(() => {
+    localStorage.setItem("owa_deleted_folder_ids", JSON.stringify([...deletedFolderIds]));
+  }, [deletedFolderIds]);
+
+  useEffect(() => { localStorage.setItem("owa_notes_folder_id", selectedFolderId || ""); }, [selectedFolderId]);
+  useEffect(() => { localStorage.setItem("owa_notes_tag", selectedTag || ""); }, [selectedTag]);
+  useEffect(() => { localStorage.setItem("owa_notes_view_mode", viewMode); }, [viewMode]);
 
   // Clock time state (Compact aligned inside header)
   const [ct, setCt] = useState(new Date());
@@ -1274,6 +1313,12 @@ export default function Notas() {
     if (isEditing && selectedNote && editorRef.current) {
       if (editorRef.current.innerHTML !== selectedNote.content) {
         editorRef.current.innerHTML = selectedNote.content || "";
+        editorRef.current.querySelectorAll('a').forEach(a => {
+          const href = a.getAttribute('href');
+          if (href && href !== a.getAttribute('title')) {
+            a.setAttribute('title', href);
+          }
+        });
       }
     }
   }, [selectedNoteId, isEditing]);
@@ -1303,13 +1348,13 @@ export default function Notas() {
       title = titleRef.current.value || "Sin título";
     }
 
-    const plain = content.replace(/<[^>]+>/g, "").trim();
+    const plain = content.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\u00A0/g, " ").trim();
     if (plain !== lastContentRef.current && plain) {
       lastContentRef.current = plain;
       const preview = plain.slice(0, 80);
       const versions = JSON.parse(localStorage.getItem("owa_note_versions_" + selectedNote.id) || "[]");
       if (!versions.length || versions[0].preview !== preview) {
-        versions.unshift({ timestamp: new Date().toISOString(), preview, wordCount: plain.split(/\s+/).length, content });
+        versions.unshift({ timestamp: new Date().toISOString(), preview, wordCount: plain.split(/\s+/).filter(Boolean).length, content });
         if (versions.length > 10) versions.length = 10;
         localStorage.setItem("owa_note_versions_" + selectedNote.id, JSON.stringify(versions));
       }
@@ -1324,30 +1369,7 @@ export default function Notas() {
   }, []);
 
   const openFloatingNote = useCallback(async (note: Note) => {
-    const ch = new BroadcastChannel('owa_notes_sync');
-    ch.postMessage({
-      type: 'OPEN_NOTE',
-      noteId: note.id,
-      note: { id: note.id, title: note.title || '', content: note.content || '', coverColor: note.coverColor, coverImage: note.coverImage },
-    });
-    ch.close();
-    try {
-      const existing = await WebviewWindow.getByLabel('floating-note-window');
-      if (existing) { await existing.show(); await existing.setFocus(); return; }
-      new WebviewWindow('floating-note-window', {
-        url: '/',
-        title: note.title || 'Nota flotante',
-        width: 440, height: 520,
-        resizable: true,
-        decorations: true,
-        alwaysOnTop: true,
-        skipTaskbar: true,
-      });
-    } catch {
-      // Fallback for web mode: use in-app floating note
-      setFloatingNoteId(note.id);
-    }
-  }, [setFloatingNoteId]);
+  }, []);
 
   const handleOpenNote = useCallback(() => {
     if (selectedNote) {
@@ -1471,6 +1493,141 @@ export default function Notas() {
     }
   }, [selectedNote, updateNote]);
 
+  const handleFormat = useCallback((cmd: string, value?: string) => {
+    if (cmd === "codeBlock") {
+      const sel = window.getSelection();
+      if (!sel || !sel.rangeCount) { editorRef.current?.focus(); return; }
+      const range = sel.getRangeAt(0);
+      let el: HTMLElement | null = range.startContainer.parentElement;
+      let inCodeBlock = false;
+      while (el && el !== editorRef.current) {
+        if (el.classList.contains("notes-code-block")) { inCodeBlock = true; break; }
+        el = el.parentElement;
+      }
+      if (inCodeBlock) {
+        const text = el!.querySelector("code")?.textContent || "";
+        const p = document.createElement("p");
+        p.textContent = text;
+        el!.parentNode?.replaceChild(p, el!);
+        const newRange = document.createRange();
+        newRange.selectNodeContents(p);
+        newRange.collapse(false);
+        sel.removeAllRanges();
+        sel.addRange(newRange);
+      } else {
+        const text = sel.toString();
+        const html = `<pre class="notes-code-block"><code>${text || "Código"}</code><button class="copy-code-btn" data-code="${encodeURIComponent(text || "")}">Copiar</button></pre>`;
+        document.execCommand("insertHTML", false, html);
+      }
+    } else if (cmd === "insertTable") {
+      const dims = value ? value.split("x").map(Number) : [3, 3];
+      const cols = dims[0] || 3;
+      const rows = dims[1] || 3;
+      let thead = "<thead><tr>";
+      for (let c = 1; c <= cols; c++) thead += `<th style="border:1px solid var(--border-default);padding:8px;background:var(--bg-hover);font-weight:600;">Columna ${c}</th>`;
+      thead += "</tr></thead>";
+      let tbody = "<tbody>";
+      for (let r = 1; r <= rows; r++) {
+        tbody += "<tr>";
+        for (let c = 1; c <= cols; c++) tbody += `<td style="border:1px solid var(--border-default);padding:8px;">Dato ${r}-${c}</td>`;
+        tbody += "</tr>";
+      }
+      tbody += "</tbody>";
+      const html = `<table class="notes-table" style="width:100%;border-collapse:collapse;margin:8px 0;">${thead}${tbody}</table><br>`;
+      document.execCommand("insertHTML", false, html);
+    } else if (cmd === "insertFile") {
+      fileInputRef.current?.click();
+      return;
+    } else if (cmd === "styledQuote") {
+      const sel = window.getSelection();
+      const text = sel ? sel.toString() : "";
+      if (text) {
+        document.execCommand("insertHTML", false, `<blockquote class="notes-styled-quote" style="border-left:3px solid var(--accent);margin:12px 0;padding:12px 16px;background:var(--bg-hover);border-radius:0 8px 8px 0;font-style:italic;color:var(--text-secondary);">${text}</blockquote>`);
+      } else {
+        document.execCommand("insertHTML", false, `<blockquote class="notes-styled-quote" style="border-left:3px solid var(--accent);margin:12px 0;padding:12px 16px;background:var(--bg-hover);border-radius:0 8px 8px 0;font-style:italic;color:var(--text-secondary);"><br></blockquote>`);
+      }
+    } else if (cmd === "removeLink") {
+      document.execCommand("unlink", false);
+    } else if (cmd === "mathInline") {
+      const formula = prompt("Ingresa la fórmula matemática inline (LaTeX):", "E=mc^2");
+      if (formula) {
+        document.execCommand("insertHTML", false, `$${formula}$`);
+      }
+    } else if (cmd === "mathBlock") {
+      const formula = prompt("Ingresa la fórmula en bloque (LaTeX):", "\\int_{a}^{b} f(x)\\,dx = F(b) - F(a)");
+      if (formula) {
+        document.execCommand("insertHTML", false, `$$${formula}$$`);
+      }
+    } else if (cmd === "calloutBlock") {
+      const text = prompt("Ingresa el texto para el bloque destacado (Callout):", "Nota importante...");
+      if (text) {
+        const html = `<div class="notes-callout" style="display:flex;gap:12px;padding:12px 16px;background:var(--bg-elevated);border-left:4px solid var(--accent);border-radius:8px;margin:12px 0;color:var(--text-secondary);align-items:center;"><span style="font-size:18px;">💡</span><div style="flex:1;font-size:14px;line-height:1.5;">${text}</div></div><br>`;
+        document.execCommand("insertHTML", false, html);
+      }
+    } else if (cmd === "insertHR") {
+      document.execCommand("insertHTML", false, "<hr style='border:none;border-top:1px solid var(--border-default);margin:16px 0;' />");
+    } else if (cmd === "formatBlock") {
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount) {
+        let el: HTMLElement | null = sel.getRangeAt(0).startContainer.parentElement;
+        while (el && el !== editorRef.current && el.tagName !== "P" && el.tagName !== "H1" && el.tagName !== "H2" && el.tagName !== "H3" && el.tagName !== "H4" && el.tagName !== "BLOCKQUOTE" && el.tagName !== "PRE" && el.tagName !== "LI") {
+          el = el.parentElement;
+        }
+        if (el && el !== editorRef.current && el.tagName.toLowerCase() === (value || "").replace(/[<>]/g, "")) {
+          document.execCommand("formatBlock", false, "<p>");
+        } else {
+          document.execCommand("formatBlock", false, value || "<p>");
+        }
+      } else {
+        document.execCommand("formatBlock", false, value || "<p>");
+      }
+    } else if (cmd === "createLink" && value) {
+      document.execCommand("createLink", false, value);
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        const a = sel.getRangeAt(0).startContainer.parentElement?.closest('a');
+        if (a) a.setAttribute('title', value);
+      }
+    } else if (cmd === "hiliteColor") {
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        const range = sel.getRangeAt(0);
+        const parent = range.startContainer.parentElement;
+        const highlightSpan = parent?.closest('span[style*="background"]') || parent?.closest('span[style*="background-color"]');
+        if (highlightSpan) {
+          const text = highlightSpan.textContent || '';
+          const p = highlightSpan.parentNode;
+          if (p) {
+            const textNode = document.createTextNode(text);
+            p.replaceChild(textNode, highlightSpan);
+            const newRange = document.createRange();
+            newRange.selectNodeContents(textNode);
+            newRange.collapse(false);
+            sel.removeAllRanges();
+            sel.addRange(newRange);
+          }
+        } else {
+          document.execCommand("hiliteColor", false, "#FFF9C4");
+          if (sel.rangeCount > 0) {
+            const a = (sel.getRangeAt(0).startContainer.parentElement?.closest('span[style*="background"]') || sel.getRangeAt(0).startContainer.parentElement?.closest('span[style*="background-color"]')) as HTMLElement | null;
+            if (a && a.style.backgroundColor) {
+              a.style.backgroundColor = '#FFF9C4';
+              a.style.borderRadius = '3px';
+              a.style.padding = '1px 2px';
+            }
+          }
+        }
+      }
+    } else {
+      document.execCommand(cmd, false, value);
+    }
+    editorRef.current?.focus();
+    setSaveStatus("pending");
+    if (editorRef.current && selectedNote) {
+      updateNote(selectedNote.id, { content: editorRef.current.innerHTML });
+    }
+  }, [selectedNote, updateNote]);
+
   const handleEditorKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
     // 1. Tab indentation / outdentation
     if (e.key === "Tab") {
@@ -1499,6 +1656,65 @@ export default function Notas() {
       }
       setSaveStatus("pending");
       return;
+    }
+
+    // 1a. Format keys (Ctrl + B, Ctrl + I, Ctrl + U, Ctrl + K, Ctrl + E, Ctrl + D)
+    if (e.ctrlKey || e.metaKey) {
+      const key = e.key.toLowerCase();
+      if (key === 'b') {
+        e.preventDefault();
+        handleFormat("bold");
+        return;
+      }
+      if (key === 'i') {
+        e.preventDefault();
+        handleFormat("italic");
+        return;
+      }
+      if (key === 'u') {
+        e.preventDefault();
+        handleFormat("underline");
+        return;
+      }
+      if (key === 'k') {
+        e.preventDefault();
+        const sel = window.getSelection();
+        if (sel && sel.toString()) {
+          const url = prompt("Ingresa la URL del enlace:", "https://");
+          if (url) {
+            document.execCommand("createLink", false, url);
+            const s = window.getSelection();
+            if (s && s.rangeCount > 0) {
+              const a = s.getRangeAt(0).startContainer.parentElement?.closest('a');
+              if (a) a.setAttribute('title', url);
+            }
+            setSaveStatus("pending");
+            if (editorRef.current && selectedNote) {
+              updateNote(selectedNote.id, { content: editorRef.current.innerHTML });
+            }
+          }
+        }
+        return;
+      }
+      if (key === 'e') {
+        e.preventDefault();
+        const sel = window.getSelection();
+        if (sel && sel.toString()) {
+          document.execCommand("insertHTML", false, `<code style="background:var(--bg-elevated);padding:2px 6px;border-radius:4px;font-family:'JetBrains Mono',monospace;font-size:0.9em;color:var(--accent);">${sel.toString()}</code>`);
+          setSaveStatus("pending");
+          if (editorRef.current && selectedNote) {
+            updateNote(selectedNote.id, { content: editorRef.current.innerHTML });
+          }
+        } else {
+          handleFormat("codeBlock");
+        }
+        return;
+      }
+      if (key === 'd' || (e.shiftKey && key === 'x')) {
+        e.preventDefault();
+        handleFormat("strikeThrough");
+        return;
+      }
     }
 
     // 1b. / Slash command trigger — insert "/" and show menu
@@ -1747,6 +1963,12 @@ export default function Notas() {
           cmd = "ol";
         } else if (textBeforeCursor === ">") {
           cmd = "quote";
+        } else if (textBeforeCursor === "```") {
+          cmd = "codeBlock";
+        } else if (textBeforeCursor === "---") {
+          cmd = "insertHR";
+        } else if (textBeforeCursor === "$$") {
+          cmd = "mathBlock";
         }
 
         if (cmd) {
@@ -1768,12 +1990,18 @@ export default function Notas() {
             document.execCommand("insertOrderedList", false);
           } else if (cmd === "checklist") {
             document.execCommand("insertHTML", false, htmlToInsert);
+          } else if (cmd === "codeBlock") {
+            handleFormat("codeBlock");
+          } else if (cmd === "insertHR") {
+            handleFormat("insertHR");
+          } else if (cmd === "mathBlock") {
+            handleFormat("mathBlock");
           }
           setSaveStatus("pending");
         }
       }
     }
-  }, [handleEditorInput, slashMenuPos]);
+  }, [handleEditorInput, slashMenuPos, selectedNote, updateNote, handleFormat]);
 
   const handleEditorPaste = useCallback((e: React.ClipboardEvent) => {
     const sel = window.getSelection();
@@ -1847,7 +2075,6 @@ export default function Notas() {
       e.preventDefault();
       const temp = document.createElement("div");
       temp.innerHTML = htmlData;
-      // Remove problematic inline styles that conflict with theme
       const all = temp.querySelectorAll("*");
       for (const el of all) {
         const style = (el as HTMLElement).style;
@@ -1857,7 +2084,6 @@ export default function Notas() {
         style.removeProperty("font-family");
         style.removeProperty("margin");
         style.removeProperty("padding");
-        // Keep font-size, font-weight, font-style, text-decoration, text-align
         el.removeAttribute("bgcolor");
         el.removeAttribute("face");
         el.removeAttribute("class");
@@ -1870,103 +2096,15 @@ export default function Notas() {
         .replace(/<span[^>]*>/gi, "<span>");
       document.execCommand("insertHTML", false, cleaned);
       setSaveStatus("pending");
+    } else {
+      // Plain text paste: detect URLs
+      const text = e.clipboardData.getData("text/plain");
+      if (text && (text.startsWith("http://") || text.startsWith("https://"))) {
+        e.preventDefault();
+        setPendingLink(text);
+      }
     }
   }, [selectedNote, updateNote]);
-
-  const handleFormat = useCallback((cmd: string, value?: string) => {
-    if (cmd === "codeBlock") {
-      const sel = window.getSelection();
-      if (!sel || !sel.rangeCount) { editorRef.current?.focus(); return; }
-      const range = sel.getRangeAt(0);
-      let el: HTMLElement | null = range.startContainer.parentElement;
-      let inCodeBlock = false;
-      while (el && el !== editorRef.current) {
-        if (el.classList.contains("notes-code-block")) { inCodeBlock = true; break; }
-        el = el.parentElement;
-      }
-      if (inCodeBlock) {
-        const text = el!.querySelector("code")?.textContent || "";
-        const p = document.createElement("p");
-        p.textContent = text;
-        el!.parentNode?.replaceChild(p, el!);
-        const newRange = document.createRange();
-        newRange.selectNodeContents(p);
-        newRange.collapse(false);
-        sel.removeAllRanges();
-        sel.addRange(newRange);
-      } else {
-        const text = sel.toString();
-        const html = `<pre class="notes-code-block"><code>${text || "Código"}</code><button class="copy-code-btn" data-code="${encodeURIComponent(text || "")}">Copiar</button></pre>`;
-        document.execCommand("insertHTML", false, html);
-      }
-    } else if (cmd === "insertTable") {
-      const dims = value ? value.split("x").map(Number) : [3, 3];
-      const cols = dims[0] || 3;
-      const rows = dims[1] || 3;
-      let thead = "<thead><tr>";
-      for (let c = 1; c <= cols; c++) thead += `<th style="border:1px solid var(--border-default);padding:8px;background:var(--bg-hover);font-weight:600;">Columna ${c}</th>`;
-      thead += "</tr></thead>";
-      let tbody = "<tbody>";
-      for (let r = 1; r <= rows; r++) {
-        tbody += "<tr>";
-        for (let c = 1; c <= cols; c++) tbody += `<td style="border:1px solid var(--border-default);padding:8px;">Dato ${r}-${c}</td>`;
-        tbody += "</tr>";
-      }
-      tbody += "</tbody>";
-      const html = `<table class="notes-table" style="width:100%;border-collapse:collapse;margin:8px 0;">${thead}${tbody}</table><br>`;
-      document.execCommand("insertHTML", false, html);
-    } else if (cmd === "insertFile") {
-      fileInputRef.current?.click();
-      return;
-    } else if (cmd === "styledQuote") {
-      const sel = window.getSelection();
-      const text = sel ? sel.toString() : "";
-      if (text) {
-        document.execCommand("insertHTML", false, `<blockquote class="notes-styled-quote" style="border-left:3px solid var(--accent);margin:12px 0;padding:12px 16px;background:var(--bg-hover);border-radius:0 8px 8px 0;font-style:italic;color:var(--text-secondary);">${text}</blockquote>`);
-      } else {
-        document.execCommand("insertHTML", false, `<blockquote class="notes-styled-quote" style="border-left:3px solid var(--accent);margin:12px 0;padding:12px 16px;background:var(--bg-hover);border-radius:0 8px 8px 0;font-style:italic;color:var(--text-secondary);"><br></blockquote>`);
-      }
-    } else if (cmd === "removeLink") {
-      document.execCommand("unlink", false);
-    } else if (cmd === "mathInline") {
-      const formula = prompt("Ingresa la fórmula matemática inline (LaTeX):", "E=mc^2");
-      if (formula) {
-        document.execCommand("insertHTML", false, `$${formula}$`);
-      }
-    } else if (cmd === "mathBlock") {
-      const formula = prompt("Ingresa la fórmula en bloque (LaTeX):", "\\int_{a}^{b} f(x)\\,dx = F(b) - F(a)");
-      if (formula) {
-        document.execCommand("insertHTML", false, `$$${formula}$$`);
-      }
-    } else if (cmd === "calloutBlock") {
-      const text = prompt("Ingresa el texto para el bloque destacado (Callout):", "Nota importante...");
-      if (text) {
-        const html = `<div class="notes-callout" style="display:flex;gap:12px;padding:12px 16px;background:var(--bg-elevated);border-left:4px solid var(--accent);border-radius:8px;margin:12px 0;color:var(--text-secondary);align-items:center;"><span style="font-size:18px;">💡</span><div style="flex:1;font-size:14px;line-height:1.5;">${text}</div></div><br>`;
-        document.execCommand("insertHTML", false, html);
-      }
-    } else if (cmd === "insertHR") {
-      document.execCommand("insertHTML", false, "<hr style='border:none;border-top:1px solid var(--border-default);margin:16px 0;' />");
-    } else if (cmd === "formatBlock") {
-      const sel = window.getSelection();
-      if (sel && sel.rangeCount) {
-        let el: HTMLElement | null = sel.getRangeAt(0).startContainer.parentElement;
-        while (el && el !== editorRef.current && el.tagName !== "P" && el.tagName !== "H1" && el.tagName !== "H2" && el.tagName !== "H3" && el.tagName !== "H4" && el.tagName !== "BLOCKQUOTE" && el.tagName !== "PRE" && el.tagName !== "LI") {
-          el = el.parentElement;
-        }
-        if (el && el !== editorRef.current && el.tagName.toLowerCase() === (value || "").replace(/[<>]/g, "")) {
-          document.execCommand("formatBlock", false, "<p>");
-        } else {
-          document.execCommand("formatBlock", false, value || "<p>");
-        }
-      } else {
-        document.execCommand("formatBlock", false, value || "<p>");
-      }
-    } else {
-      document.execCommand(cmd, false, value);
-    }
-    editorRef.current?.focus();
-    setSaveStatus("pending");
-  }, []);
 
   const handleSlashSelect = useCallback((cmd: string, value?: string) => {
     setSlashMenuPos(null);
@@ -1978,12 +2116,13 @@ export default function Notas() {
   const handleDuplicate = useCallback(() => {
     const targetId = contextMenu ? contextMenu.noteId : selectedNoteId;
     if (!targetId) return;
+    const original = notes.find(n => n.id === targetId);
     const newId = duplicateNote(targetId);
     if (newId) {
       setSelectedNoteId(newId);
-      toast.success("Cuaderno duplicado");
+      toast.success(original ? `Copia de "${original.title}" creada` : "Nota duplicada");
     }
-  }, [selectedNoteId, contextMenu, duplicateNote]);
+  }, [selectedNoteId, contextMenu, duplicateNote, notes]);
 
   const handleMoveToFolder = useCallback((folderId: string | undefined) => {
     const targetId = contextMenu ? contextMenu.noteId : selectedNoteId;
@@ -2078,18 +2217,21 @@ export default function Notas() {
   useEffect(() => {
     if (!selectedNote || !isEditing) return;
     const id = setInterval(() => { handleSaveNote(); }, 20000);
-    return () => clearInterval(id);
+    return () => {
+      clearInterval(id);
+      handleSaveNote(); // Persistir cambios pendientes al desmontar o cambiar de nota
+    };
   }, [selectedNote, isEditing, handleSaveNote]);
 
   // Save a history entry when opening the editor
   useEffect(() => {
     if (!isEditing || !selectedNote) return;
-    const plain = selectedNote.content.replace(/<[^>]+>/g, "").trim();
+    const plain = selectedNote.content.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\u00A0/g, " ").trim();
     if (plain) {
       const preview = plain.slice(0, 80);
       const versions = JSON.parse(localStorage.getItem("owa_note_versions_" + selectedNote.id) || "[]");
       if (!versions.length || versions[0].preview !== preview) {
-        versions.unshift({ timestamp: new Date().toISOString(), preview, wordCount: plain.split(/\s+/).length, content: selectedNote.content });
+        versions.unshift({ timestamp: new Date().toISOString(), preview, wordCount: plain.split(/\s+/).filter(Boolean).length, content: selectedNote.content });
         if (versions.length > 10) versions.length = 10;
         localStorage.setItem("owa_note_versions_" + selectedNote.id, JSON.stringify(versions));
       }
@@ -2157,22 +2299,18 @@ export default function Notas() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <button onClick={() => {
-            if (floatingNoteId) { setFloatingNoteId(null); } else {
-              const id = addNote({ title: "Nota rápida", content: "", subtitle: "", course: "", courseColor: "", tags: [], isPinned: false });
-              setFloatingNoteId(id);
-            }
-          }}
+          <button onClick={() => setActiveSidebarTab(activeSidebarTab === 'favs' ? 'all' : 'favs')}
             style={{
               display: "flex", alignItems: "center", gap: 5, height: 30,
               padding: "0 10px", borderRadius: 8,
-              background: "var(--bg-surface)", border: "1px solid var(--border-subtle)",
-              color: "var(--text-secondary)", fontSize: 11, fontWeight: 550,
+              background: activeSidebarTab === 'favs' ? 'rgba(245, 158, 11, 0.12)' : "var(--bg-surface)",
+              border: "1px solid " + (activeSidebarTab === 'favs' ? '#F59E0B' : 'var(--border-subtle)'),
+              color: activeSidebarTab === 'favs' ? '#F59E0B' : "var(--text-secondary)", fontSize: 11, fontWeight: 550,
               cursor: "pointer", transition: "all 150ms " + EASE,
             }}
             className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
-            title={floatingNoteId ? "Cerrar nota flotante" : "Nueva nota flotante (Ctrl+Shift+N)"}>
-            <StickyNote size={13} /> {floatingNoteId ? "Cerrar flotante" : "Nota rápida"}
+            title={activeSidebarTab === 'favs' ? "Ver todas" : "Ver destacados"}>
+            <Star size={13} fill={activeSidebarTab === 'favs' ? '#F59E0B' : 'none'} /> {activeSidebarTab === 'favs' ? 'Todas' : 'Destacados'}
           </button>
           <NotificationBell />
           <div className="flex items-center gap-4 flex-shrink-0" style={{
@@ -2281,10 +2419,11 @@ export default function Notas() {
                   <EditorToolbar onFormat={handleFormat} />
                 </div>
 
-                {/* Write panel — adaptive margins, professional width */}
+                {/* Write panel — adaptive margins */}
                 <div style={{
                   flex: 1, display: "flex", flexDirection: "column", overflow: "auto",
-                  padding: "32px 0 64px", width: "100%", boxSizing: "border-box",
+                  padding: showDetailsPanel ? "16px 24px 48px" : "16px 48px 48px",
+                  width: "100%", boxSizing: "border-box",
                 }}>
                   {/* Clean text input for title */}
                   <input
@@ -2300,7 +2439,7 @@ export default function Notas() {
                       borderBottom: "1px solid var(--border-subtle)",
                       caretColor: "var(--accent)", boxSizing: "border-box",
                       letterSpacing: "-0.02em",
-                      maxWidth: 760, margin: "0 auto 20px",
+                      margin: "0 0 20px",
                     }}
                     onBlur={handleSaveNote}
                   />
@@ -2317,11 +2456,17 @@ export default function Notas() {
                       color: "var(--text-primary)",
                       fontFamily: "'Atkinson Hyperlegible', system-ui, serif",
                       caretColor: "var(--accent)",
-                      maxWidth: 760, width: "100%", boxSizing: "border-box",
-                      margin: "0 auto",
+                      width: "100%", boxSizing: "border-box",
+                      margin: "0",
                     }}
                     onDoubleClick={(e) => {
                       const target = e.target as HTMLElement;
+                      // Double-click on IMG: show options (border, size, delete)
+                      if (target.tagName === "IMG") {
+                        e.preventDefault();
+                        setLightboxImage({ src: (target as HTMLImageElement).src, el: target });
+                        return;
+                      }
                       // Double-click on code block: exit cursor below it
                       const codeBlock = target.closest(".notes-code-block");
                       if (codeBlock && codeBlock.parentElement) {
@@ -2370,12 +2515,6 @@ export default function Notas() {
                           cb.removeAttribute("checked");
                         }
                         handleEditorInput();
-                      }
-                      if (target.tagName === "IMG" && target.classList.contains("editable-image")) {
-                        e.preventDefault();
-                        const currentBorder = target.style.borderColor ? target.style.borderColor : "#000000";
-                        setLightboxBorderColor(currentBorder);
-                        setLightboxImage({ src: (target as HTMLImageElement).src, el: target });
                       }
                     }}
                     onKeyDown={handleEditorKeyDown}
@@ -2470,9 +2609,15 @@ export default function Notas() {
 
               {/* Collapsible Details Panel right — redesigned professional */}
               {showDetailsPanel && selectedNote && (() => {
-                const pColor = selectedNote.coverColor || selectedNote.courseColor || "var(--accent)";
-                const allTags = Object.keys(mergedTagColors);
+                const detailFolder = folders.find(f => f.id === selectedNote.folderId);
+                const pColor = selectedNote.coverColor || detailFolder?.color || selectedNote.courseColor || "var(--accent)";
                 const noteTags = selectedNote.tags || [];
+                const infoAllTags = (() => {
+                  const s = new Set<string>();
+                  notes.forEach(n => n.tags?.forEach(t => s.add(t)));
+                  try { JSON.parse(localStorage.getItem("owa_created_tags") || "[]").forEach((t: string) => s.add(t)); } catch {}
+                  return Array.from(s);
+                })();
                 const handleTagToggle = (tagName: string) => {
                   const current = selectedNote.tags || [];
                   const next = current.includes(tagName)
@@ -2548,9 +2693,9 @@ export default function Notas() {
                     }}>
                       <Hash size={9} /> Etiquetas
                     </h3>
-                    {allTags.length > 0 ? (
+                    {infoAllTags.length > 0 ? (
                       <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                        {allTags.map(tag => {
+                        {infoAllTags.map(tag => {
                           const tc = mergedTagColors[tag] || "var(--accent)";
                           const active = noteTags.includes(tag);
                           return (
@@ -2604,17 +2749,6 @@ export default function Notas() {
                       <Zap size={9} /> Acciones
                     </h3>
                     <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                      <button onClick={() => { openFloatingNote(selectedNote!); }}
-                        style={{
-                          display: "flex", alignItems: "center", gap: 7, padding: "7px 10px",
-                          borderRadius: 7, border: "1px solid var(--border-default)",
-                          background: "transparent",
-                          color: "var(--accent)", fontSize: 11, fontWeight: 500,
-                          cursor: "pointer", transition: "all 120ms",
-                        }}
-                        className="hover:bg-[var(--accent-dim)]">
-                        <StickyNote size={12} /> Flotante
-                      </button>
                       <button onClick={handleDuplicate}
                         style={{
                           display: "flex", alignItems: "center", gap: 7, padding: "7px 10px",
@@ -3344,7 +3478,8 @@ export default function Notas() {
                           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                             {/* Folder / Course card */}
                             {selectedNote.course && (() => {
-                              const fc = selectedNote.coverColor || selectedNote.courseColor || "var(--accent)";
+                              const currentFolder = folders.find(f => f.id === selectedNote.folderId);
+                              const fc = selectedNote.coverColor || currentFolder?.color || selectedNote.courseColor || "var(--accent)";
                               return (
                                 <div style={{
                                   display: "flex", alignItems: "center", gap: 10,
@@ -3604,7 +3739,6 @@ export default function Notas() {
           }} />
           {[
             { label: "Editar", icon: Edit3, action: () => { setSelectedNoteId(contextMenu.noteId); setContextMenu(null); setIsEditing(true); } },
-            { label: "Abrir en flotante", icon: StickyNote, action: () => { const t = notes.find(n => n.id === contextMenu.noteId); if (t) openFloatingNote(t); } },
             { type: "divider" as const },
             { label: "Editar icono", icon: ImageIcon, action: () => { const target = notes.find(n => n.id === contextMenu.noteId); if (target) { setIconPickerTarget(contextMenu.noteId); setShowIconPicker(true); } } },
             { label: "Duplicar", icon: Copy, action: handleDuplicate },
@@ -3799,6 +3933,62 @@ export default function Notas() {
         </div>
       )}
 
+      {/* ===== LINK PASTE CONFIRMATION ===== */}
+      {pendingLink && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 10002,
+          background: "rgba(0,0,0,0.5)", backdropFilter: "blur(6px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          padding: 24,
+        }} onClick={() => setPendingLink(null)}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background: "var(--bg-surface)",
+            border: "1px solid var(--border-default)",
+            borderRadius: 14, padding: "20px 24px",
+            maxWidth: 440, width: "100%",
+            boxShadow: "0 16px 64px rgba(0,0,0,0.3)",
+            display: "flex", flexDirection: "column", gap: 12,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Link size={16} style={{ color: "var(--accent)" }} />
+              <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>Enlace detectado</span>
+            </div>
+            <div style={{
+              padding: "8px 12px", background: "var(--bg-elevated)",
+              borderRadius: 8, fontSize: 11.5, color: "var(--accent)",
+              wordBreak: "break-all", border: "1px solid var(--border-subtle)",
+            }}>{pendingLink}</div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
+              <button onClick={() => setPendingLink(null)}
+                style={{
+                  padding: "6px 14px", borderRadius: 8, border: "1px solid var(--border-default)",
+                  background: "transparent", color: "var(--text-secondary)", fontSize: 11.5,
+                  cursor: "pointer", fontWeight: 500,
+                }}
+                className="hover:bg-[var(--bg-hover)]">
+                Descartar
+              </button>
+              <button onClick={() => {
+                if (editorRef.current) {
+                  document.execCommand("insertHTML", false,
+                    `<div class="notes-attachment" style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--border-subtle);border-radius:8px;margin:8px 0;background:var(--bg-hover);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg><a href="${pendingLink}" target="_blank" style="color:var(--accent);font-weight:600;font-size:12px;">${pendingLink}</a></div>`);
+                  setSaveStatus("pending");
+                  if (selectedNote) updateNote(selectedNote.id, { content: editorRef.current.innerHTML });
+                }
+                setPendingLink(null);
+              }}
+                style={{
+                  padding: "6px 14px", borderRadius: 8, border: "none",
+                  background: "var(--accent)", color: "var(--text-on-accent, #fff)", fontSize: 11.5,
+                  cursor: "pointer", fontWeight: 600,
+                }}>
+                Agregar enlace
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ===== LINK WEB PREVIEW ===== */}
       {linkPreviewUrl && (
         <div style={{
@@ -3878,71 +4068,31 @@ export default function Notas() {
       {lightboxImage && (
         <div style={{
           position: "fixed", inset: 0, zIndex: 10003,
-          background: "rgba(0,0,0,0.8)", backdropFilter: "blur(10px)",
+          background: "rgba(0,0,0,0.85)", backdropFilter: "blur(12px)",
           display: "flex", alignItems: "center", justifyContent: "center",
           padding: 24,
-        }} onClick={() => { setLightboxImage(null); setShowImageDeleteConfirm(false); }}>
+        }} onClick={() => setLightboxImage(null)}>
           <div onClick={e => e.stopPropagation()} style={{
-            display: "flex", flexDirection: "column", alignItems: "center",
-            gap: 16, maxWidth: "90vw", maxHeight: "90vh",
+            position: "relative", display: "flex", alignItems: "center", justifyContent: "center",
+            maxWidth: "90vw", maxHeight: "90vh",
           }}>
             <img src={lightboxImage.src} alt=""
               style={{
-                maxWidth: "100%", maxHeight: "70vh", borderRadius: 12,
-                border: lightboxBorderColor && lightboxBorderColor !== "#000000" ? "3px solid " + lightboxBorderColor : "none",
+                maxWidth: "100%", maxHeight: "85vh", borderRadius: 8,
                 boxShadow: "0 8px 40px rgba(0,0,0,0.5)",
                 objectFit: "contain",
               }}
             />
-            <div style={{
-              display: "flex", alignItems: "center", gap: 10,
-              padding: "10px 16px", background: "rgba(255,255,255,0.08)",
-              borderRadius: 12, backdropFilter: "blur(4px)",
-            }}>
-              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.6)", fontWeight: 600 }}>Borde</span>
-              <input type="color" value={lightboxBorderColor}
-                onChange={(e) => {
-                  const c = e.target.value;
-                  setLightboxBorderColor(c);
-                  lightboxImage.el.style.border = "2px solid " + c;
-                }}
-                style={{ width: 28, height: 28, border: "none", borderRadius: 6, cursor: "pointer", padding: 0, background: "none" }}
-              />
-              <div style={{ width: 1, height: 20, background: "rgba(255,255,255,0.15)" }} />
-              <input type="range" min="20" max="100" defaultValue="100"
-                onChange={(e) => { lightboxImage.el.style.width = e.target.value + "%"; }}
-                style={{ width: 80, height: 4, accentColor: "var(--accent)", cursor: "pointer" }}
-              />
-              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.6)", fontWeight: 600 }}>Tamaño</span>
-              <div style={{ width: 1, height: 20, background: "rgba(255,255,255,0.15)" }} />
-              {!showImageDeleteConfirm ? (
-                <button onClick={() => setShowImageDeleteConfirm(true)}
-                  style={{
-                    background: "none", border: "1px solid rgba(255,255,255,0.2)",
-                    borderRadius: 6, padding: "4px 8px",
-                    color: "#fff", cursor: "pointer", fontSize: 10, fontWeight: 600,
-                  }}>Borrar</button>
-              ) : (
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ fontSize: 10, color: "rgba(255,255,255,0.7)" }}>¿Eliminar?</span>
-                  <button onClick={() => {
-                    lightboxImage.el.remove();
-                    setLightboxImage(null);
-                    setShowImageDeleteConfirm(false);
-                    setSaveStatus("pending");
-                  }}
-                    style={{
-                      background: "var(--error)", border: "none", borderRadius: 6,
-                      padding: "4px 10px", color: "#fff", cursor: "pointer", fontSize: 10, fontWeight: 600,
-                    }}>Sí</button>
-                  <button onClick={() => setShowImageDeleteConfirm(false)}
-                    style={{
-                      background: "none", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 6,
-                      padding: "4px 10px", color: "#fff", cursor: "pointer", fontSize: 10, fontWeight: 600,
-                    }}>No</button>
-                </div>
-              )}
-            </div>
+            <button onClick={() => setLightboxImage(null)}
+              style={{
+                position: "absolute", top: -12, right: -12, width: 32, height: 32,
+                borderRadius: "50%", border: "none", background: "var(--bg-elevated)",
+                color: "var(--text-secondary)", cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                boxShadow: "0 2px 12px rgba(0,0,0,0.3)",
+              }}>
+              <X size={16} />
+            </button>
           </div>
         </div>
       )}

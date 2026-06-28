@@ -448,7 +448,6 @@ interface AppState {
   showRestPrompt: boolean;
   setShowRestPrompt: Dispatch<SetStateAction<boolean>>;
   handlePomodoroBannerClick: () => void;
-  setFloatingNoteId: Dispatch<SetStateAction<string | null>>;
   importState: ImportState;
   artists: { id: string; name: string; profileImage?: string }[];
   trackHistory: string[];
@@ -468,7 +467,6 @@ interface AppState {
   coverModalTrackId: string | null;
   youtubeVideoUrl: string | null;
   isPlayingMusic: boolean;
-  floatingNoteId: string | null;
 }
 
 export type ViewId = 'inicio' | 'tareas' | 'apuntes' | 'estudio' | 'cursos' | 'analiticas' | 'chat' | 'ajustes' | 'musica' | 'flujo' | 'canvas';
@@ -734,7 +732,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [showCompletion, setShowCompletion] = useState(false);
   const [roundsCompleted, setRoundsCompleted] = useState(0);
   const [showRestPrompt, setShowRestPrompt] = useState(false);
-  const [floatingNoteId, setFloatingNoteId] = useState<string | null>(null);
 
   // Pause tracking and time distribution
   const [accumulatedPauseTime, setAccumulatedPauseTime] = useState(0);
@@ -1613,7 +1610,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const updateNote = useCallback((id: string, updates: Partial<Note>) => {
-    setNotes(prev => prev.map(n => n.id === id ? { ...n, ...updates, updatedAt: new Date().toISOString() } : n));
+    setNotes(prev => {
+      const note = prev.find(n => n.id === id);
+      if (!note) return prev;
+      return prev.map(n => n.id === id ? { ...n, ...updates, updatedAt: new Date().toISOString() } : n);
+    });
   }, []);
 
   const deleteNote = useCallback((id: string) => {
@@ -1634,6 +1635,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteNoteFolder = useCallback((id: string) => {
     setNoteFolders(prev => prev.filter(f => f.id !== id));
+    setNotes(prev => prev.map(n => n.folderId === id ? { ...n, folderId: undefined, course: 'Sin carpeta', courseColor: 'var(--text-muted)' } : n));
   }, []);
 
   const reorderFolders = useCallback((folderIds: string[]) => {
@@ -1668,7 +1670,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const now = new Date().toISOString();
     const newId = Date.now().toString();
     const { id, createdAt, updatedAt, ...rest } = original;
-    setNotes(prev => [...prev, { ...rest, id: newId, title: `${rest.title} (copia)`, createdAt: now, updatedAt: now }]);
+    const baseTitle = rest.title.replace(/\s*\(Copia(?: \d+)?\)\s*$/i, '').trim();
+    const copies = notes.filter(n => n.title.startsWith(baseTitle) && n.title.match(/\(Copia(?: \d+)?\)/i));
+    const copyNums = copies.map(n => {
+      const m = n.title.match(/\(Copia\s*(\d+)\)/i);
+      return m ? parseInt(m[1], 10) : 1;
+    }).sort((a, b) => b - a);
+    const nextNum = copyNums.length > 0 ? copyNums[0] + 1 : '';
+    const newTitle = `${baseTitle} (Copia${nextNum ? ` ${nextNum}` : ''})`;
+    setNotes(prev => [...prev, { ...rest, id: newId, title: newTitle, createdAt: now, updatedAt: now }]);
     return newId;
   }, [notes]);
 
@@ -2559,7 +2569,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [studySessions, settings.dailyGoal, settings.studyGoals]);
 
   const updateStudySession = useCallback((id: string, updates: Partial<StudySession>) => {
-    if (isRestRef.current) return;
     setStudySessions(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
     setTimeout(() => recalcDailyPerformance(new Date().toISOString().slice(0, 10)), 0);
   }, []);
@@ -2640,18 +2649,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
     return () => { unlisten.then(fn => fn()); };
   }, [handlePomodoroBannerClick, setNavigateTo]);
-
-  // BroadcastChannel listener for SAVE_NOTE from floating-note-window
-  useEffect(() => {
-    const ch = new BroadcastChannel('owa_notes_sync');
-    const handler = (e: MessageEvent) => {
-      if (e.data?.type === 'SAVE_NOTE' && e.data.noteId && e.data.updates) {
-        updateNote(e.data.noteId, e.data.updates);
-      }
-    };
-    ch.addEventListener('message', handler);
-    return () => { ch.removeEventListener('message', handler); ch.close(); };
-  }, [updateNote]);
 
   // â”€â”€ DOWNLOADS â”€â”€
   const addToDownloadQueue = useCallback((item: Omit<DownloadItem, 'id' | 'progress' | 'status' | 'completedItems'>): string => {
@@ -2925,7 +2922,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     tasks, notes, noteFolders, courses, events, tracks, studySessions,
     settings, sessionTime, sessionType, weeklyStudyTime, dailyStudyTime, pomodoroSessions,
     activeTaskId, timerLocked, isTimerActive, roundsCompleted, showCompletion,
-    showRestPrompt, setShowRestPrompt, handlePomodoroBannerClick, floatingNoteId, setFloatingNoteId,
+    showRestPrompt, setShowRestPrompt, handlePomodoroBannerClick,
     currentTrackId, coverModalTrackId, youtubeVideoUrl, isPlayingMusic, isAudioLoading, musicVolume, musicProgress, musicDuration, musicListeningTime, dailyMusicTime, weeklyMusicTime, monthlyMusicTime, shuffleMode, repeatMode,
     trackHistory, playCounts, musicQueue, queueSource, downloadQueue, artists,
     googleConnected, calendarSyncEnabled, lastCalendarSync, importState,

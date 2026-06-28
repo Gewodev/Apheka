@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useApp } from '../store/AppContext';
 
 /**
@@ -34,6 +34,8 @@ export function useTimer() {
     setShowCompletion,
     resetTimer,
     addNotification,
+    distractionCount,
+    accumulatedPauseTime,
   } = useApp();
 
   // Local UI state
@@ -41,21 +43,8 @@ export function useTimer() {
   const [chronoRounds, setChronoRounds] = useState(0);
   const chronoGoal = settings.chronoGoal ?? 25 * 60; // seconds, default 25â€¯min
 
-  const hasTriggeredRef = useRef(false);
-  const restStartRef = useRef(-1);
   const sessionTimeRef = useRef(sessionTime);
   sessionTimeRef.current = sessionTime;
-
-  // Freeze restStartRef when rest starts, reset when rest ends
-  useEffect(() => {
-    if (isRest) {
-      if (restStartRef.current === -1) {
-        restStartRef.current = sessionTimeRef.current;
-      }
-    } else {
-      restStartRef.current = -1;
-    }
-  }, [isRest]);
 
   // ---------------------------------------------------------------------------
   // Timer sideâ€‘effects â€“ runs when the timer is active
@@ -72,10 +61,6 @@ export function useTimer() {
       setChronoRoundCounted(true);
     }
 
-    // Reset helpers when timer stops or mode changes
-    if (isRest || !isTimerActive || sessionType !== 'pomodoro') {
-      hasTriggeredRef.current = false;
-    }
     if (!isTimerActive || sessionType !== 'chrono') {
       setChronoRoundCounted(false);
     }
@@ -84,7 +69,6 @@ export function useTimer() {
     sessionTime,
     sessionType,
     isRest,
-    settings.pomodoroTime,
     chronoGoal,
     chronoRoundCounted,
   ]);
@@ -96,19 +80,21 @@ export function useTimer() {
   // ---------------------------------------------------------------------------
   // Helper UI calculations
   // ---------------------------------------------------------------------------
+  const pomoLimit = settings.pomodoroTime || 1500;
   const displayTime =
     sessionType === 'pomodoro'
-      ? Math.max(0, (settings.pomodoroTime ?? 1500) - sessionTime)
+      ? Math.max(0, pomoLimit - sessionTime)
       : sessionTime;
 
   const progressPct =
-    sessionType === 'pomodoro' && settings.pomodoroTime
-      ? Math.min(100, (sessionTime / settings.pomodoroTime) * 100)
+    sessionType === 'pomodoro' && pomoLimit
+      ? Math.min(100, (sessionTime / pomoLimit) * 100)
       : 0;
 
-  const isLongBreak = isRest && pomodoroSessions > 0 && (pomodoroSessions % (settings.pomodoroGoal ?? 4)) === 0;
-  const restDuration = isLongBreak ? (settings.longBreakTime ?? 900) : (settings.shortBreakTime ?? 300);
-  const restElapsed = isRest ? sessionTime - Math.max(0, restStartRef.current) : 0;
+  const pomoGoal = (settings.pomodoroGoal ?? 4) || 1;
+  const isLongBreak = isRest && pomodoroSessions > 0 && (pomodoroSessions % pomoGoal) === 0;
+  const restDuration = isLongBreak ? (settings.longBreakTime || 900) : (settings.shortBreakTime || 300);
+  const restElapsed = isRest ? sessionTime : 0;
   const restTimeLeft = isRest ? Math.max(0, restDuration - restElapsed) : 0;
   const restProgressPct = isRest && restDuration
     ? Math.min(100, (restElapsed / restDuration) * 100)
@@ -124,9 +110,6 @@ export function useTimer() {
   }, [setIsTimerActive]);
 
   const handleReset = useCallback(() => {
-    if (isTimerActive && !isRest) {
-      return;
-    }
     // Persist the session if it was long enough (>= 10s)
     if (sessionTime >= 10) {
       addStudySession({
@@ -136,13 +119,13 @@ export function useTimer() {
         duration: sessionTime,
         taskId: activeTaskId ?? undefined,
         courseId: undefined,
-        pauseCount: 0,
-        pauseDuration: 0,
+        pauseCount: distractionCount,
+        pauseDuration: accumulatedPauseTime,
       });
     }
     // Reset timer state
     resetTimer();
-  }, [sessionTime, sessionType, activeTaskId, addStudySession, resetTimer, isTimerActive, isRest]);
+  }, [sessionTime, sessionType, activeTaskId, addStudySession, resetTimer, distractionCount, accumulatedPauseTime]);
 
   const handleTypeChange = useCallback(
     (type: 'pomodoro' | 'chrono') => {
@@ -173,8 +156,8 @@ export function useTimer() {
     restTimeLeft,
     currentProgress,
     // progress numbers for UI
-    pomodoroProgress: Math.min(pomodoroSessions, settings.pomodoroGoal ?? 4),
-    pomodoroGoal: settings.pomodoroGoal ?? 4,
+    pomodoroProgress: Math.min(pomodoroSessions, pomoGoal),
+    pomodoroGoal: pomoGoal,
     pomodoroSessions,
     // handlers
     handleToggle,
