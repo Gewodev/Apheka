@@ -167,6 +167,14 @@ export interface NoteFolder {
   sortOrder?: number;
 }
 
+export interface Habit {
+  id: string;
+  name: string;
+  completedOn: string[]; // Array of 'YYYY-MM-DD' date strings
+  isArchived?: boolean;
+  order?: number;
+}
+
 export interface SubjectGroup {
   id: string;
   name: string;
@@ -405,6 +413,7 @@ export interface AppNotification {
 interface AppState {
   roundsCompleted: number;
   tasks: Task[];
+  habits: Habit[];
   notes: Note[];
   noteFolders: NoteFolder[];
   courses: Course[];
@@ -509,6 +518,11 @@ interface AppContextType extends AppState {
   addEvent: (event: Omit<ScheduleEvent, 'id'>) => void;
   updateEvent: (id: string, updates: Partial<ScheduleEvent>) => void;
   deleteEvent: (id: string) => void;
+  // Habits
+  addHabit: (name: string) => void;
+  updateHabit: (id: string, updates: Partial<Habit>) => void;
+  deleteHabit: (id: string) => void;
+  setHabits: Dispatch<SetStateAction<Habit[]>>;
   // Music
   addTrack: (track: Omit<Track, 'id'>) => string;
   updateTrack: (id: string, updates: Partial<Track>) => void;
@@ -716,6 +730,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [noteFolders, setNoteFolders] = useState<NoteFolder[]>(defaultFolders);
   const [courses, setCourses] = useState<Course[]>(defaultCourses);
   const [events, setEvents] = useState<ScheduleEvent[]>([]);
+  const [habits, setHabits] = useState<Habit[]>([]);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [studySessions, setStudySessions] = useState<StudySession[]>([]);
   const [settings, setSettings] = useState<Settings>(defaultSettings);
@@ -975,6 +990,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (data.shuffleMode !== undefined) _setShuffleMode(data.shuffleMode);
           if (data.repeatMode) _setRepeatMode(data.repeatMode);
           if (data.tasks) setTasks(data.tasks);
+          if (data.habits) setHabits(data.habits);
           if (data.notes) setNotes(data.notes);
           if (data.noteFolders) setNoteFolders(data.noteFolders);
           if (data.courses) setCourses(data.courses);
@@ -1341,7 +1357,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const t = setTimeout(() => {
       set(STORAGE_KEY, JSON.stringify({
-        tasks, notes, noteFolders, courses, events, studySessions,
+        tasks, habits, notes, noteFolders, courses, events, studySessions,
         settings, sessionTime, sessionType, isRest, isTimerActive, weeklyStudyTime, dailyStudyTime, dailyStudyDate, pomodoroSessions,
         trackHistory, playCounts, musicQueue, musicVolume, shuffleMode, repeatMode, artists, playlists,
         currentTrackId, isPlayingMusic: isPlayingMusic && !globalAudio.paused, musicListeningTime, musicListeningDate, dailyMusicTime,
@@ -1359,7 +1375,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     debounceTimerRef.current = t;
     return () => { if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current); debounceTimerRef.current = null; };
   }, [
-    tasks, notes, noteFolders, courses, events, studySessions, settings, sessionTime,
+    tasks, habits, notes, noteFolders, courses, events, studySessions, settings, sessionTime,
     weeklyStudyTime, dailyStudyTime, dailyStudyDate, pomodoroSessions, trackHistory, playCounts, musicQueue,
     musicVolume, artists, playlists, currentTrackId, isPlayingMusic, musicListeningTime, musicListeningDate, dailyMusicTime,
     weeklyMusicTime, monthlyMusicTime, weeklyResetSunday, monthlyResetKey,
@@ -1481,7 +1497,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       : musicProgress;
     const savedPlaying = overrideIsPlaying !== undefined ? overrideIsPlaying : isPlayingMusic;
     set(STORAGE_KEY, JSON.stringify({
-      tasks, notes, noteFolders, courses, events, studySessions,
+      tasks, habits, notes, noteFolders, courses, events, studySessions,
       settings, sessionTime, sessionType, isRest, isTimerActive: false, weeklyStudyTime, dailyStudyTime, dailyStudyDate, pomodoroSessions,
       trackHistory, playCounts, musicQueue, musicVolume, shuffleMode, repeatMode, artists,
       currentTrackId, isPlayingMusic: savedPlaying, musicListeningTime, musicListeningDate, dailyMusicTime,
@@ -1739,6 +1755,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteEvent = useCallback((id: string) => {
     setEvents(prev => prev.filter(e => e.id !== id));
+  }, []);
+
+  // ── HABITS ──
+  const addHabit = useCallback((name: string) => {
+    const newHabit: Habit = {
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
+      name: name.trim(),
+      completedOn: [],
+      order: habits.length,
+    };
+    setHabits(prev => [...prev, newHabit]);
+  }, [habits.length]);
+
+  const updateHabit = useCallback((id: string, updates: Partial<Habit>) => {
+    setHabits(prev => prev.map(h => h.id === id ? { ...h, ...updates } : h));
+  }, []);
+
+  const deleteHabit = useCallback((id: string) => {
+    setHabits(prev => prev.filter(h => h.id !== id));
   }, []);
 
   // â”€â”€ MUSIC â”€â”€
@@ -2919,7 +2954,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [tasks]);
 
   const value: AppContextType = {
-    tasks, notes, noteFolders, courses, events, tracks, studySessions,
+    tasks, habits, notes, noteFolders, courses, events, tracks, studySessions,
     settings, sessionTime, sessionType, weeklyStudyTime, dailyStudyTime, pomodoroSessions,
     activeTaskId, timerLocked, isTimerActive, roundsCompleted, showCompletion,
     showRestPrompt, setShowRestPrompt, handlePomodoroBannerClick,
@@ -2931,6 +2966,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addNote, updateNote, deleteNote, restoreNote, permanentlyDeleteNote, addNoteFolder, deleteNoteFolder, reorderFolders, reorderNotes, updateNoteFolder, duplicateNote,
     addCourse, updateCourse, deleteCourse, reorderCourses,
     addEvent, updateEvent, deleteEvent,
+    addHabit, updateHabit, deleteHabit, setHabits,
     addTrack, updateTrack, deleteTrack, toggleTrackFavorite, importLocalTracks,
     playTrack, toggleMusicPlayback, setIsPlayingMusic, clearCurrentTrack, setMusicVolume: setMusicVolumeCb, setMusicProgress: setMusicProgressCb,
     setShuffleMode, setRepeatMode, setMusicQueue, setQueueSource, clearAllMusicData,

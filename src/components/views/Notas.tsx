@@ -191,19 +191,38 @@ function NoteCard({ note, isSelected, onSelect, onOpen, onContextMenu, onDragSta
   }, [note.content]);
   const [hov, setHov] = useState(false);
   const hasTags = note.tags && note.tags.length > 0;
+  const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dragAllowedRef = useRef(false);
+
+  const handleMouseDownCard = useCallback(() => {
+    dragAllowedRef.current = false;
+    longPressRef.current = setTimeout(() => { dragAllowedRef.current = true; }, 400);
+  }, []);
+
+  const handleMouseUpCard = useCallback(() => {
+    if (longPressRef.current) { clearTimeout(longPressRef.current); longPressRef.current = null; }
+    dragAllowedRef.current = false;
+  }, []);
+
+  const handleDragStartCard = useCallback((e: React.DragEvent) => {
+    if (!dragAllowedRef.current) { e.preventDefault(); return; }
+    onDragStart(e);
+  }, [onDragStart]);
 
   return (
     <div style={{ position: "relative", height: "100%", minWidth: 0 }}>
       <div
         draggable
-        onDragStart={onDragStart}
+        onDragStart={handleDragStartCard}
         onDragOver={onDragOver}
         onDrop={onDrop}
         onClick={onSelect}
         onDoubleClick={onOpen}
         onContextMenu={onContextMenu}
         onMouseEnter={() => setHov(true)}
-        onMouseLeave={() => setHov(false)}
+        onMouseLeave={(e) => { setHov(false); handleMouseUpCard(); }}
+        onMouseDown={handleMouseDownCard}
+        onMouseUp={handleMouseUpCard}
         className="bento-card"
         style={{
           display: "flex", flexDirection: "column", gap: 0,
@@ -335,7 +354,24 @@ function BookshelfBook({ note, isSelected, folders, onSelect, onDoubleClick, onC
       : (DEFAULT_TAG_COLORS[note.tags[0]] || spineColor))
     : null;
   const [hov, setHov] = useState(false);
-  
+  const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dragAllowedRef = useRef(false);
+
+  const handleMouseDownBook = useCallback(() => {
+    dragAllowedRef.current = false;
+    longPressRef.current = setTimeout(() => { dragAllowedRef.current = true; }, 400);
+  }, []);
+
+  const handleMouseUpBook = useCallback(() => {
+    if (longPressRef.current) { clearTimeout(longPressRef.current); longPressRef.current = null; }
+    dragAllowedRef.current = false;
+  }, []);
+
+  const handleDragStartBook = useCallback((e: React.DragEvent) => {
+    if (!dragAllowedRef.current) { e.preventDefault(); return; }
+    onDragStart(e);
+  }, [onDragStart]);
+
   const previewText = useMemo(() => {
     const text = note.content.replace(/<[^>]+>/g, "").trim();
     return text.slice(0, 60) || "Sin contenido adicional.";
@@ -360,14 +396,16 @@ function BookshelfBook({ note, isSelected, folders, onSelect, onDoubleClick, onC
       zIndex: hov ? 10 : 3,
     }}
       draggable
-      onDragStart={onDragStart}
+      onDragStart={handleDragStartBook}
       onDragOver={onDragOver}
       onDrop={onDrop}
       onClick={onSelect}
       onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}
       onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
+      onMouseLeave={(e) => { setHov(false); handleMouseUpBook(); }}
+      onMouseDown={handleMouseDownBook}
+      onMouseUp={handleMouseUpBook}
     >
         {/* 3D Book Cover Container — plain rectangle, no V-notch */}
       <div style={{
@@ -1268,7 +1306,7 @@ export default function Notas() {
     }
 
     result.sort((a, b) => {
-      if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
+      if (activeSidebarTab === 'favs' && a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
       if (sortMode === "priority") {
         const order = { high: 0, medium: 1, low: 2, none: 3 };
         return ((order[a.priority || "none"] || 3) - (order[b.priority || "none"] || 3));
@@ -1458,31 +1496,31 @@ export default function Notas() {
     }
     let x: number, arrowLeft: boolean;
     if (btnRect) {
-      const spR = window.innerWidth - btnRect.right, spL = btnRect.left;
-      if (spR >= menuW) {
-        x = btnRect.right - 2; arrowLeft = true;
-      } else if (spL >= menuW) {
-        x = btnRect.left - menuW + 2; arrowLeft = false;
-      } else if (spR >= spL) {
-        x = Math.max(2, window.innerWidth - menuW - 2); arrowLeft = true;
+      const spL = btnRect.left, spR = window.innerWidth - btnRect.right;
+      if (spL >= menuW) {
+        x = Math.max(0, btnRect.left - menuW - 210); arrowLeft = true;
+      } else if (spR >= menuW) {
+        x = btnRect.right; arrowLeft = false;
+      } else if (spL >= spR) {
+        x = 0; arrowLeft = true;
       } else {
-        x = 2; arrowLeft = false;
+        x = Math.max(0, window.innerWidth - menuW); arrowLeft = false;
       }
     } else {
-      const spR = window.innerWidth - anchorX, spL = anchorX;
-      if (spR >= menuW) {
-        x = anchorX - 2; arrowLeft = true;
-      } else if (spL >= menuW) {
-        x = anchorX - menuW + 2; arrowLeft = false;
-      } else if (spR >= spL) {
-        x = Math.max(2, window.innerWidth - menuW - 2); arrowLeft = true;
+      const spL = anchorX, spR = window.innerWidth - anchorX;
+      if (spL >= menuW) {
+        x = Math.max(0, anchorX - menuW - 210); arrowLeft = true;
+      } else if (spR >= menuW) {
+        x = anchorX; arrowLeft = false;
+      } else if (spL >= spR) {
+        x = 0; arrowLeft = true;
       } else {
-        x = 2; arrowLeft = false;
+        x = Math.max(0, window.innerWidth - menuW); arrowLeft = false;
       }
     }
-    let y = anchorY - Math.round(menuH / 2);
+    let y = btnRect ? btnRect.top - 16 : anchorY - Math.round(menuH / 2);
     y = Math.max(2, Math.min(y, window.innerHeight - menuH - 2));
-    const arrowY = Math.max(10, Math.min(menuH - 16, anchorY - y));
+    const arrowY = btnRect ? Math.max(10, Math.min(menuH - 16, btnRect.top + btnRect.height / 2 - y)) : Math.max(10, Math.min(menuH - 16, anchorY - y));
     setContextMenu({ x, y, noteId, arrowLeft, arrowY });
   }, []);
 
@@ -2205,12 +2243,16 @@ export default function Notas() {
     toast.success("Etiqueta creada");
   }, [customTagColors]);
 
-  // Click outside to close context menu
+  // Click outside / scroll to close context menu
   useEffect(() => {
     if (!contextMenu) return;
-    const handler = () => setContextMenu(null);
-    window.addEventListener("click", handler);
-    return () => window.removeEventListener("click", handler);
+    const close = () => setContextMenu(null);
+    window.addEventListener("click", close);
+    window.addEventListener("wheel", close, { passive: true });
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("wheel", close);
+    };
   }, [contextMenu]);
 
   // Auto-save logic
@@ -2299,19 +2341,6 @@ export default function Notas() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <button onClick={() => setActiveSidebarTab(activeSidebarTab === 'favs' ? 'all' : 'favs')}
-            style={{
-              display: "flex", alignItems: "center", gap: 5, height: 30,
-              padding: "0 10px", borderRadius: 8,
-              background: activeSidebarTab === 'favs' ? 'rgba(245, 158, 11, 0.12)' : "var(--bg-surface)",
-              border: "1px solid " + (activeSidebarTab === 'favs' ? '#F59E0B' : 'var(--border-subtle)'),
-              color: activeSidebarTab === 'favs' ? '#F59E0B' : "var(--text-secondary)", fontSize: 11, fontWeight: 550,
-              cursor: "pointer", transition: "all 150ms " + EASE,
-            }}
-            className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
-            title={activeSidebarTab === 'favs' ? "Ver todas" : "Ver destacados"}>
-            <Star size={13} fill={activeSidebarTab === 'favs' ? '#F59E0B' : 'none'} /> {activeSidebarTab === 'favs' ? 'Todas' : 'Destacados'}
-          </button>
           <NotificationBell />
           <div className="flex items-center gap-4 flex-shrink-0" style={{
               paddingLeft: 16, borderLeft: '1px solid var(--border-subtle)', position: 'relative' }}>
@@ -2908,6 +2937,19 @@ export default function Notas() {
                           background: "var(--bg-surface)",
                         }} />
                     </div>
+                    <button onClick={() => setActiveSidebarTab(activeSidebarTab === 'favs' ? 'all' : 'favs')}
+                      style={{
+                        width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center",
+                        background: activeSidebarTab === 'favs' ? 'rgba(245, 158, 11, 0.12)' : "var(--bg-surface)",
+                        border: "1px solid " + (activeSidebarTab === 'favs' ? '#F59E0B' : 'var(--border-subtle)'),
+                        borderRadius: 8, cursor: "pointer",
+                        color: activeSidebarTab === 'favs' ? '#F59E0B' : "var(--text-secondary)",
+                        transition: "all 150ms " + EASE,
+                      }}
+                      className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+                      title={activeSidebarTab === 'favs' ? "Ver todas" : "Ver destacados"}>
+                      <Star size={13} fill={activeSidebarTab === 'favs' ? '#F59E0B' : 'none'} />
+                    </button>
                     <button onClick={handleCreateNote}
                       style={{
                         display: "flex", alignItems: "center", gap: 5, height: 30, padding: "0 12px",
@@ -3729,12 +3771,12 @@ export default function Notas() {
           <div style={{
             position: "absolute",
             top: contextMenu.arrowY,
-            [contextMenu.arrowLeft ? 'left' : 'right']: -5,
+            [contextMenu.arrowLeft ? 'right' : 'left']: -5,
             width: 8, height: 8,
             background: "var(--bg-surface)",
             borderLeft: "1px solid var(--border-default)",
             borderTop: "1px solid var(--border-default)",
-            transform: contextMenu.arrowLeft ? 'rotate(315deg)' : 'rotate(135deg)',
+            transform: contextMenu.arrowLeft ? 'rotate(135deg)' : 'rotate(315deg)',
             borderRadius: 1,
           }} />
           {[

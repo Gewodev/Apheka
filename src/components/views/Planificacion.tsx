@@ -4,7 +4,7 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
-  ChevronLeft, ChevronRight, Plus, Calendar, Clock, X, Trash2, Check
+  ChevronLeft, ChevronRight, Plus, Calendar, Clock, X, Trash2, Check, CheckSquare
 } from 'lucide-react';
 import { useApp, fmtClock, fmtTimeRange } from '../../store/AppContext';
 import {
@@ -23,6 +23,7 @@ import {
 
 import EventModal, { PlanEvent } from './planificacion/EventModal';
 import ScheduleBuilder, { ScheduleClass } from './planificacion/ScheduleBuilder';
+import HabitsView from './planificacion/HabitsView';
 import LateralPanel, { SelectedItem } from './planificacion/LateralPanel';
 
 const H_START = 0;
@@ -164,13 +165,8 @@ export default function Planificacion() {
 
   const imgInputRef = useRef<HTMLInputElement>(null);
   const [scheduleImageUrl, setScheduleImageUrl] = useState<string | null>(null);
-  const [scheduleTab, setScheduleTab] = useState<'image' | 'manual'>(() => {
-    try { return (localStorage.getItem('owa_sched_last_tab') as 'image' | 'manual') || 'manual'; }
-    catch { return 'manual'; }
-  });
   const [showScheduleBuilder, setShowScheduleBuilder] = useState(false);
-
-  useEffect(() => { localStorage.setItem('owa_sched_last_tab', scheduleTab); }, [scheduleTab]);
+  const [showHabits, setShowHabits] = useState(false);
 
   useEffect(() => { localStorage.setItem('owa_planner_view', planView); }, [planView]);
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t); }, []);
@@ -400,6 +396,21 @@ export default function Planificacion() {
           >
             <Calendar size={14} /> {showScheduleBuilder ? 'Cerrar Horario' : 'Horario'}
           </button>
+          <button onClick={() => setShowHabits(!showHabits)}
+            style={{
+              height:38, borderRadius:10, padding:'0 18px',
+              fontSize:12, fontWeight:600, fontFamily:"'Outfit',sans-serif",
+              display:'flex', alignItems:'center', gap:8,
+              border: showHabits ? '1px solid var(--accent)' : '1px solid var(--border-subtle)',
+              background: showHabits ? 'rgba(225,29,72,0.08)' : 'transparent',
+              color: showHabits ? 'var(--accent)' : 'var(--text-secondary)',
+              cursor:'pointer', transition:'all 200ms',
+            }}
+            onMouseEnter={e=>{if(!showHabits){e.currentTarget.style.borderColor='var(--border-hover)';e.currentTarget.style.color='var(--text-primary)';}}}
+            onMouseLeave={e=>{if(!showHabits){e.currentTarget.style.borderColor='var(--border-subtle)';e.currentTarget.style.color='var(--text-secondary)';}}}
+          >
+            <CheckSquare size={14} /> {showHabits ? 'Cerrar Hábitos' : 'Hábitos'}
+          </button>
           <button
             onClick={() => { setModalDefaults({ date: format(new Date(), 'yyyy-MM-dd') }); setEditingEvent(null); setShowEventModal(true); }}
             style={{
@@ -420,20 +431,22 @@ export default function Planificacion() {
       </div>
 
       {/* MAIN GRID */}
-      {showScheduleBuilder ? (
+      {showScheduleBuilder || showHabits ? (
         <div style={{ display:'flex', flex:1, gap:16, minHeight:0, overflow:'hidden' }}>
-          <ScheduleBuilder
-            classes={classes}
-            courses={courses as any}
-            onUpdateClasses={setClasses}
-            scheduleImageUrl={scheduleImageUrl}
-            onSetScheduleImage={setScheduleImageUrl}
-            imgInputRef={imgInputRef}
-            scheduleTab={scheduleTab}
-            onSetScheduleTab={setScheduleTab}
-            addNotification={addNotification}
-            timeFormat={settings?.timeFormat}
-          />
+          {showScheduleBuilder && (
+            <div style={{ flex: showHabits ? '1 1 50%' : 1, minWidth: 0, display: 'flex' }}>
+              <ScheduleBuilder
+                scheduleImageUrl={scheduleImageUrl}
+                onSetScheduleImage={setScheduleImageUrl}
+                imgInputRef={imgInputRef}
+              />
+            </div>
+          )}
+          {showHabits && (
+            <div style={{ flex: showScheduleBuilder ? '1 1 50%' : 1, minWidth: 0, borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)', background: 'color-mix(in srgb, var(--bg-elevated) 65%, transparent)', backdropFilter: 'blur(8px)', boxShadow: '0 8px 32px rgba(0,0,0,0.25)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              <HabitsView />
+            </div>
+          )}
         </div>
       ) : (
       <div style={{ display:'flex', flex:1, gap:16, minHeight:0, overflow:'hidden' }}>
