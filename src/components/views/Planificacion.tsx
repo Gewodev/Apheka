@@ -165,10 +165,16 @@ export default function Planificacion() {
 
   const imgInputRef = useRef<HTMLInputElement>(null);
   const [scheduleImageUrl, setScheduleImageUrl] = useState<string | null>(null);
-  const [showScheduleBuilder, setShowScheduleBuilder] = useState(false);
-  const [showHabits, setShowHabits] = useState(false);
+  const [showScheduleBuilder, setShowScheduleBuilder] = useState(() => {
+    try { return localStorage.getItem('owa_show_schedule') === 'true'; } catch { return false; }
+  });
+  const [showHabits, setShowHabits] = useState(() => {
+    try { return localStorage.getItem('owa_show_habits') === 'true'; } catch { return false; }
+  });
 
   useEffect(() => { localStorage.setItem('owa_planner_view', planView); }, [planView]);
+  useEffect(() => { localStorage.setItem('owa_show_schedule', String(showScheduleBuilder)); }, [showScheduleBuilder]);
+  useEffect(() => { localStorage.setItem('owa_show_habits', String(showHabits)); }, [showHabits]);
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t); }, []);
   const timeStr = fmtClock(format(now, 'HH:mm'), settings?.timeFormat);
   const secsStr = format(now, 'ss');

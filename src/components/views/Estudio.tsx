@@ -3,7 +3,7 @@ import {
   Play, Pause, RotateCcw, Zap, Clock,
   CheckCircle, Trophy, Sparkles, Flame,
   Coffee, X, Timer, BarChart3, Plus,
-  TrendingUp, AlertTriangle, Link2, Eye, Focus, Monitor, Minimize2, Maximize2,
+  AlertTriangle, Link2, Eye, Focus, Monitor, Minimize2, Maximize2,
   Check, Minus, Brain, Volume2, BookOpen
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
@@ -49,20 +49,22 @@ function calculateStreak(w: Record<string, number>, dailyGoalMin: number, dailyG
 }
 
 const TomatoIcon = ({ size = 24, color = 'currentColor', style }: { size?: number; color?: string; style?: React.CSSProperties }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={style}>
-    <path d="M12 3c-1 0-4 1-4 4 0-3 3-4 4-4z" fill={color} fillOpacity="0.2" />
-    <ellipse cx="12" cy="14" rx="7" ry="6" fill={color} fillOpacity="0.12" />
-    <path d="M12 3c1 0 4 1 4 4 0-3-3-4-4-4z" fill={color} fillOpacity="0.25" />
-    <path d="M12 3C6.5 3 5 10 5 14c0 4 3 7 7 7s7-3 7-7c0-4-1.5-11-7-11z" />
-    <path d="M12 3C6.5 3 5 10 5 14c0 4 3 7 7 7s7-3 7-7c0-4-1.5-11-7-11z" stroke={color} fill="none" />
-    <path d="M12 6c-3.5 0-5 5-5 8" stroke={color} strokeWidth="1" fill="none" />
-    <path d="M12 3c-1.5 2-3 4-3.5 6" stroke={color} strokeWidth="0.8" fill="none" opacity="0.4" />
-    <path d="M15 7l1.5-1" strokeWidth="1.2" />
-    <path d="M9 7l-1.5-1" strokeWidth="1.2" />
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" style={style}>
+    <ellipse cx="12" cy="14.5" rx="7.5" ry="7" fill={color} fillOpacity="0.12" />
+    <ellipse cx="12" cy="14.5" rx="7.5" ry="7" stroke={color} fill="none" />
+    <ellipse cx="12" cy="14.5" rx="7.5" ry="7" fill={color} fillOpacity="0.05" transform="translate(0, -0.5)" />
+    <path d="M12 3.5C12 3.5 10.5 5 10 6c-.3.6-.5 1.2-.5 1.8" stroke={color} strokeWidth="1.2" fill="none" />
+    <path d="M12 3.5c1.8 0 3 1.5 3 3.2" stroke={color} strokeWidth="1" fill="none" opacity="0.3" />
+    <path d="M12 3.5c-1.8 0-3 1.5-3 3.2" stroke={color} strokeWidth="1" fill="none" opacity="0.15" />
+    <path d="M12 3.5c0 0 1.2 1.3 1.8 2.5" stroke={color} strokeWidth="1" fill="none" opacity="0.25" />
+    <path d="M9.8 6.2c-1.2.8-2.5 2-3.2 3.8" stroke={color} strokeWidth="0.8" fill="none" opacity="0.15" />
+    <path d="M12 3l1.5 1.2" stroke={color} strokeWidth="1" opacity="0.5" />
+    <path d="M12 3L9.5 4" stroke={color} strokeWidth="1" opacity="0.4" />
+    <path d="M11 2.5l1 .5 1-.5" stroke={color} strokeWidth="1.2" strokeLinecap="round" />
   </svg>
 );
 
-function LEDTime({ time, color, digitWidth = 112, digitHeight = 184, colonWidth = 36 }: { time: string; color: string; digitWidth?: number; digitHeight?: number; colonWidth?: number }) {
+function LEDTime({ time, color, digitWidth = 82, digitHeight = 136, colonWidth = 26 }: { time: string; color: string; digitWidth?: number; digitHeight?: number; colonWidth?: number }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
       {time.split('').map((ch, i) =>
@@ -86,6 +88,7 @@ interface ActivityEntry {
   pauseCount?: number;
   pauseDuration?: number;
   sessionEff?: number;
+  sessionIre?: number;
   evaluated?: boolean;
   volmeter?: number;
   perception?: number;
@@ -131,6 +134,22 @@ export default function Estudio() {
   const [evalLinkedTaskId, setEvalLinkedTaskId] = useState<string | null>(null);
   const [evalFreeText, setEvalFreeText] = useState('');
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [winW, setWinW] = useState(window.innerWidth);
+  useEffect(() => {
+    const h = () => setWinW(window.innerWidth);
+    window.addEventListener('resize', h);
+    return () => window.removeEventListener('resize', h);
+  }, []);
+
+  const isNarrow = winW < 1024;
+  const dw = isNarrow ? 58 : 82;
+  const dh = isNarrow ? 96 : 136;
+  const cw = isNarrow ? 18 : 26;
+  const dotStep = isNarrow ? 2 : 1;
+  const controlSize = isNarrow ? 60 : 72;
+  const controlIcon = isNarrow ? 24 : 30;
+  const resetSize = isNarrow ? 46 : 56;
+  const resetIcon = isNarrow ? 16 : 20;
 
   const hasTriggeredRef = useRef(false);
   const breakNotifiedRef = useRef(false);
@@ -280,8 +299,8 @@ export default function Estudio() {
         lastChronoRoundRef.current = r;
         saveChronoRound(r);
         setChronoRounds(r);
-        addNotification(`Ronda ${r} completada (${chronoGoal / 60} min)`, 'success');
-        const sessionId = addStudySession({
+        addNotification(r >= 2 ? `¡${r} sesiones completadas! (${(r * chronoGoal) / 60} min)` : `Ronda completada (${chronoGoal / 60} min)`, 'success');
+        addStudySession({
           type: 'chrono',
           startedAt: new Date(Date.now() - sessionTime * 1000).toISOString(),
           endedAt: new Date().toISOString(),
@@ -291,23 +310,6 @@ export default function Estudio() {
           pauseCount: distractionCount,
           pauseDuration: accumulatedPauseTime - lastPauseTimeRef.current,
         });
-        if (sessionId) {
-          setEvalSessionId(sessionId);
-          setEvalPerception(7);
-          setEvalDiscomfort(Math.min(10, distractionCount));
-          setEvalVolmeter(Math.min(20, Math.max(1, 10 - distractionCount + 5)));
-          setEvalMode('tiempo');
-          setEvalFreeText('');
-          if (activeTaskId) {
-            const task = tasks.find(t => t.id === activeTaskId);
-            setEvalTaskAction(task?.status === 'inicio' ? null : (task?.status === 'progreso' ? 'not_finished' : 'complete'));
-            setEvalSubjects(courses.filter(c => task?.course === c.name).map(c => c.id));
-            setShowSessionEval(true);
-          } else {
-            setEvalSubjects([]);
-            setShowFreeStudyPrompt(true);
-          }
-        }
         lastPauseTimeRef.current = accumulatedPauseTime;
         if (activeTaskId) {
           const task = tasks.find(t => t.id === activeTaskId);
@@ -407,12 +409,61 @@ export default function Estudio() {
   const efficiencyPct = useMemo(() => {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
     const todaysSessions = studySessions.filter(s => s.startedAt.startsWith(todayStr));
+    const clamp = (v: number, mn: number, mx: number) => Math.max(mn, Math.min(v, mx));
+
     const focusSecs = todaysSessions.reduce((acc, s) => acc + s.duration, 0);
     const pauseSecs = todaysSessions.reduce((acc, s) => acc + (s.pauseDuration || 0), 0);
     const distractions = todaysSessions.reduce((acc, s) => acc + (s.pauseCount || 0), 0);
-    const total = focusSecs + pauseSecs + distractions * 60;
-    return total > 0 ? Math.round(100 * focusSecs / total) : todaysSessions.length > 0 ? 100 : 0;
-  }, [studySessions]);
+    const breakSecs = studySessions.filter(s => s.startedAt.startsWith(todayStr) && s.type === 'break')
+      .reduce((acc, s) => acc + s.duration, 0);
+
+    if (focusSecs <= 0 && todaysSessions.length === 0) return 0;
+
+    const dailyGoalSecs = (settings?.dailyGoal || 240) * 60;
+    const focusMin = focusSecs / 60;
+
+    // ScoreMeta (tolerancia 95%)
+    const scoreMeta = dailyGoalSecs > 0
+      ? clamp(focusSecs / (dailyGoalSecs * 0.95), 0, 1)
+      : 0.8;
+
+    // ScoreEnfoque = eficiencia × penalización por distracciones
+    const totalOp = focusSecs + pauseSecs + distractions * 60;
+    const eficiencia = totalOp > 0 ? focusSecs / totalOp : 1;
+    const hoursStudy = focusMin / 60;
+    const distPerHour = hoursStudy > 0 ? distractions / hoursStudy : 0;
+    const scoreEnfoque = clamp(eficiencia * Math.exp(-0.05 * distPerHour), 0, 1);
+
+    // ScoreFlujo según duración promedio de bloques de estudio
+    const studyBlocks = todaysSessions.filter(s => s.type !== 'break');
+    const avgBlockMin = studyBlocks.length > 0
+      ? studyBlocks.reduce((acc, s) => acc + s.duration, 0) / studyBlocks.length / 60
+      : 0;
+    const longestBlock = Math.max(...studyBlocks.map(s => s.duration), 0) / 60;
+    const effectiveBlock = Math.max(avgBlockMin, longestBlock * 0.6);
+    let scoreFlujo = 0;
+    if (effectiveBlock <= 0) scoreFlujo = 0.3;
+    else if (effectiveBlock < 5) scoreFlujo = clamp(0.3 + (effectiveBlock / 5) * 0.3, 0.3, 0.6);
+    else if (effectiveBlock < 15) scoreFlujo = 0.6 + ((effectiveBlock - 5) / 10) * 0.35;
+    else if (effectiveBlock <= 60) scoreFlujo = 0.95;
+    else if (effectiveBlock <= 90) scoreFlujo = 0.85;
+    else scoreFlujo = 0.7;
+
+    // ScoreDescanso (ratio ideal 0.20)
+    const ratioDescanso = focusMin > 0 ? (breakSecs / 60) / focusMin : 0;
+    const scoreDescanso = focusMin > 0
+      ? clamp(1 - Math.abs(ratioDescanso - 0.20) / 0.25, 0.2, 1)
+      : 0.5;
+
+    // IRE compuesto
+    const ire = 100 *
+      Math.pow(scoreMeta, 0.35) *
+      Math.pow(scoreEnfoque, 0.35) *
+      Math.pow(scoreFlujo, 0.20) *
+      Math.pow(scoreDescanso, 0.10);
+
+    return Math.max(1, Math.round(ire));
+  }, [studySessions, settings?.dailyGoal]);
 
   // Daily trend: compare today vs yesterday
   const yesterdayStr = format(subDays(new Date(), 1), 'yyyy-MM-dd');
@@ -452,6 +503,22 @@ export default function Estudio() {
         sessionEff: s.duration + s.pauseDuration + (s.pauseCount || 0) * 60 > 0
           ? Math.round(100 * s.duration / (s.duration + s.pauseDuration + (s.pauseCount || 0) * 60))
           : 100,
+        sessionIre: (() => {
+          const clamp = (v: number, mn: number, mx: number) => Math.max(mn, Math.min(v, mx));
+          const focusMin = s.duration / 60;
+          const eff = s.duration + s.pauseDuration + (s.pauseCount || 0) * 60 > 0
+            ? s.duration / (s.duration + s.pauseDuration + (s.pauseCount || 0) * 60) : 1;
+          const distPerHour = focusMin > 0 ? ((s.pauseCount || 0) / (focusMin / 60)) : 0;
+          const sm = pomGoal > 0 ? clamp(s.duration / (pomGoal * 0.95), 0, 1) : 0.5;
+          const se = clamp(eff * Math.exp(-0.05 * distPerHour), 0, 1);
+          let sf = 0;
+          if (focusMin < 5) sf = clamp(focusMin / 10, 0, 0.5);
+          else if (focusMin < 15) sf = 0.5 + ((focusMin - 5) / 10) * 0.4;
+          else if (focusMin <= 60) sf = 1;
+          else if (focusMin <= 90) sf = 0.9;
+          else sf = 0.7;
+          return Math.round(100 * Math.pow(sm, 0.40) * Math.pow(se, 0.35) * Math.pow(sf, 0.15));
+        })(),
         evaluated: s.perception !== undefined,
         volmeter: s.volmeter,
         perception: s.perception,
@@ -525,18 +592,18 @@ export default function Estudio() {
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, paddingTop: 8 }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <h1 style={{ fontSize: 40, fontWeight: 200, color: 'var(--text-primary)', lineHeight: 1, letterSpacing: '-0.03em', fontFamily: "'Inter Tight', sans-serif", textShadow: '0 0 20px var(--accent-glow)' }}>Estudio</h1>
+            <h1 style={{ fontSize: 'clamp(28px, 4vw, 40px)', fontWeight: 200, color: 'var(--text-primary)', lineHeight: 1, letterSpacing: '-0.03em', fontFamily: "'Inter Tight', sans-serif", textShadow: '0 0 20px var(--accent-glow)' }}>Estudio</h1>
           </div>
-          <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4, fontWeight: 400, letterSpacing: '0.02em' }}>Tu concentración, tu ritmo.</p>
+          <p className="hidden sm:block" style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4, fontWeight: 400, letterSpacing: '0.02em' }}>Tu concentración, tu ritmo.</p>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div className="hidden sm:flex" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <button onClick={tf} style={{ padding: 8, borderRadius: '50%', background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-secondary)', cursor: 'pointer', transition: 'all 200ms', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Pantalla completa">
               {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
             </button>
             {/* Floating timer toggle — opens always-on-top floating timer window */}
-            <button onClick={async () => {
+            <button className="hidden md:block" onClick={async () => {
               const existing = await WebviewWindow.getByLabel('floating-timer');
               if (existing) { await existing.show(); await existing.setFocus(); return; }
               const win = new WebviewWindow('floating-timer', {
@@ -560,18 +627,18 @@ export default function Estudio() {
 
           <div className="flex items-center gap-4 flex-shrink-0" style={{ paddingLeft: 16, borderLeft: '1px solid var(--border-subtle)', position: 'relative' }}>
             <div style={{ position: 'absolute', top: '50%', right: 0, width: 150, height: 100, background: `radial-gradient(circle at center, var(--text-muted) 0%, transparent 70%)`, opacity: 0.1, transform: 'translateY(-50%)', pointerEvents: 'none', zIndex: 0 }} />
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--text-tertiary)', position: 'relative', zIndex: 1 }} />
+            <div className="hidden sm:block" style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--text-tertiary)', position: 'relative', zIndex: 1 }} />
             <NotificationBell />
             <div style={{ textAlign: 'right', position: 'relative', zIndex: 1 }}>
               <div className="flex items-baseline gap-2 justify-end">
-                <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 68, fontWeight: 200, lineHeight: 0.9, color: 'var(--text-secondary)', letterSpacing: '0.02em', transition: 'color 300ms' }}>
+                <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 'clamp(32px, 6vw, 68px)', fontWeight: 200, lineHeight: 0.9, color: 'var(--text-secondary)', letterSpacing: '0.02em', transition: 'color 300ms' }}>
                   {fmtClock(format(currentTime, 'HH:mm'), settings?.timeFormat)}
                 </span>
-                <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 22, fontWeight: 200, color: 'var(--text-tertiary)', opacity: 0.7, letterSpacing: '0.02em', transition: 'color 300ms' }}>
+                <span className="hidden lg:inline" style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 'clamp(14px, 2vw, 22px)', fontWeight: 200, color: 'var(--text-tertiary)', opacity: 0.7, letterSpacing: '0.02em', transition: 'color 300ms' }}>
                   {format(currentTime, 'ss')}
                 </span>
               </div>
-              <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.12em', marginTop: 6 }}>
+              <div className="hidden lg:block" style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.12em', marginTop: 6 }}>
                 {format(currentTime, "EEEE, d 'de' MMMM", { locale: es })}
               </div>
             </div>
@@ -580,16 +647,16 @@ export default function Estudio() {
       </header>
 
       {/* MAIN TWO-COLUMN DASHBOARD LAYOUT */}
-      <div style={{ display: 'flex', gap: 20, flex: 1, minHeight: 0 }}>
+      <div className="flex flex-col lg:flex-row gap-5 flex-1 min-h-0">
 
         {/* LEFT COLUMN: Timer & Bottom Statistics */}
-        <div style={{ flex: 1.6, display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
+        <div className="lg:flex-[1.6]" style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
           
           {/* TIMER PANEL */}
-          <div className="bento-card" style={{ padding: '24px 32px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative', border: '1px solid var(--border-subtle)', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
+          <div className="bento-card" style={{ padding: isNarrow ? '18px 18px 12px' : '24px 32px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative', border: '1px solid var(--border-subtle)', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
             
             {/* Mode Type Header */}
-            <div style={{ display: 'flex', gap: 6, padding: 4, borderRadius: 12, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', marginBottom: 8 }}>
+            <div style={{ display: 'flex', gap: 4, padding: 3, borderRadius: 10, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', marginBottom: 6 }}>
               {[
                 { id: 'pomodoro', label: 'Pomodoro', icon: TomatoIcon },
                 { id: 'chrono', label: 'Cronómetro', icon: Timer },
@@ -600,15 +667,15 @@ export default function Estudio() {
                 return (
                   <button key={mode.id} onClick={() => handleTypeChange(mode.id as any)}
                     style={{
-                      padding: '8px 24px', borderRadius: 8, fontSize: 11, fontWeight: 600,
+                      padding: isNarrow ? '6px 14px' : '8px 24px', borderRadius: 8, fontSize: isNarrow ? 10 : 11, fontWeight: 600,
                       letterSpacing: '0.04em', cursor: blocked ? 'not-allowed' : 'pointer', border: 'none', textTransform: 'uppercase',
                       background: active ? `linear-gradient(135deg, ${statusColor}15, ${statusColor}05)` : 'transparent',
                       color: active ? statusColor : blocked ? 'var(--text-muted)' : 'var(--text-muted)',
-                      display: 'flex', alignItems: 'center', gap: 8, transition: 'all 300ms',
+                      display: 'flex', alignItems: 'center', gap: isNarrow ? 5 : 8, transition: 'all 300ms',
                       position: 'relative', opacity: blocked ? 0.4 : 1,
                     }}
                   >
-                    <Icon size={14} color={active ? statusColor : 'currentColor'} />
+                    <Icon size={isNarrow ? 12 : 14} color={active ? statusColor : 'currentColor'} />
                     {mode.label}
                     {active && <div style={{ position: 'absolute', bottom: 0, left: '25%', right: '25%', height: 2, background: statusColor, borderRadius: 2, boxShadow: `0 0 8px ${statusColor}80` }} />}
                   </button>
@@ -622,17 +689,19 @@ export default function Estudio() {
               <LEDTime 
                 time={isBreakTime ? fmt(computedRest) : fmt(computedDisplay)} 
                 color={statusColor} 
-                digitWidth={112} 
-                digitHeight={184} 
-                colonWidth={36} 
+                digitWidth={dw} 
+                digitHeight={dh} 
+                colonWidth={cw} 
               />
             </div>
 
             {/* Edge-to-edge progress dots — pomodoro only */}
             {sessionType === 'pomodoro' && !isBreakTime && (
-              <div style={{ width: '100%', display: 'flex', gap: 2, justifyContent: 'space-between', marginTop: 10, marginBottom: 2 }}>
-                {Array.from({ length: 60 }, (_, i) => {
-                  const filled = sessionTime >= ((settings.pomodoroTime || 1500) / 60) * (i + 1);
+              <div style={{ width: '100%', display: 'flex', gap: dotStep > 1 ? 1 : 2, justifyContent: 'space-between', marginTop: 10, marginBottom: 2 }}>
+                {Array.from({ length: Math.ceil(60 / dotStep) }, (_, i) => {
+                  const idx = i * dotStep;
+                  const nextIdx = Math.min(idx + dotStep - 1, 59);
+                  const filled = sessionTime >= ((settings.pomodoroTime || 1500) / 60) * (nextIdx + 1);
                   return (
                     <div key={i} style={{
                       flex: 1, height: 3, borderRadius: 1.5,
@@ -652,40 +721,31 @@ export default function Estudio() {
                 {activeTask ? activeTask.title : 'Sin tarea vinculada'}
               </span>
               {activeTask && (
-                <>
-                  <button onClick={() => setActiveTaskId(null)} style={{ fontSize: 9, color: 'var(--text-tertiary)', cursor: 'pointer', background: 'none', border: 'none', textDecoration: 'underline', textUnderlineOffset: 2, padding: 0 }}>
-                    Desvincular
-                  </button>
-                  <button onClick={() => {
-                    const nextStatus = activeTask.status === 'inicio' ? 'progreso' : activeTask.status === 'progreso' ? 'completado' : 'inicio';
-                    updateTask(activeTaskId!, { status: nextStatus });
-                    addNotification(`Tarea marcada como "${nextStatus}"`, 'success');
-                  }} style={{ fontSize: 9, fontWeight: 600, color: 'var(--accent)', cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}>
-                    {activeTask.status === 'inicio' ? 'Iniciar' : activeTask.status === 'progreso' ? 'Completar' : 'Reabrir'}
-                  </button>
-                </>
+                <button onClick={() => setActiveTaskId(null)} style={{ fontSize: 9, color: 'var(--text-tertiary)', cursor: 'pointer', background: 'none', border: 'none', textDecoration: 'underline', textUnderlineOffset: 2, padding: 0 }}>
+                  Desvincular
+                </button>
               )}
             </div>
 
             {/* Controls */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 28, marginTop: 28, marginBottom: 8 }}>
-              <div style={{ position: 'relative', width: 56, height: 56 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: isNarrow ? 20 : 28, marginTop: 28, marginBottom: 8 }}>
+              <div style={{ position: 'relative', width: resetSize, height: resetSize }}>
                 {isBreakTime && isTimerActive && (() => {
                   const totalBreak = isLongBreak && settings.longBreakTime ? settings.longBreakTime : (settings.shortBreakTime || 300);
                   const pct = Math.min(100, Math.max(0, Math.round((sessionTime / totalBreak) * 100)));
-                  const r = 25;
+                  const r = resetSize / 2 - 3;
                   const circ = 2 * Math.PI * r;
                   const offset = circ - (pct / 100) * circ;
                   return (
-                    <svg width={56} height={56} style={{ position: 'absolute', top: 0, left: 0, transform: 'rotate(-90deg)' }}>
-                      <circle cx={28} cy={28} r={r} fill="none" stroke="rgba(245,158,11,0.15)" strokeWidth={2.5} />
-                      <circle cx={28} cy={28} r={r} fill="none" stroke="#F59E0B" strokeWidth={2.5} strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" style={{ transition: 'stroke-dashoffset 400ms ease' }} />
+                    <svg width={resetSize} height={resetSize} style={{ position: 'absolute', top: 0, left: 0, transform: 'rotate(-90deg)' }}>
+                      <circle cx={resetSize / 2} cy={resetSize / 2} r={r} fill="none" stroke="rgba(245,158,11,0.15)" strokeWidth={2.5} />
+                      <circle cx={resetSize / 2} cy={resetSize / 2} r={r} fill="none" stroke="#F59E0B" strokeWidth={2.5} strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" style={{ transition: 'stroke-dashoffset 400ms ease' }} />
                     </svg>
                   );
                 })()}
                 <button onClick={() => { if (isTimerActive && !isBreakTime) return; setShowResetConfirm(true); }}
                   style={{
-                    width: 56, height: 56, borderRadius: '50%',
+                    width: resetSize, height: resetSize, borderRadius: '50%',
                     cursor: isTimerActive && !isBreakTime ? 'not-allowed' : 'pointer',
                     border: isBreakTime && isTimerActive ? `1px solid #F59E0B50` : '1px solid var(--border-soft)',
                     background: isTimerActive && !isBreakTime ? 'var(--bg-deep)' : (isBreakTime && isTimerActive ? '#F59E0B10' : 'var(--bg-deep)'),
@@ -696,12 +756,12 @@ export default function Estudio() {
                     position: 'relative',
                   }}
                   title={isTimerActive && !isBreakTime ? "No puedes reiniciar mientras el temporizador está corriendo" : "Reiniciar"}>
-                  <RotateCcw size={20} />
+                  <RotateCcw size={resetIcon} />
                 </button>
               </div>
               
               <button onClick={handleToggle} style={{
-                width: 72, height: 72, borderRadius: '50%', cursor: 'pointer',
+                width: controlSize, height: controlSize, borderRadius: '50%', cursor: 'pointer',
                 border: `1px solid ${statusColor}50`,
                 background: `${statusColor}15`,
                 backdropFilter: 'blur(12px)',
@@ -713,7 +773,7 @@ export default function Estudio() {
               onMouseEnter={(e) => { e.currentTarget.style.background = `${statusColor}25`; e.currentTarget.style.boxShadow = `0 12px 40px rgba(0,0,0,0.25), inset 0 0 24px ${statusColor}20`; e.currentTarget.style.border = `1px solid ${statusColor}80` }}
               onMouseLeave={(e) => { e.currentTarget.style.background = `${statusColor}15`; e.currentTarget.style.boxShadow = `0 8px 32px rgba(0,0,0,0.15), inset 0 0 20px ${statusColor}10`; e.currentTarget.style.border = `1px solid ${statusColor}50` }}
               >
-                {isTimerActive ? <Pause size={30} fill="currentColor" /> : <Play size={30} fill="currentColor" style={{ marginLeft: 4 }} />}
+                {isTimerActive ? <Pause size={controlIcon} fill="currentColor" /> : <Play size={controlIcon} fill="currentColor" style={{ marginLeft: isNarrow ? 2 : 4 }} />}
               </button>
 
               <button onClick={() => {
@@ -741,7 +801,6 @@ export default function Estudio() {
                   saveChronoRound(lastChronoRoundRef.current);
                 }
                 lastPauseTimeRef.current = accumulatedPauseTime;
-                setSessionTime(0);
                 setEvalSessionId(sessionId || null);
                 setEvalVolmeter(Math.min(20, Math.max(1, 10 - distractionCount + 5)));
                 setEvalFreeText('');
@@ -771,7 +830,7 @@ export default function Estudio() {
           </div>
 
           {/* COMPACT CHARTS ROW */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             
             {/* Donut Chart - distribution */}
             <div className="bento-card" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column' }}>
@@ -859,7 +918,7 @@ export default function Estudio() {
         </div>
 
         {/* RIGHT COLUMN (LATERAL): Metrics & Activity History */}
-        <div style={{ flex: 1.2, display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
+        <div className="lg:flex-[1.2]" style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
           
           {/* 4 ELEGANT SIDEBAR METRICS CARD */}
           <div className="bento-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -867,7 +926,7 @@ export default function Estudio() {
               Resumen Operativo
             </span>
             
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* Metric 1: Pure Study Time */}
                 <div style={{ background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', borderRadius: 16, padding: '20px', display: 'flex', flexDirection: 'column', gap: 8, position: 'relative', overflow: 'hidden' }}>
                   <Clock size={80} style={{ position: 'absolute', bottom: -20, right: -20, color: statusColor, opacity: 0.15 }} />
@@ -882,14 +941,14 @@ export default function Estudio() {
                   <span style={{ fontSize: 26, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", zIndex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{recentSessions.length}</span>
                 </div>
 
-                {/* Metric 3: Eficiencia */}
-                <div style={{ background: 'var(--bg-deep)', border: `1px solid ${efficiencyPct > 80 ? '#10B981' : efficiencyPct > 50 ? '#F59E0B' : '#EF4444'}30`, borderRadius: 16, padding: '20px', display: 'flex', flexDirection: 'column', gap: 8, position: 'relative', overflow: 'hidden' }}>
-                  <TrendingUp size={80} style={{ position: 'absolute', bottom: -20, right: -20, color: efficiencyPct > 80 ? '#10B981' : efficiencyPct > 50 ? '#F59E0B' : '#EF4444', opacity: 0.15 }} />
+                {/* Metric 3: Eficiencia (IRE compuesto) */}
+                <div style={{ background: 'var(--bg-deep)', border: `1px solid ${efficiencyPct >= 80 ? '#10B981' : efficiencyPct >= 50 ? '#F59E0B' : '#EF4444'}30`, borderRadius: 16, padding: '20px', display: 'flex', flexDirection: 'column', gap: 8, position: 'relative', overflow: 'hidden' }}>
+                  <Zap size={80} style={{ position: 'absolute', bottom: -20, right: -20, color: efficiencyPct >= 80 ? '#10B981' : efficiencyPct >= 50 ? '#F59E0B' : '#EF4444', opacity: 0.15 }} />
                   <span style={{ fontSize: 10, fontWeight: 300, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', zIndex: 1 }}>Eficiencia</span>
-                  <span style={{ fontSize: 26, fontWeight: 300, color: efficiencyPct > 80 ? '#10B981' : efficiencyPct > 50 ? 'var(--text-primary)' : '#EF4444', fontFamily: "'Inter Tight', sans-serif", zIndex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{efficiencyPct}%</span>
+                  <span style={{ fontSize: 26, fontWeight: 300, color: efficiencyPct >= 80 ? '#10B981' : efficiencyPct >= 50 ? 'var(--text-primary)' : '#EF4444', fontFamily: "'Inter Tight', sans-serif", zIndex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{efficiencyPct}%</span>
                 </div>
 
-                {/* Metric 4: Distractions */}
+                {/* Metric 4: Distracciones */}
                 <div style={{ background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', borderRadius: 16, padding: '20px', display: 'flex', flexDirection: 'column', gap: 8, position: 'relative', overflow: 'hidden' }}>
                   <AlertTriangle size={80} style={{ position: 'absolute', bottom: -20, right: -20, color: '#EF4444', opacity: 0.15 }} />
                   <span style={{ fontSize: 10, fontWeight: 300, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', zIndex: 1 }}>Distracciones</span>
@@ -921,18 +980,19 @@ export default function Estudio() {
             </div>
             
             {activityFeed.length > 0 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 0 8px 0', fontSize: 8, fontWeight: 500, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', borderBottom: '1px solid var(--border-subtle)', marginBottom: 4 }}>
+              <div className="hidden lg:flex" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 0 8px 0', fontSize: 8, fontWeight: 500, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1px solid var(--border-subtle)', marginBottom: 4 }}>
                 <span style={{ width: 28, flexShrink: 0 }} />
-                <span style={{ flex: 1 }}>Duración</span>
-                <span style={{ width: 40, textAlign: 'right', flexShrink: 0 }}>Rend.</span>
-                <span style={{ width: 70, textAlign: 'right', flexShrink: 0 }}>Hora</span>
+                <span style={{ width: 58, flexShrink: 0 }}>Tiempo</span>
+                <span style={{ flex: 1 }}>Progreso</span>
+                <span style={{ width: 32, textAlign: 'right', flexShrink: 0 }}>Rend.</span>
+                <span className="hidden xl:inline" style={{ width: 22, textAlign: 'right', flexShrink: 0 }}>1‑20</span>
               </div>
             )}
 
             <div className="no-scrollbar" style={{ flex: 1, overflowY: 'auto' }}>
               {activityFeed.length > 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  {activityFeed.slice(0, 6).map((entry, i) => {
+                  {activityFeed.slice(0, 4).map((entry, i) => {
                     const isPomo = entry.type === 'pomodoro';
                     const isChrono = entry.type === 'chrono';
                     const isBreakEntry = entry.type === 'break';
@@ -940,46 +1000,35 @@ export default function Estudio() {
                     const Icon = isPomo ? TomatoIcon : isBreakEntry ? Coffee : Timer;
                     const mins = Math.floor(entry.duration / 60);
                     const secs = entry.duration % 60;
-                    const timeStr = entry.endedAt ? (() => { try { return format(new Date(entry.endedAt), 'HH:mm'); } catch { return '—'; } })() : '—';
-                    const denom = entry.type === 'chrono' ? (chronoGoal || 900) : (settings.pomodoroTime || 1500);
-                    const pct = (entry.type === 'pomodoro' || entry.type === 'chrono') && denom > 0 ? Math.min(100, Math.round(entry.duration / denom * 100)) : 100;
                     const eff = entry.sessionEff ?? 100;
-                    const barColor = eff >= 85 ? '#10B981' : eff >= 60 ? '#F59E0B' : '#EF4444';
-                    const statusLabel = entry.status === 'completado' ? 'Hecho' : entry.status === 'mitad' ? 'Medio' : 'Corte';
-                    const statusCol = entry.status === 'completado' ? 'var(--success)' : entry.status === 'mitad' ? '#F59E0B' : 'var(--error)';
+                    const effColor = eff >= 85 ? '#10B981' : eff >= 60 ? '#F59E0B' : '#EF4444';
+                    const vm = entry.volmeter ?? Math.round(eff / 5);
                     return (
                       <div key={entry.id || i}
-                        onClick={() => handleViewSession(entry.id || '')}
                         style={{
-                          display: 'flex', alignItems: 'center', gap: 6,
-                          padding: '9px 4px', borderRadius: 8,
-                          cursor: 'pointer', transition: 'background 150ms',
-                          borderBottom: i < Math.min(activityFeed.length, 6) - 1 ? '1px solid var(--border-subtle)' : 'none',
-                        }}
-                        className="hover:bg-[var(--bg-hover)]">
-                        <div style={{ width: 28, height: 28, borderRadius: 7, background: `${c}10`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          display: 'flex', alignItems: 'center', gap: 8,
+                          padding: '10px 6px', borderRadius: 8,
+                          borderBottom: i < Math.min(activityFeed.length, 4) - 1 ? '1px solid var(--border-subtle)' : 'none',
+                        }}>
+                        <div style={{ width: 26, height: 26, borderRadius: 7, background: `${c}12`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                           <Icon size={12} color={c} />
                         </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 3 }}>
-                            <span style={{ fontSize: 12, fontWeight: 550, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>
-                              {mins > 0 ? `${mins}m ${secs}s` : `${secs}s`}
-                            </span>
-                            <span style={{ fontSize: 8, fontWeight: 500, color: 'var(--text-muted)' }}>{entry.type === 'pomodoro' ? 'Pomo' : entry.type === 'chrono' ? 'Chrono' : 'Break'}</span>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <div style={{ flex: '0 1 60px', height: 3, borderRadius: 2, background: 'var(--bg-deep)', overflow: 'hidden' }}>
-                              <div style={{ width: `${pct}%`, height: '100%', borderRadius: 2, background: barColor, transition: 'width 500ms ease' }} />
-                            </div>
-                            {(entry.pauseCount ?? 0) > 0 && (
-                              <span style={{ fontSize: 7, color: '#F59E0B', fontWeight: 600, background: '#F59E0B10', padding: '0 4px', borderRadius: 3, lineHeight: '14px', flexShrink: 0 }}>
-                                {entry.pauseCount}p
-                              </span>
-                            )}
-                          </div>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", width: 58, textAlign: 'left', flexShrink: 0 }}>
+                          {mins > 0 ? `${mins}m` : `${secs}s`}
+                        </span>
+                        <div style={{ display: 'flex', gap: 2, flex: 1, minWidth: 0, alignItems: 'center' }}>
+                          {Array.from({ length: 20 }, (_, j) => (
+                            <div key={j} style={{
+                              width: 6, height: 12, borderRadius: 1.5,
+                              background: j < vm
+                                ? (j < 7 ? '#EF4444' : j < 14 ? '#F59E0B' : '#10B981')
+                                : 'var(--bg-hover)',
+                              flexShrink: 0,
+                            }} />
+                          ))}
                         </div>
-                        <span style={{ width: 40, textAlign: 'right', fontSize: 11, fontWeight: 600, color: barColor, fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{eff}%</span>
-                        <span style={{ width: 70, textAlign: 'right', fontSize: 10, fontWeight: 450, color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{entry.meta ?? timeStr}</span>
+                        <span style={{ width: 32, textAlign: 'right', fontSize: 10, fontWeight: 600, color: effColor, fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{eff}%</span>
+                        <span className="hidden xl:inline" style={{ width: 22, textAlign: 'right', fontSize: 9, fontWeight: 500, color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{vm}</span>
                       </div>
                     );
                   })}
@@ -1047,9 +1096,10 @@ export default function Estudio() {
                     {/* Column headers */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 0 8px 0', fontSize: 8, fontWeight: 500, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', borderBottom: '1px solid var(--border-subtle)', marginBottom: 4 }}>
                       <span style={{ width: 28, flexShrink: 0 }} />
-                      <span style={{ flex: 1 }}>Duración</span>
-                      <span style={{ width: 40, textAlign: 'right', flexShrink: 0 }}>Rend.</span>
-                      <span style={{ width: 70, textAlign: 'right', flexShrink: 0 }}>Hora</span>
+                      <span style={{ width: 58, flexShrink: 0 }}>Tiempo</span>
+                      <span style={{ flex: 1 }}>Progreso</span>
+                      <span style={{ width: 32, textAlign: 'right', flexShrink: 0 }}>Rend.</span>
+                      <span style={{ width: 22, textAlign: 'right', flexShrink: 0 }}>1-20</span>
                     </div>
 
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -1061,47 +1111,35 @@ export default function Estudio() {
                         const Icon = isPomo ? TomatoIcon : isBreakEntry ? Coffee : Timer;
                         const mins = Math.floor(entry.duration / 60);
                         const secs = entry.duration % 60;
-                        const timeStr = entry.endedAt ? (() => { try { return fmtClock(format(new Date(entry.endedAt), 'HH:mm'), settings?.timeFormat); } catch { return '—'; } })() : '—';
-                        const denom = entry.type === 'chrono' ? (chronoGoal || 900) : (settings.pomodoroTime || 1500);
-                        const pct = (entry.type === 'pomodoro' || entry.type === 'chrono') && denom > 0 ? Math.min(100, Math.round(entry.duration / denom * 100)) : 100;
-                        const eff = entry.sessionEff ?? 100;
-                        const barColor = eff >= 85 ? '#10B981' : eff >= 60 ? '#F59E0B' : '#EF4444';
-                        const statusLabel = entry.status === 'completado' ? '✓ Hecho' : entry.status === 'mitad' ? '— Medio' : '✕ Corte';
-                        const statusCol = entry.status === 'completado' ? 'var(--success)' : entry.status === 'mitad' ? '#F59E0B' : 'var(--error)';
+                    const eff = entry.sessionIre ?? entry.sessionEff ?? 100;
+                        const effColor = eff >= 85 ? '#10B981' : eff >= 60 ? '#F59E0B' : '#EF4444';
+                        const vm = entry.volmeter ?? Math.round(eff / 5);
                         return (
                           <div key={entry.id || i}
-                            onClick={() => { setShowAllActivity(false); setTimeout(() => handleViewSession(entry.id || ''), 100); }}
                             style={{
-                              display: 'flex', alignItems: 'center', gap: 6,
-                              padding: '9px 4px', borderRadius: 8,
-                              cursor: 'pointer', transition: 'background 150ms',
+                              display: 'flex', alignItems: 'center', gap: 8,
+                              padding: '10px 4px', borderRadius: 8,
                               borderBottom: i < activityFeed.length - 1 ? '1px solid var(--border-subtle)' : 'none',
-                            }}
-                            className="hover:bg-[var(--bg-hover)]">
-                            <div style={{ width: 28, height: 28, borderRadius: 7, background: `${c}10`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            }}>
+                            <div style={{ width: 26, height: 26, borderRadius: 7, background: `${c}12`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                               <Icon size={12} color={c} />
                             </div>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 3 }}>
-                                <span style={{ fontSize: 12, fontWeight: 550, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>
-                                  {mins > 0 ? `${mins}m ${secs}s` : `${secs}s`}
-                                </span>
-                                <span style={{ fontSize: 8, fontWeight: 500, color: 'var(--text-muted)' }}>{entry.type === 'pomodoro' ? 'Pomo' : entry.type === 'chrono' ? 'Chrono' : 'Break'}</span>
-                                <span style={{ fontSize: 8, fontWeight: 500, color: statusCol, marginLeft: 'auto' }}>{statusLabel}</span>
-                              </div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                <div style={{ flex: '0 1 60px', height: 3, borderRadius: 2, background: 'var(--bg-deep)', overflow: 'hidden' }}>
-                                  <div style={{ width: `${pct}%`, height: '100%', borderRadius: 2, background: barColor, transition: 'width 500ms ease' }} />
-                                </div>
-                                {(entry.pauseCount ?? 0) > 0 && (
-                                  <span style={{ fontSize: 7, color: '#F59E0B', fontWeight: 600, background: '#F59E0B10', padding: '0 4px', borderRadius: 3, lineHeight: '14px', flexShrink: 0 }}>
-                                    {entry.pauseCount}p
-                                  </span>
-                                )}
-                              </div>
+                            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", width: 58, textAlign: 'left', flexShrink: 0 }}>
+                              {mins > 0 ? `${mins}m` : `${secs}s`}
+                            </span>
+                            <div style={{ display: 'flex', gap: 2, flex: 1, minWidth: 0, alignItems: 'center' }}>
+                              {Array.from({ length: 20 }, (_, j) => (
+                                <div key={j} style={{
+                                  width: 6, height: 12, borderRadius: 1.5,
+                                  background: j < vm
+                                    ? (j < 7 ? '#EF4444' : j < 14 ? '#F59E0B' : '#10B981')
+                                    : 'var(--bg-hover)',
+                                  flexShrink: 0,
+                                }} />
+                              ))}
                             </div>
-                            <span style={{ width: 40, textAlign: 'right', fontSize: 11, fontWeight: 600, color: barColor, fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{eff}%</span>
-                            <span style={{ width: 70, textAlign: 'right', fontSize: 10, fontWeight: 450, color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{entry.meta ?? timeStr}</span>
+                            <span style={{ width: 32, textAlign: 'right', fontSize: 10, fontWeight: 600, color: effColor, fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{eff}%</span>
+                            <span style={{ width: 22, textAlign: 'right', fontSize: 9, fontWeight: 500, color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{vm}</span>
                           </div>
                         );
                       })}
@@ -1311,7 +1349,7 @@ export default function Estudio() {
 
       {/* POST-SESSION EVALUATION — with linked task */}
       {showSessionEval && evalSessionId && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }} onClick={() => { handleEvalAndStartRest(); }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }} onClick={() => { setShowSessionEval(false); setShowFreeStudyPrompt(false); setShowRestPrompt(false); }}>
           <div onClick={e => e.stopPropagation()}
             style={{
               background: 'var(--bg-elevated)', borderRadius: 20,
@@ -1414,7 +1452,17 @@ export default function Estudio() {
             )}
 
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
-              <button onClick={() => { handleEvalAndStartRest(); }}
+              <button onClick={() => {
+                if (evalSessionId && sessionType === 'pomodoro') {
+                  updateStudySession(evalSessionId, { isDistraction: true, evaluatedAt: new Date().toISOString() });
+                } else if (evalSessionId) {
+                  updateStudySession(evalSessionId, { evaluatedAt: new Date().toISOString() });
+                }
+                setShowSessionEval(false);
+                setShowFreeStudyPrompt(false);
+                setShowRestPrompt(false);
+                addNotification('Sesión omitida', 'info');
+              }}
                 style={{ padding: '8px 20px', borderRadius: 10, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
                 Omitir
               </button>
@@ -1445,7 +1493,7 @@ export default function Estudio() {
 
       {/* FREE STUDY PROMPT — no linked task */}
       {showFreeStudyPrompt && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }} onClick={() => { handleEvalAndStartRest(); }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }} onClick={() => { setShowSessionEval(false); setShowFreeStudyPrompt(false); setShowRestPrompt(false); }}>
           <div onClick={e => e.stopPropagation()}
             style={{
               background: 'var(--bg-elevated)', borderRadius: 20,
@@ -1526,7 +1574,17 @@ export default function Estudio() {
             </div>
 
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
-              <button onClick={() => { handleEvalAndStartRest(); }}
+              <button onClick={() => {
+                if (evalSessionId && sessionType === 'pomodoro') {
+                  updateStudySession(evalSessionId, { isDistraction: true, evaluatedAt: new Date().toISOString() });
+                } else if (evalSessionId) {
+                  updateStudySession(evalSessionId, { evaluatedAt: new Date().toISOString() });
+                }
+                setShowSessionEval(false);
+                setShowFreeStudyPrompt(false);
+                setShowRestPrompt(false);
+                addNotification('Sesión omitida', 'info');
+              }}
                 style={{ padding: '8px 20px', borderRadius: 10, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
                 Omitir
               </button>

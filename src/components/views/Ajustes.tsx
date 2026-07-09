@@ -841,7 +841,29 @@ export default function Ajustes() {
                       <Image size={16} /> {settings.backgroundImage ? 'Cambiar Imagen de Fondo' : 'Cargar Imagen de Fondo'}
                     </button>
 
-                    <div style={{ marginTop: 8 }}>
+                    {settings.backgroundImage && (
+                      <div>
+                        <label style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8, display: 'block', fontWeight: 400 }}>Ajuste de Imagen</label>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          {[
+                            { id: 'cover' as const, label: 'Cubrir' },
+                            { id: 'contain' as const, label: 'Contener' },
+                            { id: 'fill' as const, label: 'Llenar' },
+                            { id: 'tile' as const, label: 'Mosaico' },
+                          ].map(opt => {
+                            const isActive = (settings.backgroundSize || 'cover') === opt.id;
+                            return (
+                              <button key={opt.id} onClick={() => updateSettings({ backgroundSize: opt.id })}
+                                style={{ flex: 1, padding: '8px 12px', borderRadius: 8, fontSize: 11, fontWeight: 600, border: `1px solid ${isActive ? 'var(--accent)' : 'var(--border-subtle)'}`, background: isActive ? 'var(--accent-soft)' : 'var(--bg-deep)', color: isActive ? 'var(--accent)' : 'var(--text-secondary)', cursor: 'pointer', transition: 'all 150ms' }}>
+                                {opt.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    <div>
                       <label style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8, display: 'flex', justifyContent: 'space-between', fontWeight: 400 }}>
                         <span>Opacidad de Paneles</span>
                         <span>{Math.round((settings.uiOpacity ?? 0.85) * 100)}%</span>
@@ -852,7 +874,7 @@ export default function Ajustes() {
                         style={{ width: '100%', accentColor: 'var(--accent)' }} />
                     </div>
 
-                    <div style={{ marginTop: 12 }}>
+                    <div>
                       <label style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8, display: 'flex', justifyContent: 'space-between', fontWeight: 400 }}>
                         <span>Brillo del Fondo</span>
                         <span>{settings.backgroundBrightness ?? 100}%</span>
@@ -863,7 +885,7 @@ export default function Ajustes() {
                         style={{ width: '100%', accentColor: 'var(--accent)' }} />
                     </div>
 
-                    <div style={{ marginTop: 12 }}>
+                    <div>
                       <label style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8, display: 'flex', justifyContent: 'space-between', fontWeight: 400 }}>
                         <span>Desenfoque de Paneles</span>
                         <span>{settings.backgroundBlur ?? 0}px</span>
@@ -874,7 +896,7 @@ export default function Ajustes() {
                         style={{ width: '100%', accentColor: 'var(--accent)' }} />
                     </div>
 
-                    <div style={{ marginTop: 12 }}>
+                    <div>
                       <label style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8, display: 'flex', justifyContent: 'space-between', fontWeight: 400 }}>
                         <span>Oscurecer Fondo</span>
                         <span>{settings.backgroundOverlay ?? 0}%</span>

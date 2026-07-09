@@ -127,11 +127,23 @@
 }
 
 html,
-body,
+body {
+  height: 100%;
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
 #root {
   height: 100%;
   width: 100%;
   overflow: hidden;
+  min-width: 900px;
   background: var(--bg-base);
   color: var(--text-primary);
   font-family: var(--font-primary);
@@ -145,7 +157,8 @@ body,
 .app-layout {
   display: flex;
   height: 100vh;
-  width: 100vw;
+  width: 100%;
+  min-width: 900px;
   background-color: var(--bg-base);
   position: relative;
 }
@@ -156,9 +169,9 @@ body,
   position: absolute;
   inset: 0;
   background-image: var(--app-bg-image, none);
-  background-size: cover;
+  background-size: var(--bg-size, cover);
   background-position: center;
-  background-repeat: no-repeat;
+  background-repeat: var(--bg-repeat, no-repeat);
   filter: brightness(var(--bg-brightness, 100%));
   pointer-events: none;
   z-index: 0;
@@ -1309,7 +1322,10 @@ h6,
   padding-left: 24px;
   margin: 8px 0;
 }
-.notes-editor-area li { margin: 4px 0; }
+.notes-editor-area ul { list-style: disc; }
+.notes-editor-area ol { list-style: decimal; }
+.notes-editor-area li { margin: 4px 0; color: var(--text-primary); }
+.notes-editor-area li::marker { color: var(--text-tertiary); }
 .notes-editor-area hr {
   border: none;
   height: 2px;

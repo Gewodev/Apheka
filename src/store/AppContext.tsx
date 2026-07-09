@@ -1,10 +1,10 @@
-import React, { createContext, useContext, useState, useEffect, useLayoutEffect, useCallback, useRef, ReactNode, Dispatch, SetStateAction } from 'react';
+import React, { createContext, useContext, useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo, ReactNode, Dispatch, SetStateAction } from 'react';
 import { emit, listen } from '@tauri-apps/api/event';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { copyFile, mkdir, exists, readFile, writeFile, BaseDirectory } from '@tauri-apps/plugin-fs';
 import { get, set, del } from 'idb-keyval';
 import { extractAudioMetadata } from '../lib/audioMetadata';
-import { format, parseISO, subDays } from 'date-fns';
+import { format, parseISO, subDays, addDays } from 'date-fns';
 import { appDataDir, appCacheDir, join, extname } from '@tauri-apps/api/path';
 import { saveAllTracks, loadAllTracks, copyAudioToStorage, removeAudioFromStorage, clearAllAudioFiles, exportMusicLibrary as exportMusicToDir, importMusicLibrary as importMusicFromDir, saveTrackMetadata, getAllTracksMetadata, deleteTrackMetadata, clearAllTracksMetadata, addTrackFileToDB, getTrackFileFromDB, deleteTrackFileFromDB, clearAllTrackFiles, storeTrackFileInDB } from '../lib/musicDb';
 
@@ -148,6 +148,7 @@ export interface Note {
   createdAt: string;
   updatedAt: string;
   isPinned: boolean;
+  isCoursePrivate?: boolean; // New field for private course notes
   tags?: string[];
   priority?: 'high' | 'medium' | 'low';
   coverImage?: string;
@@ -331,6 +332,7 @@ export interface Settings {
   backgroundBrightness?: number; // 50-200, default 100
   backgroundBlur?: number;       // 0-20, default 0 (backdrop blur on panels)
   backgroundOverlay?: number;    // 0-100, default 0 (dark overlay opacity)
+  backgroundSize?: 'cover' | 'contain' | 'fill' | 'tile';
   profilePhoto?: string;  // base64
   notifications: boolean;
   soundEffects: boolean;
@@ -500,6 +502,7 @@ interface AppContextType extends AppState {
   // Notes
   addNote: (note: Omit<Note, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateNote: (id: string, updates: Partial<Note>) => void;
+  updateNoteVisual: (id: string, updates: Partial<Note>) => void;
   deleteNote: (id: string) => void;
   restoreNote: (id: string) => void;
   permanentlyDeleteNote: (id: string) => void;
@@ -594,6 +597,8 @@ interface AppContextType extends AppState {
   // Navigation
   navigateTo: ViewId | null;
   setNavigateTo: (view: ViewId | null) => void;
+  focusedTaskId: string | null;
+  setFocusedTaskId: (id: string | null) => void;
   // Settings
   updateSettings: (updates: Partial<Settings>) => void;
   // Integrations
@@ -785,6 +790,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setNotifications(prev => prev.filter(n => n.id !== id));
   }, []);
   const clearNotifications = useCallback(() => setNotifications([]), []);
+  const [playCounts, setPlayCounts] = useState<Record<string, number>>({});
+  const [trackHistory, setTrackHistory] = useState<string[]>([]);
   const setShuffleMode = useCallback((mode: boolean) => {
     _setShuffleMode(mode);
     if (mode) {
@@ -793,10 +800,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setMusicQueue(prev => {
         if (prev.length > 0) return prev;
         const rest = tracksRef.current.filter(t => t.id !== currentTrackIdRef.current).map(t => t.id);
-        return shuffleArray(rest);
+        return weightedShuffle(rest, playCounts);
       });
     }
-  }, []);
+  }, [playCounts]);
   const setRepeatMode = useCallback((mode: 'none' | 'all' | 'one') => {
     _setRepeatMode(mode);
     if (mode !== 'none') _setShuffleMode(false);
@@ -810,12 +817,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     return a;
   };
+  // Weighted shuffle: less-played tracks get higher probability (unplayed ≈ 1.0, played 3x ≈ 0.25)
+  const weightedShuffle = (arr: string[], counts: Record<string, number>): string[] => {
+    const a = [...arr];
+    const result: string[] = [];
+    while (a.length > 0) {
+      const weights = a.map(tid => 1 / ((counts[tid] || 0) + 1));
+      const total = weights.reduce((s, w) => s + w, 0);
+      let r = Math.random() * total;
+      let idx = 0;
+      for (let i = 0; i < weights.length; i++) {
+        r -= weights[i];
+        if (r <= 0) { idx = i; break; }
+      }
+      result.push(a[idx]);
+      a.splice(idx, 1);
+    }
+    return result;
+  };
    const [trackPlayDurations, setTrackPlayDurations] = useState<Record<string, number>>({});
    const [currentTrackStartTime, setCurrentTrackStartTime] = useState<number | null>(null);
    const [artists, setArtists] = useState<{ id: string; name: string }[]>([]);
    const [playlists, setPlaylists] = useState<Playlist[]>([]);
-   const [trackHistory, setTrackHistory] = useState<string[]>([]);
-   const [playCounts, setPlayCounts] = useState<Record<string, number>>({});
+
   const [musicQueue, setMusicQueue] = useState<string[]>([]);
   const [queueSource, setQueueSource] = useState<{ pool: string[] } | null>(null);
   const [isAudioLoading, setIsAudioLoading] = useState(false);
@@ -833,51 +857,47 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [musicListeningTime, setMusicListeningTime] = useState(0);
   const [musicListeningDate, setMusicListeningDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
   const [dailyMusicTime, setDailyMusicTime] = useState<Record<string, number>>({});
-  const [weeklyMusicTime, setWeeklyMusicTime] = useState(0);
-  const [monthlyMusicTime, setMonthlyMusicTime] = useState(0);
-  const [weeklyResetSunday, setWeeklyResetSunday] = useState(() => {
-    const now = new Date();
-    const sunday = new Date(now);
-    sunday.setDate(sunday.getDate() - sunday.getDay());
-    return format(sunday, 'yyyy-MM-dd');
-  });
-  const [monthlyResetKey, setMonthlyResetKey] = useState(() => format(new Date(), 'yyyy-MM'));
 
-  // Reset listening time daily, weekly (Sunday), and monthly (1st)
+  const weeklyMusicTime = useMemo(() => {
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+    let total = 0;
+    for (let i = 0; i <= dayOfWeek; i++) {
+      const dateStr = format(addDays(subDays(today, dayOfWeek), i), 'yyyy-MM-dd');
+      total += dailyMusicTime[dateStr] || 0;
+    }
+    return total;
+  }, [dailyMusicTime]);
+
+  const monthlyMusicTime = useMemo(() => {
+    const monthKey = format(new Date(), 'yyyy-MM');
+    let total = 0;
+    for (const [dateStr, seconds] of Object.entries(dailyMusicTime)) {
+      if (dateStr.startsWith(monthKey)) {
+        total += seconds;
+      }
+    }
+    return total;
+  }, [dailyMusicTime]);
+
+  // Reset listening time daily
   useEffect(() => {
     const check = setInterval(() => {
       const now = new Date();
       const today = format(now, 'yyyy-MM-dd');
-      // Daily reset
       if (today !== musicListeningDate) {
         setMusicListeningTime(0);
         setMusicListeningDate(today);
       }
-      // Weekly reset (Sunday midnight)
-      const sunday = new Date(now);
-      sunday.setDate(sunday.getDate() - sunday.getDay());
-      const sundayKey = format(sunday, 'yyyy-MM-dd');
-      if (sundayKey !== weeklyResetSunday) {
-        setWeeklyMusicTime(0);
-        setWeeklyResetSunday(sundayKey);
-      }
-      // Monthly reset (1st of month)
-      const monthKey = format(now, 'yyyy-MM');
-      if (monthKey !== monthlyResetKey) {
-        setMonthlyMusicTime(0);
-        setMonthlyResetKey(monthKey);
-      }
-    }, 30000); // check every 30s
+    }, 30000);
     return () => clearInterval(check);
-  }, [musicListeningDate, weeklyResetSunday, monthlyResetKey]);
+  }, [musicListeningDate]);
 
   // Increment listening time every second while music plays
   useEffect(() => {
     if (!isPlayingMusic) return;
     const interval = setInterval(() => {
       setMusicListeningTime(prev => prev + 1);
-      setWeeklyMusicTime(prev => prev + 1);
-      setMonthlyMusicTime(prev => prev + 1);
       const today = format(new Date(), 'yyyy-MM-dd');
       setDailyMusicTime(prev => ({ ...prev, [today]: (prev[today] || 0) + 1 }));
     }, 1000);
@@ -892,6 +912,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
    const queueSourceRef = useRef(queueSource);
    const playTrackRef = useRef<(id: string) => void>(() => {});
   const trackHistoryRef = useRef(trackHistory);
+  const playCountsRef = useRef(playCounts);
   const musicVolumeRef = useRef(musicVolume);
    const autoPlayRef = useRef(false);
    const activePlaySessionIdRef = useRef<string | null>(null);
@@ -906,6 +927,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   
   useLayoutEffect(() => { currentTrackIdRef.current = currentTrackId; }, [currentTrackId]);
   useEffect(() => { trackHistoryRef.current = trackHistory; }, [trackHistory]);
+  useEffect(() => { playCountsRef.current = playCounts; }, [playCounts]);
    useEffect(() => { tracksRef.current = tracks; }, [tracks]);
    useEffect(() => { shuffleModeRef.current = shuffleMode; }, [shuffleMode]);
    useEffect(() => { repeatModeRef.current = repeatMode; }, [repeatMode]);
@@ -960,6 +982,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [tracks]);
 
    const [navigateTo, setNavigateTo] = useState<ViewId | null>(null);
+  const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null);
   const [googleConnected, setGoogleConnected] = useState(false);
   const [calendarSyncEnabled, setCalendarSyncEnabled] = useState(false);
   const [lastCalendarSync, setLastCalendarSync] = useState<string | null>(null);
@@ -1020,7 +1043,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
           if (data.sessionTime) setSessionTime(data.sessionTime);
           if (data.sessionType) setSessionType(data.sessionType);
-          if (data.isRest) setIsRest(true);
+          if (data.isRest) {
+            setIsRest(true);
+            const savedRestStart = localStorage.getItem('owa_rest_start_time');
+            if (savedRestStart) restStartTimeRef.current = Number(savedRestStart);
+          }
           if (data.weeklyStudyTime) setWeeklyStudyTime(data.weeklyStudyTime);
           const today = format(new Date(), 'yyyy-MM-dd');
           if (data.dailyStudyTime !== undefined && data.dailyStudyDate === today) {
@@ -1123,25 +1150,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               return statsData.dailyMusicTime;
             });
           }
-          // Restore weekly stats if same week
-          if (statsData.weeklyMusicTime !== undefined && statsData.weeklyResetSunday) {
-            const now = new Date();
-            const sunday = new Date(now);
-            sunday.setDate(sunday.getDate() - sunday.getDay());
-            const sundayKey = format(sunday, 'yyyy-MM-dd');
-            if (statsData.weeklyResetSunday === sundayKey) {
-              setWeeklyMusicTime(statsData.weeklyMusicTime);
-              setWeeklyResetSunday(sundayKey);
-            }
-          }
-          // Restore monthly stats if same month
-          if (statsData.monthlyMusicTime !== undefined && statsData.monthlyResetKey) {
-            const monthKey = format(new Date(), 'yyyy-MM');
-            if (statsData.monthlyResetKey === monthKey) {
-              setMonthlyMusicTime(statsData.monthlyMusicTime);
-              setMonthlyResetKey(monthKey);
-            }
-          }
+
         }
       } catch {}
       // Sync with Rust backend for default path
@@ -1178,6 +1187,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
   const sessionTimeRef = useRef(sessionTime);
   sessionTimeRef.current = sessionTime;
+  const isTimerActiveRef = useRef(isTimerActive);
+  isTimerActiveRef.current = isTimerActive;
   const isRestRef = useRef(isRest);
   const restStartTimeRef = useRef(-1);
   isRestRef.current = isRest;
@@ -1279,6 +1290,66 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [isTimerActive, settings.pomodoroTime, settings.shortBreakTime]);
 
+  // Catch up timer when page becomes visible after being hidden (laptop sleep, tab switch)
+  const hiddenTimerRef = useRef<{ sessionTime: number; timestamp: number } | null>(null);
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        hiddenTimerRef.current = { sessionTime: sessionTimeRef.current, timestamp: Date.now() };
+      } else if (hiddenTimerRef.current && isTimerActiveRef.current) {
+        const elapsed = Math.floor((Date.now() - hiddenTimerRef.current.timestamp) / 1000);
+        if (elapsed > 1) {
+          const expected = hiddenTimerRef.current.sessionTime + elapsed;
+          const current = sessionTimeRef.current;
+          if (expected > current) {
+            sessionTimeRef.current = expected;
+            const today = format(new Date(), 'yyyy-MM-dd');
+            if (isRestRef.current) {
+              setBreakTime(prev => prev + (expected - current));
+              setDailyBreakTime(prev => ({ ...prev, [today]: (prev[today] || 0) + (expected - current) }));
+            } else {
+              setDailyStudyTime(prev => prev + (expected - current));
+              setWeeklyStudyTime(prev => ({ ...prev, [today]: (prev[today] || 0) + (expected - current) }));
+              if (sessionTypeRef.current === 'pomodoro') {
+                setFocusPomodoroTime(prev => prev + (expected - current));
+                setDailyFocusPomodoro(prev => ({ ...prev, [today]: (prev[today] || 0) + (expected - current) }));
+              } else {
+                setFocusChronoTime(prev => prev + (expected - current));
+                setDailyFocusChrono(prev => ({ ...prev, [today]: (prev[today] || 0) + (expected - current) }));
+              }
+              const currentTaskId = activeTaskIdRef.current;
+              if (currentTaskId) {
+                setTasks(prev => prev.map(t => t.id === currentTaskId ? { ...t, studyTime: t.studyTime + (expected - current) } : t));
+              }
+            }
+            setSessionTime(expected);
+            emit('timer:sync', JSON.stringify({
+              sessionTime: expected,
+              isTimerActive: isTimerActiveRef.current,
+              activeTaskId: activeTaskIdRef.current,
+              isRest: isRestRef.current,
+              sessionType: sessionTypeRef.current,
+              pomodoroTime: settings.pomodoroTime,
+              shortBreakTime: settings.shortBreakTime,
+              longBreakTime: settings.longBreakTime,
+              accumulatedPauseTime: accumulatedPauseTimeRef.current,
+              pauseStartTime: pauseStartTimeRef.current,
+              distractionCount: distractionCountRef.current,
+              pomodoroSessions: pomodoroSessionsRef.current,
+              pomodoroGoal: settings.pomodoroGoal,
+              sessionsCount: sessionsCountRef.current,
+              restStartTime: restStartTimeRef.current,
+              pomodoroComplete: !isRestRef.current && sessionTypeRef.current === 'pomodoro' && expected >= settings.pomodoroTime,
+            }));
+          }
+        }
+        hiddenTimerRef.current = null;
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [settings.pomodoroTime, settings.shortBreakTime, settings.longBreakTime, settings.pomodoroGoal]);
+
   // Sync timer state instantly when isRest, isTimerActive, or sessionType changes
   useEffect(() => {
     emit('timer:sync', JSON.stringify({
@@ -1361,7 +1432,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         settings, sessionTime, sessionType, isRest, isTimerActive, weeklyStudyTime, dailyStudyTime, dailyStudyDate, pomodoroSessions,
         trackHistory, playCounts, musicQueue, musicVolume, shuffleMode, repeatMode, artists, playlists,
         currentTrackId, isPlayingMusic: isPlayingMusic && !globalAudio.paused, musicListeningTime, musicListeningDate, dailyMusicTime,
-        weeklyMusicTime, monthlyMusicTime, weeklyResetSunday, monthlyResetKey,
         musicProgress, musicDuration, downloadPath,
         accumulatedPauseTime, pauseStartTime, distractionCount,
         focusPomodoroTime, focusChronoTime, breakTime, dailyBreakTime,
@@ -1369,7 +1439,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       })).catch((e: any) => console.error("Error saving data:", e));
       set(MUSIC_STATS_KEY, JSON.stringify({
         musicListeningTime, musicListeningDate, dailyMusicTime,
-        weeklyMusicTime, monthlyMusicTime, weeklyResetSunday, monthlyResetKey,
       })).catch((e: any) => console.error("Error saving music stats:", e));
     }, 300);
     debounceTimerRef.current = t;
@@ -1378,7 +1447,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     tasks, habits, notes, noteFolders, courses, events, studySessions, settings, sessionTime,
     weeklyStudyTime, dailyStudyTime, dailyStudyDate, pomodoroSessions, trackHistory, playCounts, musicQueue,
     musicVolume, artists, playlists, currentTrackId, isPlayingMusic, musicListeningTime, musicListeningDate, dailyMusicTime,
-    weeklyMusicTime, monthlyMusicTime, weeklyResetSunday, monthlyResetKey,
     musicProgress, musicDuration, downloadPath,
     accumulatedPauseTime, pauseStartTime, distractionCount,
     focusPomodoroTime, focusChronoTime, breakTime, dailyBreakTime,
@@ -1443,7 +1511,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         pomodoroTime: settings.pomodoroTime,
         shortBreakTime: settings.shortBreakTime,
         longBreakTime: settings.longBreakTime,
-        restStartTime: isRestRef.current ? sessionTimeRef.current : 0,
+        restStartTime: restStartTimeRef.current,
         accumulatedPauseTime: accumulatedPauseTimeRef.current,
         pauseStartTime: pauseStartTimeRef.current,
         distractionCount: distractionCountRef.current,
@@ -1463,7 +1531,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         pomodoroTime: settings.pomodoroTime,
         shortBreakTime: settings.shortBreakTime,
         longBreakTime: settings.longBreakTime,
-        restStartTime: isRestRef.current ? sessionTimeRef.current : 0,
+        restStartTime: restStartTimeRef.current,
         accumulatedPauseTime: accumulatedPauseTimeRef.current,
         pauseStartTime: pauseStartTimeRef.current,
         distractionCount: distractionCountRef.current,
@@ -1501,7 +1569,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       settings, sessionTime, sessionType, isRest, isTimerActive: false, weeklyStudyTime, dailyStudyTime, dailyStudyDate, pomodoroSessions,
       trackHistory, playCounts, musicQueue, musicVolume, shuffleMode, repeatMode, artists,
       currentTrackId, isPlayingMusic: savedPlaying, musicListeningTime, musicListeningDate, dailyMusicTime,
-      weeklyMusicTime, monthlyMusicTime, weeklyResetSunday, monthlyResetKey,
       musicProgress: liveProgress, musicDuration, downloadPath,
       accumulatedPauseTime, pauseStartTime, distractionCount,
       focusPomodoroTime, focusChronoTime, breakTime, dailyBreakTime,
@@ -1633,6 +1700,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const updateNoteVisual = useCallback((id: string, updates: Partial<Note>) => {
+    setNotes(prev => {
+      const note = prev.find(n => n.id === id);
+      if (!note) return prev;
+      return prev.map(n => n.id === id ? { ...n, ...updates } : n);
+    });
+  }, []);
+
   const deleteNote = useCallback((id: string) => {
     setNotes(prev => prev.map(n => n.id === id ? { ...n, deletedAt: new Date().toISOString() } : n));
   }, []);
@@ -1720,6 +1795,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       return prev.map(c => c.id === id ? { ...c, ...updates } : c);
     });
+    if (updates.name || updates.color) {
+      setNoteFolders(prev => prev.map(f =>
+        f.courseId === id ? { ...f, ...(updates.name && { name: updates.name }), ...(updates.color && { color: updates.color }) } : f
+      ));
+    }
   }, []);
 
   const deleteCourse = useCallback((id: string) => {
@@ -2218,7 +2298,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       excludeIds.add(id);
       const available = pool.filter(tid => !excludeIds.has(tid) && !after.includes(tid));
       if (shuffleModeRef.current) {
-        const shuffled = shuffleArray([...available]);
+        const shuffled = weightedShuffle(available, playCountsRef.current);
         return [...after, ...shuffled].slice(0, 5);
       }
       const currentIdx = pool.indexOf(id);
@@ -2386,7 +2466,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         } else if (shuffleModeRef.current || repeatModeRef.current === 'all') {
           const sourcePool = queueSourceRef.current?.pool ?? tracksRef.current.map(t => t.id);
           const rest = sourcePool.filter(tid => tid !== cid);
-          const refilled = shuffleModeRef.current ? shuffleArray(rest) : rest;
+          const refilled = shuffleModeRef.current ? weightedShuffle(rest, playCountsRef.current) : rest;
           if (refilled.length > 0) {
             setMusicQueue(refilled.slice(1));
             nextId = refilled[0];
@@ -2403,7 +2483,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             const excludeIds = new Set(history.length < threshold ? history : []);
             excludeIds.add(nextId);
             const available = pool.filter(tid => !excludeIds.has(tid) && !prev.includes(tid));
-            const shuffled = shuffleModeRef.current ? shuffleArray([...available]) : available;
+            const shuffled = shuffleModeRef.current ? weightedShuffle(available, playCountsRef.current) : available;
             return [...prev, ...shuffled].slice(0, 5);
           });
         }
@@ -2963,7 +3043,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     googleConnected, calendarSyncEnabled, lastCalendarSync, importState,
     addTask, updateTask, deleteTask, toggleTaskStatus, clearAllTasks, deleteCompletedTasks, deleteOldCompletedTasks, reorderTasks,
     addSubTask, toggleSubTask, deleteSubTask, addTaskFile, removeTaskFile, incrementTaskStudyTime,
-    addNote, updateNote, deleteNote, restoreNote, permanentlyDeleteNote, addNoteFolder, deleteNoteFolder, reorderFolders, reorderNotes, updateNoteFolder, duplicateNote,
+    addNote, updateNote, updateNoteVisual, deleteNote, restoreNote, permanentlyDeleteNote, addNoteFolder, deleteNoteFolder, reorderFolders, reorderNotes, updateNoteFolder, duplicateNote,
     addCourse, updateCourse, deleteCourse, reorderCourses,
     addEvent, updateEvent, deleteEvent,
     addHabit, updateHabit, deleteHabit, setHabits,
@@ -3008,6 +3088,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setAccumulatedPauseTime, setPauseStartTime, setDistractionCount, setFocusPomodoroTime, setFocusChronoTime, setBreakTime, setDailyFocusPomodoro, setDailyFocusChrono,
     dailyPerformances, setDailyPerformances,
     navigateTo, setNavigateTo,
+    focusedTaskId, setFocusedTaskId,
     updateSettings: updateSettingsCb,
     setGoogleConnected, setCalendarSyncEnabled, setLastCalendarSync,
     triggerCalendarSync, importGoogleEvents: importGoogleEventsCb,

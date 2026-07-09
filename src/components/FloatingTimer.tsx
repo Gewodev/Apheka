@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { listen, emit } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { Coffee } from 'lucide-react';
 import { DigitSVG, ColonSVG } from './LEDDigits';
 import { ANIMATIONS } from './FloatingAnimations';
 
@@ -252,18 +251,13 @@ export default function FloatingTimer() {
         transition: 'opacity 400ms',
       }}>
         {pomodoroComplete ? (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-            <div style={{ width: 32, height: 32, borderRadius: '50%', background: `${color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Coffee size={14} color={color} />
-            </div>
-            <span style={{
-              fontFamily: fontInfo.family, fontWeight: 350, fontSize: 24,
-              color, letterSpacing: '0.01em', lineHeight: 1.3, padding: '0 2px',
-              textAlign: 'center',
-            }}>
-              Te espera un descanso
-            </span>
-          </div>
+          <span style={{
+            fontFamily: "'Inter', sans-serif", fontWeight: 400, fontSize: 18,
+            color, letterSpacing: '0.04em', lineHeight: 1.3, padding: '0 4px',
+            textAlign: 'center', opacity: 0.85,
+          }}>
+            Te espera un descanso
+          </span>
         ) : showAnimation && AnimComponent ? (
           <AnimComponent color={color} />
         ) : useLed ? (

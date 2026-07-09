@@ -19,7 +19,7 @@ import { es } from 'date-fns/locale';
 import { isSignedIn, signIn, signOut, onAuthChange } from '../../lib/google';
 import NotificationBell from '../ui/NotificationBell';
 import {
-  DndContext, DragOverlay, closestCenter, closestCorners,
+  DndContext, DragOverlay, closestCenter, closestCorners, pointerWithin,
   PointerSensor, useSensor, useSensors,
   useDraggable, useDroppable
 } from '@dnd-kit/core';
@@ -112,7 +112,7 @@ function SortableCalendarTask({ task, children }: { task: Task; children: (dragP
 }
 
 export default function Tareas() {
-  const { tasks, courses, addTask, updateTask, toggleTaskStatus, deleteTask, addSubTask, toggleSubTask, deleteSubTask, addTaskFile, removeTaskFile, clearAllTasks, addNotification, setNavigateTo, settings } = useApp();
+  const { tasks, courses, addTask, updateTask, toggleTaskStatus, deleteTask, addSubTask, toggleSubTask, deleteSubTask, addTaskFile, removeTaskFile, clearAllTasks, addNotification, setNavigateTo, focusedTaskId, setFocusedTaskId, settings } = useApp();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -120,7 +120,9 @@ export default function Tareas() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [showNewModal, setShowNewModal] = useState(false);
   const [newTaskPrefillDate, setNewTaskPrefillDate] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'list' | 'board' | 'calendar'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'board' | 'calendar'>(() => {
+    try { return (localStorage.getItem('owa_tasks_view') as 'list' | 'board' | 'calendar') || 'list'; } catch { return 'list'; }
+  });
   const [sortBy, setSortBy] = useState<'fecha' | 'curso'>('fecha');
   const [calendarDate, setCalendarDate] = useState(new Date());
   const [calendarSelectedDay, setCalendarSelectedDay] = useState<Date>(new Date(0));
@@ -173,6 +175,14 @@ export default function Tareas() {
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   useEffect(() => { const t = setTimeout(() => setIsInitialLoading(false), 650); return () => clearTimeout(t); }, []);
+  useEffect(() => { localStorage.setItem('owa_tasks_view', viewMode); }, [viewMode]);
+  useEffect(() => {
+    const pendingId = localStorage.getItem('owa_pending_task_id');
+    if (pendingId && tasks.some(t => t.id === pendingId)) {
+      setSelectedTaskId(pendingId);
+      localStorage.removeItem('owa_pending_task_id');
+    }
+  }, [tasks]);
   const [showNotesModal, setShowNotesModal] = useState(false);
   const [showSubtasksModal, setShowSubtasksModal] = useState(false);
   const [addMaterialMode, setAddMaterialMode] = useState<'link' | 'file'>('file');
@@ -194,6 +204,8 @@ export default function Tareas() {
       setNewTaskPrefillDate(null);
     }
   }, [showNewModal, newTaskPrefillDate]);
+
+  useEffect(() => { if (focusedTaskId) { setSelectedTaskId(focusedTaskId); setShowAddMaterial(false); setPdfPreviewUrl(null); setFocusedTaskId(null); } }, [focusedTaskId, setFocusedTaskId]);
 
   useEffect(() => { return onAuthChange(connected => setGoogleConnected(connected)); }, []);
 
@@ -596,13 +608,13 @@ export default function Tareas() {
         {viewMode === 'list' && (
             <div style={{ width: '100%', display: 'flex', flexDirection: 'column', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 12, flex: 1 }}>
               {/* Column headers */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 18px', borderBottom: '1px solid var(--border-soft)', flexShrink: 0, background: 'var(--bg-elevated)', borderRadius: '12px 12px 0 0' }}>
-                <span style={{ width: 24, flexShrink: 0 }} />
-                <span style={{ flex: 4, fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Tarea</span>
-                <span style={{ flex: 1.8, fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', textAlign: 'center' }}>Curso</span>
-                <span style={{ flex: 0.8, fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', textAlign: 'center' }}>Prioridad</span>
-                <span style={{ flex: 0.9, fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', textAlign: 'center' }}>Fecha</span>
-                <span style={{ width: 24, flexShrink: 0 }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 0, padding: '11px 18px 11px 12px', borderBottom: '1px solid var(--border-soft)', flexShrink: 0, background: 'var(--bg-elevated)', borderRadius: '12px 12px 0 0' }}>
+                <span style={{ width: 30, flexShrink: 0 }} />
+                <span style={{ flex: 4, fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', textAlign: 'left' }}>Tarea</span>
+                <span style={{ flex: 2.2, fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', paddingLeft: 16, textAlign: 'center' }}>Curso</span>
+                <span style={{ flex: 1, fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', paddingLeft: 16, textAlign: 'center' }}>Prioridad</span>
+                <span style={{ flex: 1.2, fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', paddingLeft: 24 }}>Fecha</span>
+                <span style={{ width: 30, flexShrink: 0 }} />
               </div>
               {/* Rows */}
               <div className="no-scrollbar" style={{ display: 'flex', flexDirection: 'column', overflowY: 'auto', flex: 1 }}>
@@ -649,13 +661,13 @@ export default function Tareas() {
                                 </div>
                                 {/* Content area — click opens detail */}
                                 <div onClick={(e) => { e.stopPropagation(); handleOpenDetail(t.id); }}
-                                  style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 12, padding: '0 18px 0 26px', minHeight: 50, cursor: 'pointer', minWidth: 0 }}>
+                                  style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 0, padding: '0 18px 0 12px', minHeight: 50, cursor: 'pointer', minWidth: 0 }}>
                                   <div style={{ flex: 4, display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                                     <span style={{ fontSize: 13, fontWeight: 500, color: titleColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: isDone ? 'line-through' : 'none' }}>
                                       {t.title}
                                     </span>
                                   </div>
-                                  <div style={{ flex: 1.8, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                  <div style={{ flex: 2.2, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, paddingLeft: 16 }}>
                                     {t.course && t.course !== 'Sin curso' ? (
                                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 500, padding: '3px 10px', borderRadius: 6, background: t.courseColor + '12', color: t.courseColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%', border: t.status === 'progreso' ? `1px solid ${t.courseColor}50` : '1px solid transparent' }}>
                                       <span style={{ width: 5, height: 5, borderRadius: '50%', background: t.courseColor, flexShrink: 0, boxShadow: t.status === 'progreso' ? `0 0 6px ${t.courseColor}80` : 'none' }} />
@@ -667,7 +679,7 @@ export default function Tareas() {
                                     </span>
                                     )}
                                   </div>
-                                  <div style={{ flex: 0.8, textAlign: 'center' }}>
+                                  <div style={{ flex: 1, paddingLeft: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                     {t.priority !== 'none' ? (
                                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 9, fontWeight: 600, padding: '2px 8px', borderRadius: 6, textTransform: 'uppercase', letterSpacing: '0.04em', background: t.priority === 'high' ? 'rgba(239,68,68,0.15)' : t.priority === 'medium' ? 'rgba(245,158,11,0.15)' : 'rgba(16,185,129,0.15)', color: t.priority === 'high' ? '#EF4444' : t.priority === 'medium' ? '#F59E0B' : '#10B981' }}>
                                       {t.priority === 'high' ? 'Alta' : t.priority === 'medium' ? 'Media' : 'Baja'}
@@ -678,14 +690,14 @@ export default function Tareas() {
                                     </span>
                                     )}
                                   </div>
-                                  <div style={{ flex: 0.9, textAlign: 'center', opacity: longPressedTaskId === t.id ? 0 : 1, transition: 'opacity 200ms' }}>
+                                  <div style={{ flex: 1.2, paddingLeft: 24, opacity: longPressedTaskId === t.id ? 0 : 1, transition: 'opacity 200ms' }}>
                                     {tr && (
                                       <span style={{ fontSize: 12, fontWeight: 500, color: dateColor }}>
                                         {tr.text}
                                       </span>
                                     )}
                                   </div>
-                                  <div style={{ width: 24, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  <div style={{ width: 30, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                     <div onClick={(e) => { e.stopPropagation(); handleOpenDetail(t.id); }}
                                       style={{ width: 22, height: 22, borderRadius: 6, background: 'var(--bg-hover)', border: '1px solid var(--border-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 150ms' }}
                                       className="hover:bg-white/[0.06]">
@@ -756,7 +768,7 @@ export default function Tareas() {
                         updateTask(taskId, { status: newStatus });
                       }
                     }}
-                    style={{ flex: 1, minWidth: 0, padding: '14px 12px', display: 'flex', flexDirection: 'column', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 12 }}>
+                    style={{ flex: '1 1 0', minWidth: 0, width: 0, overflow: 'hidden', padding: '14px 12px', display: 'flex', flexDirection: 'column', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 12 }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingBottom: 8, borderBottom: '1px solid var(--border-soft)', flexShrink: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <div style={{ width: 6, height: 6, borderRadius: '50%', background: col.color, boxShadow: `0 0 6px ${col.color}60` }} />
@@ -787,8 +799,9 @@ export default function Tareas() {
                             cursor: 'pointer',
                             transition: 'all 200ms',
                             flexShrink: 0,
-                            overflow: 'visible',
+                            overflow: 'hidden',
                             width: '100%',
+                            maxWidth: '100%',
                             boxSizing: 'border-box',
                             marginTop: 4,
                             opacity: draggingTaskId === task.id ? 0.35 : 1,
@@ -797,12 +810,12 @@ export default function Tareas() {
                           {/* Curso + Tiempo restante — juntos en fila superior */}
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                             {task.course && task.course !== 'Sin curso' ? (
-                            <span style={{ fontSize: 8, fontWeight: 600, color: task.courseColor, display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <span style={{ fontSize: 8, fontWeight: 600, color: task.courseColor, display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
                               <span style={{ width: 4, height: 4, borderRadius: '50%', background: task.courseColor, flexShrink: 0 }} />
                               {task.course}
                             </span>
                             ) : (
-                            <span style={{ fontSize: 8, fontWeight: 400, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4, fontStyle: 'italic' }}>
+                            <span style={{ fontSize: 8, fontWeight: 400, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4, fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
                               Sin curso
                             </span>
                             )}
@@ -990,7 +1003,7 @@ export default function Tareas() {
               </div>
 
               {/* Calendar Grid — más vertical */}
-              <DndContext sensors={calendarSensors} collisionDetection={closestCenter} onDragStart={e => setCalendarDragTaskId(e.active.id as string)} onDragEnd={handleDragEndCalendar}>
+              <DndContext sensors={calendarSensors} collisionDetection={pointerWithin} onDragStart={e => setCalendarDragTaskId(e.active.id as string)} onDragEnd={handleDragEndCalendar}>
               <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
                 {weekRows.map((week, wi) => {
                   return (
@@ -1130,20 +1143,21 @@ export default function Tareas() {
                   );
                 })}
               </div>
-              <DragOverlay dropAnimation={null}>
+              <DragOverlay dropAnimation={null} modifiers={[snapCenterToCursor]} style={{ position: 'fixed', pointerEvents: 'none', zIndex: 1000 }}>
                 {calendarDragTaskId ? (() => {
                   const t = tasks.find(x => x.id === calendarDragTaskId);
                   if (!t) return null;
                   const isOverdueCal = t.dueDate && localDate(t.dueDate).getTime() < Date.now() && t.status !== 'completado';
                   return (
                     <div style={{
-                      borderRadius: 6, padding: '8px 14px', fontSize: 12, fontWeight: 600,
-                      color: t.status === 'completado' ? 'rgba(255,255,255,0.3)' : '#fff',
-                      background: t.status === 'completado' ? 'rgba(255,255,255,0.03)' : (isOverdueCal ? 'rgba(239,68,68,0.3)' : `${t.courseColor}25`),
-                      borderLeft: `3px solid ${isOverdueCal ? '#EF4444' : t.courseColor}`,
-                      boxShadow: '0 6px 24px rgba(0,0,0,0.4)',
+                      borderRadius: 4, padding: '3px 8px', fontSize: 11, fontWeight: 500,
+                      lineHeight: '24px',
+                      color: '#fff',
+                      background: isOverdueCal ? 'rgba(239,68,68,0.4)' : `${t.courseColor}30`,
+                      borderLeft: `2px solid ${isOverdueCal ? '#EF4444' : t.courseColor}`,
+                      boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
                       textDecoration: t.status === 'completado' ? 'line-through' : 'none',
-                      maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     }}>
                       {t.title}
                     </div>
@@ -1464,7 +1478,7 @@ export default function Tareas() {
                 </button>
               </div>
 
-              {/* Materiales — un bloque por fila, vista previa enriquecida */}
+              {/* Materiales */}
               <div style={{ padding: '16px 18px', background: `linear-gradient(135deg, var(--bg-elevated) 0%, ${statusConfig[selectedTask.status]?.color}04 100%)`, borderRadius: 12, border: `1px solid ${statusConfig[selectedTask.status]?.color}12` }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -1503,55 +1517,51 @@ export default function Tareas() {
 
                       const cardCursor = (isPdf || isOffice || isImage || (isYouTube && embedUrl) || isWeb) ? 'pointer' : 'default';
                       const statusColor = statusConfig[selectedTask.status]?.color || 'var(--accent)';
+                      const badgeInfo = isPdf ? { label: 'PDF', bg: 'rgba(239,68,68,0.12)', fg: '#EF4444' } : isAudio ? { label: 'Audio', bg: 'rgba(139,92,246,0.12)', fg: '#8B5CF6' } : isOffice ? { label: f.type === 'doc' ? 'Doc' : f.type === 'xls' ? 'XLS' : 'PPT', bg: 'rgba(37,99,235,0.12)', fg: '#2563EB' } : isImage ? { label: 'IMG', bg: 'rgba(245,158,11,0.12)', fg: '#F59E0B' } : isYouTube ? { label: 'Video', bg: 'rgba(239,68,68,0.12)', fg: '#EF4444' } : isWeb ? { label: 'Web', bg: 'rgba(16,185,129,0.12)', fg: '#10B981' } : isDrive ? { label: 'Drive', bg: 'rgba(66,133,244,0.12)', fg: '#4285F4' } : { label: 'File', bg: 'rgba(255,255,255,0.06)', fg: 'var(--text-muted)' };
 
                       return (
-                        <div key={f.id} onClick={handleCardClick} style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '12px', borderRadius: 10, background: 'linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-elevated) 100%)', border: `1px solid var(--border-subtle)`, cursor: cardCursor, transition: 'all 150ms' }}
-                          className={cardCursor !== 'default' ? 'hover:border-borderDark/60' : ''}>
-                          {/* Header: icon + name + badge + delete */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <div style={{ width: 32, height: 32, borderRadius: 8, background: `linear-gradient(135deg, ${statusColor}15, ${statusColor}06)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                              {getFileIcon(f.type, 15)}
+                        <div key={f.id} onClick={handleCardClick}
+                          style={{ borderRadius: 10, border: `1px solid var(--border-subtle)`, cursor: cardCursor, transition: 'all 150ms', overflow: 'hidden', background: 'var(--bg-surface)' }}
+                          className={cardCursor !== 'default' ? 'hover:border-[var(--border-strong)] hover:shadow-sm' : ''}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 10px 10px 12px' }}>
+                            <div style={{ width: 30, height: 30, borderRadius: 7, background: `linear-gradient(135deg, ${statusColor}14, ${statusColor}05)`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: `1px solid ${statusColor}10` }}>
+                              {getFileIcon(f.type, 14)}
                             </div>
-                            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
-                            <span style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.06em', padding: '2px 5px', borderRadius: 3, background: isPdf ? 'rgba(239,68,68,0.15)' : isOffice ? 'rgba(37,99,235,0.15)' : isAudio ? 'rgba(139,92,246,0.15)' : isImage ? 'rgba(245,158,11,0.15)' : isYouTube ? 'rgba(239,68,68,0.15)' : isWeb ? 'rgba(16,185,129,0.15)' : isDrive ? 'rgba(66,133,244,0.15)' : 'rgba(255,255,255,0.06)', color: isPdf ? '#EF4444' : isOffice ? '#2563EB' : isAudio ? '#8B5CF6' : isImage ? '#F59E0B' : isYouTube ? '#EF4444' : isWeb ? '#10B981' : isDrive ? '#4285F4' : 'var(--text-muted)', textTransform: 'uppercase' }}>
-                              {isPdf ? 'PDF' : isAudio ? 'Audio' : isOffice ? (f.type === 'doc' ? 'Doc' : f.type === 'xls' ? 'XLS' : 'PPT') : isImage ? 'IMG' : isYouTube ? 'Video' : isWeb ? 'Web' : isDrive ? 'Drive' : 'File'}
+                            <span style={{ fontSize: 11, fontWeight: 550, color: 'var(--text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
+                            <span style={{ fontSize: 7, fontWeight: 700, letterSpacing: '0.05em', padding: '1px 6px', borderRadius: 3, background: badgeInfo.bg, color: badgeInfo.fg, textTransform: 'uppercase', lineHeight: '16px' }}>
+                              {badgeInfo.label}
                             </span>
                             <button onClick={(e) => { e.stopPropagation(); setConfirmDeleteMaterial({ taskId: selectedTask.id, fileId: f.id }); }} title="Eliminar"
-                              style={{ padding: 4, borderRadius: 5, background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', opacity: 0.4, transition: 'opacity 150ms' }}
-                              className="hover:opacity-100"><X size={10} /></button>
+                              style={{ padding: 3, borderRadius: 4, background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', opacity: 0.35, transition: 'opacity 150ms' }}
+                              className="hover:opacity-100"><X size={9} /></button>
                           </div>
-                          {/* Preview content by type */}
                           {isYouTube && embedUrl && (
-                            <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', borderRadius: 8, overflow: 'hidden', background: '#000' }}>
-                              <img src={`https://img.youtube.com/vi/${embedUrl.split('/embed/')[1]?.split('?')[0]}/0.jpg`} style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.5 }} alt="" />
+                            <div style={{ borderTop: '1px solid var(--border-subtle)', position: 'relative', width: '100%', aspectRatio: '16/9', background: '#000' }}>
+                              <img src={`https://img.youtube.com/vi/${embedUrl.split('/embed/')[1]?.split('?')[0]}/0.jpg`} style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.6 }} alt="" />
                               <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(239,68,68,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                  <Play size={16} fill="#fff" style={{ color: '#fff', marginLeft: 2 }} />
+                                <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'rgba(239,68,68,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>
+                                  <Play size={15} fill="#fff" style={{ color: '#fff', marginLeft: 2 }} />
                                 </div>
                               </div>
                             </div>
                           )}
                           {isAudio && (
-                            <div onClick={e => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'var(--bg-deep)', borderRadius: 8 }}>
-                              <div style={{ width: 28, height: 28, borderRadius: 7, background: 'rgba(139,92,246,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="#8B5CF6"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55C7.79 13 6 14.79 6 17s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
-                              </div>
-                              <audio controls style={{ flex: 1, height: 32, borderRadius: 6 }} src={isLocal ? localSrc : (f.path.startsWith('blob:') || f.path.startsWith('data:') ? f.path : '')}>
+                            <div onClick={e => e.stopPropagation()} style={{ borderTop: '1px solid var(--border-subtle)', padding: '8px 12px', background: 'var(--bg-deep)' }}>
+                              <audio controls style={{ width: '100%', height: 30, borderRadius: 4 }} src={isLocal ? localSrc : (f.path.startsWith('blob:') || f.path.startsWith('data:') ? f.path : '')}>
                                 Tu navegador no soporta audio.
                               </audio>
                             </div>
                           )}
                           {isImage && (
-                            <div style={{ borderRadius: 8, overflow: 'hidden', maxHeight: 160 }}>
-                              <img src={isLocal ? localSrc : f.path} alt={f.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            <div style={{ borderTop: '1px solid var(--border-subtle)', maxHeight: 140, overflow: 'hidden' }}>
+                              <img src={isLocal ? localSrc : f.path} alt={f.name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                             </div>
                           )}
                           {isPdf && (
-                            <div style={{ borderRadius: 8, overflow: 'hidden', background: 'var(--bg-deep)', position: 'relative' }}>
-                              <object data={isLocal ? localSrc : f.path} type="application/pdf" style={{ width: '100%', height: 200, border: 'none', borderRadius: 8 }} aria-label={f.name}>
-                                {/* WhatsApp-style fallback when preview unavailable */}
-                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '24px 16px' }}>
-                                  <svg width="32" height="32" viewBox="0 0 24 24" fill="#EF4444"><path d="M6 2h12l4 4v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm8 1v5h5"/></svg>
+                            <div style={{ borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', position: 'relative' }}>
+                              <object data={isLocal ? localSrc : f.path} type="application/pdf" style={{ width: '100%', height: 180, border: 'none', display: 'block' }} aria-label={f.name}>
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '20px 16px' }}>
+                                  <svg width="28" height="28" viewBox="0 0 24 24" fill="#EF4444"><path d="M6 2h12l4 4v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm8 1v5h5"/></svg>
                                   <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>{f.name}</span>
                                   <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>Toca para previsualizar</span>
                                 </div>
@@ -1559,24 +1569,24 @@ export default function Tareas() {
                             </div>
                           )}
                           {isOffice && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 8, background: 'var(--bg-deep)' }}>
+                            <div style={{ borderTop: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'var(--bg-deep)' }}>
                               {f.type === 'doc' ? <svg width="16" height="16" viewBox="0 0 24 24" fill="#2563EB"><path d="M6 2h12l4 4v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm8 1v5h5M8 13h8v-2H8v2zm0 4h5v-2H8v2zm0-8h3V7H8v2z"/></svg> : f.type === 'xls' ? <svg width="16" height="16" viewBox="0 0 24 24" fill="#16A34A"><path d="M6 2h12l4 4v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm8 1v5h5M8 13l4 4-4 4h2.5l2.5-2.5L15.5 21H18l-4-4 4-4h-2.5L12.5 15 10 13H8z"/></svg> : <svg width="16" height="16" viewBox="0 0 24 24" fill="#D97706"><path d="M6 2h12l4 4v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm8 1v5h5M8 13v-2h8v2H8zm0 4v-2h5v2H8z"/></svg>}
                               <span style={{ flex: 1, fontSize: 10, color: 'var(--text-secondary)' }}>Abrir {f.type === 'doc' ? 'documento' : f.type === 'xls' ? 'hoja de cálculo' : 'presentación'}</span>
                               <ExternalLink size={11} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
                             </div>
                           )}
                           {isWeb && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'var(--bg-deep)', borderRadius: 8 }}>
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                            <div style={{ borderTop: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'var(--bg-deep)' }}>
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
                               <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 9, fontWeight: 500, color: 'var(--text-secondary)' }}>{f.path.replace(/^https?:\/\//, '').split('/')[0]}</span>
-                              <ExternalLink size={11} style={{ flexShrink: 0, color: 'var(--text-muted)' }} />
+                              <ExternalLink size={10} style={{ flexShrink: 0, color: 'var(--text-muted)' }} />
                             </div>
                           )}
                           {isDrive && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 8, background: 'rgba(66,133,244,0.06)', border: '1px solid rgba(66,133,244,0.12)' }}>
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="#4285F4"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                            <div style={{ borderTop: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'rgba(66,133,244,0.05)' }}>
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="#4285F4"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
                               <span style={{ flex: 1, fontSize: 9, fontWeight: 600, color: '#4285F4' }}>Google Drive</span>
-                              <ExternalLink size={11} style={{ flexShrink: 0, color: '#4285F4' }} />
+                              <ExternalLink size={10} style={{ flexShrink: 0, color: '#4285F4' }} />
                             </div>
                           )}
                         </div>
@@ -1618,7 +1628,7 @@ export default function Tareas() {
                     </div>
                   </div>
                 ) : (
-                  <button onClick={() => setShowAddMaterial(true)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '10px 0', borderRadius: 8, fontSize: 10, fontWeight: 600, cursor: 'pointer', border: `1px dashed ${statusConfig[selectedTask.status]?.color}30`, background: `${statusConfig[selectedTask.status]?.color}04`, color: statusConfig[selectedTask.status]?.color, transition: 'all 150ms' }}>
+                  <button onClick={() => setShowAddMaterial(true)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '10px 0', borderRadius: 8, fontSize: 10, fontWeight: 600, cursor: 'pointer', border: `1px dashed ${statusConfig[selectedTask.status]?.color}40`, background: `${statusConfig[selectedTask.status]?.color}04`, color: statusConfig[selectedTask.status]?.color, transition: 'all 150ms' }} className="hover:bg-[var(--bg-hover)]">
                     <Plus size={13} /> Añadir material
                   </button>
                 )}

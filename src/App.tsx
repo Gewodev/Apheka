@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Home, BookOpen, Clock, ListTodo, Settings,
+  Home, NotebookPen, Clock, ListTodo, Settings,
   Music,
-  Calendar, Layers, Plus,
+  Calendar, Layers, Plus, GraduationCap, X, Image as ImageIcon,
 } from 'lucide-react';
 import { AppProvider, useApp } from './store/AppContext';
+import toast from 'react-hot-toast';
 import ErrorBoundary from './components/ErrorBoundary';
 
 import Inicio from './components/views/Inicio';
@@ -19,6 +20,7 @@ import CursosHub from './components/views/CursosHub';
 import OAuthCallback from './components/OAuthCallback';
 import SupabaseCallback from './components/SupabaseCallback';
 import GlobalPlayer from './components/GlobalPlayer';
+import DownloadManager from './components/ui/DownloadManager';
 import NowPlayingView from './components/NowPlayingView';
 import ReactPlayer from 'react-player';
 const Player = ReactPlayer as any;
@@ -30,7 +32,7 @@ interface AppContentProps {
 }
 
 function AppContent() {
-  const { settings, courses, navigateTo, setNavigateTo, importState, updateSettings, toastMessage, deleteOldCompletedTasks, youtubeVideoUrl, isPlayingMusic, musicVolume, musicProgress, musicDuration, setMusicProgress, setIsPlayingMusic, playTrack, musicQueue, setMusicQueue, shuffleMode, repeatMode, tracks, currentTrackId, setRepeatMode, coverModalTrackId, showRestPrompt, handlePomodoroBannerClick } = useApp();
+  const { settings, courses, addCourse, navigateTo, setNavigateTo, importState, updateSettings, toastMessage, deleteOldCompletedTasks, youtubeVideoUrl, isPlayingMusic, musicVolume, musicProgress, musicDuration, setMusicProgress, setIsPlayingMusic, playTrack, musicQueue, setMusicQueue, shuffleMode, repeatMode, tracks, currentTrackId, setRepeatMode, coverModalTrackId, showRestPrompt, handlePomodoroBannerClick } = useApp();
   const [activeView, setActiveView] = useState<ViewId>('inicio');
 
   // Auto-clean completed tasks older than 2 months on startup
@@ -71,8 +73,15 @@ function AppContent() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
+  const [selectedCourseTab, setSelectedCourseTab] = useState<string>('overview');
   const [showCoursesPopup, setShowCoursesPopup] = useState(false);
   const coursesPopupRef = useRef<HTMLDivElement>(null);
+  const [showPopupAddModal, setShowPopupAddModal] = useState(false);
+  const [popupAddName, setPopupAddName] = useState('');
+  const [popupAddColor, setPopupAddColor] = useState('#758bfa');
+  const [popupAddCover, setPopupAddCover] = useState<string | undefined>(undefined);
+  const fileInputRefPopup = useRef<HTMLInputElement>(null);
+  const EASE_POPUP = 'cubic-bezier(0.16, 1, 0.3, 1)';
   const backgroundLoadAttemptedRef = useRef(false);
 
   useEffect(() => {
@@ -205,7 +214,9 @@ function AppContent() {
     root.style.setProperty('--bg-brightness', `${settings.backgroundBrightness ?? 100}%`);
     root.style.setProperty('--bg-blur', `${settings.backgroundBlur ?? 0}px`);
     root.style.setProperty('--bg-overlay', `${(settings.backgroundOverlay ?? 0) / 100}`);
-  }, [settings.theme, settings.accentColor, settings.fontFamily, settings.backgroundImage, settings.uiOpacity, settings.backgroundBrightness, settings.backgroundBlur, settings.backgroundOverlay, settings.useThreeColors, settings.secondaryColor, settings.surfaceColor]);
+    root.style.setProperty('--bg-size', settings.backgroundSize === 'tile' ? 'auto' : (settings.backgroundSize || 'cover'));
+    root.style.setProperty('--bg-repeat', settings.backgroundSize === 'tile' ? 'repeat' : 'no-repeat');
+  }, [settings.theme, settings.accentColor, settings.fontFamily, settings.backgroundImage, settings.uiOpacity, settings.backgroundBrightness, settings.backgroundBlur, settings.backgroundOverlay, settings.backgroundSize, settings.useThreeColors, settings.secondaryColor, settings.surfaceColor]);
 
   const initials = settings.userName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
@@ -213,7 +224,7 @@ function AppContent() {
     { id: 'inicio', label: 'Inicio', icon: Home },
     { id: 'estudio', label: 'Estudio', icon: Clock },
     { id: 'tareas', label: 'Tareas', icon: ListTodo },
-    { id: 'notas', label: 'Notas', icon: BookOpen },
+    { id: 'notas', label: 'Notas', icon: NotebookPen },
     { id: 'musica', label: 'Música', icon: Music },
     { id: 'planificacion', label: 'Planificador', icon: Calendar },
     { id: 'cursos', label: 'Cursos', icon: Layers },
@@ -257,18 +268,19 @@ function AppContent() {
               {item.id === 'cursos' && isCollapsed && showCoursesPopup && (
                 <div ref={coursesPopupRef}
                   style={{
-                    position: 'absolute', left: '100%', top: 0, marginLeft: 8,
-                    width: 220, background: 'var(--bg-elevated)', border: '1px solid var(--border-default)',
-                    borderRadius: 12, padding: 8, zIndex: 9999, boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+                    position: 'absolute', left: '100%', top: '50%', transform: 'translateY(-50%)', marginLeft: 8,
+                    width: 280, maxHeight: 'min(680px, 88vh)', overflowY: 'auto',
+                    background: 'var(--bg-elevated)', border: '1px solid var(--border-default)',
+                    borderRadius: 14, padding: 10, zIndex: 9999, boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
                     backdropFilter: 'blur(20px)',
                   }}
                 >
-                  <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-tertiary)', padding: '8px 10px 4px' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-tertiary)', padding: '8px 12px 4px' }}>
                     Mis Cursos
                   </div>
                   {courses.map(course => (
                     <button key={course.id} onClick={() => { setSelectedCourseId(course.id); setActiveView('curso_detalle'); setShowCoursesPopup(false); }}
-                      style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '8px 10px', borderRadius: 8, border: 'none', background: 'transparent', color: 'var(--text-primary)', fontSize: 12, cursor: 'pointer', textAlign: 'left', transition: 'background 150ms' }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '9px 12px', borderRadius: 8, border: 'none', background: 'transparent', color: 'var(--text-primary)', fontSize: 12, cursor: 'pointer', textAlign: 'left', transition: 'background 150ms' }}
                       onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
                       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                     >
@@ -276,8 +288,8 @@ function AppContent() {
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{course.name}</span>
                     </button>
                   ))}
-                  <button onClick={() => { setSelectedCourseId('NEW'); setActiveView('curso_detalle'); setShowCoursesPopup(false); }}
-                    style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px', borderRadius: 8, border: 'none', background: 'transparent', color: 'var(--accent)', fontSize: 11, fontWeight: 600, cursor: 'pointer', textAlign: 'left', marginTop: 4 }}
+                  <button onClick={() => { setPopupAddName(''); setPopupAddColor('#758bfa'); setPopupAddCover(undefined); setShowPopupAddModal(true); }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 12px', borderRadius: 8, border: 'none', background: 'transparent', color: 'var(--accent)', fontSize: 11, fontWeight: 600, cursor: 'pointer', textAlign: 'left', marginTop: 4 }}
                     onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                   >
@@ -342,9 +354,9 @@ function AppContent() {
             {activeView === 'notas' && <Notas />}
             {activeView === 'musica' && <Musica />}
             {activeView === 'planificacion' && <Planificacion />}
-            {activeView === 'cursos' && <CursosHub onSelectCourse={(courseId) => { setSelectedCourseId(courseId); setActiveView('curso_detalle'); }} />}
+            {activeView === 'cursos' && <CursosHub onSelectCourse={(courseId) => { setSelectedCourseId(courseId); setActiveView('curso_detalle'); }} onTabSelect={(courseId, tab) => { setSelectedCourseId(courseId); setSelectedCourseTab(tab); setActiveView('curso_detalle'); }} />}
             {activeView === 'ajustes' && <Ajustes />}
-          {activeView === 'curso_detalle' && <Cursos initialCourseId={selectedCourseId || undefined} />}
+          {activeView === 'curso_detalle' && <Cursos initialCourseId={selectedCourseId || undefined} initialTab={selectedCourseTab as any} onNavigate={(v) => setActiveView(v as ViewId)} />}
           </div>
         )}
         {youtubeVideoUrl && <div style={{ display: 'none' }}>
@@ -538,6 +550,156 @@ function AppContent() {
             <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', marginTop: 8, fontSize: 11, color: 'var(--text-tertiary)' }}>
               <span>Procesando...</span>
               <span>Por favor, no cierres la aplicación</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <DownloadManager />
+
+      {/* Add course modal (from collapsed popup) */}
+      {showPopupAddModal && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 2000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)'
+        }} onClick={() => setShowPopupAddModal(false)}>
+          <div style={{
+            width: 420, padding: 24, borderRadius: 'var(--radius-lg)',
+            background: "linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)",
+            border: "1px solid var(--border-default)",
+            boxShadow: "var(--shadow-elevated)"
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{
+              display: 'flex', justifyContent: 'space-between',
+              alignItems: 'center', marginBottom: 20
+            }}>
+              <h3 style={{
+                fontSize: 16, fontWeight: 600, color: 'var(--text-primary)',
+                display: 'flex', alignItems: 'center', gap: 8,
+                fontFamily: "'Inter Tight', sans-serif", margin: 0
+              }}>
+                <GraduationCap size={18} style={{ color: "var(--accent)" }} /> Nueva Asignatura
+              </h3>
+              <button onClick={() => setShowPopupAddModal(false)} style={{
+                background: 'none', border: 'none', color: 'var(--text-muted)',
+                cursor: 'pointer', padding: 4, display: 'flex'
+              }}><X size={16} /></button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div>
+                <label style={{
+                  fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)',
+                  textTransform: 'uppercase', letterSpacing: '0.08em',
+                  display: 'block', marginBottom: 6
+                }}>Nombre</label>
+                <input value={popupAddName} onChange={e => setPopupAddName(e.target.value)}
+                  className="input-base"
+                  style={{
+                    width: '100%', height: 40, fontSize: 13, padding: '0 12px',
+                    borderRadius: 'var(--radius-sm)', boxSizing: 'border-box'
+                  }}
+                  placeholder="Ej: Cálculo, Biología..." autoFocus />
+              </div>
+              <div>
+                <label style={{
+                  fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)',
+                  textTransform: 'uppercase', letterSpacing: '0.08em',
+                  display: 'block', marginBottom: 6
+                }}>Color</label>
+                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                  {['#E11D48','#3B82F6','#10B981','#F59E0B','#8B5CF6','#EC4899',
+                    '#06B6D4','#84CC16','#F97316','#6366F1','#14B8A6','#D946EF',
+                    '#0EA5E9','#22C55E','#EAB308','#A855F7','#758bfa','#6B7280'
+                  ].map(c => (
+                    <button key={c} onClick={() => setPopupAddColor(c)}
+                      style={{
+                        width: 22, height: 22, borderRadius: '50%',
+                        border: `2px solid ${popupAddColor === c ? '#fff' : 'transparent'}`,
+                        background: c, cursor: 'pointer',
+                        outline: popupAddColor === c ? `2px solid ${c}` : 'none',
+                        outlineOffset: 1, transition: 'all 150ms'
+                      }} />
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label style={{
+                  fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)',
+                  textTransform: 'uppercase', letterSpacing: '0.08em',
+                  display: 'block', marginBottom: 6
+                }}>Banner (opcional)</label>
+                {popupAddCover ? (
+                  <div style={{
+                    position: 'relative', width: '100%', aspectRatio: '16/7',
+                    borderRadius: 'var(--radius-sm)', overflow: 'hidden',
+                    border: '1px solid var(--border-subtle)'
+                  }}>
+                    <img src={popupAddCover} alt=""
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <button onClick={() => setPopupAddCover(undefined)} style={{
+                      position: 'absolute', top: 6, right: 6,
+                      width: 24, height: 24, borderRadius: '50%',
+                      background: 'rgba(239,68,68,0.9)', border: 'none',
+                      color: '#fff', cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center'
+                    }}><X size={12} /></button>
+                  </div>
+                ) : (
+                  <button onClick={() => fileInputRefPopup.current?.click()}
+                    style={{
+                      width: '100%', height: 80, borderRadius: 'var(--radius-sm)',
+                      border: '1px dashed var(--border-default)',
+                      background: 'transparent', color: 'var(--text-secondary)',
+                      cursor: 'pointer', display: 'flex', flexDirection: 'column',
+                      alignItems: 'center', justifyContent: 'center', gap: 6,
+                      transition: "all 200ms " + EASE_POPUP
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.borderColor = 'var(--accent)';
+                      e.currentTarget.style.color = 'var(--accent)';
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.borderColor = 'var(--border-default)';
+                      e.currentTarget.style.color = 'var(--text-secondary)';
+                    }}>
+                    <ImageIcon size={18} style={{ color: "var(--accent)" }} />
+                    <span style={{
+                      fontSize: 9, fontWeight: 600, textTransform: 'uppercase',
+                      letterSpacing: '0.08em'
+                    }}>Subir Banner</span>
+                  </button>
+                )}
+                <input type="file" ref={fileInputRefPopup} style={{ display: 'none' }}
+                  accept="image/*" onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (event) => { setPopupAddCover(event.target?.result as string); toast.success('Imagen cargada'); };
+                    reader.readAsDataURL(file);
+                  }} />
+              </div>
+              <button onClick={() => {
+                const name = popupAddName.trim();
+                if (!name) { toast.error('El nombre es obligatorio'); return; }
+                if (courses.some(c => c.name.toLowerCase() === name.toLowerCase())) { toast.error('Ya existe'); return; }
+                const newId = addCourse({ name, color: popupAddColor, progress: 0, totalTasks: 0, completedTasks: 0, hoursStudied: 0, coverImage: popupAddCover, coverUrl: popupAddCover, groups: [], studyTopics: [] });
+                setPopupAddName(''); setPopupAddColor('#758bfa'); setPopupAddCover(undefined); setShowPopupAddModal(false);
+                setSelectedCourseId(typeof newId === 'string' ? newId : '');
+                setActiveView('curso_detalle');
+                setShowCoursesPopup(false);
+                toast.success('Asignatura creada');
+              }} disabled={!popupAddName.trim()}
+                style={{
+                  width: '100%', height: 40, border: 'none',
+                  borderRadius: 'var(--radius-sm)', cursor: 'pointer', marginTop: 4,
+                  background: popupAddName.trim() ? "var(--accent)" : "var(--bg-hover)",
+                  color: popupAddName.trim() ? "#fff" : "var(--text-muted)",
+                  fontSize: 12, fontWeight: 600, fontFamily: "var(--font-primary)",
+                  transition: "all 200ms " + EASE_POPUP
+                }}>
+                Crear Asignatura
+              </button>
             </div>
           </div>
         </div>

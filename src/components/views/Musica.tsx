@@ -118,15 +118,13 @@ export default function Musica() {
     const trackId = typeof trackOrId === 'string' ? trackOrId : trackOrId.id;
     const track = tracks.find(t => t.id === trackId);
     if (!track) return;
-    const inPlaylists = playlists.some(p => p.trackIds?.includes(trackId));
-    const inFavorites = track.isFavorite;
-    const tab = sourceTab
-      || (inFavorites && activeTab !== 'favoritas' ? 'favoritas' as TabId : undefined)
-      || (inPlaylists && activeTab !== 'playlists' ? 'playlists' as TabId : undefined)
-      || activeTab;
-    if (tab !== activeTab) setActiveTab(tab);
+    const tab = sourceTab || activeTab;
+    if (tab !== activeTab) {
+      setActiveTab(tab);
+      if (tab === 'artistas' && track.artist) setSelectedArtist(track.artist);
+    }
     playTrack(trackId);
-  }, [tracks, playlists, activeTab, playTrack]);
+  }, [activeTab, playTrack]);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -680,6 +678,7 @@ export default function Musica() {
                           <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
                             <button onClick={() => {
                               if (artistTracks.length === 0) return;
+                              if (isPlayingAll) { toggleMusicPlayback(); return; }
                               const allIds = artistTracks.map(t => t.id);
                               setQueueSource({ pool: allIds });
                               const rest = allIds.slice(1);
@@ -699,7 +698,7 @@ export default function Musica() {
                           {artistTracks.map((t, idx) => {
                             const isPlaying = currentTrackId === t.id && isPlayingMusic;
                             return (
-                              <div key={t.id} onClick={() => handlePlayWithTabCb(t.id)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 10, cursor: 'pointer', background: isPlaying ? 'var(--accent-dim)' : 'transparent', transition: 'background 150ms' }}
+                              <div key={t.id} onClick={() => { const pool = artistTracks.map(x => x.id); setQueueSource({ pool }); handlePlayWithTabCb(t.id); }} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 10, cursor: 'pointer', background: isPlaying ? 'var(--accent-dim)' : 'transparent', transition: 'background 150ms' }}
                                 onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-surface)'}
                                 onMouseLeave={e => e.currentTarget.style.background = isPlaying ? 'var(--accent-dim)' : 'transparent'}>
                                 <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-tertiary)', width: 24, textAlign: 'center' }}>{isPlaying ? <Play size={10} fill="var(--accent)" style={{ color: 'var(--accent)' }} /> : idx + 1}</span>
@@ -819,6 +818,7 @@ export default function Musica() {
                           <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
                             <button onClick={() => {
                               if (plTracks.length === 0) return;
+                              if (isPlayingAll) { toggleMusicPlayback(); return; }
                               const allIds = plTracks.map(t => t.id);
                               setQueueSource({ pool: allIds });
                               const rest = allIds.slice(1);
@@ -838,7 +838,7 @@ export default function Musica() {
                             const isPlaying = currentTrackId === t.id && isPlayingMusic;
                             return (
                               <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 10, cursor: 'pointer', background: isPlaying ? 'var(--accent-dim)' : 'transparent', transition: 'background 150ms' }}
-                                onClick={() => handlePlayWithTabCb(t.id)}
+                                onClick={() => { const pool = plTracks.map(x => x.id); setQueueSource({ pool }); handlePlayWithTabCb(t.id); }}
                                 onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-surface)'}
                                 onMouseLeave={e => e.currentTarget.style.background = isPlaying ? 'var(--accent-dim)' : 'transparent'}>
                                 <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-tertiary)', width: 24, textAlign: 'center' }}>{isPlaying ? <Play size={10} fill="var(--accent)" style={{ color: 'var(--accent)' }} /> : idx + 1}</span>
@@ -1022,16 +1022,18 @@ export default function Musica() {
                   {activeTab === 'favoritas' && displayTracks.length > 0 && (
                     <button
                       onClick={() => {
+                        if (isPlayingMusic && currentTrackId && displayTracks.some(t => t.id === currentTrackId)) { toggleMusicPlayback(); return; }
                         const allIds = displayTracks.map(t => t.id);
                         setQueueSource({ pool: allIds });
                         const rest = allIds.slice(1);
                         setMusicQueue(rest);
-                         handlePlayWithTabCb(allIds[0]);
+                        handlePlayWithTabCb(allIds[0]);
                       }}
                       className="btn-primary"
                       style={{ height: 30, padding: '0 16px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, borderRadius: 15 }}
                     >
-                      <Play size={11} fill="#fff" /> Reproducir todo
+                      {isPlayingMusic && currentTrackId && displayTracks.some(t => t.id === currentTrackId) ? <Pause size={11} fill="#fff" /> : <Play size={11} fill="#fff" />}
+                      {isPlayingMusic && currentTrackId && displayTracks.some(t => t.id === currentTrackId) ? 'Reproduciendo' : 'Reproducir todo'}
                     </button>
                   )}
                   {activeTab === 'biblioteca' && libraryTracks.length > 25 && (

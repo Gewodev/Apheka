@@ -1,7 +1,7 @@
 ﻿import React, { useState, useEffect, useMemo } from 'react';
 import {
   Activity, Monitor, Wifi, Music, CheckSquare, FileText, Flame,
-  Cpu, HardDrive, Thermometer
+  Cpu, HardDrive, Thermometer, Target
 } from 'lucide-react';
 import { useApp, fmtClock } from '../../store/AppContext';
 import { format, subDays, subWeeks, addDays, addWeeks, startOfWeek, parseISO } from 'date-fns';
@@ -301,24 +301,23 @@ export default function Inicio() {
       {/* â'€â'€ HEADER â'€â'€ */}
       <header className="flex justify-between items-end gap-6 pt-1" style={{ paddingBottom: 4, marginBottom: 4 }}>
         <div className="flex-1 min-w-0">
-          <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 6, color: 'var(--text-tertiary)' }}>
+          <div className="hidden sm:block" style={{ fontSize: 14, fontWeight: 500, marginBottom: 6, color: 'var(--text-tertiary)' }}>
             {(() => {
               const h = ct.getHours();
               return h < 12 ? 'Buenos dias' : h < 18 ? 'Buenas tardes' : 'Buenas noches';
             })()}, <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{settings.userName || 'Avery'}</span>
           </div>
-          <h1 style={{ fontFamily: "'Inter Tight', sans-serif", fontWeight: 300, fontSize: 32, lineHeight: 1.4, letterSpacing: '0.02em', color: 'var(--text-primary)' }}>
+          <h1 className="truncate" style={{ fontFamily: "'Inter Tight', sans-serif", fontWeight: 300, fontSize: 'clamp(18px, 3.5vw, 32px)', lineHeight: 1.4, letterSpacing: '0.02em', color: 'var(--text-primary)' }}>
             {phrase}
           </h1>
         </div>
 
-        <div className="flex items-center gap-4 flex-shrink-0" style={{ 
+        <div className="flex items-center gap-3 lg:gap-4 flex-shrink-0" style={{ 
           paddingLeft: 16, 
           borderLeft: '1px solid var(--border-subtle)',
           position: 'relative'
         }}>
-          {/* Clock background illumination */}
-          <div style={{ 
+          <div className="hidden lg:block" style={{ 
             position: 'absolute', 
             top: '50%', 
             right: 0, 
@@ -330,92 +329,110 @@ export default function Inicio() {
             pointerEvents: 'none',
             zIndex: 0
           }} />
-          <div style={{ width: 8, height: 8, borderRadius: '50%', background: isOnline ? '#10B981' : '#EF4444', boxShadow: isOnline ? '0 0 8px rgba(16,185,129,0.5)' : '0 0 8px rgba(239,68,68,0.5)', position: 'relative', zIndex: 1, transition: 'all 300ms' }} />
+          <div className="hidden md:block" style={{ width: 8, height: 8, borderRadius: '50%', background: isOnline ? '#10B981' : '#EF4444', boxShadow: isOnline ? '0 0 8px rgba(16,185,129,0.5)' : '0 0 8px rgba(239,68,68,0.5)', position: 'relative', zIndex: 1, transition: 'all 300ms' }} />
           <NotificationBell />
           <div style={{ textAlign: 'right', position: 'relative', zIndex: 1 }}>
-            <div className="flex items-baseline gap-2 justify-end">
-              <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 68, fontWeight: 200, lineHeight: 0.9, color: 'var(--accent)', letterSpacing: '0.02em', textShadow: '0 0 20px var(--accent-glow)' }}>
+            <div className="flex items-baseline gap-1 sm:gap-2 justify-end">
+              <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 'clamp(32px, 6vw, 68px)', fontWeight: 200, lineHeight: 0.9, color: 'var(--accent)', letterSpacing: '0.02em', textShadow: '0 0 20px var(--accent-glow)' }}>
                 {timeStr}
               </span>
-              <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 22, fontWeight: 200, color: 'var(--accent)', opacity: 0.7, letterSpacing: '0.02em' }}>
+              <span className="hidden sm:block" style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 'clamp(12px, 2vw, 22px)', fontWeight: 200, color: 'var(--accent)', opacity: 0.7, letterSpacing: '0.02em' }}>
                 {secStr}
               </span>
             </div>
-            <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.12em', marginTop: 6 }}>
+            <div className="hidden xs:block" style={{ fontSize: 'clamp(9px, 1vw, 11px)', fontWeight: 500, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.12em', marginTop: 6 }}>
               {dateCap}
             </div>
           </div>
         </div>
       </header>
 
-      {/* â'€â'€ ROW 1: 3 STATS + TIMER â'€â'€ */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      {/* ROW 1: STAT CARDS + META DIARIA */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         {[
-          { label: 'TAREAS', val: ts.active, sub: 'Pendientes', color: '#3B82F6', icon: CheckSquare },
-          { label: 'NOTAS', val: ts.total, sub: 'Guardadas', color: '#10B981', icon: FileText },
-          { label: 'RACHA', val: streak, sub: 'dias', color: '#F59E0B', icon: Flame },
-        ].map((s, i) => (
-          <div key={i}
-            style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 10, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em' }}>{s.label}</span>
-              <s.icon size={16} style={{ color: s.color, opacity: 0.8 }} />
+          { label: 'TAREAS', val: ts.active, sub: 'Pendientes', color: '#3B82F6', IconC: CheckSquare },
+          { label: 'NOTAS', val: ts.total, sub: 'Guardadas', color: '#10B981', IconC: FileText },
+          { label: 'RACHA', val: streak, sub: 'dias', color: streak > 0 ? '#F59E0B' : 'var(--text-tertiary)', IconC: Flame },
+        ].map((s, i) => {
+          const active = i === 2 && streak > 0;
+          const c = s.color;
+          return (
+            <div key={i} className="col-span-1"
+              style={{ padding: 0, display: 'flex', overflow: 'hidden', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: `1px solid ${active ? 'rgba(245,158,11,0.25)' : 'var(--border-subtle)'}`, borderRadius: 12, boxShadow: active ? '0 0 24px rgba(245,158,11,0.10)' : 'none' }}>
+              <div style={{ width: 54, flexShrink: 0, background: active ? 'rgba(245,158,11,0.10)' : `${c}0c`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <s.IconC size={24} style={{ color: active ? '#F59E0B' : c }} />
+              </div>
+              <div style={{ flex: 1, padding: '14px 16px', minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                <div style={{ fontSize: 34, fontWeight: 700, color: active ? '#F59E0B' : 'var(--text-primary)', lineHeight: 1, letterSpacing: '-0.02em', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{s.val}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>{s.label}</span>
+                  <span style={{ width: 2, height: 2, borderRadius: '50%', background: 'var(--border-default)', flexShrink: 0 }} />
+                  <span style={{ fontSize: 9, color: 'var(--text-tertiary)', fontWeight: 500, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', minWidth: 0 }}>{s.sub}</span>
+                </div>
+              </div>
             </div>
-            <div>
-              <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1 }}>{s.val}</div>
-              <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 1 }}>{s.sub}</div>
-            </div>
-          </div>
-        ))}
+          );
+        })}
 
         {/* META DIARIA */}
         {(() => {
-          const goalMins = (settings?.dailyGoal || 240);
-          const goalSecs = goalMins * 60;
-          const doneMins = Math.round(dailyStudyTime / 60);
-          const pct = Math.min(100, (dailyStudyTime / goalSecs) * 100);
-          const remaining = Math.max(0, goalMins - doneMins);
-          const accent = settings?.accentColor || 'var(--accent)';
+          const goalM = (settings?.dailyGoal || 240);
+          const doneM = Math.round(dailyStudyTime / 60);
+          const pct = Math.min(100, (dailyStudyTime / (goalM * 60)) * 100);
+          const rem = Math.max(0, goalM - doneM);
+          const a = settings?.accentColor || 'var(--accent)';
+          const met = rem <= 0;
           return (
-            <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 5, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 12, justifyContent: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <span style={{ fontSize: 8, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em' }}>META DIARIA</span>
+            <div className="col-span-2"
+              style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', justifyContent: 'center', position: 'relative', overflow: 'hidden', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: `1px solid ${met ? `${a}30` : 'var(--border-subtle)'}`, borderRadius: 12 }}>
+              {met && <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(circle at 80% 20%, ${a}0c 0%, transparent 60%)`, pointerEvents: 'none' }} />}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: `${a}0c`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Target size={17} style={{ color: a }} />
+                  </div>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em' }}>META DIARIA</span>
                 </div>
-                <span style={{ fontSize: 9, fontWeight: 600, color: remaining <= 0 ? accent : 'var(--text-tertiary)' }}>
-                  {doneMins}/{goalMins}min
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                  <span style={{ fontSize: 28, fontWeight: 600, color: met ? a : 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", lineHeight: 1, letterSpacing: '-0.03em' }}>{doneM}</span>
+                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)' }}>/{goalM} min</span>
+                </div>
+              </div>
+              <div style={{ marginBottom: 8 }}>
+                <div style={{ width: '100%', height: 6, background: 'var(--bg-deep)', borderRadius: 3, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', borderRadius: 3, background: `linear-gradient(90deg, ${a}, ${a}99)`, width: `${pct}%`, transition: 'width 500ms cubic-bezier(0.16, 1, 0.3, 1)' }} />
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 10, fontWeight: 600, color: met ? a : 'var(--text-secondary)' }}>
+                  {met ? 'Meta alcanzada' : `Faltan ${rem} min`}
+                </span>
+                <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', fontFamily: "'JetBrains Mono', monospace", background: 'var(--bg-hover)', padding: '1px 7px', borderRadius: 4 }}>
+                  {Math.round(pct)}%
                 </span>
               </div>
-              <div style={{ width: '100%', height: 6, background: 'var(--bg-deep)', borderRadius: 3, overflow: 'hidden' }}>
-                <div style={{ height: '100%', borderRadius: 3, background: `linear-gradient(90deg, ${accent}, ${accent}cc)`, width: `${pct}%`, transition: 'width 400ms ease', boxShadow: `0 0 8px ${accent}60` }} />
-              </div>
-              <span style={{ fontSize: 9, fontWeight: 500, color: remaining <= 0 ? accent : 'var(--text-secondary)' }}>
-                {remaining <= 0
-                  ? 'Meta alcanzada'
-                  : `Faltan ${remaining}min para alcanzar la meta`}
-              </span>
             </div>
           );
         })()}
       </div>
 
       {/* â'€â'€ ROW 2: HEATMAP + RECIENTES â'€â'€ */}
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-stretch">
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-12 gap-4 items-stretch">
 
         {/* HEATMAP */}
         <div className="xl:col-span-6" style={{ padding: '18px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 12 }}>
           <div>
-            <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em' }}>ACTIVIDAD (4 MESES)</span>
+            <span className="block" style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em' }}>ACTIVIDAD (4 MESES)</span>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 14 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: 130, color: 'var(--text-tertiary)', fontSize: 9, fontWeight: 600 }}><span>L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span><span>D</span></div>
+            <div className="hidden sm:flex" style={{ flexDirection: 'column', justifyContent: 'space-between', height: 130, color: 'var(--text-tertiary)', fontSize: 9, fontWeight: 600 }}><span>L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span><span>D</span></div>
             <div style={{ display: 'grid', gridTemplateRows: 'repeat(7, 1fr)', gridTemplateColumns: 'repeat(16, 1fr)', gap: 4, flex: 1, height: 130 }}>
               {heatmapData.flatMap((r, ri) => r.map((cell, ci) => (
                 <div key={`${ri}-${ci}`} title={cell.tooltip} style={{ borderRadius: 2, background: hl(cell.level), boxShadow: cell.level >= 3 ? '0 0 6px var(--accent-glow)' : 'none', transition: 'all 120ms' }} className="hover:scale-110 cursor-pointer" />
               )))}
             </div>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 4, marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border-soft)', fontSize: 9, color: 'var(--text-tertiary)', fontWeight: 600 }}>
+          <div className="hidden sm:flex" style={{ justifyContent: 'flex-end', alignItems: 'center', gap: 4, marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border-soft)', fontSize: 9, color: 'var(--text-tertiary)', fontWeight: 600 }}>
             <span>Menos</span>
             {[0,1,2,3,4].map(l => <div key={l} style={{ width: 10, height: 10, borderRadius: 2, background: hl(l) }} />)}
             <span>Mas</span>
@@ -423,7 +440,7 @@ export default function Inicio() {
         </div>
 
         {/* RECIENTES: Canciones */}
-        <div className="xl:col-span-6" style={{ padding: '18px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 12, display: 'flex', flexDirection: 'column' }}>
+        <div className="xl:col-span-6 hidden sm:flex" style={{ padding: '18px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 12, display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
             <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em' }}>RECIENTES</span>
             <span onClick={() => setNavigateTo?.('musica')} style={{ fontSize: 10, fontWeight: 600, color: 'var(--accent)', cursor: 'pointer' }} className="hover:opacity-80">Ir a Musica</span>
@@ -438,8 +455,8 @@ export default function Inicio() {
             alignItems: 'start'
           }}>
             {recentTracks.length > 0 ? (
-              recentTracks.slice(0, 4).map((track) => (
-                <div key={track.id} style={{ 
+              recentTracks.slice(0, 4).map((track, idx) => (
+                <div key={track.id} className={idx >= 3 ? 'hidden lg:block' : ''} style={{ 
                   background: 'var(--bg-deep)', 
                   borderRadius: 10, 
                   border: '1px solid var(--border-subtle)', 
@@ -468,7 +485,7 @@ export default function Inicio() {
               ))
             ) : (
               Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} style={{ 
+                <div key={i} className={i >= 3 ? 'hidden lg:block' : ''} style={{ 
                   background: 'var(--bg-deep)', 
                   borderRadius: 10, 
                   border: '1px dashed var(--border-subtle)', 
@@ -492,11 +509,14 @@ export default function Inicio() {
       </div>
 
       {/* â'€â'€ ROW 3: TASKS + NOTES + SYSTEM â'€â'€ */}
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 mb-2">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-12 gap-4 mb-2">
 
         {/* TASKS */}
-        <div className="xl:col-span-4" style={{ padding: '18px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 12, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 12, borderBottom: '1px solid var(--border-soft)' }}>
+        <div className="xl:col-span-4 md:col-span-1" style={{ padding: '18px', position: 'relative', overflow: 'hidden', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 12, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ position: 'absolute', right: 8, bottom: 8, opacity: 0.07, pointerEvents: 'none', lineHeight: 0 }}>
+            <CheckSquare size={120} strokeWidth={1} color="#3B82F6" />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 12, borderBottom: '1px solid var(--border-soft)', position: 'relative', zIndex: 1 }}>
             <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em' }}>TAREAS</span>
             <span onClick={() => setNavigateTo?.('tareas')} style={{ fontSize: 10, fontWeight: 600, color: 'var(--accent)', cursor: 'pointer' }} className="hover:opacity-80">Ver todas</span>
           </div>
@@ -517,7 +537,7 @@ export default function Inicio() {
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    {tr && <span style={{ fontSize: 8, color: 'var(--text-muted)', fontFamily: "'JetBrains Mono', monospace" }}>{tr}</span>}
+                    {tr && <span className="hidden lg:inline" style={{ fontSize: 8, color: 'var(--text-muted)', fontFamily: "'JetBrains Mono', monospace" }}>{tr}</span>}
                     <span style={{ fontSize: 8, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: `${pc[t.priority]}20`, color: pc[t.priority] }}>{pcl[t.priority]}</span>
                   </div>
                 </div>
@@ -530,8 +550,11 @@ export default function Inicio() {
         </div>
 
         {/* NOTES */}
-        <div className="xl:col-span-4" style={{ padding: '18px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 12, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 12, borderBottom: '1px solid var(--border-soft)' }}>
+        <div className="xl:col-span-4 md:col-span-1" style={{ padding: '18px', position: 'relative', overflow: 'hidden', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 12, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ position: 'absolute', right: 8, bottom: 8, opacity: 0.07, pointerEvents: 'none', lineHeight: 0 }}>
+            <FileText size={120} strokeWidth={1} color="#10B981" />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 12, borderBottom: '1px solid var(--border-soft)', position: 'relative', zIndex: 1 }}>
             <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em' }}>NOTAS</span>
             <span onClick={() => setNavigateTo?.('apuntes')} style={{ fontSize: 10, fontWeight: 600, color: 'var(--accent)', cursor: 'pointer' }} className="hover:opacity-80">Ver todas</span>
           </div>
@@ -549,7 +572,7 @@ export default function Inicio() {
         </div>
 
         {/* SYSTEM STATUS */}
-        <div className="xl:col-span-4" style={{ padding: '24px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 14, display: 'flex', flexDirection: 'column' }}>
+        <div className="xl:col-span-4 hidden xl:block" style={{ padding: '24px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 14, display: 'flex', flexDirection: 'column' }}>
           {/* Top: icon + info */}
           {(() => { const a = Math.round((ss.cpu + ss.ram + ss.disk) / 3); const lc = a > 80 ? '#E11D48' : a > 50 ? '#F59E0B' : '#22C55E'; const R = 28; const circ = 2 * Math.PI * R; const off = circ * (1 - a / 100); return (
           <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid var(--border-soft)' }}>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Search, Plus, Folder as FolderIcon, Pin, Trash2, FileText, Download, X, Copy, Move,
-  AlertTriangle, Check, Bold, Italic, Underline, List, Code, Link, Paperclip,
+  AlertTriangle, Check, Bold, Italic, Underline, List, Code, Link, Paperclip, StickyNote,
   Image as ImageIcon, Type,   BookOpen, Library, Star,
   Info, Clock, AlignJustify,
   ChevronDown, ChevronLeft, ChevronRight, MoreHorizontal,
@@ -11,11 +11,33 @@ import {
   Filter, SortAsc, Tag, Hash, Maximize2, Minimize2, CheckSquare, Palette, ArrowLeft, Unlink, Minus,
   Briefcase, GraduationCap, Compass, Target, Brain, Award, Coffee, Activity, Shield,
   Heart, Lightbulb, Zap, Globe, Feather, Sun, Moon, CloudRain, Mountain, Music,
-  Camera, Eye, Flag, Gift, Anchor, Key, Rocket, Scissors, Watch, Wifi,
+  Camera, Eye, Flag, Gift, Anchor, Key, Rocket, Scissors, Watch, Wifi, ExternalLink,
   Strikethrough, AlignLeft, AlignCenter, AlignRight, Heading1, Heading2, Heading3,
-  Eraser, Sigma
+  Eraser, Sigma,
+  Album, Archive, Atom, Backpack, Banknote, Palmtree, Bell, Bike, Bone, Bot, Box, Brush, Bug, Building,
+  Cake, Calculator, Calendar, Car, Castle, Cat, Clipboard, Cloud, Crown, Blocks,
+  Database, Diamond, Disc,
+  Egg, Film, Flower,
+  Gamepad, Ghost, Gem, Guitar,
+  Hammer, Headphones, Hexagon, Home,
+  IceCreamBowl,
+  Joystick,
+  Keyboard,
+  Lamp, Landmark, Laptop, Leaf, Loader,
+  Magnet, Mail, Medal, Mic, Monitor,
+  Navigation,
+  Package, Paintbrush, PawPrint, Pen, Pencil, Phone, Pizza, Plane, Plug, Power, Printer, Puzzle,
+  QrCode,
+  Radar, Radio, Ribbon, Ruler,
+  Salad, Satellite, Save, School, Server, Settings, Share, Shirt, ShoppingBag, Smartphone, Smile, Snowflake, Sofa, Sparkles, Sword,
+  Tablet, Tags, Tent, Terminal, TestTube, Thermometer, ThumbsUp, Ticket, Timer, Trophy, Truck, Turtle, Tv,
+  Umbrella, Undo, User, Users, Utensils,
+  Verified, Video, Volume,
+  Wallet, Wand, Waves, Webcam, Weight, Wine,
+  ZoomIn, ZoomOut
 } from "lucide-react";
-import { useApp, Note, NoteFolder, NoteAttachment } from "../../store/AppContext";
+import { useApp, Note, NoteFolder, NoteAttachment, fmtClock } from "../../store/AppContext";
+import { createDownloadTask, updateDownloadTask, completeDownloadTask } from '../ui/DownloadManager';
 import {
   DndContext, closestCenter,
   PointerSensor, useSensor, useSensors,
@@ -41,28 +63,20 @@ const SPINE_COLORS = [
   "#14B8A6", "#D946EF", "#0EA5E9", "#22C55E", "#EAB308",
 ];
 
-const AVAILABLE_ICONS = [
-  { name: "FileText", icon: FileText, label: "Nota" },
+const AVAILABLE_ICONS: { name: string; icon: React.ComponentType<{ size?: number; color?: string; style?: React.CSSProperties }>; label: string }[] = [
+  { name: "FileText", icon: FileText, label: "Documento" },
   { name: "BookOpen", icon: BookOpen, label: "Libro" },
   { name: "Code", icon: Code, label: "Código" },
-  { name: "Folder", icon: FolderIcon, label: "Carpeta" },
-  { name: "Brain", icon: Brain, label: "Idea" },
-  { name: "Target", icon: Target, label: "Objetivo" },
-  { name: "Coffee", icon: Coffee, label: "Estudio" },
-  { name: "Compass", icon: Compass, label: "Explorar" },
-  { name: "Award", icon: Award, label: "Logro" },
-  { name: "Briefcase", icon: Briefcase, label: "Proyecto" },
-  { name: "GraduationCap", icon: GraduationCap, label: "Clase" },
-  { name: "Shield", icon: Shield, label: "Importante" },
+  { name: "Star", icon: Star, label: "Estrella" },
   { name: "Heart", icon: Heart, label: "Corazón" },
+  { name: "Target", icon: Target, label: "Objetivo" },
+  { name: "Brain", icon: Brain, label: "Cerebro" },
   { name: "Lightbulb", icon: Lightbulb, label: "Idea" },
-  { name: "Zap", icon: Zap, label: "Energía" },
+  { name: "Zap", icon: Zap, label: "Rayo" },
   { name: "Globe", icon: Globe, label: "Mundo" },
   { name: "Feather", icon: Feather, label: "Pluma" },
   { name: "Sun", icon: Sun, label: "Sol" },
   { name: "Moon", icon: Moon, label: "Luna" },
-  { name: "CloudRain", icon: CloudRain, label: "Lluvia" },
-  { name: "Mountain", icon: Mountain, label: "Montaña" },
   { name: "Music", icon: Music, label: "Música" },
   { name: "Camera", icon: Camera, label: "Cámara" },
   { name: "Eye", icon: Eye, label: "Ojo" },
@@ -73,16 +87,155 @@ const AVAILABLE_ICONS = [
   { name: "Rocket", icon: Rocket, label: "Cohete" },
   { name: "Scissors", icon: Scissors, label: "Tijeras" },
   { name: "Watch", icon: Watch, label: "Reloj" },
-  { name: "Wifi", icon: Wifi, label: "Wifi" },
-  { name: "Activity", icon: Activity, label: "Actividad" },
-  { name: "Lock", icon: Lock, label: "Candado" },
-  { name: "Star", icon: Star, label: "Estrella" },
-  { name: "Hash", icon: Hash, label: "Hashtag" },
-  { name: "CheckSquare", icon: CheckSquare, label: "Check" },
+  { name: "Search", icon: Search, label: "Buscar" },
+  { name: "Plus", icon: Plus, label: "Añadir" },
+  { name: "Trash2", icon: Trash2, label: "Papelera" },
+  { name: "Download", icon: Download, label: "Descargar" },
+  { name: "Copy", icon: Copy, label: "Copiar" },
+  { name: "Move", icon: Move, label: "Mover" },
+  { name: "Check", icon: Check, label: "Verificar" },
+  { name: "Link", icon: Link, label: "Enlace" },
+  { name: "Paperclip", icon: Paperclip, label: "Clip" },
+  { name: "Image", icon: ImageIcon, label: "Imagen" },
+  { name: "Type", icon: Type, label: "Texto" },
+  { name: "Library", icon: Library, label: "Librería" },
+  { name: "Info", icon: Info, label: "Info" },
   { name: "Clock", icon: Clock, label: "Reloj" },
+  { name: "Tag", icon: Tag, label: "Etiqueta" },
+  { name: "Hash", icon: Hash, label: "Hashtag" },
+  { name: "Lock", icon: Lock, label: "Candado" },
+  { name: "History", icon: History, label: "Historial" },
+  { name: "Table", icon: Table, label: "Tabla" },
   { name: "File", icon: File, label: "Archivo" },
   { name: "Layers", icon: Layers, label: "Capas" },
-  { name: "Pin", icon: Pin, label: "Pin" },
+  { name: "Edit3", icon: Edit3, label: "Editar" },
+  { name: "Filter", icon: Filter, label: "Filtro" },
+  { name: "Palette", icon: Palette, label: "Paleta" },
+  { name: "ArrowLeft", icon: ArrowLeft, label: "Flecha" },
+  { name: "Minus", icon: Minus, label: "Menos" },
+  { name: "Briefcase", icon: Briefcase, label: "Maletín" },
+  { name: "GraduationCap", icon: GraduationCap, label: "Graduación" },
+  { name: "Compass", icon: Compass, label: "Brújula" },
+  { name: "Award", icon: Award, label: "Premio" },
+  { name: "Coffee", icon: Coffee, label: "Café" },
+  { name: "Activity", icon: Activity, label: "Actividad" },
+  { name: "Shield", icon: Shield, label: "Escudo" },
+  { name: "Mountain", icon: Mountain, label: "Montaña" },
+  { name: "CloudRain", icon: CloudRain, label: "Lluvia" },
+  { name: "ExternalLink", icon: ExternalLink, label: "Enlace" },
+  { name: "Album", icon: Album, label: "Álbum" },
+  { name: "Archive", icon: Archive, label: "Archivar" },
+  { name: "Atom", icon: Atom, label: "Átomo" },
+  { name: "Backpack", icon: Backpack, label: "Mochila" },
+  { name: "Banknote", icon: Banknote, label: "Dinero" },
+  { name: "Palmtree", icon: Palmtree, label: "Playa" },
+  { name: "Bell", icon: Bell, label: "Campana" },
+  { name: "Bike", icon: Bike, label: "Bici" },
+  { name: "Bone", icon: Bone, label: "Hueso" },
+  { name: "Bot", icon: Bot, label: "Bot" },
+  { name: "Box", icon: Box, label: "Caja" },
+  { name: "Brush", icon: Brush, label: "Pincel" },
+  { name: "Bug", icon: Bug, label: "Bug" },
+  { name: "Building", icon: Building, label: "Edificio" },
+  { name: "Cake", icon: Cake, label: "Pastel" },
+  { name: "Calculator", icon: Calculator, label: "Calculadora" },
+  { name: "Calendar", icon: Calendar, label: "Calendario" },
+  { name: "Car", icon: Car, label: "Carro" },
+  { name: "Castle", icon: Castle, label: "Castillo" },
+  { name: "Cat", icon: Cat, label: "Gato" },
+  { name: "Clipboard", icon: Clipboard, label: "Portapapeles" },
+  { name: "Cloud", icon: Cloud, label: "Nube" },
+  { name: "Crown", icon: Crown, label: "Corona" },
+  { name: "Blocks", icon: Blocks, label: "Cubo" },
+  { name: "Database", icon: Database, label: "Base datos" },
+  { name: "Diamond", icon: Diamond, label: "Diamante" },
+  { name: "Disc", icon: Disc, label: "Disco" },
+  { name: "Egg", icon: Egg, label: "Huevo" },
+  { name: "Film", icon: Film, label: "Película" },
+  { name: "Flower", icon: Flower, label: "Flor" },
+  { name: "Gamepad", icon: Gamepad, label: "Gamepad" },
+  { name: "Ghost", icon: Ghost, label: "Fantasma" },
+  { name: "Gem", icon: Gem, label: "Gema" },
+  { name: "Guitar", icon: Guitar, label: "Guitarra" },
+  { name: "Hammer", icon: Hammer, label: "Martillo" },
+  { name: "Headphones", icon: Headphones, label: "Audífonos" },
+  { name: "Hexagon", icon: Hexagon, label: "Hexágono" },
+  { name: "Home", icon: Home, label: "Inicio" },
+  { name: "IceCreamBowl", icon: IceCreamBowl, label: "Helado" },
+  { name: "Joystick", icon: Joystick, label: "Joystick" },
+  { name: "Keyboard", icon: Keyboard, label: "Teclado" },
+  { name: "Lamp", icon: Lamp, label: "Lámpara" },
+  { name: "Landmark", icon: Landmark, label: "Monumento" },
+  { name: "Laptop", icon: Laptop, label: "Portátil" },
+  { name: "Leaf", icon: Leaf, label: "Hoja" },
+  { name: "Loader", icon: Loader, label: "Cargando" },
+  { name: "Magnet", icon: Magnet, label: "Imán" },
+  { name: "Mail", icon: Mail, label: "Correo" },
+  { name: "Medal", icon: Medal, label: "Medalla" },
+  { name: "Mic", icon: Mic, label: "Micrófono" },
+  { name: "Monitor", icon: Monitor, label: "Monitor" },
+  { name: "Navigation", icon: Navigation, label: "Navegación" },
+  { name: "Package", icon: Package, label: "Paquete" },
+  { name: "Paintbrush", icon: Paintbrush, label: "Brocha" },
+  { name: "PawPrint", icon: PawPrint, label: "Huella" },
+  { name: "Pen", icon: Pen, label: "Pluma" },
+  { name: "Pencil", icon: Pencil, label: "Lápiz" },
+  { name: "Phone", icon: Phone, label: "Teléfono" },
+  { name: "Pizza", icon: Pizza, label: "Pizza" },
+  { name: "Plane", icon: Plane, label: "Avión" },
+  { name: "Plug", icon: Plug, label: "Enchufe" },
+  { name: "Power", icon: Power, label: "Encender" },
+  { name: "Printer", icon: Printer, label: "Impresora" },
+  { name: "Puzzle", icon: Puzzle, label: "Rompecabezas" },
+  { name: "QrCode", icon: QrCode, label: "QR" },
+  { name: "Radar", icon: Radar, label: "Radar" },
+  { name: "Radio", icon: Radio, label: "Radio" },
+  { name: "Ribbon", icon: Ribbon, label: "Cinta" },
+  { name: "Ruler", icon: Ruler, label: "Regla" },
+  { name: "Salad", icon: Salad, label: "Ensalada" },
+  { name: "Satellite", icon: Satellite, label: "Satélite" },
+  { name: "Save", icon: Save, label: "Guardar" },
+  { name: "School", icon: School, label: "Escuela" },
+  { name: "Server", icon: Server, label: "Servidor" },
+  { name: "Settings", icon: Settings, label: "Ajustes" },
+  { name: "Share", icon: Share, label: "Compartir" },
+  { name: "Shirt", icon: Shirt, label: "Camiseta" },
+  { name: "ShoppingBag", icon: ShoppingBag, label: "Bolsa" },
+  { name: "Smartphone", icon: Smartphone, label: "Móvil" },
+  { name: "Smile", icon: Smile, label: "Sonrisa" },
+  { name: "Snowflake", icon: Snowflake, label: "Copo" },
+  { name: "Sofa", icon: Sofa, label: "Sofá" },
+  { name: "Sparkles", icon: Sparkles, label: "Brillo" },
+  { name: "Sword", icon: Sword, label: "Espada" },
+  { name: "Tablet", icon: Tablet, label: "Tableta" },
+  { name: "Tags", icon: Tags, label: "Etiquetas" },
+  { name: "Tent", icon: Tent, label: "Carpa" },
+  { name: "Terminal", icon: Terminal, label: "Terminal" },
+  { name: "TestTube", icon: TestTube, label: "Tubo" },
+  { name: "Thermometer", icon: Thermometer, label: "Termómetro" },
+  { name: "ThumbsUp", icon: ThumbsUp, label: "Me gusta" },
+  { name: "Ticket", icon: Ticket, label: "Boleto" },
+  { name: "Timer", icon: Timer, label: "Temporizador" },
+  { name: "Trophy", icon: Trophy, label: "Trofeo" },
+  { name: "Truck", icon: Truck, label: "Camión" },
+  { name: "Turtle", icon: Turtle, label: "Tortuga" },
+  { name: "Tv", icon: Tv, label: "TV" },
+  { name: "Umbrella", icon: Umbrella, label: "Paraguas" },
+  { name: "Undo", icon: Undo, label: "Deshacer" },
+  { name: "User", icon: User, label: "Usuario" },
+  { name: "Users", icon: Users, label: "Usuarios" },
+  { name: "Utensils", icon: Utensils, label: "Cubiertos" },
+  { name: "Verified", icon: Verified, label: "Verificado" },
+  { name: "Video", icon: Video, label: "Video" },
+  { name: "Volume", icon: Volume, label: "Volumen" },
+  { name: "Wallet", icon: Wallet, label: "Cartera" },
+  { name: "Wand", icon: Wand, label: "Varita" },
+  { name: "Waves", icon: Waves, label: "Olas" },
+  { name: "Webcam", icon: Webcam, label: "Webcam" },
+  { name: "Weight", icon: Weight, label: "Peso" },
+  { name: "Wine", icon: Wine, label: "Vino" },
+  { name: "ZoomIn", icon: ZoomIn, label: "Acercar" },
+  { name: "ZoomOut", icon: ZoomOut, label: "Alejar" },
 ];
 
 const DEFAULT_TAG_COLORS: Record<string, string> = {
@@ -226,14 +379,14 @@ function NoteCard({ note, isSelected, onSelect, onOpen, onContextMenu, onDragSta
         className="bento-card"
         style={{
           display: "flex", flexDirection: "column", gap: 0,
-          padding: "18px 18px 14px", cursor: "pointer", height: "100%",
+          padding: "16px 16px 12px", cursor: "pointer", height: "100%",
           background: "var(--bg-elevated)",
-          border: "1px solid " + (isSelected ? spineColor + "40" : hov ? "var(--border-default)" : "var(--border-subtle)"),
+          border: "1px solid " + (isSelected ? spineColor + "40" : hov ? "var(--border-strong)" : "var(--border-subtle)"),
           borderRadius: "var(--radius-xl)",
           transition: "all 250ms " + EASE,
           transform: hov ? "translateY(-2px)" : "none",
           boxShadow: hov
-            ? "0 8px 24px rgba(0,0,0,0.10)"
+            ? "0 12px 28px rgba(0,0,0,0.10), 0 4px 12px rgba(0,0,0,0.06)"
             : "0 1px 3px rgba(0,0,0,0.04)",
           position: "relative", overflow: "hidden",
         }}
@@ -253,26 +406,26 @@ function NoteCard({ note, isSelected, onSelect, onOpen, onContextMenu, onDragSta
           pointerEvents: "none",
         }} />
         {/* Top section: bigger icon + bigger title + 3-dot */}
-        <div style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 10 }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 8 }}>
           <div style={{
-            width: 44, height: 44, borderRadius: "var(--radius-md)", flexShrink: 0,
+            width: 40, height: 40, borderRadius: "var(--radius-md)", flexShrink: 0,
             background: "linear-gradient(145deg, " + spineColor + "14, " + spineColor + "06)",
             display: "flex", alignItems: "center", justifyContent: "center",
             border: "1px solid " + spineColor + "16",
           }}>
-            <NoteIconRenderer iconName={note.coverImage} color={spineColor} size={20} />
+            <NoteIconRenderer iconName={note.coverImage} color={spineColor} size={18} />
           </div>
-          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 1, justifyContent: "center", paddingTop: 1 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 1, justifyContent: "center", paddingTop: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <span style={{
-                fontSize: 14, fontWeight: 660, color: "var(--text-primary)",
+                fontSize: 13.5, fontWeight: 650, color: "var(--text-primary)",
                 fontFamily: "var(--font-heading)",
                 whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                letterSpacing: "-0.015em",
+                letterSpacing: "-0.01em",
               }}>{note.title || "Sin título"}</span>
-              {note.isPinned && <Star size={11} fill="#F59E0B" style={{ color: "#F59E0B", flexShrink: 0 }} />}
+              {note.isPinned && <Star size={10} fill="#F59E0B" style={{ color: "#F59E0B", flexShrink: 0 }} />}
             </div>
-            <span style={{ fontSize: 10.5, color: "var(--text-tertiary)", fontWeight: 500 }}>
+            <span style={{ fontSize: 10, color: "var(--text-tertiary)", fontWeight: 450 }}>
               {formatTimeAgo(note.updatedAt)} · {folderName || "Sin carpeta"}
             </span>
           </div>
@@ -280,35 +433,35 @@ function NoteCard({ note, isSelected, onSelect, onOpen, onContextMenu, onDragSta
             style={{
               background: "transparent", border: "1px solid transparent",
               cursor: "pointer", color: "var(--text-tertiary)",
-              padding: 4, display: "flex", borderRadius: 6, flexShrink: 0,
+              padding: 3, display: "flex", borderRadius: 5, flexShrink: 0,
               transition: "all 150ms",
-              marginTop: 2,
+              marginTop: 0,
             }}
             className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-secondary)] hover:border-[var(--border-default)]"
             title="Más opciones">
-            <MoreHorizontal size={13} />
+            <MoreHorizontal size={12} />
           </button>
         </div>
 
         {/* Divider */}
-        <div style={{ height: 1, background: "var(--border-subtle)", opacity: 0.3, marginBottom: 8 }} />
+        <div style={{ height: 1, background: "var(--border-subtle)", opacity: 0.2, marginBottom: 6 }} />
 
         {/* Preview text — fixed 2 lines */}
         <div style={{
-          fontSize: 12.5, color: "var(--text-secondary)", lineHeight: 1.5,
+          fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.55,
           display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
           overflow: "hidden", opacity: 0.5,
-          maxHeight: "3.3em", minHeight: "3.3em", flexShrink: 0,
+          maxHeight: "3.4em", minHeight: "3.4em", flexShrink: 0,
         }}>{preview}</div>
 
         {/* Spacer to push footer down */}
-        <div style={{ flex: 1, minHeight: 4 }} />
+        <div style={{ flex: 1, minHeight: 2 }} />
 
         {/* Footer area: tags row only (folder moved to header) */}
         {hasTags && (
           <div style={{ display: "flex", alignItems: "center", gap: 3, flexWrap: "wrap", minHeight: 18, paddingTop: 8, marginTop: "auto" }}>
             {note.tags!.slice(0, 3).map((t) => {
-              const tc = tagColors[t] || DEFAULT_TAG_COLORS[t] || spineColor;
+              const tc = tagColors[t] || DEFAULT_TAG_COLORS[t] || note.courseColor || getSpineColor(note.id);
               return (
                 <span key={t} style={{
                   fontSize: 9, fontWeight: 650, color: tc,
@@ -350,8 +503,8 @@ function BookshelfBook({ note, isSelected, folders, onSelect, onDoubleClick, onC
   const spineColor = note.coverColor || folderData?.color || note.courseColor || getSpineColor(note.id);
   const tagColor = (note.tags && note.tags.length > 0)
     ? (localStorage.getItem("owa_custom_tag_colors")
-      ? (JSON.parse(localStorage.getItem("owa_custom_tag_colors") || "{}")[note.tags[0]] || DEFAULT_TAG_COLORS[note.tags[0]] || spineColor)
-      : (DEFAULT_TAG_COLORS[note.tags[0]] || spineColor))
+      ? (JSON.parse(localStorage.getItem("owa_custom_tag_colors") || "{}")[note.tags[0]] || DEFAULT_TAG_COLORS[note.tags[0]] || note.courseColor || getSpineColor(note.id))
+      : (DEFAULT_TAG_COLORS[note.tags[0]] || note.courseColor || getSpineColor(note.id)))
     : null;
   const [hov, setHov] = useState(false);
   const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -522,120 +675,143 @@ function BookshelfBook({ note, isSelected, folders, onSelect, onDoubleClick, onC
 interface IconPickerProps {
   currentIcon?: string;
   currentColor?: string;
+  noteTitle?: string;
   onSelect: (iconName: string, colorHex: string) => void;
   onClose: () => void;
 }
 
-function IconPicker({ currentIcon, currentColor, onSelect, onClose }: IconPickerProps) {
-  const [selectedIcon, setSelectedIcon] = useState(currentIcon || "FileText");
-  const [selectedColor, setSelectedColor] = useState(currentColor || "#E11D48");
-  const [showColors, setShowColors] = useState(!!currentIcon);
+function IconPicker({ currentIcon, currentColor, noteTitle, onSelect, onClose }: IconPickerProps) {
+  const [hoveredIcon, setHoveredIcon] = useState<string | null>(null);
+  const [activeColor, setActiveColor] = useState(currentColor || "#E11D48");
+  const [popupPos, setPopupPos] = useState<{ top: number; left: number } | null>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
 
   const IconForName = useCallback((name: string) => {
     const found = AVAILABLE_ICONS.find(i => i.name === name);
     return found ? found.icon : FileText;
   }, []);
 
-  const handleIconClick = useCallback((iconName: string) => {
-    setSelectedIcon(iconName);
-    setShowColors(true);
-    onSelect(iconName, selectedColor);
-  }, [selectedColor, onSelect]);
-
-  const handleColorClick = useCallback((color: string) => {
-    setSelectedColor(color);
-    onSelect(selectedIcon, color);
-  }, [selectedIcon, onSelect]);
+  const SelIcon = IconForName(currentIcon || "FileText");
+  const HovIcon = hoveredIcon ? IconForName(hoveredIcon) : null;
 
   return (
     <div style={{
-      width: 340,
+      width: 380,
       background: "var(--bg-elevated)", border: "1px solid var(--border-strong)",
-      borderRadius: "var(--radius-lg)", padding: 12,
+      borderRadius: "var(--radius-lg)", padding: 0,
       boxShadow: "var(--shadow-elevated), 0 10px 30px rgba(0,0,0,0.5)",
-      display: "flex", flexDirection: "column", gap: 8,
+      display: "flex", flexDirection: "column",
       animation: "fadeInDown 200ms ease-out",
     }} onClick={e => e.stopPropagation()}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span style={{ fontSize: 9.5, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase" }}>Personalizar Icono</span>
-        <button onClick={onClose} style={{ background: "none", border: "none", color: "var(--text-tertiary)", cursor: "pointer", padding: 2 }}><X size={12} /></button>
+
+      {/* Header */}
+      <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--border-default)", display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{
+          width: 40, height: 40, borderRadius: 10,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          background: activeColor + "18",
+          border: "1px solid " + activeColor + "30",
+          transition: "all 200ms",
+        }}>
+          <SelIcon size={20} style={{ color: activeColor }} />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{noteTitle || "Sin título"}</div>
+          <div style={{ fontSize: 9, color: "var(--text-tertiary)", marginTop: 1 }}>{AVAILABLE_ICONS.find(i => i.name === (currentIcon || "FileText"))?.label || currentIcon}</div>
+        </div>
+        <button onClick={onClose} style={{ width: 26, height: 26, borderRadius: 6, border: "none", background: "var(--bg-hover)", color: "var(--text-tertiary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <X size={13} />
+        </button>
       </div>
 
-      {/* Selected preview */}
-      <div style={{
-        display: "flex", alignItems: "center", gap: 10, padding: "6px 8px",
-        borderRadius: 8, border: "1px solid var(--border-default)", background: "var(--bg-base)",
+      {/* Icons Grid */}
+      <div ref={gridRef} style={{
+        overflowY: "auto", maxHeight: 260,
+        display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2,
+        padding: "8px 10px",
+        position: "relative",
       }}>
-        <div style={{
-          width: 36, height: 36, borderRadius: 8,
-          background: selectedColor + "18", display: "flex", alignItems: "center", justifyContent: "center",
-          border: "1px solid " + selectedColor + "30",
-        }}>
-          {(() => {
-            const I = IconForName(selectedIcon);
-            return <I size={18} style={{ color: selectedColor }} />;
-          })()}
-        </div>
-        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)", flex: 1 }}>
-          {AVAILABLE_ICONS.find(i => i.name === selectedIcon)?.label || selectedIcon}
-        </span>
-        <div style={{ width: 16, height: 16, borderRadius: "50%", background: selectedColor, flexShrink: 0 }} />
-      </div>
+        {AVAILABLE_ICONS.map(i => {
+          const Icon = i.icon;
+          const isHovered = hoveredIcon === i.name;
+          return (
+            <button key={i.name}
+              onMouseEnter={(e) => {
+                setHoveredIcon(i.name);
+                const rect = e.currentTarget.getBoundingClientRect();
+                const gridRect = gridRef.current?.getBoundingClientRect();
+                if (gridRect) {
+                  setPopupPos({
+                    left: Math.min(rect.left - gridRect.left, (gridRef.current?.clientWidth || 340) - 170),
+                    top: rect.bottom - gridRect.top + 4,
+                  });
+                }
+              }}
+              onMouseLeave={() => {}}
+              title={i.label}
+              style={{
+                height: 34, borderRadius: 6,
+                border: "1px solid",
+                borderColor: isHovered ? activeColor : "transparent",
+                background: isHovered ? activeColor + "15" : "transparent",
+                color: isHovered ? activeColor : "var(--text-secondary)",
+                cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                transition: "all 100ms",
+              }}>
+              <Icon size={14} style={{ color: isHovered ? activeColor : undefined }} />
+            </button>
+          );
+        })}
 
-      {/* Icons + Colors side by side */}
-      <div style={{ display: "flex", gap: 6, minHeight: 0 }}>
-        {/* Icons Grid — left side */}
-        <div style={{
-          overflowY: "auto", flex: showColors ? 1 : 1,
-          display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 4,
-          borderTop: "1px solid var(--border-default)", paddingTop: 6,
-          maxHeight: 164,
-        }}>
-          {AVAILABLE_ICONS.map(i => {
-            const Icon = i.icon;
-            const isSel = selectedIcon === i.name;
-            return (
-              <button key={i.name} onClick={() => { handleIconClick(i.name); }}
-                title={i.label}
-                style={{
-                  height: 30, borderRadius: 6, border: "1px solid " + (isSel ? selectedColor : "var(--border-default)"),
-                  background: isSel ? selectedColor + "16" : "transparent",
-                  color: isSel ? selectedColor : "var(--text-secondary)", cursor: "pointer",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  transition: "all 120ms",
-                  width: "100%",
-                }}
-                className="hover:bg-[var(--bg-hover)]">
-                <Icon size={14} />
-              </button>
-            );
-          })}
-        </div>
-        {/* Colors — right side, appears when icon is selected */}
-        {showColors && (
+        {/* Color popup on hover */}
+        {hoveredIcon && popupPos && HovIcon && (
           <div style={{
-            width: 120, flexShrink: 0, overflowY: "auto",
-            display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 4,
-            borderTop: "1px solid var(--border-default)", paddingTop: 6,
-            maxHeight: 164, alignContent: "start",
-          }}>
-            {SPINE_COLORS.map(c => (
-              <button key={c} onClick={() => { handleColorClick(c); }}
-                title={c}
-                style={{
-                  height: 30, borderRadius: 6,
-                  background: selectedColor === c ? c : c + "20",
-                  border: selectedColor === c ? "2px solid " + c : "1px solid " + c + "30",
-                  cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-                  transition: "all 120ms",
-                  transform: selectedColor === c ? "scale(1.1)" : "none",
-                }}>
-                {(() => {
-                  const CI = IconForName(selectedIcon);
-                  return <CI size={13} style={{ color: selectedColor === c ? "#fff" : c }} />;
-                })()}
-              </button>
-            ))}
+            position: "absolute",
+            top: popupPos.top,
+            left: Math.max(0, popupPos.left),
+            width: 170,
+            background: "var(--bg-elevated)",
+            border: "1px solid var(--border-strong)",
+            borderRadius: "var(--radius-lg)",
+            boxShadow: "var(--shadow-elevated)",
+            padding: "8px 10px",
+            zIndex: 100,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 8,
+          }}
+            onMouseEnter={() => setHoveredIcon(hoveredIcon)}
+            onMouseLeave={() => { setHoveredIcon(null); setPopupPos(null); }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
+              <HovIcon size={18} style={{ color: activeColor, flexShrink: 0 }} />
+              <span style={{ fontSize: 10, fontWeight: 600, color: "var(--text-secondary)" }}>
+                {AVAILABLE_ICONS.find(x => x.name === hoveredIcon)?.label || hoveredIcon}
+              </span>
+            </div>
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(7, 1fr)",
+              gap: 4,
+              width: "100%",
+            }}>
+              {SPINE_COLORS.map(c => (
+                <button key={c}
+                  onClick={() => { setActiveColor(c); if (hoveredIcon) onSelect(hoveredIcon, c); }}
+                  style={{
+                    width: 18, height: 18, borderRadius: "50%",
+                    border: activeColor === c ? "2px solid var(--text-primary)" : "1px solid var(--border-default)",
+                    background: c,
+                    cursor: "pointer",
+                    boxShadow: activeColor === c ? `0 0 0 2px ${c}` : "none",
+                    transition: "all 120ms",
+                    transform: activeColor === c ? "scale(1.15)" : "scale(1)",
+                  }}
+                />
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -1089,7 +1265,7 @@ function ShelfPlank() {
 }
 
 export default function Notas() {
-  const { notes, noteFolders: folders, addNote, updateNote, deleteNote, restoreNote, permanentlyDeleteNote, addNoteFolder, duplicateNote, reorderNotes } = useApp();
+  const { notes, noteFolders: folders, addNote, updateNote, updateNoteVisual, deleteNote, restoreNote, permanentlyDeleteNote, addNoteFolder, duplicateNote, reorderNotes, settings } = useApp();
 
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(() => {
@@ -1107,13 +1283,14 @@ export default function Notas() {
   
   const [showNewFolderModal, setShowNewFolderModal] = useState(false);
   const [showNewTagModal, setShowNewTagModal] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmNoteId, setDeleteConfirmNoteId] = useState<string | null>(null);
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [trashSelectedIds, setTrashSelectedIds] = useState<Set<string>>(new Set());
   const [switchTargetId, setSwitchTargetId] = useState<string | null>(null);
   const [drawerTab, setDrawerTab] = useState<"contenido" | "informacion" | "historial">("contenido");
   const [linkPreviewUrl, setLinkPreviewUrl] = useState<string | null>(null);
   const [linkPreviewError, setLinkPreviewError] = useState(false);
+  const [previewFile, setPreviewFile] = useState<{ url: string; name: string; type: string } | null>(null);
   const [lightboxImage, setLightboxImage] = useState<{ src: string; el: HTMLElement } | null>(null);
   const [pendingLink, setPendingLink] = useState<string | null>(null);
 
@@ -1253,8 +1430,8 @@ export default function Notas() {
     return () => clearInterval(interval);
   }, []);
 
-  const timeStr = format(ct, "HH:mm");
-  const secondsStr = format(ct, 'ss');
+  const timeStr = fmtClock(format(ct, "HH:mm"), settings?.timeFormat);
+  const secondsStr = settings?.timeFormat === '12h' ? null : format(ct, 'ss');
   const dateStr = useMemo(() => {
     try {
       const d = format(ct, "EEEE, d 'de' MMMM", { locale: es });
@@ -1274,18 +1451,21 @@ export default function Notas() {
 
   // Filter notes by query, folder, tags, views
   const filteredNotes = useMemo(() => {
-    let result = [...notes];
-    
     // Sidebar view filters
+    let result: typeof notes;
+    if (activeSidebarTab === "trash") {
+      // Trash shows ALL deleted notes, including course-private
+      result = notes.filter(n => n.deletedAt);
+    } else {
+      // All other views exclude course-private and non-deleted notes
+      result = notes.filter(n => !n.isCoursePrivate && !n.deletedAt);
+    }
+
     if (activeSidebarTab === "favs") {
-      result = result.filter(n => !n.deletedAt && n.isPinned);
+      result = result.filter(n => n.isPinned);
     } else if (activeSidebarTab === "recents") {
       const cutoff = Date.now() - 3 * 24 * 60 * 60 * 1000;
-      result = result.filter(n => !n.deletedAt && new Date(n.updatedAt).getTime() > cutoff);
-    } else if (activeSidebarTab === "trash") {
-      result = result.filter(n => n.deletedAt);
-    } else {
-      result = result.filter(n => !n.deletedAt);
+      result = result.filter(n => new Date(n.updatedAt).getTime() > cutoff);
     }
 
     if (selectedFolderId) {
@@ -1416,17 +1596,17 @@ export default function Notas() {
   }, [selectedNote]);
 
   const handleDeleteNote = useCallback(() => {
-    if (!selectedNoteId && !contextMenu) return;
-    const id = contextMenu ? contextMenu.noteId : selectedNoteId!;
+    const id = deleteConfirmNoteId;
+    if (!id) return;
     deleteNote(id);
     if (selectedNoteId === id) {
       setSelectedNoteId(null);
       setIsEditing(false);
     }
     setContextMenu(null);
-    setShowDeleteConfirm(false);
+    setDeleteConfirmNoteId(null);
     toast.success("Movido a la papelera");
-  }, [contextMenu, selectedNoteId, deleteNote]);
+  }, [deleteConfirmNoteId, selectedNoteId, deleteNote]);
 
   const handleRestoreNote = useCallback((id: string) => {
     restoreNote(id);
@@ -2178,26 +2358,62 @@ export default function Notas() {
   const handleExportPDF = useCallback((noteId?: string) => {
     const target = notes.find(n => n.id === (noteId || (contextMenu ? contextMenu.noteId : selectedNoteId)));
     if (!target) return;
-    const content = `
-      <html><head><meta charset="utf-8"><style>
-        body { font-family: system-ui; max-width: 800px; margin: 40px auto; padding: 20px; color: #222; }
-        h1 { font-size: 24px; margin-bottom: 8px; }
-        .meta { color: #888; font-size: 12px; margin-bottom: 24px; }
-        .content { font-size: 14px; line-height: 1.7; }
-      </style></head><body>
-        <h1>${target.title}</h1>
-        <div class="meta">${safeFormat(target.createdAt, "d MMM yyyy, HH:mm")} · ${getWordCount(target.content)} palabras</div>
-        <div class="content">${target.content}</div>
-      </body></html>
-    `;
-    const blob = new Blob([content], { type: "text/html" });
+    const taskId = createDownloadTask((target.title || "nota") + ".pdf", 'pdf');
+    updateDownloadTask(taskId, { status: 'downloading', progress: 30 });
+    const content = `<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+  @page { margin: 24mm 20mm; size: A4; }
+  * { box-sizing: border-box; }
+  body { font-family: 'Inter', 'Segoe UI', system-ui, sans-serif; max-width: 700px; margin: 0 auto; padding: 0; color: #1a1a2e; line-height: 1.6; }
+  h1 { font-size: 26px; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.02em; color: #111; }
+  .meta { color: #666; font-size: 11px; margin-bottom: 28px; padding-bottom: 16px; border-bottom: 1px solid #e2e8f0; display: flex; gap: 16px; }
+  .content { font-size: 13.5px; line-height: 1.75; color: #1a1a2e; }
+  .content img { max-width: 100%; border-radius: 6px; margin: 12px 0; }
+  .content a { color: #2563eb; text-decoration: underline; }
+  .content .notes-attachment { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border: 1px solid #e2e8f0; border-radius: 8px; margin: 8px 0; background: #f8fafc; }
+  .content .notes-attachment a { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #2563eb; font-weight: 600; font-size: 12px; text-decoration: none; }
+  .content .notes-attachment .att-meta { font-size: 10px; color: #94a3b8; flex-shrink: 0; }
+  .content blockquote { margin: 12px 0; padding-left: 16px; border-left: 3px solid #2563eb; color: #475569; }
+  .content pre { background: #f1f5f9; padding: 12px 16px; border-radius: 8px; overflow-x: auto; font-size: 12px; }
+  .content table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+  .content th, .content td { padding: 8px; border: 1px solid #e2e8f0; font-size: 12px; }
+  .content th { background: #f8fafc; font-weight: 600; }
+  @media print {
+    body { margin: 0; padding: 0; }
+    .content a { color: #2563eb !important; }
+  }
+</style></head><body>
+  <h1>${target.title}</h1>
+  <div class="meta">
+    <span>${safeFormat(target.createdAt, "d MMM yyyy")}</span>
+    <span>${getWordCount(target.content)} palabras</span>
+  </div>
+  <div class="content">${target.content}</div>
+</body></html>`;
+    updateDownloadTask(taskId, { progress: 60 });
+    const blob = new Blob([content], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = (target.title || "nota") + ".html";
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success("Exportado como HTML");
+    const w = window.open(url, '_blank');
+    if (w) {
+      updateDownloadTask(taskId, { progress: 80 });
+      w.document.title = target.title || "nota";
+      setTimeout(() => {
+        w.focus();
+        w.print();
+        completeDownloadTask(taskId);
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+      }, 600);
+      toast.success("Exportando PDF — usa Guardar como PDF");
+    } else {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = (target.title || "nota") + ".html";
+      a.click();
+      URL.revokeObjectURL(url);
+      completeDownloadTask(taskId);
+      toast.success("Exportado como HTML (permite ventanas emergentes para PDF)");
+    }
     setContextMenu(null);
   }, [notes, contextMenu, selectedNoteId]);
 
@@ -2320,49 +2536,74 @@ export default function Notas() {
         .notes-preview-area ul { padding-left: 20px; margin: 6px 0; list-style: disc; }
         .notes-preview-area ol { padding-left: 20px; margin: 6px 0; list-style: decimal; }
         .notes-preview-area li { margin: 2px 0; line-height: 1.6; }
+        .notes-editor-area .notes-attachment,
+        .notes-preview-area .notes-attachment {
+          display: flex; align-items: center; gap: 10px;
+          padding: 10px 14px;
+          border: 1px solid var(--border-default);
+          border-radius: 10px; margin: 8px 0;
+          background: var(--bg-hover);
+          transition: border-color 150ms;
+        }
+        .notes-editor-area .notes-attachment:hover,
+        .notes-preview-area .notes-attachment:hover {
+          border-color: var(--accent);
+        }
+        .notes-editor-area .notes-attachment a,
+        .notes-preview-area .notes-attachment a {
+          color: var(--accent) !important;
+          font-weight: 600; font-size: 12px;
+          text-decoration: none;
+          flex: 1; overflow: hidden;
+          text-overflow: ellipsis; white-space: nowrap;
+        }
+        .notes-editor-area .notes-attachment a:hover,
+        .notes-preview-area .notes-attachment a:hover {
+          text-decoration: underline;
+        }
+        .notes-editor-area .notes-attachment .att-meta,
+        .notes-preview-area .notes-attachment .att-meta {
+          font-size: 10px; color: var(--text-tertiary); flex-shrink: 0;
+        }
+        .notes-preview-area a:not(.notes-attachment a) {
+          color: var(--accent); text-decoration: underline;
+          font-weight: 500;
+        }
+        .notes-preview-area a:not(.notes-attachment a):hover {
+          opacity: 0.8;
+        }
       `}</style>
       {/* ===== HEADER: Estudio-style as card ===== */}
       <header style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
-        marginBottom: 24, paddingTop: 8,
+        marginBottom: 22, paddingTop: 8,
       }}>
-        <div>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
           <h1 style={{
-            fontSize: 40, fontWeight: 200, color: 'var(--text-primary)', lineHeight: 1,
-            letterSpacing: '-0.03em', fontFamily: "'Inter Tight', sans-serif",
-            textShadow: '0 0 20px var(--accent-glow)', margin: 0,
+            fontSize: 42, fontWeight: 200, color: 'var(--text-primary)', lineHeight: 1,
+            letterSpacing: '-0.03em', fontFamily: "'Inter Tight', sans-serif", margin: 0,
+            textShadow: '0 0 20px var(--accent-glow)',
           }}>
             Notas
           </h1>
-          <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4,
-              fontWeight: 400, letterSpacing: '0.02em' }}>
-            Tu conocimiento, organizado.
-          </p>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <NotificationBell />
-          <div className="flex items-center gap-4 flex-shrink-0" style={{
-              paddingLeft: 16, borderLeft: '1px solid var(--border-subtle)', position: 'relative' }}>
-            <div style={{ position: 'absolute', top: '50%', right: 0, width: 150, height: 100,
-                background: 'radial-gradient(circle at center, var(--accent-dim) 0%, transparent 70%)',
-                opacity: 0.25, transform: 'translateY(-50%)', pointerEvents: 'none', zIndex: 0 }} />
-            <div style={{ width: 8, height: 8, borderRadius: '50%',
-                background: 'var(--text-tertiary)', position: 'relative', zIndex: 1 }} />
+          <div style={{ paddingLeft: 16, borderLeft: '1px solid var(--border-subtle)', position: 'relative' }}>
+            <div style={{ position: 'absolute', top: '50%', right: 0, width: 150, height: 100, background: `radial-gradient(circle at center, var(--text-muted) 0%, transparent 70%)`, opacity: 0.1, transform: 'translateY(-50%)', pointerEvents: 'none', zIndex: 0 }} />
             <div style={{ textAlign: 'right', position: 'relative', zIndex: 1 }}>
               <div className="flex items-baseline gap-2 justify-end">
-                <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 68, fontWeight: 200,
-                    lineHeight: 0.9, color: 'var(--accent)', letterSpacing: '0.02em',
-                    textShadow: '0 0 20px var(--accent-glow)' }}>
+                <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 68, fontWeight: 200, lineHeight: 0.9, color: 'var(--text-secondary)', letterSpacing: '0.02em' }}>
                   {timeStr}
                 </span>
-                <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 22, fontWeight: 200,
-                    color: 'var(--accent)', opacity: 0.7, letterSpacing: '0.02em' }}>
+                {secondsStr !== null && (
+                <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 22, fontWeight: 200, color: 'var(--text-tertiary)', opacity: 0.7, letterSpacing: '0.02em' }}>
                   {secondsStr}
                 </span>
+                )}
               </div>
-              <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)',
-                  textTransform: 'uppercase', letterSpacing: '0.12em', marginTop: 6 }}>
+              <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.12em', marginTop: 6 }}>
                 {dateStr}
               </div>
             </div>
@@ -2434,7 +2675,12 @@ export default function Notas() {
                     } else if (isVideo) {
                       html = `<div class="notes-attachment" style="display:flex;flex-direction:column;gap:6px;padding:10px 14px;border:1px solid var(--border-default);border-radius:10px;margin:8px 0;background:var(--bg-hover);"><div style="display:flex;align-items:center;gap:8px;"><span style="font-size:18px;">🎬</span><span style="font-size:12;font-weight:600;color:var(--text-primary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${file.name}</span><span style="font-size:10px;color:var(--text-tertiary);flex-shrink:0;">${(file.size / 1024).toFixed(0)} KB</span></div><video controls src="${url}" style="width:100%;max-height:400px;border-radius:6px;">${file.name}</video></div>`;
                     } else {
-                      html = `<div class="notes-attachment" style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--border-default);border-radius:8px;margin:8px 0;background:var(--bg-hover);"><span style="font-size:20px;">📎</span><a href="${url}" target="_blank" style="color:var(--accent);font-weight:600;">${file.name}</a><span style="font-size:10px;color:var(--text-tertiary);margin-left:auto;">${(file.size / 1024).toFixed(0)} KB</span></div>`;
+                      const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith('.pdf');
+                      if (isPdf) {
+                        html = `<div class="notes-attachment"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg><a href="${url}" target="_blank">${file.name}</a><span class="att-meta">${(file.size / 1024).toFixed(0)} KB · PDF</span></div>`;
+                      } else {
+                        html = `<div class="notes-attachment"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg><a href="${url}" target="_blank">${file.name}</a><span class="att-meta">${(file.size / 1024).toFixed(0)} KB</span></div>`;
+                      }
                     }
                     document.execCommand("insertHTML", false, html);
                     setSaveStatus("pending");
@@ -2801,7 +3047,7 @@ export default function Notas() {
                         <Download size={12} /> Exportar PDF
                       </button>
                       <div style={{ height: 1, background: "var(--border-subtle)", margin: "2px 0" }} />
-                      <button onClick={() => setShowDeleteConfirm(true)}
+                      <button onClick={() => setDeleteConfirmNoteId(selectedNoteId)}
                         style={{
                           display: "flex", alignItems: "center", gap: 7, padding: "7px 10px",
                           borderRadius: 7, border: "1px solid transparent",
@@ -2823,9 +3069,9 @@ export default function Notas() {
             <div style={{
               display: "flex", flex: 1, minHeight: 0, overflow: "hidden",
               background: "var(--bg-surface)",
-              border: "1px solid var(--border-subtle)",
-              borderRadius: "var(--radius-lg)",
-              boxShadow: "var(--shadow-sm)",
+              border: "1px solid var(--border-default)",
+              borderRadius: "var(--radius-xl)",
+              boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
             }}>
               {/* LEFT SIDEBAR (Library views & custom folder list) */}
               <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -3095,7 +3341,9 @@ export default function Notas() {
                                 <FileText size={12} style={{ color: "var(--text-secondary)" }} />
                               </div>
                               <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)", marginBottom: 1 }}>{note.title || "Sin título"}</div>
+                                <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)", marginBottom: 1 }}>
+                                  {note.course ? `${format(new Date(note.createdAt), 'dd/MM/yy')} — ${note.course}` : (note.title || "Sin título")}
+                                </div>
                                 <div style={{ fontSize: 9.5, color: "var(--text-tertiary)" }}>
                                   {delTime} · {note.tags?.slice(0, 2).join(", ") || "sin etiquetas"}
                                 </div>
@@ -3426,7 +3674,7 @@ export default function Notas() {
                             <Edit3 size={12} />
                           </button>
 
-                          <button onClick={() => setShowDeleteConfirm(true)}
+                          <button onClick={() => setDeleteConfirmNoteId(selectedNote!.id)}
                             title="Eliminar"
                             style={{
                               background: "none", border: "1px solid var(--border-default)",
@@ -3497,19 +3745,68 @@ export default function Notas() {
                             {/* Attachments */}
                             {selectedNote.attachments && selectedNote.attachments.length > 0 && (
                               <div style={{ marginTop: 12 }}>
-                                <h4 style={{ fontSize: 10, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Adjuntos</h4>
-                                <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                                  {selectedNote.attachments.map(att => (
-                                    <div key={att.id} style={{
-                                      display: "flex", alignItems: "center", gap: 8, padding: 8,
-                  background: "rgba(255,255,255,0.03)", border: "1px solid var(--border-subtle)",
-                                      borderRadius: 6, fontSize: 11.5,
-                                    }}>
-                                      <File size={13} style={{ color: "var(--accent)", flexShrink: 0 }} />
-                                      <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{att.name}</span>
-                                      <span style={{ fontSize: 9.5, color: "var(--text-tertiary)" }}>{(att.size / (1024 * 1024)).toFixed(1)} MB</span>
-                                    </div>
-                                  ))}
+                                <h4 style={{ fontSize: 10, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Adjuntos</h4>
+                                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                                  {selectedNote.attachments.map(att => {
+                                    const isPdf = att.type === 'pdf' || att.name.toLowerCase().endsWith('.pdf');
+                                    const isImg = att.type === 'image' || att.name.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i);
+                                    const isAudio = att.type === 'audio' || att.name.match(/\.(mp3|wav|ogg|m4a|flac)$/i);
+                                    const isVideo = att.type === 'video' || att.name.match(/\.(mp4|webm|mov)$/i);
+                                    const isLink = att.dataUrl?.startsWith('http');
+                                    const isOffice = att.name.match(/\.(doc|docx|xls|xlsx|ppt|pptx)$/i);
+                                    return (
+                                      <div key={att.id} style={{
+                                        display: "flex", alignItems: "center", gap: 8, padding: "8px 10px",
+                                        background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)",
+                                        borderRadius: 8, fontSize: 11.5, transition: "border-color 150ms",
+                                      }} className="hover:border-[var(--accent)]">
+                                        {isPdf ? (
+                                          <FileText size={14} style={{ color: "#EF4444", flexShrink: 0 }} />
+                                        ) : isImg ? (
+                                          <ImageIcon size={14} style={{ color: "#3B82F6", flexShrink: 0 }} />
+                                        ) : isAudio ? (
+                                          <Music size={14} style={{ color: "#10B981", flexShrink: 0 }} />
+                                        ) : isVideo ? (
+                                          <Camera size={14} style={{ color: "#8B5CF6", flexShrink: 0 }} />
+                                        ) : isLink ? (
+                                          <Link size={14} style={{ color: "var(--accent)", flexShrink: 0 }} />
+                                        ) : (
+                                          <File size={13} style={{ color: "var(--text-tertiary)", flexShrink: 0 }} />
+                                        )}
+                                        <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-primary)", fontSize: 11, fontWeight: 500 }}>{att.name}</span>
+                                        <span style={{ fontSize: 9, color: "var(--text-tertiary)", flexShrink: 0 }}>
+                                          {isLink ? '' : (att.size / 1024).toFixed(0) + ' KB'}
+                                        </span>
+                                        <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
+                                          {(isImg || isPdf) && (
+                                            <button onClick={(e) => { e.stopPropagation(); setPreviewFile({ url: att.dataUrl, name: att.name, type: isPdf ? 'pdf' : 'img' }); }}
+                                              style={{ width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", color: "var(--text-tertiary)", cursor: "pointer", borderRadius: 4 }}
+                                              className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]" title="Vista previa">
+                                              <Eye size={11} />
+                                            </button>
+                                          )}
+                                          {isLink && (
+                                            <a href={att.dataUrl} target="_blank" rel="noopener noreferrer"
+                                              style={{ width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-tertiary)", borderRadius: 4 }}
+                                              className="hover:bg-[var(--bg-hover)] hover:text-[var(--accent)]" title="Abrir enlace">
+                                              <ExternalLink size={11} />
+                                            </a>
+                                          )}
+                                          <button onClick={(e) => {
+                                            e.stopPropagation();
+                                            const a = document.createElement('a');
+                                            a.href = att.dataUrl;
+                                            a.download = att.name;
+                                            a.click();
+                                          }}
+                                            style={{ width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", color: "var(--text-tertiary)", cursor: "pointer", borderRadius: 4 }}
+                                            className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]" title="Descargar">
+                                            <Download size={11} />
+                                          </button>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               </div>
                             )}
@@ -3742,20 +4039,21 @@ export default function Notas() {
       {/* ===== ICON PICKER OVERLAY (from context menu) ===== */}
       {showIconPicker && iconPickerTarget && (
         <div style={{
-          position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)",
-          zIndex: 10001,
-        }}>
-          <div style={{
-            position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: -1,
-          }} onClick={() => { setShowIconPicker(false); setIconPickerTarget(null); }} />
-          <IconPicker
-            currentIcon={notes.find(n => n.id === iconPickerTarget)?.coverImage}
-            currentColor={notes.find(n => n.id === iconPickerTarget)?.coverColor}
-            onSelect={(ico, col) => {
-              if (iconPickerTarget) updateNote(iconPickerTarget, { coverImage: ico, coverColor: col });
-            }}
-            onClose={() => { setShowIconPicker(false); setIconPickerTarget(null); }}
-          />
+          position: "fixed", inset: 0, zIndex: 10001,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          background: "rgba(0,0,0,0.5)",
+        }} onClick={() => { setShowIconPicker(false); setIconPickerTarget(null); }}>
+          <div onClick={e => e.stopPropagation()}>
+            <IconPicker
+              currentIcon={notes.find(n => n.id === iconPickerTarget)?.coverImage}
+              currentColor={notes.find(n => n.id === iconPickerTarget)?.coverColor}
+              noteTitle={notes.find(n => n.id === iconPickerTarget)?.title}
+              onSelect={(ico, col) => {
+                if (iconPickerTarget) updateNoteVisual(iconPickerTarget, { coverImage: ico, coverColor: col });
+              }}
+              onClose={() => { setShowIconPicker(false); setIconPickerTarget(null); }}
+            />
+          </div>
         </div>
       )}
 
@@ -3785,9 +4083,9 @@ export default function Notas() {
             { label: "Editar icono", icon: ImageIcon, action: () => { const target = notes.find(n => n.id === contextMenu.noteId); if (target) { setIconPickerTarget(contextMenu.noteId); setShowIconPicker(true); } } },
             { label: "Duplicar", icon: Copy, action: handleDuplicate },
             { type: "divider" as const },
-            { label: "Exportar HTML", icon: Download, action: handleExportPDF },
+            { label: "Exportar PDF", icon: Download, action: handleExportPDF },
             { type: "divider" as const },
-            { label: "Eliminar", icon: Trash2, action: () => { setShowDeleteConfirm(true); }, danger: true },
+            { label: "Eliminar", icon: Trash2, action: () => { if (contextMenu) setDeleteConfirmNoteId(contextMenu.noteId); }, danger: true },
           ].map((item, i) => {
             if ("type" in item) return <div key={i} style={{ height: 1, background: "var(--border-default)", margin: "4px 6px" }} />;
             const Icon = item.icon;
@@ -3860,38 +4158,39 @@ export default function Notas() {
       )}
 
       {/* ===== DELETE CONFIRM MODAL ===== */}
-      {showDeleteConfirm && (
+      {deleteConfirmNoteId && (
         <div style={{
           position: "fixed", inset: 0, zIndex: 10001,
-          background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)",
+          background: "rgba(0,0,0,0.55)", backdropFilter: "blur(6px)",
           display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
+        }} onClick={() => setDeleteConfirmNoteId(null)}>
           <div style={{
             background: "linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-base) 100%)",
             border: "1px solid var(--border-default)",
-            borderRadius: "var(--radius-lg)", padding: 24, minWidth: 320, maxWidth: 400,
-            boxShadow: "var(--shadow-elevated)",
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-              <AlertTriangle size={18} style={{ color: "var(--error)", flexShrink: 0 }} />
-              <h3 style={{ fontSize: 14.5, fontWeight: 600, color: "var(--text-primary)", margin: 0, fontFamily: "var(--font-heading)" }}>
-                Eliminar cuaderno
+            borderRadius: 14, padding: 24, minWidth: 300, maxWidth: 380,
+            boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+              <AlertTriangle size={18} style={{ color: "#EF4444", flexShrink: 0 }} />
+              <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", margin: 0, fontFamily: "'Inter Tight', sans-serif" }}>
+                Eliminar nota
               </h3>
             </div>
-            <p style={{ fontSize: 12.5, color: "var(--text-secondary)", margin: 0, lineHeight: 1.5 }}>
-              ¿Estás seguro de eliminar este cuaderno? Se eliminará permanentemente en 1 semana.
+            <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: 0, lineHeight: 1.5 }}>
+              ¿Estás seguro de eliminar esta nota? Se moverá a la papelera.
             </p>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
-              <button onClick={() => setShowDeleteConfirm(false)}
-                className="btn-secondary"
+              <button onClick={() => setDeleteConfirmNoteId(null)}
                 style={{
-                  background: "none", border: "1px solid var(--border-default)", borderRadius: 6,
-                  padding: "6px 14px", color: "var(--text-secondary)", fontSize: 12, cursor: "pointer",
+                  background: "none", border: "1px solid var(--border-default)", borderRadius: 8,
+                  padding: "7px 16px", color: "var(--text-secondary)", fontSize: 11, cursor: "pointer",
+                  fontFamily: "'Inter', sans-serif", fontWeight: 500,
                 }}>Cancelar</button>
               <button onClick={handleDeleteNote}
                 style={{
-                  background: "var(--error)", color: "#fff", border: "none", borderRadius: 6,
-                  padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                  background: "#EF4444", color: "#fff", border: "none", borderRadius: 8,
+                  padding: "7px 16px", fontSize: 11, fontWeight: 600, cursor: "pointer",
+                  fontFamily: "'Inter', sans-serif",
                 }}>Eliminar</button>
             </div>
           </div>
@@ -4013,7 +4312,7 @@ export default function Notas() {
               <button onClick={() => {
                 if (editorRef.current) {
                   document.execCommand("insertHTML", false,
-                    `<div class="notes-attachment" style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--border-subtle);border-radius:8px;margin:8px 0;background:var(--bg-hover);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg><a href="${pendingLink}" target="_blank" style="color:var(--accent);font-weight:600;font-size:12px;">${pendingLink}</a></div>`);
+                    `<div class="notes-attachment"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg><a href="${pendingLink}" target="_blank">${pendingLink}</a><span class="att-meta">Enlace</span></div>`);
                   setSaveStatus("pending");
                   if (selectedNote) updateNote(selectedNote.id, { content: editorRef.current.innerHTML });
                 }
@@ -4135,6 +4434,76 @@ export default function Notas() {
               }}>
               <X size={16} />
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ===== FILE PREVIEW (PDF / Image) ===== */}
+      {previewFile && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 10003,
+          background: "rgba(0,0,0,0.8)", backdropFilter: "blur(10px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          padding: 24,
+        }} onClick={() => setPreviewFile(null)}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background: "var(--bg-surface)",
+            border: "1px solid var(--border-default)",
+            borderRadius: 14, width: "90%", maxWidth: 800, height: "85%",
+            display: "flex", flexDirection: "column", overflow: "hidden",
+            boxShadow: "0 24px 80px rgba(0,0,0,0.4)",
+          }}>
+            <div style={{
+              display: "flex", alignItems: "center", gap: 8,
+              padding: "10px 14px", borderBottom: "1px solid var(--border-soft)",
+              background: "var(--bg-elevated)", flexShrink: 0,
+            }}>
+              {previewFile.type === 'pdf' ? (
+                <FileText size={14} style={{ color: "#EF4444", flexShrink: 0 }} />
+              ) : (
+                <Eye size={14} style={{ color: "var(--accent)", flexShrink: 0 }} />
+              )}
+              <span style={{ flex: 1, fontSize: 12, color: "var(--text-primary)", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {previewFile.name}
+              </span>
+              <button onClick={() => {
+                const a = document.createElement('a');
+                a.href = previewFile.url;
+                a.download = previewFile.name;
+                a.click();
+              }} style={{
+                fontSize: 11, fontWeight: 600, padding: "4px 10px",
+                border: "1px solid var(--border-default)", borderRadius: 6,
+                color: "var(--text-primary)", background: "transparent", cursor: "pointer",
+              }} className="hover:bg-[var(--bg-hover)]">
+                <Download size={12} /> Descargar
+              </button>
+              <button onClick={() => setPreviewFile(null)}
+                style={{
+                  width: 26, height: 26, flexShrink: 0,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  border: "none", background: "transparent",
+                  color: "var(--text-tertiary)", cursor: "pointer", borderRadius: 6,
+                }}
+                className="hover:bg-[var(--bg-hover)]">
+                <X size={14} />
+              </button>
+            </div>
+            <div style={{ flex: 1, position: "relative", background: "var(--bg-canvas)" }}>
+              {previewFile.type === 'pdf' ? (
+                <object data={previewFile.url} type="application/pdf" style={{ width: "100%", height: "100%", border: "none" }} aria-label={previewFile.name}>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 12, color: "var(--text-tertiary)" }}>
+                    <FileText size={40} style={{ opacity: 0.3 }} />
+                    <span>No se puede previsualizar este PDF</span>
+                    <a href={previewFile.url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", fontWeight: 600, fontSize: 12 }}>Abrir PDF</a>
+                  </div>
+                </object>
+              ) : (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", padding: 16 }}>
+                  <img src={previewFile.url} alt={previewFile.name} style={{ maxWidth: "100%", maxHeight: "100%", borderRadius: 6, objectFit: "contain" }} />
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -4363,55 +4732,53 @@ const trashCount = notes.filter(n => n.deletedAt).length;
         </div>
 
         {/* subtle section divider */}
-        {allTags.length > 0 && (
-          <div style={{ height: 1, background: "var(--border-subtle)", margin: "0 4px" }} />
-        )}
+        <div style={{ height: 1, background: "var(--border-subtle)", margin: "0 4px" }} />
 
         {/* ETIQUETAS */}
-        {allTags.length > 0 && (
-          <div>
-            <div style={{
-              display: "flex", alignItems: "center", justifyContent: "space-between",
-              marginBottom: 8, paddingLeft: 4,
-            }}>
-              <span style={{
-                fontSize: 13, fontWeight: 700, color: "var(--text-primary)",
-                letterSpacing: "0.06em", textTransform: "uppercase",
-              }}>Etiquetas</span>
-              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <button onClick={() => setShowTagSection(!showTagSection)}
-                  style={{
-                    width: 26, height: 26,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    background: "transparent", border: "1px solid transparent",
-                    color: "var(--text-muted)", cursor: "pointer", padding: 0,
-                    borderRadius: 6, transition: "all 150ms",
-                  }}
-                  className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-secondary)]"
-                  title={showTagSection ? "Ocultar etiquetas" : "Mostrar etiquetas"}>
-                  <ChevronDown size={14} style={{
-                    transform: showTagSection ? "rotate(0deg)" : "rotate(-90deg)",
-                    transition: "transform 250ms " + EASE,
-                  }} />
-                </button>
-                <button onClick={onNewTag}
-                  title="Nueva etiqueta"
-                  style={{
-                    width: 26, height: 26,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    background: "transparent", border: "1px solid var(--border-subtle)",
-                    borderRadius: 6, color: "var(--accent)", cursor: "pointer", padding: 0,
-                    transition: "all 150ms",
-                  }}
-                  className="hover:border-[var(--accent)] hover:bg-[var(--accent-dim)]">
-                  <Plus size={14} />
-                </button>
-              </div>
+        <div>
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            marginBottom: 8, paddingLeft: 4,
+          }}>
+            <span style={{
+              fontSize: 13, fontWeight: 700, color: "var(--text-primary)",
+              letterSpacing: "0.06em", textTransform: "uppercase",
+            }}>Etiquetas</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <button onClick={() => setShowTagSection(!showTagSection)}
+                style={{
+                  width: 26, height: 26,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  background: "transparent", border: "1px solid transparent",
+                  color: "var(--text-muted)", cursor: "pointer", padding: 0,
+                  borderRadius: 6, transition: "all 150ms",
+                }}
+                className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-secondary)]"
+                title={showTagSection ? "Ocultar etiquetas" : "Mostrar etiquetas"}>
+                <ChevronDown size={14} style={{
+                  transform: showTagSection ? "rotate(0deg)" : "rotate(-90deg)",
+                  transition: "transform 250ms " + EASE,
+                }} />
+              </button>
+              <button onClick={onNewTag}
+                title="Nueva etiqueta"
+                style={{
+                  width: 26, height: 26,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  background: "transparent", border: "1px solid var(--border-subtle)",
+                  borderRadius: 6, color: "var(--accent)", cursor: "pointer", padding: 0,
+                  transition: "all 150ms",
+                }}
+                className="hover:border-[var(--accent)] hover:bg-[var(--accent-dim)]">
+                <Plus size={14} />
+              </button>
             </div>
-            <div style={{
-              overflow: "hidden", maxHeight: showTagSection ? 10000 : 0,
-              transition: "max-height 300ms " + EASE,
-            }}>
+          </div>
+          <div style={{
+            overflow: "hidden", maxHeight: showTagSection ? 10000 : 0,
+            transition: "max-height 300ms " + EASE,
+          }}>
+            {allTags.length > 0 ? (
               <DndContext sensors={tagSensors} collisionDetection={closestCenter} onDragStart={e => setActiveTagDragId(e.active.id as string)} onDragEnd={handleTagDragEnd} modifiers={[restrictToParentElement]}>
                 <SortableContext items={allTags} strategy={verticalListSortingStrategy}>
                   <div style={{ display: "flex", flexDirection: "column", gap: 1, marginTop: 2 }}>
@@ -4461,9 +4828,9 @@ const trashCount = notes.filter(n => n.deletedAt).length;
                   </div>
                 </SortableContext>
               </DndContext>
-            </div>
+            ) : null}
           </div>
-        )}
+        </div>
       </div>
 
       {/* Tag edit modal (rename + color + delete) */}
