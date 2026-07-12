@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Calendar, Clock, BookOpen, FileText, ExternalLink, Trash2, CheckCircle2, Link as LinkIcon, Repeat, Plus } from 'lucide-react';
+import { X, Calendar, Clock, BookOpen, FileText, ExternalLink, Trash2, CheckCircle2, Link as LinkIcon, Repeat, Plus, Star } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { PlanEvent } from './EventModal';
@@ -32,15 +32,16 @@ export default function LateralPanel({ item, onClose, onSelectEvent, onEditEvent
         onClick={onClose} 
       />
       
-      <div 
+      <div className="bento-card"
         style={{ 
           position: 'fixed', 
           top: 0, 
           bottom: 0, 
           right: 0, 
-          width: 440, // slightly wider for breathing room
+          width: 440, padding: 0,
           background: 'var(--surface)', 
           borderLeft: '1px solid var(--border-soft)',
+          borderRight: 'none', borderTop: 'none', borderBottom: 'none',
           zIndex: 1300,
           boxShadow: '-32px 0 64px rgba(0,0,0,0.5)',
           display: 'flex',
@@ -182,10 +183,25 @@ function DayDetails({ item, onSelectEvent, onViewTask, timeFormat, onAddEvent }:
   );
 }
 
+const GOAL_KEY = 'owa_planned_goal';
+
 function EventDetails({ item, onEdit, onDelete, timeFormat }: { item: Extract<SelectedItem, {type: 'event'}>, onEdit?: (ev: PlanEvent) => void, onDelete?: (evId: string) => void, timeFormat?: '24h' | '12h' }) {
   const { event } = item;
 
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
+  const [goalId, setGoalId] = React.useState(() => localStorage.getItem(GOAL_KEY) || '');
+  const isGoal = goalId === event.id;
+
+  const toggleGoal = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isGoal) {
+      localStorage.removeItem(GOAL_KEY);
+      setGoalId('');
+    } else {
+      localStorage.setItem(GOAL_KEY, event.id);
+      setGoalId(event.id);
+    }
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 40, height: '100%' }}>
@@ -193,6 +209,12 @@ function EventDetails({ item, onEdit, onDelete, timeFormat }: { item: Extract<Se
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
           <div style={{ width: 10, height: 10, borderRadius: '50%', background: event.color, boxShadow: `0 0 16px ${event.color}80` }} />
           <span style={{ fontSize: 11, fontWeight: 700, color: event.color, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Evento programado</span>
+          <button onClick={toggleGoal} title={isGoal ? 'Quitar meta planificada' : 'Marcar como meta planificada'}
+            style={{ marginLeft: 'auto', padding: 6, borderRadius: 8, background: isGoal ? `${event.color}18` : 'transparent', border: `1px solid ${isGoal ? event.color : 'transparent'}`, cursor: 'pointer', color: isGoal ? event.color : 'var(--text-tertiary)', transition: 'all 200ms', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            onMouseEnter={e => { e.currentTarget.style.background = isGoal ? `${event.color}25` : 'var(--bg-hover)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = isGoal ? `${event.color}18` : 'transparent'; }}>
+            <Star size={16} fill={isGoal ? event.color : 'none'} />
+          </button>
         </div>
         <h2 style={{ fontSize: 32, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Outfit',sans-serif", lineHeight: 1.1, letterSpacing: '-0.02em', wordBreak: 'break-word' }}>
           {event.title}

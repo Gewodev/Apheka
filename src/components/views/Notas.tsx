@@ -676,144 +676,133 @@ interface IconPickerProps {
   currentIcon?: string;
   currentColor?: string;
   noteTitle?: string;
-  onSelect: (iconName: string, colorHex: string) => void;
+  onSelect: (iconName: string, color: string) => void;
   onClose: () => void;
 }
 
 function IconPicker({ currentIcon, currentColor, noteTitle, onSelect, onClose }: IconPickerProps) {
-  const [hoveredIcon, setHoveredIcon] = useState<string | null>(null);
-  const [activeColor, setActiveColor] = useState(currentColor || "#E11D48");
-  const [popupPos, setPopupPos] = useState<{ top: number; left: number } | null>(null);
-  const gridRef = useRef<HTMLDivElement>(null);
+  const [selectedIcon, setSelectedIcon] = useState(currentIcon || "FileText");
+  const [selectedColor, setSelectedColor] = useState(currentColor || SPINE_COLORS[0]);
 
   const IconForName = useCallback((name: string) => {
     const found = AVAILABLE_ICONS.find(i => i.name === name);
     return found ? found.icon : FileText;
   }, []);
 
-  const SelIcon = IconForName(currentIcon || "FileText");
-  const HovIcon = hoveredIcon ? IconForName(hoveredIcon) : null;
+  const SelIcon = IconForName(selectedIcon);
 
   return (
-    <div style={{
-      width: 380,
-      background: "var(--bg-elevated)", border: "1px solid var(--border-strong)",
-      borderRadius: "var(--radius-lg)", padding: 0,
-      boxShadow: "var(--shadow-elevated), 0 10px 30px rgba(0,0,0,0.5)",
+    <div className="bento-card" style={{
+      width: 400,
+      background: "var(--bg-elevated)", border: "1px solid var(--border-default)",
+      borderRadius: 16, padding: 0,
+      boxShadow: `0 20px 60px rgba(0,0,0,0.5), 0 0 0 1px ${selectedColor}15`,
       display: "flex", flexDirection: "column",
       animation: "fadeInDown 200ms ease-out",
+      overflow: "hidden",
     }} onClick={e => e.stopPropagation()}>
 
-      {/* Header */}
-      <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--border-default)", display: "flex", alignItems: "center", gap: 12 }}>
+      {/* Top: live preview card */}
+      <div style={{
+        padding: "24px 20px 16px",
+        display: "flex", flexDirection: "column", alignItems: "center", gap: 10,
+        borderBottom: "1px solid var(--border-soft)",
+        background: `linear-gradient(180deg, ${selectedColor}06 0%, transparent 100%)`,
+      }}>
+        {/* Icon preview with glow */}
         <div style={{
-          width: 40, height: 40, borderRadius: 10,
+          width: 76, height: 76, borderRadius: 20,
           display: "flex", alignItems: "center", justifyContent: "center",
-          background: activeColor + "18",
-          border: "1px solid " + activeColor + "30",
-          transition: "all 200ms",
+          background: `linear-gradient(135deg, ${selectedColor}20, ${selectedColor}06)`,
+          border: `1px solid ${selectedColor}20`,
+          boxShadow: `0 0 40px ${selectedColor}15, inset 0 0 40px ${selectedColor}06`,
+          transition: "all 300ms cubic-bezier(0.16, 1, 0.3, 1)",
         }}>
-          <SelIcon size={20} style={{ color: activeColor }} />
+          <SelIcon size={36} style={{
+            color: selectedColor,
+            filter: `drop-shadow(0 0 6px ${selectedColor}60)`,
+            transition: "all 300ms cubic-bezier(0.16, 1, 0.3, 1)",
+          }} />
         </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{noteTitle || "Sin título"}</div>
-          <div style={{ fontSize: 9, color: "var(--text-tertiary)", marginTop: 1 }}>{AVAILABLE_ICONS.find(i => i.name === (currentIcon || "FileText"))?.label || currentIcon}</div>
+
+        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)", letterSpacing: "-0.01em" }}>
+          {AVAILABLE_ICONS.find(i => i.name === selectedIcon)?.label || selectedIcon}
         </div>
-        <button onClick={onClose} style={{ width: 26, height: 26, borderRadius: 6, border: "none", background: "var(--bg-hover)", color: "var(--text-tertiary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          <X size={13} />
-        </button>
+
+        {/* Color swatches */}
+        <div style={{ display: "flex", gap: 5, flexWrap: "wrap", justifyContent: "center", marginTop: 2, padding: "0 4px" }}>
+          {SPINE_COLORS.map(c => (
+            <button key={c} onClick={() => setSelectedColor(c)}
+              title={c}
+              style={{
+                width: 22, height: 22, borderRadius: "50%",
+                background: `linear-gradient(135deg, ${c}, ${c}cc)`,
+                border: "none",
+                cursor: "pointer",
+                boxShadow: selectedColor === c
+                  ? `0 0 0 2px var(--bg-elevated), 0 0 0 4px ${c}80`
+                  : `0 0 0 1.5px ${c}40`,
+                transition: "all 200ms cubic-bezier(0.16, 1, 0.3, 1)",
+                transform: selectedColor === c ? "scale(1.15)" : "scale(1)",
+                outline: "none",
+              }}
+              onMouseEnter={e => { if (selectedColor !== c) { e.currentTarget.style.transform = "scale(1.12)"; e.currentTarget.style.boxShadow = `0 0 0 2px var(--bg-elevated), 0 0 0 3px ${c}60`; }}}
+              onMouseLeave={e => { if (selectedColor !== c) { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = `0 0 0 1.5px ${c}40`; }}}
+            />
+          ))}
+        </div>
       </div>
 
       {/* Icons Grid */}
-      <div ref={gridRef} style={{
-        overflowY: "auto", maxHeight: 260,
+      <div style={{
+        overflowY: "auto", maxHeight: 200,
         display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2,
         padding: "8px 10px",
-        position: "relative",
       }}>
         {AVAILABLE_ICONS.map(i => {
           const Icon = i.icon;
-          const isHovered = hoveredIcon === i.name;
+          const isActive = i.name === selectedIcon;
           return (
             <button key={i.name}
-              onMouseEnter={(e) => {
-                setHoveredIcon(i.name);
-                const rect = e.currentTarget.getBoundingClientRect();
-                const gridRect = gridRef.current?.getBoundingClientRect();
-                if (gridRect) {
-                  setPopupPos({
-                    left: Math.min(rect.left - gridRect.left, (gridRef.current?.clientWidth || 340) - 170),
-                    top: rect.bottom - gridRect.top + 4,
-                  });
-                }
-              }}
-              onMouseLeave={() => {}}
+              onClick={() => setSelectedIcon(i.name)}
               title={i.label}
               style={{
-                height: 34, borderRadius: 6,
-                border: "1px solid",
-                borderColor: isHovered ? activeColor : "transparent",
-                background: isHovered ? activeColor + "15" : "transparent",
-                color: isHovered ? activeColor : "var(--text-secondary)",
+                height: 34, borderRadius: 7,
+                border: isActive ? `1px solid ${selectedColor}50` : "1px solid transparent",
+                background: isActive ? `${selectedColor}12` : "transparent",
+                color: isActive ? selectedColor : "var(--text-tertiary)",
                 cursor: "pointer",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 transition: "all 100ms",
-              }}>
-              <Icon size={14} style={{ color: isHovered ? activeColor : undefined }} />
+              }}
+              onMouseEnter={e => { if (!isActive) { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text-secondary)"; }}}
+              onMouseLeave={e => { if (!isActive) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-tertiary)"; }}}>
+              <Icon size={14} />
             </button>
           );
         })}
+      </div>
 
-        {/* Color popup on hover */}
-        {hoveredIcon && popupPos && HovIcon && (
-          <div style={{
-            position: "absolute",
-            top: popupPos.top,
-            left: Math.max(0, popupPos.left),
-            width: 170,
-            background: "var(--bg-elevated)",
-            border: "1px solid var(--border-strong)",
-            borderRadius: "var(--radius-lg)",
-            boxShadow: "var(--shadow-elevated)",
-            padding: "8px 10px",
-            zIndex: 100,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: 8,
-          }}
-            onMouseEnter={() => setHoveredIcon(hoveredIcon)}
-            onMouseLeave={() => { setHoveredIcon(null); setPopupPos(null); }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
-              <HovIcon size={18} style={{ color: activeColor, flexShrink: 0 }} />
-              <span style={{ fontSize: 10, fontWeight: 600, color: "var(--text-secondary)" }}>
-                {AVAILABLE_ICONS.find(x => x.name === hoveredIcon)?.label || hoveredIcon}
-              </span>
-            </div>
-            <div style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(7, 1fr)",
-              gap: 4,
-              width: "100%",
-            }}>
-              {SPINE_COLORS.map(c => (
-                <button key={c}
-                  onClick={() => { setActiveColor(c); if (hoveredIcon) onSelect(hoveredIcon, c); }}
-                  style={{
-                    width: 18, height: 18, borderRadius: "50%",
-                    border: activeColor === c ? "2px solid var(--text-primary)" : "1px solid var(--border-default)",
-                    background: c,
-                    cursor: "pointer",
-                    boxShadow: activeColor === c ? `0 0 0 2px ${c}` : "none",
-                    transition: "all 120ms",
-                    transform: activeColor === c ? "scale(1.15)" : "scale(1)",
-                  }}
-                />
-              ))}
-            </div>
-          </div>
-        )}
+      {/* Footer */}
+      <div style={{ padding: "8px 12px", borderTop: "1px solid var(--border-soft)", display: "flex", justifyContent: "flex-end", gap: 6 }}>
+        <button onClick={onClose} style={{
+          padding: "6px 14px", borderRadius: 8, border: "1px solid var(--border-default)",
+          background: "transparent", color: "var(--text-secondary)", fontSize: 12, fontWeight: 500,
+          cursor: "pointer", transition: "all 150ms",
+        }}
+          onMouseEnter={e => { e.currentTarget.style.background = "var(--bg-hover)"; }}
+          onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+        >Cancelar</button>
+        <button onClick={() => { onSelect(selectedIcon, selectedColor); onClose(); }} style={{
+          padding: "6px 18px", borderRadius: 8, border: "none",
+          background: `linear-gradient(135deg, ${selectedColor}, ${selectedColor}cc)`,
+          color: "#fff", fontSize: 12, fontWeight: 600,
+          cursor: "pointer", boxShadow: `0 2px 8px ${selectedColor}30`,
+          transition: "all 150ms",
+        }}
+          onMouseEnter={e => { e.currentTarget.style.filter = "brightness(1.1)"; e.currentTarget.style.transform = "translateY(-1px)"; }}
+          onMouseLeave={e => { e.currentTarget.style.filter = "none"; e.currentTarget.style.transform = "none"; }}
+        >Seleccionar</button>
       </div>
     </div>
   );
@@ -2614,8 +2603,8 @@ export default function Notas() {
       {/* ===== MAIN GRID LAYOUT (toolbar + content inside one bento card) ===== */}
       {isEditing ? (
             /* ==================== INLINE EDITOR WORKSPACE ==================== */
-            <div style={{
-              display: "flex", flex: 1, minHeight: 0, background: "var(--bg-surface)",
+            <div className="bento-card" style={{
+              display: "flex", flex: 1, minHeight: 0, padding: 0, background: "var(--bg-surface)",
               border: "1px solid var(--border-default)", borderRadius: "var(--radius-lg)",
               overflow: "hidden",
             }}>
@@ -3066,8 +3055,8 @@ export default function Notas() {
             </div>
           ) : (
             /* ==================== MAIN CONTENT CARD ==================== */
-            <div style={{
-              display: "flex", flex: 1, minHeight: 0, overflow: "hidden",
+            <div className="bento-card" style={{
+              display: "flex", flex: 1, minHeight: 0, overflow: "hidden", padding: 0,
               background: "var(--bg-surface)",
               border: "1px solid var(--border-default)",
               borderRadius: "var(--radius-xl)",
@@ -3587,16 +3576,15 @@ export default function Notas() {
 
                 {/* ==================== LATERAL OVERLAY DRAWER PANEL ==================== */}
                 {/* Slides in from right, uses app theme colors */}
-                <div style={{
-                  position: "absolute", right: 0, top: 0, bottom: 0,
+                <div className="bento-card notes-lateral-drawer" style={{
+                  position: "absolute", right: 0, top: 0, bottom: 0, padding: 0,
                   width: selectedNote ? (isMaximized ? "85%" : "48%") : 0,
                   opacity: selectedNote ? 1 : 0,
                   pointerEvents: selectedNote ? "all" : "none",
                   transform: selectedNote ? "translateX(0)" : "translateX(30px)",
                   transition: "all 300ms " + EASE,
                   zIndex: 80,
-                  background: "var(--bg-surface)",
-                  backdropFilter: "blur(24px)",
+                  background: "var(--bg-elevated)",
                   borderLeft: "1px solid var(--border-strong)",
                   borderRadius: "16px 0 0 16px",
                   boxShadow: "-12px 0 40px rgba(0,0,0,0.25)",
@@ -3604,112 +3592,115 @@ export default function Notas() {
                 }}>
                   {selectedNote && (
                     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
-                      {/* Drawer Toolbar */}
-                      <div style={{
-                        display: "flex", alignItems: "center", justifyContent: "space-between",
-                        padding: "12px 16px", borderBottom: "1px solid var(--border-default)",
-                      }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          <button onClick={() => setSelectedNoteId(null)}
-                            style={{
-                              background: "none", border: "none", color: "var(--text-secondary)",
-                              padding: 6, display: "flex", borderRadius: 6, cursor: "pointer",
-                            }}
-                            className="hover:bg-[var(--bg-hover)]">
-                            <X size={15} />
-                          </button>
+                      {/* Drawer Header (toolbar + tabs) — darker bg */}
+                      <div className="notes-drawer-header">
+                        {/* Drawer Toolbar */}
+                        <div style={{
+                          display: "flex", alignItems: "center", justifyContent: "space-between",
+                          padding: "12px 16px", borderBottom: "1px solid var(--border-default)",
+                        }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <button onClick={() => setSelectedNoteId(null)}
+                              style={{
+                                background: "none", border: "none", color: "var(--text-secondary)",
+                                padding: 6, display: "flex", borderRadius: 6, cursor: "pointer",
+                              }}
+                              className="hover:bg-[var(--bg-hover)]">
+                              <X size={15} />
+                            </button>
 
-                          {/* Maximize Toggle button */}
-                          <button onClick={() => setIsMaximized(!isMaximized)}
-                            style={{
-                              background: "none", border: "1px solid var(--border-default)",
-                              color: "var(--text-secondary)", padding: 6, borderRadius: 6,
-                              display: "flex", cursor: "pointer",
-                            }}
-                            className="hover:bg-[var(--bg-hover)]"
-                            title={isMaximized ? "Restaurar vista" : "Ampliar vista"}>
-                            {isMaximized ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
-                          </button>
+                            {/* Maximize Toggle button */}
+                            <button onClick={() => setIsMaximized(!isMaximized)}
+                              style={{
+                                background: "none", border: "1px solid var(--border-default)",
+                                color: "var(--text-secondary)", padding: 6, borderRadius: 6,
+                                display: "flex", cursor: "pointer",
+                              }}
+                              className="hover:bg-[var(--bg-hover)]"
+                              title={isMaximized ? "Restaurar vista" : "Ampliar vista"}>
+                              {isMaximized ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+                            </button>
+                          </div>
+
+                          {/* Top quick actions — icon only */}
+                          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <button onClick={() => updateNote(selectedNote.id, { isPinned: !selectedNote.isPinned })}
+                              title={selectedNote.isPinned ? "Desfijar" : "Fijar"}
+                              style={{
+                                background: selectedNote.isPinned ? "rgba(245, 158, 11, 0.1)" : "none",
+                                border: "1px solid " + (selectedNote.isPinned ? "#F59E0B" : "var(--border-default)"),
+                                color: selectedNote.isPinned ? "#F59E0B" : "var(--text-secondary)",
+                                width: 30, height: 30, borderRadius: 6, display: "flex", cursor: "pointer",
+                                alignItems: "center", justifyContent: "center",
+                              }}>
+                              <Star size={12} fill={selectedNote.isPinned ? "#F59E0B" : "none"} />
+                            </button>
+
+                            {(() => {
+                              const fc = folders.find(f => f.id === selectedNote.folderId);
+                              return (
+                                <button onClick={() => setShowMoveModal(true)}
+                                  title="Mover"
+                                  style={{
+                                    background: "none", border: "1px solid " + (fc ? fc.color + "30" : "var(--border-default)"),
+                                    color: fc ? fc.color : "var(--text-secondary)",
+                                    width: 30, height: 30, borderRadius: 6,
+                                    display: "flex", cursor: "pointer", alignItems: "center", justifyContent: "center",
+                                  }}>
+                                  <FolderIcon size={12} />
+                                </button>
+                              );
+                            })()}
+
+                            <button onClick={() => { handleSelectNote(selectedNote!.id); handleOpenNote(); }}
+                              title="Editar"
+                              style={{
+                                background: "var(--accent)", color: "#fff", border: "none",
+                                width: 30, height: 30, borderRadius: 6,
+                                display: "flex", cursor: "pointer",
+                                alignItems: "center", justifyContent: "center",
+                                boxShadow: "0 2px 8px var(--accent-glow)",
+                              }}>
+                              <Edit3 size={12} />
+                            </button>
+
+                            <button onClick={() => setDeleteConfirmNoteId(selectedNote!.id)}
+                              title="Eliminar"
+                              style={{
+                                background: "none", border: "1px solid var(--border-default)",
+                                color: "var(--error)", width: 30, height: 30, borderRadius: 6,
+                                display: "flex", cursor: "pointer", alignItems: "center", justifyContent: "center",
+                              }}>
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
                         </div>
 
-                        {/* Top quick actions — icon only */}
-                        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                          <button onClick={() => updateNote(selectedNote.id, { isPinned: !selectedNote.isPinned })}
-                            title={selectedNote.isPinned ? "Desfijar" : "Fijar"}
-                            style={{
-                              background: selectedNote.isPinned ? "rgba(245, 158, 11, 0.1)" : "none",
-                              border: "1px solid " + (selectedNote.isPinned ? "#F59E0B" : "var(--border-default)"),
-                              color: selectedNote.isPinned ? "#F59E0B" : "var(--text-secondary)",
-                              width: 30, height: 30, borderRadius: 6, display: "flex", cursor: "pointer",
-                              alignItems: "center", justifyContent: "center",
-                            }}>
-                            <Star size={12} fill={selectedNote.isPinned ? "#F59E0B" : "none"} />
-                          </button>
-
-                          {(() => {
-                            const fc = folders.find(f => f.id === selectedNote.folderId);
-                            return (
-                              <button onClick={() => setShowMoveModal(true)}
-                                title="Mover"
-                                style={{
-                                  background: "none", border: "1px solid " + (fc ? fc.color + "30" : "var(--border-default)"),
-                                  color: fc ? fc.color : "var(--text-secondary)",
-                                  width: 30, height: 30, borderRadius: 6,
-                                  display: "flex", cursor: "pointer", alignItems: "center", justifyContent: "center",
-                                }}>
-                                <FolderIcon size={12} />
-                              </button>
-                            );
-                          })()}
-
-                          <button onClick={() => { handleSelectNote(selectedNote!.id); handleOpenNote(); }}
-                            title="Editar"
-                            style={{
-                              background: "var(--accent)", color: "#fff", border: "none",
-                              width: 30, height: 30, borderRadius: 6,
-                              display: "flex", cursor: "pointer",
-                              alignItems: "center", justifyContent: "center",
-                              boxShadow: "0 2px 8px var(--accent-glow)",
-                            }}>
-                            <Edit3 size={12} />
-                          </button>
-
-                          <button onClick={() => setDeleteConfirmNoteId(selectedNote!.id)}
-                            title="Eliminar"
-                            style={{
-                              background: "none", border: "1px solid var(--border-default)",
-                              color: "var(--error)", width: 30, height: 30, borderRadius: 6,
-                              display: "flex", cursor: "pointer", alignItems: "center", justifyContent: "center",
-                            }}>
-                            <Trash2 size={12} />
-                          </button>
+                        {/* Tabs */}
+                        <div style={{
+                          display: "flex", gap: 2,
+                          borderBottom: "1px solid var(--border-default)", padding: "0 12px",
+                          background: "var(--bg-elevated)",
+                        }}>
+                          {["contenido", "informacion", "historial"].map((tab) => (
+                            <button key={tab} onClick={() => setDrawerTab(tab as any)}
+                              style={{
+                                padding: "10px 12px", border: "none", background: drawerTab === tab ? "var(--bg-surface)" : "none",
+                                color: drawerTab === tab ? "var(--accent)" : "var(--text-tertiary)",
+                                fontSize: 11.5, fontWeight: 600, cursor: "pointer",
+                                borderRadius: "8px 8px 0 0",
+                                textTransform: "capitalize", transition: "all 150ms",
+                                marginBottom: -1, borderBottom: "2px solid " + (drawerTab === tab ? "var(--accent)" : "transparent"),
+                              }}
+                              className={drawerTab !== tab ? "hover:text-[var(--text-secondary)]" : ""}>
+                              {tab === "contenido" ? "Contenido" : tab === "informacion" ? "Metadatos" : "Historial"}
+                            </button>
+                          ))}
                         </div>
-                      </div>
-
-                      {/* Tabs */}
-                      <div style={{
-                        display: "flex", gap: 2,
-                        borderBottom: "1px solid var(--border-default)", padding: "0 12px",
-                        background: "var(--bg-elevated)",
-                      }}>
-                        {["contenido", "informacion", "historial"].map((tab) => (
-                          <button key={tab} onClick={() => setDrawerTab(tab as any)}
-                            style={{
-                              padding: "10px 12px", border: "none", background: drawerTab === tab ? "var(--bg-surface)" : "none",
-                              color: drawerTab === tab ? "var(--accent)" : "var(--text-tertiary)",
-                              fontSize: 11.5, fontWeight: 600, cursor: "pointer",
-                              borderRadius: "8px 8px 0 0",
-                              textTransform: "capitalize", transition: "all 150ms",
-                              marginBottom: -1, borderBottom: "2px solid " + (drawerTab === tab ? "var(--accent)" : "transparent"),
-                            }}
-                            className={drawerTab !== tab ? "hover:text-[var(--text-secondary)]" : ""}>
-                            {tab === "contenido" ? "Contenido" : tab === "informacion" ? "Metadatos" : "Historial"}
-                          </button>
-                        ))}
                       </div>
 
                       {/* Tab panel content */}
-                      <div style={{ flex: 1, overflow: "auto", padding: "16px 20px 24px" }}>
+                      <div className="notes-drawer-content" style={{ flex: 1, overflow: "auto", padding: "16px 20px 24px" }}>
                         {drawerTab === "contenido" && (
                           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                             <h2 style={{
@@ -4048,9 +4039,9 @@ export default function Notas() {
               currentIcon={notes.find(n => n.id === iconPickerTarget)?.coverImage}
               currentColor={notes.find(n => n.id === iconPickerTarget)?.coverColor}
               noteTitle={notes.find(n => n.id === iconPickerTarget)?.title}
-              onSelect={(ico, col) => {
-                if (iconPickerTarget) updateNoteVisual(iconPickerTarget, { coverImage: ico, coverColor: col });
-              }}
+               onSelect={(ico, col) => {
+                 if (iconPickerTarget) updateNoteVisual(iconPickerTarget, { coverImage: ico, coverColor: col });
+               }}
               onClose={() => { setShowIconPicker(false); setIconPickerTarget(null); }}
             />
           </div>

@@ -331,6 +331,8 @@ export default function NowPlayingView({ sidebarCollapsed, activeView }: { sideb
 
   // Whether to show blurred cover or not
   const showBlurredCover = coverBgMode === 'auto' && hasCover;
+  // Theme mode: show app bg image behind
+  const showThemeBg = coverBgMode === 'theme' && !!settings.backgroundImage;
   const isLightBg = hasCover ? isLight(dominantColor) : !isDarkMode;
   const textMain = isLightBg ? '#1a1a1a' : '#fff';
   const textMuted = isLightBg ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.5)';
@@ -363,6 +365,20 @@ export default function NowPlayingView({ sidebarCollapsed, activeView }: { sideb
             filter: 'blur(120px) saturate(2.2)',
             transform: visible ? 'scale(1.3)' : 'scale(1.5)',
             transition: 'background-image 600ms ease, transform 500ms ease',
+          }}
+        />
+      )}
+
+      {/* Theme mode: app background image blurred behind */}
+      {showThemeBg && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: -200,
+            background: `url(${settings.backgroundImage}) center/cover no-repeat`,
+            filter: 'blur(80px) brightness(var(--bg-brightness, 100%))',
+            transform: visible ? 'scale(1.3)' : 'scale(1.5)',
+            transition: 'transform 500ms ease',
           }}
         />
       )}

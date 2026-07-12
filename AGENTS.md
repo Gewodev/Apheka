@@ -61,8 +61,8 @@ Three root causes fixed:
 ### Icon Picker (Notas Generales)
 - Only accessible in Notas Generales (not in Cursos overview).
 - Shows ~280+ lucide-react icons in a scrollable grid (7 columns).
-- **Only changes the icon** (name/symbol), never the color — color stays fixed from note's existing `coverColor`.
-- No color swatches or color picker. Preview shows selected icon with note's existing color.
+- **Changes both icon AND color**: color swatches shown inline below icon grid. Preview updates live showing selected icon + selected color. Two-step flow: select icon + color, then "Seleccionar" button commits both to `coverImage` + `coverColor`.
+- Color swatches are the same 20 used across Owa (course colors, tag colors, note folder colors). Uses `onNoteColorChange` to persist.
 - "Seleccionar" or "OK" to confirm.
 
 ### Notas — Notes Tab
@@ -84,3 +84,16 @@ Three root causes fixed:
 - **Weighted shuffle**: `weightedShuffle` in AppContext replaces `shuffleArray` — weight = `1/(playCount+1)` so unplayed tracks dominate over played ones. Used in all 4 queue-refill paths.
 - **Context preservation**: `handlePlayWithTabCb` removed auto-detection (no longer auto-switches tabs). Single-track clicks from artista/playlist views now call `setQueueSource({ pool: artistTracks / plTracks })`, so "next" plays within the same context.
 - **Statistics coherence**: `weeklyMusicTime` and `monthlyMusicTime` are now computed from `dailyMusicTime` via `useMemo` instead of separate accumulators, eliminating the week > month drift. Weekly/monthly state variables and reset logic removed.
+
+## Background Image & Panel Opacity
+- **`bg.jpg`** set as the `<html>` background via `coverPreview` state in `AppContext`. The `<html>` element gets `data-has-bg` and a `background-image: url(...)` style when a valid coverPath is detected.
+- **Panel opacity slider** controls `--ui-opacity` (0.3–1.0, default 0.85) — only applies when `data-has-bg` is active. When no bg is set, all panels stay fully opaque.
+- **Under `[data-has-bg]`**: `.page-container` and `.sidebar` get a translucent `--bg-base` layer + `backdrop-filter` blur — this is the main dimming layer controlled by the opacity slider.
+- **`.bento-card` under `[data-has-bg]`**: `background: color-mix(in srgb, var(--bg-elevated-raw) 15%, transparent) !important` — subtle fill (15% elevated color) + `backdrop-filter` blur. Panels show the bg through but have enough base for content readability. Borders remain visible (inline `border-color` overridden by the base `.bento-card` CSS).
+- **No global `--bg-elevated` override**: Form controls (inputs, selects, buttons, chips) that use `background: var(--bg-elevated)` stay fully opaque for usability. Only `.bento-card` panels become translucent.
+- **All panel blocks across the app have `bento-card` class**: Inicio (7 grid blocks + 2 modals), Ajustes (27 panels + sidebar + 4 modals), Estudio (1 panel + 5 modals), Música (14 panels + 2 artist/playlist cards + YouTube modal), Tareas (list table + 6 modals), CursosHub (2 modals).
+- **`--bg-elevated-raw`** defined in each theme as a reference value (not currently used in overrides).
+- **backdrop-filter blur** on `.page-container`, `.sidebar`, `.bento-card`, and any element with inline `--bg-elevated`/`--bg-surface` styles via `[data-has-bg]` rules.
+- **`.estudio-stats`** overrides `--ui-opacity: 0.92` for legibility.
+- **Inicio stat blocks** redesigned with premium styling: small uppercase label, big value, thin colored right-border accent, subtle icon glow, compact layout.
+- **Inicio mobile**: Racha stat card uses `col-span-2 lg:col-span-1` to prevent empty column on mobile.

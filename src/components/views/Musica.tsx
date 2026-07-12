@@ -628,7 +628,7 @@ export default function Musica() {
                     {artists.map(artist => {
                       const artistTracks = tracks.filter(t => t.artist === artist.name);
                       return (
-                        <div key={artist.id} className="hover-lift" style={{ padding: '32px 20px', borderRadius: 16, border: '1px solid var(--border-subtle)', transition: 'all 250ms', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, position: 'relative', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', cursor: 'pointer' }}
+                        <div key={artist.id} className="hover-lift bento-card" style={{ padding: '32px 20px', borderRadius: 16, border: '1px solid var(--border-subtle)', transition: 'all 250ms', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, position: 'relative', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', cursor: 'pointer' }}
                           onClick={() => setSelectedArtist(artist.name)}>
                           <div style={{ width: 110, height: 110, borderRadius: '50%', background: artist.profileImage ? 'var(--bg-surface)' : `color-mix(in srgb, var(--accent) 30%, var(--bg-deep))`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 32, fontWeight: 700, boxShadow: '0 6px 20px rgba(0,0,0,0.35)', overflow: 'hidden' }}>
                             {artist.profileImage ? <img src={artist.profileImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : artist.name.slice(0, 2).toUpperCase()}
@@ -742,7 +742,7 @@ export default function Musica() {
                       const plTracks = pl.trackIds.map(id => tracks.find(t => t.id === id)).filter((t): t is Track => !!t);
                       const firstCover = plTracks.find(t => t.coverImage)?.coverImage || pl.coverImage;
                       return (
-                        <div key={pl.id} className="hover-lift" style={{ padding: '24px', borderRadius: 16, border: '1px solid var(--border-subtle)', transition: 'all 250ms', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, position: 'relative', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', cursor: 'pointer' }}
+                        <div key={pl.id} className="hover-lift bento-card" style={{ padding: '24px', borderRadius: 16, border: '1px solid var(--border-subtle)', transition: 'all 250ms', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, position: 'relative', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', cursor: 'pointer' }}
                           onClick={() => setSelectedPlaylistId(pl.id)}>
                           <div style={{ width: 150, height: 150, borderRadius: 16, background: firstCover ? 'var(--bg-surface)' : `color-mix(in srgb, var(--accent) 25%, var(--bg-deep))`, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 28px rgba(0,0,0,0.35)', overflow: 'hidden', position: 'relative' }}>
                             {firstCover ? <img src={firstCover} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={40} style={{ color: 'var(--text-muted)', opacity: 0.3 }} />}
@@ -2134,7 +2134,7 @@ export default function Musica() {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(8px)',
         }} onClick={() => { setYoutubePlayerUrl(null); }}>
-          <div onClick={e => e.stopPropagation()} style={{
+          <div onClick={e => e.stopPropagation()} className="bento-card" style={{
             width: '90%', maxWidth: 480,
             borderRadius: 16, overflow: 'hidden',
             background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)',

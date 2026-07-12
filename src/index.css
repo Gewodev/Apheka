@@ -20,7 +20,8 @@
   /* ── DARK THEME (Default) ── */
   --bg-base: #0a0a0c;
   --bg-surface: #111114;
-  --bg-elevated: #18181b;
+  --bg-elevated-raw: #18181b;
+  --bg-elevated: var(--bg-elevated-raw);
   --bg-hover: rgba(255, 255, 255, 0.03);
   --bg-active: rgba(255, 255, 255, 0.05);
   --bg-deep: #06060a;
@@ -85,7 +86,8 @@
 [data-theme='claro'] {
   --bg-base: #f8fafc;
   --bg-surface: #ffffff;
-  --bg-elevated: #f1f5f9;
+  --bg-elevated-raw: #f1f5f9;
+  --bg-elevated: var(--bg-elevated-raw);
   --bg-hover: rgba(0, 0, 0, 0.04);
   --bg-active: rgba(0, 0, 0, 0.06);
   --bg-deep: #e2e8f0;
@@ -204,6 +206,67 @@ body {
   box-shadow: 4px 0 32px rgba(0, 0, 0, 0.3);
   position: relative;
   z-index: 10;
+}
+
+/* ── Background image active: panels get opacity-based translucency + blur ── */
+[data-has-bg] .page-container,
+[data-has-bg] .sidebar {
+  background: color-mix(in srgb, var(--bg-base) calc(var(--ui-opacity, 0.85) * 100%), transparent);
+  backdrop-filter: blur(var(--bg-blur, 0px));
+  -webkit-backdrop-filter: blur(var(--bg-blur, 0px));
+}
+[data-has-bg] .cursos-root-view {
+  background: color-mix(in srgb, var(--bg-base) calc(var(--ui-opacity, 0.85) * 100%), transparent) !important;
+  backdrop-filter: blur(var(--bg-blur, 0px));
+  -webkit-backdrop-filter: blur(var(--bg-blur, 0px));
+}
+[data-has-bg] .sidebar {
+  background: color-mix(in srgb, var(--bg-base) calc(var(--ui-opacity, 0.85) * 100%), transparent);
+  backdrop-filter: blur(var(--bg-blur, 0px));
+  -webkit-backdrop-filter: blur(var(--bg-blur, 0px));
+}
+[data-has-bg] .bento-card {
+  background: color-mix(in srgb, var(--bg-elevated-raw) calc(var(--ui-opacity, 0.85) * 100%), transparent) !important;
+  backdrop-filter: blur(var(--bg-blur, 0px));
+  -webkit-backdrop-filter: blur(var(--bg-blur, 0px));
+  border-color: var(--border-strong) !important;
+}
+[data-has-bg] .estudio-stats .stat-card {
+  background: color-mix(in srgb, var(--bg-deep) calc(min(var(--ui-opacity, 0.85) * 1.15, 1) * 100%), transparent) !important;
+}
+[data-has-bg] .bento-card [style*="--bg-"],
+[data-has-bg] .bento-card [style*="--surface"] {
+  background: transparent !important;
+}
+[data-has-bg] .notes-lateral-drawer {
+  background: color-mix(in srgb, var(--bg-elevated-raw) calc(var(--ui-opacity, 0.85) * 100%), transparent) !important;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+[data-has-bg] .notes-lateral-drawer [style*="--bg-"],
+[data-has-bg] .notes-lateral-drawer [style*="--surface"] {
+  background: color-mix(in srgb, var(--bg-base) 70%, transparent) !important;
+}
+[data-has-bg] .notes-drawer-header {
+  background: color-mix(in srgb, var(--bg-elevated-raw) 85%, transparent) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+[data-has-bg] .notes-drawer-content {
+  background: color-mix(in srgb, var(--bg-elevated-raw) 85%, transparent) !important;
+}
+[data-has-bg] .notes-editor-area {
+  background: color-mix(in srgb, var(--bg-base) 20%, transparent) !important;
+}
+[data-has-bg] {
+  --bg-elevated-alpha: color-mix(in srgb, var(--bg-elevated-raw) calc(var(--ui-opacity, 0.85) * 100%), transparent);
+  --bg-surface-alpha: color-mix(in srgb, var(--bg-surface) calc(var(--ui-opacity, 0.85) * 100%), transparent);
+}
+[data-has-bg] .item-card {
+  background: color-mix(in srgb, var(--bg-elevated-raw) calc(var(--ui-opacity, 0.85) * 100%), transparent) !important;
+}
+[data-has-bg] .board-card {
+  background: color-mix(in srgb, var(--bg-elevated-raw) calc(var(--ui-opacity, 0.85) * 100%), transparent) !important;
 }
 
 [data-theme='claro'] .sidebar {
@@ -523,7 +586,6 @@ body {
 }
 
 .main-area > .page-container {
-  opacity: var(--ui-opacity, 0.85);
 }
 
 .page-container {
@@ -559,7 +621,8 @@ body {
 [data-theme='vibrante'] {
   --bg-base: #0c0a1a;
   --bg-surface: #120f24;
-  --bg-elevated: #1a1630;
+  --bg-elevated-raw: #1a1630;
+  --bg-elevated: var(--bg-elevated-raw);
   --bg-hover: rgba(139, 92, 246, 0.06);
   --bg-active: rgba(139, 92, 246, 0.10);
   --bg-deep: #08061a;
@@ -1104,7 +1167,8 @@ h6,
 }
 
 .hover-lift:hover {
-  transform: translateY(-1px);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
 }
 
 .truncate {

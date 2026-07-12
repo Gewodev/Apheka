@@ -197,7 +197,7 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
       }}>
           {hasTrack && (
           <div style={{
-            background: `color-mix(in srgb, var(--bg-primary) 78%, transparent)`,
+            background: `color-mix(in srgb, var(--bg-primary) calc(var(--ui-opacity, 0.85) * 100%), transparent)`,
             backdropFilter: 'blur(16px)',
             WebkitBackdropFilter: 'blur(16px)',
             borderTop: settings.playerBarEnabled && settings.playerBarBorderColor
@@ -307,7 +307,8 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                   </button>
                   <button onClick={() => {
                     const idx = tracks.findIndex(t => t.id === currentTrackId);
-                    if (idx > 0) playTrack(tracks[idx - 1].id);
+                    const prevIdx = idx > 0 ? idx - 1 : tracks.length - 1;
+                    playTrack(tracks[prevIdx].id);
                   }}
                     style={{ background: 'none', border: 'none', padding: 8, cursor: 'pointer', color: 'var(--text-tertiary)', display: 'flex', borderRadius: 6, transition: 'color 150ms' }}
                     onMouseEnter={e => { e.currentTarget.style.color = acC; e.currentTarget.style.background = 'var(--bg-hover)'; }}
@@ -337,8 +338,8 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                   </button>
                   <button onClick={() => {
                     const idx = tracks.findIndex(t => t.id === currentTrackId);
-                    if (idx < tracks.length - 1) playTrack(tracks[idx + 1].id);
-                    else if (repeatMode === 'all' && tracks.length > 0) playTrack(tracks[0].id);
+                    const nextIdx = idx < tracks.length - 1 ? idx + 1 : 0;
+                    playTrack(tracks[nextIdx].id);
                   }}
                     style={{ background: 'none', border: 'none', padding: 8, cursor: 'pointer', color: 'var(--text-tertiary)', display: 'flex', borderRadius: 6, transition: 'color 150ms' }}
                     onMouseEnter={e => { e.currentTarget.style.color = acC; e.currentTarget.style.background = 'var(--bg-hover)'; }}

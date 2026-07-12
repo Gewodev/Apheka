@@ -541,7 +541,7 @@ export default function Tareas() {
     <div className="page-container flex flex-col h-full overflow-y-auto custom-scroll" style={{ gap: 20 }}>
 
       {/* HEADER */}
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, padding: '14px 20px', flexShrink: 0, background: 'var(--bg-surface)', borderRadius: 12, border: '1px solid var(--border-subtle)' }}>
+      <header className="bento-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, padding: '14px 20px', flexShrink: 0, background: 'var(--bg-surface)', borderRadius: 12, border: '1px solid var(--border-subtle)' }}>
         <h1 style={{ fontFamily: "'Inter Tight', sans-serif", fontWeight: 300, fontSize: 32, lineHeight: 1.4, letterSpacing: '0.02em', color: 'var(--text-primary)' }}>Tareas</h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, position: 'relative' }}>
           <NotificationBell />
@@ -556,7 +556,7 @@ export default function Tareas() {
 
       {/* TOOLBAR */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 14, flexShrink: 0 }}>
-        <div style={{ display: 'flex', gap: 3, padding: 3, borderRadius: 10, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
+        <div className="bento-card" style={{ display: 'flex', gap: 3, padding: 3, borderRadius: 10, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
           {[
             { id: 'list', label: 'Lista', icon: ListIcon },
             { id: 'board', label: 'Tablero', icon: LayoutGrid },
@@ -606,7 +606,7 @@ export default function Tareas() {
 
           {/* LIST VIEW */}
         {viewMode === 'list' && (
-            <div style={{ width: '100%', display: 'flex', flexDirection: 'column', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 12, flex: 1 }}>
+            <div className="bento-card" style={{ width: '100%', display: 'flex', flexDirection: 'column', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 12, flex: 1 }}>
               {/* Column headers */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 0, padding: '11px 18px 11px 12px', borderBottom: '1px solid var(--border-soft)', flexShrink: 0, background: 'var(--bg-elevated)', borderRadius: '12px 12px 0 0' }}>
                 <span style={{ width: 30, flexShrink: 0 }} />
@@ -758,7 +758,7 @@ export default function Tareas() {
               ].map(col => {
                 const colTasks = tasks.filter(t => t.status === col.status);
                 return (
-                  <div key={col.status}
+                  <div key={col.status} className="bento-card"
                     onDragOver={e => e.preventDefault()}
                     onDrop={e => {
                       e.preventDefault();
@@ -789,7 +789,7 @@ export default function Tareas() {
                       )) : colTasks.map((task, i) => {
                         const tr = task.dueDate ? getTimeRemaining(task.dueDate) : null;
                         return (
-                        <div key={task.id} draggable onDragStart={e => handleDragStart(e, task.id)} onDragEnd={handleDragEnd} onClick={() => handleOpenDetail(task.id)}
+                        <div key={task.id} className="board-card hover:bg-white/[0.03]" draggable onDragStart={e => handleDragStart(e, task.id)} onDragEnd={handleDragEnd} onClick={() => handleOpenDetail(task.id)}
                           style={{
                             position: 'relative',
                             padding: '14px 14px 12px',
@@ -805,8 +805,7 @@ export default function Tareas() {
                             boxSizing: 'border-box',
                             marginTop: 4,
                             opacity: draggingTaskId === task.id ? 0.35 : 1,
-                          }}
-                          className="hover:bg-white/[0.03]">
+                          }}>
                           {/* Curso + Tiempo restante — juntos en fila superior */}
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                             {task.course && task.course !== 'Sin curso' ? (
@@ -867,7 +866,7 @@ export default function Tareas() {
 
           {/* CALENDAR VIEW */}
           {viewMode === 'calendar' && (
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 12 }}>
+            <div className="bento-card" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative', padding: 0, background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 12 }}>
               {/* Calendar Header */}
               <div style={{ padding: '12px 16px', background: 'var(--bg-elevated)', borderBottom: '1px solid var(--border-soft)', borderRadius: '12px 12px 0 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -1172,7 +1171,7 @@ export default function Tareas() {
 
         {/* RIGHT PANEL */}
         {(viewMode === 'list' || viewMode === 'board') && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto', paddingBottom: 8 }}>
+        <div className="bento-card" style={{ display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto', padding: 8, background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 12, justifyContent: 'center' }}>
           {(() => {
             const isBoard = viewMode === 'board';
             const sz = isBoard ? 130 : 170;
@@ -1325,7 +1324,7 @@ export default function Tareas() {
       {/* TASK DETAIL PANEL */}
       {selectedTaskId && selectedTask && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', justifyContent: 'flex-end', background: 'color-mix(in srgb, var(--bg-base) 65%, transparent)', backdropFilter: 'blur(6px)' }} onClick={() => { setSelectedTaskId(null); setShowAddMaterial(false); setPdfPreviewUrl(null); setPreviewModalUrl(null); }}>
-          <div className="bento-card" style={{ width: '100%', maxWidth: 520, height: '100%', borderRadius: 0, borderLeft: `3px solid ${statusConfig[selectedTask.status]?.color || 'var(--border-default)'}`, padding: 0, display: 'flex', flexDirection: 'column', background: 'var(--bg-primary)' }} onClick={e => e.stopPropagation()}>
+          <div className="bento-card" style={{ width: '100%', maxWidth: 520, height: '100dvh', borderRadius: 0, borderLeft: `3px solid ${statusConfig[selectedTask.status]?.color || 'var(--border-default)'}`, padding: 0, display: 'flex', flexDirection: 'column', background: 'var(--bg-primary)' }} onClick={e => e.stopPropagation()}>
             {/* Header — barra coloreada */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderBottom: `1px solid ${statusConfig[selectedTask.status]?.color}25`, flexShrink: 0, background: `${statusConfig[selectedTask.status]?.color}06` }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

@@ -206,8 +206,10 @@ function AppContent() {
 
     if (settings.backgroundImage) {
       applyBg(settings.backgroundImage);
+      document.documentElement.dataset.hasBg = 'true';
     } else {
       removeBg();
+      delete document.documentElement.dataset.hasBg;
     }
     
     root.style.setProperty('--ui-opacity', (settings.uiOpacity ?? 0.85).toString());

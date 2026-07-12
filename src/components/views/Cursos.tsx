@@ -1177,10 +1177,10 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
 
   // ─── RENDER ───
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg-base)', overflow: 'hidden' }}>
+    <div className="cursos-root-view" style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg-base)', overflow: 'hidden' }}>
       {/* Breadcrumb - only when not in overview */}
       {activeTab !== 'overview' && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 20px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0, background: 'var(--bg-surface)' }}>
+        <div className="bento-card" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 20px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0, background: 'var(--bg-surface)' }}>
           <button onClick={() => setNavigateTo('cursos')} style={{ display: 'flex', alignItems: 'center', gap: 4, height: 26, padding: '0 8px', borderRadius: 6, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 11, fontWeight: 500 }}
             onMouseEnter={e => e.currentTarget.style.color = 'var(--text-secondary)'}
             onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
@@ -1196,7 +1196,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
 
       {/* Tabs - only when not in overview */}
       {activeTab !== 'overview' && currentView === 'overview' && (
-        <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--border-subtle)', flexShrink: 0, background: 'var(--bg-surface)', padding: '0 20px' }}>
+        <div className="bento-card" style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--border-subtle)', flexShrink: 0, background: 'var(--bg-surface)', padding: '0 20px' }}>
           {(['overview', 'tareas', 'notas', 'archivos'] as const).map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)}
               style={{
@@ -1324,7 +1324,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                 {/* ─── LEFT: Tasks — AETHER CLONE (3/5) ─── */}
                 <div style={{ flex: 3, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 24 }}>
                   {/* Task Creator Card */}
-                  <div style={{ borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', overflow: 'hidden', boxShadow: '0 1px 8px rgba(0,0,0,0.04)' }}>
+                  <div className="bento-card" style={{ borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', overflow: 'hidden', padding: 0, boxShadow: '0 1px 8px rgba(0,0,0,0.04)' }}>
                     <div style={{ padding: '14px 16px' }}>
                       <input value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} placeholder="Nombre de la tarea"
                         style={{ width: '100%', border: 'none', borderBottom: 'none', height: 'auto', padding: '2px 0', fontSize: 16, fontWeight: 600, background: 'transparent', color: 'var(--text-primary)', outline: 'none', fontFamily: "'Inter Tight', sans-serif", borderRadius: 0, letterSpacing: '-0.02em' }}
@@ -1395,7 +1395,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                           }
                           const isDone = task.status === 'completado';
                           return (
-                            <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, border: '1px solid var(--border-subtle)', background: isDone ? 'var(--bg-surface)' : 'var(--bg-elevated)', transition: 'all 200ms ' + EASE, opacity: isDone ? 0.7 : 1 }}
+                            <div key={task.id} className={isDone ? '' : 'item-card'} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, border: '1px solid var(--border-subtle)', background: isDone ? 'var(--bg-surface-alpha, var(--bg-surface))' : 'var(--bg-elevated-alpha, var(--bg-elevated))', transition: 'all 200ms ' + EASE, opacity: isDone ? 0.7 : 1 }}
                               onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}30`; }}
                               onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; }}>
                               <div onClick={() => handleToggleTask(task.id)}
@@ -1618,7 +1618,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                     ].map(s => {
                       const Icon = s.icon;
                       return (
-                        <div key={s.label} style={{ padding: '12px 14px', borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div className="bento-card" key={s.label} style={{ padding: '12px 14px', borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', display: 'flex', alignItems: 'center', gap: 10 }}>
                           <div style={{ width: 32, height: 32, borderRadius: 8, background: `${s.color}12`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                             <Icon size={14} style={{ color: s.color }} />
                           </div>
@@ -1721,7 +1721,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                 </div>
                 {/* RIGHT: Archivos — with upload */}
                 <div style={{ flex: 3, minWidth: 0 }}>
-                  <div style={{ borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', overflow: 'hidden' }}>
+                  <div className="bento-card" style={{ borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', overflow: 'hidden', padding: 0 }}>
                     <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <h3 style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-tertiary)', margin: 0 }}>Archivos</h3>
                       <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>{allCourseMaterials.filter(m => m.type === 'resource').length}</span>
@@ -1767,7 +1767,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
           /* ─── TAREAS TAB ─── */
             <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px 24px 60px' }}>
             {/* Create task card */}
-            <div style={{ borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', overflow: 'hidden', marginBottom: 20, boxShadow: '0 1px 8px rgba(0,0,0,0.04)' }}>
+            <div className="bento-card" style={{ borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', overflow: 'hidden', marginBottom: 20, padding: 0, boxShadow: '0 1px 8px rgba(0,0,0,0.04)' }}>
               <div style={{ padding: '14px 16px' }}>
                 <input value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} placeholder="Nombre de la tarea"
                   style={{ width: '100%', border: 'none', borderBottom: 'none', height: 'auto', padding: '2px 0', fontSize: 16, fontWeight: 600, background: 'transparent', color: 'var(--text-primary)', outline: 'none', fontFamily: "'Inter Tight', sans-serif", borderRadius: 0, letterSpacing: '-0.02em' }}
@@ -1822,7 +1822,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                     isOverdue = Math.ceil((due.getTime() - today.getTime()) / (1000*60*60*24)) < 0;
                   }
                   return (
-                    <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, border: '1px solid var(--border-subtle)', borderLeft: task.priority !== 'none' && task.priority ? `3px solid ${priorityColors[task.priority]}` : '3px solid transparent', background: 'var(--bg-elevated)', transition: 'all 200ms ' + EASE, boxShadow: '0 0 0 0 rgba(0,0,0,0)' }}
+                    <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, border: '1px solid var(--border-subtle)', borderLeft: task.priority !== 'none' && task.priority ? `3px solid ${priorityColors[task.priority]}` : '3px solid transparent', background: 'var(--bg-elevated-alpha, var(--bg-elevated))', transition: 'all 200ms ' + EASE, boxShadow: '0 0 0 0 rgba(0,0,0,0)' }}
                       onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}30`; e.currentTarget.style.boxShadow = `0 2px 10px ${course.color}08`; }}
                       onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.boxShadow = '0 0 0 0 rgba(0,0,0,0)'; }}>
                       <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-tertiary)', minWidth: 14, textAlign: 'right', flexShrink: 0, fontFamily: "'Inter Tight', sans-serif" }}>{idx + 1}</span>
@@ -1868,7 +1868,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                   {courseTasks.filter(t => t.status === 'completado').map((task, idx) => {
                     const isConfirm = pendingTaskDeleteId === task.id;
                     return (
-                      <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', opacity: 0.7 }}>
+                      <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-surface-alpha, var(--bg-surface))', opacity: 0.7 }}>
                         <Check size={12} style={{ color: '#10B981', flexShrink: 0 }} />
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: "'Inter', sans-serif", textDecoration: 'line-through' }}>{task.title}</div>
@@ -1941,12 +1941,12 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                         <SortableWrapper key={n.id} id={n.id}>
                           {({ attributes, listeners, isDragging }) => (
                             <div style={{
-                              borderRadius: 16, border: `1px solid ${isEditing ? `${course.color}40` : 'var(--border-subtle)'}`, background: 'var(--bg-elevated)', transition: 'all 200ms ' + EASE, cursor: !isEditing && !editingNoteId ? 'pointer' : 'default', boxShadow: isEditing ? `0 4px 24px ${course.color}14` : 'none', minHeight: isEditing ? 'auto' : 140,
+                              borderRadius: 16, border: `1px solid ${isEditing ? `${course.color}40` : 'var(--border-subtle)'}`, background: 'var(--bg-elevated-alpha, var(--bg-elevated))', transition: 'all 200ms ' + EASE, cursor: !isEditing && !editingNoteId ? 'pointer' : 'default', boxShadow: isEditing ? `0 4px 24px ${course.color}14` : 'none', minHeight: isEditing ? 'auto' : 140,
                               position: 'relative', opacity: isDragging ? 0.4 : 1,
                             }}
                               onClick={() => { if (!isEditing && !editingNoteId) handleStartEdit(); }}
                               onMouseEnter={e => { if (!isEditing && !editingNoteId) { e.currentTarget.style.borderColor = `${course.color}28`; e.currentTarget.style.background = `${course.color}03`; } }}
-                              onMouseLeave={e => { if (!isEditing && !editingNoteId) { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = 'var(--bg-elevated)'; } }}>
+                              onMouseLeave={e => { if (!isEditing && !editingNoteId) { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = 'var(--bg-elevated-alpha, var(--bg-elevated))'; } }}>
                               {/* Drag handle */}
                               <div {...attributes} {...listeners} style={{
                                 position: 'absolute', top: 6, right: 6, width: 22, height: 22,
@@ -2059,7 +2059,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
       {/* ═══════════ MODALS ═══════════ */}
       {showEditCourse && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }} onClick={() => setShowEditCourse(false)}>
-          <div style={{ width: 400, padding: 22, borderRadius: 12, background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }} onClick={e => e.stopPropagation()}>
+          <div className="bento-card" style={{ width: 400, padding: 22, borderRadius: 12, background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
               <h3 style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', margin: 0, fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em' }}>Configurar curso</h3>
               <button onClick={() => setShowEditCourse(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}><X size={15} /></button>
@@ -2121,7 +2121,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
       )}
       {showTopicModal && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }} onClick={() => setShowTopicModal(false)}>
-          <div style={{ width: 360, padding: 22, borderRadius: 12, background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }} onClick={e => e.stopPropagation()}>
+          <div className="bento-card" style={{ width: 360, padding: 22, borderRadius: 12, background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
               <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>{editingTopicId ? 'Editar' : 'Nuevo'} Tema</h3>
               <button onClick={() => setShowTopicModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}><X size={15} /></button>
@@ -2133,7 +2133,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
       )}
       {showGroupModal && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }} onClick={() => setShowGroupModal(false)}>
-          <div style={{ width: 400, padding: 22, borderRadius: 12, background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }} onClick={e => e.stopPropagation()}>
+          <div className="bento-card" style={{ width: 400, padding: 22, borderRadius: 12, background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
               <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>{editingGroupId ? 'Editar' : 'Nueva'} Agrupación</h3>
               <button onClick={() => setShowGroupModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}><X size={15} /></button>
@@ -2171,7 +2171,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
       {/* PDF Preview Modal */}
       {showPdfPreview && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(12px)' }} onClick={() => setShowPdfPreview(false)}>
-          <div style={{ width: '90vw', height: '90vh', borderRadius: 12, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+          <div className="bento-card" style={{ width: '90vw', height: '90vh', borderRadius: 12, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0 }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }}>
               <File size={14} style={{ color: course?.color }} />
               <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pdfPreviewName}</span>
@@ -2196,7 +2196,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
       )}
       {showMaterialModal && materialType && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }} onClick={() => setShowMaterialModal(false)}>
-          <div style={{ width: 420, padding: 22, borderRadius: 12, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+          <div className="bento-card" style={{ width: 420, padding: 22, borderRadius: 12, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
               <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6, margin: 0 }}>
                 {editingMaterial ? 'Editar' : 'Añadir'} {materialType && MATERIAL_META[materialType]?.label}
@@ -2301,7 +2301,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
           background: "rgba(0,0,0,0.55)", backdropFilter: "blur(6px)",
           display: "flex", alignItems: "center", justifyContent: "center",
         }} onClick={() => setConfirmDeleteNoteId(null)}>
-          <div style={{
+          <div className="bento-card" style={{
             background: "linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-base) 100%)",
             border: "1px solid var(--border-default)",
             borderRadius: 14, padding: 24, minWidth: 300, maxWidth: 380,

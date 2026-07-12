@@ -64,7 +64,7 @@ const TomatoIcon = ({ size = 24, color = 'currentColor', style }: { size?: numbe
   </svg>
 );
 
-function LEDTime({ time, color, digitWidth = 82, digitHeight = 136, colonWidth = 26 }: { time: string; color: string; digitWidth?: number; digitHeight?: number; colonWidth?: number }) {
+function LEDTime({ time, color, digitWidth = 110, digitHeight = 180, colonWidth = 32 }: { time: string; color: string; digitWidth?: number; digitHeight?: number; colonWidth?: number }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
       {time.split('').map((ch, i) =>
@@ -684,14 +684,11 @@ export default function Estudio() {
             </div>
 
             {/* Glowing Segmented Timer */}
-            <div style={{ position: 'relative', margin: '10px 0 4px', height: 190, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: 400, height: 200, background: `radial-gradient(ellipse, ${statusColor}08 0%, transparent 65%)`, pointerEvents: 'none' }} />
+            <div style={{ position: 'relative', margin: '10px 0 4px', height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: 520, height: 240, background: `radial-gradient(ellipse, ${statusColor}08 0%, transparent 65%)`, pointerEvents: 'none' }} />
               <LEDTime 
                 time={isBreakTime ? fmt(computedRest) : fmt(computedDisplay)} 
                 color={statusColor} 
-                digitWidth={dw} 
-                digitHeight={dh} 
-                colonWidth={cw} 
               />
             </div>
 
@@ -918,7 +915,7 @@ export default function Estudio() {
         </div>
 
         {/* RIGHT COLUMN (LATERAL): Metrics & Activity History */}
-        <div className="lg:flex-[1.2]" style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
+        <div className="lg:flex-[1.2] estudio-stats" style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
           
           {/* 4 ELEGANT SIDEBAR METRICS CARD */}
           <div className="bento-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -928,28 +925,28 @@ export default function Estudio() {
             
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* Metric 1: Pure Study Time */}
-                <div style={{ background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', borderRadius: 16, padding: '20px', display: 'flex', flexDirection: 'column', gap: 8, position: 'relative', overflow: 'hidden' }}>
+                <div className="stat-card" style={{ background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', borderRadius: 16, padding: '20px', display: 'flex', flexDirection: 'column', gap: 8, position: 'relative', overflow: 'hidden' }}>
                   <Clock size={80} style={{ position: 'absolute', bottom: -20, right: -20, color: statusColor, opacity: 0.15 }} />
                   <span style={{ fontSize: 10, fontWeight: 300, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', zIndex: 1 }}>Estudio Puro</span>
                   <span style={{ fontSize: 26, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", zIndex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{studyFormatted}</span>
                 </div>
 
                 {/* Metric 2: Completed Sessions */}
-                <div style={{ background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', borderRadius: 16, padding: '20px', display: 'flex', flexDirection: 'column', gap: 8, position: 'relative', overflow: 'hidden' }}>
+                <div className="stat-card" style={{ background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', borderRadius: 16, padding: '20px', display: 'flex', flexDirection: 'column', gap: 8, position: 'relative', overflow: 'hidden' }}>
                   <CheckCircle size={80} style={{ position: 'absolute', bottom: -20, right: -20, color: '#8B5CF6', opacity: 0.15 }} />
                   <span style={{ fontSize: 10, fontWeight: 300, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', zIndex: 1 }}>Sesiones</span>
                   <span style={{ fontSize: 26, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", zIndex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{recentSessions.length}</span>
                 </div>
 
                 {/* Metric 3: Eficiencia (IRE compuesto) */}
-                <div style={{ background: 'var(--bg-deep)', border: `1px solid ${efficiencyPct >= 80 ? '#10B981' : efficiencyPct >= 50 ? '#F59E0B' : '#EF4444'}30`, borderRadius: 16, padding: '20px', display: 'flex', flexDirection: 'column', gap: 8, position: 'relative', overflow: 'hidden' }}>
+                <div className="stat-card" style={{ background: 'var(--bg-deep)', border: `1px solid ${efficiencyPct >= 80 ? '#10B981' : efficiencyPct >= 50 ? '#F59E0B' : '#EF4444'}30`, borderRadius: 16, padding: '20px', display: 'flex', flexDirection: 'column', gap: 8, position: 'relative', overflow: 'hidden' }}>
                   <Zap size={80} style={{ position: 'absolute', bottom: -20, right: -20, color: efficiencyPct >= 80 ? '#10B981' : efficiencyPct >= 50 ? '#F59E0B' : '#EF4444', opacity: 0.15 }} />
                   <span style={{ fontSize: 10, fontWeight: 300, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', zIndex: 1 }}>Eficiencia</span>
                   <span style={{ fontSize: 26, fontWeight: 300, color: efficiencyPct >= 80 ? '#10B981' : efficiencyPct >= 50 ? 'var(--text-primary)' : '#EF4444', fontFamily: "'Inter Tight', sans-serif", zIndex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{efficiencyPct}%</span>
                 </div>
 
                 {/* Metric 4: Distracciones */}
-                <div style={{ background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', borderRadius: 16, padding: '20px', display: 'flex', flexDirection: 'column', gap: 8, position: 'relative', overflow: 'hidden' }}>
+                <div className="stat-card" style={{ background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', borderRadius: 16, padding: '20px', display: 'flex', flexDirection: 'column', gap: 8, position: 'relative', overflow: 'hidden' }}>
                   <AlertTriangle size={80} style={{ position: 'absolute', bottom: -20, right: -20, color: '#EF4444', opacity: 0.15 }} />
                   <span style={{ fontSize: 10, fontWeight: 300, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', zIndex: 1 }}>Distracciones</span>
                   <span style={{ fontSize: 26, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", zIndex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{distractionCount}</span>
@@ -1052,7 +1049,7 @@ export default function Estudio() {
         {/* VIEW ALL MODAL (UP TO 10 ITEMS) */}
         {showAllActivity && (
           <div style={{ position: 'fixed', inset: 0, zIndex: 70, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(12px)' }} onClick={() => setShowAllActivity(false)}>
-            <div 
+            <div className="bento-card"
               style={{ 
                 borderRadius: 18, 
                 width: '100%', 
@@ -1162,7 +1159,7 @@ export default function Estudio() {
       {/* Read-only Session Detail Modal */}
       {showSessionDetail && detailSession && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(10px)' }} onClick={() => setShowSessionDetail(false)}>
-          <div onClick={e => e.stopPropagation()}
+          <div onClick={e => e.stopPropagation()} className="bento-card"
             style={{
               background: 'var(--bg-elevated)', borderRadius: 20,
               border: '1px solid var(--border-soft)', padding: '32px 0 24px',
@@ -1317,7 +1314,7 @@ export default function Estudio() {
       {/* Reset Confirmation Modal */}
       {showResetConfirm && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }} onClick={() => setShowResetConfirm(false)}>
-          <div onClick={e => e.stopPropagation()}
+          <div onClick={e => e.stopPropagation()} className="bento-card"
             style={{
               background: 'var(--bg-elevated)', borderRadius: 16,
               border: '1px solid var(--border-soft)', padding: '28px 32px',
@@ -1350,7 +1347,7 @@ export default function Estudio() {
       {/* POST-SESSION EVALUATION — with linked task */}
       {showSessionEval && evalSessionId && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }} onClick={() => { setShowSessionEval(false); setShowFreeStudyPrompt(false); setShowRestPrompt(false); }}>
-          <div onClick={e => e.stopPropagation()}
+          <div onClick={e => e.stopPropagation()} className="bento-card"
             style={{
               background: 'var(--bg-elevated)', borderRadius: 20,
               border: '1px solid var(--border-soft)', padding: '32px 36px',
@@ -1494,7 +1491,7 @@ export default function Estudio() {
       {/* FREE STUDY PROMPT — no linked task */}
       {showFreeStudyPrompt && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }} onClick={() => { setShowSessionEval(false); setShowFreeStudyPrompt(false); setShowRestPrompt(false); }}>
-          <div onClick={e => e.stopPropagation()}
+          <div onClick={e => e.stopPropagation()} className="bento-card"
             style={{
               background: 'var(--bg-elevated)', borderRadius: 20,
               border: '1px solid var(--border-soft)', padding: '32px 36px',

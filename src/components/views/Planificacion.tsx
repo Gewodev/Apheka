@@ -313,7 +313,7 @@ export default function Planificacion() {
   }, [planView, navDate]);
 
   return (
-    <div className="page-container" style={{ display:'flex', flexDirection:'column', height:'100%', overflow:'hidden', background: 'var(--bg-primary)' }}>
+    <div className="page-container" style={{ display:'flex', flexDirection:'column', height:'100%', overflow:'hidden' }}>
 
       {/* HEADER — Title + Date | Bell + Clock */}
       <header style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-end', marginBottom:16, paddingTop:6, flexShrink:0 }}>
@@ -449,19 +449,19 @@ export default function Planificacion() {
             </div>
           )}
           {showHabits && (
-            <div style={{ flex: showScheduleBuilder ? '1 1 50%' : 1, minWidth: 0, borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)', background: 'color-mix(in srgb, var(--bg-elevated) 65%, transparent)', backdropFilter: 'blur(8px)', boxShadow: '0 8px 32px rgba(0,0,0,0.25)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div className="bento-card" style={{ flex: showScheduleBuilder ? '1 1 50%' : 1, minWidth: 0, padding: 0, border: '1px solid var(--border-default)', boxShadow: '0 8px 32px rgba(0,0,0,0.25)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
               <HabitsView />
             </div>
           )}
         </div>
       ) : (
       <div style={{ display:'flex', flex:1, gap:16, minHeight:0, overflow:'hidden' }}>
-        <div className="bento-card" style={{ flex:1, display:'flex', flexDirection:'column', minWidth:0, overflow:'hidden', padding:0, border:'1px solid var(--border-default)', background: 'color-mix(in srgb, var(--bg-elevated) 65%, transparent)', backdropFilter: 'blur(8px)', boxShadow: '0 8px 32px rgba(0,0,0,0.25)' }}>
+        <div className="bento-card" style={{ flex:1, display:'flex', flexDirection:'column', minWidth:0, overflow:'hidden', padding:0, border:'1px solid var(--border-default)', boxShadow: '0 8px 32px rgba(0,0,0,0.25)', background: 'color-mix(in srgb, var(--bg-surface) 60%, var(--bg-base) 40%)' }}>
 
           {/* WEEK VIEW */}
           {planView === 'week' && (
             <>
-              <div style={{ display:'grid', gridTemplateColumns:`60px repeat(7,1fr)`, borderBottom:'1px solid var(--border-soft)', flexShrink:0, background: 'var(--bg-primary)' }}>
+              <div style={{ display:'grid', gridTemplateColumns:`60px repeat(7,1fr)`, borderBottom:'1px solid var(--border-soft)', flexShrink:0 }}>
                 <div style={{ borderRight:'1px solid var(--border-soft)' }}/>
                 {weekDays.map((d,i) => {
                   const tod = isToday(d);
@@ -469,8 +469,8 @@ export default function Planificacion() {
                     <div key={i}
                       onClick={() => setSelectedItem({ type: 'day', date: d, events: getEventsForDate(format(d, 'yyyy-MM-dd')), tasks: tasks.filter(t => t.dueDate === format(d, 'yyyy-MM-dd') && t.status !== 'completado') })}
                       style={{ padding:'12px 0', textAlign:'center', cursor:'pointer', borderLeft: i > 0 ? '1px solid var(--border-soft)' : 'none', background:tod?'rgba(225,29,72,0.05)':'transparent', position:'relative', transition:'background 200ms' }}
-                      onMouseEnter={e=>!tod && (e.currentTarget.style.background='var(--surface-hover)')}
-                      onMouseLeave={e=>!tod && (e.currentTarget.style.background='transparent')}
+                      onMouseEnter={e=>!tod && (e.currentTarget.style.outline='1px solid var(--border-strong)')}
+                      onMouseLeave={e=>!tod && (e.currentTarget.style.outline='none')}
                     >
                       {tod && <div style={{ position:'absolute', top:0, left:0, right:0, height:3, background:'var(--accent)', boxShadow:'0 0 12px var(--accent-glow)' }}/>}
                       <div style={{ fontSize:11, fontWeight:700, color:tod?'var(--accent)':'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.06em' }}>{DAY_LABELS[i]}</div>
@@ -489,7 +489,7 @@ export default function Planificacion() {
               <DndContext sensors={planSensors} onDragStart={e => { if (!('dayOfWeek' in (events.find(ev => ev.id === e.active.id) || {} as any))) setActiveDragPlanId(e.active.id as string); }} onDragEnd={handleDragEndPlan}>
               <div ref={timelineRef} style={{ flex:1, overflowY:'auto' }}>
                 <div style={{ display:'grid', gridTemplateColumns:`60px repeat(7,1fr)`, minHeight:(H_END-H_START+1)*H_PX }}>
-                  <div style={{ borderRight:'1px solid var(--border-soft)', background: 'var(--bg-primary)' }}>
+                  <div style={{ borderRight:'1px solid var(--border-soft)' }}>
                     {HOURS.map(h => (
                       <div key={h} style={{ height:H_PX, display:'flex', alignItems:'flex-start', justifyContent:'flex-end', paddingRight:12, paddingTop:6, borderBottom:'1px solid var(--border-soft)' }}>
                         <span style={{ fontSize:10, fontWeight:600, color:'var(--text-muted)', fontFamily:"'JetBrains Mono',monospace", letterSpacing:'0.04em' }}>
@@ -630,7 +630,7 @@ export default function Planificacion() {
           {/* DAY VIEW */}
           {planView === 'day' && (
             <>
-              <div style={{ padding:'20px 28px', borderBottom:'1px solid var(--border-soft)', flexShrink:0, background: 'var(--bg-primary)' }}>
+              <div style={{ padding:'20px 28px', borderBottom:'1px solid var(--border-soft)', flexShrink:0, backdropFilter: 'blur(var(--bg-blur, 10px))', WebkitBackdropFilter: 'blur(var(--bg-blur, 10px))' }}>
                 <div style={{ fontSize:24, fontWeight:300, color:isToday(navDate)?'var(--accent)':'var(--text-primary)', fontFamily:"'Outfit',sans-serif", textTransform:'capitalize', display: 'flex', alignItems: 'center', gap: 12 }}>
                   {format(navDate,"EEEE d 'de' MMMM yyyy",{locale:es as any})}
                   {isToday(navDate) && <span style={{ fontSize:10, fontWeight:700, color:'var(--accent)', background:'var(--accent-glow)', padding:'4px 12px', borderRadius:20 }}>HOY</span>}
@@ -643,7 +643,7 @@ export default function Planificacion() {
               </div>
               <div ref={timelineRef} style={{ flex:1, overflowY:'auto' }}>
                 <div style={{ display:'grid', gridTemplateColumns:'80px 1fr', minHeight:(H_END-H_START+1)*H_PX }}>
-                  <div style={{ borderRight:'1px solid var(--border-soft)', background: 'var(--bg-primary)' }}>
+                  <div style={{ borderRight:'1px solid var(--border-soft)', background: 'color-mix(in srgb, var(--bg-elevated) 40%, transparent)' }}>
                     {HOURS.map(h=>(
                       <div key={h} style={{ height:H_PX, display:'flex', alignItems:'flex-start', justifyContent:'flex-end', paddingRight:12, paddingTop:6, borderBottom:'1px solid var(--border-soft)' }}>
                         <span style={{ fontSize:11, fontWeight:600, color:'var(--text-muted)', fontFamily:"'JetBrains Mono',monospace" }}>{fmtClock(String(h).padStart(2,'0') + ':00', settings?.timeFormat)}</span>
@@ -727,7 +727,7 @@ export default function Planificacion() {
           {/* MONTH VIEW */}
           {planView === 'month' && (
             <>
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', borderBottom:'1px solid var(--border-soft)', flexShrink:0, background: 'var(--bg-primary)' }}>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', borderBottom:'1px solid var(--border-soft)', flexShrink:0, backdropFilter: 'blur(var(--bg-blur, 10px))', WebkitBackdropFilter: 'blur(var(--bg-blur, 10px))' }}>
                 {DAY_LABELS.map(d=><div key={d} style={{ padding:'12px 0', textAlign:'center', fontSize:11, fontWeight:700, color:'var(--text-tertiary)', textTransform:'uppercase', letterSpacing:'0.08em' }}>{d}</div>)}
               </div>
               <div style={{ flex:1, overflowY:'auto' }}>
@@ -743,8 +743,8 @@ export default function Planificacion() {
                         <div key={di}
                           onClick={()=>{ setSelectedItem({ type: 'day', date: day, events: dayEvs, tasks: dayTasks }); }}
                           style={{ height:130, padding:'10px 12px', cursor:'pointer', overflow:'hidden', borderRight:di<6?'1px solid var(--border-soft)':'none', background:tod?'rgba(225,29,72,0.05)':'transparent', opacity, transition:'background 200ms', position:'relative' }}
-                          onMouseEnter={e=>!tod && (e.currentTarget.style.background='var(--surface-hover)')}
-                          onMouseLeave={e=>!tod && (e.currentTarget.style.background='transparent')}
+                          onMouseEnter={e=>!tod && (e.currentTarget.style.outline='1px solid var(--border-strong)')}
+                          onMouseLeave={e=>!tod && (e.currentTarget.style.outline='none')}
                         >
                           <div style={{ width:28,height:28,borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',marginBottom:10, fontSize:13,fontWeight:tod?700:500, background:tod?'var(--accent)':'transparent', color:tod?'#fff':'var(--text-primary)', fontFamily:"'Outfit',sans-serif" }}>{format(day,'d')}</div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, overflow: 'hidden' }}>
@@ -784,8 +784,8 @@ export default function Planificacion() {
                         padding:12, cursor:'default',
                         transition:'all 200ms',
                       }}
-                      onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface-hover)'; e.currentTarget.style.borderColor = 'var(--border-strong)'; }}
-                      onMouseLeave={e => { e.currentTarget.style.background = thisMonth ? 'rgba(225,29,72,0.04)' : 'transparent'; e.currentTarget.style.borderColor = 'var(--border-soft)'; }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-strong)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; }}
                     >
                       <div
                         onClick={() => { setNavDate(new Date(navDate.getFullYear(), mi, 1)); setPlanView('month'); }}
@@ -823,8 +823,8 @@ export default function Planificacion() {
                                   cursor: inc ? 'pointer' : 'default',
                                   transition:'background 150ms',
                                 }}
-                                onMouseEnter={e => { if (inc && !tod) e.currentTarget.style.background = 'var(--surface-hover)'; }}
-                                onMouseLeave={e => { if (inc && !tod) e.currentTarget.style.background = hasEvent ? 'rgba(225,29,72,0.08)' : 'transparent'; }}
+                                onMouseEnter={e => { if (inc && !tod) e.currentTarget.style.outline = '1px solid var(--border-strong)'; }}
+                                onMouseLeave={e => { if (inc && !tod) e.currentTarget.style.outline = 'none'; }}
                               >
                                 {format(day, 'd')}
                               </div>

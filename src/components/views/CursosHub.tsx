@@ -280,7 +280,7 @@ export default function CursosHub({ onSelectCourse, onTabSelect }: CursosHubProp
       {/* Add Modal */}
       {showAddModal && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={() => setShowAddModal(false)}>
-          <div style={{ width: 420, padding: 24, borderRadius: 'var(--radius-lg)', background: "linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)", border: "1px solid var(--border-default)", boxShadow: "var(--shadow-elevated)" }} onClick={e => e.stopPropagation()}>
+          <div className="bento-card" style={{ width: 420, padding: 24, borderRadius: 'var(--radius-lg)', background: "linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)", border: "1px solid var(--border-default)", boxShadow: "var(--shadow-elevated)" }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8, fontFamily: "'Inter Tight', sans-serif", margin: 0 }}>
                 <GraduationCap size={18} style={{ color: "var(--accent)" }} /> Nueva Asignatura
@@ -333,7 +333,7 @@ export default function CursosHub({ onSelectCourse, onTabSelect }: CursosHubProp
       {/* Delete Modal */}
       {pendingDeleteId && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={() => setPendingDeleteId(null)}>
-          <div style={{ width: 380, padding: 24, borderRadius: 'var(--radius-lg)', background: "linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)", border: "1px solid var(--border-default)", boxShadow: "var(--shadow-elevated)" }} onClick={e => e.stopPropagation()}>
+          <div className="bento-card" style={{ width: 380, padding: 24, borderRadius: 'var(--radius-lg)', background: "linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)", border: "1px solid var(--border-default)", boxShadow: "var(--shadow-elevated)" }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
               <Trash2 size={18} style={{ color: 'var(--error)', flexShrink: 0 }} />
               <h3 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', margin: 0, fontFamily: "'Inter Tight', sans-serif" }}>Eliminar asignatura</h3>

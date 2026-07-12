@@ -82,7 +82,7 @@ export default function ScheduleBuilder({
   const imgContainerRef = useRef<HTMLDivElement>(null);
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'color-mix(in srgb, var(--bg-elevated) 65%, transparent)', backdropFilter: 'blur(8px)' }}>
+    <div className="bento-card" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0, border: '1px solid var(--border-default)' }}>
       {/* Toolbar */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderBottom: '1px solid var(--border-soft)', flexShrink: 0, background: 'color-mix(in srgb, var(--bg-elevated) 80%, transparent)' }}>
         <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Outfit',sans-serif" }}>Horario</div>

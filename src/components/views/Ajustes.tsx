@@ -144,6 +144,7 @@ export default function Ajustes() {
   const [showBarDrawModal, setShowBarDrawModal] = useState(false);
   const [clearAllMusicText, setClearAllMusicText] = useState('');
   const [sysInfo, setSysInfo] = useState<{ cpu: number; ram: number; disk: number; platform: string; arch: string; appVer: string } | null>(null);
+  const bgInputRef = useRef<HTMLInputElement>(null);
 
   // Load theme colors from saved settings on mount
   useEffect(() => {
@@ -796,46 +797,61 @@ export default function Ajustes() {
                         </button>
                       </div>
                     )}
+                    <input ref={bgInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = (ev) => {
+                        const dataUrl = ev.target?.result as string;
+                        updateSettings({ backgroundImage: dataUrl, backgroundImagePath: undefined });
+                      };
+                      reader.readAsDataURL(file);
+                      e.target.value = '';
+                    }} />
                     <button onClick={async () => {
-                      try {
-                        const selected = await open({
-                          multiple: false,
-                          filters: [{ name: 'Imágenes', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'svg', 'avif', 'tiff', 'heic'] }]
-                        });
-                        if (selected && typeof selected === 'string') {
-                          try {
-                            const appData = await appCacheDir();
-                            const hasDir = await exists(appData);
-                            if (!hasDir) await mkdir(appData, { recursive: true });
-                            const ext = await extname(selected);
-                            const cleanExt = ext.startsWith('.') ? ext.slice(1) : ext;
-                            const filename = `background_${Date.now()}.${cleanExt}`;
-                            const dest = await join(appData, filename);
-                            await copyFile(selected, dest);
-                            const imageData = await readFile(dest);
-                            const mimeMap: Record<string, string> = {
-                              jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
-                              gif: 'image/gif', bmp: 'image/bmp', webp: 'image/webp',
-                              svg: 'image/svg+xml', avif: 'image/avif', tiff: 'image/tiff', heic: 'image/heic',
-                            };
-                            const mime = mimeMap[cleanExt.toLowerCase()] || 'application/octet-stream';
-                            const uint8 = new Uint8Array(imageData);
-                            const chunks: string[] = [];
-                            const chunkSize = 8192;
-                            for (let i = 0; i < uint8.length; i += chunkSize) {
-                              chunks.push(String.fromCharCode(...uint8.subarray(i, i + chunkSize)));
+                      if (isTauri()) {
+                        try {
+                          const selected = await open({
+                            multiple: false,
+                            filters: [{ name: 'Imágenes', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'svg', 'avif', 'tiff', 'heic'] }]
+                          });
+                          if (selected && typeof selected === 'string') {
+                            try {
+                              const appData = await appCacheDir();
+                              const hasDir = await exists(appData);
+                              if (!hasDir) await mkdir(appData, { recursive: true });
+                              const ext = await extname(selected);
+                              const cleanExt = ext.startsWith('.') ? ext.slice(1) : ext;
+                              const filename = `background_${Date.now()}.${cleanExt}`;
+                              const dest = await join(appData, filename);
+                              await copyFile(selected, dest);
+                              const imageData = await readFile(dest);
+                              const mimeMap: Record<string, string> = {
+                                jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+                                gif: 'image/gif', bmp: 'image/bmp', webp: 'image/webp',
+                                svg: 'image/svg+xml', avif: 'image/avif', tiff: 'image/tiff', heic: 'image/heic',
+                              };
+                              const mime = mimeMap[cleanExt.toLowerCase()] || 'application/octet-stream';
+                              const uint8 = new Uint8Array(imageData);
+                              const chunks: string[] = [];
+                              const chunkSize = 8192;
+                              for (let i = 0; i < uint8.length; i += chunkSize) {
+                                chunks.push(String.fromCharCode(...uint8.subarray(i, i + chunkSize)));
+                              }
+                              const base64 = btoa(chunks.join(''));
+                              const dataUrl = `data:${mime};base64,${base64}`;
+                              updateSettings({ backgroundImagePath: dest, backgroundImage: dataUrl });
+                            } catch (e) {
+                              console.error('Error al procesar imagen de fondo:', e);
+                              addNotification('Error al procesar la imagen', 'error');
                             }
-                            const base64 = btoa(chunks.join(''));
-                            const dataUrl = `data:${mime};base64,${base64}`;
-                            updateSettings({ backgroundImagePath: dest, backgroundImage: dataUrl });
-                          } catch (e) {
-                            console.error('Error al procesar imagen de fondo:', e);
-                            addNotification('Error al procesar la imagen', 'error');
                           }
+                        } catch (e) {
+                          addNotification('Error al seleccionar la imagen', 'error');
+                          console.error(e);
                         }
-                      } catch (e) {
-                        addNotification('Error al seleccionar la imagen', 'error');
-                        console.error(e);
+                      } else {
+                        bgInputRef.current?.click();
                       }
                     }} style={{ padding: '12px 24px', borderRadius: 10, fontSize: 12, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8, border: '1px solid var(--border-default)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)', cursor: 'pointer', width: 'fit-content' }}>
                       <Image size={16} /> {settings.backgroundImage ? 'Cambiar Imagen de Fondo' : 'Cargar Imagen de Fondo'}
