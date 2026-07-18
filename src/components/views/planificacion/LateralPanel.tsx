@@ -305,7 +305,7 @@ function TaskDetails({ item, onViewTask }: { item: Extract<SelectedItem, {type: 
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {task.dueDate && <DetailRow icon={<Calendar size={18} strokeWidth={1.5} />} label="Fecha de entrega" value={(()=>{try{return format(new Date(task.dueDate+'T12:00:00'),"EEEE d 'de' MMMM yyyy",{locale:es})}catch{return '—'}})()} />}
+                {task.dueDate && <DetailRow icon={<Calendar size={18} strokeWidth={1.5} />} label="Fecha de entrega" value={(()=>{try{const hasTime=task.dueDate.includes('T');const d=hasTime?new Date(task.dueDate):new Date(task.dueDate+'T12:00:00');return format(d,"EEEE d 'de' MMMM yyyy"+(hasTime?" 'a las' HH:mm":""),{locale:es})}catch{return '—'}})()} />}
         <DetailRow icon={<CheckCircle2 size={18} strokeWidth={1.5} />} label="Estado" value={task.status === 'completado' ? 'Completado' : task.status === 'en-curso' ? 'En curso' : 'Pendiente'} />
       </div>
 

@@ -588,7 +588,8 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const [editCourseCover, setEditCourseCover] = useState<string | undefined>(undefined);
   const [editCourseTeacher, setEditCourseTeacher] = useState('');
   const [editCourseColor, setEditCourseColor] = useState('#6366f1');
-  const [pendingCourseDelete, setPendingCourseDelete] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmName, setDeleteConfirmName] = useState('');
 
   // Group modals
   const [showGroupModal, setShowGroupModal] = useState(false);
@@ -645,6 +646,21 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     try { return (localStorage.getItem('owa_course_overview_mode') as 'tareas_notas' | 'temas_archivos') || 'tareas_notas'; } catch { return 'tareas_notas'; }
   });
   useEffect(() => { localStorage.setItem('owa_course_overview_mode', overviewMode); }, [overviewMode]);
+  const [modeAnimating, setModeAnimating] = useState(false);
+  const [modePhase, setModePhase] = useState<'idle' | 'out' | 'in'>('idle');
+  const prevMode = useRef(overviewMode);
+
+  const handleToggleMode = () => {
+    if (modeAnimating) return;
+    setModeAnimating(true);
+    setModePhase('out');
+    setTimeout(() => {
+      prevMode.current = overviewMode;
+      setOverviewMode(prev => prev === 'tareas_notas' ? 'temas_archivos' : 'tareas_notas');
+      setModePhase('in');
+      setTimeout(() => { setModePhase('idle'); setModeAnimating(false); }, 350);
+    }, 200);
+  };
   const [selectedOverviewNoteId, setSelectedOverviewNoteId] = useState<string | null>(null);
   const [overviewNoteEditMode, setOverviewNoteEditMode] = useState(false);
   const [overviewNoteHighlights, setOverviewNoteHighlights] = useState<string[]>(() => {
@@ -899,9 +915,11 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   };
 
   const handleConfirmDeleteCourse = () => {
+    if (deleteConfirmName.trim() !== course.name) return;
     deleteCourse(course.id);
+    setShowDeleteConfirm(false);
     setShowEditCourse(false);
-    setPendingCourseDelete(false);
+    setDeleteConfirmName('');
     setCurrentView('overview');
     setOverviewMode('tareas_notas');
     toast.success('Asignatura eliminada');
@@ -1298,27 +1316,23 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                   {(course.teacher || course.teacherName) && <span style={{ fontSize: 16, fontWeight: 300, color: 'rgba(255,255,255,0.5)', display: 'block', lineHeight: 1.4, letterSpacing: '0.02em' }}>{course.teacher || course.teacherName}</span>}
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <button onClick={() => { setEditCourseName(course.name); setEditCourseTeacher(course.teacher || course.teacherName || ''); setEditCourseCover(course.coverUrl || course.coverImage); setEditCourseColor(course.color); setShowEditCourse(true); }} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  <button onClick={() => { setEditCourseName(course.name); setEditCourseTeacher(course.teacher || course.teacherName || ''); setEditCourseCover(course.coverUrl || course.coverImage); setEditCourseColor(course.color); setDeleteConfirmName(''); setShowEditCourse(true); }} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                     onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}><Pencil size={13} /></button>
-                  <button onClick={() => { setEditingTopicId(null); setTopicName(''); setShowTopicModal(true); }} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}><PlusCircle size={13} /></button>
-                  <button onClick={() => { setEditingGroupId(null); setGroupName(''); setGroupCover(undefined); setSelectedTopicIds([]); setShowGroupModal(true); }} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}><Layers size={13} /></button>
+                  <button onClick={handleToggleMode}
+                    title={overviewMode === 'tareas_notas' ? 'Modo Estudio' : 'Vista General'}
+                    style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 300ms cubic-bezier(0.16, 1, 0.3, 1)' }}>
+                    <ArrowLeftRight size={13} style={{ transition: 'transform 400ms cubic-bezier(0.16, 1, 0.3, 1)', transform: overviewMode === 'temas_archivos' ? 'rotate(180deg)' : 'rotate(0deg)' }} />
+                  </button>
                 </div>
               </div>
             </div>
-            {/* Swap (invertir) icon — animated */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', maxWidth: 1440, margin: '0 auto', padding: '12px 24px 0' }}>
-              <button onClick={() => setOverviewMode(overviewMode === 'tareas_notas' ? 'temas_archivos' : 'tareas_notas')}
-                title={overviewMode === 'tareas_notas' ? 'Ver temas y archivos' : 'Ver resumen'}
-                style={{ height: 30, padding: '0 14px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 9, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, transition: 'all 300ms ' + EASE }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = course.color; e.currentTarget.style.color = course.color; e.currentTarget.style.background = `${course.color}08`; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.background = 'var(--bg-elevated)'; }}>
-                <ArrowLeftRight size={12} style={{ transition: 'transform 300ms ' + EASE, transform: overviewMode === 'temas_archivos' ? 'rotate(180deg)' : 'none' }} />
-                <span>{overviewMode === 'tareas_notas' ? 'Modo Estudio' : 'General'}</span>
-              </button>
-            </div>
-            {/* Content based on mode */}
+            {/* Content based on mode — with crossfade animation */}
+            <div style={{
+              transition: 'all 350ms cubic-bezier(0.16, 1, 0.3, 1)',
+              opacity: modePhase === 'out' ? 0 : 1,
+              transform: modePhase === 'out' ? 'translateY(8px) scale(0.97)' : modePhase === 'in' ? 'translateY(-4px) scale(1.005)' : 'none',
+              filter: modePhase === 'out' ? 'blur(4px)' : modePhase === 'in' ? 'blur(1px)' : 'none',
+            }}>
             {overviewMode === 'tareas_notas' ? (
               <div key="tasks_notes" style={{ display: 'flex', gap: 24, maxWidth: 1440, margin: '0 auto', padding: '16px 24px 60px' }}>
                 {/* ─── LEFT: Tasks — AETHER CLONE (3/5) ─── */}
@@ -1762,6 +1776,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
           </div>
           )
         }
+          </div>
         </div>
         ) : activeTab === 'tareas' ? (
           /* ─── TAREAS TAB ─── */
@@ -2098,23 +2113,44 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
               )}
               <input type="file" ref={courseCoverInputRef} style={{ display: 'none' }} accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) { const r = new FileReader(); r.onload = ev => setEditCourseCover(ev.target?.result as string); r.readAsDataURL(f); }}} />
               <button onClick={handleSaveCourseSettings} style={{ width: '100%', height: 34, borderRadius: 6, border: 'none', background: course.color, color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>Guardar</button>
-              <div style={{ borderTop: '1px solid var(--border-subtle)', marginTop: 4, paddingTop: 14 }}>
-                {pendingCourseDelete ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <span style={{ fontSize: 10, color: '#EF4444', fontWeight: 600, textAlign: 'center' }}>¿Eliminar esta asignatura? Se borrarán todos sus datos.</span>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button onClick={() => setPendingCourseDelete(false)} style={{ flex: 1, height: 34, borderRadius: 6, border: '1px solid var(--border-default)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>Cancelar</button>
-                      <button onClick={handleConfirmDeleteCourse} style={{ flex: 1, height: 34, borderRadius: 6, border: 'none', background: '#EF4444', color: '#fff', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>Eliminar</button>
-                    </div>
-                  </div>
-                ) : (
-                  <button onClick={() => setPendingCourseDelete(true)} style={{ width: '100%', height: 34, borderRadius: 6, border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.06)', color: 'rgba(239,68,68,0.7)', fontSize: 10, fontWeight: 600, cursor: 'pointer', transition: 'all 150ms' }}
-                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.12)'; e.currentTarget.style.color = '#EF4444'; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.06)'; e.currentTarget.style.color = 'rgba(239,68,68,0.7)'; }}>
-                    <Trash2 size={10} style={{ marginRight: 4, verticalAlign: 'middle' }} /> Eliminar asignatura
-                  </button>
-                )}
+              <div style={{ borderTop: '1px solid var(--border-subtle)', marginTop: 8, paddingTop: 12, display: 'flex', justifyContent: 'center' }}>
+                <button onClick={() => { setShowDeleteConfirm(true); setDeleteConfirmName(''); }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 18px', borderRadius: 8, border: '1px solid rgba(239,68,68,0.25)', background: 'transparent', color: 'rgba(239,68,68,0.7)', fontSize: 10, fontWeight: 600, cursor: 'pointer', transition: 'all 150ms', letterSpacing: '0.02em' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; e.currentTarget.style.borderColor = 'rgba(239,68,68,0.5)'; e.currentTarget.style.color = '#EF4444'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'rgba(239,68,68,0.25)'; e.currentTarget.style.color = 'rgba(239,68,68,0.7)'; }}>
+                  <Trash2 size={11} /> Eliminar asignatura
+                </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDeleteConfirm && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 2100, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }} onClick={() => setShowDeleteConfirm(false)}>
+          <div className="bento-card" style={{ width: 380, padding: 24, borderRadius: 14, background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(239,68,68,0.12)' }}>
+                <Trash2 size={16} style={{ color: '#EF4444' }} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <h3 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', margin: 0, fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em' }}>Eliminar asignatura</h3>
+                <p style={{ fontSize: 10, color: 'var(--text-tertiary)', margin: '2px 0 0', lineHeight: 1.4 }}>Esta acción no se puede deshacer.</p>
+              </div>
+              <button onClick={() => setShowDeleteConfirm(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}><X size={15} /></button>
+            </div>
+            <div style={{ fontSize: 10, color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: 12 }}>
+              Escribe <strong style={{ color: '#EF4444' }}>{course.name}</strong> para confirmar:
+            </div>
+            <input value={deleteConfirmName} onChange={e => setDeleteConfirmName(e.target.value)} autoFocus
+              placeholder="Nombre de la asignatura..."
+              style={{ width: '100%', height: 38, borderRadius: 8, padding: '0 12px', fontSize: 12, fontFamily: "'Inter Tight', sans-serif", border: `1px solid ${deleteConfirmName.trim() === course.name ? 'rgba(239,68,68,0.5)' : 'var(--border-soft)'}`, background: 'var(--bg-deep)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', marginBottom: 14 }} />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button onClick={() => setShowDeleteConfirm(false)} style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 11, fontWeight: 500, cursor: 'pointer' }}>Cancelar</button>
+              <button onClick={handleConfirmDeleteCourse} disabled={deleteConfirmName.trim() !== course.name}
+                style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: deleteConfirmName.trim() === course.name ? '#EF4444' : 'var(--bg-hover)', color: deleteConfirmName.trim() === course.name ? '#fff' : 'var(--text-muted)', fontSize: 11, fontWeight: 600, cursor: deleteConfirmName.trim() === course.name ? 'pointer' : 'default', transition: 'all 150ms', display: 'flex', alignItems: 'center', gap: 5 }}>
+                <Trash2 size={11} /> Eliminar
+              </button>
             </div>
           </div>
         </div>

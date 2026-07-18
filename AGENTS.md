@@ -3,6 +3,17 @@
 
 # Summary
 
+## Task Detail Panel — Professional Redesign
+- **All modals portaled to `document.body`**: Subtasks, Notes, Preview, Confirm‑delete modals now use `createPortal(…, document.body)` at `zIndex: 99995`. Fixes the stacking‑context bug where `backdrop-filter` on `.page-container` trapped inline `position: fixed` elements, making them appear below the sidebar.
+- **Panel header**: Clean close‑button + status pill (dot + subtle bg) + action buttons. No gradients.
+- **Title**: Standalone `bento-card` section, larger typography (20px, weight 500), no bottom border.
+- **Info grid (Course, Date, Priority, Time)**: 4 clean bento‑cards in 2×2 layout, each with a tiny uppercase label (8px, `Inter Tight` font). Compact select/input styling, no unnecessary icons.
+- **Study progress**: Subtle 3px solid bar, no gradient. Uppercase label. Compact stat row.
+- **Subtareas / Notas**: Full‑width clickable cards with icon, count summary, chevron. Hover border‑color transition.
+- **Materiales**: Tighter file cards (7px padding, 22px icon box), smaller badges, cleaner embedded previews (YouTube, audio, image, PDF, Office, Web, Drive). Add‑material form uses compact `9px` UI.
+- **Estudiar CTA**: Tinted border + background, full‑width, clean type.
+- **Every card** uses `bento-card` with consistent `border: 1px solid var(--border-soft)`. No gradient fills anywhere.
+
 ## Timer
 - Pomodoro completion is detected globally (any view) via a `useEffect` in AppContext. When `isTimerActive && !isRest && sessionType === 'pomodoro' && sessionTime >= settings.pomodoroTime`, a `showRestPrompt` flag is set.
 - When `showRestPrompt` is true and the user is not in Estudio, App.tsx shows an amber banner: "Te espera un descanso" with an "Ir a Estudio" button (`ArrowRight` icon). On click, it navigates to Estudio and clears the prompt.

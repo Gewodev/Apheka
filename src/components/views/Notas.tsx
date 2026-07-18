@@ -327,7 +327,7 @@ interface NoteCardProps {
   isSelected: boolean;
   onSelect: () => void;
   onOpen: () => void;
-  onContextMenu: (e: React.MouseEvent) => void;
+  onContextMenu: (e: React.MouseEvent, btnRect?: DOMRect) => void;
   onDragStart: (e: React.DragEvent) => void;
   onDragOver: (e: React.DragEvent) => void;
   onDrop: (e: React.DragEvent) => void;
@@ -339,7 +339,11 @@ function NoteCard({ note, isSelected, onSelect, onOpen, onContextMenu, onDragSta
   const folderName = note.course;
   const folderColor = note.coverColor || note.courseColor || spineColor;
   const preview = useMemo(() => {
-    const text = note.content.replace(/<[^>]+>/g, "").trim();
+    const text = note.content
+      .replace(/<[^>]+>/g, "")
+      .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ')
+      .replace(/&#(\d+);/g, (_, d) => String.fromCharCode(+d)).replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCharCode(parseInt(h, 16)))
+      .trim();
     return text || "Sin contenido adicional en este cuaderno.";
   }, [note.content]);
   const [hov, setHov] = useState(false);
@@ -418,10 +422,10 @@ function NoteCard({ note, isSelected, onSelect, onOpen, onContextMenu, onDragSta
           <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 1, justifyContent: "center", paddingTop: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <span style={{
-                fontSize: 13.5, fontWeight: 650, color: "var(--text-primary)",
-                fontFamily: "var(--font-heading)",
+                fontSize: 14, fontWeight: 550, color: "var(--text-primary)",
+                fontFamily: "'Inter Tight', sans-serif",
                 whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                letterSpacing: "-0.01em",
+                letterSpacing: "-0.02em",
               }}>{note.title || "Sin título"}</span>
               {note.isPinned && <Star size={10} fill="#F59E0B" style={{ color: "#F59E0B", flexShrink: 0 }} />}
             </div>
@@ -429,7 +433,7 @@ function NoteCard({ note, isSelected, onSelect, onOpen, onContextMenu, onDragSta
               {formatTimeAgo(note.updatedAt)} · {folderName || "Sin carpeta"}
             </span>
           </div>
-          <button onClick={(e) => { e.stopPropagation(); onContextMenu(e); }}
+          <button onClick={(e) => { e.stopPropagation(); const br = e.currentTarget.getBoundingClientRect(); onContextMenu(e, br); }}
             style={{
               background: "transparent", border: "1px solid transparent",
               cursor: "pointer", color: "var(--text-tertiary)",
@@ -492,7 +496,7 @@ interface BookshelfBookProps {
   folders: NoteFolder[];
   onSelect: () => void;
   onDoubleClick: () => void;
-  onContextMenu: (e: React.MouseEvent) => void;
+  onContextMenu: (e: React.MouseEvent, btnRect?: DOMRect) => void;
   onDragStart: (e: React.DragEvent) => void;
   onDragOver: (e: React.DragEvent) => void;
   onDrop: (e: React.DragEvent) => void;
@@ -627,7 +631,7 @@ function BookshelfBook({ note, isSelected, folders, onSelect, onDoubleClick, onC
               display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
               overflow: "hidden", flex: 1, marginRight: 4,
             }}>{note.title || "Sin título"}</div>
-            <button onClick={(e) => { e.stopPropagation(); onContextMenu(e); }}
+            <button onClick={(e) => { e.stopPropagation(); const br = e.currentTarget.getBoundingClientRect(); onContextMenu(e, br); }}
               style={{
                 background: "none", border: "none", cursor: "pointer",
                 color: "var(--text-tertiary)", padding: 2, display: "flex",
@@ -693,94 +697,119 @@ function IconPicker({ currentIcon, currentColor, noteTitle, onSelect, onClose }:
 
   return (
     <div className="bento-card" style={{
-      width: 400,
+      width: 480,
       background: "var(--bg-elevated)", border: "1px solid var(--border-default)",
       borderRadius: 16, padding: 0,
-      boxShadow: `0 20px 60px rgba(0,0,0,0.5), 0 0 0 1px ${selectedColor}15`,
+      boxShadow: `0 20px 60px rgba(0,0,0,0.5)`,
       display: "flex", flexDirection: "column",
       animation: "fadeInDown 200ms ease-out",
       overflow: "hidden",
     }} onClick={e => e.stopPropagation()}>
 
-      {/* Top: live preview card */}
+      {/* Top: note preview card */}
       <div style={{
-        padding: "24px 20px 16px",
-        display: "flex", flexDirection: "column", alignItems: "center", gap: 10,
+        padding: "14px 20px 12px",
         borderBottom: "1px solid var(--border-soft)",
         background: `linear-gradient(180deg, ${selectedColor}06 0%, transparent 100%)`,
       }}>
-        {/* Icon preview with glow */}
         <div style={{
-          width: 76, height: 76, borderRadius: 20,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          background: `linear-gradient(135deg, ${selectedColor}20, ${selectedColor}06)`,
-          border: `1px solid ${selectedColor}20`,
-          boxShadow: `0 0 40px ${selectedColor}15, inset 0 0 40px ${selectedColor}06`,
-          transition: "all 300ms cubic-bezier(0.16, 1, 0.3, 1)",
+          display: "flex", alignItems: "center", gap: 10,
+          padding: "8px 12px",
+          borderRadius: 10,
+          background: "var(--bg-surface)",
+          border: "1px solid var(--border-subtle)",
+          transition: "all 200ms ease",
         }}>
-          <SelIcon size={36} style={{
-            color: selectedColor,
-            filter: `drop-shadow(0 0 6px ${selectedColor}60)`,
-            transition: "all 300ms cubic-bezier(0.16, 1, 0.3, 1)",
-          }} />
-        </div>
-
-        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)", letterSpacing: "-0.01em" }}>
-          {AVAILABLE_ICONS.find(i => i.name === selectedIcon)?.label || selectedIcon}
-        </div>
-
-        {/* Color swatches */}
-        <div style={{ display: "flex", gap: 5, flexWrap: "wrap", justifyContent: "center", marginTop: 2, padding: "0 4px" }}>
-          {SPINE_COLORS.map(c => (
-            <button key={c} onClick={() => setSelectedColor(c)}
-              title={c}
-              style={{
-                width: 22, height: 22, borderRadius: "50%",
-                background: `linear-gradient(135deg, ${c}, ${c}cc)`,
-                border: "none",
-                cursor: "pointer",
-                boxShadow: selectedColor === c
-                  ? `0 0 0 2px var(--bg-elevated), 0 0 0 4px ${c}80`
-                  : `0 0 0 1.5px ${c}40`,
-                transition: "all 200ms cubic-bezier(0.16, 1, 0.3, 1)",
-                transform: selectedColor === c ? "scale(1.15)" : "scale(1)",
-                outline: "none",
-              }}
-              onMouseEnter={e => { if (selectedColor !== c) { e.currentTarget.style.transform = "scale(1.12)"; e.currentTarget.style.boxShadow = `0 0 0 2px var(--bg-elevated), 0 0 0 3px ${c}60`; }}}
-              onMouseLeave={e => { if (selectedColor !== c) { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = `0 0 0 1.5px ${c}40`; }}}
-            />
-          ))}
+          <div style={{
+            width: 34, height: 34, borderRadius: 9,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            background: `${selectedColor}15`,
+            transition: "all 200ms ease",
+          }}>
+            <SelIcon size={17} style={{ color: selectedColor, transition: "all 200ms ease" }} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{
+              fontSize: 12, fontWeight: 600, color: "var(--text-primary)",
+              letterSpacing: "-0.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}>
+              {noteTitle || "Sin título"}
+            </div>
+            <div style={{ fontSize: 9, fontWeight: 500, color: "var(--text-tertiary)", marginTop: 1 }}>
+              {AVAILABLE_ICONS.find(i => i.name === selectedIcon)?.label || selectedIcon}
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Icons Grid */}
-      <div style={{
-        overflowY: "auto", maxHeight: 200,
-        display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2,
-        padding: "8px 10px",
-      }}>
-        {AVAILABLE_ICONS.map(i => {
-          const Icon = i.icon;
-          const isActive = i.name === selectedIcon;
-          return (
-            <button key={i.name}
-              onClick={() => setSelectedIcon(i.name)}
-              title={i.label}
-              style={{
-                height: 34, borderRadius: 7,
-                border: isActive ? `1px solid ${selectedColor}50` : "1px solid transparent",
-                background: isActive ? `${selectedColor}12` : "transparent",
-                color: isActive ? selectedColor : "var(--text-tertiary)",
-                cursor: "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                transition: "all 100ms",
-              }}
-              onMouseEnter={e => { if (!isActive) { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text-secondary)"; }}}
-              onMouseLeave={e => { if (!isActive) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-tertiary)"; }}}>
-              <Icon size={14} />
-            </button>
-          );
-        })}
+      {/* Body: icons grid + color variants column on right */}
+      <div style={{ display: "flex", height: 244 }}>
+        {/* Icons grid — neutral / monochrome */}
+        <div style={{
+          flex: 1, overflowY: "auto",
+          display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4,
+          padding: "8px 12px",
+        }}>
+          {AVAILABLE_ICONS.map(i => {
+            const Icon = i.icon;
+            const isActive = i.name === selectedIcon;
+            return (
+              <button key={i.name}
+                onClick={() => setSelectedIcon(i.name)}
+                title={i.label}
+                style={{
+                  height: 34, borderRadius: 7,
+                  border: isActive ? `1px solid ${selectedColor}50` : "1px solid transparent",
+                  background: isActive ? `${selectedColor}12` : "transparent",
+                  color: isActive ? selectedColor : "var(--text-tertiary)",
+                  cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  transition: "all 100ms",
+                }}
+                onMouseEnter={e => { if (!isActive) { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text-secondary)"; }}}
+                onMouseLeave={e => { if (!isActive) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-tertiary)"; }}}>
+                <Icon size={14} />
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Color variants column — single vertical column on the right, shown when an icon is selected */}
+        {selectedIcon && (
+          <div style={{
+            width: 50,
+            borderLeft: "1px solid var(--border-soft)",
+            overflowY: "auto", overflowX: "hidden",
+            padding: "8px 4px",
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 5,
+          }}>
+            {SPINE_COLORS.map(c => {
+              const Icon = IconForName(selectedIcon);
+              const isActive = selectedColor === c;
+              return (
+                <button key={c}
+                  onClick={() => setSelectedColor(c)}
+                  title={c}
+                  style={{
+                    width: 30, height: 30, borderRadius: 8,
+                    border: isActive ? `2px solid ${c}` : "1px solid transparent",
+                    background: isActive ? `${c}18` : "transparent",
+                    color: c,
+                    cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    outline: "none",
+                    flexShrink: 0,
+                    transition: "all 120ms ease",
+                    transform: isActive ? "scale(1.1)" : "scale(1)",
+                  }}
+                  onMouseEnter={e => { if (!isActive) { e.currentTarget.style.background = `${c}10`; e.currentTarget.style.transform = "scale(1.08)"; }}}
+                  onMouseLeave={e => { if (!isActive) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.transform = "scale(1)"; }}}>
+                  <Icon size={15} />
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Footer */}
@@ -1268,7 +1297,7 @@ export default function Notas() {
   });
   const [sortMode, setSortMode] = useState<SortMode>("updated");
   const [searchQuery, setSearchQuery] = useState("");
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; noteId: string; arrowLeft: boolean; arrowY: number } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; noteId: string; arrowLeft: boolean; arrowY: number; arrowTop?: boolean; arrowBottom?: boolean } | null>(null);
   
   const [showNewFolderModal, setShowNewFolderModal] = useState(false);
   const [showNewTagModal, setShowNewTagModal] = useState(false);
@@ -1650,47 +1679,34 @@ export default function Notas() {
     });
   }, []);
 
-  const handleContextMenu = useCallback((e: React.MouseEvent, noteId: string) => {
+  const handleContextMenu = useCallback((e: React.MouseEvent, noteId: string, btnRect?: DOMRect) => {
     e.preventDefault(); e.stopPropagation();
     const menuW = 180, menuH = 184;
-    let btnRect: DOMRect | null = null;
-    let anchorX: number, anchorY: number;
-    if (e.type === 'click') {
-      btnRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-      anchorX = btnRect.left + btnRect.width / 2;
-      anchorY = btnRect.top + btnRect.height / 2;
-    } else {
-      anchorX = e.clientX;
-      anchorY = e.clientY;
-    }
-    let x: number, arrowLeft: boolean;
     if (btnRect) {
-      const spL = btnRect.left, spR = window.innerWidth - btnRect.right;
-      if (spL >= menuW) {
-        x = Math.max(0, btnRect.left - menuW - 210); arrowLeft = true;
-      } else if (spR >= menuW) {
-        x = btnRect.right; arrowLeft = false;
-      } else if (spL >= spR) {
-        x = 0; arrowLeft = true;
-      } else {
-        x = Math.max(0, window.innerWidth - menuW); arrowLeft = false;
+      const x = Math.max(8, btnRect.right - menuW - 110);
+      let y = btnRect.bottom + 4;
+      let arrowBottom = false;
+      if (y + menuH > window.innerHeight - 4) {
+        y = btnRect.top - menuH - 4;
+        arrowBottom = true;
+        if (y < 4) {
+          y = Math.max(4, window.innerHeight - menuH - 4);
+        }
       }
+      const arrowY = Math.max(6, Math.min(menuW - 6, btnRect.left + btnRect.width / 2 - x));
+      setContextMenu({ x, y, noteId, arrowLeft: false, arrowY, arrowTop: !arrowBottom, arrowBottom });
     } else {
-      const spL = anchorX, spR = window.innerWidth - anchorX;
-      if (spL >= menuW) {
-        x = Math.max(0, anchorX - menuW - 210); arrowLeft = true;
-      } else if (spR >= menuW) {
-        x = anchorX; arrowLeft = false;
-      } else if (spL >= spR) {
-        x = 0; arrowLeft = true;
+      const cx = e.clientX, cy = e.clientY;
+      let x: number, arrowLeft: boolean;
+      if (cx + menuW <= window.innerWidth - 8) {
+        x = cx; arrowLeft = false;
       } else {
-        x = Math.max(0, window.innerWidth - menuW); arrowLeft = false;
+        x = Math.max(8, cx - menuW); arrowLeft = true;
       }
+      const y = Math.max(4, Math.min(cy - Math.round(menuH / 2), window.innerHeight - menuH - 4));
+      const arrowY = Math.max(10, Math.min(menuH - 16, cy - y));
+      setContextMenu({ x, y, noteId, arrowLeft, arrowY });
     }
-    let y = btnRect ? btnRect.top - 16 : anchorY - Math.round(menuH / 2);
-    y = Math.max(2, Math.min(y, window.innerHeight - menuH - 2));
-    const arrowY = btnRect ? Math.max(10, Math.min(menuH - 16, btnRect.top + btnRect.height / 2 - y)) : Math.max(10, Math.min(menuH - 16, anchorY - y));
-    setContextMenu({ x, y, noteId, arrowLeft, arrowY });
   }, []);
 
   const handleEditorInput = useCallback(() => {
@@ -3323,18 +3339,20 @@ export default function Notas() {
                               </button>
                               <div style={{
                                 width: 28, height: 28, borderRadius: 6, flexShrink: 0,
-                                background: "linear-gradient(135deg, var(--accent)10, transparent)",
+                                background: note.courseColor
+                                  ? `linear-gradient(135deg, ${note.courseColor}18, transparent)`
+                                  : "linear-gradient(135deg, var(--accent)10, transparent)",
                                 display: "flex", alignItems: "center", justifyContent: "center",
-                                border: "1px solid var(--border-soft)",
+                                border: `1px solid ${note.courseColor ? note.courseColor + '22' : 'var(--border-soft)'}`,
                               }}>
-                                <FileText size={12} style={{ color: "var(--text-secondary)" }} />
+                                <FileText size={12} style={{ color: note.courseColor || "var(--text-secondary)" }} />
                               </div>
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)", marginBottom: 1 }}>
                                   {note.course ? `${format(new Date(note.createdAt), 'dd/MM/yy')} — ${note.course}` : (note.title || "Sin título")}
                                 </div>
                                 <div style={{ fontSize: 9.5, color: "var(--text-tertiary)" }}>
-                                  {delTime} · {note.tags?.slice(0, 2).join(", ") || "sin etiquetas"}
+                                  {delTime}{note.tags?.length ? ` · ${note.tags.slice(0, 2).join(", ")}` : ""}
                                 </div>
                               </div>
                               <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
@@ -3389,7 +3407,7 @@ export default function Notas() {
                         isSelected={selectedNoteId === note.id}
                         onSelect={() => handleSelectNote(note.id)}
                         onOpen={() => { handleSelectNote(note.id); handleOpenNote(); }}
-                        onContextMenu={(e) => handleContextMenu(e, note.id)}
+                        onContextMenu={(e, br) => handleContextMenu(e, note.id, br)}
                         onDragStart={(e) => handleDragStart(e, i)}
                         onDragOver={handleDragOver}
                         onDrop={(e) => handleDrop(e, i)}
@@ -3472,7 +3490,7 @@ export default function Notas() {
                                         folders={folders}
                                         onSelect={() => handleSelectNote(note.id)}
                                         onDoubleClick={handleOpenNote}
-                                        onContextMenu={(e) => handleContextMenu(e, note.id)}
+                                        onContextMenu={(e, br) => handleContextMenu(e, note.id, br)}
                                         onDragStart={(e) => handleDragStart(e, noteIdx)}
                                         onDragOver={handleDragOver}
                                         onDrop={(e) => handleDrop(e, noteIdx)} />
@@ -3704,8 +3722,9 @@ export default function Notas() {
                         {drawerTab === "contenido" && (
                           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                             <h2 style={{
-                              fontFamily: "'Outfit', sans-serif", fontSize: 24, fontWeight: 600,
-                              color: "var(--text-primary)", margin: 0, letterSpacing: "-0.01em",
+                              fontFamily: "'Inter Tight', sans-serif", fontSize: 26, fontWeight: 250,
+                              color: "var(--text-primary)", margin: 0, letterSpacing: "-0.03em",
+                              lineHeight: 1.15,
                             }}>
                               {selectedNote.title}
                             </h2>
@@ -4057,7 +4076,21 @@ export default function Notas() {
           borderRadius: "var(--radius-md)", padding: 4, minWidth: 164,
           boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
         }}>
-          <div style={{
+          <div style={contextMenu.arrowBottom ? {
+            position: "absolute", bottom: -5, left: contextMenu.arrowY,
+            width: 8, height: 8, borderRadius: 1,
+            background: "var(--bg-surface)",
+            borderLeft: "1px solid var(--border-default)",
+            borderTop: "1px solid var(--border-default)",
+            transform: 'rotate(225deg)',
+          } : contextMenu.arrowTop ? {
+            position: "absolute", top: -5, left: contextMenu.arrowY,
+            width: 8, height: 8, borderRadius: 1,
+            background: "var(--bg-surface)",
+            borderLeft: "1px solid var(--border-default)",
+            borderTop: "1px solid var(--border-default)",
+            transform: 'rotate(45deg)',
+          } : {
             position: "absolute",
             top: contextMenu.arrowY,
             [contextMenu.arrowLeft ? 'right' : 'left']: -5,

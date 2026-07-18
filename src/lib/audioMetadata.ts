@@ -332,7 +332,10 @@ function compressCover(dataUrl: string, maxSize = 300): Promise<string> {
   });
 }
 
-export async function extractAudioMetadata(filePath: string): Promise<{
+export async function extractAudioMetadata(
+  filePath: string,
+  preloadedData?: Uint8Array
+): Promise<{
   coverUrl?: string;
   title?: string;
   artist?: string;
@@ -340,14 +343,17 @@ export async function extractAudioMetadata(filePath: string): Promise<{
 }> {
   const fileName = filePath.split(/[/\\]/).pop() || 'Unknown';
   try {
-    let data = await readFile(filePath);
-    if (!data || data.length < 10) {
-      console.warn('[Metadata] File too small or empty:', fileName, data?.length);
-      return { duration: 0 };
-    }
-    // Ensure data is Uint8Array (some Tauri versions return number[])
-    if (!(data instanceof Uint8Array)) {
-      data = new Uint8Array(data as any);
+    let data = preloadedData;
+    if (!data) {
+      data = await readFile(filePath);
+      if (!data || data.length < 10) {
+        console.warn('[Metadata] File too small or empty:', fileName, data?.length);
+        return { duration: 0 };
+      }
+      // Ensure data is Uint8Array (some Tauri versions return number[])
+      if (!(data instanceof Uint8Array)) {
+        data = new Uint8Array(data as any);
+      }
     }
     const ext = filePath.toLowerCase().split('.').pop() || '';
 

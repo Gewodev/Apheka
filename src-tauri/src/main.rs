@@ -31,7 +31,7 @@ fn resolve_binary(app: &tauri::AppHandle, name: &str) -> Result<std::path::PathB
         }
     }
     Err(format!(
-        "Binary not found: {} (checked {:?} and {:?})",
+        "{} no encontrado (Windows Defender pudo eliminarlo). Buscado en {:?} y {:?}.",
         name, candidates[0], candidates[1],
     ))
 }
@@ -160,7 +160,16 @@ async fn start_download(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| format!("Failed to spawn yt-dlp: {e}"))?;
+        .map_err(|e| {
+            let msg = e.to_string();
+            if msg.contains("Access is denied") || msg.contains("denied") || msg.contains("5") {
+                format!("Windows Defender bloqueó yt-dlp. Agrega la carpeta a exclusiones de Windows Security: {msg}")
+            } else if msg.contains("not found") || msg.contains("2") {
+                format!("yt-dlp no encontrado (pudo ser eliminado por Windows Defender). Reinstala la app o agrega exclusiones: {msg}")
+            } else {
+                format!("Error al iniciar yt-dlp: {msg}")
+            }
+        })?;
 
     let stdout = child.stdout.take().unwrap();
     let stderr = child.stderr.take().unwrap();

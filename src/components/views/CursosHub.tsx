@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
-  GraduationCap, PlusCircle, Upload, Download, Trash2,
+  GraduationCap, PlusCircle, Upload, Download,
   X, Image as ImageIcon, GripVertical,
 } from 'lucide-react';
 import { useApp, Course } from '../../store/AppContext';
@@ -17,7 +17,7 @@ interface CursosHubProps {
 }
 
 export default function CursosHub({ onSelectCourse, onTabSelect }: CursosHubProps) {
-  const { courses = [], addCourse, updateCourse, deleteCourse, reorderCourses } = useApp();
+  const { courses = [], addCourse, updateCourse, reorderCourses } = useApp();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
 
@@ -25,7 +25,6 @@ export default function CursosHub({ onSelectCourse, onTabSelect }: CursosHubProp
   const [courseName, setCourseName] = useState('');
   const [courseColor, setCourseColor] = useState('#758bfa');
   const [courseCover, setCourseCover] = useState<string | undefined>(undefined);
-  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [timeStr, setTimeStr] = useState(() => format(new Date(), "HH:mm"));
   const [secStr, setSecStr] = useState(() => format(new Date(), "ss"));
   const [dragIndex, setDragIndex] = useState<number | null>(null);
@@ -62,12 +61,6 @@ export default function CursosHub({ onSelectCourse, onTabSelect }: CursosHubProp
     toast.success('Asignatura creada');
   };
 
-  const handleConfirmDelete = () => {
-    if (!pendingDeleteId) return;
-    deleteCourse(pendingDeleteId);
-    setPendingDeleteId(null);
-    toast.success('Asignatura eliminada');
-  };
 
   const handleExport = () => {
     try {
@@ -194,29 +187,34 @@ export default function CursosHub({ onSelectCourse, onTabSelect }: CursosHubProp
                 onMouseUp={(e) => { handleMouseUp(); if (!isLongPressed) onSelectCourse(course.id); }}
                 style={{
                   position: 'relative', overflow: 'hidden',
-                  borderRadius: 16, border: '1px solid var(--border-subtle)',
-                  background: course.coverUrl ? 'transparent' : `linear-gradient(145deg, ${course.color}22, ${course.color}06)`,
+                  borderRadius: 16,
+                  border: `1.5px solid ${course.color}35`,
+                  background: course.coverUrl
+                    ? `linear-gradient(160deg, ${course.color}06, transparent 50%)`
+                    : `linear-gradient(160deg, ${course.color}14, transparent 50%)`,
                   cursor: isLongPressed ? 'grabbing' : 'pointer',
                   opacity: isDragging ? 0.4 : 1,
                   outline: isLongPressed ? '2px dashed var(--accent)' : 'none',
                   outlineOffset: 2,
-                  transition: isDragging ? "none" : "all 500ms " + EASE,
+                  transition: isDragging ? "none" : `all 500ms ${EASE}`,
                   aspectRatio: '16/10',
+                  boxShadow: `inset 0 0 40px ${course.color}06, 0 0 0 1px ${course.color}10 inset`,
                 }}
                 onMouseEnter={(e) => {
                   if (isDragging) return;
-                  e.currentTarget.style.boxShadow = 'var(--shadow-elevated), 0 0 0 1px var(--accent-glow)';
-                  e.currentTarget.style.borderColor = 'var(--border-strong)';
-                  e.currentTarget.style.transform = 'translateY(-3px) scale(1.01)';
+                  e.currentTarget.style.borderColor = `${course.color}65`;
+                  e.currentTarget.style.transform = 'translateY(-2px) scale(1.005)';
+                  e.currentTarget.style.boxShadow = `0 8px 28px ${course.color}18, inset 0 0 40px ${course.color}08, 0 0 0 1px ${course.color}1a inset`;
                 }}
                 onMouseLeave={(e) => {
                   handleMouseUp();
                   if (isDragging) return;
                   e.currentTarget.style.transform = 'none';
-                  e.currentTarget.style.boxShadow = 'none';
-                  e.currentTarget.style.borderColor = 'var(--border-subtle)';
+                  e.currentTarget.style.borderColor = `${course.color}35`;
+                  e.currentTarget.style.boxShadow = `inset 0 0 40px ${course.color}06, 0 0 0 1px ${course.color}10 inset`;
                 }}
               >
+
                 {/* Full-bleed cover */}
                 {course.coverUrl ? (
                   <img src={course.coverUrl} alt=""
@@ -225,45 +223,35 @@ export default function CursosHub({ onSelectCourse, onTabSelect }: CursosHubProp
                     onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
                   />
                 ) : (
-                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <GraduationCap size={52} style={{ color: course.color, opacity: 0.12 }} />
+                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 0 }}>
+                    <GraduationCap size={44} style={{ color: course.color, opacity: 0.08 }} />
                   </div>
                 )}
-                <div style={{
-                  position: 'absolute', inset: 0,
-                  background: 'linear-gradient(to bottom, transparent 30%, rgba(0,0,0,0.8) 100%)',
-                  pointerEvents: 'none',
-                }} />
 
-                {/* Course name overlay */}
+                {/* Dark overlay for cover images */}
+                {course.coverUrl && (
+                  <div style={{
+                    position: 'absolute', inset: 0,
+                    background: 'linear-gradient(to bottom, transparent 30%, rgba(0,0,0,0.75) 100%)',
+                    pointerEvents: 'none', zIndex: 1,
+                  }} />
+                )}
+
+                {/* Course name */}
                 <div style={{
                   position: 'absolute', bottom: 0, left: 0, right: 0,
-                  padding: '18px 20px',
+                  padding: '16px 18px', zIndex: 2,
                 }}>
                   <span style={{
-                    fontSize: 28, fontWeight: 200, color: '#fff',
-                    fontFamily: "'Inter Tight', 'Arial Narrow', sans-serif",
+                    fontSize: 26, fontWeight: 250,
+                    color: course.coverUrl ? '#fff' : `var(--text-primary)`,
+                    fontFamily: "'Inter Tight', sans-serif",
                     letterSpacing: '-0.03em', lineHeight: 1.15,
                     display: 'block',
-                    textShadow: '0 2px 20px rgba(0,0,0,0.7)',
+                    textShadow: course.coverUrl ? '0 2px 16px rgba(0,0,0,0.6)' : 'none',
                     whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                   }}>{course.name}</span>
                 </div>
-
-                {/* Delete button */}
-                <button onClick={(e) => { e.stopPropagation(); setPendingDeleteId(course.id); }}
-                  style={{
-                    position: 'absolute', top: 10, right: 10, zIndex: 4,
-                    width: 28, height: 28, borderRadius: 8,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(6px)',
-                    border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.7)',
-                    opacity: 0, transition: 'opacity 250ms ' + EASE,
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = 'rgba(239,68,68,0.8)'; e.currentTarget.style.color = '#fff'; }}
-                  className="group-hover-visible">
-                  <Trash2 size={12} />
-                </button>
 
                 {isLongPressed && (
                   <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 5, width: 28, height: 28, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)', color: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(6px)', pointerEvents: 'none' }}>
@@ -330,22 +318,6 @@ export default function CursosHub({ onSelectCourse, onTabSelect }: CursosHubProp
         </div>
       )}
 
-      {/* Delete Modal */}
-      {pendingDeleteId && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={() => setPendingDeleteId(null)}>
-          <div className="bento-card" style={{ width: 380, padding: 24, borderRadius: 'var(--radius-lg)', background: "linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)", border: "1px solid var(--border-default)", boxShadow: "var(--shadow-elevated)" }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-              <Trash2 size={18} style={{ color: 'var(--error)', flexShrink: 0 }} />
-              <h3 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', margin: 0, fontFamily: "'Inter Tight', sans-serif" }}>Eliminar asignatura</h3>
-            </div>
-            <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 20 }}>Esto eliminará permanentemente la asignatura junto con todos sus datos. Esta acción no se puede deshacer.</p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-              <button onClick={() => setPendingDeleteId(null)} style={{ background: 'none', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', padding: '6px 14px', color: 'var(--text-secondary)', fontSize: 12, cursor: 'pointer', fontFamily: 'var(--font-primary)' }}>Cancelar</button>
-              <button onClick={handleConfirmDelete} style={{ background: 'var(--error)', color: '#fff', border: 'none', borderRadius: 'var(--radius-sm)', padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font-primary)' }}>Eliminar</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

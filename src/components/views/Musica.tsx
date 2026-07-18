@@ -107,6 +107,7 @@ export default function Musica() {
   const sidebarArrowTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const urlInputRef = useRef<HTMLInputElement>(null);
+  const searchRequestId = useRef(0);
   const [colocarTrackId, setColocarTrackId] = useState<string | null>(null);
   const [youtubePlayerUrl, setYoutubePlayerUrl] = useState<string | null>(null);
   const [youtubePlayerTitle, setYoutubePlayerTitle] = useState('');
@@ -222,18 +223,21 @@ export default function Musica() {
   const handleSearch = async () => {
     const q = searchQuery.trim();
     if (!q) return;
+    const id = ++searchRequestId.current;
     setIsLoading(true);
     setSearchResults([]);
     setSearchPerformed(false);
     try {
       const results = await searchMusic(q);
+      if (id !== searchRequestId.current) return;
       setSearchResults(results);
       setSearchPerformed(true);
     } catch {
+      if (id !== searchRequestId.current) return;
       addNotification('Error al buscar', 'error');
       setSearchPerformed(true);
     } finally {
-      setIsLoading(false);
+      if (id === searchRequestId.current) setIsLoading(false);
     }
   };
 
@@ -268,7 +272,9 @@ export default function Musica() {
     updateDownloadStatus(dlItemId, 'downloading');
     try {
       await startDownload(videoUrl, dlItemId, path, audioFormat, includeCover, audioQuality);
-      updateDownloadStatus(dlItemId, 'completed');
+      if (!isTauri()) {
+        updateDownloadStatus(dlItemId, 'completed');
+      }
     } catch (e) {
       const msg = String(e);
       if (msg.includes('web-download-unavailable')) {
@@ -525,6 +531,13 @@ export default function Musica() {
               placeholder="Buscar canciones o artistas..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && searchQuery.trim()) {
+                  setActiveTab('explorar');
+                  setSearchMode('query');
+                  setTimeout(() => handleSearch(), 0);
+                }
+              }}
               className="input-base"
               style={{ width: '100%', height: 38, paddingLeft: 36, fontSize: 12, borderRadius: 10, border: '1px solid var(--border-subtle)' }}
             />

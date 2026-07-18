@@ -179,8 +179,8 @@ const MIME_MAP: Record<string, string> = {
   aiff: 'audio/aiff', ape: 'audio/ape',
 };
 
-export async function storeTrackFileInDB(id: string, filePath: string): Promise<void> {
-  const data = await readFile(filePath);
+export async function storeTrackFileInDB(id: string, filePath: string, preloadedData?: Uint8Array): Promise<void> {
+  const data = preloadedData || await readFile(filePath);
   const ext = (filePath.split('.').pop() || 'mp3').toLowerCase();
   const mime = MIME_MAP[ext] || 'audio/mpeg';
   const fileName = filePath.split(/[/\\]/).pop() || `${id}.${ext}`;
@@ -204,11 +204,11 @@ export async function ensureMusicDir(): Promise<string> {
   return dir;
 }
 
-export async function copyAudioToStorage(sourcePath: string, trackId: string): Promise<string> {
+export async function copyAudioToStorage(sourcePath: string, trackId: string, preloadedData?: Uint8Array): Promise<string> {
   const musicDir = await ensureMusicDir();
   const ext = (sourcePath.split('.').pop() || 'mp3').toLowerCase();
   const destPath = await join(musicDir, `${trackId}.${ext}`);
-  const data = await readFile(sourcePath);
+  const data = preloadedData || await readFile(sourcePath);
   await writeFile(destPath, data);
   return destPath;
 }

@@ -2004,13 +2004,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
       };
 
       try {
-        // Phase 1: Loading/Reading file
+        // Phase 1: Loading/Reading file (ONCE — avoid Windows Defender collisions)
         updateProgress('loading_file', 10);
+        let fileData: Uint8Array | undefined;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            const raw = await readFile(path);
+            if (raw && (!(raw instanceof Uint8Array) || raw.length > 0)) {
+              fileData = raw instanceof Uint8Array ? raw : new Uint8Array(raw as any);
+              break;
+            }
+          } catch {
+            if (attempt < 2) await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+          }
+        }
+        if (!fileData) throw new Error('No se pudo leer el archivo (bloqueado por seguridad)');
         updateProgress('loading_file', 100);
 
-        // Phase 2: Metadata Parsing
+        // Phase 2: Metadata Parsing (pass pre-read buffer)
         updateProgress('extracting_metadata', 10);
-        const meta = await extractAudioMetadata(path);
+        const meta = await extractAudioMetadata(path, fileData);
         updateProgress('extracting_metadata', 100);
 
         // Phase 3: Duration from metadata (already extracted)
@@ -2043,12 +2056,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
           listenedTime: 0
         };
 
-        // Phase 4: Save to storage (AETHER pattern: save file + metadata)
+        // Phase 4: Save to storage (use pre-read buffer — no extra disk I/O)
         updateProgress('saving_to_db', 10);
-        const storedPath = await copyAudioToStorage(path, trackId).catch(() => path);
+        const storedPath = await copyAudioToStorage(path, trackId, fileData).catch(() => path);
         newTrack.url = storedPath;
         // AETHER pattern: also store File in IndexedDB for reliable blob URL playback
-        await storeTrackFileInDB(trackId, path).catch(() => {});
+        await storeTrackFileInDB(trackId, path, fileData).catch(() => {});
         await saveTrackMetadata(newTrack);
         updateProgress('saving_to_db', 100);
 

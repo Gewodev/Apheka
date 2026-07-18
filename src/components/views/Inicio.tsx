@@ -1,7 +1,7 @@
 ﻿import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Music, CheckSquare, FileText, Flame,
-  Target, Star
+  Target, Star, Lock, Check, X
 } from 'lucide-react';
 import { useApp, fmtClock } from '../../store/AppContext';
 import { format, subDays, subWeeks, addDays, addWeeks, startOfWeek, parseISO } from 'date-fns';
@@ -10,20 +10,20 @@ import { getWeeklyPhrase } from '../../data/phrases';
 import NotificationBell from '../ui/NotificationBell';
 
 const segs: Record<string, boolean[]> = {
-  '0': [true,true,true,true,true,true,false], '1': [false,true,true,false,false,false,false],
-  '2': [true,true,false,true,true,false,true], '3': [true,true,true,true,false,false,true],
-  '4': [false,true,true,false,false,true,true], '5': [true,false,true,true,false,true,true],
-  '6': [true,false,true,true,true,true,true], '7': [true,true,true,false,false,false,false],
-  '8': [true,true,true,true,true,true,true], '9': [true,true,true,true,false,true,true],
+  '0': [true, true, true, true, true, true, false], '1': [false, true, true, false, false, false, false],
+  '2': [true, true, false, true, true, false, true], '3': [true, true, true, true, false, false, true],
+  '4': [false, true, true, false, false, true, true], '5': [true, false, true, true, false, true, true],
+  '6': [true, false, true, true, true, true, true], '7': [true, true, true, false, false, false, false],
+  '8': [true, true, true, true, true, true, true], '9': [true, true, true, true, false, true, true],
 };
-const segPolys: [number,number][][] = [
-  [[14,4],[58,4],[50,12],[22,12]],
-  [[68,14],[60,18],[60,50],[68,54]],
-  [[68,66],[60,70],[60,102],[68,106]],
-  [[22,108],[50,108],[58,116],[14,116]],
-  [[4,66],[12,70],[12,102],[4,106]],
-  [[4,14],[12,18],[12,50],[4,54]],
-  [[10,60],[18,56],[54,56],[62,60],[54,64],[18,64]],
+const segPolys: [number, number][][] = [
+  [[14, 4], [58, 4], [50, 12], [22, 12]],
+  [[68, 14], [60, 18], [60, 50], [68, 54]],
+  [[68, 66], [60, 70], [60, 102], [68, 106]],
+  [[22, 108], [50, 108], [58, 116], [14, 116]],
+  [[4, 66], [12, 70], [12, 102], [4, 106]],
+  [[4, 14], [12, 18], [12, 50], [4, 54]],
+  [[10, 60], [18, 56], [54, 56], [62, 60], [54, 64], [18, 64]],
 ];
 function DigitSVG({ d, color, width = 80, height = 130 }: { d: string; color: string; width?: number; height?: number }) {
   const s = segs[d] || segs['0'];
@@ -67,18 +67,18 @@ function getGoalForDay(dayStr: string, currentGoal: number, dailyGoalHistory?: R
 function calculateStreak(w: Record<string, number>, dailyGoalMin: number, dailyGoalHistory?: Record<string, number>, initialDailyGoal?: number): number {
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const yesterdayStr = format(subDays(new Date(), 1), 'yyyy-MM-dd');
-  
+
   const metGoal = (dayStr: string): boolean => {
     const goalForDay = getGoalForDay(dayStr, dailyGoalMin, dailyGoalHistory, initialDailyGoal);
     return (w[dayStr] || 0) >= goalForDay * 60;
   };
-  
+
   // If today not completed yet, check yesterday first
   const startDay = metGoal(todayStr) ? todayStr :
-                   metGoal(yesterdayStr) ? yesterdayStr : null;
-  
+    metGoal(yesterdayStr) ? yesterdayStr : null;
+
   if (!startDay) return 0;
-  
+
   // Walk backwards to find the start of the streak
   let s = 1;
   let d = subDays(new Date(startDay), 1);
@@ -154,6 +154,7 @@ export default function Inicio() {
 
   const [goalEvent, setGoalEvent] = useState<GoalEvent | null>(() => loadGoalEvent());
   const [goalCountdown, setGoalCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+  const [goalExpired, setGoalExpired] = useState(false);
   const [upcomingEvents, setUpcomingEvents] = useState<GoalEvent[]>([]);
 
   const updateGoalFromStorage = useCallback(() => setGoalEvent(loadGoalEvent()), []);
@@ -169,9 +170,8 @@ export default function Inicio() {
       const today = format(new Date(), 'yyyy-MM-dd');
       const future = all.filter(e => e.date >= today).sort((a, b) => a.date.localeCompare(b.date) || (a.startTime || '').localeCompare(b.startTime || ''));
       if (!goalEvent) return future.slice(0, 4);
-      const goalIdx = future.findIndex(e => e.id === goalEvent.id);
-      if (goalIdx < 0) return future.slice(0, 4);
-      return future.slice(goalIdx, goalIdx + 5);
+      const afterGoal = future.filter(e => e.id !== goalEvent.id && e.date >= goalEvent.date);
+      return afterGoal.slice(0, 2);
     } catch { return []; }
   }, [goalEvent]);
 
@@ -182,10 +182,22 @@ export default function Inicio() {
       if (g?.id !== goalEvent?.id) setGoalEvent(g);
     }, 1000);
     const cd = setInterval(() => {
-      if (!goalEvent) { setGoalCountdown({ days: 0, hours: 0, minutes: 0, seconds: 0 }); return; }
+      if (!goalEvent) { setGoalCountdown({ days: 0, hours: 0, minutes: 0, seconds: 0 }); setGoalExpired(false); return; }
       const t = new Date(goalEvent.date + 'T' + (goalEvent.startTime || '23:59'));
       const diff = t.getTime() - Date.now();
-      if (diff <= 0) { setGoalCountdown({ days: 0, hours: 0, minutes: 0, seconds: 0 }); return; }
+      if (diff <= 0) {
+        setGoalCountdown({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+        setGoalExpired(true);
+        // Auto-unpin after 24h
+        const hoursSince = Math.abs(diff) / 3600000;
+        if (hoursSince >= 24) {
+          localStorage.removeItem(GOAL_KEY);
+          setGoalEvent(null);
+          setGoalExpired(false);
+        }
+        return;
+      }
+      setGoalExpired(false);
       setGoalCountdown({
         days: Math.floor(diff / 86400000),
         hours: Math.floor((diff % 86400000) / 3600000),
@@ -206,6 +218,31 @@ export default function Inicio() {
 
   const streak = useMemo(() => calculateStreak(weeklyStudyTime, settings?.dailyGoal || 240, settings?.dailyGoalHistory, settings?.initialDailyGoal), [weeklyStudyTime, settings?.dailyGoal, settings?.dailyGoalHistory, settings?.initialDailyGoal]);
   const phrase = useMemo(() => getWeeklyPhrase(), []);
+  const [phraseEditing, setPhraseEditing] = useState(false);
+  const [phraseDraft, setPhraseDraft] = useState('');
+  const [phraseLocked, setPhraseLocked] = useState(() => localStorage.getItem('owa_phrase_locked') === 'true');
+  const [phraseCustom, setPhraseCustom] = useState(() => localStorage.getItem('owa_phrase_custom') || '');
+  const displayPhrase = phraseCustom || phrase;
+  const handleSavePhrase = useCallback(() => {
+    const trimmed = phraseDraft.trim();
+    if (trimmed) {
+      localStorage.setItem('owa_phrase_custom', trimmed);
+      setPhraseCustom(trimmed);
+    } else {
+      localStorage.removeItem('owa_phrase_custom');
+      setPhraseCustom('');
+    }
+    setPhraseEditing(false);
+  }, [phraseDraft]);
+  const handleCancelPhrase = useCallback(() => {
+    setPhraseEditing(false);
+    setPhraseDraft('');
+  }, []);
+  const togglePhraseLock = useCallback(() => {
+    const next = !phraseLocked;
+    setPhraseLocked(next);
+    localStorage.setItem('owa_phrase_locked', String(next));
+  }, [phraseLocked]);
   useEffect(() => {
     if (settings && !settings.heatmapStartDate && updateSettings) {
       const today = new Date();
@@ -220,45 +257,45 @@ export default function Inicio() {
   const heatmapData = useMemo(() => {
     const today = new Date();
     const grid: { level: number; tooltip: string }[][] = [];
-    
+
     const dayOfWeekToday = today.getDay();
     const daysToSubToday = dayOfWeekToday === 0 ? 6 : dayOfWeekToday - 1;
     const mondayOfThisWeek = subDays(today, daysToSubToday);
     const defaultStart = subWeeks(mondayOfThisWeek, 15);
-    
+
     const configuredStart = settings?.heatmapStartDate ? parseISO(settings.heatmapStartDate) : defaultStart;
     const startOfWeekConfigured = startOfWeek(configuredStart, { weekStartsOn: 1 });
-    
+
     const weeksDiff = Math.floor((mondayOfThisWeek.getTime() - startOfWeekConfigured.getTime()) / (7 * 24 * 60 * 60 * 1000));
-    
+
     let baseMonday = startOfWeekConfigured;
     if (weeksDiff > 15) {
       baseMonday = subWeeks(mondayOfThisWeek, 15);
     }
-    
+
     for (let r = 0; r < 7; r++) {
       const rowCells: { level: number; tooltip: string }[] = [];
       for (let c = 0; c < 16; c++) {
         const targetDate = addDays(addWeeks(baseMonday, c), r);
         const dayStr = format(targetDate, 'yyyy-MM-dd');
-        
+
         const secondsStudied = weeklyStudyTime[dayStr] || 0;
         const isFuture = targetDate.getTime() > today.getTime();
-        
+
         const goalForDay = getGoalForDay(dayStr, settings?.dailyGoal || 240, settings?.dailyGoalHistory, settings?.initialDailyGoal);
         const goalSeconds = goalForDay * 60;
-        
+
         const met = secondsStudied >= goalSeconds && secondsStudied > 0;
         const pct = goalSeconds > 0 ? secondsStudied / goalSeconds : 0;
         const level = isFuture ? 0 : met ? 4 : pct >= 0.75 ? 3 : pct >= 0.25 ? 2 : pct > 0 ? 1 : 0;
-        
+
         const dateFormatted = format(targetDate, "d 'de' MMM", { locale: es });
         const minutesStudied = Math.floor(secondsStudied / 60);
-        
-        const tooltip = isFuture 
+
+        const tooltip = isFuture
           ? `${dateFormatted}: Dia futuro`
           : `${dateFormatted}: ${minutesStudied}m / ${goalForDay}m (${Math.round(pct * 100)}%) ${met ? 'Meta cumplida' : ''}`;
-          
+
         rowCells.push({ level, tooltip });
       }
       grid.push(rowCells);
@@ -273,6 +310,7 @@ export default function Inicio() {
 
   const dailyGoalMinutes = settings?.dailyGoal || 240;
   const dailyPct = useMemo(() => Math.min(100, Math.round((dailyStudyTime / (dailyGoalMinutes * 60)) * 100) || 73), [dailyStudyTime, dailyGoalMinutes]);
+  const todayAchieved = dailyStudyTime >= dailyGoalMinutes * 60;
 
   const recentTracks = useMemo(() => {
     const seen = new Set<string>();
@@ -305,9 +343,33 @@ export default function Inicio() {
               return h < 12 ? 'Buenos días' : h < 18 ? 'Buenas tardes' : 'Buenas noches';
             })()}, <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{settings.userName || 'Avery'}</span>
           </div>
-          <h1 className="truncate" style={{ fontFamily: "'Inter Tight', sans-serif", fontWeight: 350, fontSize: 'clamp(18px, 3.2vw, 34px)', lineHeight: 1.5, letterSpacing: '0.01em', color: 'var(--text-secondary)' }}>
-            {phrase}
-          </h1>
+          {phraseEditing ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, maxWidth: '100%' }}>
+              <input value={phraseDraft} onChange={e => setPhraseDraft(e.target.value)} autoFocus
+                onKeyDown={e => { if (e.key === 'Enter') handleSavePhrase(); if (e.key === 'Escape') handleCancelPhrase(); }}
+                style={{ flex: 1, minWidth: 0, height: 38, borderRadius: 8, padding: '0 12px', fontSize: 15, fontFamily: "'Inter Tight', sans-serif", fontWeight: 350, border: '1px solid var(--border-soft)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', outline: 'none' }} />
+              <button onClick={togglePhraseLock} title={phraseLocked ? 'Desbloquear frase' : 'Bloquear frase'}
+                style={{ width: 32, height: 32, borderRadius: 8, background: 'none', border: '1px solid var(--border-subtle)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: phraseLocked ? '#F59E0B' : 'var(--text-muted)', flexShrink: 0, transition: 'all 150ms' }}>
+                <Lock size={13} />
+              </button>
+              <button onClick={handleSavePhrase} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'var(--accent)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', flexShrink: 0 }}>
+                <Check size={14} />
+              </button>
+              <button onClick={handleCancelPhrase} style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-tertiary)', flexShrink: 0 }}>
+                <X size={14} />
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', maxWidth: '100%' }} onClick={() => { setPhraseDraft(displayPhrase); setPhraseEditing(true); }}>
+              <h1 className="truncate" style={{ fontFamily: "'Inter Tight', sans-serif", fontWeight: 350, fontSize: 'clamp(18px, 3.2vw, 34px)', lineHeight: 1.5, letterSpacing: '0.01em', color: 'var(--text-secondary)', margin: 0 }}>
+                {displayPhrase}
+              </h1>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, opacity: 0.4 }}>
+                {phraseCustom ? <Check size={12} style={{ color: '#10B981' }} /> : null}
+                {phraseLocked ? <Lock size={11} style={{ color: '#F59E0B' }} /> : null}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-3 flex-shrink-0">
@@ -335,7 +397,7 @@ export default function Inicio() {
           { label: 'NOTAS', val: ts.total, sub: 'Guardadas', color: '#10B981', IconC: FileText },
           { label: 'RACHA', val: streak, sub: 'días', color: streak > 0 ? '#F59E0B' : 'var(--text-tertiary)', IconC: Flame },
         ].map((s, i) => {
-          const active = i === 2 && streak > 0;
+          const active = i === 2 && streak > 0 && todayAchieved;
           const c = s.color;
           return (
             <div key={i} className={(i === 2 ? "col-span-2 lg:col-span-1" : "col-span-1") + " bento-card"}
@@ -361,19 +423,15 @@ export default function Inicio() {
                 e.currentTarget.style.transform = 'translateY(0)';
               }}>
               <div style={{
-                width: 56, flexShrink: 0,
-                background: `linear-gradient(180deg, ${c}12 0%, transparent 100%)`,
+                width: 64, flexShrink: 0,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                position: 'relative',
               }}>
-                <div style={{
-                  width: 30, height: 30, borderRadius: 9,
-                  background: `${c}14`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  border: `1px solid ${c}18`,
-                }}>
-                  <s.IconC size={15} style={{ color: active ? '#F59E0B' : c, opacity: 0.85 }} />
-                </div>
+                <s.IconC size={24} style={{
+                  color: active ? '#F59E0B' : c,
+                  opacity: active ? 1 : 0.7,
+                  fill: i === 2 && active ? '#F59E0B' : 'transparent',
+                  filter: active ? `drop-shadow(0 0 8px ${c}50)` : 'none',
+                }} />
               </div>
               <div style={{ flex: 1, padding: '12px 16px', minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                 <div style={{ fontSize: 30, fontWeight: 650, color: active ? '#F59E0B' : 'var(--text-primary)', lineHeight: 1.05, letterSpacing: '-0.02em', fontFamily: "'Inter Tight', sans-serif", overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', marginBottom: 3 }}>{s.val}</div>
@@ -465,7 +523,7 @@ export default function Inicio() {
           </div>
           <div className="hidden sm:flex" style={{ justifyContent: 'flex-end', alignItems: 'center', gap: 4, marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border-soft)', fontSize: 9, color: 'var(--text-tertiary)', fontWeight: 600 }}>
             <span>Menos</span>
-            {[0,1,2,3,4].map(l => <div key={l} style={{ width: 10, height: 10, borderRadius: 2, background: hl(l) }} />)}
+            {[0, 1, 2, 3, 4].map(l => <div key={l} style={{ width: 10, height: 10, borderRadius: 2, background: hl(l) }} />)}
             <span>Mas</span>
           </div>
         </div>
@@ -476,21 +534,21 @@ export default function Inicio() {
             <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em' }}>RECIENTES</span>
             <span onClick={() => setNavigateTo?.('musica')} style={{ fontSize: 10, fontWeight: 600, color: 'var(--accent)', cursor: 'pointer' }} className="hover:opacity-80">Ir a Musica</span>
           </div>
-          
-          <div style={{ 
-            display: 'grid', 
-            gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', 
-            gap: 12, 
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+            gap: 12,
             flex: 1,
             justifyContent: 'center',
             alignItems: 'start'
           }}>
             {recentTracks.length > 0 ? (
               recentTracks.slice(0, 4).map((track, idx) => (
-                <div key={track.id} className={idx >= 3 ? 'hidden lg:block' : ''} style={{ 
-                  background: 'var(--bg-deep)', 
-                  borderRadius: 10, 
-                  border: '1px solid var(--border-subtle)', 
+                <div key={track.id} className={idx >= 3 ? 'hidden lg:block' : ''} style={{
+                  background: 'var(--bg-deep)',
+                  borderRadius: 10,
+                  border: '1px solid var(--border-subtle)',
                   padding: 8,
                   display: 'flex',
                   flexDirection: 'column',
@@ -516,10 +574,10 @@ export default function Inicio() {
               ))
             ) : (
               Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className={i >= 3 ? 'hidden lg:block' : ''} style={{ 
-                  background: 'var(--bg-deep)', 
-                  borderRadius: 10, 
-                  border: '1px dashed var(--border-subtle)', 
+                <div key={i} className={i >= 3 ? 'hidden lg:block' : ''} style={{
+                  background: 'var(--bg-deep)',
+                  borderRadius: 10,
+                  border: '1px dashed var(--border-subtle)',
                   aspectRatio: '1/1',
                   display: 'flex',
                   flexDirection: 'column',
@@ -604,24 +662,24 @@ export default function Inicio() {
 
         {/* GOAL / META PLANIFICADA */}
         <div className="xl:col-span-4 hidden xl:block bento-card" style={{ padding: '24px', background: `linear-gradient(135deg, var(--bg-elevated) 0%, color-mix(in srgb, ${goalEvent?.color || 'var(--accent)'}04, var(--bg-base)) 100%)`, border: `1px solid ${goalEvent ? `${goalEvent.color}30` : 'var(--border-subtle)'}`, borderRadius: 14, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, paddingBottom: 14, borderBottom: '1px solid var(--border-soft)' }}>
-            <div style={{ width: 36, height: 36, borderRadius: 10, background: goalEvent ? `${goalEvent.color}14` : 'var(--bg-surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${goalEvent ? `${goalEvent.color}20` : 'var(--border-soft)'}` }}>
-              <Star size={17} fill={goalEvent ? goalEvent.color : 'none'} style={{ color: goalEvent?.color || 'var(--text-tertiary)' }} />
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', marginBottom: 3 }}>META PLANIFICADA</div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: goalEvent?.color || 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {goalEvent ? goalEvent.title : 'Ninguna'}
-              </div>
-            </div>
-          </div>
 
           {goalEvent ? (
             <>
+              {/* Goal header */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, paddingBottom: 14, borderBottom: '1px solid var(--border-soft)' }}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: `${goalEvent.color}14`, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${goalEvent.color}20` }}>
+                  <Star size={17} fill={goalEvent.color} style={{ color: goalEvent.color }} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', marginBottom: 3 }}>META PLANIFICADA</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: goalEvent.color, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{goalEvent.title}</div>
+                </div>
+              </div>
+
               {/* Big countdown */}
               <div style={{ display: 'flex', gap: 8, justifyContent: 'center', padding: '12px 0 16px', fontFamily: "'Inter Tight', sans-serif" }}>
                 {[
-                  { val: goalCountdown.days, label: 'días' },
+                  { val: goalCountdown.days, label: 'dias' },
                   { val: goalCountdown.hours, label: 'hrs' },
                   { val: goalCountdown.minutes, label: 'min' },
                   { val: goalCountdown.seconds, label: 'seg' },
@@ -640,58 +698,103 @@ export default function Inicio() {
                   );
                 })}
               </div>
+
+              {/* Date label or expired message */}
               {(() => {
                 try {
                   const d = new Date(goalEvent.date + 'T' + (goalEvent.startTime || '23:59'));
                   const diff = d.getTime() - Date.now();
-                  if (diff <= 0) return <div style={{ textAlign: 'center', fontSize: 10, color: '#EF4444', fontWeight: 600 }}>{'\u26A0'} Evento vencido</div>;
+                  if (diff <= 0) return (
+                    <div style={{ textAlign: 'center', padding: '2px 0' }}>
+                      <div style={{ fontSize: 10, color: '#10B981', fontWeight: 600 }}>Ha llegado el dia de tu meta</div>
+                      <div style={{ fontSize: 8, color: 'var(--text-tertiary)', fontStyle: 'italic', marginTop: 4 }}>Se desanclara automaticamente manana</div>
+                    </div>
+                  );
                   return (
                     <div style={{ fontSize: 10, color: 'var(--text-tertiary)', textAlign: 'center', fontFamily: "'JetBrains Mono', monospace" }}>
                       {format(d, "EEEE d 'de' MMMM", { locale: es as any })}
-                      {goalEvent.startTime && !goalEvent.allDay ? ` \u00B7 ${goalEvent.startTime}` : ''}
+                      {goalEvent.startTime && !goalEvent.allDay ? ` · ${goalEvent.startTime}` : ''}
                     </div>
                   );
                 } catch { return null; }
               })()}
 
-              {/* Upcoming events */}
+              {/* Upcoming events (2) */}
               {upcomingEvents.length > 0 && (
-                <div style={{ marginTop: upcomingEvents.length > 1 ? 14 : 0, paddingTop: upcomingEvents.length > 1 ? 12 : 0, borderTop: upcomingEvents.length > 1 ? '1px solid var(--border-soft)' : 'none' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {upcomingEvents.map(ev => {
-                      const isGoal = ev.id === goalEvent.id;
-                      return (
-                        <div key={ev.id} style={{
-                          display: 'flex', alignItems: 'center', gap: 8,
-                          padding: '5px 8px', borderRadius: 6,
-                          background: isGoal ? `${ev.color}0a` : 'transparent',
-                        }}>
-                          <div style={{ width: 6, height: 6, borderRadius: '50%', background: ev.color, flexShrink: 0 }} />
-                          <div style={{ flex: 1, minWidth: 0, fontSize: 10.5, fontWeight: isGoal ? 600 : 400, color: isGoal ? ev.color : 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {ev.title}
-                          </div>
-                          <div style={{ fontSize: 8.5, color: 'var(--text-tertiary)', fontFamily: "'JetBrains Mono', monospace", flexShrink: 0, opacity: isGoal ? 0.7 : 1 }}>
-                            {(() => {
-                              try {
-                                const ed = new Date(ev.date + 'T' + (ev.startTime || '12:00'));
-                                return format(ed, 'd MMM', { locale: es as any });
-                              } catch { return ''; }
-                            })()}
-                          </div>
+                <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border-soft)' }}>
+                  <div style={{ fontSize: 8, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10 }}>Siguientes</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {upcomingEvents.map(ev => (
+                      <div key={ev.id} style={{
+                        display: 'flex', alignItems: 'center', gap: 10,
+                        padding: '8px 10px', borderRadius: 8,
+                        background: 'var(--bg-deep)',
+                      }}>
+                        <div style={{ width: 6, height: 6, borderRadius: '50%', background: ev.color, flexShrink: 0 }} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.title}</div>
                         </div>
-                      );
-                    })}
+                        <div style={{ fontSize: 9, color: 'var(--text-tertiary)', fontFamily: "'JetBrains Mono', monospace", flexShrink: 0 }}>
+                          {(() => {
+                            try {
+                              const ed = new Date(ev.date + 'T' + (ev.startTime || '12:00'));
+                              return format(ed, "d MMM", { locale: es as any });
+                            } catch { return ''; }
+                          })()}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
             </>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px 0', gap: 8 }}>
-              <Star size={28} style={{ color: 'var(--text-muted)', opacity: 0.3 }} />
-              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 500, textAlign: 'center', lineHeight: 1.5 }}>
-                Marca un evento como <br />"Meta Planificada" en Planificador
+            <>
+              {/* No goal: show upcoming events */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, paddingBottom: 14, borderBottom: '1px solid var(--border-soft)' }}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--bg-surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border-soft)' }}>
+                  <Star size={17} style={{ color: 'var(--text-tertiary)' }} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', marginBottom: 3 }}>PROXIMOS EVENTOS</div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-muted)' }}>
+                    {upcomingEvents.length > 0 ? `${upcomingEvents.length} por venir` : 'Ninguno'}
+                  </div>
+                </div>
               </div>
-            </div>
+
+              {upcomingEvents.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {upcomingEvents.map(ev => (
+                    <div key={ev.id} style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '8px 10px', borderRadius: 8,
+                      background: 'var(--bg-deep)',
+                    }}>
+                      <div style={{ width: 6, height: 6, borderRadius: '50%', background: ev.color, flexShrink: 0 }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.title}</div>
+                      </div>
+                      <div style={{ fontSize: 9, color: 'var(--text-tertiary)', fontFamily: "'JetBrains Mono', monospace", flexShrink: 0 }}>
+                        {(() => {
+                          try {
+                            const ed = new Date(ev.date + 'T' + (ev.startTime || '12:00'));
+                            return format(ed, "d MMM", { locale: es as any });
+                          } catch { return ''; }
+                        })()}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '16px 0', gap: 6 }}>
+                  <Star size={24} style={{ color: 'var(--text-muted)', opacity: 0.2 }} />
+                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 500, textAlign: 'center', lineHeight: 1.5 }}>
+                    Marca un evento como Meta Planificada en Planificador
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

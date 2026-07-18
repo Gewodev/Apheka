@@ -299,18 +299,6 @@ export default function Estudio() {
         lastChronoRoundRef.current = r;
         saveChronoRound(r);
         setChronoRounds(r);
-        addNotification(r >= 2 ? `¡${r} sesiones completadas! (${(r * chronoGoal) / 60} min)` : `Ronda completada (${chronoGoal / 60} min)`, 'success');
-        addStudySession({
-          type: 'chrono',
-          startedAt: new Date(Date.now() - sessionTime * 1000).toISOString(),
-          endedAt: new Date().toISOString(),
-          duration: chronoGoal,
-          taskId: activeTaskId || undefined,
-          courseId: undefined,
-          pauseCount: distractionCount,
-          pauseDuration: accumulatedPauseTime - lastPauseTimeRef.current,
-        });
-        lastPauseTimeRef.current = accumulatedPauseTime;
         if (activeTaskId) {
           const task = tasks.find(t => t.id === activeTaskId);
           if (task) updateTask(activeTaskId, { studyTime: (task.studyTime || 0) + Math.round(chronoGoal / 60) });

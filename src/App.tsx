@@ -273,8 +273,7 @@ function AppContent() {
                     position: 'absolute', left: '100%', top: '50%', transform: 'translateY(-50%)', marginLeft: 8,
                     width: 280, maxHeight: 'min(680px, 88vh)', overflowY: 'auto',
                     background: 'var(--bg-elevated)', border: '1px solid var(--border-default)',
-                    borderRadius: 14, padding: 10, zIndex: 9999, boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-                    backdropFilter: 'blur(20px)',
+                    borderRadius: 14, padding: 10, zIndex: 9999, boxShadow: '0 4px 16px rgba(0,0,0,0.25)',
                   }}
                 >
                   <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-tertiary)', padding: '8px 12px 4px' }}>

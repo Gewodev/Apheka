@@ -73,6 +73,7 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
   } = useApp();
 
   const progressRef = useRef<HTMLDivElement>(null);
+  const seekValueRef = useRef(0);
   const [isSeeking, setIsSeeking] = useState(false);
   const [seekValue, setSeekValue] = useState(0);
   const [expanded, setExpanded] = useState(false);
@@ -88,12 +89,11 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
   const [coverHover, setCoverHover] = useState(false);
 
   const barPadding = settings.playerBarEnabled
-    ? (settings.playerBarHeight === 'compact' ? '16px 28px 16px 20px'
-      : settings.playerBarHeight === 'large' ? '30px 36px 28px 28px'
-      : '24px 36px 22px 28px')
-    : '16px 28px 16px 20px';
+    ? (settings.playerBarHeight === 'compact' ? '18px 28px 18px 20px'
+      : settings.playerBarHeight === 'large' ? '32px 36px 30px 28px'
+      : '26px 36px 24px 28px')
+    : '18px 28px 18px 20px';
 
-  // Compute bar track image URL (GIF or draw)
   const barTrackImage = useMemo(() => {
     if (!settings.playerBarEnabled) return null;
     const src = settings.playerBarTrackSource || 'url';
@@ -104,28 +104,34 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
 
   const progressVal = isSeeking ? seekValue : musicProgress;
 
-  // Don't auto-select a track on mount; let user choose from Música view
-  // Player starts collapsed and paused
+  const sidebarWidthRef = useRef(sidebarWidth);
+  useEffect(() => { sidebarWidthRef.current = sidebarWidth; }, [sidebarWidth]);
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
       if (expanded) return;
-      const nearBottom = window.innerHeight - e.clientY < 60;
-      if (nearBottom && !proximityRef.current) {
+      const sw = sidebarWidthRef.current;
+      const cx = window.innerWidth * 0.5 + sw * 0.5;
+      const cy = window.innerHeight - 24;
+      const dx = e.clientX - cx;
+      const dy = e.clientY - cy;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const nearBottom = window.innerHeight - e.clientY < 20;
+      const inZone = nearBottom || dist < 80;
+      if (inZone && !proximityRef.current) {
         proximityRef.current = true;
         setArrowVisible(true);
         if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
-      } else if (!nearBottom && proximityRef.current) {
+      } else if (!inZone && proximityRef.current) {
         proximityRef.current = false;
         if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
         hideTimerRef.current = setTimeout(() => setArrowVisible(false), 200);
       }
     };
     const onLeave = () => {
-      if (!expanded && arrowVisible) {
-        if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
-        hideTimerRef.current = setTimeout(() => setArrowVisible(false), 150);
-      }
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+      proximityRef.current = false;
+      hideTimerRef.current = setTimeout(() => setArrowVisible(false), 80);
     };
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseleave', onLeave);
@@ -153,18 +159,48 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
     setMusicVolume(parseFloat(e.target.value));
   };
 
-  const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleProgressClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!progressRef.current || !hasTrack) return;
     const rect = progressRef.current.getBoundingClientRect();
     setMusicProgress(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)));
-  };
+  }, [hasTrack, setMusicProgress]);
+
+  const handleSeekMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!progressRef.current || !hasTrack) return;
+    const rect = progressRef.current.getBoundingClientRect();
+    const val = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    seekValueRef.current = val;
+    setSeekValue(val);
+    setIsSeeking(true);
+  }, [hasTrack]);
+
+  useEffect(() => {
+    if (!isSeeking) return;
+    const onMove = (e: MouseEvent) => {
+      if (!progressRef.current) return;
+      const rect = progressRef.current.getBoundingClientRect();
+      const val = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      seekValueRef.current = val;
+      setSeekValue(val);
+    };
+    const onUp = () => {
+      setMusicProgress(seekValueRef.current);
+      setIsSeeking(false);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    return () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+  }, [isSeeking, setMusicProgress]);
 
   if (!hasTracks || !currentTrackId) return null;
   if (coverModalTrackId) return null;
 
   return (
     <>
-      {/* Entry arrow — minimal stroke only */}
+      {/* Entry arrow */}
       <div onClick={handleOpen}
         style={{
           position: 'fixed',
@@ -234,7 +270,7 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                 minWidth: 0, maxWidth: 360,
               }}>
                 <div style={{
-                  width: 62, height: 62, borderRadius: 14, overflow: 'hidden',
+                  width: 66, height: 66, borderRadius: 14, overflow: 'hidden',
                   background: 'var(--bg-deep)', flexShrink: 0,
                   boxShadow: `0 2px 12px rgba(0,0,0,0.35)`,
                   cursor: 'pointer', position: 'relative',
@@ -245,10 +281,9 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                     <img src={currentTrack.coverUrl || currentTrack.coverImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                   ) : (
                     <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: `color-mix(in srgb, ${acC} 12%, transparent)` }}>
-                      <Disc3 size={18} style={{ color: acC }} />
+                      <Disc3 size={20} style={{ color: acC }} />
                     </div>
                   )}
-                  {/* Expand hint overlay */}
                   <div style={{
                     position: 'absolute', inset: 0,
                     background: 'rgba(0,0,0,0.25)',
@@ -268,7 +303,7 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, marginRight: 6 }}>
                   <div style={{
-                    fontSize: 15, fontWeight: 600,
+                    fontSize: 16, fontWeight: 600,
                     color: 'var(--text-primary)',
                     whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                     lineHeight: 1.3,
@@ -276,7 +311,7 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                     {currentTrack.title}
                   </div>
                   <div style={{
-                    fontSize: 12, color: 'var(--text-tertiary)',
+                    fontSize: 13, color: 'var(--text-tertiary)',
                     whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                     lineHeight: 1.2, marginTop: 3,
                   }}>
@@ -287,12 +322,12 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
 
               {/* CENTER: Controls + Progress */}
               <div style={{
-                display: 'flex', flexDirection: 'column', gap: 6,
+                display: 'flex', flexDirection: 'column', gap: 8,
                 minWidth: 0,
               }}>
                 {/* Controls row */}
                 <div style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
                   flexShrink: 0,
                 }}>
                   <button onClick={() => setShuffleMode(!shuffleMode)}
@@ -303,7 +338,7 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                     }}
                     onMouseEnter={e => { if (!shuffleMode) e.currentTarget.style.background = 'var(--bg-hover)'; }}
                     onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}>
-                    <Shuffle size={14} />
+                    <Shuffle size={15} />
                   </button>
                   <button onClick={() => {
                     const idx = tracks.findIndex(t => t.id === currentTrackId);
@@ -313,11 +348,11 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                     style={{ background: 'none', border: 'none', padding: 8, cursor: 'pointer', color: 'var(--text-tertiary)', display: 'flex', borderRadius: 6, transition: 'color 150ms' }}
                     onMouseEnter={e => { e.currentTarget.style.color = acC; e.currentTarget.style.background = 'var(--bg-hover)'; }}
                     onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-tertiary)'; e.currentTarget.style.background = 'none'; }}>
-                    <SkipBack size={18} />
+                    <SkipBack size={19} />
                   </button>
                   <button onClick={toggleMusicPlayback}
                     style={{
-                      width: 52, height: 52, borderRadius: '50%',
+                      width: 56, height: 56, borderRadius: '50%',
                       background: `linear-gradient(135deg, ${acC}, ${acC}cc)`,
                       color: '#fff',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -334,7 +369,7 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                       e.currentTarget.style.boxShadow = `0 2px 14px ${acC}40`;
                     }}
                   >
-                    {isPlayingMusic ? <Pause size={22} fill="currentColor" /> : <Play size={22} fill="currentColor" style={{ marginLeft: 2 }} />}
+                    {isPlayingMusic ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" style={{ marginLeft: 2 }} />}
                   </button>
                   <button onClick={() => {
                     const idx = tracks.findIndex(t => t.id === currentTrackId);
@@ -344,7 +379,7 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                     style={{ background: 'none', border: 'none', padding: 8, cursor: 'pointer', color: 'var(--text-tertiary)', display: 'flex', borderRadius: 6, transition: 'color 150ms' }}
                     onMouseEnter={e => { e.currentTarget.style.color = acC; e.currentTarget.style.background = 'var(--bg-hover)'; }}
                     onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-tertiary)'; e.currentTarget.style.background = 'none'; }}>
-                    <SkipForward size={18} />
+                    <SkipForward size={19} />
                   </button>
                   <button onClick={() => {
                     const next = repeatMode === 'none' ? 'all' : repeatMode === 'all' ? 'one' : 'none';
@@ -357,15 +392,15 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                     }}
                     onMouseEnter={e => { if (repeatMode === 'none') e.currentTarget.style.background = 'var(--bg-hover)'; }}
                     onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}>
-                    <Repeat2 size={14} />
+                    <Repeat2 size={15} />
                     {repeatMode === 'one' && <span style={{ position: 'absolute', top: -2, right: -3, fontSize: 8, fontWeight: 700, color: acC }}>1</span>}
                   </button>
                 </div>
                 {/* Progress bar */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{
-                    fontSize: 10, color: 'var(--text-tertiary)',
-                    minWidth: 28, textAlign: 'right',
+                    fontSize: 11, color: 'var(--text-tertiary)',
+                    minWidth: 32, textAlign: 'right',
                     fontFamily: "'JetBrains Mono', monospace", fontWeight: 500,
                     flexShrink: 0,
                   }}>
@@ -373,10 +408,7 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                   </span>
                   <div ref={progressRef}
                     onClick={handleProgressClick}
-                    onMouseDown={(e) => { setIsSeeking(true); setSeekValue(musicProgress); handleProgressClick(e); }}
-                    onMouseMove={(e) => { if (isSeeking && progressRef.current) { const r = progressRef.current.getBoundingClientRect(); setSeekValue(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width))); } }}
-                    onMouseUp={() => { if (isSeeking) { setMusicProgress(seekValue); setIsSeeking(false); } }}
-                    onMouseLeave={() => { if (isSeeking) { setMusicProgress(seekValue); setIsSeeking(false); } }}
+                    onMouseDown={handleSeekMouseDown}
                     style={{
                       flex: 1,
                       height: settings.playerBarEnabled ? (settings.playerBarTrackHeight ?? 3) : 3,
@@ -384,7 +416,6 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                       overflow: 'visible',
                       transition: 'height 200ms',
                     }}>
-                    {/* Track background */}
                     <div style={{
                       position: 'absolute', inset: 0,
                       borderRadius: 4,
@@ -395,7 +426,6 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                       backgroundRepeat: 'no-repeat',
                       opacity: barTrackImage ? 0.15 : 1,
                     }} />
-                    {/* Fill — progressive reveal via clip-path */}
                     <div style={{
                       position: 'absolute', inset: 0,
                       borderRadius: 4,
@@ -409,7 +439,6 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                       backgroundPosition: 'center',
                       backgroundRepeat: 'no-repeat',
                     }}>
-                      {/* Color overlay with reduced opacity so image shows through */}
                       <div style={{
                         position: 'absolute', inset: 0,
                         background: settings.playerBarEnabled && settings.playerBarTrackColor
@@ -443,8 +472,8 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                     })()}
                   </div>
                   <span style={{
-                    fontSize: 10, color: 'var(--text-tertiary)',
-                    minWidth: 28, textAlign: 'left',
+                    fontSize: 11, color: 'var(--text-tertiary)',
+                    minWidth: 32, textAlign: 'left',
                     fontFamily: "'JetBrains Mono', monospace", fontWeight: 500,
                     flexShrink: 0,
                   }}>
