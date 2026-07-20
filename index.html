@@ -55,10 +55,14 @@
           }
           const config = JSON.parse(localStorage.getItem('owa_studio_data') || 'null');
           const theme = config?.settings?.theme || 'oscuro';
-          const isDark = theme === 'oscuro' || (theme === 'sistema' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          const isDark = theme === 'oscuro' || theme === 'vibrante' || (theme === 'sistema' && window.matchMedia('(prefers-color-scheme: dark)').matches);
           document.documentElement.setAttribute('data-theme', isDark ? 'oscuro' : 'claro');
+          document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
           if (isDark) document.documentElement.classList.add('dark');
-        } catch (e) {}
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'oscuro');
+          document.documentElement.style.colorScheme = 'dark';
+        }
       })();
     </script>
   </head>

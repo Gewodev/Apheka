@@ -563,6 +563,9 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
 // ─── Main Component ───
 export default function Cursos({ initialCourseId, initialTab = 'overview', onNavigate }: { initialCourseId?: string; initialTab?: 'overview' | 'tareas' | 'notas' | 'archivos'; onNavigate?: (view: string) => void }) {
   const { courses = [], tasks = [], notes = [], noteFolders = [], updateCourse, deleteCourse, setNavigateTo, setFocusedTaskId, addTask, updateTask, deleteTask, addNote, updateNote, deleteNote, reorderNotes } = useApp();
+  const th = document.documentElement.getAttribute('data-theme');
+  const isDarkSelect = !th || th === 'oscuro' || th === 'vibrante';
+  const selectBorder = isDarkSelect ? '1px solid rgba(255,255,255,0.12)' : '1px solid rgba(0,0,0,0.12)';
 
   const [selectedCourseId, setSelectedCourseId] = useState<string>(initialCourseId || courses[0]?.id || '');
   const [activeTab, setActiveTab] = useState<'overview' | 'tareas' | 'notas' | 'archivos'>(initialTab);
@@ -1352,9 +1355,9 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
 
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 12 }}>
                         <input type="date" value={newTaskDueDate} onChange={e => setNewTaskDueDate(e.target.value)}
-                          style={{ height: 42, borderRadius: 8, border: '1.5px solid var(--border-subtle)', background: newTaskDueDate ? `${course.color}08` : 'var(--bg-surface)', color: newTaskDueDate ? course.color : 'var(--text-tertiary)', padding: '0 14px', cursor: 'pointer', fontSize: 13, fontWeight: 500, fontFamily: "'Inter Tight', sans-serif", outline: 'none', colorScheme: 'dark', width: 170, minWidth: 170, boxSizing: 'border-box' }} />
+                          style={{ height: 42, borderRadius: 8, border: selectBorder, background: newTaskDueDate ? `${course.color}08` : 'var(--bg-surface)', color: newTaskDueDate ? course.color : 'var(--text-tertiary)', padding: '0 14px', cursor: 'pointer', fontSize: 13, fontWeight: 500, fontFamily: "'Inter Tight', sans-serif", outline: 'none', width: 170, minWidth: 170, boxSizing: 'border-box' }} />
                         <select value={newTaskPriority} onChange={e => setNewTaskPriority(e.target.value as any)}
-                          style={{ height: 40, borderRadius: 8, border: '1.5px solid var(--border-subtle)', background: newTaskPriority !== 'none' ? `${({ high: '#EF4444', medium: '#F59E0B', low: '#10B981' })[newTaskPriority]}18` : 'var(--bg-surface)', color: newTaskPriority !== 'none' ? ({ high: '#EF4444', medium: '#F59E0B', low: '#10B981' })[newTaskPriority] : 'var(--text-tertiary)', padding: '0 28px 0 12px', cursor: 'pointer', fontSize: 12, fontWeight: 500, fontFamily: "'Inter Tight', sans-serif", outline: 'none', colorScheme: 'dark', width: 120, minWidth: 120, boxSizing: 'border-box' }}>
+                          style={{ height: 40, borderRadius: 8, border: selectBorder, background: newTaskPriority !== 'none' ? `${({ high: '#EF4444', medium: '#F59E0B', low: '#10B981' })[newTaskPriority]}18` : 'var(--bg-surface)', color: newTaskPriority !== 'none' ? ({ high: '#EF4444', medium: '#F59E0B', low: '#10B981' })[newTaskPriority] : 'var(--text-tertiary)', padding: '0 28px 0 12px', cursor: 'pointer', fontSize: 12, fontWeight: 500, fontFamily: "'Inter Tight', sans-serif", outline: 'none', width: 120, minWidth: 120, boxSizing: 'border-box' }}>
                           <option value="none">Sin prioridad</option>
                           <option value="high">Alta</option>
                           <option value="medium">Media</option>
@@ -1795,9 +1798,9 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                   onInput={e => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }} />
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 12 }}>
                   <input type="date" value={newTaskDueDate} onChange={e => setNewTaskDueDate(e.target.value)}
-                    style={{ height: 42, borderRadius: 8, border: '1.5px solid var(--border-subtle)', background: newTaskDueDate ? `${course.color}08` : 'var(--bg-surface)', color: newTaskDueDate ? course.color : 'var(--text-tertiary)', padding: '0 14px', cursor: 'pointer', fontSize: 13, fontWeight: 500, fontFamily: "'Inter Tight', sans-serif", outline: 'none', colorScheme: 'dark', width: 170, minWidth: 170, boxSizing: 'border-box' }} />
+                    style={{ height: 42, borderRadius: 8, border: selectBorder, background: newTaskDueDate ? `${course.color}08` : 'var(--bg-surface)', color: newTaskDueDate ? course.color : 'var(--text-tertiary)', padding: '0 14px', cursor: 'pointer', fontSize: 13, fontWeight: 500, fontFamily: "'Inter Tight', sans-serif", outline: 'none', width: 170, minWidth: 170, boxSizing: 'border-box' }} />
                   <select value={newTaskPriority} onChange={e => setNewTaskPriority(e.target.value as any)}
-                    style={{ height: 40, borderRadius: 8, border: '1.5px solid var(--border-subtle)', background: newTaskPriority !== 'none' ? `${({ high: '#EF4444', medium: '#F59E0B', low: '#10B981' })[newTaskPriority]}18` : 'var(--bg-surface)', color: newTaskPriority !== 'none' ? ({ high: '#EF4444', medium: '#F59E0B', low: '#10B981' })[newTaskPriority] : 'var(--text-tertiary)', padding: '0 28px 0 12px', cursor: 'pointer', fontSize: 12, fontWeight: 500, fontFamily: "'Inter Tight', sans-serif", outline: 'none', colorScheme: 'dark', width: 120, minWidth: 120, boxSizing: 'border-box' }}>
+                    style={{ height: 40, borderRadius: 8, border: selectBorder, background: newTaskPriority !== 'none' ? `${({ high: '#EF4444', medium: '#F59E0B', low: '#10B981' })[newTaskPriority]}18` : 'var(--bg-surface)', color: newTaskPriority !== 'none' ? ({ high: '#EF4444', medium: '#F59E0B', low: '#10B981' })[newTaskPriority] : 'var(--text-tertiary)', padding: '0 28px 0 12px', cursor: 'pointer', fontSize: 12, fontWeight: 500, fontFamily: "'Inter Tight', sans-serif", outline: 'none', width: 120, minWidth: 120, boxSizing: 'border-box' }}>
                     <option value="none">Sin prioridad</option>
                     <option value="high">Alta</option>
                     <option value="medium">Media</option>

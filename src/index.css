@@ -16,6 +16,11 @@
   --color-danger: var(--error);
 }
 
+/* Native select/date/time popup color-scheme (managed by App.tsx via CSS variable) */
+select, input[type="date"], input[type="time"], input[type="datetime-local"] {
+  color-scheme: var(--select-scheme, dark);
+}
+
 :root {
   /* ── DARK THEME (Default) ── */
   --bg-base: #0a0a0c;

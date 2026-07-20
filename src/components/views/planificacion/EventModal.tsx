@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { X, Calendar, Clock, Plus, Trash2, Repeat, Check, Paperclip, FileText, Link as LinkIcon, ExternalLink, Music, Video, Image, FileSpreadsheet, File } from 'lucide-react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { X, Calendar, Clock, Plus, Trash2, Repeat, Check, FileText, Link as LinkIcon, ExternalLink, Music, Video, Image, FileSpreadsheet, File } from 'lucide-react';
 import { format } from 'date-fns';
 
 function getEventFileIcon(type: string, size = 14) {
@@ -61,7 +61,7 @@ interface EventModalProps {
   event: PlanEvent | null;
   defaults: Partial<PlanEvent>;
   courses: { id: string; name: string; color: string }[];
-  tasks: { id: string; title: string; courseColor: string }[];
+  tasks: { id: string; title: string; courseColor: string; dueDate?: string }[];
   onClose: () => void;
   onSave: (ev: PlanEvent) => void;
   onDelete: (id: string) => void;
@@ -78,6 +78,9 @@ export default function EventModal({
   onDelete,
   addNotification
 }: EventModalProps) {
+  const th = document.documentElement.getAttribute('data-theme');
+  const isDarkSelect = !th || th === 'oscuro' || th === 'vibrante';
+  const selectBorder = isDarkSelect ? '1px solid rgba(255,255,255,0.12)' : '1px solid rgba(0,0,0,0.12)';
   const [title, setTitle] = useState(event?.title || defaults.title || '');
   const [allDay, setAllDay] = useState(event?.allDay ?? defaults.allDay ?? false);
   const [date, setDate] = useState(event?.date || defaults.date || format(new Date(), 'yyyy-MM-dd'));
@@ -92,7 +95,6 @@ export default function EventModal({
   const [taskId, setTaskId] = useState(event?.taskId || '');
   const [attachments, setAttachments] = useState<{ type: 'link' | 'file'; name: string; url: string; size?: string }[]>(event?.attachments || []);
   
-  const [showAttachMenu, setShowAttachMenu] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -101,6 +103,28 @@ export default function EventModal({
       if (c) setColor(c.color);
     }
   }, [courseId, courses]);
+
+  const taskMismatch = useMemo(() => {
+    if (!taskId) return null;
+    const t = tasks.find(x => x.id === taskId);
+    if (!t || !t.dueDate) return null;
+    const td = t.dueDate.slice(0, 10);
+    const hasTime = t.dueDate.includes('T');
+    const tt = hasTime ? t.dueDate.slice(11, 16) : null;
+    if (td === date && (!hasTime || allDay || tt === start)) return null;
+    return { taskDate: td, taskTime: tt, hasTime };
+  }, [taskId, tasks, date, start, allDay]);
+
+  const syncTaskToEvent = () => {
+    if (!taskMismatch) return;
+    setDate(taskMismatch.taskDate);
+    if (taskMismatch.hasTime && taskMismatch.taskTime) {
+      if (allDay) setAllDay(false);
+      setStart(taskMismatch.taskTime);
+      const [h, m] = taskMismatch.taskTime.split(':').map(Number);
+      setEnd(`${String(Math.min(h + 1, 23)).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+    }
+  };
 
   // Generate 15-min intervals
   const timeOptions: string[] = [];
@@ -155,7 +179,6 @@ export default function EventModal({
       const detectedType = url.includes('youtube.com') || url.includes('youtu.be') ? 'video' : url.includes('drive.google.com') ? 'drive' : 'link';
       setAttachments([...attachments, { type: detectedType as any, name, url }]);
     }
-    setShowAttachMenu(false);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -166,7 +189,6 @@ export default function EventModal({
       const detectedType = detectEventFileType(file.name, url);
       setAttachments([...attachments, { type: detectedType as any, name: file.name, url, size: `${sizeMb} MB` }]);
     }
-    setShowAttachMenu(false);
   };
 
   return (
@@ -230,7 +252,7 @@ export default function EventModal({
                 <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 8 }}>Fecha</label>
                 <div style={{ position: 'relative' }}>
                   <Calendar size={15} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
-                  <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ width: '100%', fontSize: 14, height: 44, background: 'var(--surface-elevated)', border: '1px solid var(--border-soft)', borderRadius: 10, padding: '0 16px 0 40px', color: 'var(--text-primary)', outline: 'none', colorScheme: 'dark' }} />
+                  <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ width: '100%', fontSize: 14, height: 44, background: 'var(--surface-elevated)', border: selectBorder, borderRadius: 10, padding: '0 16px 0 40px', color: 'var(--text-primary)', outline: 'none' }} />
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, height: 44, padding: '0 16px', background: 'var(--surface-elevated)', border: '1px solid var(--border-soft)', borderRadius: 10 }}>
@@ -251,7 +273,7 @@ export default function EventModal({
                   <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 8 }}>Inicio</label>
                   <div style={{ position: 'relative' }}>
                     <Clock size={15} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
-                    <select value={start} onChange={e => setStart(e.target.value)} style={{ width: '100%', fontSize: 14, height: 44, background: 'var(--surface-elevated)', border: '1px solid var(--border-soft)', borderRadius: 10, padding: '0 16px 0 40px', color: 'var(--text-primary)', outline: 'none', appearance: 'none' }}>
+                    <select value={start} onChange={e => setStart(e.target.value)} style={{ width: '100%', fontSize: 14, height: 44, background: 'var(--surface-elevated)', border: selectBorder, borderRadius: 10, padding: '0 16px 0 40px', color: 'var(--text-primary)', outline: 'none', appearance: 'none' }}>
                       {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
                   </div>
@@ -260,7 +282,7 @@ export default function EventModal({
                   <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 8 }}>Fin</label>
                   <div style={{ position: 'relative' }}>
                     <Clock size={15} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
-                    <select value={end} onChange={e => setEnd(e.target.value)} style={{ width: '100%', fontSize: 14, height: 44, background: 'var(--surface-elevated)', border: '1px solid var(--border-soft)', borderRadius: 10, padding: '0 16px 0 40px', color: 'var(--text-primary)', outline: 'none', appearance: 'none' }}>
+                    <select value={end} onChange={e => setEnd(e.target.value)} style={{ width: '100%', fontSize: 14, height: 44, background: 'var(--surface-elevated)', border: selectBorder, borderRadius: 10, padding: '0 16px 0 40px', color: 'var(--text-primary)', outline: 'none', appearance: 'none' }}>
                       {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
                   </div>
@@ -276,7 +298,7 @@ export default function EventModal({
                 <Repeat size={15} style={{ color: 'var(--text-muted)' }} />
                 <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)' }}>Repetición</span>
               </div>
-              <select value={repeat} onChange={e => setRepeat(e.target.value as any)} style={{ fontSize: 13, height: 32, background: 'var(--bg-secondary)', border: '1px solid var(--border-soft)', borderRadius: 6, padding: '0 12px', color: 'var(--text-secondary)', outline: 'none' }}>
+              <select value={repeat} onChange={e => setRepeat(e.target.value as any)} style={{ fontSize: 13, height: 32, background: 'var(--bg-secondary)', border: selectBorder, borderRadius: 6, padding: '0 12px', color: 'var(--text-secondary)', outline: 'none' }}>
                 <option value="none">Ninguna</option>
                 <option value="daily">Diariamente</option>
                 <option value="weekly">Semanalmente</option>
@@ -312,7 +334,7 @@ export default function EventModal({
             {repeat !== 'none' && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, borderTop: '1px solid var(--border-soft)', paddingTop: 16 }}>
                 <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Termina el:</span>
-                <input type="date" value={repeatUntil} onChange={e => setRepeatUntil(e.target.value)} style={{ flex: 1, fontSize: 13, height: 32, background: 'var(--bg-secondary)', border: '1px solid var(--border-soft)', borderRadius: 6, padding: '0 12px', color: 'var(--text-primary)', outline: 'none', colorScheme: 'dark' }} />
+                <input type="date" value={repeatUntil} onChange={e => setRepeatUntil(e.target.value)} style={{ flex: 1, fontSize: 13, height: 32, background: 'var(--bg-secondary)', border: selectBorder, borderRadius: 6, padding: '0 12px', color: 'var(--text-primary)', outline: 'none' }} />
               </div>
             )}
           </div>
@@ -322,7 +344,7 @@ export default function EventModal({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 8 }}>Materia</label>
-                <select value={courseId} onChange={e => setCourseId(e.target.value)} style={{ width: '100%', fontSize: 14, height: 44, background: 'var(--surface-elevated)', border: '1px solid var(--border-soft)', borderRadius: 10, padding: '0 16px', color: 'var(--text-primary)', outline: 'none' }}>
+                <select value={courseId} onChange={e => setCourseId(e.target.value)} style={{ width: '100%', fontSize: 14, height: 44, background: 'var(--surface-elevated)', border: selectBorder, borderRadius: 10, padding: '0 16px', color: 'var(--text-primary)', outline: 'none' }}>
                   <option value="">Ninguna</option>
                   {courses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
@@ -330,10 +352,26 @@ export default function EventModal({
               {tasks.length > 0 && (
                 <div>
                   <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 8 }}>Tarea vinculada</label>
-                  <select value={taskId} onChange={e => setTaskId(e.target.value)} style={{ width: '100%', fontSize: 14, height: 44, background: 'var(--surface-elevated)', border: '1px solid var(--border-soft)', borderRadius: 10, padding: '0 16px', color: 'var(--text-primary)', outline: 'none' }}>
+                  <select value={taskId} onChange={e => setTaskId(e.target.value)} style={{ width: '100%', fontSize: 14, height: 44, background: 'var(--surface-elevated)', border: selectBorder, borderRadius: 10, padding: '0 16px', color: 'var(--text-primary)', outline: 'none' }}>
                     <option value="">Ninguna</option>
                     {tasks.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
                   </select>
+                  {taskMismatch && (
+                    <div style={{ marginTop: 10, padding: '10px 12px', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#F59E0B', marginBottom: 2 }}>Fecha desincronizada</div>
+                        <div style={{ fontSize: 10, color: 'var(--text-tertiary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          Tarea: {taskMismatch.taskDate}{taskMismatch.taskTime ? ` ${taskMismatch.taskTime}` : ''}  ·  Evento: {date}{!allDay ? ` ${start}` : ''}
+                        </div>
+                      </div>
+                      <button onClick={syncTaskToEvent}
+                        style={{ flexShrink: 0, padding: '5px 10px', borderRadius: 6, border: 'none', background: '#F59E0B', color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', transition: 'opacity 150ms' }}
+                        onMouseEnter={e => e.currentTarget.style.opacity = '0.8'}
+                        onMouseLeave={e => e.currentTarget.style.opacity = '1'}>
+                        Sincronizar
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -410,21 +448,13 @@ export default function EventModal({
                   </div>
                 )}
                 
-                <div style={{ position: 'relative' }}>
-                  <button onClick={() => setShowAttachMenu(!showAttachMenu)} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', background: 'var(--surface)', padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border-soft)', cursor: 'pointer' }}>
-                    <Paperclip size={14} /> Adjuntar
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <button onClick={handleAddLink} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', background: 'var(--surface)', padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border-soft)', cursor: 'pointer' }}>
+                    <LinkIcon size={14} /> Enlace
                   </button>
-                  
-                  {showAttachMenu && (
-                    <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: 'var(--surface-elevated)', border: '1px solid var(--border-soft)', borderRadius: 8, boxShadow: '0 12px 24px rgba(0,0,0,0.3)', zIndex: 50, display: 'flex', flexDirection: 'column', padding: 4, width: 140 }}>
-                      <button onClick={handleAddLink} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'transparent', border: 'none', color: 'var(--text-primary)', fontSize: 12, textAlign: 'left', cursor: 'pointer', borderRadius: 4 }} onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-hover)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                        <LinkIcon size={14} /> Enlace
-                      </button>
-                      <button onClick={() => fileInputRef.current?.click()} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'transparent', border: 'none', color: 'var(--text-primary)', fontSize: 12, textAlign: 'left', cursor: 'pointer', borderRadius: 4 }} onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-hover)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                        <FileText size={14} /> Archivo local
-                      </button>
-                    </div>
-                  )}
+                  <button onClick={() => fileInputRef.current?.click()} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', background: 'var(--surface)', padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border-soft)', cursor: 'pointer' }}>
+                    <FileText size={14} /> Archivo local
+                  </button>
                   <input type="file" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileChange} />
                 </div>
               </div>

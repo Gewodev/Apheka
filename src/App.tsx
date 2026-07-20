@@ -32,7 +32,7 @@ interface AppContentProps {
 }
 
 function AppContent() {
-  const { settings, courses, addCourse, navigateTo, setNavigateTo, importState, updateSettings, toastMessage, deleteOldCompletedTasks, youtubeVideoUrl, isPlayingMusic, musicVolume, musicProgress, musicDuration, setMusicProgress, setIsPlayingMusic, playTrack, musicQueue, setMusicQueue, shuffleMode, repeatMode, tracks, currentTrackId, setRepeatMode, coverModalTrackId, showRestPrompt, handlePomodoroBannerClick } = useApp();
+  const { settings, courses, addCourse, navigateTo, setNavigateTo, importState, updateSettings, toastMessage, deleteOldCompletedTasks, youtubeVideoUrl, isPlayingMusic, musicVolume, musicProgress, musicDuration, setMusicProgress, setIsPlayingMusic, playTrack, musicQueue, setMusicQueue, shuffleMode, repeatMode, tracks, currentTrackId, setRepeatMode, coverModalTrackId, showRestPrompt, handlePomodoroBannerClick, queueSource } = useApp();
   const [activeView, setActiveView] = useState<ViewId>('inicio');
 
   // Auto-clean completed tasks older than 2 months on startup
@@ -193,6 +193,21 @@ function AppContent() {
       root.style.removeProperty('--bg-active');
     }
     
+    if (settings.useThreeColors) {
+      const c3 = settings.surfaceColor || '#0a0a0c';
+      const b = parseInt(c3.slice(5,7), 16);
+      const g = parseInt(c3.slice(3,5), 16);
+      const r = parseInt(c3.slice(1,3), 16);
+      const selectScheme = (0.2126*r + 0.7152*g + 0.0722*b)/255 < 0.5 ? 'dark' : 'light';
+      root.style.colorScheme = selectScheme;
+      root.style.setProperty('--select-scheme', selectScheme);
+    } else {
+      const schemeIsDark = root.getAttribute('data-theme') === 'oscuro' || root.getAttribute('data-theme') === 'vibrante';
+      const selectScheme = schemeIsDark ? 'dark' : 'light';
+      root.style.colorScheme = selectScheme;
+      root.style.setProperty('--select-scheme', selectScheme);
+    }
+
     root.style.setProperty('--font-primary', settings.fontFamily);
     
     const applyBg = (url: string) => {
@@ -368,9 +383,12 @@ function AppContent() {
                 if (repeatMode === 'one') { playTrack(currentTrackId); return; }
                 let nextId: string | null = null;
                 const q = musicQueue;
-                if (q.length > 0) { const [n] = q; setMusicQueue(q.slice(1)); nextId = n; }
-                else if (shuffleMode || repeatMode === 'all') {
-                  const rest = tracks.filter(t => t.id !== currentTrackId).map(t => t.id);
+                if (q.length > 0) {
+                  setMusicQueue(q.slice(1));
+                  nextId = q[0];
+                } else if (shuffleMode || repeatMode === 'all') {
+                  const sourcePool = queueSource?.pool ?? tracks.map(t => t.id);
+                  const rest = sourcePool.filter(tid => tid !== currentTrackId);
                   const refilled = shuffleMode ? [...rest].sort(() => Math.random() - 0.5) : rest;
                   if (refilled.length > 0) { setMusicQueue(refilled.slice(1)); nextId = refilled[0]; }
                 }

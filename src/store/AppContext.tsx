@@ -125,6 +125,7 @@ export interface Task {
   subtasks: SubTask[];
   files: TaskFile[];
   notes: string;       // rich text / description
+  apuntes: string;     // local inline notes (task detail panel)
   studyTime: number;   // seconds studied on this task
   sortOrder?: number;
 }
@@ -275,6 +276,7 @@ export interface Playlist {
   coverImage?: string;
   trackIds: string[];
   createdAt: number;
+  isPublic?: boolean;
 }
 
 export interface DownloadItem {
@@ -464,7 +466,7 @@ interface AppState {
   trackHistory: string[];
   playCounts: Record<string, number>;
   musicQueue: string[];
-  queueSource: { pool: string[] } | null;
+  queueSource: { pool: string[]; name?: string } | null;
   musicVolume: number;
   musicProgress: number;
   musicDuration: number;
@@ -485,7 +487,7 @@ export type ViewId = 'inicio' | 'tareas' | 'apuntes' | 'estudio' | 'cursos' | 'a
 interface AppContextType extends AppState {
   setSessionType: (val: 'pomodoro' | 'chrono') => void;
   // Tasks
-  addTask: (task: Omit<Task, 'id' | 'createdAt' | 'status' | 'subtasks' | 'files' | 'notes' | 'studyTime'> & { notes?: string; files?: TaskFile[]; subtasks?: SubTask[] }) => void;
+  addTask: (task: Omit<Task, 'id' | 'createdAt' | 'status' | 'subtasks' | 'files' | 'notes' | 'apuntes' | 'studyTime'> & { notes?: string; apuntes?: string; files?: TaskFile[]; subtasks?: SubTask[] }) => void;
   clearAllTasks: () => void;
   deleteCompletedTasks: () => void;
   deleteOldCompletedTasks: () => void;
@@ -543,7 +545,7 @@ interface AppContextType extends AppState {
   setShuffleMode: (mode: boolean) => void;
   setRepeatMode: (mode: 'none' | 'all' | 'one') => void;
   setMusicQueue: (queue: string[]) => void;
-  setQueueSource: (source: { pool: string[] } | null) => void;
+  setQueueSource: (source: { pool: string[]; name?: string } | null) => void;
   clearCurrentTrack: () => void;
   clearAllMusicData: () => void;
   exportMusicLibrary: (destDir: string) => Promise<number>;
@@ -553,7 +555,7 @@ interface AppContextType extends AppState {
   deleteArtist: (id: string) => void;
   // Playlists
   playlists: Playlist[];
-  addPlaylist: (name: string, trackIds: string[], coverImage?: string) => void;
+  addPlaylist: (name: string, trackIds: string[], coverImage?: string, isPublic?: boolean) => void;
   updatePlaylist: (id: string, updates: Partial<Playlist>) => void;
   deletePlaylist: (id: string) => void;
   // Timer / Study
@@ -796,12 +798,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     _setShuffleMode(mode);
     if (mode) {
       _setRepeatMode('none');
-      // Populate shuffled queue
-      setMusicQueue(prev => {
-        if (prev.length > 0) return prev;
-        const rest = tracksRef.current.filter(t => t.id !== currentTrackIdRef.current).map(t => t.id);
-        return weightedShuffle(rest, playCounts);
-      });
+      // Always reshuffle from full pool (respecting queueSource context)
+      const pool = queueSourceRef.current?.pool ?? tracksRef.current.map(t => t.id);
+      const rest = pool.filter(tid => tid !== currentTrackIdRef.current);
+      setMusicQueue(weightedShuffle(rest, playCounts));
     }
   }, [playCounts]);
   const setRepeatMode = useCallback((mode: 'none' | 'all' | 'one') => {
@@ -841,7 +841,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
    const [playlists, setPlaylists] = useState<Playlist[]>([]);
 
   const [musicQueue, setMusicQueue] = useState<string[]>([]);
-  const [queueSource, setQueueSource] = useState<{ pool: string[] } | null>(null);
+  const [queueSource, setQueueSource] = useState<{ pool: string[]; name?: string } | null>(null);
   const [isAudioLoading, setIsAudioLoading] = useState(false);
   const [downloadQueue, setDownloadQueue] = useState<DownloadItem[]>([]);
   const [downloadPath, setDownloadPathState] = useState(() => localStorage.getItem('owa_download_path') || '');
@@ -1567,7 +1567,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     set(STORAGE_KEY, JSON.stringify({
       tasks, habits, notes, noteFolders, courses, events, studySessions,
       settings, sessionTime, sessionType, isRest, isTimerActive: false, weeklyStudyTime, dailyStudyTime, dailyStudyDate, pomodoroSessions,
-      trackHistory, playCounts, musicQueue, musicVolume, shuffleMode, repeatMode, artists,
+      trackHistory, playCounts, musicQueue, musicVolume, shuffleMode, repeatMode, artists, playlists,
       currentTrackId, isPlayingMusic: savedPlaying, musicListeningTime, musicListeningDate, dailyMusicTime,
       musicProgress: liveProgress, musicDuration, downloadPath,
       accumulatedPauseTime, pauseStartTime, distractionCount,
@@ -1582,7 +1582,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   // â”€â”€ TASKS â”€â”€
-  const addTask = useCallback((task: Omit<Task, 'id' | 'createdAt' | 'status' | 'subtasks' | 'files' | 'notes' | 'studyTime'> & { notes?: string; files?: TaskFile[]; subtasks?: SubTask[] }) => {
+  const addTask = useCallback((task: Omit<Task, 'id' | 'createdAt' | 'status' | 'subtasks' | 'files' | 'notes' | 'apuntes' | 'studyTime'> & { notes?: string; apuntes?: string; files?: TaskFile[]; subtasks?: SubTask[] }) => {
     const newTask: Task = {
       ...task,
       id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
@@ -1591,6 +1591,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       subtasks: task.subtasks || [],
       files: task.files || [],
       notes: task.notes || '',
+      apuntes: task.apuntes || '',
       studyTime: 0
     };
     setTasks(prev => [...prev, newTask]);
@@ -2466,7 +2467,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (currentTrackIdRef.current && tracksRef.current.length > 0) {
         if (repeatModeRef.current === 'one') {
           globalAudio.currentTime = 0;
-          globalAudio.play().catch(() => {});
+          globalAudio.play().catch(() => {
+            setTimeout(() => globalAudio.play().catch(() => {}), 100);
+          });
           return; // stay in repeat-one, keep looping
         }
         let nextId: string | null = null;
@@ -3078,10 +3081,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setArtists(prev => prev.filter(a => a.id !== id));
     }, []),
     playlists,
-    addPlaylist: useCallback((name: string, trackIds: string[], coverImage?: string) => {
+    addPlaylist: useCallback((name: string, trackIds: string[], coverImage?: string, isPublic?: boolean) => {
       setPlaylists(prev => {
         if (prev.some(p => p.name.toLowerCase() === name.toLowerCase())) return prev;
-        return [...prev, { id: crypto.randomUUID(), name: name.trim(), trackIds, coverImage, createdAt: Date.now() }];
+        return [...prev, { id: crypto.randomUUID(), name: name.trim(), trackIds, coverImage, isPublic, createdAt: Date.now() }];
       });
     }, []),
     updatePlaylist: useCallback((id: string, updates: Partial<Playlist>) => {
