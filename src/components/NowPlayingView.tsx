@@ -816,6 +816,10 @@ export default function NowPlayingView({ sidebarCollapsed, activeView }: { sideb
                     const newId = tracks[idx + 1].id;
                     setCoverModalTrackId(newId);
                     playTrack(newId);
+                  } else if (repeatMode === 'all' && tracks.length > 0) {
+                    const newId = tracks[0].id;
+                    setCoverModalTrackId(newId);
+                    playTrack(newId);
                   }
                 }
               }}

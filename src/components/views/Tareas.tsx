@@ -168,13 +168,12 @@ export default function Tareas() {
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [showAddMaterial, setShowAddMaterial] = useState(false);
-  const [newMaterialType, setNewMaterialType] = useState<string>('other');
   const [newMaterialName, setNewMaterialName] = useState('');
   const [newMaterialPath, setNewMaterialPath] = useState('');
   const [newMaterialFile, setNewMaterialFile] = useState<File | null>(null);
   const [googleConnected, setGoogleConnected] = useState(isSignedIn());
   const [syncing, setSyncing] = useState<'classroom' | 'tasks' | null>(null);
-  const [sectionCollapsed, setSectionCollapsed] = useState<Record<string, boolean>>({});
+
   const [showApuntesEditor, setShowApuntesEditor] = useState(false);
 
   function donutGradient(segments: { value: number; color: string }[], gapDeg = 2): string {
@@ -302,6 +301,19 @@ export default function Tareas() {
   }, [updateTask]);
 
   const selectedTask = tasks.find(t => t.id === selectedTaskId);
+  const taskId = selectedTask?.id;
+
+  const [sectionCollapsed, setSectionCollapsed] = useState<Record<string, boolean>>(() => {
+    if (!taskId) return {};
+    try { return JSON.parse(localStorage.getItem(`owa_task_sec_${taskId}`) || '{}'); } catch { return {}; }
+  });
+  useEffect(() => {
+    setSectionCollapsed(() => {
+      if (!taskId) return {};
+      try { return JSON.parse(localStorage.getItem(`owa_task_sec_${taskId}`) || '{}'); } catch { return {}; }
+    });
+  }, [taskId]);
+  useEffect(() => { if (taskId) localStorage.setItem(`owa_task_sec_${taskId}`, JSON.stringify(sectionCollapsed)); }, [taskId, sectionCollapsed]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -409,9 +421,6 @@ export default function Tareas() {
     reader.onload = (ev) => setNewMaterialPath(ev.target?.result as string);
     reader.readAsDataURL(file);
     if (!newMaterialName.trim()) setNewMaterialName(file.name.replace(/\.[^/.]+$/, ''));
-    const ext = file.name.split('.').pop()?.toLowerCase() || '';
-    const typeMap: Record<string, string> = { pdf: 'pdf', png: 'image', jpg: 'image', jpeg: 'image', gif: 'image', webp: 'image', svg: 'image', mp4: 'video', webm: 'video', mp3: 'audio', wav: 'audio', ogg: 'audio', flac: 'audio', aac: 'audio', doc: 'doc', docx: 'doc', xls: 'xls', xlsx: 'xls', ppt: 'ppt', pptx: 'ppt', txt: 'text', csv: 'csv', zip: 'zip', rar: 'zip', '7z': 'zip', json: 'text', md: 'text' };
-    setNewMaterialType((typeMap[ext] || 'other') as any);
     e.target.value = '';
   }, [newMaterialName]);
 
@@ -1436,14 +1445,13 @@ export default function Tareas() {
                 </div>
 
                 {/* ── Subtareas ── */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                <div className="bento-card" style={{ padding: 0, overflow: 'hidden', background: 'var(--bg-surface)' }}>
                   <div onClick={() => setSectionCollapsed(prev => ({ ...prev, subtareas: !prev.subtareas }))}
-                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px', background: 'var(--bg-surface)', border: `1px solid var(--border-default)`, borderRadius: sectionCollapsed.subtareas ? 10 : '10px 10px 0 0', cursor: 'pointer', transition: 'background 150ms', userSelect: 'none' }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px', cursor: 'pointer', transition: 'background 150ms', userSelect: 'none' }}
                     onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-surface)'
-                    }>
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                     <div style={{ transform: `rotate(${sectionCollapsed.subtareas ? -90 : 0}deg)`, transition: 'transform 200ms', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-                      <ChevronDown size={13} style={{ color: taskColor, filter: `drop-shadow(0 0 5px ${taskColor}60)` }} />
+                      <ChevronDown size={13} style={{ color: taskColor }} />
                     </div>
                     <CheckSquare size={12} style={{ color: taskColor, flexShrink: 0 }} />
                     <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '0.03em', fontFamily: "'Inter Tight', sans-serif", flex: 1 }}>Subtareas</span>
@@ -1453,21 +1461,21 @@ export default function Tareas() {
                           {doneSubtasks}/{totalSubtasks}
                         </span>
                         <div style={{ width: 48, height: 3, borderRadius: 2, background: 'var(--border-soft)', overflow: 'hidden', flexShrink: 0 }}>
-                          <div style={{ width: `${(doneSubtasks / totalSubtasks) * 100}%`, height: '100%', background: 'linear-gradient(90deg, #10B981, #34D399)', borderRadius: 2, transition: 'width 0.3s ease' }} />
+                          <div style={{ width: `${(doneSubtasks / totalSubtasks) * 100}%`, height: '100%', background: `linear-gradient(90deg, ${taskColor}, ${taskColor}88)`, borderRadius: 2, transition: 'width 0.3s ease' }} />
                         </div>
                       </>
                     )}
                   </div>
 
                   {!sectionCollapsed.subtareas && (
-                    <div style={{ padding: '0 16px 14px', display: 'flex', flexDirection: 'column', gap: 8, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderTop: 'none', borderRadius: '0 0 10px 10px' }}>
+                    <div style={{ padding: '0 16px 14px', display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }}>
 
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                         {selectedTask.subtasks.map((st) => (
                           <div key={st.id}
-                            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: "7px 10px", borderRadius: 7, background: st.done ? 'rgba(16,185,129,0.05)' : 'var(--bg-elevated)', border: `1px solid ${st.done ? 'rgba(16,185,129,0.12)' : 'var(--border-soft)'}`, transition: 'all 150ms', opacity: st.done ? 0.6 : 1 }}
+                            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: "7px 10px", borderRadius: 7, background: st.done ? 'rgba(16,185,129,0.08)' : 'var(--bg-surface)', border: `1px solid ${st.done ? 'rgba(16,185,129,0.15)' : 'var(--border-soft)'}`, transition: 'all 150ms', opacity: st.done ? 0.55 : 1 }}
                             onMouseEnter={e => { if (!st.done) { e.currentTarget.style.borderColor = 'var(--border-hover)'; e.currentTarget.style.background = 'var(--bg-hover)'; } }}
-                            onMouseLeave={e => { if (!st.done) { e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.background = 'var(--bg-elevated)'; } }}>
+                            onMouseLeave={e => { if (!st.done) { e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.background = 'var(--bg-surface)'; } }}>
                             <button onClick={() => toggleSubTask(selectedTask.id, st.id)}
                               style={{ width: 16, height: 16, borderRadius: '50%', border: `2px solid ${st.done ? '#10B981' : 'var(--border-strong)'}`, background: st.done ? '#10B981' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, padding: 0, transition: 'all 250ms cubic-bezier(0.34, 1.56, 0.64, 1)' }}
                               onMouseEnter={e => { if (!st.done) { e.currentTarget.style.borderColor = taskColor; e.currentTarget.style.boxShadow = `0 0 0 3px ${taskColor}14`; } }}
@@ -1506,7 +1514,7 @@ export default function Tareas() {
                           </div>
                         ))}
                         {selectedTask.subtasks.length === 0 && (
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 60, borderRadius: 7, border: '1px dashed var(--border-soft)', background: 'var(--bg-elevated)', color: 'var(--text-muted)', fontSize: 11, fontWeight: 500, gap: 2 }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 60, borderRadius: 7, border: '1px dashed var(--border-soft)', background: 'var(--bg-surface)', color: 'var(--text-muted)', fontSize: 11, fontWeight: 500, gap: 2 }}>
                             <CheckSquare size={14} style={{ opacity: 0.15 }} />
                             <span style={{ opacity: 0.3 }}>Desglosa la tarea en pasos</span>
                           </div>
@@ -1519,7 +1527,7 @@ export default function Tareas() {
                           onChange={e => setNewSubtaskTitle(e.target.value)}
                           placeholder="Añadir paso..."
                           onKeyDown={e => { if (e.key === 'Enter') handleAddSubtask(); }}
-                          style={{ flex: 1, padding: '7px 10px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 7, fontSize: 10.5, color: 'var(--text-primary)', outline: 'none', transition: 'all 150ms' }}
+                          style={{ flex: 1, padding: '7px 10px', background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 7, fontSize: 10.5, color: 'var(--text-primary)', outline: 'none', transition: 'all 150ms' }}
                           onFocus={e => { e.currentTarget.style.borderColor = taskColor; e.currentTarget.style.boxShadow = `0 0 0 2px ${taskColor}14`; }}
                           onBlur={e => { e.currentTarget.style.borderColor = 'var(--border-default)'; e.currentTarget.style.boxShadow = 'none'; }}
                         />
@@ -1533,14 +1541,14 @@ export default function Tareas() {
                 </div>
 
                 {/* ── Materiales ── */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                {/* ── Materiales ── */}
+                <div className="bento-card" style={{ padding: 0, overflow: 'hidden', background: 'var(--bg-surface)' }}>
                   <div onClick={() => setSectionCollapsed(prev => ({ ...prev, materiales: !prev.materiales }))}
-                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px', background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: sectionCollapsed.materiales ? 10 : '10px 10px 0 0', cursor: 'pointer', transition: 'background 150ms', userSelect: 'none', borderTop: 'none' }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px', cursor: 'pointer', transition: 'background 150ms', userSelect: 'none' }}
                     onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-surface)'
-                    }>
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                     <div style={{ transform: `rotate(${sectionCollapsed.materiales ? -90 : 0}deg)`, transition: 'transform 200ms', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-                      <ChevronDown size={13} style={{ color: taskColor, filter: `drop-shadow(0 0 5px ${taskColor}60)` }} />
+                      <ChevronDown size={13} style={{ color: taskColor }} />
                     </div>
                     <Paperclip size={12} style={{ color: taskColor, flexShrink: 0 }} />
                     <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '0.03em', fontFamily: "'Inter Tight', sans-serif", flex: 1 }}>Materiales</span>
@@ -1550,11 +1558,11 @@ export default function Tareas() {
                   </div>
 
                   {!sectionCollapsed.materiales && (
-                    <div style={{ padding: '0 16px 14px', display: 'flex', flexDirection: 'column', gap: 8, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderTop: 'none', borderRadius: '0 0 10px 10px' }}>
+                    <div style={{ padding: '0 16px 14px', display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }}>
 
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                         {selectedTask.files.length === 0 && (
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 60, borderRadius: 7, border: '1px dashed var(--border-soft)', background: 'var(--bg-elevated)', color: 'var(--text-muted)', fontSize: 10.5, fontWeight: 500, gap: 2 }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 60, borderRadius: 7, border: '1px dashed var(--border-soft)', background: 'var(--bg-surface)', color: 'var(--text-muted)', fontSize: 10.5, fontWeight: 500, gap: 2 }}>
                             <Paperclip size={14} style={{ opacity: 0.15 }} />
                             <span style={{ opacity: 0.3 }}>Añade recursos de estudio</span>
                           </div>
@@ -1656,7 +1664,7 @@ export default function Tareas() {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '11px 13px', background: 'var(--bg-elevated)', borderRadius: 9, border: `1px solid ${taskColor}20` }}>
                           <div style={{ display: 'flex', gap: 5 }}>
                             {(['link', 'file'] as const).map(m => (
-                              <button key={m} onClick={() => { setAddMaterialMode(m); setNewMaterialType(m === 'link' ? 'link' : 'other'); }}
+                              <button key={m} onClick={() => { setAddMaterialMode(m); }}
                                 style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '6px 0', borderRadius: 6, fontSize: 9, fontWeight: 700, cursor: 'pointer', border: addMaterialMode === m ? `1px solid ${taskColor}` : '1px solid var(--border-soft)', background: addMaterialMode === m ? `${taskColor}14` : 'var(--bg-surface)', color: addMaterialMode === m ? taskColor : 'var(--text-secondary)', transition: 'all 150ms' }}>
                                 {m === 'link' ? <Link size={9} /> : <Upload size={9} />}
                                 {m === 'link' ? 'Enlace' : 'Archivo'}
@@ -1699,14 +1707,13 @@ export default function Tareas() {
                 </div>
 
                 {/* ── Apuntes ── */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                <div className="bento-card" style={{ padding: 0, overflow: 'hidden', background: 'var(--bg-surface)' }}>
                   <div onClick={() => setSectionCollapsed(prev => ({ ...prev, apuntes: !prev.apuntes }))}
-                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px', background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: sectionCollapsed.apuntes ? 10 : '10px 10px 0 0', cursor: 'pointer', transition: 'background 150ms', userSelect: 'none', borderTop: 'none' }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px', cursor: 'pointer', transition: 'background 150ms', userSelect: 'none' }}
                     onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-surface)'
-                    }>
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                     <div style={{ transform: `rotate(${sectionCollapsed.apuntes ? -90 : 0}deg)`, transition: 'transform 200ms', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-                      <ChevronDown size={13} style={{ color: taskColor, filter: `drop-shadow(0 0 5px ${taskColor}60)` }} />
+                      <ChevronDown size={13} style={{ color: taskColor }} />
                     </div>
                     <StickyNote size={12} style={{ color: taskColor, flexShrink: 0 }} />
                     <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '0.03em', fontFamily: "'Inter Tight', sans-serif", flex: 1 }}>Apuntes</span>
@@ -1716,13 +1723,13 @@ export default function Tareas() {
                   </div>
 
                   {!sectionCollapsed.apuntes && (
-                    <div style={{ padding: '0 16px 14px', display: 'flex', flexDirection: 'column', gap: 8, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderTop: 'none', borderRadius: '0 0 10px 10px' }}>
+                    <div style={{ padding: '0 16px 14px', display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }}>
                       {(selectedTask.apuntes?.trim() || showApuntesEditor) ? (
                         <textarea
                           value={selectedTask.apuntes || ''}
                           onChange={e => updateTask(selectedTask.id, { apuntes: e.target.value })}
                           placeholder="Escribe tus apuntes aquí..."
-                          style={{ width: '100%', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 7, color: 'var(--text-primary)', fontSize: 12, outline: 'none', padding: '10px 12px', resize: 'vertical', minHeight: 68, lineHeight: 1.65, fontFamily: "'Inter', sans-serif", transition: 'all 150ms' }}
+                          style={{ width: '100%', background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 7, color: 'var(--text-primary)', fontSize: 12, outline: 'none', padding: '10px 12px', resize: 'vertical', minHeight: 68, lineHeight: 1.65, fontFamily: "'Inter', sans-serif", transition: 'all 150ms' }}
                           onInput={e => {
                             e.currentTarget.style.height = 'auto';
                             e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`;
@@ -1733,9 +1740,9 @@ export default function Tareas() {
                       ) : (
                         <div
                           onClick={() => setShowApuntesEditor(true)}
-                          style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 68, borderRadius: 7, border: '1px dashed var(--border-soft)', background: 'var(--bg-elevated)', color: 'var(--text-muted)', fontSize: 10.5, fontWeight: 500, gap: 3, cursor: 'pointer', transition: 'all 150ms' }}
+                          style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 68, borderRadius: 7, border: '1px dashed var(--border-soft)', background: 'var(--bg-surface)', color: 'var(--text-muted)', fontSize: 10.5, fontWeight: 500, gap: 3, cursor: 'pointer', transition: 'all 150ms' }}
                           onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-hover)'; e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.background = 'var(--bg-elevated)'; }}>
+                          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.background = 'var(--bg-surface)'; }}>
                           <StickyNote size={15} style={{ opacity: 0.15 }} />
                           <span style={{ opacity: 0.3 }}>Añadir apuntes</span>
                         </div>

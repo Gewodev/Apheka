@@ -1683,7 +1683,7 @@ export default function Notas() {
     e.preventDefault(); e.stopPropagation();
     const menuW = 180, menuH = 184;
     if (btnRect) {
-      const x = Math.max(8, btnRect.right - menuW - 110);
+      const x = Math.max(8, btnRect.right - menuW - 140);
       let y = btnRect.bottom + 4;
       let arrowBottom = false;
       if (y + menuH > window.innerHeight - 4) {

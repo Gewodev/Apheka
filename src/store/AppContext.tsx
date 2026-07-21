@@ -2481,7 +2481,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           nextId = next;
         } else if (shuffleModeRef.current || repeatModeRef.current === 'all') {
           const sourcePool = queueSourceRef.current?.pool ?? tracksRef.current.map(t => t.id);
-          const rest = sourcePool.filter(tid => tid !== cid);
+          const rest = sourcePool.filter(tid => repeatModeRef.current === 'all' || tid !== cid);
           const refilled = shuffleModeRef.current ? weightedShuffle(rest, playCountsRef.current) : rest;
           if (refilled.length > 0) {
             setMusicQueue(refilled.slice(1));
