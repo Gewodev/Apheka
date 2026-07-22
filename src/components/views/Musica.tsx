@@ -475,7 +475,7 @@ export default function Musica() {
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, paddingTop: 8 }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <h1 style={{ fontSize: 32, fontWeight: 700, color: 'var(--accent)', lineHeight: 1.15, letterSpacing: '-0.02em', fontFamily: "'Inter Tight', sans-serif", textShadow: '0 0 20px var(--accent-glow)' }}>Música</h1>
+            <h1 style={{ fontSize: 30, fontWeight: 650, color: 'var(--accent)', lineHeight: 1.15, letterSpacing: '-0.02em', fontFamily: "'Inter Tight', sans-serif" }}>Música</h1>
             <div style={{ display: 'flex', alignItems: 'center', gap: 3, color: 'var(--text-tertiary)' }}>
               <div style={{ width: 3, height: 12, background: 'var(--text-secondary)', borderRadius: 2 }} />
               <div style={{ width: 3, height: 18, background: 'var(--accent)', borderRadius: 2 }} />
@@ -501,26 +501,13 @@ export default function Musica() {
             borderLeft: '1px solid var(--border-subtle)',
             position: 'relative'
           }}>
-            {/* Clock background illumination */}
-            <div style={{
-              position: 'absolute',
-              top: '50%',
-              right: 0,
-              width: 150,
-              height: 100,
-              background: 'radial-gradient(circle at center, var(--accent-dim) 0%, transparent 70%)',
-              opacity: 0.4,
-              transform: 'translateY(-50%)',
-              pointerEvents: 'none',
-              zIndex: 0
-            }} />
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#10B981', boxShadow: '0 0 8px rgba(16,185,129,0.5)', position: 'relative', zIndex: 1 }} />
-            <div style={{ textAlign: 'right', position: 'relative', zIndex: 1 }}>
+            <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#10B981', position: 'relative' }} />
+            <div style={{ textAlign: 'right' }}>
               <div className="flex items-baseline gap-2 justify-end">
-                <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 68, fontWeight: 200, lineHeight: 0.9, color: 'var(--accent)', letterSpacing: '0.02em', textShadow: '0 0 20px var(--accent-glow)' }}>
+                <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 54, fontWeight: 200, lineHeight: 0.9, color: 'var(--accent)', letterSpacing: '-0.01em' }}>
                   {timeStr}
                 </span>
-                <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 22, fontWeight: 200, color: 'var(--accent)', opacity: 0.7, letterSpacing: '0.02em' }}>
+                <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 18, fontWeight: 300, color: 'var(--text-tertiary)', letterSpacing: '0.01em' }}>
                   {secondsStr}
                 </span>
               </div>
@@ -549,7 +536,7 @@ export default function Musica() {
             >
               {tab === 'explorar' ? 'Explorar & Descargar' : tab}
               {activeTab === tab && (
-                <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 2, background: 'var(--accent)', borderRadius: 2, boxShadow: '0 0 8px var(--accent-glow)' }} />
+                <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 2, background: 'var(--accent)', borderRadius: 2 }} />
               )}
             </button>
           ))}
@@ -603,7 +590,7 @@ export default function Musica() {
               <Upload size={16} /> Subir
             </button>
 
-            <button onClick={() => setActiveTab('explorar')} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 8, height: 38, borderRadius: 10, fontSize: 12, fontWeight: 700, padding: '0 18px', boxShadow: '0 4px 15px var(--accent-dim)' }}>
+            <button onClick={() => setActiveTab('explorar')} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 8, height: 38, borderRadius: 10, fontSize: 12, fontWeight: 600, padding: '0 18px' }}>
               <Plus size={16} /> Añadir <ChevronDown size={12} style={{ marginLeft: 2 }} />
             </button>
           </div>
@@ -644,14 +631,12 @@ export default function Musica() {
               { label: 'Favoritas', val: tracks.filter(t => t.isFavorite).length, sub: 'guardadas', icon: Heart, color: '#10B981' },
               { label: 'Hoy', val: formatHm(musicListeningTime), sub: 'escuchando Música', icon: Activity, color: '#F59E0B' },
             ].map((s, i) => (
-              <div key={i} className="bento-card" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', position: 'relative', overflow: 'hidden' }}>
-                <s.icon size={60} style={{ position: 'absolute', top: -4, right: -2, color: s.color, opacity: 0.1, pointerEvents: 'none' }} />
-                <div style={{ position: 'relative', zIndex: 1 }}>
-                  <span className="stat-label" style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{s.label}</span>
-                </div>
-                <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <div className="stat-value" style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.02em' }}>{s.val}</div>
-                  <div className="stat-subtext" style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{s.sub}</div>
+              <div key={i} className="bento-card" style={{ padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 10, position: 'relative', overflow: 'hidden' }}>
+                <s.icon size={56} style={{ position: 'absolute', bottom: -8, right: -6, color: s.color, opacity: 0.08, pointerEvents: 'none', strokeWidth: 1.5 }} />
+                <div style={{ position: 'relative', zIndex: 1, fontSize: 9, fontWeight: 700, color: s.color, textTransform: 'uppercase', letterSpacing: '0.1em', opacity: 0.75 }}>{s.label}</div>
+                <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <div className="stat-value" style={{ fontSize: 26, fontWeight: 650, letterSpacing: '-0.02em', lineHeight: 1.1 }}>{s.val}</div>
+                  <div className="stat-subtext" style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 450 }}>{s.sub}</div>
                 </div>
               </div>
             ))}
@@ -661,7 +646,7 @@ export default function Musica() {
           {activeTab === 'artistas' && (
             <div>
               {!selectedArtist ? (
-                <div className="bento-card" style={{ padding: '28px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                <div className="bento-card" style={{ padding: '28px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
                     <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>Tus Artistas</h3>
                     <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
@@ -675,7 +660,7 @@ export default function Musica() {
                     {artists.map(artist => {
                       const artistTracks = tracks.filter(t => t.artist === artist.name);
                       return (
-                        <div key={artist.id} className="hover-lift bento-card" style={{ padding: '32px 20px', borderRadius: 16, border: '1px solid var(--border-subtle)', transition: 'all 250ms', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, position: 'relative', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', cursor: 'pointer' }}
+                        <div key={artist.id} className="hover-lift bento-card" style={{ padding: '32px 20px', borderRadius: 16, border: '1px solid var(--border-subtle)', transition: 'all 250ms', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, position: 'relative', cursor: 'pointer' }}
                           onClick={() => setSelectedArtist(artist.name)}>
                           <div style={{ width: 110, height: 110, borderRadius: '50%', background: artist.profileImage ? 'var(--bg-surface)' : `color-mix(in srgb, var(--accent) 30%, var(--bg-deep))`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 32, fontWeight: 700, boxShadow: '0 6px 20px rgba(0,0,0,0.35)', overflow: 'hidden' }}>
                             {artist.profileImage ? <img src={artist.profileImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : artist.name.slice(0, 2).toUpperCase()}
@@ -786,7 +771,7 @@ export default function Musica() {
           {activeTab === 'playlists' && (
             <div>
               {!selectedPlaylistId ? (
-                <div className="bento-card" style={{ padding: '28px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                <div className="bento-card" style={{ padding: '28px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
                     <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>Tus Playlists</h3>
                     <button onClick={() => { setShowCreatePlaylist(true); setNewPlaylistName(''); setSelectedTrackIds(new Set()); }} style={{ padding: '8px 18px', borderRadius: 10, fontSize: 12, fontWeight: 600, background: 'var(--accent)', color: '#fff', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -798,7 +783,7 @@ export default function Musica() {
                       const plTracks = pl.trackIds.map(id => tracks.find(t => t.id === id)).filter((t): t is Track => !!t);
                       const firstCover = plTracks.find(t => t.coverImage)?.coverImage || pl.coverImage;
                       return (
-                        <div key={pl.id} className="hover-lift bento-card" style={{ padding: '24px', borderRadius: 16, border: '1px solid var(--border-subtle)', transition: 'all 250ms', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, position: 'relative', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', cursor: 'pointer' }}
+                        <div key={pl.id} className="hover-lift bento-card" style={{ padding: '24px', borderRadius: 16, border: '1px solid var(--border-subtle)', transition: 'all 250ms', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, position: 'relative', cursor: 'pointer' }}
                           onClick={() => setSelectedPlaylistId(pl.id)}>
                           <div style={{ width: 150, height: 150, borderRadius: 16, background: firstCover ? 'var(--bg-surface)' : `color-mix(in srgb, var(--accent) 25%, var(--bg-deep))`, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 28px rgba(0,0,0,0.35)', overflow: 'hidden', position: 'relative' }}>
                             {firstCover ? <img src={firstCover} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={40} style={{ color: 'var(--text-muted)', opacity: 0.3 }} />}
@@ -940,146 +925,190 @@ export default function Musica() {
               {showCreatePlaylist && (
                 <div style={{ position: 'fixed', inset: 0, zIndex: 10050, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
                   onClick={(e) => { if (e.target === e.currentTarget) { setShowCreatePlaylist(false); setPlaylistStep(0); setPlaylistCoverData(''); setNewPlaylistName(''); setSelectedTrackIds(new Set()); } }}>
-                  <div className="bento-card" style={{ width: 'min(420px, 90vw)', padding: 28, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', borderRadius: 16, border: '1px solid var(--border-soft)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-                      <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
-                        {editingPlaylistId ? 'Editar playlist' : playlistStep === 0 ? 'Nueva playlist' : playlistStep === 1 ? 'Portada' : 'Canciones'}
-                      </h3>
+                  <div className="bento-card" style={{ width: 'min(440px, 90vw)', padding: 0, borderRadius: 16, overflow: 'hidden' }}>
+                    {/* Header */}
+                    <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border-subtle)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--accent-alpha, rgba(255,255,255,0.06))', border: '1px solid var(--accent, #E11D48)30', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <ListMusic size={16} style={{ color: 'var(--accent, #E11D48)' }} />
+                          </div>
+                          <div>
+                            <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', margin: 0, fontFamily: "'Inter Tight', sans-serif" }}>
+                              {editingPlaylistId ? 'Editar playlist' : playlistStep === 0 ? 'Nueva playlist' : playlistStep === 1 ? 'Portada' : 'Canciones'}
+                            </h3>
+                            {!editingPlaylistId && (
+                              <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: '2px 0 0' }}>
+                                {playlistStep === 0 ? 'Dale un nombre a tu playlist' : playlistStep === 1 ? 'Elige una portada (opcional)' : `${selectedTrackIds.size} canciones seleccionadas`}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <button onClick={() => { setShowCreatePlaylist(false); setPlaylistStep(0); setPlaylistCoverData(''); setNewPlaylistName(''); setSelectedTrackIds(new Set()); }}
+                          style={{ width: 28, height: 28, borderRadius: 7, background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                          <X size={14} />
+                        </button>
+                      </div>
+                      {/* Step indicator */}
                       {!editingPlaylistId && (
-                        <div style={{ display: 'flex', gap: 6 }}>
-                          {[0, 1, 2].map(s => (
-                            <div key={s} style={{ width: 8, height: 8, borderRadius: '50%', background: playlistStep === s ? 'var(--accent)' : s < playlistStep ? 'var(--accent)' : 'var(--border-subtle)', opacity: s < playlistStep ? 0.5 : 1, transition: 'all 200ms' }} />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+                          {[0, 1, 2].map((s, i) => (
+                            <React.Fragment key={s}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: s === 1 ? 0 : 1 }}>
+                                <div style={{ width: 20, height: 20, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, flexShrink: 0, transition: 'all 250ms',
+                                  background: playlistStep >= s ? 'var(--accent, #E11D48)' : 'var(--bg-hover)',
+                                  color: playlistStep >= s ? '#fff' : 'var(--text-muted)',
+                                  border: playlistStep >= s ? 'none' : '1px solid var(--border-subtle)' }}>
+                                  {playlistStep > s ? <Check size={10} strokeWidth={3} /> : s + 1}
+                                </div>
+                                {s < 2 && (
+                                  <div style={{ flex: 1, height: 2, borderRadius: 1, background: playlistStep > s ? 'var(--accent, #E11D48)' : 'var(--border-subtle)', transition: 'background 300ms', minWidth: 16 }} />
+                                )}
+                              </div>
+                            </React.Fragment>
                           ))}
                         </div>
                       )}
                     </div>
 
-                    {/* Step 0: Name only */}
-                    {playlistStep === 0 && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                        <div>
-                          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>Nombre de la playlist</label>
-                          <input autoFocus value={newPlaylistName} onChange={e => setNewPlaylistName(e.target.value)}
-                            placeholder="Ej: Mis favoritos, Gym, Relax..."
-                            style={{ width: '100%', height: 48, padding: '0 16px', borderRadius: 10, border: '1px solid var(--border-default)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', fontSize: 15, fontWeight: 500, outline: 'none', boxSizing: 'border-box' }}
-                            onKeyDown={e => { if (e.key === 'Enter' && newPlaylistName.trim()) setPlaylistStep(1); }} />
+                    {/* Content */}
+                    <div style={{ padding: '20px 24px' }}>
+                      {/* Step 0: Name */}
+                      {playlistStep === 0 && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                          <div style={{ position: 'relative' }}>
+                            <Music size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+                            <input autoFocus value={newPlaylistName} onChange={e => setNewPlaylistName(e.target.value)}
+                              placeholder="Ej: Gym, Relax, Favoritos..."
+                              style={{ width: '100%', height: 42, padding: '0 14px 0 34px', borderRadius: 10, border: '1px solid var(--border-default)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', fontSize: 14, fontWeight: 500, outline: 'none', boxSizing: 'border-box', fontFamily: "'Inter Tight', sans-serif", transition: 'border-color 200ms' }}
+                              onFocus={e => e.currentTarget.style.borderColor = 'var(--accent, #E11D48)'}
+                              onBlur={e => e.currentTarget.style.borderColor = 'var(--border-default)'}
+                              onKeyDown={e => { if (e.key === 'Enter' && newPlaylistName.trim()) setPlaylistStep(1); }} />
+                          </div>
+                          <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textAlign: 'center' }}>
+                            {tracks.length} {tracks.length === 1 ? 'canción disponible' : 'canciones disponibles'}
+                          </div>
                         </div>
-                        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textAlign: 'center', marginTop: 4 }}>
-                          {tracks.length} canciones disponibles
-                        </div>
-                      </div>
-                    )}
+                      )}
 
-                    {/* Step 1: Cover yes/no choice */}
-                    {playlistStep === 1 && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 20, alignItems: 'center' }}>
-                        <div style={{ width: 160, height: 160, borderRadius: 16, overflow: 'hidden', background: 'var(--bg-deep)', border: '2px dashed var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', position: 'relative', transition: 'border-color 200ms' }}
-                          onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent)'}
-                          onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border-subtle)'}
-                          onClick={() => document.getElementById('playlist-cover-input')?.click()}>
-                          {playlistCoverData ? (
-                            <img src={playlistCoverData} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                          ) : (
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, color: 'var(--text-muted)' }}>
-                              <Image size={28} />
-                              <span style={{ fontSize: 12, fontWeight: 500 }}>Subir portada</span>
-                            </div>
-                          )}
-                        </div>
-                        <input id="playlist-cover-input" type="file" accept="image/*" style={{ display: 'none' }} onChange={e => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            const reader = new FileReader();
-                            reader.onload = ev => setPlaylistCoverData(ev.target?.result as string);
-                            reader.readAsDataURL(file);
-                          }
-                        }} />
-                        <div style={{ display: 'flex', gap: 10, width: '100%' }}>
-                          <button onClick={() => setPlaylistCoverData('')} disabled={!playlistCoverData}
-                            style={{ flex: 1, padding: '12px 0', borderRadius: 10, border: `2px solid ${!playlistCoverData ? 'var(--accent)' : 'var(--border-default)'}`, background: !playlistCoverData ? 'var(--accent-alpha)' : 'transparent', color: 'var(--text-primary)', fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: !playlistCoverData ? 1 : 0.5, transition: 'all 200ms' }}>
-                            Sin portada
-                          </button>
-                          <button onClick={() => setPlaylistStep(2)}
-                            style={{ flex: 1, padding: '12px 0', borderRadius: 10, background: 'var(--accent)', color: '#fff', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 200ms' }}
-                            onMouseEnter={e => e.currentTarget.style.opacity = '0.9'} onMouseLeave={e => e.currentTarget.style.opacity = '1'}>
-                            {playlistCoverData ? 'Siguiente →' : 'Sin portada →'}
-                          </button>
-                        </div>
-                        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textAlign: 'center' }}>
-                          {playlistCoverData ? 'Portada seleccionada. Continúa para elegir canciones.' : 'Haz clic para subir o continúa sin portada.'}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Step 2: Select Songs */}
-                    {playlistStep === 2 && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                        <div style={{ position: 'relative' }}>
-                          <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)', pointerEvents: 'none' }} />
-                          <input value={playlistSongSearch} onChange={e => setPlaylistSongSearch(e.target.value)} placeholder="Buscar canciones..." className="input-base" style={{ width: '100%', height: 34, fontSize: 12, paddingLeft: 30, borderRadius: 6 }} />
-                        </div>
-                        <select value={playlistArtistFilter} onChange={e => setPlaylistArtistFilter(e.target.value)}
-                          style={{ height: 32, padding: '0 8px', fontSize: 11, background: 'var(--bg-surface)', color: 'var(--text-primary)', border: '1px solid var(--border-soft)', outline: 'none', borderRadius: 6, cursor: 'pointer' }}>
-                          <option value="" style={{ background: 'var(--bg-surface)', color: 'var(--text-secondary)' }}>Todos los artistas</option>
-                          {artists.map(a => (
-                            <option key={a.id} value={a.name} style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)' }}>{a.name}</option>
-                          ))}
-                        </select>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
-                            {selectedTrackIds.size} de {tracks.length} canciones seleccionadas
-                          </span>
-                          <button onClick={() => setSelectedTrackIds(prev => prev.size === tracks.length ? new Set() : new Set(tracks.map(t => t.id)))} className="btn-ghost" style={{ fontSize: 10, color: 'var(--accent)', padding: '2px 8px' }}>
-                            {selectedTrackIds.size === tracks.length ? 'Deseleccionar todo' : 'Seleccionar todo'}
-                          </button>
-                        </div>
-                        <div style={{ maxHeight: 280, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2, borderRadius: 8, border: '1px solid var(--border-subtle)', padding: 4 }}>
-                          {tracks.filter(t => {
-                            if (playlistArtistFilter && t.artist !== playlistArtistFilter) return false;
-                            if (playlistSongSearch && !t.title.toLowerCase().includes(playlistSongSearch.toLowerCase()) && !t.artist?.toLowerCase().includes(playlistSongSearch.toLowerCase())) return false;
-                            return true;
-                          }).length === 0 && (
-                            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', padding: '20px 8px', textAlign: 'center' }}>
-                              No hay canciones
-                            </div>
-                          )}
-                          {tracks.filter(t => {
-                            if (playlistArtistFilter && t.artist !== playlistArtistFilter) return false;
-                            if (playlistSongSearch && !t.title.toLowerCase().includes(playlistSongSearch.toLowerCase()) && !t.artist?.toLowerCase().includes(playlistSongSearch.toLowerCase())) return false;
-                            return true;
-                          }).map(t => {
-                            const sel = selectedTrackIds.has(t.id);
-                            return (
-                              <div key={t.id} onClick={() => setSelectedTrackIds(prev => { const n = new Set(prev); if (n.has(t.id)) n.delete(t.id); else n.add(t.id); return n; })}
-                                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 10px', borderRadius: 8, cursor: 'pointer', background: sel ? 'var(--accent-alpha)' : 'transparent', transition: 'background 150ms', border: sel ? '1px solid var(--accent)' : '1px solid transparent' }}>
-                                <div style={{ width: 18, height: 18, borderRadius: 4, border: sel ? '2px solid var(--accent)' : '2px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', background: sel ? 'var(--accent)' : 'transparent', flexShrink: 0, transition: 'all 150ms' }}>
-                                  {sel && <Check size={12} color="#fff" strokeWidth={3} />}
+                      {/* Step 1: Cover */}
+                      {playlistStep === 1 && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 18, alignItems: 'center' }}>
+                          <div style={{ width: 140, height: 140, borderRadius: 14, overflow: 'hidden', background: 'var(--bg-deep)', border: `2px dashed ${playlistCoverData ? 'var(--accent, #E11D48)' : 'var(--border-subtle)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', position: 'relative', transition: 'all 250ms' }}
+                            onMouseEnter={e => { if (!playlistCoverData) e.currentTarget.style.borderColor = 'var(--accent, #E11D48)'; }}
+                            onMouseLeave={e => { if (!playlistCoverData) e.currentTarget.style.borderColor = 'var(--border-subtle)'; }}
+                            onClick={() => document.getElementById('playlist-cover-input')?.click()}>
+                            {playlistCoverData ? (
+                              <>
+                                <img src={playlistCoverData} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 200ms' }}
+                                  onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+                                  onClick={(e) => { e.stopPropagation(); document.getElementById('playlist-cover-input')?.click(); }}>
+                                  <span style={{ fontSize: 11, fontWeight: 600, color: '#fff' }}>Cambiar</span>
                                 </div>
-                                <div style={{ width: 26, height: 26, borderRadius: 4, overflow: 'hidden', background: 'var(--bg-deep)', flexShrink: 0 }}>
-                                  {t.coverImage && <img src={t.coverImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
-                                </div>
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                  <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</div>
-                                  <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{t.artist || 'Sin artista'}</div>
-                                </div>
+                              </>
+                            ) : (
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, color: 'var(--text-muted)' }}>
+                                <Image size={26} strokeWidth={1.5} />
+                                <span style={{ fontSize: 11, fontWeight: 500 }}>Subir portada</span>
                               </div>
-                            );
-                          })}
+                            )}
+                          </div>
+                          <input id="playlist-cover-input" type="file" accept="image/*" style={{ display: 'none' }} onChange={e => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onload = ev => setPlaylistCoverData(ev.target?.result as string);
+                              reader.readAsDataURL(file);
+                            }
+                          }} />
+                          <div style={{ display: 'flex', gap: 10, width: '100%' }}>
+                            <button onClick={() => setPlaylistCoverData('')} disabled={!playlistCoverData}
+                              style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: `1.5px solid ${!playlistCoverData ? 'var(--accent, #E11D48)' : 'var(--border-default)'}`, background: !playlistCoverData ? 'var(--accent-alpha, rgba(255,255,255,0.04))' : 'transparent', color: !playlistCoverData ? 'var(--accent, #E11D48)' : 'var(--text-muted)', fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all 200ms' }}>
+                              Sin portada
+                            </button>
+                            <button onClick={() => setPlaylistStep(2)}
+                              className="btn-primary" style={{ flex: 1, height: 38, fontSize: 12 }}>
+                              {playlistCoverData ? 'Siguiente' : 'Continuar'}
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
 
-                    {/* Navigation buttons */}
-                    <div style={{ display: 'flex', gap: 12, justifyContent: 'space-between', marginTop: 24 }}>
+                      {/* Step 2: Select Songs */}
+                      {playlistStep === 2 && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          <div style={{ position: 'relative' }}>
+                            <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)', pointerEvents: 'none' }} />
+                            <input value={playlistSongSearch} onChange={e => setPlaylistSongSearch(e.target.value)} placeholder="Buscar canciones..."
+                              style={{ width: '100%', height: 34, fontSize: 12, paddingLeft: 30, borderRadius: 8, background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box' }} />
+                          </div>
+                          <select value={playlistArtistFilter} onChange={e => setPlaylistArtistFilter(e.target.value)}
+                            style={{ height: 32, padding: '0 10px', fontSize: 11, background: 'var(--bg-elevated)', color: 'var(--text-primary)', border: '1px solid var(--border-default)', outline: 'none', borderRadius: 8, cursor: 'pointer', colorScheme: 'dark' }}>
+                            <option value="">Todos los artistas</option>
+                            {artists.map(a => (
+                              <option key={a.id} value={a.name}>{a.name}</option>
+                            ))}
+                          </select>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+                              {selectedTrackIds.size} de {tracks.length}
+                            </span>
+                            <button onClick={() => setSelectedTrackIds(prev => prev.size === tracks.length ? new Set() : new Set(tracks.map(t => t.id)))} className="btn-ghost" style={{ fontSize: 10, color: 'var(--accent)', padding: '2px 8px' }}>
+                              {selectedTrackIds.size === tracks.length ? 'Limpiar' : 'Seleccionar todo'}
+                            </button>
+                          </div>
+                          <div style={{ maxHeight: 260, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2, borderRadius: 8, border: '1px solid var(--border-subtle)', padding: 3 }}>
+                            {tracks.filter(t => {
+                              if (playlistArtistFilter && t.artist !== playlistArtistFilter) return false;
+                              if (playlistSongSearch && !t.title.toLowerCase().includes(playlistSongSearch.toLowerCase()) && !t.artist?.toLowerCase().includes(playlistSongSearch.toLowerCase())) return false;
+                              return true;
+                            }).map(t => {
+                              const sel = selectedTrackIds.has(t.id);
+                              return (
+                                <div key={t.id} onClick={() => setSelectedTrackIds(prev => { const n = new Set(prev); if (n.has(t.id)) n.delete(t.id); else n.add(t.id); return n; })}
+                                  style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '5px 10px', borderRadius: 7, cursor: 'pointer', background: sel ? 'var(--accent-alpha, rgba(255,255,255,0.04))' : 'transparent', transition: 'background 150ms', border: sel ? '1px solid var(--accent, #E11D48)40' : '1px solid transparent' }}>
+                                  <div style={{ width: 16, height: 16, borderRadius: 4, border: sel ? '2px solid var(--accent, #E11D48)' : '2px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', background: sel ? 'var(--accent, #E11D48)' : 'transparent', flexShrink: 0, transition: 'all 150ms' }}>
+                                    {sel && <Check size={10} color="#fff" strokeWidth={3} />}
+                                  </div>
+                                  <div style={{ width: 24, height: 24, borderRadius: 4, overflow: 'hidden', background: 'var(--bg-deep)', flexShrink: 0 }}>
+                                    {t.coverImage && <img src={t.coverImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                                  </div>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</div>
+                                    <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{t.artist || 'Sin artista'}</div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                            {tracks.filter(t => {
+                              if (playlistArtistFilter && t.artist !== playlistArtistFilter) return false;
+                              if (playlistSongSearch && !t.title.toLowerCase().includes(playlistSongSearch.toLowerCase()) && !t.artist?.toLowerCase().includes(playlistSongSearch.toLowerCase())) return false;
+                              return true;
+                            }).length === 0 && (
+                              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', padding: '20px 8px', textAlign: 'center' }}>
+                                No hay canciones
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Footer */}
+                    <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between', padding: '14px 24px', borderTop: '1px solid var(--border-subtle)' }}>
                       <div>
                         {playlistStep > 0 && !editingPlaylistId && (
-                          <button onClick={() => setPlaylistStep(s => s - 1)} className="btn-ghost" style={{ padding: '10px 16px', fontSize: 12, color: 'var(--text-secondary)' }}>
+                          <button onClick={() => setPlaylistStep(s => s - 1)} className="btn-ghost" style={{ padding: '8px 14px', fontSize: 12 }}>
                             <ChevronLeft size={14} /> Atrás
                           </button>
                         )}
                       </div>
-                      <div style={{ display: 'flex', gap: 12 }}>
-                        <button onClick={() => { setShowCreatePlaylist(false); setPlaylistStep(0); setPlaylistCoverData(''); setNewPlaylistName(''); setSelectedTrackIds(new Set()); }} className="btn-secondary" style={{ height: 38, padding: '0 20px', fontSize: 12 }}>
+                      <div style={{ display: 'flex', gap: 10 }}>
+                        <button onClick={() => { setShowCreatePlaylist(false); setPlaylistStep(0); setPlaylistCoverData(''); setNewPlaylistName(''); setSelectedTrackIds(new Set()); }}
+                          style={{ height: 36, padding: '0 18px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: '1px solid var(--border-default)', background: 'transparent', color: 'var(--text-secondary)', transition: 'all 200ms' }}>
                           Cancelar
                         </button>
                         {editingPlaylistId ? (
@@ -1088,14 +1117,14 @@ export default function Musica() {
                             if (!name) return;
                             updatePlaylist(editingPlaylistId, { name, coverImage: playlistCoverData || undefined });
                             setShowCreatePlaylist(false); setEditingPlaylistId(null); setPlaylistStep(0);
-                          }} className="btn-primary" style={{ height: 38, padding: '0 20px', fontSize: 12 }}>
-                            Guardar cambios
+                          }} className="btn-primary" style={{ height: 36, padding: '0 18px', fontSize: 12 }}>
+                            Guardar
                           </button>
                         ) : playlistStep < 2 ? (
                           <button onClick={() => {
                             if (playlistStep === 0 && !newPlaylistName.trim()) return;
                             setPlaylistStep(s => s + 1);
-                          }} className="btn-primary" style={{ height: 38, padding: '0 20px', fontSize: 12, opacity: playlistStep === 0 && !newPlaylistName.trim() ? 0.5 : 1 }}>
+                          }} className="btn-primary" style={{ height: 36, padding: '0 18px', fontSize: 12, opacity: playlistStep === 0 && !newPlaylistName.trim() ? 0.5 : 1 }}>
                             Siguiente <ChevronRight size={14} />
                           </button>
                         ) : (
@@ -1104,7 +1133,7 @@ export default function Musica() {
                             if (!name) return;
                             addPlaylist(name, Array.from(selectedTrackIds), playlistCoverData || undefined);
                             setShowCreatePlaylist(false); setPlaylistStep(0); setPlaylistCoverData(''); setNewPlaylistName(''); setSelectedTrackIds(new Set());
-                          }} className="btn-primary" style={{ height: 38, padding: '0 20px', fontSize: 12, fontWeight: 700 }}>
+                          }} className="btn-primary" style={{ height: 36, padding: '0 18px', fontSize: 12, fontWeight: 700 }}>
                             <Check size={14} /> Crear playlist
                           </button>
                         )}
@@ -1118,7 +1147,7 @@ export default function Musica() {
 
           {/* RECIENTES ALBUMS GRID */}
           {(activeTab === 'biblioteca' || activeTab === 'favoritas') && (
-            <div className="bento-card" style={{ padding: '20px 24px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+            <div className="bento-card" style={{ padding: '20px 24px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                 <div className="section-header" style={{ marginBottom: 0, fontSize: 13, color: 'var(--text-primary)' }}>Recientes</div>
                 <span onClick={() => setShowAllRecents(!showAllRecents)} className="text-accent" style={{ fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{showAllRecents ? 'Ver menos' : 'Ver todo'}</span>
@@ -1155,7 +1184,7 @@ export default function Musica() {
 
           {/* SONGS TABLE / CARDS GRID */}
           {(activeTab === 'biblioteca' || activeTab === 'favoritas') && (
-            <div className="bento-card" style={{ padding: '20px 24px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+            <div className="bento-card" style={{ padding: '20px 24px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                 <span className="section-header" style={{ marginBottom: 0, fontSize: 14, color: 'var(--text-primary)' }}>
                   {activeTab === 'favoritas' ? 'Tus Canciones Favoritas' : 'Biblioteca de Canciones'} ({displayTracks.length})
@@ -1358,7 +1387,7 @@ export default function Musica() {
 
           {/* EXPLORAR & DESCARGAR SECTION (CUSTOM YT/SPOTIFY SCRAPER) */}
           {activeTab === 'explorar' && (
-            <div className="bento-card" style={{ padding: '24px 28px', border: '1px solid var(--accent-glow)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+            <div className="bento-card" style={{ padding: '24px 28px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                 <div>
                   <div className="section-header" style={{ marginBottom: 4, fontSize: 14, color: 'var(--text-primary)' }}>Explorar & Descargar Música</div>
@@ -1434,69 +1463,56 @@ export default function Musica() {
                 </div>
               )}
 
-              {/* Download options: Quality + Format + Cover toggle + Destination */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '14px 18px', borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', marginBottom: 20 }}>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
-                  <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <span>Calidad</span>
-                    <span style={{ color: 'var(--border-default)', fontSize: 9 }}>·</span>
-                    <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>{audioQuality === '0' ? '320' : audioQuality === '3' ? '192' : audioQuality === '5' ? '128' : '96'} kbps</span>
+              {/* Download options */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '16px 18px', borderRadius: 10, border: '1px solid var(--border-subtle)', marginBottom: 20 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', minWidth: 48 }}>Calidad</span>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      {([['7', '96'], ['5', '128'], ['3', '192'], ['0', '320']] as const).map(([q, label]) => (
+                        <button key={q} onClick={() => setAudioQuality(q)}
+                          style={{
+                            padding: '5px 10px', borderRadius: 6, fontSize: 10, fontWeight: 600, minWidth: 44, textAlign: 'center',
+                            background: audioQuality === q ? 'var(--accent)' : 'var(--bg-surface)',
+                            color: audioQuality === q ? '#fff' : 'var(--text-tertiary)',
+                            border: '1px solid', borderColor: audioQuality === q ? 'var(--accent)' : 'var(--border-default)',
+                            cursor: 'pointer', transition: 'all 150ms',
+                          }}
+                        >{label}</button>
+                      ))}
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', gap: 3 }}>
-                    {([['7', '96'], ['5', '128'], ['3', '192'], ['0', '320']] as const).map(([q, label]) => (
-                      <button key={q}
-                        onClick={() => setAudioQuality(q)}
-                        style={{
-                          padding: '5px 10px', borderRadius: 6, fontSize: 10, fontWeight: 600, whiteSpace: 'nowrap', minWidth: 44, textAlign: 'center',
-                          background: audioQuality === q ? 'var(--accent)' : 'transparent',
-                          color: audioQuality === q ? '#fff' : 'var(--text-tertiary)',
-                          border: audioQuality === q ? 'none' : '1px solid var(--border-default)',
-                          cursor: 'pointer', transition: 'all 180ms',
-                        }}
-                      >{label}</button>
-                    ))}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', minWidth: 48 }}>Formato</span>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      {(['mp3', 'm4a'] as const).map(f => (
+                        <button key={f} onClick={() => setAudioFormat(f)}
+                          style={{
+                            padding: '5px 10px', borderRadius: 6, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', minWidth: 44, textAlign: 'center',
+                            background: audioFormat === f ? 'var(--accent)' : 'var(--bg-surface)',
+                            color: audioFormat === f ? '#fff' : 'var(--text-tertiary)',
+                            border: '1px solid', borderColor: audioFormat === f ? 'var(--accent)' : 'var(--border-default)',
+                            cursor: 'pointer', transition: 'all 150ms',
+                          }}
+                        >{f}</button>
+                      ))}
+                    </div>
+                    {audioFormat === 'm4a' && <span style={{ fontSize: 9, color: 'var(--accent)', fontWeight: 500, opacity: 0.8 }}>✓ AAC</span>}
                   </div>
-                  <div style={{ width: 1, height: 20, background: 'var(--border-subtle)', flexShrink: 0 }} />
-                  <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>Formato</div>
-                  <div style={{ display: 'flex', gap: 3 }}>
-                    {(['mp3', 'm4a'] as const).map(f => (
-                      <button key={f}
-                        onClick={() => setAudioFormat(f)}
-                        style={{
-                          padding: '5px 10px', borderRadius: 6, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', whiteSpace: 'nowrap', minWidth: 44, textAlign: 'center',
-                          background: audioFormat === f ? 'var(--accent)' : 'transparent',
-                          color: audioFormat === f ? '#fff' : 'var(--text-tertiary)',
-                          border: audioFormat === f ? 'none' : '1px solid var(--border-default)', cursor: 'pointer', transition: 'all 180ms',
-                        }}
-                      >{f}</button>
-                    ))}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', minWidth: 48 }}>Opciones</span>
+                    <button onClick={() => setIncludeCover(!includeCover)}
+                      style={{
+                        padding: '5px 10px', borderRadius: 6, fontSize: 10, fontWeight: 600, whiteSpace: 'nowrap',
+                        background: includeCover ? 'var(--accent)' : 'var(--bg-surface)',
+                        color: includeCover ? '#fff' : 'var(--text-tertiary)',
+                        border: '1px solid', borderColor: includeCover ? 'var(--accent)' : 'var(--border-default)',
+                        cursor: 'pointer', transition: 'all 150ms', display: 'flex', alignItems: 'center', gap: 5,
+                      }}
+                    ><Image size={10} /> {includeCover ? 'Con portada' : 'Sin portada'}</button>
+                    <span style={{ fontSize: 10, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', wordBreak: 'break-all', opacity: 0.7 }}>{persistentDownloadPath || 'Descargas/OWA Music'}</span>
+                    <button onClick={handleSelectFolder} className="btn-ghost" style={{ padding: 4, display: 'flex', color: 'var(--text-tertiary)', cursor: 'pointer' }}><FolderOpen size={13} /></button>
                   </div>
-                  {audioFormat === 'm4a' && (
-                    <span style={{ fontSize: 9, color: 'var(--accent)', fontWeight: 500, whiteSpace: 'nowrap', background: 'rgba(59,130,246,0.08)', padding: '3px 8px', borderRadius: 4 }}>
-                      ✓ Mejor calidad
-                    </span>
-                  )}
-                  <div style={{ width: 1, height: 20, background: 'var(--border-subtle)', flexShrink: 0 }} />
-                  <button
-                    onClick={() => setIncludeCover(!includeCover)}
-                    style={{
-                      padding: '5px 10px', borderRadius: 6, fontSize: 10, fontWeight: 600, whiteSpace: 'nowrap',
-                      background: includeCover ? 'var(--accent)' : 'transparent',
-                      color: includeCover ? '#fff' : 'var(--text-tertiary)',
-                      border: '1px solid var(--border-default)', cursor: 'pointer', transition: 'all 180ms',
-                      display: 'flex', alignItems: 'center', gap: 6,
-                    }}
-                  ><Image size={11} /> {includeCover ? 'Con portada' : 'Sin portada'}</button>
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', paddingTop: 10, borderTop: '1px solid var(--border-subtle)' }}>
-                  <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>Destino</span>
-                  <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', wordBreak: 'break-all', opacity: 0.8 }}>{persistentDownloadPath || 'Descargas/OWA Music'}</span>
-                  <button
-                    onClick={handleSelectFolder}
-                    className="btn-ghost" style={{ padding: 5, background: 'var(--bg-elevated)', borderRadius: 6, border: '1px solid var(--border-subtle)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text-tertiary)', transition: 'all 180ms' }}
-                  >
-                    <FolderOpen size={13} />
-                  </button>
                 </div>
               </div>
 
@@ -1637,10 +1653,10 @@ export default function Musica() {
 
           {/* REPRODUCIENDO CARD */}
           {currentTrack ? (
-            <div className="bento-card" style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', border: isPlayingMusic ? '1px solid var(--accent)' : '1px solid var(--border-default)', boxShadow: isPlayingMusic ? '0 8px 32px var(--accent-glow)' : 'none', transition: 'all 300ms', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+            <div className="bento-card" style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', border: isPlayingMusic ? '1px solid var(--accent)' : '1px solid var(--border-default)', transition: 'all 300ms' }}>
               <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: isPlayingMusic ? 'var(--accent)' : 'var(--text-muted)', boxShadow: isPlayingMusic ? '0 0 8px var(--accent)' : 'none', animation: isPlayingMusic ? 'pulseGlow 1.5s infinite' : 'none' }} />
+                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: isPlayingMusic ? 'var(--accent)' : 'var(--text-muted)' }} />
                   <span className="section-header" style={{ marginBottom: 0, fontSize: 12, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                     {isPlayingMusic ? 'Reproduciendo' : 'Pausado'}
                   </span>
@@ -1656,7 +1672,7 @@ export default function Musica() {
                 onMouseLeave={() => setCoverHover(false)}>
                 {currentTrack.coverImage ? <img src={currentTrack.coverImage} alt={currentTrack.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={48} style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', color: 'var(--text-muted)', opacity: 0.15 }} />}
                 {isPlayingMusic && (
-                  <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, transparent 60%, var(--accent-soft) 100%)', pointerEvents: 'none' }} />
+                  <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, transparent 60%, rgba(0,0,0,0.12) 100%)', pointerEvents: 'none' }} />
                 )}
                 {/* Expand hint overlay */}
                 <div style={{
@@ -1727,9 +1743,15 @@ export default function Musica() {
                 <button onClick={() => {
                   if (musicQueue.length > 0) { setMusicQueue(musicQueue.slice(1)); playTrack(musicQueue[0]); return; }
                   const pool = queueSource?.pool ?? tracks.map(t => t.id);
-                  const idx = pool.indexOf(currentTrack.id);
-                  if (idx < pool.length - 1) playTrack(pool[idx + 1]);
-                  else if (repeatMode === 'all' && pool.length > 0) playTrack(pool[0]);
+                  if (shuffleMode) {
+                    const rest = pool.filter(tid => tid !== currentTrack.id);
+                    if (rest.length > 0) { const pick = rest[Math.floor(Math.random() * rest.length)]; playTrack(pick); }
+                    else if (pool.length > 0) playTrack(pool[0]);
+                  } else {
+                    const idx = pool.indexOf(currentTrack.id);
+                    if (idx < pool.length - 1) playTrack(pool[idx + 1]);
+                    else if (repeatMode === 'all' && pool.length > 0) playTrack(pool[(idx + 1) % pool.length]);
+                  }
                 }} className="btn-ghost" style={{ padding: 8 }}>
                   <SkipForward size={20} style={{ color: 'var(--text-primary)' }} />
                 </button>
@@ -1743,7 +1765,7 @@ export default function Musica() {
               </div>
             </div>
           ) : (
-            <div className="bento-card" style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, border: '1px dashed var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+            <div className="bento-card" style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, border: '1px dashed var(--border-subtle)' }}>
               <Music size={32} style={{ color: 'var(--text-muted)', opacity: 0.4 }} />
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)' }}>Tiempo hoy</div>
@@ -1757,7 +1779,7 @@ export default function Musica() {
           )}
 
           {/* COLA DE REPRODUCCIÃ“N */}
-          <div className="bento-card" style={{ padding: '20px', border: '1px solid var(--border-subtle)', position: 'relative', overflow: 'hidden', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+          <div className="bento-card" style={{ padding: '20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <span className="section-header" style={{ marginBottom: 0, fontSize: 12, color: 'var(--text-primary)' }}>Cola de Reproducción</span>
             </div>
@@ -1769,7 +1791,7 @@ export default function Musica() {
 
             {shuffleMode ? (
               <div style={{ padding: '24px 0', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, animation: 'fadeIn 0.4s' }}>
-                <Shuffle size={20} className="spin-slow" style={{ color: 'var(--accent)' }} />
+                <Shuffle size={20} style={{ color: 'var(--accent)' }} />
                 <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', lineHeight: 1.5, padding: '0 10px' }}>
                   {queueSource?.name
                     ? `Estamos escogiendo aleatoriamente las canciones de: ${queueSource.name}`
@@ -1810,7 +1832,7 @@ export default function Musica() {
           </div>
 
           {/* ESTADÍSTICAS DE ESCUCHA */}
-          <div className="bento-card" style={{ padding: '20px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+          <div className="bento-card" style={{ padding: '20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <span className="section-header" style={{ marginBottom: 0, fontSize: 12, color: 'var(--text-primary)' }}>Estadísticas de escucha</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '3px', borderRadius: 6, border: '1px solid var(--border-subtle)' }}>
@@ -1820,7 +1842,7 @@ export default function Musica() {
             </div>
 
             <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-primary)' }}>{formatTime(statsPeriod === 'week' ? weeklyListeningTime : monthlyListeningTime)}</div>
+              <div style={{ fontSize: 22, fontWeight: 650, color: 'var(--text-primary)' }}>{formatTime(statsPeriod === 'week' ? weeklyListeningTime : monthlyListeningTime)}</div>
               <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{statsPeriod === 'week' ? 'Esta semana' : 'Este mes'}</div>
             </div>
 
@@ -1897,21 +1919,21 @@ export default function Musica() {
             </div>
 
             {/* Micro Stats Grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, borderTop: '1px solid var(--border-subtle)', paddingTop: 16 }}>
-              <div style={{ textAlign: 'center', padding: '8px 4px', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
-                <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginBottom: 2 }}>Hoy</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{formatTime(musicListeningTime)}</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, borderTop: '1px solid var(--border-subtle)', paddingTop: 14 }}>
+              <div style={{ textAlign: 'center', padding: '6px 4px', borderRadius: 6 }}>
+                <div style={{ fontSize: 9, color: 'var(--text-tertiary)', marginBottom: 2 }}>Hoy</div>
+                <div style={{ fontSize: 13, fontWeight: 650, color: 'var(--text-primary)' }}>{formatTime(musicListeningTime)}</div>
               </div>
-              <div style={{ textAlign: 'center', padding: '8px 4px', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
-                <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginBottom: 2 }}>Favoritas</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{tracks.filter(t => t.isFavorite).length}</div>
+              <div style={{ textAlign: 'center', padding: '6px 4px', borderRadius: 6 }}>
+                <div style={{ fontSize: 9, color: 'var(--text-tertiary)', marginBottom: 2 }}>Favoritas</div>
+                <div style={{ fontSize: 13, fontWeight: 650, color: 'var(--text-primary)' }}>{tracks.filter(t => t.isFavorite).length}</div>
               </div>
             </div>
           </div>
 
           {/* DOWNLOADS CARD — inline en columna derecha */}
           {(downloadSelection.length > 0 || downloadQueue.length > 0) && (
-            <div className="bento-card" style={{ padding: '16px 18px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+            <div className="bento-card" style={{ padding: '16px 18px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.02em' }}>
                   <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)' }} />
@@ -1929,28 +1951,25 @@ export default function Musica() {
               {/* Activos: progress + Cancel (sin X) */}
               {downloadQueue.filter(d => d.status === 'downloading' || d.status === 'queued').length > 0 && (
                 <div style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--accent)', animation: 'pulseGlow 1.2s infinite' }} />
+                  <div style={{ fontSize: 8, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>
                     Descargando
                   </div>
                   {downloadQueue.filter(d => d.status === 'downloading' || d.status === 'queued').map(dl => (
-                    <div key={dl.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 8, background: 'var(--bg-surface)', marginBottom: 6, border: '1px solid var(--border-subtle)' }}>
-                      <div style={{ width: 32, height: 32, borderRadius: 6, background: 'var(--bg-deep)', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.2)' }}>
-                        {dl.thumbnail ? <img src={dl.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={13} style={{ color: 'var(--text-muted)' }} />}
+                    <div key={dl.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', borderRadius: 8, background: 'var(--bg-surface)', marginBottom: 6 }}>
+                      <div style={{ width: 28, height: 28, borderRadius: 5, background: 'var(--bg-deep)', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {dl.thumbnail ? <img src={dl.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={11} style={{ color: 'var(--text-muted)' }} />}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 5 }}>{dl.title}</div>
-                        <div style={{ height: 4, borderRadius: 3, background: 'var(--bg-deep)', overflow: 'hidden', position: 'relative' }}>
-                          <div style={{ width: `${dl.progress * 100}%`, height: '100%', borderRadius: 3, background: 'linear-gradient(90deg, var(--accent), var(--accent-secondary, var(--accent)))', opacity: 0.8, transition: 'width 400ms ease' }} />
+                        <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 4 }}>{dl.title}</div>
+                        <div style={{ height: 3, borderRadius: 2, background: 'var(--bg-deep)', overflow: 'hidden' }}>
+                          <div style={{ width: `${dl.progress * 100}%`, height: '100%', borderRadius: 2, background: 'var(--accent)', transition: 'width 400ms ease' }} />
                         </div>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                        <span style={{ fontSize: 10, color: 'var(--text-tertiary)', fontVariantNumeric: 'tabular-nums', fontWeight: 500 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                        <span style={{ fontSize: 9, color: 'var(--text-tertiary)', fontVariantNumeric: 'tabular-nums' }}>
                           {Math.round(dl.progress * 100)}%
                         </span>
-                        <button onClick={() => handleCancelDownload(dl.id)} style={{ padding: '4px 10px', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 5, fontSize: 9, fontWeight: 600, color: '#F59E0B', cursor: 'pointer', whiteSpace: 'nowrap', transition: 'all 180ms' }}
-                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(245,158,11,0.2)'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = 'rgba(245,158,11,0.1)'; }}>
+                        <button onClick={() => handleCancelDownload(dl.id)} style={{ padding: '3px 8px', background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 4, fontSize: 8, fontWeight: 600, color: 'var(--text-tertiary)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
                           Cancelar
                         </button>
                       </div>
@@ -1959,58 +1978,50 @@ export default function Musica() {
                 </div>
               )}
 
-              {/* Completados / Error / Cancelados: solo X (delete) */}
               {downloadQueue.filter(d => d.status !== 'downloading' && d.status !== 'queued').length > 0 && (
                 <div style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
+                  <div style={{ fontSize: 8, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>
                     Finalizadas
                   </div>
                   {downloadQueue.filter(d => d.status !== 'downloading' && d.status !== 'queued').map(dl => (
-                    <div key={dl.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', borderRadius: 7, background: 'var(--bg-surface)', marginBottom: 4, border: '1px solid transparent', transition: 'border-color 200ms' }}
-                      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; }}
-                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'transparent'; }}>
-                      <div style={{ width: 26, height: 26, borderRadius: 5, background: 'var(--bg-deep)', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        {dl.thumbnail ? <img src={dl.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={11} style={{ color: 'var(--text-muted)' }} />}
+                    <div key={dl.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 8px', borderRadius: 6, marginBottom: 2 }}>
+                      <div style={{ width: 24, height: 24, borderRadius: 4, background: 'var(--bg-deep)', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {dl.thumbnail ? <img src={dl.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={10} style={{ color: 'var(--text-muted)' }} />}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{dl.title}</div>
-                        <div style={{ fontSize: 9, color: dl.status === 'error' ? 'var(--danger)' : 'var(--text-tertiary)', marginTop: 1, display: 'flex', alignItems: 'center', gap: 4 }}>
-                          {dl.status === 'completed' && <><Check size={9} style={{ color: '#22C55E' }} /> Completado</>}
-                          {dl.status === 'error' && <><AlertCircle size={9} /> Error: {dl.errorMessage || 'desconocido'}</>}
-                          {dl.status === 'cancelled' && 'Cancelado'}
+                        <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{dl.title}</div>
+                        <div style={{ fontSize: 8, color: dl.status === 'error' ? 'var(--danger)' : 'var(--text-tertiary)', marginTop: 1, display: 'flex', alignItems: 'center', gap: 3 }}>
+                          {dl.status === 'completed' && <Check size={8} style={{ color: 'var(--success)' }} />}
+                          {dl.status === 'error' && <AlertCircle size={8} />}
+                          {dl.status === 'completed' ? 'Completado' : dl.status === 'error' ? (dl.errorMessage || 'Error') : 'Cancelado'}
                         </div>
                       </div>
-                      <button onClick={() => removeFromDownloadQueue(dl.id)} style={{ padding: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', opacity: 0.35, flexShrink: 0, transition: 'opacity 200ms' }}
-                        onMouseEnter={e => { e.currentTarget.style.opacity = '0.7'; }}
-                        onMouseLeave={e => { e.currentTarget.style.opacity = '0.35'; }}><X size={10} /></button>
+                      <button onClick={() => removeFromDownloadQueue(dl.id)} style={{ padding: 2, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', flexShrink: 0, opacity: 0.4 }}><X size={8} /></button>
                     </div>
                   ))}
                 </div>
               )}
 
-              {/* Pendientes: selección para descargar */}
               {downloadSelection.length > 0 && (
                 <>
-                  <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
+                  <div style={{ fontSize: 8, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>
                     Pendientes ({downloadSelection.length})
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginBottom: 12, maxHeight: 180, overflowY: 'auto', paddingRight: 4 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 12, maxHeight: 160, overflowY: 'auto', paddingRight: 4 }}>
                     {downloadSelection.map((item, i) => (
-                      <div key={item.url} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 7, background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', transition: 'border-color 200ms' }}>
-                        <div style={{ width: 24, height: 24, borderRadius: 4, background: 'var(--bg-deep)', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          {item.thumbnail ? <img src={item.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={10} style={{ color: 'var(--text-muted)' }} />}
+                      <div key={item.url} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 6, background: 'var(--bg-surface)' }}>
+                        <div style={{ width: 22, height: 22, borderRadius: 4, background: 'var(--bg-deep)', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {item.thumbnail ? <img src={item.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={9} style={{ color: 'var(--text-muted)' }} />}
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
+                          <div style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
                         </div>
-                        <button onClick={() => setDownloadSelection(prev => prev.filter((_, idx) => idx !== i))} style={{ padding: 3, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', opacity: 0.35, flexShrink: 0, transition: 'opacity 200ms' }}
-                          onMouseEnter={e => { e.currentTarget.style.opacity = '0.7'; }}
-                          onMouseLeave={e => { e.currentTarget.style.opacity = '0.35'; }}><X size={9} /></button>
+                        <button onClick={() => setDownloadSelection(prev => prev.filter((_, idx) => idx !== i))} style={{ padding: 2, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', flexShrink: 0, opacity: 0.4 }}><X size={8} /></button>
                       </div>
                     ))}
                   </div>
-                  <button onClick={startBulkDownload} className="btn-primary" style={{ width: '100%', height: 34, fontSize: 11, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 8, letterSpacing: '0.02em' }}>
-                    <Download size={13} /> Descargar Todo ({downloadSelection.length})
+                  <button onClick={startBulkDownload} className="btn-primary" style={{ width: '100%', height: 32, fontSize: 10, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, borderRadius: 7 }}>
+                    <Download size={11} /> Descargar Todo ({downloadSelection.length})
                   </button>
                 </>
               )}
@@ -2048,7 +2059,7 @@ export default function Musica() {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
         }} onClick={() => setEditingTrackId(null)}>
-          <div className="bento-card" style={{ padding: 28, width: 380, maxWidth: '90vw', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }} onClick={e => e.stopPropagation()}>
+          <div className="bento-card" style={{ padding: 28, width: 380, maxWidth: '90vw' }} onClick={e => e.stopPropagation()}>
             <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 16 }}>Editar Canción</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
@@ -2149,7 +2160,7 @@ export default function Musica() {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
         }} onClick={() => setEditingArtistId(null)}>
-          <div className="bento-card" style={{ padding: 28, width: 440, maxWidth: '92vw', maxHeight: '90vh', overflowY: 'auto', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-soft)' }} onClick={e => e.stopPropagation()}>
+          <div className="bento-card" style={{ padding: 28, width: 440, maxWidth: '92vw', maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
             {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 24 }}>
               {editArtistImage ? (
@@ -2339,10 +2350,7 @@ export default function Musica() {
           <div onClick={e => e.stopPropagation()} className="bento-card" style={{
             width: '90%', maxWidth: 480,
             borderRadius: 16, overflow: 'hidden',
-            background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)',
-            border: '1px solid var(--border-subtle)',
             boxShadow: '0 24px 80px rgba(0,0,0,0.6)',
-            animation: 'fadeIn 200ms ease',
           }}>
             {/* Cover art */}
             <div style={{ width: '100%', aspectRatio: '16/9', position: 'relative', background: '#000', overflow: 'hidden' }}>

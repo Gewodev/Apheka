@@ -20,6 +20,13 @@
 select, input[type="date"], input[type="time"], input[type="datetime-local"] {
   color-scheme: var(--select-scheme, dark);
 }
+select option {
+  background-color: #18181b;
+  color: #e4e4e7;
+}
+select option:disabled {
+  color: #71717a;
+}
 
 :root {
   /* ── DARK THEME (Default) ── */

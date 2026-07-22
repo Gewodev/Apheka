@@ -386,9 +386,15 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                   <button onClick={() => {
                     if (musicQueue.length > 0) { setMusicQueue(musicQueue.slice(1)); playTrack(musicQueue[0]); return; }
                     const pool = queueSource?.pool ?? tracks.map(t => t.id);
-                    const idx = pool.indexOf(currentTrackId);
-                    if (idx < pool.length - 1) playTrack(pool[idx + 1]);
-                    else if (repeatMode === 'all' && pool.length > 0) playTrack(pool[0]);
+                    if (shuffleMode) {
+                      const rest = pool.filter(tid => tid !== currentTrackId);
+                      if (rest.length > 0) { const pick = rest[Math.floor(Math.random() * rest.length)]; playTrack(pick); }
+                      else if (pool.length > 0) playTrack(pool[0]);
+                    } else {
+                      const idx = pool.indexOf(currentTrackId);
+                      if (idx < pool.length - 1) playTrack(pool[idx + 1]);
+                      else if (repeatMode === 'all' && pool.length > 0) playTrack(pool[(idx + 1) % pool.length]);
+                    }
                   }}
                     style={{ background: 'none', border: 'none', padding: 6, cursor: 'pointer', color: 'var(--text-tertiary)', display: 'flex', borderRadius: 6, transition: 'color 150ms' }}
                     onMouseEnter={e => { e.currentTarget.style.color = acC; e.currentTarget.style.background = 'var(--bg-hover)'; }}

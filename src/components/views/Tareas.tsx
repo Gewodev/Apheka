@@ -1236,17 +1236,17 @@ export default function Tareas() {
                 <div>
                   <label style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 4 }}>Curso</label>
                   <select id="new-task-course" style={{ width: '100%', height: 36, padding: '0 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', outline: 'none', cursor: 'pointer', colorScheme: 'dark', fontFamily: "'Inter', sans-serif" }}>
-                    <option value="">Sin curso</option>
-                    {courses.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                    <option value="" style={{ background: '#18181b', color: '#e4e4e7' }}>Sin curso</option>
+                    {courses.map(c => <option key={c.id} value={c.name} style={{ background: '#18181b', color: c.color }}>{c.name}</option>)}
                   </select>
                 </div>
                 <div>
                   <label style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 4 }}>Prioridad</label>
                   <select id="new-task-priority" style={{ width: '100%', height: 36, padding: '0 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', outline: 'none', cursor: 'pointer', colorScheme: 'dark', fontFamily: "'Inter', sans-serif" }}>
-                    <option value="">Sin prioridad</option>
-                    <option value="high">Alta</option>
-                    <option value="medium">Media</option>
-                    <option value="low">Baja</option>
+                    <option value="" style={{ background: '#18181b', color: '#e4e4e7' }}>Sin prioridad</option>
+                    <option value="high" style={{ background: '#18181b', color: '#EF4444' }}>Alta</option>
+                    <option value="medium" style={{ background: '#18181b', color: '#F59E0B' }}>Media</option>
+                    <option value="low" style={{ background: '#18181b', color: '#10B981' }}>Baja</option>
                   </select>
                 </div>
               </div>
@@ -1343,9 +1343,9 @@ export default function Tareas() {
                     <select value={selectedTask.course}
                       onChange={e => updateTask(selectedTask.id, { course: e.target.value, courseColor: e.target.value === 'Sin curso' ? '#888' : (courses.find(c => c.name === e.target.value)?.color || '#E11D48') })}
                       style={{ width: '100%', height: 28, padding: '0 9px', background: selectedTask.course !== 'Sin curso' ? `${selectedCourseColor}08` : 'var(--bg-elevated)', border: `1px solid ${selectedTask.course !== 'Sin curso' ? `${selectedCourseColor}30` : 'var(--border-default)'}`, borderRadius: 7, fontSize: 11, fontWeight: 600, color: selectedTask.course !== 'Sin curso' ? selectedCourseColor : 'var(--text-primary)', outline: 'none', cursor: 'pointer', colorScheme: 'dark', fontFamily: "'Inter', sans-serif", transition: 'all 150ms' }}>
-                      <option value="Sin curso" style={{ background: 'var(--bg-elevated)', color: 'var(--text-primary)' }}>Sin curso</option>
+                      <option value="Sin curso" style={{ background: '#18181b', color: '#e4e4e7' }}>Sin curso</option>
                       {courses.map(c => (
-                        <option key={c.id} value={c.name} style={{ background: 'var(--bg-elevated)', color: c.color }}>{c.name}</option>
+                        <option key={c.id} value={c.name} style={{ background: '#18181b', color: c.color }}>{c.name}</option>
                       ))}
                     </select>
                   </div>
@@ -1358,10 +1358,10 @@ export default function Tareas() {
                     </span>
                     <select value={selectedTask.priority || 'none'} onChange={e => updateTask(selectedTask.id, { priority: e.target.value as any })}
                       style={{ width: '100%', height: 28, padding: '0 9px', background: selectedTask.priority && selectedTask.priority !== 'none' ? `${priorityColor}08` : 'var(--bg-elevated)', border: `1px solid ${selectedTask.priority && selectedTask.priority !== 'none' ? `${priorityColor}30` : 'var(--border-default)'}`, borderRadius: 7, fontSize: 11, fontWeight: 600, color: selectedTask.priority && selectedTask.priority !== 'none' ? priorityColor : 'var(--text-primary)', outline: 'none', cursor: 'pointer', colorScheme: 'dark', fontFamily: "'Inter', sans-serif", transition: 'all 150ms' }}>
-                      <option value="none" style={{ background: 'var(--bg-elevated)', color: 'var(--text-primary)' }}>Ninguna</option>
-                      <option value="low" style={{ background: 'var(--bg-elevated)', color: '#10B981' }}>Baja</option>
-                      <option value="medium" style={{ background: 'var(--bg-elevated)', color: '#F59E0B' }}>Media</option>
-                      <option value="high" style={{ background: 'var(--bg-elevated)', color: '#EF4444' }}>Alta</option>
+                      <option value="none" style={{ background: '#18181b', color: '#e4e4e7' }}>Ninguna</option>
+                      <option value="low" style={{ background: '#18181b', color: '#10B981' }}>Baja</option>
+                      <option value="medium" style={{ background: '#18181b', color: '#F59E0B' }}>Media</option>
+                      <option value="high" style={{ background: '#18181b', color: '#EF4444' }}>Alta</option>
                     </select>
                   </div>
 
@@ -1468,9 +1468,9 @@ export default function Tareas() {
                   </div>
 
                   {!sectionCollapsed.subtareas && (
-                    <div style={{ padding: '0 16px 14px', display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }}>
+                    <div style={{ padding: '2px 16px 16px', display: 'flex', flexDirection: 'column', gap: 10, borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }}>
 
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
                         {selectedTask.subtasks.map((st) => (
                           <div key={st.id}
                             style={{ display: 'flex', alignItems: 'center', gap: 8, padding: "7px 10px", borderRadius: 7, background: st.done ? 'rgba(16,185,129,0.08)' : 'var(--bg-surface)', border: `1px solid ${st.done ? 'rgba(16,185,129,0.15)' : 'var(--border-soft)'}`, transition: 'all 150ms', opacity: st.done ? 0.55 : 1 }}
@@ -1514,26 +1514,26 @@ export default function Tareas() {
                           </div>
                         ))}
                         {selectedTask.subtasks.length === 0 && (
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 60, borderRadius: 7, border: '1px dashed var(--border-soft)', background: 'var(--bg-surface)', color: 'var(--text-muted)', fontSize: 11, fontWeight: 500, gap: 2 }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 52, borderRadius: 7, border: '1px dashed var(--border-soft)', background: 'var(--bg-surface)', color: 'var(--text-muted)', fontSize: 11, fontWeight: 500, gap: 2 }}>
                             <CheckSquare size={14} style={{ opacity: 0.15 }} />
                             <span style={{ opacity: 0.3 }}>Desglosa la tarea en pasos</span>
                           </div>
                         )}
                       </div>
 
-                      <div style={{ display: 'flex', gap: 5 }}>
+                      <div style={{ display: 'flex', gap: 6, padding: '2px 0' }}>
                         <input
                           value={newSubtaskTitle}
                           onChange={e => setNewSubtaskTitle(e.target.value)}
                           placeholder="Añadir paso..."
                           onKeyDown={e => { if (e.key === 'Enter') handleAddSubtask(); }}
-                          style={{ flex: 1, padding: '7px 10px', background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 7, fontSize: 10.5, color: 'var(--text-primary)', outline: 'none', transition: 'all 150ms' }}
+                          style={{ flex: 1, padding: '8px 12px', background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 7, fontSize: 11, color: 'var(--text-primary)', outline: 'none', transition: 'all 150ms', height: 32 }}
                           onFocus={e => { e.currentTarget.style.borderColor = taskColor; e.currentTarget.style.boxShadow = `0 0 0 2px ${taskColor}14`; }}
                           onBlur={e => { e.currentTarget.style.borderColor = 'var(--border-default)'; e.currentTarget.style.boxShadow = 'none'; }}
                         />
                         <button onClick={handleAddSubtask} disabled={!newSubtaskTitle.trim()}
-                          style={{ width: 28, height: 28, borderRadius: 7, border: 'none', background: newSubtaskTitle.trim() ? taskColor : 'var(--border-soft)', color: newSubtaskTitle.trim() ? '#fff' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: newSubtaskTitle.trim() ? 'pointer' : 'default', transition: 'all 150ms', flexShrink: 0 }}>
-                          <Plus size={13} />
+                          style={{ width: 32, height: 32, borderRadius: 7, border: 'none', background: newSubtaskTitle.trim() ? taskColor : 'var(--border-soft)', color: newSubtaskTitle.trim() ? '#fff' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: newSubtaskTitle.trim() ? 'pointer' : 'default', transition: 'all 150ms', flexShrink: 0 }}>
+                          <Plus size={14} />
                         </button>
                       </div>
                     </div>

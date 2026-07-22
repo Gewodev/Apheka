@@ -12,7 +12,7 @@ export default function NowPlayingView({ sidebarCollapsed, activeView }: { sideb
     tracks, currentTrackId, isPlayingMusic,
     shuffleMode, repeatMode, toggleMusicPlayback, playTrack,
     setShuffleMode, setRepeatMode, setMusicProgress,
-    settings, musicQueue, trackHistory, toggleTrackFavorite, updateTrack,
+    settings, musicQueue, trackHistory, toggleTrackFavorite, updateTrack, queueSource,
   } = useApp();
 
   const track = tracks.find(t => t.id === coverModalTrackId);
@@ -811,15 +811,22 @@ export default function NowPlayingView({ sidebarCollapsed, activeView }: { sideb
                   setCoverModalTrackId(nextId);
                   playTrack(nextId);
                 } else {
-                  const idx = tracks.findIndex(t => t.id === currentTrackId);
-                  if (idx < tracks.length - 1) {
-                    const newId = tracks[idx + 1].id;
-                    setCoverModalTrackId(newId);
-                    playTrack(newId);
-                  } else if (repeatMode === 'all' && tracks.length > 0) {
-                    const newId = tracks[0].id;
-                    setCoverModalTrackId(newId);
-                    playTrack(newId);
+                  const pool = queueSource?.pool ?? tracks.map(t => t.id);
+                  if (shuffleMode) {
+                    const rest = pool.filter(tid => tid !== currentTrackId);
+                    if (rest.length > 0) { const pick = rest[Math.floor(Math.random() * rest.length)]; setCoverModalTrackId(pick); playTrack(pick); }
+                    else if (pool.length > 0) { setCoverModalTrackId(pool[0]); playTrack(pool[0]); }
+                  } else {
+                    const idx = pool.findIndex(t => t === currentTrackId);
+                    if (idx < pool.length - 1) {
+                      const newId = pool[idx + 1];
+                      setCoverModalTrackId(newId);
+                      playTrack(newId);
+                    } else if (repeatMode === 'all' && pool.length > 0) {
+                      const newId = pool[0];
+                      setCoverModalTrackId(newId);
+                      playTrack(newId);
+                    }
                   }
                 }
               }}

@@ -2481,8 +2481,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
           nextId = next;
         } else if (shuffleModeRef.current || repeatModeRef.current === 'all') {
           const sourcePool = queueSourceRef.current?.pool ?? tracksRef.current.map(t => t.id);
-          const rest = sourcePool.filter(tid => repeatModeRef.current === 'all' || tid !== cid);
-          const refilled = shuffleModeRef.current ? weightedShuffle(rest, playCountsRef.current) : rest;
+          let refilled: string[];
+          if (shuffleModeRef.current) {
+            const rest = sourcePool.filter(tid => tid !== cid);
+            refilled = weightedShuffle(rest, playCountsRef.current);
+          } else {
+            const idx = sourcePool.indexOf(cid);
+            const startIdx = idx >= 0 ? (idx + 1) % sourcePool.length : 0;
+            refilled = [];
+            for (let i = 0; i < sourcePool.length; i++) {
+              refilled.push(sourcePool[(startIdx + i) % sourcePool.length]);
+            }
+          }
           if (refilled.length > 0) {
             setMusicQueue(refilled.slice(1));
             nextId = refilled[0];
