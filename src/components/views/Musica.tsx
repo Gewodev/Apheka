@@ -1456,66 +1456,68 @@ export default function Musica() {
                 <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <Sliders size={11} style={{ opacity: 0.5 }} /> Opciones de descarga
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                  {/* Quality */}
+
+                {/* Quality + Format row */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
                   <div>
-                    <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Calidad</div>
-                    <div style={{ display: 'flex', gap: 4 }}>
+                    <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Calidad de audio</div>
+                    <div style={{ display: 'flex', gap: 3, padding: 3, background: 'var(--bg-deep)', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
                       {([['7', '96k'], ['5', '128k'], ['3', '192k'], ['0', '320k']] as const).map(([q, label]) => (
                         <button key={q} onClick={() => setAudioQuality(q)}
                           style={{
-                            flex: 1, padding: '7px 0', borderRadius: 7, fontSize: 10, fontWeight: 600, textAlign: 'center',
-                            background: audioQuality === q ? 'var(--accent)' : 'var(--bg-elevated)',
+                            flex: 1, padding: '6px 0', borderRadius: 6, fontSize: 10, fontWeight: 600, textAlign: 'center',
+                            background: audioQuality === q ? 'var(--accent)' : 'transparent',
                             color: audioQuality === q ? '#fff' : 'var(--text-tertiary)',
-                            border: '1px solid', borderColor: audioQuality === q ? 'var(--accent)' : 'var(--border-subtle)',
-                            cursor: 'pointer', transition: 'all 150ms',
+                            border: 'none', cursor: 'pointer', transition: 'all 150ms',
+                            boxShadow: audioQuality === q ? '0 1px 4px rgba(0,0,0,0.2)' : 'none',
                           }}>{label}</button>
                       ))}
                     </div>
                   </div>
-                  {/* Format */}
                   <div>
                     <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Formato</div>
-                    <div style={{ display: 'flex', gap: 4 }}>
+                    <div style={{ display: 'flex', gap: 3, padding: 3, background: 'var(--bg-deep)', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
                       {(['mp3', 'm4a'] as const).map(f => (
                         <button key={f} onClick={() => setAudioFormat(f)}
                           style={{
-                            flex: 1, padding: '7px 0', borderRadius: 7, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', textAlign: 'center',
-                            background: audioFormat === f ? 'var(--accent)' : 'var(--bg-elevated)',
+                            flex: 1, padding: '6px 0', borderRadius: 6, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', textAlign: 'center',
+                            background: audioFormat === f ? 'var(--accent)' : 'transparent',
                             color: audioFormat === f ? '#fff' : 'var(--text-tertiary)',
-                            border: '1px solid', borderColor: audioFormat === f ? 'var(--accent)' : 'var(--border-subtle)',
-                            cursor: 'pointer', transition: 'all 150ms',
+                            border: 'none', cursor: 'pointer', transition: 'all 150ms',
+                            boxShadow: audioFormat === f ? '0 1px 4px rgba(0,0,0,0.2)' : 'none',
                           }}>{f}</button>
                       ))}
-                      {audioFormat === 'm4a' && <span style={{ fontSize: 9, color: 'var(--accent)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 2, marginLeft: 4 }}><Check size={9} /> AAC</span>}
                     </div>
+                    {audioFormat === 'm4a' && <div style={{ fontSize: 9, color: 'var(--accent)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 3, marginTop: 5 }}><Check size={9} /> AAC de alta calidad</div>}
                   </div>
-                  {/* Cover */}
+                </div>
+
+                {/* Cover + Folder row */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 14 }}>
                   <div>
                     <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Portada</div>
                     <button onClick={() => setIncludeCover(!includeCover)}
                       style={{
-                        width: '100%', padding: '7px 0', borderRadius: 7, fontSize: 10, fontWeight: 600,
-                        background: includeCover ? 'var(--accent)' : 'var(--bg-elevated)',
-                        color: includeCover ? '#fff' : 'var(--text-tertiary)',
-                        border: '1px solid', borderColor: includeCover ? 'var(--accent)' : 'var(--border-subtle)',
+                        width: '100%', padding: '8px 0', borderRadius: 8, fontSize: 10, fontWeight: 600,
+                        background: includeCover ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : 'var(--bg-elevated)',
+                        color: includeCover ? 'var(--accent)' : 'var(--text-tertiary)',
+                        border: includeCover ? '1px solid color-mix(in srgb, var(--accent) 25%, transparent)' : '1px solid var(--border-subtle)',
                         cursor: 'pointer', transition: 'all 150ms', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-                      }}><Image size={10} /> {includeCover ? 'Incluir' : 'No incluir'}</button>
+                      }}><Image size={11} /> {includeCover ? 'Sí incluir' : 'No incluir'}</button>
                   </div>
-                  {/* Folder — full width */}
                   <div>
                     <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Carpeta de destino</div>
-                    <button onClick={handleSelectFolder} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 8, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', cursor: 'pointer', transition: 'all 150ms', textAlign: 'left' }}
+                    <button onClick={handleSelectFolder} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', borderRadius: 8, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', cursor: 'pointer', transition: 'all 150ms', textAlign: 'left' }}
                       onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 5%, var(--bg-elevated))'; }}
                       onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = 'var(--bg-elevated)'; }}>
-                      <div style={{ width: 32, height: 32, borderRadius: 8, background: 'color-mix(in srgb, var(--accent) 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <FolderOpen size={15} style={{ color: 'var(--accent)' }} />
+                      <div style={{ width: 30, height: 30, borderRadius: 7, background: 'color-mix(in srgb, var(--accent) 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <FolderOpen size={14} style={{ color: 'var(--accent)' }} />
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{persistentDownloadPath || 'Descargas/OWA Music'}</div>
-                        <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 1 }}>Haz click para cambiar</div>
+                        <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 1 }}>Click para cambiar</div>
                       </div>
-                      <FolderOpen size={11} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                      <FolderOpen size={10} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
                     </button>
                   </div>
                 </div>
@@ -2100,24 +2102,24 @@ export default function Musica() {
                     </div>
                     <button onClick={() => setDownloadSelection([])} style={{ fontSize: 9, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2 }}>Limpiar</button>
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginBottom: 12, maxHeight: 180, overflowY: 'auto', paddingRight: 4 }} className="no-scrollbar">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 12, maxHeight: 200, overflowY: 'auto', paddingRight: 4 }} className="no-scrollbar">
                     {downloadSelection.map((item, i) => (
-                      <div key={item.url} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 7, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
-                        <div style={{ width: 24, height: 24, borderRadius: 5, background: 'var(--bg-deep)', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          {item.thumbnail ? <img src={item.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={9} color="var(--text-muted)" style={{ opacity: 0.3 }} />}
-                        </div>
+                      <div key={item.url} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', transition: 'all 150ms' }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-strong)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; }}>
+                        <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--text-muted)', flexShrink: 0, opacity: 0.4 }} />
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
+                          <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
                         </div>
                         <button onClick={() => setDownloadSelection(prev => prev.filter((_, idx) => idx !== i))}
-                          style={{ padding: 2, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', flexShrink: 0, opacity: 0.3, transition: 'opacity 150ms', display: 'flex' }}
-                          onMouseEnter={e => { e.currentTarget.style.opacity = '1'; }}
-                          onMouseLeave={e => { e.currentTarget.style.opacity = '0.3'; }}><X size={10} /></button>
+                          style={{ padding: 3, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', flexShrink: 0, opacity: 0.3, transition: 'opacity 150ms', display: 'flex', borderRadius: 4 }}
+                          onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = 'var(--danger)'; }}
+                          onMouseLeave={e => { e.currentTarget.style.opacity = '0.3'; e.currentTarget.style.color = 'var(--text-muted)'; }}><X size={11} /></button>
                       </div>
                     ))}
                   </div>
-                  <button onClick={startBulkDownload} className="btn-primary" style={{ width: '100%', height: 36, fontSize: 11, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 8, whiteSpace: 'nowrap' }}>
-                    <Download size={13} /> Descargar Todo ({downloadSelection.length})
+                  <button onClick={startBulkDownload} className="btn-primary" style={{ width: '100%', height: 38, fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, borderRadius: 9, whiteSpace: 'nowrap', boxShadow: '0 2px 8px color-mix(in srgb, var(--accent) 25%, transparent)' }}>
+                    <Download size={14} /> Descargar Todo ({downloadSelection.length})
                   </button>
                 </div>
               )}
