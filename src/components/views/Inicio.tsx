@@ -188,9 +188,9 @@ export default function Inicio() {
       if (diff <= 0) {
         setGoalCountdown({ days: 0, hours: 0, minutes: 0, seconds: 0 });
         setGoalExpired(true);
-        // Auto-unpin after 24h
+        // Auto-unpin after 12h
         const hoursSince = Math.abs(diff) / 3600000;
-        if (hoursSince >= 24) {
+        if (hoursSince >= 12) {
           localStorage.removeItem(GOAL_KEY);
           setGoalEvent(null);
           setGoalExpired(false);

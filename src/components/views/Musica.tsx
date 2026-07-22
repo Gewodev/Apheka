@@ -543,11 +543,11 @@ export default function Musica() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
-          <div style={{ position: 'relative', width: 260 }}>
+          <div style={{ position: 'relative', width: 280 }}>
             <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }} />
             <input
               type="text"
-              placeholder="Buscar canciones o artistas..."
+              placeholder="Buscar canciones, artistas..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => {
@@ -562,8 +562,20 @@ export default function Musica() {
                 }
               }}
               className="input-base"
-              style={{ width: '100%', height: 38, paddingLeft: 36, fontSize: 12, borderRadius: 10, border: '1px solid var(--border-subtle)' }}
+              style={{ width: '100%', height: 38, paddingLeft: 36, fontSize: 12, borderRadius: 10, border: '1px solid var(--border-subtle)', transition: 'all 200ms' }}
             />
+            {searchQuery.trim() && (() => {
+              const q = searchQuery.trim().toLowerCase();
+              const localCount = tracks.filter(t => t.title.toLowerCase().includes(q) || t.artist.toLowerCase().includes(q)).length;
+              if (localCount === 0) return null;
+              return (
+                <div style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', gap: 5, pointerEvents: 'none' }}>
+                  <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+                    {localCount} local{localCount !== 1 ? 's' : ''}
+                  </span>
+                </div>
+              );
+            })()}
           </div>
 
           <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
@@ -689,11 +701,8 @@ export default function Musica() {
                 const firstCover = artistTracks.find(t => t.coverImage)?.coverImage;
                 const isPlayingAll = currentTrackId && artistTracks.some(t => t.id === currentTrackId) && isPlayingMusic;
                 return (
-                  <div style={{ position: 'relative' }}>
-                    {firstCover && (
-                      <div style={{ position: 'fixed', inset: 0, background: `url(${firstCover}) center/cover no-repeat`, filter: 'blur(100px) saturate(2)', opacity: 0.3, zIndex: 0 }} />
-                    )}
-                    <div style={{ position: 'relative', zIndex: 1, background: `color-mix(in srgb, var(--bg-primary) 88%, transparent)`, backdropFilter: 'blur(4px)', borderRadius: 16, padding: '28px 32px 32px' }}>
+                  <div>
+                    <div className="bento-card" style={{ padding: '28px 32px 32px' }}>
                       <button onClick={() => setSelectedArtist(null)} className="btn-ghost" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 20, padding: '6px 12px', borderRadius: 8, transition: 'color 150ms' }}
                         onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
                         onMouseLeave={e => e.currentTarget.style.color = 'var(--text-tertiary)'}>
@@ -815,11 +824,8 @@ export default function Musica() {
                 const firstCover = plTracks.find(t => t.coverImage)?.coverImage || pl.coverImage;
                 const isPlayingAll = currentTrackId && plTracks.some(t => t.id === currentTrackId) && isPlayingMusic;
                 return (
-                  <div style={{ position: 'relative' }}>
-                    {firstCover && (
-                      <div style={{ position: 'fixed', inset: 0, background: `url(${firstCover}) center/cover no-repeat`, filter: 'blur(100px) saturate(2)', opacity: 0.3, zIndex: 0 }} />
-                    )}
-                    <div style={{ position: 'relative', zIndex: 1, background: `color-mix(in srgb, var(--bg-primary) 88%, transparent)`, backdropFilter: 'blur(4px)', borderRadius: 16, padding: '28px 32px 32px' }}>
+                  <div>
+                    <div className="bento-card" style={{ padding: '28px 32px 32px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
                         <button onClick={() => setSelectedPlaylistId(null)} className="btn-ghost" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-tertiary)', padding: '6px 12px', borderRadius: 8, transition: 'color 150ms' }}
                           onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
@@ -922,226 +928,201 @@ export default function Musica() {
               })()}
 
               {/* Create/Edit Playlist Dialog */}
-              {showCreatePlaylist && (
-                <div style={{ position: 'fixed', inset: 0, zIndex: 10050, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
-                  onClick={(e) => { if (e.target === e.currentTarget) { setShowCreatePlaylist(false); setPlaylistStep(0); setPlaylistCoverData(''); setNewPlaylistName(''); setSelectedTrackIds(new Set()); } }}>
-                  <div className="bento-card" style={{ width: 'min(440px, 90vw)', padding: 0, borderRadius: 16, overflow: 'hidden' }}>
-                    {/* Header */}
-                    <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border-subtle)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--accent-alpha, rgba(255,255,255,0.06))', border: '1px solid var(--accent, #E11D48)30', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <ListMusic size={16} style={{ color: 'var(--accent, #E11D48)' }} />
-                          </div>
-                          <div>
-                            <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', margin: 0, fontFamily: "'Inter Tight', sans-serif" }}>
-                              {editingPlaylistId ? 'Editar playlist' : playlistStep === 0 ? 'Nueva playlist' : playlistStep === 1 ? 'Portada' : 'Canciones'}
-                            </h3>
-                            {!editingPlaylistId && (
-                              <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: '2px 0 0' }}>
-                                {playlistStep === 0 ? 'Dale un nombre a tu playlist' : playlistStep === 1 ? 'Elige una portada (opcional)' : `${selectedTrackIds.size} canciones seleccionadas`}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                        <button onClick={() => { setShowCreatePlaylist(false); setPlaylistStep(0); setPlaylistCoverData(''); setNewPlaylistName(''); setSelectedTrackIds(new Set()); }}
-                          style={{ width: 28, height: 28, borderRadius: 7, background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
-                          onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
-                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                          <X size={14} />
-                        </button>
+              {showCreatePlaylist && (() => {
+                const isEdit = !!editingPlaylistId;
+                const closePL = () => { setShowCreatePlaylist(false); setPlaylistStep(0); setPlaylistCoverData(''); setNewPlaylistName(''); setSelectedTrackIds(new Set()); setEditingPlaylistId(null); };
+                const filteredPLTracks = tracks.filter(t => {
+                  if (playlistArtistFilter && t.artist !== playlistArtistFilter) return false;
+                  if (playlistSongSearch && !t.title.toLowerCase().includes(playlistSongSearch.toLowerCase()) && !t.artist?.toLowerCase().includes(playlistSongSearch.toLowerCase())) return false;
+                  return true;
+                });
+                const SongPickerListInner = ({ items }: { items: Track[] }) => (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    {items.length === 0 && (
+                      <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 11.5, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                        <Music size={20} strokeWidth={1.2} style={{ opacity: 0.3 }} />
+                        <span>No hay canciones</span>
                       </div>
-                      {/* Step indicator */}
-                      {!editingPlaylistId && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
-                          {[0, 1, 2].map((s, i) => (
-                            <React.Fragment key={s}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: s === 1 ? 0 : 1 }}>
-                                <div style={{ width: 20, height: 20, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, flexShrink: 0, transition: 'all 250ms',
-                                  background: playlistStep >= s ? 'var(--accent, #E11D48)' : 'var(--bg-hover)',
-                                  color: playlistStep >= s ? '#fff' : 'var(--text-muted)',
-                                  border: playlistStep >= s ? 'none' : '1px solid var(--border-subtle)' }}>
-                                  {playlistStep > s ? <Check size={10} strokeWidth={3} /> : s + 1}
-                                </div>
-                                {s < 2 && (
-                                  <div style={{ flex: 1, height: 2, borderRadius: 1, background: playlistStep > s ? 'var(--accent, #E11D48)' : 'var(--border-subtle)', transition: 'background 300ms', minWidth: 16 }} />
-                                )}
-                              </div>
-                            </React.Fragment>
-                          ))}
+                    )}
+                    {items.map(t => {
+                      const sel = selectedTrackIds.has(t.id);
+                      return (
+                        <div key={t.id} onClick={() => setSelectedTrackIds(prev => { const next = new Set(prev); sel ? next.delete(t.id) : next.add(t.id); return next; })}
+                          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 8px', borderRadius: 8, cursor: 'pointer', transition: 'all 150ms', background: sel ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'transparent' }}
+                          onMouseEnter={e => { if (!sel) e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                          onMouseLeave={e => { if (!sel) e.currentTarget.style.background = sel ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'transparent'; }}>
+                          <div style={{ width: 16, height: 16, borderRadius: 4, border: sel ? 'none' : '1.5px solid var(--border-default)', background: sel ? 'var(--accent)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 150ms' }}>
+                            {sel && <Check size={10} strokeWidth={3} color="#fff" />}
+                          </div>
+                          <div style={{ width: 30, height: 30, borderRadius: 5, overflow: 'hidden', flexShrink: 0, background: 'var(--bg-deep)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            {t.coverImage ? <img src={t.coverImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={12} color="var(--text-muted)" style={{ opacity: 0.35 }} />}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 12, fontWeight: 500, color: sel ? 'var(--accent)' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3 }}>{t.title}</div>
+                            <div style={{ fontSize: 10, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3 }}>{t.artist}</div>
+                          </div>
+                          <span style={{ fontSize: 10, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', flexShrink: 0, opacity: 0.7 }}>{formatTime(t.duration)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+                return (
+                <div style={{ position: 'fixed', inset: 0, zIndex: 10050, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}
+                  onClick={(e) => { if (e.target === e.currentTarget) closePL(); }}>
+                  <div style={{ width: 'min(480px, 92vw)', maxHeight: 'calc(100vh - 48px)', display: 'flex', flexDirection: 'column', background: 'var(--bg-surface)', borderRadius: 16, border: '1px solid var(--border-default)', boxShadow: '0 32px 80px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.04) inset', overflow: 'hidden' }}>
+
+                    {/* ── Cover Hero ── */}
+                    <div style={{ position: 'relative', height: 150, flexShrink: 0, overflow: 'hidden' }}
+                      onClick={() => document.getElementById('pl-cover-input')?.click()}>
+                      {playlistCoverData ? (
+                        <>
+                          <img src={playlistCoverData} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.55) 0%, transparent 50%)' }} />
+                          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 200ms', cursor: 'pointer' }}
+                            onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+                            onMouseLeave={e => e.currentTarget.style.opacity = '0'}
+                            onClick={(e) => { e.stopPropagation(); document.getElementById('pl-cover-input')?.click(); }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 16px', borderRadius: 10, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.15)' }}>
+                              <Image size={13} color="#fff" />
+                              <span style={{ fontSize: 11.5, fontWeight: 600, color: '#fff' }}>Cambiar portada</span>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, background: 'var(--bg-deep)', cursor: 'pointer', border: '2px dashed var(--border-subtle)', boxSizing: 'border-box', transition: 'border-color 200ms, background 200ms' }}
+                          onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 5%, var(--bg-deep))'; }}
+                          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = 'var(--bg-deep)'; }}>
+                          <div style={{ width: 40, height: 40, borderRadius: 12, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <Image size={18} strokeWidth={1.5} color="var(--text-muted)" />
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                            <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-secondary)' }}>Subir portada</span>
+                            <span style={{ fontSize: 9.5, color: 'var(--text-tertiary)' }}>Click para seleccionar imagen</span>
+                          </div>
                         </div>
                       )}
+                      <input id="pl-cover-input" type="file" accept="image/*" style={{ display: 'none' }} onChange={e => {
+                        const file = e.target.files?.[0]; if (file) { const r = new FileReader(); r.onload = ev => setPlaylistCoverData(ev.target?.result as string); r.readAsDataURL(file); }
+                      }} />
+                      {/* Close button */}
+                      <button onClick={(e) => { e.stopPropagation(); closePL(); }}
+                        style={{ position: 'absolute', top: 10, right: 10, width: 30, height: 30, borderRadius: 9, background: playlistCoverData ? 'rgba(0,0,0,0.4)' : 'var(--bg-elevated)', backdropFilter: playlistCoverData ? 'blur(6px)' : 'none', border: playlistCoverData ? '1px solid rgba(255,255,255,0.12)' : '1px solid var(--border-subtle)', color: playlistCoverData ? '#fff' : 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                        onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.08)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.transform = ''; }}>
+                        <X size={14} />
+                      </button>
                     </div>
 
-                    {/* Content */}
-                    <div style={{ padding: '20px 24px' }}>
-                      {/* Step 0: Name */}
-                      {playlistStep === 0 && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                          <div style={{ position: 'relative' }}>
-                            <Music size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
-                            <input autoFocus value={newPlaylistName} onChange={e => setNewPlaylistName(e.target.value)}
-                              placeholder="Ej: Gym, Relax, Favoritos..."
-                              style={{ width: '100%', height: 42, padding: '0 14px 0 34px', borderRadius: 10, border: '1px solid var(--border-default)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', fontSize: 14, fontWeight: 500, outline: 'none', boxSizing: 'border-box', fontFamily: "'Inter Tight', sans-serif", transition: 'border-color 200ms' }}
-                              onFocus={e => e.currentTarget.style.borderColor = 'var(--accent, #E11D48)'}
-                              onBlur={e => e.currentTarget.style.borderColor = 'var(--border-default)'}
-                              onKeyDown={e => { if (e.key === 'Enter' && newPlaylistName.trim()) setPlaylistStep(1); }} />
-                          </div>
-                          <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textAlign: 'center' }}>
-                            {tracks.length} {tracks.length === 1 ? 'canción disponible' : 'canciones disponibles'}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Step 1: Cover */}
-                      {playlistStep === 1 && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 18, alignItems: 'center' }}>
-                          <div style={{ width: 140, height: 140, borderRadius: 14, overflow: 'hidden', background: 'var(--bg-deep)', border: `2px dashed ${playlistCoverData ? 'var(--accent, #E11D48)' : 'var(--border-subtle)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', position: 'relative', transition: 'all 250ms' }}
-                            onMouseEnter={e => { if (!playlistCoverData) e.currentTarget.style.borderColor = 'var(--accent, #E11D48)'; }}
-                            onMouseLeave={e => { if (!playlistCoverData) e.currentTarget.style.borderColor = 'var(--border-subtle)'; }}
-                            onClick={() => document.getElementById('playlist-cover-input')?.click()}>
-                            {playlistCoverData ? (
-                              <>
-                                <img src={playlistCoverData} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 200ms' }}
-                                  onMouseEnter={e => e.currentTarget.style.opacity = '1'}
-                                  onClick={(e) => { e.stopPropagation(); document.getElementById('playlist-cover-input')?.click(); }}>
-                                  <span style={{ fontSize: 11, fontWeight: 600, color: '#fff' }}>Cambiar</span>
+                    {/* ── Name + Info ── */}
+                    <div style={{ padding: '14px 20px 12px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
+                      <input autoFocus value={newPlaylistName} onChange={e => setNewPlaylistName(e.target.value)}
+                        placeholder="Nombre de la playlist"
+                        style={{ width: '100%', background: 'transparent', border: 'none', fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', outline: 'none', padding: 0, fontFamily: "'Inter Tight', sans-serif", lineHeight: 1.3 }}
+                        onKeyDown={e => { if (e.key === 'Enter' && newPlaylistName.trim() && !isEdit) setPlaylistStep(1); }} />
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
+                        <span style={{ fontSize: 10.5, color: 'var(--text-tertiary)' }}>
+                          {isEdit ? `${selectedTrackIds.size} de ${tracks.length} canciones` : playlistStep === 0 ? `${selectedTrackIds.size} seleccionadas` : `${selectedTrackIds.size} seleccionadas`}
+                        </span>
+                        {!isEdit && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            {[0, 1].map((s) => (
+                              <React.Fragment key={s}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                  <div style={{ width: 18, height: 18, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8.5, fontWeight: 700, flexShrink: 0, transition: 'all 250ms',
+                                    background: playlistStep >= s ? 'var(--accent)' : 'var(--bg-hover)',
+                                    color: playlistStep >= s ? '#fff' : 'var(--text-muted)',
+                                    border: playlistStep >= s ? 'none' : '1px solid var(--border-subtle)' }}>
+                                    {playlistStep > s ? <Check size={9} strokeWidth={3} /> : s === 0 ? '1' : '2'}
+                                  </div>
                                 </div>
-                              </>
-                            ) : (
-                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, color: 'var(--text-muted)' }}>
-                                <Image size={26} strokeWidth={1.5} />
-                                <span style={{ fontSize: 11, fontWeight: 500 }}>Subir portada</span>
-                              </div>
-                            )}
+                                {s === 0 && (
+                                  <div style={{ width: 24, height: 1.5, borderRadius: 1, background: playlistStep > 0 ? 'var(--accent)' : 'var(--border-subtle)', transition: 'background 300ms' }} />
+                                )}
+                              </React.Fragment>
+                            ))}
                           </div>
-                          <input id="playlist-cover-input" type="file" accept="image/*" style={{ display: 'none' }} onChange={e => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              const reader = new FileReader();
-                              reader.onload = ev => setPlaylistCoverData(ev.target?.result as string);
-                              reader.readAsDataURL(file);
-                            }
-                          }} />
-                          <div style={{ display: 'flex', gap: 10, width: '100%' }}>
-                            <button onClick={() => setPlaylistCoverData('')} disabled={!playlistCoverData}
-                              style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: `1.5px solid ${!playlistCoverData ? 'var(--accent, #E11D48)' : 'var(--border-default)'}`, background: !playlistCoverData ? 'var(--accent-alpha, rgba(255,255,255,0.04))' : 'transparent', color: !playlistCoverData ? 'var(--accent, #E11D48)' : 'var(--text-muted)', fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all 200ms' }}>
-                              Sin portada
-                            </button>
-                            <button onClick={() => setPlaylistStep(2)}
-                              className="btn-primary" style={{ flex: 1, height: 38, fontSize: 12 }}>
-                              {playlistCoverData ? 'Siguiente' : 'Continuar'}
-                            </button>
-                          </div>
-                        </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* ── Scrollable Content ── */}
+                    <div style={{ flex: 1, overflowY: 'auto', padding: '10px 16px' }} className="no-scrollbar">
+
+                      {/* EDIT MODE: Song list */}
+                      {isEdit && (
+                        <SongPickerListInner items={tracks} />
                       )}
 
-                      {/* Step 2: Select Songs */}
-                      {playlistStep === 2 && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                          <div style={{ position: 'relative' }}>
-                            <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)', pointerEvents: 'none' }} />
-                            <input value={playlistSongSearch} onChange={e => setPlaylistSongSearch(e.target.value)} placeholder="Buscar canciones..."
-                              style={{ width: '100%', height: 34, fontSize: 12, paddingLeft: 30, borderRadius: 8, background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box' }} />
+                      {/* CREATE Step 1: Song selection */}
+                      {!isEdit && playlistStep === 1 && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <div style={{ position: 'relative', flex: 1 }}>
+                              <Search size={12} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)', pointerEvents: 'none' }} />
+                              <input value={playlistSongSearch} onChange={e => setPlaylistSongSearch(e.target.value)} placeholder="Buscar..."
+                                style={{ width: '100%', height: 32, fontSize: 11.5, paddingLeft: 28, borderRadius: 8, background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box' }} />
+                            </div>
+                            <select value={playlistArtistFilter} onChange={e => setPlaylistArtistFilter(e.target.value)}
+                              style={{ height: 32, padding: '0 10px', fontSize: 10.5, background: 'var(--bg-elevated)', color: 'var(--text-primary)', border: '1px solid var(--border-default)', outline: 'none', borderRadius: 8, cursor: 'pointer', colorScheme: 'dark', minWidth: 100 }}>
+                              <option value="">Todos</option>
+                              {artists.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}
+                            </select>
                           </div>
-                          <select value={playlistArtistFilter} onChange={e => setPlaylistArtistFilter(e.target.value)}
-                            style={{ height: 32, padding: '0 10px', fontSize: 11, background: 'var(--bg-elevated)', color: 'var(--text-primary)', border: '1px solid var(--border-default)', outline: 'none', borderRadius: 8, cursor: 'pointer', colorScheme: 'dark' }}>
-                            <option value="">Todos los artistas</option>
-                            {artists.map(a => (
-                              <option key={a.id} value={a.name}>{a.name}</option>
-                            ))}
-                          </select>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+                            <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>
                               {selectedTrackIds.size} de {tracks.length}
                             </span>
-                            <button onClick={() => setSelectedTrackIds(prev => prev.size === tracks.length ? new Set() : new Set(tracks.map(t => t.id)))} className="btn-ghost" style={{ fontSize: 10, color: 'var(--accent)', padding: '2px 8px' }}>
+                            <button onClick={() => setSelectedTrackIds(prev => prev.size === tracks.length ? new Set() : new Set(tracks.map(t => t.id)))} className="btn-ghost" style={{ fontSize: 10, color: 'var(--accent)', padding: '2px 8px', height: 22 }}>
                               {selectedTrackIds.size === tracks.length ? 'Limpiar' : 'Seleccionar todo'}
                             </button>
                           </div>
-                          <div style={{ maxHeight: 260, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2, borderRadius: 8, border: '1px solid var(--border-subtle)', padding: 3 }}>
-                            {tracks.filter(t => {
-                              if (playlistArtistFilter && t.artist !== playlistArtistFilter) return false;
-                              if (playlistSongSearch && !t.title.toLowerCase().includes(playlistSongSearch.toLowerCase()) && !t.artist?.toLowerCase().includes(playlistSongSearch.toLowerCase())) return false;
-                              return true;
-                            }).map(t => {
-                              const sel = selectedTrackIds.has(t.id);
-                              return (
-                                <div key={t.id} onClick={() => setSelectedTrackIds(prev => { const n = new Set(prev); if (n.has(t.id)) n.delete(t.id); else n.add(t.id); return n; })}
-                                  style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '5px 10px', borderRadius: 7, cursor: 'pointer', background: sel ? 'var(--accent-alpha, rgba(255,255,255,0.04))' : 'transparent', transition: 'background 150ms', border: sel ? '1px solid var(--accent, #E11D48)40' : '1px solid transparent' }}>
-                                  <div style={{ width: 16, height: 16, borderRadius: 4, border: sel ? '2px solid var(--accent, #E11D48)' : '2px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', background: sel ? 'var(--accent, #E11D48)' : 'transparent', flexShrink: 0, transition: 'all 150ms' }}>
-                                    {sel && <Check size={10} color="#fff" strokeWidth={3} />}
-                                  </div>
-                                  <div style={{ width: 24, height: 24, borderRadius: 4, overflow: 'hidden', background: 'var(--bg-deep)', flexShrink: 0 }}>
-                                    {t.coverImage && <img src={t.coverImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
-                                  </div>
-                                  <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</div>
-                                    <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{t.artist || 'Sin artista'}</div>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                            {tracks.filter(t => {
-                              if (playlistArtistFilter && t.artist !== playlistArtistFilter) return false;
-                              if (playlistSongSearch && !t.title.toLowerCase().includes(playlistSongSearch.toLowerCase()) && !t.artist?.toLowerCase().includes(playlistSongSearch.toLowerCase())) return false;
-                              return true;
-                            }).length === 0 && (
-                              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', padding: '20px 8px', textAlign: 'center' }}>
-                                No hay canciones
-                              </div>
-                            )}
-                          </div>
+                          <SongPickerListInner items={filteredPLTracks} />
                         </div>
                       )}
                     </div>
 
-                    {/* Footer */}
-                    <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between', padding: '14px 24px', borderTop: '1px solid var(--border-subtle)' }}>
-                      <div>
-                        {playlistStep > 0 && !editingPlaylistId && (
-                          <button onClick={() => setPlaylistStep(s => s - 1)} className="btn-ghost" style={{ padding: '8px 14px', fontSize: 12 }}>
-                            <ChevronLeft size={14} /> Atrás
-                          </button>
-                        )}
-                      </div>
-                      <div style={{ display: 'flex', gap: 10 }}>
-                        <button onClick={() => { setShowCreatePlaylist(false); setPlaylistStep(0); setPlaylistCoverData(''); setNewPlaylistName(''); setSelectedTrackIds(new Set()); }}
-                          style={{ height: 36, padding: '0 18px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: '1px solid var(--border-default)', background: 'transparent', color: 'var(--text-secondary)', transition: 'all 200ms' }}>
-                          Cancelar
+                    {/* ── Footer ── */}
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center', padding: '12px 20px', borderTop: '1px solid var(--border-subtle)', flexShrink: 0, background: 'var(--bg-surface)' }}>
+                      {!isEdit && playlistStep > 0 && (
+                        <button onClick={() => setPlaylistStep(s => s - 1)} className="btn-ghost" style={{ marginRight: 'auto', height: 34, padding: '0 14px', fontSize: 12, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <ChevronLeft size={14} /> Atrás
                         </button>
-                        {editingPlaylistId ? (
-                          <button onClick={() => {
-                            const name = newPlaylistName.trim();
-                            if (!name) return;
-                            updatePlaylist(editingPlaylistId, { name, coverImage: playlistCoverData || undefined });
-                            setShowCreatePlaylist(false); setEditingPlaylistId(null); setPlaylistStep(0);
-                          }} className="btn-primary" style={{ height: 36, padding: '0 18px', fontSize: 12 }}>
-                            Guardar
-                          </button>
-                        ) : playlistStep < 2 ? (
-                          <button onClick={() => {
-                            if (playlistStep === 0 && !newPlaylistName.trim()) return;
-                            setPlaylistStep(s => s + 1);
-                          }} className="btn-primary" style={{ height: 36, padding: '0 18px', fontSize: 12, opacity: playlistStep === 0 && !newPlaylistName.trim() ? 0.5 : 1 }}>
-                            Siguiente <ChevronRight size={14} />
-                          </button>
-                        ) : (
-                          <button onClick={() => {
-                            const name = newPlaylistName.trim();
-                            if (!name) return;
-                            addPlaylist(name, Array.from(selectedTrackIds), playlistCoverData || undefined);
-                            setShowCreatePlaylist(false); setPlaylistStep(0); setPlaylistCoverData(''); setNewPlaylistName(''); setSelectedTrackIds(new Set());
-                          }} className="btn-primary" style={{ height: 36, padding: '0 18px', fontSize: 12, fontWeight: 700 }}>
-                            <Check size={14} /> Crear playlist
-                          </button>
-                        )}
-                      </div>
+                      )}
+                      <button onClick={closePL}
+                        className="btn-ghost"
+                        style={{ height: 34, padding: '0 16px', fontSize: 12, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center' }}>
+                        Cancelar
+                      </button>
+                      {isEdit ? (
+                        <button onClick={() => {
+                          const name = newPlaylistName.trim();
+                          if (!name) return;
+                          updatePlaylist(editingPlaylistId, { name, coverImage: playlistCoverData || undefined, trackIds: Array.from(selectedTrackIds) });
+                          closePL();
+                        }} className="btn-primary" style={{ height: 34, padding: '0 20px', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 5 }}>
+                          <Check size={14} /> Guardar
+                        </button>
+                      ) : playlistStep === 0 ? (
+                        <button onClick={() => { if (!newPlaylistName.trim()) return; setPlaylistStep(1); }}
+                          className="btn-primary" style={{ height: 34, padding: '0 20px', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 5, opacity: !newPlaylistName.trim() ? 0.4 : 1, pointerEvents: !newPlaylistName.trim() ? 'none' : 'auto' }}>
+                          Siguiente <ChevronRight size={14} />
+                        </button>
+                      ) : (
+                        <button onClick={() => {
+                          const name = newPlaylistName.trim();
+                          if (!name) return;
+                          addPlaylist(name, Array.from(selectedTrackIds), playlistCoverData || undefined);
+                          closePL();
+                        }} className="btn-primary" style={{ height: 34, padding: '0 20px', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 5 }}>
+                          <Check size={14} /> Crear playlist
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
-              )}
+                );
+              })()}
             </div>
           )}
 
@@ -1385,258 +1366,350 @@ export default function Musica() {
             </div>
           )}
 
-          {/* EXPLORAR & DESCARGAR SECTION (CUSTOM YT/SPOTIFY SCRAPER) */}
+          {/* EXPLORAR & DESCARGAR SECTION */}
           {activeTab === 'explorar' && (
-            <div className="bento-card" style={{ padding: '24px 28px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                <div>
-                  <div className="section-header" style={{ marginBottom: 4, fontSize: 14, color: 'var(--text-primary)' }}>Explorar & Descargar Música</div>
-                  <p style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Importa canciones o playlists completas desde YouTube mediante Owa Downloader.</p>
-                </div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                </div>
-              </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
               {/* Web mode banner */}
               {!isTauri() && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 8, marginBottom: 16 }}>
-                  <AlertCircle size={18} style={{ color: '#F59E0B', flexShrink: 0 }} />
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                    <strong>Las descargas requieren la app de escritorio.</strong> Estás en modo web. Para descargar canciones con yt-dlp, ejecuta <code style={{ background: 'rgba(0,0,0,0.3)', padding: '2px 6px', borderRadius: 4, fontSize: 11 }}>npm run tauri dev</code>
+                <div className="bento-card" style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '14px 16px', background: 'color-mix(in srgb, #F59E0B 6%, var(--bg-surface))', borderColor: 'color-mix(in srgb, #F59E0B 20%, var(--border-subtle))' }}>
+                  <div style={{ width: 28, height: 28, borderRadius: 7, background: 'color-mix(in srgb, #F59E0B 12%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
+                    <AlertCircle size={15} style={{ color: '#F59E0B' }} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 3 }}>App de escritorio requerida</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.5 }}>
+                      Las descargas usan <code style={{ background: 'rgba(0,0,0,0.2)', padding: '1px 5px', borderRadius: 4, fontSize: 10 }}>yt-dlp</code> que solo funciona en la app de escritorio. Ejecuta <code style={{ background: 'rgba(0,0,0,0.2)', padding: '1px 5px', borderRadius: 4, fontSize: 10 }}>npm run tauri dev</code> para habilitar descargas.
+                    </div>
                   </div>
                 </div>
               )}
 
-              {/* Input mode toggle */}
-              <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-                <button onClick={() => setSearchMode('link')} className="btn-secondary" style={{ height: 34, padding: '0 16px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 6, background: searchMode === 'link' ? 'var(--accent)' : 'var(--bg-surface)', color: searchMode === 'link' ? '#fff' : 'var(--text-secondary)', border: searchMode === 'link' ? 'none' : '1px solid var(--border-default)', borderRadius: 8 }}>
-                  <Link size={12} /> Pegar enlace
-                </button>
-                <button onClick={() => setSearchMode('query')} className="btn-secondary" style={{ height: 34, padding: '0 16px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 6, background: searchMode === 'query' ? 'var(--accent)' : 'var(--bg-surface)', color: searchMode === 'query' ? '#fff' : 'var(--text-secondary)', border: searchMode === 'query' ? 'none' : '1px solid var(--border-default)', borderRadius: 8 }}>
-                  <Search size={12} /> Buscar
-                </button>
+              {/* Input Card */}
+              <div className="bento-card" style={{ padding: '20px 24px' }}>
+                {/* Mode toggle */}
+                <div style={{ display: 'flex', padding: 3, background: 'var(--bg-deep)', borderRadius: 10, border: '1px solid var(--border-subtle)', marginBottom: 16 }}>
+                  {([
+                    { mode: 'link' as const, icon: Link, label: 'Pegar enlace' },
+                    { mode: 'query' as const, icon: Search, label: 'Buscar en YouTube' },
+                  ]).map(({ mode, icon: Icon, label }) => (
+                    <button key={mode} onClick={() => setSearchMode(mode)}
+                      style={{
+                        flex: 1, height: 36, padding: '0 14px', fontSize: 11.5, fontWeight: 600,
+                        fontFamily: "'Inter Tight', sans-serif", letterSpacing: '0.01em',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                        borderRadius: 8, cursor: 'pointer', border: 'none', transition: 'all 200ms ease',
+                        background: searchMode === mode ? 'var(--bg-surface)' : 'transparent',
+                        color: searchMode === mode ? 'var(--text-primary)' : 'var(--text-muted)',
+                        boxShadow: searchMode === mode ? '0 1px 4px rgba(0,0,0,0.15), 0 0 0 1px var(--border-default)' : 'none',
+                      }}>
+                      <Icon size={13} /> {label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Unified input area */}
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, borderRadius: 10, padding: '0 14px', background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', transition: 'border-color 200ms, box-shadow 200ms' }}
+                    onFocus={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.boxShadow = '0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent)'; }}
+                    onBlur={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.boxShadow = 'none'; }}>
+                    {searchMode === 'link'
+                      ? <Link size={15} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                      : <Search size={15} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />}
+                    <input
+                      ref={searchMode === 'link' ? urlInputRef : undefined}
+                      type="text"
+                      value={searchMode === 'link' ? url : searchQuery}
+                      onChange={e => searchMode === 'link' ? setUrl(e.target.value) : setSearchQuery(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      placeholder={searchMode === 'link' ? 'Pega un enlace de YouTube...' : 'Busca canciones, artistas o playlists...'}
+                      style={{ border: 'none', background: 'transparent', height: 42, padding: 0, fontSize: 13, flex: 1, color: 'var(--text-primary)', outline: 'none', fontFamily: 'inherit' }}
+                    />
+                    {((searchMode === 'link' && url) || (searchMode === 'query' && searchQuery)) && (
+                      <button onClick={() => searchMode === 'link' ? setUrl('') : setSearchQuery('')} style={{ padding: 4, background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', borderRadius: 4, transition: 'color 150ms' }}
+                        onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
+                        onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+                  <button onClick={searchMode === 'link' ? handleUrlSubmit : handleSearch}
+                    className="btn-primary"
+                    style={{ height: 44, padding: '0 22px', display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', borderRadius: 10 }}
+                    disabled={isLoading}>
+                    {isLoading ? <Loader size={15} style={{ animation: 'spin 1s linear infinite' }} /> : <Search size={15} />}
+                    {searchMode === 'link' ? 'Analizar' : 'Buscar'}
+                  </button>
+                </div>
+
+                {/* Quick tip under input */}
+                <div style={{ marginTop: 10, fontSize: 10, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                  {searchMode === 'link'
+                    ? <><Link size={10} style={{ opacity: 0.4 }} /> Soporta enlaces de YouTube, playlists y canales</>
+                    : <><Search size={10} style={{ opacity: 0.4 }} /> Busca en YouTube o pega un enlace directamente</>
+                  }
+                </div>
               </div>
 
-              {/* URL Input Bar */}
-              {searchMode === 'link' && (
-                <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
-                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, border: '1px solid var(--border-default)', borderRadius: 8, padding: '0 14px' }}>
-                    <Link size={16} style={{ color: 'var(--text-muted)' }} />
-                    <input
-                      ref={urlInputRef}
-                      type="text"
-                      value={url}
-                      onChange={e => setUrl(e.target.value)}
-                      onKeyDown={handleKeyDown}
-                      placeholder="Pega un enlace de YouTube (video o playlist)..."
-                      className="input-base"
-                      style={{ border: 'none', background: 'transparent', height: 42, padding: 0, fontSize: 13 }}
-                    />
-                    {url && <button onClick={() => setUrl('')} className="btn-ghost" style={{ padding: 4 }}><X size={14} /></button>}
-                  </div>
-
-                  <button onClick={handleUrlSubmit} className="btn-primary" style={{ height: 42, padding: '0 24px', display: 'flex', alignItems: 'center', gap: 8 }} disabled={isLoading}>
-                    {isLoading ? <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} /> : <Search size={16} />}
-                    Analizar Enlace
-                  </button>
+              {/* Download Options Card */}
+              <div className="bento-card" style={{ padding: '20px 24px' }}>
+                <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Sliders size={11} style={{ opacity: 0.5 }} /> Opciones de descarga
                 </div>
-              )}
-
-              {/* Search Bar */}
-              {searchMode === 'query' && (
-                <div style={{ display: 'flex', gap: 12, marginBottom: 16, animation: 'fadeIn 200ms' }}>
-                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, border: '1px solid var(--border-default)', borderRadius: 8, padding: '0 14px' }}>
-                    <Search size={16} style={{ color: 'var(--text-muted)' }} />
-                    <input
-                      type="text"
-                      value={searchQuery}
-                      onChange={e => setSearchQuery(e.target.value)}
-                      onKeyDown={handleKeyDown}
-                      placeholder="Busca canciones directamente en YouTube..."
-                      className="input-base"
-                      style={{ border: 'none', background: 'transparent', height: 40, padding: 0, fontSize: 13 }}
-                    />
-                  </div>
-                  <button onClick={handleSearch} className="btn-primary" style={{ height: 40, padding: '0 20px', display: 'flex', alignItems: 'center', gap: 8 }} disabled={isLoading}>
-                    {isLoading ? <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} /> : <Search size={16} />} Buscar
-                  </button>
-                </div>
-              )}
-
-              {/* Download options */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '16px 18px', borderRadius: 10, border: '1px solid var(--border-subtle)', marginBottom: 20 }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', minWidth: 48 }}>Calidad</span>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                  {/* Quality */}
+                  <div>
+                    <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Calidad</div>
                     <div style={{ display: 'flex', gap: 4 }}>
-                      {([['7', '96'], ['5', '128'], ['3', '192'], ['0', '320']] as const).map(([q, label]) => (
+                      {([['7', '96k'], ['5', '128k'], ['3', '192k'], ['0', '320k']] as const).map(([q, label]) => (
                         <button key={q} onClick={() => setAudioQuality(q)}
                           style={{
-                            padding: '5px 10px', borderRadius: 6, fontSize: 10, fontWeight: 600, minWidth: 44, textAlign: 'center',
-                            background: audioQuality === q ? 'var(--accent)' : 'var(--bg-surface)',
+                            flex: 1, padding: '7px 0', borderRadius: 7, fontSize: 10, fontWeight: 600, textAlign: 'center',
+                            background: audioQuality === q ? 'var(--accent)' : 'var(--bg-elevated)',
                             color: audioQuality === q ? '#fff' : 'var(--text-tertiary)',
-                            border: '1px solid', borderColor: audioQuality === q ? 'var(--accent)' : 'var(--border-default)',
+                            border: '1px solid', borderColor: audioQuality === q ? 'var(--accent)' : 'var(--border-subtle)',
                             cursor: 'pointer', transition: 'all 150ms',
-                          }}
-                        >{label}</button>
+                          }}>{label}</button>
                       ))}
                     </div>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', minWidth: 48 }}>Formato</span>
+                  {/* Format */}
+                  <div>
+                    <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Formato</div>
                     <div style={{ display: 'flex', gap: 4 }}>
                       {(['mp3', 'm4a'] as const).map(f => (
                         <button key={f} onClick={() => setAudioFormat(f)}
                           style={{
-                            padding: '5px 10px', borderRadius: 6, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', minWidth: 44, textAlign: 'center',
-                            background: audioFormat === f ? 'var(--accent)' : 'var(--bg-surface)',
+                            flex: 1, padding: '7px 0', borderRadius: 7, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', textAlign: 'center',
+                            background: audioFormat === f ? 'var(--accent)' : 'var(--bg-elevated)',
                             color: audioFormat === f ? '#fff' : 'var(--text-tertiary)',
-                            border: '1px solid', borderColor: audioFormat === f ? 'var(--accent)' : 'var(--border-default)',
+                            border: '1px solid', borderColor: audioFormat === f ? 'var(--accent)' : 'var(--border-subtle)',
                             cursor: 'pointer', transition: 'all 150ms',
-                          }}
-                        >{f}</button>
+                          }}>{f}</button>
                       ))}
+                      {audioFormat === 'm4a' && <span style={{ fontSize: 9, color: 'var(--accent)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 2, marginLeft: 4 }}><Check size={9} /> AAC</span>}
                     </div>
-                    {audioFormat === 'm4a' && <span style={{ fontSize: 9, color: 'var(--accent)', fontWeight: 500, opacity: 0.8 }}>✓ AAC</span>}
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', minWidth: 48 }}>Opciones</span>
+                  {/* Cover */}
+                  <div>
+                    <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Portada</div>
                     <button onClick={() => setIncludeCover(!includeCover)}
                       style={{
-                        padding: '5px 10px', borderRadius: 6, fontSize: 10, fontWeight: 600, whiteSpace: 'nowrap',
-                        background: includeCover ? 'var(--accent)' : 'var(--bg-surface)',
+                        width: '100%', padding: '7px 0', borderRadius: 7, fontSize: 10, fontWeight: 600,
+                        background: includeCover ? 'var(--accent)' : 'var(--bg-elevated)',
                         color: includeCover ? '#fff' : 'var(--text-tertiary)',
-                        border: '1px solid', borderColor: includeCover ? 'var(--accent)' : 'var(--border-default)',
-                        cursor: 'pointer', transition: 'all 150ms', display: 'flex', alignItems: 'center', gap: 5,
-                      }}
-                    ><Image size={10} /> {includeCover ? 'Con portada' : 'Sin portada'}</button>
-                    <span style={{ fontSize: 10, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)', wordBreak: 'break-all', opacity: 0.7 }}>{persistentDownloadPath || 'Descargas/OWA Music'}</span>
-                    <button onClick={handleSelectFolder} className="btn-ghost" style={{ padding: 4, display: 'flex', color: 'var(--text-tertiary)', cursor: 'pointer' }}><FolderOpen size={13} /></button>
+                        border: '1px solid', borderColor: includeCover ? 'var(--accent)' : 'var(--border-subtle)',
+                        cursor: 'pointer', transition: 'all 150ms', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                      }}><Image size={10} /> {includeCover ? 'Incluir' : 'No incluir'}</button>
+                  </div>
+                  {/* Folder — full width */}
+                  <div>
+                    <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Carpeta de destino</div>
+                    <button onClick={handleSelectFolder} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 8, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', cursor: 'pointer', transition: 'all 150ms', textAlign: 'left' }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 5%, var(--bg-elevated))'; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = 'var(--bg-elevated)'; }}>
+                      <div style={{ width: 32, height: 32, borderRadius: 8, background: 'color-mix(in srgb, var(--accent) 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <FolderOpen size={15} style={{ color: 'var(--accent)' }} />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{persistentDownloadPath || 'Descargas/OWA Music'}</div>
+                        <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 1 }}>Haz click para cambiar</div>
+                      </div>
+                      <FolderOpen size={11} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                    </button>
                   </div>
                 </div>
               </div>
 
-              {/* Loading State */}
-              {isLoading && (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0', gap: 12 }}>
-                  <Loader size={28} style={{ animation: 'spin 1s linear infinite', color: 'var(--accent)' }} />
-                  <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Procesando solicitud con Owa Downloader...</span>
-                </div>
-              )}
-
-              {/* Search Results */}
-              {searchResults.length > 0 && !isLoading && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Resultados de Búsqueda ({searchResults.length})</div>
-                    <button onClick={() => setSearchResults([])} className="btn-ghost" style={{ padding: 4 }}><X size={14} /></button>
+              {/* Loading State — only in query mode */}
+              {isLoading && searchMode === 'query' && (
+                <div className="bento-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '44px 20px', gap: 16 }}>
+                  <div style={{ position: 'relative', width: 44, height: 44 }}>
+                    <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '2.5px solid var(--border-subtle)' }} />
+                    <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '2.5px solid transparent', borderTopColor: 'var(--accent)', animation: 'spin 0.8s linear infinite' }} />
+                    <div style={{ position: 'absolute', inset: 6, borderRadius: '50%', border: '2px solid transparent', borderBottomColor: 'color-mix(in srgb, var(--accent) 50%, transparent)', animation: 'spin 1.4s linear infinite reverse' }} />
                   </div>
-                  {searchResults.map((r, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
-                      <div style={{ width: 44, height: 33, borderRadius: 6, background: 'var(--bg-surface)', overflow: 'hidden', flexShrink: 0 }}>
-                        {r.thumbnail ? <img src={r.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={14} />}
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{r.title}</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.channel} · {formatDuration(r.duration)}</div>
-                      </div>
-                      <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-                        <button onClick={async () => {
-                          try {
-                            const existing = await WebviewWindow.getByLabel('youtube-player');
-                            if (existing) {
-                              await emitTo('youtube-player', 'youtube:load', { videoUrl: r.webpage_url, title: r.title, thumbnail: r.thumbnail || '' });
-                              await existing.show(); await existing.setFocus();
-                              return;
-                            }
-                            try { localStorage.setItem('owa_yt_pending', JSON.stringify({ videoUrl: r.webpage_url, title: r.title, thumbnail: r.thumbnail || '' })); } catch {}
-                            const win = new WebviewWindow('youtube-player', {
-                              url: '/',
-                              title: 'YouTube Player',
-                              width: 480, height: 360,
-                              minWidth: 320, minHeight: 240,
-                              resizable: true,
-                              decorations: true,
-                              alwaysOnTop: false,
-                              skipTaskbar: false,
-                              center: true,
-                            });
-                            win.once('tauri://error', () => {});
-                            setTimeout(async () => {
-                              try {
-                                await emitTo('youtube-player', 'youtube:load', { videoUrl: r.webpage_url, title: r.title, thumbnail: r.thumbnail || '' });
-                              } catch {}
-                            }, 1500);
-                          } catch {
-                            setYoutubePlayerUrl(r.webpage_url); setYoutubePlayerTitle(r.title); setYoutubePlayerThumb(r.thumbnail || '');
-                          }
-                        }} className="btn-secondary" style={{ padding: '5px 10px', height: 30, fontSize: 10, display: 'flex', alignItems: 'center', gap: 4 }}><Play size={11} /> YouTube</button>
-                        <button onClick={() => handleDownloadOne(r)} className="btn-primary" style={{ padding: '5px 10px', height: 30, fontSize: 10, display: 'flex', alignItems: 'center', gap: 4 }}><Download size={11} /> Descargar</button>
-                      </div>
-                    </div>
-                  ))}
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>Procesando con Owa Downloader</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>Esto puede tardar unos segundos</div>
+                  </div>
                 </div>
               )}
 
-              {/* No Results — Recommendation */}
-              {searchPerformed && searchResults.length === 0 && !isLoading && (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: '40px 20px', marginBottom: 20 }}>
-                  <Music size={40} style={{ color: 'var(--text-muted)', opacity: 0.4 }} />
+              {/* Search Results — only in query mode */}
+              {searchMode === 'query' && searchResults.length > 0 && !isLoading && (
+                <div className="bento-card" style={{ padding: '16px 20px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Resultados</div>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 10%, transparent)', padding: '2px 8px', borderRadius: 10, fontVariantNumeric: 'tabular-nums' }}>{searchResults.length}</div>
+                    </div>
+                    <button onClick={() => setSearchResults([])} style={{ padding: '4px 10px', fontSize: 10, fontWeight: 500, color: 'var(--text-muted)', background: 'none', border: '1px solid var(--border-subtle)', borderRadius: 6, cursor: 'pointer', transition: 'all 150ms' }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-strong)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>Limpiar</button>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    {searchResults.map((r, i) => (
+                      <div key={i}
+                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 8px', borderRadius: 10, border: '1px solid transparent', transition: 'all 180ms ease' }}
+                        onMouseEnter={e => { e.currentTarget.style.background = 'color-mix(in srgb, var(--bg-elevated) 60%, var(--bg-hover))'; e.currentTarget.style.borderColor = 'var(--border-subtle)'; const ov = e.currentTarget.querySelector('.play-ov') as HTMLElement; if (ov) ov.style.opacity = '1'; const act = e.currentTarget.querySelector('.row-act') as HTMLElement; if (act) act.style.opacity = '1'; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'transparent'; const ov = e.currentTarget.querySelector('.play-ov') as HTMLElement; if (ov) ov.style.opacity = '0'; const act = e.currentTarget.querySelector('.row-act') as HTMLElement; if (act) act.style.opacity = '0.35'; }}>
+                        {/* Thumbnail with play overlay */}
+                        <div style={{ width: 60, height: 42, borderRadius: 8, background: 'var(--bg-deep)', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border-subtle)', position: 'relative', cursor: 'pointer' }}
+                          onClick={async () => {
+                            const loadToPlayer = async (videoUrl: string, title: string, thumbnail: string) => {
+                              const data = { videoUrl, title, thumbnail };
+                              for (let attempt = 0; attempt < 5; attempt++) { try { await emitTo('youtube-player', 'youtube:load', data); return true; } catch { await new Promise(resolve => setTimeout(resolve, 400 + attempt * 300)); } }
+                              return false;
+                            };
+                            try {
+                              const existing = await WebviewWindow.getByLabel('youtube-player');
+                              if (existing) { const sent = await loadToPlayer(r.webpage_url, r.title, r.thumbnail || ''); if (sent) { await existing.show(); await existing.setFocus(); return; } }
+                              try { localStorage.setItem('owa_yt_pending', JSON.stringify({ videoUrl: r.webpage_url, title: r.title, thumbnail: r.thumbnail || '' })); } catch {}
+                              const win = new WebviewWindow('youtube-player', { url: '/', title: 'YouTube Player', width: 480, height: 360, minWidth: 320, minHeight: 240, resizable: true, decorations: true, alwaysOnTop: false, skipTaskbar: false, center: true });
+                              win.once('tauri://error', () => {});
+                              await loadToPlayer(r.webpage_url, r.title, r.thumbnail || '');
+                            } catch { setYoutubePlayerUrl(r.webpage_url); setYoutubePlayerTitle(r.title); setYoutubePlayerThumb(r.thumbnail || ''); }
+                          }}>
+                          {r.thumbnail ? <img src={r.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={14} color="var(--text-muted)" style={{ opacity: 0.3 }} />}
+                          <div className="play-ov" style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 180ms', borderRadius: 8 }}>
+                            <Play size={15} fill="white" color="white" />
+                          </div>
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3 }}>{r.title}</div>
+                          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.channel}</span>
+                            <span style={{ opacity: 0.3, flexShrink: 0 }}>·</span>
+                            <span style={{ fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{formatDuration(r.duration)}</span>
+                          </div>
+                        </div>
+                        <div className="row-act" style={{ display: 'flex', gap: 4, flexShrink: 0, opacity: 0.35, transition: 'opacity 180ms' }}>
+                          <button onClick={() => handleDownloadOne(r)} style={{ height: 28, padding: '0 10px', fontSize: 10, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap', borderRadius: 6, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)', cursor: 'pointer', transition: 'all 150ms' }}
+                            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
+                            <Download size={10} /> Descargar
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* No Results — only in query mode */}
+              {searchMode === 'query' && searchPerformed && searchResults.length === 0 && !isLoading && (
+                <div className="bento-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, padding: '44px 24px' }}>
+                  <div style={{ width: 56, height: 56, borderRadius: 14, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Music size={24} style={{ color: 'var(--text-muted)', opacity: 0.4 }} />
+                  </div>
                   <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>No se encontraron resultados</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-tertiary)', lineHeight: 1.5, maxWidth: 300 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Sin resultados</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-tertiary)', lineHeight: 1.5 }}>
                       No encontramos &ldquo;{searchQuery}&rdquo; en tu biblioteca o en YouTube.
                     </div>
                   </div>
-                  <button onClick={() => { setSearchMode('link'); setUrl(`https://www.youtube.com/results?search_query=${encodeURIComponent(searchQuery)}`); }}
-                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 24px', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer', border: 'none', background: 'var(--accent)', color: '#fff', transition: 'all 200ms' }}>
-                    <Plus size={16} /> Agregar canción &mdash; Buscar en YouTube
-                  </button>
-                  <button onClick={() => { setSearchResults([]); setSearchPerformed(false); setSearchQuery(''); }}
-                    style={{ fontSize: 11, color: 'var(--text-tertiary)', cursor: 'pointer', background: 'none', border: 'none', textDecoration: 'underline', textUnderlineOffset: 3 }}>
-                    Nueva búsqueda
-                  </button>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={() => { setSearchMode('link'); setUrl(`https://www.youtube.com/results?search_query=${encodeURIComponent(searchQuery)}`); }}
+                      className="btn-primary"
+                      style={{ height: 36, padding: '0 20px', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                      <Plus size={14} /> Buscar en YouTube
+                    </button>
+                    <button onClick={() => { setSearchResults([]); setSearchPerformed(false); setSearchQuery(''); }}
+                      className="btn-ghost"
+                      style={{ height: 36, padding: '0 14px', fontSize: 12 }}>
+                      Nueva búsqueda
+                    </button>
+                  </div>
                 </div>
               )}
 
               {/* Preview Area */}
               {preview && !isLoading && (
-                <div style={{ padding: 20, borderRadius: 12, border: '1px solid var(--border-default)', position: 'relative' }}>
-                  <button onClick={() => setPreview(null)} className="btn-ghost" style={{ position: 'absolute', top: 12, right: 12, padding: 6, zIndex: 1 }}><X size={16} /></button>
-                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: 24, marginBottom: 20 }}>
-                    <div style={{ width: 120, height: 120, borderRadius: 8, background: 'linear-gradient(135deg, var(--accent), #8B1A3B)', overflow: 'hidden', flexShrink: 0, boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}>
-                      {preview.thumbnail ? <img src={preview.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={48} style={{ margin: '36px auto', display: 'block', color: 'rgba(255,255,255,0.3)' }} />}
+                <div className="bento-card" style={{ padding: 0, overflow: 'hidden' }}>
+                  {/* Preview hero */}
+                  <div style={{ display: 'flex', gap: 20, padding: '20px 24px', alignItems: 'flex-start' }}>
+                    <div style={{ width: 120, height: 120, borderRadius: 12, background: 'var(--bg-deep)', overflow: 'hidden', flexShrink: 0, boxShadow: '0 6px 20px rgba(0,0,0,0.35)', border: '1px solid var(--border-subtle)' }}>
+                      {preview.thumbnail ? <img src={preview.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={36} style={{ margin: '42px auto', display: 'block', color: 'var(--text-muted)', opacity: 0.2 }} />}
                     </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--accent)', marginBottom: 6 }}>{isPlaylist(preview) ? 'Playlist de YouTube' : 'Video de YouTube'}</div>
-                      <h3 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>{preview.title || 'Sin título'}</h3>
-                      <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>{preview.channel}</div>
-                      <div style={{ display: 'flex', gap: 12 }}>
-                        <button onClick={handleDownloadAll} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, height: 36 }}>
-                          <Download size={14} /> {isPlaylist(preview) ? 'Descargar Toda la Playlist' : 'Descargar Audio'}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                        <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 10%, transparent)', padding: '3px 8px', borderRadius: 5 }}>
+                          {isPlaylist(preview) ? 'Playlist' : 'Video'}
+                        </div>
+                        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>YouTube</span>
+                      </div>
+                      <h3 style={{ fontSize: 17, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4, lineHeight: 1.3, fontFamily: "'Inter Tight', sans-serif" }}>{preview.title || 'Sin título'}</h3>
+                      <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 14 }}>{preview.channel}</div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button onClick={handleDownloadAll} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, height: 36, padding: '0 20px', whiteSpace: 'nowrap' }}>
+                          <Download size={14} /> {isPlaylist(preview) ? 'Descargar Playlist' : 'Descargar Audio'}
                         </button>
-                        <button onClick={handleSelectFolder} className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, height: 36 }}>
-                          <FolderOpen size={14} /> Elegir Carpeta
+                        <button onClick={handleSelectFolder} className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, height: 36, padding: '0 14px', whiteSpace: 'nowrap' }}>
+                          <FolderOpen size={14} /> Carpeta
+                        </button>
+                        <button onClick={() => setPreview(null)} className="btn-ghost" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, height: 36, padding: '0 12px', color: 'var(--text-muted)' }}>
+                          <X size={14} />
                         </button>
                       </div>
                     </div>
                   </div>
 
+                  {/* Playlist entries */}
                   {isPlaylist(preview) && preview.entries.length > 0 && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 300, overflowY: 'auto', paddingRight: 8 }}>
-                      {preview.entries.map((entry: YouTubeMetadata, i: number) => (
-                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', background: 'var(--bg-surface)', borderRadius: 6, border: '1px solid var(--border-subtle)' }}>
-                          <span style={{ fontSize: 11, color: 'var(--text-tertiary)', width: 24 }}>{i + 1}</span>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.title}</div>
-                            <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{entry.channel}</div>
+                    <div style={{ borderTop: '1px solid var(--border-subtle)', padding: '14px 24px', maxHeight: 360, overflowY: 'auto' }} className="no-scrollbar">
+                      <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span>{preview.entries.length} canciones</span>
+                        <button onClick={async () => {
+                          for (const entry of preview.entries.slice(0, 3)) {
+                            const loadToPlayer = async (videoUrl: string, title: string, thumbnail: string) => {
+                              for (let attempt = 0; attempt < 3; attempt++) { try { await emitTo('youtube-player', 'youtube:load', { videoUrl, title, thumbnail }); return true; } catch { await new Promise(resolve => setTimeout(resolve, 500)); } }
+                              return false;
+                            };
+                            try {
+                              const existing = await WebviewWindow.getByLabel('youtube-player');
+                              if (existing) { await loadToPlayer(entry.webpage_url, entry.title, entry.thumbnail || ''); await existing.show(); await existing.setFocus(); return; }
+                            } catch {}
+                          }
+                        }} style={{ fontSize: 9, fontWeight: 500, color: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 15%, transparent)', padding: '2px 8px', borderRadius: 5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, transition: 'all 150ms' }}
+                          onMouseEnter={e => { e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 15%, transparent)'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 8%, transparent)'; }}>
+                          <Play size={8} fill="currentColor" /> Reproducir
+                        </button>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                        {preview.entries.map((entry: YouTubeMetadata, i: number) => (
+                          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 7, transition: 'all 150ms', border: '1px solid transparent' }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.borderColor = 'var(--border-subtle)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'transparent'; }}>
+                            <span style={{ fontSize: 10, color: 'var(--text-muted)', width: 20, textAlign: 'right', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{i + 1}</span>
+                            <div style={{ width: 36, height: 26, borderRadius: 5, background: 'var(--bg-deep)', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', position: 'relative' }}
+                              onClick={async () => {
+                                const loadToPlayer = async (videoUrl: string, title: string, thumbnail: string) => {
+                                  for (let attempt = 0; attempt < 5; attempt++) { try { await emitTo('youtube-player', 'youtube:load', { videoUrl, title, thumbnail }); return true; } catch { await new Promise(resolve => setTimeout(resolve, 400 + attempt * 300)); } }
+                                  return false;
+                                };
+                                try {
+                                  const existing = await WebviewWindow.getByLabel('youtube-player');
+                                  if (existing) { const sent = await loadToPlayer(entry.webpage_url, entry.title, entry.thumbnail || ''); if (sent) { await existing.show(); await existing.setFocus(); return; } }
+                                  try { localStorage.setItem('owa_yt_pending', JSON.stringify({ videoUrl: entry.webpage_url, title: entry.title, thumbnail: entry.thumbnail || '' })); } catch {}
+                                  const win = new WebviewWindow('youtube-player', { url: '/', title: 'YouTube Player', width: 480, height: 360, minWidth: 320, minHeight: 240, resizable: true, decorations: true, alwaysOnTop: false, skipTaskbar: false, center: true });
+                                  win.once('tauri://error', () => {});
+                                  await loadToPlayer(entry.webpage_url, entry.title, entry.thumbnail || '');
+                                } catch {}
+                              }}>
+                              {entry.thumbnail ? <img src={entry.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={10} color="var(--text-muted)" style={{ opacity: 0.3 }} />}
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.title}</div>
+                            </div>
+                            <span style={{ fontSize: 9, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{formatDuration(entry.duration)}</span>
+                            <button onClick={() => handleDownloadOne(entry)} style={{ padding: 4, background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', borderRadius: 5, transition: 'all 150ms', flexShrink: 0 }}
+                              onMouseEnter={e => { e.currentTarget.style.color = 'var(--accent)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 10%, transparent)'; }}
+                              onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'none'; }}><Download size={11} /></button>
                           </div>
-                          <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{formatDuration(entry.duration)}</div>
-                          <div style={{ display: 'flex', gap: 4 }}>
-                            <button onClick={() => handleDownloadOne(entry)} className="btn-ghost" style={{ padding: 6 }}><Download size={12} /></button>
-                          </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1931,99 +2004,122 @@ export default function Musica() {
             </div>
           </div>
 
-          {/* DOWNLOADS CARD — inline en columna derecha */}
+          {/* DOWNLOADS CARD */}
           {(downloadSelection.length > 0 || downloadQueue.length > 0) && (
-            <div className="bento-card" style={{ padding: '16px 18px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.02em' }}>
-                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)' }} />
-                  Descargas
+            <div className="bento-card" style={{ padding: '18px 20px' }}>
+              {/* Header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ width: 28, height: 28, borderRadius: 7, background: 'color-mix(in srgb, var(--accent) 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Download size={13} style={{ color: 'var(--accent)' }} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.01em' }}>Descargas</div>
+                    {activeDownloads.length > 0 && <div style={{ fontSize: 9, color: 'var(--accent)', fontWeight: 500, marginTop: 1 }}>{activeDownloads.length} activa{activeDownloads.length !== 1 ? 's' : ''}</div>}
+                  </div>
                 </div>
-                <button onClick={() => {
-                  setDownloadSelection([]);
-                  clearCompletedDownloads();
-                }} className="btn-ghost" style={{ padding: 4, color: 'var(--text-tertiary)', borderRadius: '50%', opacity: 0.5, cursor: 'pointer', transition: 'opacity 200ms' }}
-                  onMouseEnter={e => { e.currentTarget.style.opacity = '1'; }}
-                  onMouseLeave={e => { e.currentTarget.style.opacity = '0.5'; }}
-                ><X size={13} /></button>
+                <button onClick={() => { setDownloadSelection([]); clearCompletedDownloads(); }}
+                  style={{ padding: '4px 8px', fontSize: 9, fontWeight: 500, color: 'var(--text-muted)', background: 'none', border: '1px solid var(--border-subtle)', borderRadius: 5, cursor: 'pointer', transition: 'all 150ms' }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-strong)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
+                  Limpiar
+                </button>
               </div>
 
-              {/* Activos: progress + Cancel (sin X) */}
-              {downloadQueue.filter(d => d.status === 'downloading' || d.status === 'queued').length > 0 && (
-                <div style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 8, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>
-                    Descargando
-                  </div>
-                  {downloadQueue.filter(d => d.status === 'downloading' || d.status === 'queued').map(dl => (
-                    <div key={dl.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', borderRadius: 8, background: 'var(--bg-surface)', marginBottom: 6 }}>
-                      <div style={{ width: 28, height: 28, borderRadius: 5, background: 'var(--bg-deep)', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        {dl.thumbnail ? <img src={dl.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={11} style={{ color: 'var(--text-muted)' }} />}
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 4 }}>{dl.title}</div>
-                        <div style={{ height: 3, borderRadius: 2, background: 'var(--bg-deep)', overflow: 'hidden' }}>
-                          <div style={{ width: `${dl.progress * 100}%`, height: '100%', borderRadius: 2, background: 'var(--accent)', transition: 'width 400ms ease' }} />
+              {/* Active downloads */}
+              {activeDownloads.length > 0 && (
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {activeDownloads.map(dl => (
+                      <div key={dl.id} style={{ padding: '10px 12px', borderRadius: 10, background: 'color-mix(in srgb, var(--accent) 4%, var(--bg-elevated))', border: '1px solid color-mix(in srgb, var(--accent) 12%, var(--border-subtle))' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                          <div style={{ width: 32, height: 32, borderRadius: 7, background: 'var(--bg-deep)', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border-subtle)' }}>
+                            {dl.thumbnail ? <img src={dl.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={12} color="var(--text-muted)" style={{ opacity: 0.3 }} />}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{dl.title}</div>
+                            <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <span style={{ fontVariantNumeric: 'tabular-nums', color: dl.status === 'queued' ? 'var(--text-muted)' : 'var(--accent)', fontWeight: dl.status === 'downloading' ? 600 : 400 }}>
+                                {dl.status === 'queued' ? 'En cola' : `${Math.round(dl.progress * 100)}%`}
+                              </span>
+                            </div>
+                          </div>
+                          <button onClick={() => handleCancelDownload(dl.id)}
+                            style={{ padding: '4px 10px', fontSize: 9, fontWeight: 600, background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 5, color: 'var(--text-tertiary)', cursor: 'pointer', transition: 'all 150ms', whiteSpace: 'nowrap' }}
+                            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--danger)'; e.currentTarget.style.color = 'var(--danger)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-tertiary)'; }}>
+                            Cancelar
+                          </button>
                         </div>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                        <span style={{ fontSize: 9, color: 'var(--text-tertiary)', fontVariantNumeric: 'tabular-nums' }}>
-                          {Math.round(dl.progress * 100)}%
-                        </span>
-                        <button onClick={() => handleCancelDownload(dl.id)} style={{ padding: '3px 8px', background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 4, fontSize: 8, fontWeight: 600, color: 'var(--text-tertiary)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                          Cancelar
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {downloadQueue.filter(d => d.status !== 'downloading' && d.status !== 'queued').length > 0 && (
-                <div style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 8, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>
-                    Finalizadas
-                  </div>
-                  {downloadQueue.filter(d => d.status !== 'downloading' && d.status !== 'queued').map(dl => (
-                    <div key={dl.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 8px', borderRadius: 6, marginBottom: 2 }}>
-                      <div style={{ width: 24, height: 24, borderRadius: 4, background: 'var(--bg-deep)', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        {dl.thumbnail ? <img src={dl.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={10} style={{ color: 'var(--text-muted)' }} />}
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{dl.title}</div>
-                        <div style={{ fontSize: 8, color: dl.status === 'error' ? 'var(--danger)' : 'var(--text-tertiary)', marginTop: 1, display: 'flex', alignItems: 'center', gap: 3 }}>
-                          {dl.status === 'completed' && <Check size={8} style={{ color: 'var(--success)' }} />}
-                          {dl.status === 'error' && <AlertCircle size={8} />}
-                          {dl.status === 'completed' ? 'Completado' : dl.status === 'error' ? (dl.errorMessage || 'Error') : 'Cancelado'}
+                        {/* Progress bar */}
+                        <div style={{ height: 4, borderRadius: 3, background: 'var(--bg-deep)', overflow: 'hidden' }}>
+                          <div style={{ width: `${dl.progress * 100}%`, height: '100%', borderRadius: 3, background: 'linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 70%, white))', transition: 'width 400ms ease', position: 'relative' }}>
+                            {dl.status === 'downloading' && <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent)', animation: 'shimmer 1.5s infinite' }} />}
+                          </div>
                         </div>
-                      </div>
-                      <button onClick={() => removeFromDownloadQueue(dl.id)} style={{ padding: 2, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', flexShrink: 0, opacity: 0.4 }}><X size={8} /></button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {downloadSelection.length > 0 && (
-                <>
-                  <div style={{ fontSize: 8, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>
-                    Pendientes ({downloadSelection.length})
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 12, maxHeight: 160, overflowY: 'auto', paddingRight: 4 }}>
-                    {downloadSelection.map((item, i) => (
-                      <div key={item.url} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 6, background: 'var(--bg-surface)' }}>
-                        <div style={{ width: 22, height: 22, borderRadius: 4, background: 'var(--bg-deep)', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          {item.thumbnail ? <img src={item.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={9} style={{ color: 'var(--text-muted)' }} />}
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
-                        </div>
-                        <button onClick={() => setDownloadSelection(prev => prev.filter((_, idx) => idx !== i))} style={{ padding: 2, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', flexShrink: 0, opacity: 0.4 }}><X size={8} /></button>
                       </div>
                     ))}
                   </div>
-                  <button onClick={startBulkDownload} className="btn-primary" style={{ width: '100%', height: 32, fontSize: 10, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, borderRadius: 7 }}>
-                    <Download size={11} /> Descargar Todo ({downloadSelection.length})
+                </div>
+              )}
+
+              {/* Completed / Error / Cancelled */}
+              {completedDownloads.length > 0 && (
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Finalizadas</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    {completedDownloads.map(dl => (
+                      <div key={dl.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 8, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', transition: 'all 150ms' }}>
+                        <div style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--bg-deep)', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {dl.thumbnail ? <img src={dl.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={10} color="var(--text-muted)" style={{ opacity: 0.3 }} />}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{dl.title}</div>
+                          <div style={{ fontSize: 9, marginTop: 2, display: 'flex', alignItems: 'center', gap: 3, color: dl.status === 'completed' ? 'var(--success)' : dl.status === 'error' ? 'var(--danger)' : 'var(--text-muted)' }}>
+                            {dl.status === 'completed' && <Check size={9} />}
+                            {dl.status === 'error' && <AlertCircle size={9} />}
+                            {dl.status === 'completed' ? 'Descargado' : dl.status === 'error' ? (dl.errorMessage || 'Error') : 'Cancelado'}
+                          </div>
+                        </div>
+                        <button onClick={() => removeFromDownloadQueue(dl.id)}
+                          style={{ padding: 3, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', flexShrink: 0, opacity: 0.3, transition: 'opacity 150ms', display: 'flex' }}
+                          onMouseEnter={e => { e.currentTarget.style.opacity = '1'; }}
+                          onMouseLeave={e => { e.currentTarget.style.opacity = '0.3'; }}><X size={11} /></button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Pending selections */}
+              {downloadSelection.length > 0 && (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                      Pendientes ({downloadSelection.length})
+                    </div>
+                    <button onClick={() => setDownloadSelection([])} style={{ fontSize: 9, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2 }}>Limpiar</button>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginBottom: 12, maxHeight: 180, overflowY: 'auto', paddingRight: 4 }} className="no-scrollbar">
+                    {downloadSelection.map((item, i) => (
+                      <div key={item.url} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 7, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
+                        <div style={{ width: 24, height: 24, borderRadius: 5, background: 'var(--bg-deep)', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {item.thumbnail ? <img src={item.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={9} color="var(--text-muted)" style={{ opacity: 0.3 }} />}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
+                        </div>
+                        <button onClick={() => setDownloadSelection(prev => prev.filter((_, idx) => idx !== i))}
+                          style={{ padding: 2, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', flexShrink: 0, opacity: 0.3, transition: 'opacity 150ms', display: 'flex' }}
+                          onMouseEnter={e => { e.currentTarget.style.opacity = '1'; }}
+                          onMouseLeave={e => { e.currentTarget.style.opacity = '0.3'; }}><X size={10} /></button>
+                      </div>
+                    ))}
+                  </div>
+                  <button onClick={startBulkDownload} className="btn-primary" style={{ width: '100%', height: 36, fontSize: 11, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 8, whiteSpace: 'nowrap' }}>
+                    <Download size={13} /> Descargar Todo ({downloadSelection.length})
                   </button>
-                </>
+                </div>
               )}
             </div>
           )}

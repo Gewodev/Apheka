@@ -5,7 +5,7 @@ import {
   ChevronRight, CalendarDays,
   Clock, List as ListIcon, FileText,
   Link, Video, File, X, Upload,
-  ExternalLink, Eye, Filter,
+  ExternalLink,   Eye, EyeOff, Filter,
   ClipboardList, ChevronLeft, Timer,
   Paperclip, StickyNote,
   Zap, Circle, CheckCircle, Loader,
@@ -222,6 +222,47 @@ export default function Tareas() {
   const [expandedCourses, setExpandedCourses] = useState(false);
   const [expandedStatus, setExpandedStatus] = useState(false);
 
+  // Hide completed tasks
+  type HideMode = 'off' | 'now' | '10m' | '1h' | '6h' | '24h' | '48h';
+  const lastActiveMode = useRef<HideMode>('now');
+  const [hideMode, setHideMode] = useState<HideMode>(() => {
+    try { return (localStorage.getItem('owa_hide_completed') as HideMode) || 'off'; } catch { return 'off'; }
+  });
+  useEffect(() => { try { localStorage.setItem('owa_hide_completed', hideMode); } catch {} }, [hideMode]);
+  const [showHideMenu, setShowHideMenu] = useState(false);
+  const hideMenuRef = useRef<HTMLDivElement>(null);
+  const eyeLongPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!showHideMenu) return;
+    const handler = (e: MouseEvent) => { if (hideMenuRef.current && !hideMenuRef.current.contains(e.target as Node)) setShowHideMenu(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showHideMenu]);
+
+  // Auto-refresh list when in time-based hide modes (every 30s)
+  const [hideTick, setHideTick] = useState(0);
+  useEffect(() => {
+    if (hideMode === 'off' || hideMode === 'now') return;
+    const timer = setInterval(() => setHideTick(n => n + 1), 30000);
+    return () => clearInterval(timer);
+  }, [hideMode]);
+
+  const shouldHideCompleted = useCallback((task: { status: string; completedAt?: string }) => {
+    if (hideMode === 'off') return false;
+    if (task.status !== 'completado') return false;
+    if (hideMode === 'now') return true;
+    if (!task.completedAt) return false;
+    const elapsed = Date.now() - new Date(task.completedAt).getTime();
+    if (hideMode === '10m' && elapsed >= 10 * 60 * 1000) return true;
+    if (hideMode === '1h' && elapsed >= 60 * 60 * 1000) return true;
+    if (hideMode === '6h' && elapsed >= 6 * 60 * 60 * 1000) return true;
+    if (hideMode === '24h' && elapsed >= 24 * 60 * 60 * 1000) return true;
+    if (hideMode === '48h' && elapsed >= 48 * 60 * 60 * 1000) return true;
+    return false;
+  }, [hideMode, hideTick]);
+
   const notificationCount = useMemo(() => tasks.filter(t => t.dueDate && localDate(t.dueDate).getTime() < Date.now() && t.status !== 'completado').length, [tasks]);
 
   useEffect(() => { const timer = setInterval(() => setCurrentTime(new Date()), 1000); return () => clearInterval(timer); }, []);
@@ -242,6 +283,27 @@ export default function Tareas() {
 
   useEffect(() => { return onAuthChange(connected => setGoogleConnected(connected)); }, []);
 
+  // Lock body scroll when new task modal is open
+  useEffect(() => {
+    if (showNewModal) {
+      document.body.style.overflow = 'hidden';
+      document.documentElement.style.overflow = 'hidden';
+      const pc = document.querySelector('.page-container') as HTMLElement | null;
+      if (pc) pc.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
+      const pc = document.querySelector('.page-container') as HTMLElement | null;
+      if (pc) pc.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
+      const pc = document.querySelector('.page-container') as HTMLElement | null;
+      if (pc) pc.style.overflow = '';
+    };
+  }, [showNewModal]);
+
   const stats = useMemo(() => {
     const total = tasks.length;
     const completadas = tasks.filter(t => t.status === 'completado').length;
@@ -255,6 +317,7 @@ export default function Tareas() {
     let filtered = tasks;
     if (courseFilter) filtered = filtered.filter(t => t.course === courseFilter);
     if (searchQuery) filtered = filtered.filter(t => t.title.toLowerCase().includes(searchQuery.toLowerCase()));
+    filtered = filtered.filter(t => !shouldHideCompleted(t));
     const allHaveSortOrder = filtered.length > 0 && filtered.every(t => t.sortOrder !== undefined);
     return [...filtered].sort((a, b) => {
       if (allHaveSortOrder) return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
@@ -264,7 +327,7 @@ export default function Tareas() {
       if (sortBy === 'fecha') { if (!a.dueDate) return 1; if (!b.dueDate) return -1; return localDate(a.dueDate).getTime() - localDate(b.dueDate).getTime(); }
       return (a.course || '').localeCompare(b.course || '');
     });
-  }, [tasks, courseFilter, searchQuery, sortBy]);
+  }, [tasks, courseFilter, searchQuery, sortBy, shouldHideCompleted]);
 
   const { reorderTasks } = useApp();
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
@@ -551,6 +614,84 @@ export default function Tareas() {
               style={{ width: '100%', height: 32, paddingLeft: 28, fontSize: 12, fontWeight: 400, background: 'var(--bg-elevated)', borderRadius: 6, border: '1px solid var(--border-soft)', color: 'var(--text-primary)', outline: 'none', transition: 'all 150ms' }} />
             {searchQuery && <button onClick={() => setSearchQuery('')} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', padding: 2 }}><X size={10} /></button>}
           </div>
+
+          {/* Eye toggle — short click toggles on/off, long press (only when active) opens mode menu */}
+          <div ref={hideMenuRef} style={{ position: 'relative' }}>
+            <button
+              onClick={() => {
+                if (eyeLongPressTimer.current) { clearTimeout(eyeLongPressTimer.current); eyeLongPressTimer.current = null; return; }
+                if (hideMode === 'off') {
+                  setHideMode(lastActiveMode.current);
+                } else {
+                  lastActiveMode.current = hideMode;
+                  setHideMode('off');
+                }
+              }}
+              onMouseDown={() => {
+                if (hideMode === 'off') return;
+                eyeLongPressTimer.current = setTimeout(() => {
+                  eyeLongPressTimer.current = null;
+                  setShowHideMenu(true);
+                }, 500);
+              }}
+              onMouseUp={() => { if (eyeLongPressTimer.current) { clearTimeout(eyeLongPressTimer.current); eyeLongPressTimer.current = null; } }}
+              title={hideMode === 'off' ? 'Activar ocultar completadas' : 'Desactivar / configurar'}
+              style={{
+                width: 32, height: 32, borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                border: '1px solid', transition: 'all 200ms',
+                background: hideMode !== 'off' ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : 'var(--bg-elevated)',
+                borderColor: hideMode !== 'off' ? 'color-mix(in srgb, var(--accent) 30%, transparent)' : 'var(--border-soft)',
+                color: hideMode !== 'off' ? 'var(--accent)' : 'var(--text-tertiary)',
+                opacity: hideMode === 'off' ? 0.5 : 1,
+              }}
+              onMouseEnter={e => { if (hideMode === 'off') { e.currentTarget.style.opacity = '0.8'; e.currentTarget.style.borderColor = 'var(--border-strong)'; } }}
+              onMouseLeave={e => { if (eyeLongPressTimer.current) { clearTimeout(eyeLongPressTimer.current); eyeLongPressTimer.current = null; } if (hideMode === 'off') { e.currentTarget.style.opacity = '0.5'; e.currentTarget.style.borderColor = 'var(--border-soft)'; } }}>
+              {hideMode !== 'off' ? <EyeOff size={14} /> : <Eye size={14} />}
+            </button>
+
+            {showHideMenu && hideMode !== 'off' && (
+              <div style={{
+                position: 'absolute', top: '100%', right: 0, marginTop: 6, zIndex: 100,
+                background: 'var(--bg-surface)', border: '1px solid var(--border-default)',
+                borderRadius: 12, padding: 8, width: 250,
+                boxShadow: '0 16px 48px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.03) inset',
+              }}>
+                <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', padding: '2px 8px 8px', borderBottom: '1px solid var(--border-soft)', marginBottom: 6 }}>
+                  Ocultar completadas
+                </div>
+                {([
+                  { mode: 'now' as HideMode, label: 'Al instante', desc: 'Se ocultan al completar', icon: '⚡' },
+                  { mode: '10m' as HideMode, label: '10 minutos', desc: 'Puedes revisarlas un rato', icon: '🕐' },
+                  { mode: '1h' as HideMode, label: '1 hora', desc: 'Las ves por un tiempo', icon: '⏱' },
+                  { mode: '6h' as HideMode, label: '6 horas', desc: 'Ocultar al pasar el turno', icon: '🌅' },
+                  { mode: '24h' as HideMode, label: '24 horas', desc: 'Ocultar al día siguiente', icon: '📅' },
+                  { mode: '48h' as HideMode, label: '2 días', desc: 'Dos días para revisar', icon: '📆' },
+                ]).map((opt, i) => (
+                  <React.Fragment key={opt.mode}>
+                    {i === 1 && <div style={{ height: 1, background: 'var(--border-soft)', margin: '4px 8px' }} />}
+                    <button onClick={() => { lastActiveMode.current = opt.mode; setHideMode(opt.mode); setShowHideMenu(false); }}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '7px 8px', borderRadius: 8,
+                        border: 'none', cursor: 'pointer', textAlign: 'left', transition: 'all 150ms',
+                        background: hideMode === opt.mode ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : 'transparent',
+                      }}
+                      onMouseEnter={e => { if (hideMode !== opt.mode) e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                      onMouseLeave={e => { if (hideMode !== opt.mode) e.currentTarget.style.background = 'transparent'; }}>
+                      <span style={{ fontSize: 13, width: 20, textAlign: 'center', flexShrink: 0, opacity: hideMode === opt.mode ? 1 : 0.5 }}>{opt.icon}</span>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ fontSize: 12, fontWeight: hideMode === opt.mode ? 600 : 400, color: hideMode === opt.mode ? 'var(--text-primary)' : 'var(--text-secondary)', lineHeight: 1.3 }}>{opt.label}</div>
+                        <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 0 }}>{opt.desc}</div>
+                      </div>
+                      <div style={{ width: 14, height: 14, borderRadius: '50%', border: hideMode === opt.mode ? '2px solid var(--accent)' : '2px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 150ms' }}>
+                        {hideMode === opt.mode && <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)' }} />}
+                      </div>
+                    </button>
+                  </React.Fragment>
+                ))}
+              </div>
+            )}
+          </div>
+
           <button onClick={() => setShowNewModal(true)} style={{ display: 'flex', alignItems: 'center', gap: 5, height: 32, padding: '0 14px', borderRadius: 6, fontSize: 11, fontWeight: 500, cursor: 'pointer', border: 'none', background: 'var(--accent)', color: '#fff', transition: 'all 200ms' }}>
             <Plus size={14} /> Agregar tarea
           </button>
@@ -715,7 +856,7 @@ export default function Tareas() {
                 { status: 'progreso', label: 'En Curso', color: '#3B82F6' },
                 { status: 'completado', label: 'Completadas', color: '#10B981' },
               ].map(col => {
-                const colTasks = tasks.filter(t => t.status === col.status);
+                const colTasks = tasks.filter(t => t.status === col.status && !shouldHideCompleted(t));
                 return (
                   <div key={col.status} className="bento-card"
                     onDragOver={e => e.preventDefault()}
@@ -1220,7 +1361,7 @@ export default function Tareas() {
       {/* NEW TASK MODAL */}
       {showNewModal && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={() => setShowNewModal(false)}>
-          <div className="bento-card" style={{ width: '100%', maxWidth: 440, padding: '24px 28px' }} onClick={e => e.stopPropagation()}>
+          <div className="bento-card no-scrollbar" style={{ width: '100%', maxWidth: 440, maxHeight: 'calc(100vh - 40px)', overflowY: 'auto', padding: '24px 28px' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, paddingBottom: 14, borderBottom: '1px solid var(--border-subtle)' }}>
               <h2 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Plus size={18} style={{ color: 'var(--accent)' }} /> Nueva Tarea
@@ -1445,7 +1586,7 @@ export default function Tareas() {
                 </div>
 
                 {/* ── Subtareas ── */}
-                <div className="bento-card" style={{ padding: 0, overflow: 'hidden', background: 'var(--bg-surface)' }}>
+                <div className="bento-card" style={{ padding: 0, background: 'var(--bg-surface)' }}>
                   <div onClick={() => setSectionCollapsed(prev => ({ ...prev, subtareas: !prev.subtareas }))}
                     style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px', cursor: 'pointer', transition: 'background 150ms', userSelect: 'none' }}
                     onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
@@ -1468,19 +1609,19 @@ export default function Tareas() {
                   </div>
 
                   {!sectionCollapsed.subtareas && (
-                    <div style={{ padding: '2px 16px 16px', display: 'flex', flexDirection: 'column', gap: 10, borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }}>
+                    <div style={{ padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: 10, borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }}>
 
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 5, paddingTop: 10 }}>
                         {selectedTask.subtasks.map((st) => (
                           <div key={st.id}
-                            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: "7px 10px", borderRadius: 7, background: st.done ? 'rgba(16,185,129,0.08)' : 'var(--bg-surface)', border: `1px solid ${st.done ? 'rgba(16,185,129,0.15)' : 'var(--border-soft)'}`, transition: 'all 150ms', opacity: st.done ? 0.55 : 1 }}
+                            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: "8px 10px", borderRadius: 7, background: st.done ? 'rgba(16,185,129,0.08)' : 'var(--bg-surface)', border: `1px solid ${st.done ? 'rgba(16,185,129,0.15)' : 'var(--border-soft)'}`, transition: 'all 150ms', opacity: st.done ? 0.55 : 1 }}
                             onMouseEnter={e => { if (!st.done) { e.currentTarget.style.borderColor = 'var(--border-hover)'; e.currentTarget.style.background = 'var(--bg-hover)'; } }}
                             onMouseLeave={e => { if (!st.done) { e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.background = 'var(--bg-surface)'; } }}>
                             <button onClick={() => toggleSubTask(selectedTask.id, st.id)}
-                              style={{ width: 16, height: 16, borderRadius: '50%', border: `2px solid ${st.done ? '#10B981' : 'var(--border-strong)'}`, background: st.done ? '#10B981' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, padding: 0, transition: 'all 250ms cubic-bezier(0.34, 1.56, 0.64, 1)' }}
+                              style={{ width: 18, height: 18, borderRadius: '50%', border: `2px solid ${st.done ? '#10B981' : 'var(--border-strong)'}`, background: st.done ? '#10B981' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, padding: 0, transition: 'all 250ms cubic-bezier(0.34, 1.56, 0.64, 1)' }}
                               onMouseEnter={e => { if (!st.done) { e.currentTarget.style.borderColor = taskColor; e.currentTarget.style.boxShadow = `0 0 0 3px ${taskColor}14`; } }}
                               onMouseLeave={e => { if (!st.done) { e.currentTarget.style.borderColor = 'var(--border-strong)'; e.currentTarget.style.boxShadow = 'none'; } }}>
-                              {st.done && <Check size={9} strokeWidth={4} style={{ color: '#fff' }} />}
+                              {st.done && <Check size={10} strokeWidth={4} style={{ color: '#fff' }} />}
                             </button>
                             <input
                               value={st.title}
@@ -1488,7 +1629,7 @@ export default function Tareas() {
                                 const updated = selectedTask.subtasks.map(s => s.id === st.id ? { ...s, title: e.target.value } : s);
                                 updateTask(selectedTask.id, { subtasks: updated });
                               }}
-                              style={{ flex: 1, background: 'transparent', border: 'none', fontSize: 11.5, fontWeight: st.done ? 400 : 500, color: st.done ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: st.done ? 'line-through' : 'none', outline: 'none', padding: 0 }}
+                              style={{ flex: 1, background: 'transparent', border: 'none', fontSize: 12, fontWeight: st.done ? 400 : 500, color: st.done ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: st.done ? 'line-through' : 'none', outline: 'none', padding: 0 }}
                             />
                             {!st.done && (
                               <button onClick={() => {
@@ -1497,43 +1638,43 @@ export default function Tareas() {
                                 setSelectedTaskId(null);
                                 setNavigateTo('estudio');
                               }}
-                                style={{ width: 24, height: 24, borderRadius: 6, border: 'none', background: 'transparent', color: '#10B981', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 150ms', flexShrink: 0, opacity: 0 }}
+                                style={{ width: 26, height: 26, borderRadius: 6, border: 'none', background: 'transparent', color: '#10B981', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 150ms', flexShrink: 0, opacity: 0 }}
                                 onMouseEnter={e => { e.currentTarget.style.background = 'rgba(16,185,129,0.12)'; e.currentTarget.style.opacity = '1'; }}
                                 onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.opacity = '0'; }}
                                 title="Estudiar esta subtarea">
-                                <Play size={10} fill="#10B981" style={{ color: '#10B981' }} />
+                                <Play size={11} fill="#10B981" style={{ color: '#10B981' }} />
                               </button>
                             )}
                             <button onClick={() => deleteSubTask(selectedTask.id, st.id)}
-                              style={{ width: 24, height: 24, borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 150ms', flexShrink: 0, opacity: 0 }}
+                              style={{ width: 26, height: 26, borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 150ms', flexShrink: 0, opacity: 0 }}
                               onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#EF4444'; e.currentTarget.style.opacity = '1'; }}
                               onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.opacity = '0'; }}
                               title="Eliminar">
-                              <X size={10} />
+                              <X size={11} />
                             </button>
                           </div>
                         ))}
                         {selectedTask.subtasks.length === 0 && (
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 52, borderRadius: 7, border: '1px dashed var(--border-soft)', background: 'var(--bg-surface)', color: 'var(--text-muted)', fontSize: 11, fontWeight: 500, gap: 2 }}>
-                            <CheckSquare size={14} style={{ opacity: 0.15 }} />
-                            <span style={{ opacity: 0.3 }}>Desglosa la tarea en pasos</span>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 56, borderRadius: 7, border: '1px dashed var(--border-soft)', background: 'var(--bg-surface)', color: 'var(--text-muted)', fontSize: 11, fontWeight: 500, gap: 3 }}>
+                            <CheckSquare size={14} style={{ opacity: 0.2 }} />
+                            <span style={{ opacity: 0.35 }}>Desglosa la tarea en pasos</span>
                           </div>
                         )}
                       </div>
 
-                      <div style={{ display: 'flex', gap: 6, padding: '2px 0' }}>
+                      <div style={{ display: 'flex', gap: 7 }}>
                         <input
                           value={newSubtaskTitle}
                           onChange={e => setNewSubtaskTitle(e.target.value)}
                           placeholder="Añadir paso..."
                           onKeyDown={e => { if (e.key === 'Enter') handleAddSubtask(); }}
-                          style={{ flex: 1, padding: '8px 12px', background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 7, fontSize: 11, color: 'var(--text-primary)', outline: 'none', transition: 'all 150ms', height: 32 }}
+                          style={{ flex: 1, padding: '9px 12px', background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 7, fontSize: 12, color: 'var(--text-primary)', outline: 'none', transition: 'all 150ms', height: 36 }}
                           onFocus={e => { e.currentTarget.style.borderColor = taskColor; e.currentTarget.style.boxShadow = `0 0 0 2px ${taskColor}14`; }}
                           onBlur={e => { e.currentTarget.style.borderColor = 'var(--border-default)'; e.currentTarget.style.boxShadow = 'none'; }}
                         />
                         <button onClick={handleAddSubtask} disabled={!newSubtaskTitle.trim()}
-                          style={{ width: 32, height: 32, borderRadius: 7, border: 'none', background: newSubtaskTitle.trim() ? taskColor : 'var(--border-soft)', color: newSubtaskTitle.trim() ? '#fff' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: newSubtaskTitle.trim() ? 'pointer' : 'default', transition: 'all 150ms', flexShrink: 0 }}>
-                          <Plus size={14} />
+                          style={{ width: 36, height: 36, borderRadius: 7, border: 'none', background: newSubtaskTitle.trim() ? taskColor : 'var(--border-soft)', color: newSubtaskTitle.trim() ? '#fff' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: newSubtaskTitle.trim() ? 'pointer' : 'default', transition: 'all 150ms', flexShrink: 0 }}>
+                          <Plus size={15} />
                         </button>
                       </div>
                     </div>
@@ -1541,8 +1682,7 @@ export default function Tareas() {
                 </div>
 
                 {/* ── Materiales ── */}
-                {/* ── Materiales ── */}
-                <div className="bento-card" style={{ padding: 0, overflow: 'hidden', background: 'var(--bg-surface)' }}>
+                <div className="bento-card" style={{ padding: 0, background: 'var(--bg-surface)' }}>
                   <div onClick={() => setSectionCollapsed(prev => ({ ...prev, materiales: !prev.materiales }))}
                     style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px', cursor: 'pointer', transition: 'background 150ms', userSelect: 'none' }}
                     onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
@@ -1558,9 +1698,9 @@ export default function Tareas() {
                   </div>
 
                   {!sectionCollapsed.materiales && (
-                    <div style={{ padding: '0 16px 14px', display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }}>
+                    <div style={{ padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }}>
 
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 5, paddingTop: 10 }}>
                         {selectedTask.files.length === 0 && (
                           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 60, borderRadius: 7, border: '1px dashed var(--border-soft)', background: 'var(--bg-surface)', color: 'var(--text-muted)', fontSize: 10.5, fontWeight: 500, gap: 2 }}>
                             <Paperclip size={14} style={{ opacity: 0.15 }} />
@@ -1652,51 +1792,51 @@ export default function Tareas() {
                         })}
 
                         <div onClick={() => setShowAddMaterial(true)}
-                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '8px 0', borderRadius: 7, border: '1px dashed var(--border-soft)', cursor: 'pointer', background: 'transparent', transition: 'all 150ms' }}
+                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '9px 0', borderRadius: 7, border: '1px dashed var(--border-soft)', cursor: 'pointer', background: 'transparent', transition: 'all 150ms' }}
                           onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-hover)'; e.currentTarget.style.background = 'var(--bg-hover)'; }}
                           onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.background = 'transparent'; }}>
                           <Plus size={13} style={{ color: 'var(--text-muted)' }} />
-                          <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--text-muted)' }}>Añadir material</span>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>Añadir material</span>
                         </div>
                       </div>
 
                       {showAddMaterial && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '11px 13px', background: 'var(--bg-elevated)', borderRadius: 9, border: `1px solid ${taskColor}20` }}>
-                          <div style={{ display: 'flex', gap: 5 }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '14px 14px', background: 'var(--bg-surface)', borderRadius: 9, border: `1px solid ${taskColor}25` }}>
+                          <div style={{ display: 'flex', gap: 6 }}>
                             {(['link', 'file'] as const).map(m => (
                               <button key={m} onClick={() => { setAddMaterialMode(m); }}
-                                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '6px 0', borderRadius: 6, fontSize: 9, fontWeight: 700, cursor: 'pointer', border: addMaterialMode === m ? `1px solid ${taskColor}` : '1px solid var(--border-soft)', background: addMaterialMode === m ? `${taskColor}14` : 'var(--bg-surface)', color: addMaterialMode === m ? taskColor : 'var(--text-secondary)', transition: 'all 150ms' }}>
-                                {m === 'link' ? <Link size={9} /> : <Upload size={9} />}
+                                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '9px 0', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: addMaterialMode === m ? `1px solid ${taskColor}` : '1px solid var(--border-soft)', background: addMaterialMode === m ? `${taskColor}14` : 'var(--bg-elevated)', color: addMaterialMode === m ? taskColor : 'var(--text-secondary)', transition: 'all 150ms' }}>
+                                {m === 'link' ? <Link size={12} /> : <Upload size={12} />}
                                 {m === 'link' ? 'Enlace' : 'Archivo'}
                               </button>
                             ))}
                           </div>
-                          <div style={{ display: 'flex', gap: 5 }}>
+                          <div style={{ display: 'flex', gap: 7 }}>
                             <input value={newMaterialName} onChange={e => setNewMaterialName(e.target.value)} placeholder="Nombre del material..."
                               onKeyDown={e => { if (e.key === 'Enter' && newMaterialName.trim() && (addMaterialMode === 'file' || newMaterialPath.trim())) handleAddMaterial(); }}
-                              style={{ flex: 1, padding: '6px 9px', background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 6, fontSize: 10, color: 'var(--text-primary)', outline: 'none', transition: 'all 150ms' }}
+                              style={{ flex: 1, padding: '9px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 7, fontSize: 12, color: 'var(--text-primary)', outline: 'none', transition: 'all 150ms' }}
                               onFocus={e => { e.currentTarget.style.borderColor = taskColor; e.currentTarget.style.boxShadow = `0 0 0 2px ${taskColor}12`; }}
                               onBlur={e => { e.currentTarget.style.borderColor = 'var(--border-default)'; e.currentTarget.style.boxShadow = 'none'; }} />
                             <button onClick={handleAddMaterial} disabled={!newMaterialName.trim()}
-                              style={{ padding: '6px 14px', borderRadius: 6, fontSize: 9.5, fontWeight: 700, cursor: 'pointer', border: 'none', background: taskColor, color: '#fff', opacity: newMaterialName.trim() ? 1 : 0.3, transition: 'all 150ms', whiteSpace: 'nowrap' }}>
+                              style={{ padding: '9px 18px', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: 'none', background: taskColor, color: '#fff', opacity: newMaterialName.trim() ? 1 : 0.3, transition: 'all 150ms', whiteSpace: 'nowrap' }}>
                               Añadir
                             </button>
                             <button onClick={() => { setShowAddMaterial(false); setNewMaterialName(''); setNewMaterialPath(''); setNewMaterialFile(null); setAddMaterialMode('file'); }}
-                              style={{ width: 26, height: 26, borderRadius: 6, cursor: 'pointer', border: '1px solid var(--border-default)', background: 'transparent', color: 'var(--text-muted)', transition: 'all 150ms', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                              <X size={10} />
+                              style={{ width: 32, height: 32, borderRadius: 7, cursor: 'pointer', border: '1px solid var(--border-default)', background: 'transparent', color: 'var(--text-muted)', transition: 'all 150ms', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                              <X size={12} />
                             </button>
                           </div>
                           {addMaterialMode === 'link' ? (
                             <input value={newMaterialPath} onChange={e => setNewMaterialPath(e.target.value)} placeholder="URL (YouTube, Drive, web...)"
                               onKeyDown={e => { if (e.key === 'Enter' && newMaterialName.trim() && newMaterialPath.trim()) handleAddMaterial(); }}
-                              style={{ width: '100%', padding: '6px 9px', background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 6, fontSize: 10, color: 'var(--text-primary)', outline: 'none', transition: 'all 150ms' }}
+                              style={{ width: '100%', padding: '9px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 7, fontSize: 12, color: 'var(--text-primary)', outline: 'none', transition: 'all 150ms' }}
                               onFocus={e => { e.currentTarget.style.borderColor = taskColor; e.currentTarget.style.boxShadow = `0 0 0 2px ${taskColor}12`; }}
                               onBlur={e => { e.currentTarget.style.borderColor = 'var(--border-default)'; e.currentTarget.style.boxShadow = 'none'; }} />
                           ) : (
-                            <button onClick={() => fileInputRef.current?.click()} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '7px 0', borderRadius: 6, fontSize: 9.5, fontWeight: 600, cursor: 'pointer', border: '1px dashed var(--border-soft)', background: 'transparent', color: 'var(--text-secondary)', transition: 'all 150ms' }}
+                            <button onClick={() => fileInputRef.current?.click()} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px 0', borderRadius: 7, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: '1px dashed var(--border-soft)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)', transition: 'all 150ms' }}
                               onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.background = 'transparent'; }}>
-                              <Upload size={10} /> {newMaterialFile ? newMaterialFile.name : 'Seleccionar archivo...'}
+                              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.background = 'var(--bg-elevated)'; }}>
+                              <Upload size={12} /> {newMaterialFile ? newMaterialFile.name : 'Seleccionar archivo...'}
                             </button>
                           )}
                           <input type="file" ref={fileInputRef} onChange={handleFileSelected} style={{ display: 'none' }} />
@@ -1707,7 +1847,7 @@ export default function Tareas() {
                 </div>
 
                 {/* ── Apuntes ── */}
-                <div className="bento-card" style={{ padding: 0, overflow: 'hidden', background: 'var(--bg-surface)' }}>
+                <div className="bento-card" style={{ padding: 0, background: 'var(--bg-surface)' }}>
                   <div onClick={() => setSectionCollapsed(prev => ({ ...prev, apuntes: !prev.apuntes }))}
                     style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px', cursor: 'pointer', transition: 'background 150ms', userSelect: 'none' }}
                     onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
@@ -1723,13 +1863,13 @@ export default function Tareas() {
                   </div>
 
                   {!sectionCollapsed.apuntes && (
-                    <div style={{ padding: '0 16px 14px', display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }}>
+                    <div style={{ padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: 10, borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }}>
                       {(selectedTask.apuntes?.trim() || showApuntesEditor) ? (
                         <textarea
                           value={selectedTask.apuntes || ''}
                           onChange={e => updateTask(selectedTask.id, { apuntes: e.target.value })}
                           placeholder="Escribe tus apuntes aquí..."
-                          style={{ width: '100%', background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 7, color: 'var(--text-primary)', fontSize: 12, outline: 'none', padding: '10px 12px', resize: 'vertical', minHeight: 68, lineHeight: 1.65, fontFamily: "'Inter', sans-serif", transition: 'all 150ms' }}
+                          style={{ width: '100%', background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 8, color: 'var(--text-primary)', fontSize: 12.5, outline: 'none', padding: '14px 16px', resize: 'vertical', minHeight: 100, lineHeight: 1.7, fontFamily: "'Inter', sans-serif", transition: 'all 150ms', marginTop: 10 }}
                           onInput={e => {
                             e.currentTarget.style.height = 'auto';
                             e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`;
@@ -1740,11 +1880,11 @@ export default function Tareas() {
                       ) : (
                         <div
                           onClick={() => setShowApuntesEditor(true)}
-                          style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 68, borderRadius: 7, border: '1px dashed var(--border-soft)', background: 'var(--bg-surface)', color: 'var(--text-muted)', fontSize: 10.5, fontWeight: 500, gap: 3, cursor: 'pointer', transition: 'all 150ms' }}
+                          style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 80, marginTop: 10, borderRadius: 8, border: '1px dashed var(--border-soft)', background: 'var(--bg-surface)', color: 'var(--text-muted)', fontSize: 11.5, fontWeight: 500, gap: 5, cursor: 'pointer', transition: 'all 150ms' }}
                           onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-hover)'; e.currentTarget.style.background = 'var(--bg-hover)'; }}
                           onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.background = 'var(--bg-surface)'; }}>
-                          <StickyNote size={15} style={{ opacity: 0.15 }} />
-                          <span style={{ opacity: 0.3 }}>Añadir apuntes</span>
+                          <StickyNote size={18} style={{ opacity: 0.2 }} />
+                          <span style={{ opacity: 0.4 }}>Añadir apuntes</span>
                         </div>
                       )}
                     </div>

@@ -536,10 +536,19 @@ export default function Estudio() {
       const win = getCurrentWebviewWindow();
       const current = await win.isFullscreen();
       await win.setFullscreen(!current);
-      setIsFullscreen(!current);
+      // Re-read actual state to avoid icon desync
+      const actual = await win.isFullscreen();
+      setIsFullscreen(actual);
     } catch {
       if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
       else document.exitFullscreen();
+      // Re-check after browser fullscreen toggle
+      setTimeout(async () => {
+        try {
+          const win = getCurrentWebviewWindow();
+          setIsFullscreen(await win.isFullscreen());
+        } catch {}
+      }, 300);
     }
   };
 

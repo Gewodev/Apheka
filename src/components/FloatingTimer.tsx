@@ -161,8 +161,10 @@ export default function FloatingTimer() {
       const w = getCurrentWindow();
       const next = !decoratedRef.current;
       await w.setDecorations(next);
-      decoratedRef.current = next;
-      setDecorated(next);
+      // Re-read actual state from the window to avoid inverse bug
+      const actual = await w.isDecorated();
+      decoratedRef.current = actual;
+      setDecorated(actual);
     } catch {}
   }
 
@@ -172,15 +174,23 @@ export default function FloatingTimer() {
     try { await getCurrentWindow().startDragging(); } catch {}
   }
 
-  // Show decorations button only when cursor hovers top-right ~50px zone
+  // Show decorations button only when cursor hovers top-right ~60px zone
   useEffect(() => {
+    let hideTimeout: ReturnType<typeof setTimeout> | null = null;
     function onMove(e: MouseEvent) {
       const w = window.innerWidth, h = window.innerHeight;
-      const near = e.clientX > w - 50 && e.clientY < 50;
-      setShowDecoBtn(near);
+      const near = e.clientX > w - 60 && e.clientY < 60;
+      if (near) {
+        if (hideTimeout) { clearTimeout(hideTimeout); hideTimeout = null; }
+        setShowDecoBtn(true);
+      } else {
+        if (!hideTimeout) {
+          hideTimeout = setTimeout(() => { setShowDecoBtn(false); hideTimeout = null; }, 250);
+        }
+      }
     }
     window.addEventListener('mousemove', onMove);
-    return () => window.removeEventListener('mousemove', onMove);
+    return () => { window.removeEventListener('mousemove', onMove); if (hideTimeout) clearTimeout(hideTimeout); };
   }, []);
 
   const isActive = lastSync.current.isTimerActive;

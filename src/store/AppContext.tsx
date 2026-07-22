@@ -906,6 +906,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
    const currentTrackIdRef = useRef(currentTrackId);
    const tracksRef = useRef(tracks);
+   const playlistsRef = useRef(playlists);
    const shuffleModeRef = useRef(shuffleMode);
    const repeatModeRef = useRef(repeatMode);
    const musicQueueRef = useRef(musicQueue);
@@ -928,8 +929,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useLayoutEffect(() => { currentTrackIdRef.current = currentTrackId; }, [currentTrackId]);
   useEffect(() => { trackHistoryRef.current = trackHistory; }, [trackHistory]);
   useEffect(() => { playCountsRef.current = playCounts; }, [playCounts]);
-   useEffect(() => { tracksRef.current = tracks; }, [tracks]);
-   useEffect(() => { shuffleModeRef.current = shuffleMode; }, [shuffleMode]);
+    useEffect(() => { tracksRef.current = tracks; }, [tracks]);
+    useEffect(() => { playlistsRef.current = playlists; }, [playlists]);
+    useEffect(() => { shuffleModeRef.current = shuffleMode; }, [shuffleMode]);
    useEffect(() => { repeatModeRef.current = repeatMode; }, [repeatMode]);
     useEffect(() => { musicQueueRef.current = musicQueue; }, [musicQueue]);
     useEffect(() => { queueSourceRef.current = queueSource; }, [queueSource]);
@@ -2089,10 +2091,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const playTrack = useCallback((id: string) => {
-    // If the track is outside the current queueSource pool, reset to full library
+    // Auto-detect group context when playing a track outside the current pool
     const currentPool = queueSourceRef.current?.pool;
     if (currentPool && !currentPool.includes(id)) {
-      setQueueSource(null);
+      const allTracks = tracksRef.current;
+      const t = allTracks.find(tr => tr.id === id);
+      if (t) {
+        // Check playlists first — if track is in a playlist, use it
+        const inPlaylist = playlistsRef.current.find(pl => pl.trackIds.includes(id));
+        if (inPlaylist) {
+          const pool = inPlaylist.trackIds.filter(tid => allTracks.some(tr => tr.id === tid));
+          setQueueSource({ pool, name: inPlaylist.name });
+        } else {
+          // Check artist — group all songs from same artist
+          const artistTracks = allTracks.filter(tr => tr.artist === t.artist);
+          if (artistTracks.length > 1) {
+            setQueueSource({ pool: artistTracks.map(tr => tr.id), name: t.artist });
+          } else {
+            // Solo track — check favorites, otherwise full library
+            if (t.isFavorite) {
+              const favIds = allTracks.filter(tr => tr.isFavorite).map(tr => tr.id);
+              setQueueSource({ pool: favIds, name: 'Favoritas' });
+            } else {
+              setQueueSource(null);
+            }
+          }
+        }
+      } else {
+        setQueueSource(null);
+      }
     }
 
     // Same track already loaded — just resume (no reload)
@@ -2470,21 +2497,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
           globalAudio.play().catch(() => {
             setTimeout(() => globalAudio.play().catch(() => {}), 100);
           });
-          return; // stay in repeat-one, keep looping
+          return;
         }
         let nextId: string | null = null;
         const q = musicQueueRef.current;
         const cid = currentTrackIdRef.current;
+        const hasSource = !!queueSourceRef.current;
         if (q.length > 0) {
           const [next] = q;
           setMusicQueue(q.slice(1));
           nextId = next;
-        } else if (shuffleModeRef.current || repeatModeRef.current === 'all') {
+        } else if (hasSource || shuffleModeRef.current || repeatModeRef.current === 'all') {
           const sourcePool = queueSourceRef.current?.pool ?? tracksRef.current.map(t => t.id);
           let refilled: string[];
           if (shuffleModeRef.current) {
             const rest = sourcePool.filter(tid => tid !== cid);
-            refilled = weightedShuffle(rest, playCountsRef.current);
+            refilled = weightedShuffle(rest.length > 0 ? rest : sourcePool, playCountsRef.current);
           } else {
             const idx = sourcePool.indexOf(cid);
             const startIdx = idx >= 0 ? (idx + 1) % sourcePool.length : 0;
@@ -2498,18 +2526,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
             nextId = refilled[0];
           }
         }
-        // After taking next track, refill queue to 5
         if (nextId) {
           setMusicQueue(prev => {
             if (prev.length >= 5) return prev;
             const history = trackHistoryRef.current;
             const pool = queueSourceRef.current?.pool ?? tracksRef.current.map(t => t.id);
-            // 85% distance: exclude history until most of pool is played
             const threshold = Math.floor(pool.length * 0.85);
             const excludeIds = new Set(history.length < threshold ? history : []);
             excludeIds.add(nextId);
             const available = pool.filter(tid => !excludeIds.has(tid) && !prev.includes(tid));
-            const shuffled = shuffleModeRef.current ? weightedShuffle(available, playCountsRef.current) : available;
+            const final = available.length > 0 ? available : pool.filter(tid => tid !== nextId && !prev.includes(tid));
+            const shuffled = shuffleModeRef.current ? weightedShuffle(final, playCountsRef.current) : final;
             return [...prev, ...shuffled].slice(0, 5);
           });
         }
