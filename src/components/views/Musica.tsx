@@ -63,6 +63,7 @@ export default function Musica() {
   const [url, setUrl] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [preview, setPreview] = useState<YouTubePlaylist | YouTubeMetadata | null>(null);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [showAllLibrary, setShowAllLibrary] = useState(false);
@@ -141,6 +142,14 @@ export default function Musica() {
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const onOnline = () => setIsOnline(true);
+    const onOffline = () => setIsOnline(false);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    return () => { window.removeEventListener('online', onOnline); window.removeEventListener('offline', onOffline); };
   }, []);
 
   // Lock body scroll when any modal is open
@@ -238,6 +247,10 @@ export default function Musica() {
   const handleUrlSubmit = async () => {
     const trimmedUrl = url.trim();
     if (!trimmedUrl) return;
+    if (!navigator.onLine) {
+      addNotification('Sin conexión a internet. No se puede procesar enlaces en línea.', 'error');
+      return;
+    }
 
     setIsLoading(true);
     setPreview(null);
@@ -255,6 +268,10 @@ export default function Musica() {
   const handleSearch = async () => {
     const q = searchQuery.trim();
     if (!q) return;
+    if (!navigator.onLine) {
+      addNotification('Sin conexión a internet. No se puede buscar en línea.', 'error');
+      return;
+    }
     const id = ++searchRequestId.current;
     setIsLoading(true);
     setSearchResults([]);
@@ -299,6 +316,11 @@ export default function Musica() {
     const videoUrl = getVideoUrl(entry);
     if (!videoUrl) {
       updateDownloadStatus(dlItemId, 'error', 'URL del video no disponible');
+      return;
+    }
+    if (!navigator.onLine) {
+      updateDownloadStatus(dlItemId, 'error', 'Sin conexión a internet');
+      addNotification('Sin conexión a internet. No se puede descargar.', 'error');
       return;
     }
     updateDownloadStatus(dlItemId, 'downloading');
@@ -472,25 +494,14 @@ export default function Musica() {
     <div className="page-container" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto' }}>
 
       {/* â”€â”€ HEADER â”€â”€ */}
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, paddingTop: 8 }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <h1 style={{ fontSize: 30, fontWeight: 650, color: 'var(--accent)', lineHeight: 1.15, letterSpacing: '-0.02em', fontFamily: "'Inter Tight', sans-serif" }}>Música</h1>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 3, color: 'var(--text-tertiary)' }}>
-              <div style={{ width: 3, height: 12, background: 'var(--text-secondary)', borderRadius: 2 }} />
-              <div style={{ width: 3, height: 18, background: 'var(--accent)', borderRadius: 2 }} />
-              <div style={{ width: 3, height: 8, background: 'var(--text-secondary)', borderRadius: 2 }} />
-              <div style={{ width: 3, height: 14, background: 'var(--text-tertiary)', borderRadius: 2 }} />
-            </div>
-          </div>
-          <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 6, fontWeight: 500 }}>Tu Música, tu enfoque.</p>
-        </div>
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, paddingTop: 8 }}>
+        <h1 style={{ flex: 1, fontSize: 42, fontWeight: 200, color: 'var(--accent)', lineHeight: 1.1, letterSpacing: '-0.03em', fontFamily: "'Inter Tight', sans-serif" }}>Música</h1>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', border: '1px solid var(--border-default)', borderRadius: 16, fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>
-              <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--success)', boxShadow: '0 0 8px var(--success)' }} />
-              Conectado
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', border: `1px solid ${isOnline ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'}`, borderRadius: 16, fontSize: 11, fontWeight: 600, color: isOnline ? '#10B981' : '#EF4444' }}>
+              <div style={{ width: 6, height: 6, borderRadius: '50%', background: isOnline ? '#10B981' : '#EF4444', boxShadow: `0 0 8px ${isOnline ? '#10B981' : '#EF4444'}` }} />
+              {isOnline ? 'Conectado' : 'Desconectado'}
             </div>
             <button className="btn-ghost" style={{ padding: 8, borderRadius: '50%' }}><Wifi size={16} /></button>
             <NotificationBell />

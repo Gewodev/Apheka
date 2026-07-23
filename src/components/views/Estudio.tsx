@@ -94,6 +94,7 @@ interface ActivityEntry {
   perception?: number;
   discomfort?: number;
   mode?: string;
+  isDistraction?: boolean;
 }
 
 
@@ -284,10 +285,6 @@ export default function Estudio() {
       }
       setShowRestPrompt(false);
       lastPauseTimeRef.current = accumulatedPauseTime;
-      if (activeTaskId) {
-        const task = tasks.find(t => t.id === activeTaskId);
-        if (task) updateTask(activeTaskId, { studyTime: (task.studyTime || 0) + Math.round(sessionTime / 60) });
-      }
     }
     if (isRest || sessionType !== 'pomodoro') hasTriggeredRef.current = false;
   }, [sessionTime, isTimerActive, sessionType, isRest, settings.pomodoroTime, distractionCount, activeTaskId, tasks, updateTask]);
@@ -299,10 +296,6 @@ export default function Estudio() {
         lastChronoRoundRef.current = r;
         saveChronoRound(r);
         setChronoRounds(r);
-        if (activeTaskId) {
-          const task = tasks.find(t => t.id === activeTaskId);
-          if (task) updateTask(activeTaskId, { studyTime: (task.studyTime || 0) + Math.round(chronoGoal / 60) });
-        }
       }
     }
   }, [sessionTime, isTimerActive, sessionType, chronoGoal, distractionCount]);
@@ -512,6 +505,7 @@ export default function Estudio() {
         perception: s.perception,
         discomfort: s.discomfort,
         mode: s.mode,
+        isDistraction: s.isDistraction,
       });
     }
     return entries;
@@ -776,6 +770,7 @@ export default function Estudio() {
                 const nowSessionTime = sessionTime;
                 if (sessionType === 'pomodoro' && nowSessionTime < (settings.pomodoroTime || 1500) * 0.5) {
                   setSessionTime(0);
+                  hasTriggeredRef.current = false;
                   addNotification('Sesión menor al 50%, reiniciando pomodoro', 'info');
                   return;
                 }
@@ -805,10 +800,6 @@ export default function Estudio() {
                 } else {
                   setEvalSubjects([]);
                   setShowFreeStudyPrompt(true);
-                }
-                if (activeTaskId) {
-                  const task = tasks.find(t => t.id === activeTaskId);
-                  if (task) updateTask(activeTaskId, { studyTime: (task.studyTime || 0) + Math.round(nowSessionTime / 60) });
                 }
               }} style={{
                 width: 56, height: 56, borderRadius: '50%', cursor: sessionTime >= 60 && !isBreakTime ? 'pointer' : 'not-allowed',
@@ -997,32 +988,40 @@ export default function Estudio() {
                     const eff = entry.sessionEff ?? 100;
                     const effColor = eff >= 85 ? '#10B981' : eff >= 60 ? '#F59E0B' : '#EF4444';
                     const vm = entry.volmeter ?? Math.round(eff / 5);
+                    const isDist = entry.isDistraction;
                     return (
                       <div key={entry.id || i}
                         style={{
                           display: 'flex', alignItems: 'center', gap: 8,
                           padding: '10px 6px', borderRadius: 8,
+                          opacity: isDist ? 0.45 : 1,
                           borderBottom: i < Math.min(activityFeed.length, 4) - 1 ? '1px solid var(--border-subtle)' : 'none',
                         }}>
-                        <div style={{ width: 26, height: 26, borderRadius: 7, background: `${c}12`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                          <Icon size={12} color={c} />
+                        <div style={{ width: 26, height: 26, borderRadius: 7, background: isDist ? 'rgba(245,158,11,0.08)' : `${c}12`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          {isDist ? <Coffee size={12} color="#F59E0B" /> : <Icon size={12} color={c} />}
                         </div>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", width: 58, textAlign: 'left', flexShrink: 0 }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: isDist ? 'var(--text-muted)' : 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", width: 58, textAlign: 'left', flexShrink: 0, fontStyle: isDist ? 'italic' : 'normal' }}>
                           {mins > 0 ? `${mins}m` : `${secs}s`}
                         </span>
-                        <div style={{ display: 'flex', gap: 2, flex: 1, minWidth: 0, alignItems: 'center' }}>
-                          {Array.from({ length: 20 }, (_, j) => (
-                            <div key={j} style={{
-                              width: 6, height: 12, borderRadius: 1.5,
-                              background: j < vm
-                                ? (j < 7 ? '#EF4444' : j < 14 ? '#F59E0B' : '#10B981')
-                                : 'var(--bg-hover)',
-                              flexShrink: 0,
-                            }} />
-                          ))}
-                        </div>
-                        <span style={{ width: 32, textAlign: 'right', fontSize: 10, fontWeight: 600, color: effColor, fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{eff}%</span>
-                        <span className="hidden xl:inline" style={{ width: 22, textAlign: 'right', fontSize: 9, fontWeight: 500, color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{vm}</span>
+                        {isDist ? (
+                          <span style={{ fontSize: 9, fontWeight: 600, color: '#F59E0B', fontFamily: "'Inter Tight', sans-serif", flex: 1, textAlign: 'center', letterSpacing: '0.02em' }}>No considerado</span>
+                        ) : (
+                          <>
+                            <div style={{ display: 'flex', gap: 2, flex: 1, minWidth: 0, alignItems: 'center' }}>
+                              {Array.from({ length: 20 }, (_, j) => (
+                                <div key={j} style={{
+                                  width: 6, height: 12, borderRadius: 1.5,
+                                  background: j < vm
+                                    ? (j < 7 ? '#EF4444' : j < 14 ? '#F59E0B' : '#10B981')
+                                    : 'var(--bg-hover)',
+                                  flexShrink: 0,
+                                }} />
+                              ))}
+                            </div>
+                            <span style={{ width: 32, textAlign: 'right', fontSize: 10, fontWeight: 600, color: effColor, fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{eff}%</span>
+                            <span className="hidden xl:inline" style={{ width: 22, textAlign: 'right', fontSize: 9, fontWeight: 500, color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{vm}</span>
+                          </>
+                        )}
                       </div>
                     );
                   })}
@@ -1084,7 +1083,17 @@ export default function Estudio() {
                   <>
                     {/* Summary */}
                     <div style={{ padding: '14px 0 12px', fontSize: 10, color: 'var(--text-tertiary)', fontWeight: 500, borderBottom: '1px solid var(--border-soft)', marginBottom: 8, letterSpacing: '0.02em' }}>
-                      Total: <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{(Math.floor(activityFeed.reduce((s, e) => s + e.duration, 0) / 3600)) > 0 ? `${Math.floor(activityFeed.reduce((s, e) => s + e.duration, 0) / 3600)}h ` : ''}{Math.floor((activityFeed.reduce((s, e) => s + e.duration, 0) % 3600) / 60)}m</span> · {activityFeed.length} {activityFeed.length === 1 ? 'sesión' : 'sesiones'}
+                      {(() => {
+                        const validSecs = activityFeed.filter(e => !e.isDistraction).reduce((s, e) => s + e.duration, 0);
+                        const validCount = activityFeed.filter(e => !e.isDistraction).length;
+                        const distCount = activityFeed.filter(e => e.isDistraction).length;
+                        return (
+                          <>
+                            Total: <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{(Math.floor(validSecs / 3600)) > 0 ? `${Math.floor(validSecs / 3600)}h ` : ''}{Math.floor((validSecs % 3600) / 60)}m</span> · {validCount} {validCount === 1 ? 'sesión' : 'sesiones'}
+                            {distCount > 0 && <span style={{ marginLeft: 6, color: '#F59E0B', fontWeight: 600 }}>· {distCount} distracción{distCount > 1 ? 'es' : ''}</span>}
+                          </>
+                        );
+                      })()}
                     </div>
 
                     {/* Column headers */}
@@ -1105,6 +1114,7 @@ export default function Estudio() {
                         const Icon = isPomo ? TomatoIcon : isBreakEntry ? Coffee : Timer;
                         const mins = Math.floor(entry.duration / 60);
                         const secs = entry.duration % 60;
+                        const isDist = entry.isDistraction;
                     const eff = entry.sessionIre ?? entry.sessionEff ?? 100;
                         const effColor = eff >= 85 ? '#10B981' : eff >= 60 ? '#F59E0B' : '#EF4444';
                         const vm = entry.volmeter ?? Math.round(eff / 5);
@@ -1113,27 +1123,34 @@ export default function Estudio() {
                             style={{
                               display: 'flex', alignItems: 'center', gap: 8,
                               padding: '10px 4px', borderRadius: 8,
+                              opacity: isDist ? 0.45 : 1,
                               borderBottom: i < activityFeed.length - 1 ? '1px solid var(--border-subtle)' : 'none',
                             }}>
-                            <div style={{ width: 26, height: 26, borderRadius: 7, background: `${c}12`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                              <Icon size={12} color={c} />
+                            <div style={{ width: 26, height: 26, borderRadius: 7, background: isDist ? 'rgba(245,158,11,0.08)' : `${c}12`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                              {isDist ? <Coffee size={12} color="#F59E0B" /> : <Icon size={12} color={c} />}
                             </div>
-                            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", width: 58, textAlign: 'left', flexShrink: 0 }}>
+                            <span style={{ fontSize: 11, fontWeight: 600, color: isDist ? 'var(--text-muted)' : 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", width: 58, textAlign: 'left', flexShrink: 0, fontStyle: isDist ? 'italic' : 'normal' }}>
                               {mins > 0 ? `${mins}m` : `${secs}s`}
                             </span>
-                            <div style={{ display: 'flex', gap: 2, flex: 1, minWidth: 0, alignItems: 'center' }}>
-                              {Array.from({ length: 20 }, (_, j) => (
-                                <div key={j} style={{
-                                  width: 6, height: 12, borderRadius: 1.5,
-                                  background: j < vm
-                                    ? (j < 7 ? '#EF4444' : j < 14 ? '#F59E0B' : '#10B981')
-                                    : 'var(--bg-hover)',
-                                  flexShrink: 0,
-                                }} />
-                              ))}
-                            </div>
-                            <span style={{ width: 32, textAlign: 'right', fontSize: 10, fontWeight: 600, color: effColor, fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{eff}%</span>
-                            <span style={{ width: 22, textAlign: 'right', fontSize: 9, fontWeight: 500, color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{vm}</span>
+                            {isDist ? (
+                              <span style={{ fontSize: 9, fontWeight: 600, color: '#F59E0B', fontFamily: "'Inter Tight', sans-serif", flex: 1, textAlign: 'center', letterSpacing: '0.02em' }}>No considerado por reinicio</span>
+                            ) : (
+                              <>
+                                <div style={{ display: 'flex', gap: 2, flex: 1, minWidth: 0, alignItems: 'center' }}>
+                                  {Array.from({ length: 20 }, (_, j) => (
+                                    <div key={j} style={{
+                                      width: 6, height: 12, borderRadius: 1.5,
+                                      background: j < vm
+                                        ? (j < 7 ? '#EF4444' : j < 14 ? '#F59E0B' : '#10B981')
+                                        : 'var(--bg-hover)',
+                                      flexShrink: 0,
+                                    }} />
+                                  ))}
+                                </div>
+                                <span style={{ width: 32, textAlign: 'right', fontSize: 10, fontWeight: 600, color: effColor, fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{eff}%</span>
+                                <span style={{ width: 22, textAlign: 'right', fontSize: 9, fontWeight: 500, color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{vm}</span>
+                              </>
+                            )}
                           </div>
                         );
                       })}
@@ -1332,7 +1349,7 @@ export default function Estudio() {
                 style={{ padding: '8px 20px', borderRadius: 8, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
                 {isBreakTime ? 'Seguir descansando' : 'Cancelar'}
               </button>
-              <button onClick={() => { setShowResetConfirm(false); if (sessionTime >= 60 && !isBreakTime) { setDistractionCount((distractionCount ?? 0) + 1); setAccumulatedPauseTime(prev => prev + 30); } handleReset(); }}
+              <button onClick={() => { setShowResetConfirm(false); if (sessionTime >= 60 && !isBreakTime) { setDistractionCount((distractionCount ?? 0) + 1); setAccumulatedPauseTime(prev => prev + 30); } handleReset({ isDistraction: true }); }}
                 style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: '#F59E0B', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
                 Reiniciar de todos modos
               </button>

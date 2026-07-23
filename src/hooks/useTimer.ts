@@ -109,7 +109,7 @@ export function useTimer() {
     setIsTimerActive(prev => !prev);
   }, [setIsTimerActive]);
 
-  const handleReset = useCallback(() => {
+  const handleReset = useCallback((opts?: { isDistraction?: boolean }) => {
     // Persist the session if it was long enough (>= 10s)
     if (sessionTime >= 10) {
       addStudySession({
@@ -121,6 +121,7 @@ export function useTimer() {
         courseId: undefined,
         pauseCount: distractionCount,
         pauseDuration: accumulatedPauseTime,
+        isDistraction: opts?.isDistraction,
       });
     }
     // Reset timer state

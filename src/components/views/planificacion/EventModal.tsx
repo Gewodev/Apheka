@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { X, Calendar, Clock, Plus, Trash2, Repeat, Check, FileText, Link as LinkIcon, ExternalLink, Music, Video, Image, FileSpreadsheet, File } from 'lucide-react';
+import { X, Calendar, Clock, Plus, Trash2, Repeat, Check, FileText, Link as LinkIcon, ExternalLink, Music, Video, Image, FileSpreadsheet, File, Globe } from 'lucide-react';
 import { format } from 'date-fns';
 
 function getEventFileIcon(type: string, size = 14) {
@@ -94,6 +94,9 @@ export default function EventModal({
   const [repeatUntil, setRepeatUntil] = useState(event?.repeatUntil || '');
   const [taskId, setTaskId] = useState(event?.taskId || '');
   const [attachments, setAttachments] = useState<{ type: 'link' | 'file'; name: string; url: string; size?: string }[]>(event?.attachments || []);
+  const [showLinkForm, setShowLinkForm] = useState(false);
+  const [linkUrl, setLinkUrl] = useState('');
+  const [linkName, setLinkName] = useState('');
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -141,6 +144,14 @@ export default function EventModal({
       addNotification('La hora de inicio no puede ser posterior o igual a la de fin', 'error');
       return;
     }
+    if (repeat === 'custom_days' && repeatDays.length === 0) {
+      addNotification('Selecciona al menos un día de repetición', 'error');
+      return;
+    }
+    if (repeat !== 'none' && repeatUntil && repeatUntil < date) {
+      addNotification('La fecha de fin de repetición no puede ser anterior a la fecha del evento', 'error');
+      return;
+    }
 
     const ev: PlanEvent = {
       id: event?.id || crypto.randomUUID(),
@@ -168,17 +179,25 @@ export default function EventModal({
   };
 
   const handleAddLink = async () => {
-    const url = prompt('Ingresa la URL:');
-    if (url) {
-      let name = prompt('Nombre del enlace (opcional):') || '';
-      if (!name.trim()) {
+    if (!linkUrl.trim()) {
+      addNotification('Ingresa una URL válida', 'error');
+      return;
+    }
+    let url = linkUrl.trim();
+    if (!url.startsWith('http://') && !url.startsWith('https://')) url = 'https://' + url;
+    let name = linkName.trim();
+    if (!name) {
+      try {
         const fetched = await fetchEventPageTitle(url);
         if (fetched) name = fetched;
-        else name = url;
-      }
-      const detectedType = url.includes('youtube.com') || url.includes('youtu.be') ? 'video' : url.includes('drive.google.com') ? 'drive' : 'link';
-      setAttachments([...attachments, { type: detectedType as any, name, url }]);
+        else name = url.replace(/^https?:\/\//, '').slice(0, 40);
+      } catch { name = url.replace(/^https?:\/\//, '').slice(0, 40); }
     }
+    const detectedType = url.includes('youtube.com') || url.includes('youtu.be') ? 'video' : url.includes('drive.google.com') ? 'drive' : 'link';
+    setAttachments([...attachments, { type: detectedType as any, name, url }]);
+    setLinkUrl('');
+    setLinkName('');
+    setShowLinkForm(false);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -211,7 +230,7 @@ export default function EventModal({
         <div style={{ padding: '24px 32px 20px', borderBottom: '1px solid var(--border-soft)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: 'var(--surface)', zIndex: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{ width: 4, height: 20, borderRadius: 4, background: color, boxShadow: `0 0 12px ${color}60` }} />
-            <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Outfit',sans-serif", letterSpacing: '-0.02em' }}>
+            <h2 style={{ fontSize: 20, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight',sans-serif", letterSpacing: '-0.02em' }}>
               {event ? 'Editar Evento' : 'Nuevo Evento'}
             </h2>
           </div>
@@ -448,14 +467,46 @@ export default function EventModal({
                   </div>
                 )}
                 
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  <button onClick={handleAddLink} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', background: 'var(--surface)', padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border-soft)', cursor: 'pointer' }}>
-                    <LinkIcon size={14} /> Enlace
-                  </button>
-                  <button onClick={() => fileInputRef.current?.click()} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', background: 'var(--surface)', padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border-soft)', cursor: 'pointer' }}>
-                    <FileText size={14} /> Archivo local
-                  </button>
-                  <input type="file" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileChange} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {showLinkForm && (
+                    <div style={{ background: 'var(--surface)', border: '1px solid var(--border-soft)', borderRadius: 8, padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Globe size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                        <input
+                          autoFocus
+                          type="url"
+                          value={linkUrl}
+                          onChange={e => setLinkUrl(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') handleAddLink(); if (e.key === 'Escape') { setShowLinkForm(false); setLinkUrl(''); setLinkName(''); } }}
+                          placeholder="https://..."
+                          style={{ flex: 1, fontSize: 13, height: 32, background: 'var(--surface-elevated)', border: '1px solid var(--border-soft)', borderRadius: 6, padding: '0 10px', color: 'var(--text-primary)', outline: 'none' }}
+                        />
+                      </div>
+                      <input
+                        type="text"
+                        value={linkName}
+                        onChange={e => setLinkName(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') handleAddLink(); if (e.key === 'Escape') { setShowLinkForm(false); setLinkUrl(''); setLinkName(''); } }}
+                        placeholder="Nombre (opcional)"
+                        style={{ fontSize: 12, height: 28, background: 'var(--surface-elevated)', border: '1px solid var(--border-soft)', borderRadius: 6, padding: '0 10px', color: 'var(--text-primary)', outline: 'none' }}
+                      />
+                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                        <button onClick={() => { setShowLinkForm(false); setLinkUrl(''); setLinkName(''); }} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border-soft)', background: 'transparent', color: 'var(--text-muted)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>Cancelar</button>
+                        <button onClick={handleAddLink} style={{ padding: '4px 12px', borderRadius: 6, border: 'none', background: 'var(--accent)', color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Agregar</button>
+                      </div>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {!showLinkForm && (
+                      <button onClick={() => setShowLinkForm(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', background: 'var(--surface)', padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border-soft)', cursor: 'pointer' }}>
+                        <LinkIcon size={14} /> Enlace
+                      </button>
+                    )}
+                    <button onClick={() => fileInputRef.current?.click()} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', background: 'var(--surface)', padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border-soft)', cursor: 'pointer' }}>
+                      <FileText size={14} /> Archivo local
+                    </button>
+                    <input type="file" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileChange} />
+                  </div>
                 </div>
               </div>
             </div>

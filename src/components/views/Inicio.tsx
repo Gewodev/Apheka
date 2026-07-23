@@ -117,8 +117,8 @@ function loadGoalEvent(): GoalEvent | null {
 const hl = (l: number) =>
   l === 0 ? 'var(--bg-deep)' : l === 1 ? 'var(--accent-dim)' : l === 2 ? 'color-mix(in srgb, var(--accent) 35%, transparent)' : l === 3 ? 'color-mix(in srgb, var(--accent) 65%, transparent)' : 'var(--accent)';
 
-const pc: Record<string, string> = { high: '#E11D48', medium: '#F59E0B', low: '#10B981' };
-const pcl: Record<string, string> = { high: 'Alta', medium: 'Media', low: 'Baja' };
+const pc: Record<string, string> = { high: '#E11D48', medium: '#F59E0B', low: '#10B981', none: 'var(--text-tertiary)' };
+const pcl: Record<string, string> = { high: 'Alta', medium: 'Media', low: 'Baja', none: 'Sin pri.' };
 
 function timeAgo(d: string): string {
   const diff = Date.now() - new Date(d).getTime();
@@ -304,12 +304,15 @@ export default function Inicio() {
   }, [weeklyStudyTime, settings?.heatmapStartDate, settings?.dailyGoal, settings?.dailyGoalHistory, settings?.initialDailyGoal]);
 
   const ts = useMemo(() => ({
-    active: tasks.filter(t => t.status !== 'completado').length || 8,
-    total: notes.length || 146,
+    active: tasks.filter(t => t.status !== 'completado').length,
+    total: notes.filter(n => !n.deletedAt && !n.isCoursePrivate && (n.title || n.content)).length,
   }), [tasks, notes]);
 
   const dailyGoalMinutes = settings?.dailyGoal || 240;
-  const dailyPct = useMemo(() => Math.min(100, Math.round((dailyStudyTime / (dailyGoalMinutes * 60)) * 100) || 73), [dailyStudyTime, dailyGoalMinutes]);
+  const dailyPct = useMemo(() => {
+    if (!dailyGoalMinutes || dailyGoalMinutes <= 0) return 0;
+    return Math.min(100, Math.round((dailyStudyTime / (dailyGoalMinutes * 60)) * 100));
+  }, [dailyStudyTime, dailyGoalMinutes]);
   const todayAchieved = dailyStudyTime >= dailyGoalMinutes * 60;
 
   const recentTracks = useMemo(() => {
@@ -529,7 +532,7 @@ export default function Inicio() {
         </div>
 
         {/* RECIENTES: Canciones */}
-        <div className="xl:col-span-6 hidden sm:flex bento-card" style={{ padding: '18px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 12, display: 'flex', flexDirection: 'column' }}>
+        <div className="xl:col-span-6 hidden sm:flex bento-card" style={{ padding: '18px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 12, flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
             <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em' }}>RECIENTES</span>
             <span onClick={() => setNavigateTo?.('musica')} style={{ fontSize: 10, fontWeight: 600, color: 'var(--accent)', cursor: 'pointer' }} className="hover:opacity-80">Ir a Musica</span>
@@ -648,13 +651,13 @@ export default function Inicio() {
             <span onClick={() => setNavigateTo?.('apuntes')} style={{ fontSize: 10, fontWeight: 600, color: 'var(--accent)', cursor: 'pointer' }} className="hover:opacity-80">Ver todas</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {notes.slice(0, 5).map(n => (
+            {notes.filter(n => !n.deletedAt && !n.isCoursePrivate && (n.title || n.content)).slice(0, 5).map(n => (
               <div key={n.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', borderRadius: 8, cursor: 'pointer', transition: 'all 150ms' }} className="hover:border-borderDark/60 group">
-                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n.title}</div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n.title || n.content?.slice(0, 40) || 'Sin titulo'}</div>
                 <span style={{ fontSize: 9, color: 'var(--text-tertiary)', flexShrink: 0 }}>{timeAgo(n.updatedAt)}</span>
               </div>
             ))}
-            {notes.length === 0 && (
+            {notes.filter(n => !n.deletedAt && !n.isCoursePrivate && (n.title || n.content)).length === 0 && (
               <div style={{ padding: '16px 0', textAlign: 'center', fontSize: 10, color: 'var(--text-muted)' }}>Sin notas aun</div>
             )}
           </div>

@@ -21,7 +21,7 @@ interface LateralPanelProps {
 }
 
 export default function LateralPanel({ item, onClose, onSelectEvent, onEditEvent, onDeleteEvent, onViewTask, onAddEvent }: LateralPanelProps) {
-  const { settings } = useApp();
+  const { settings, tasks } = useApp();
   const tf = settings?.timeFormat;
   if (!item) return null;
 
@@ -79,7 +79,7 @@ export default function LateralPanel({ item, onClose, onSelectEvent, onEditEvent
             <DayDetails item={item} onSelectEvent={onSelectEvent} onViewTask={onViewTask} timeFormat={tf} onAddEvent={onAddEvent} />
           )}
           {item.type === 'event' && (
-            <EventDetails item={item} onEdit={onEditEvent} onDelete={onDeleteEvent} timeFormat={tf} />
+            <EventDetails item={item} onEdit={onEditEvent} onDelete={onDeleteEvent} timeFormat={tf} tasks={tasks} onViewTask={onViewTask} />
           )}
           {item.type === 'task' && (
             <TaskDetails item={item} onViewTask={onViewTask} />
@@ -185,7 +185,7 @@ function DayDetails({ item, onSelectEvent, onViewTask, timeFormat, onAddEvent }:
 
 const GOAL_KEY = 'owa_planned_goal';
 
-function EventDetails({ item, onEdit, onDelete, timeFormat }: { item: Extract<SelectedItem, {type: 'event'}>, onEdit?: (ev: PlanEvent) => void, onDelete?: (evId: string) => void, timeFormat?: '24h' | '12h' }) {
+function EventDetails({ item, onEdit, onDelete, timeFormat, tasks, onViewTask }: { item: Extract<SelectedItem, {type: 'event'}>, onEdit?: (ev: PlanEvent) => void, onDelete?: (evId: string) => void, timeFormat?: '24h' | '12h', tasks?: any[], onViewTask?: (taskId: string) => void }) {
   const { event } = item;
 
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
@@ -235,6 +235,31 @@ function EventDetails({ item, onEdit, onDelete, timeFormat }: { item: Extract<Se
           </div>
         </div>
       )}
+
+      {event.taskId && (() => {
+        const linkedTask = tasks?.find(t => t.id === event.taskId);
+        if (!linkedTask) return null;
+        return (
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>Tarea vinculada</div>
+            <div
+              onClick={() => onViewTask?.(linkedTask.id)}
+              style={{ display:'flex', alignItems:'center', gap:12, padding:'14px 18px', background:'var(--surface-elevated)', border:'1px solid var(--border-soft)', borderRadius:14, cursor:'pointer', transition:'all 200ms' }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface-hover)'; e.currentTarget.style.borderColor = 'var(--border-strong)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'var(--surface-elevated)'; e.currentTarget.style.borderColor = 'var(--border-soft)'; }}
+            >
+              <div style={{ padding:10, background:`${linkedTask.courseColor||'var(--text-muted)'}15`, borderRadius:10, border:`1px solid ${linkedTask.courseColor||'var(--text-muted)'}25` }}>
+                <CheckCircle2 size={18} style={{ color: linkedTask.courseColor || 'var(--text-muted)' }} />
+              </div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:15, color:'var(--text-primary)', fontWeight:500, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{linkedTask.title}</div>
+                {linkedTask.dueDate && <div style={{ fontSize:12, color:'var(--text-muted)', marginTop:2 }}>Vence: {(() => { try { return format(new Date(linkedTask.dueDate+'T12:00:00'), "d 'de' MMM", { locale: es }); } catch { return '—'; } })()}</div>}
+              </div>
+              <ExternalLink size={16} style={{ color:'var(--text-muted)', flexShrink:0 }} />
+            </div>
+          </div>
+        );
+      })()}
 
       {event.attachments && event.attachments.length > 0 && (
         <div>

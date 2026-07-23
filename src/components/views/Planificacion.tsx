@@ -4,7 +4,7 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
-  ChevronLeft, ChevronRight, Plus, Calendar, Clock, X, Trash2, Check, CheckSquare
+  ChevronLeft, ChevronRight, Plus, Calendar, Clock, X, Trash2, Check, CheckSquare, CheckCircle2
 } from 'lucide-react';
 import { useApp, fmtClock, fmtTimeRange } from '../../store/AppContext';
 import {
@@ -318,7 +318,7 @@ export default function Planificacion() {
       {/* HEADER — Title + Date | Bell + Clock */}
       <header style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-end', marginBottom:16, paddingTop:6, flexShrink:0 }}>
         <div>
-          <h1 style={{ fontSize:32, fontWeight:700, color:'var(--text-primary)', letterSpacing:'-0.03em', fontFamily:"'Outfit', sans-serif", lineHeight:1 }}>
+          <h1 style={{ fontSize:32, fontWeight:200, color:'var(--text-primary)', letterSpacing:'-0.03em', fontFamily:"'Inter Tight', sans-serif", lineHeight:1 }}>
             Planificador
           </h1>
           <p style={{ fontSize:13, color:'var(--text-secondary)', marginTop:6, fontWeight:500, letterSpacing: '0.01em' }}>
@@ -467,7 +467,7 @@ export default function Planificacion() {
                   const tod = isToday(d);
                   return (
                     <div key={i}
-                      onClick={() => setSelectedItem({ type: 'day', date: d, events: getEventsForDate(format(d, 'yyyy-MM-dd')), tasks: tasks.filter(t => t.dueDate === format(d, 'yyyy-MM-dd') && t.status !== 'completado') })}
+                      onClick={() => { const dIso = format(d, 'yyyy-MM-dd'); const dEvs = getEventsForDate(dIso); const dLinkedIds = new Set(dEvs.map(ev => (ev as PlanEvent).taskId).filter(Boolean)); setSelectedItem({ type: 'day', date: d, events: dEvs, tasks: tasks.filter(t => { if (!t.dueDate || t.status === 'completado') return false; if (dLinkedIds.has(t.id)) return false; return t.dueDate === dIso; }) }); }}
                       style={{ padding:'12px 0', textAlign:'center', cursor:'pointer', borderLeft: i > 0 ? '1px solid var(--border-soft)' : 'none', background:tod?'rgba(225,29,72,0.05)':'transparent', position:'relative', transition:'background 200ms' }}
                       onMouseEnter={e=>!tod && (e.currentTarget.style.outline='1px solid var(--border-strong)')}
                       onMouseLeave={e=>!tod && (e.currentTarget.style.outline='none')}
@@ -565,6 +565,12 @@ export default function Planificacion() {
                                   onMouseLeave={e=>{ e.currentTarget.style.boxShadow = `inset 0 1px 0 ${itemColor}10, 0 2px 8px rgba(0,0,0,0.08)`; e.currentTarget.style.zIndex='3'; }}
                                 >
                                   <span style={{ fontSize: 11, fontWeight: 600, color: itemColor, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{item.title}</span>
+                                  {hpx > 40 && (item as PlanEvent).taskId && (() => { const lt = tasks.find(t => t.id === (item as PlanEvent).taskId); return lt ? (
+                                    <div style={{ display:'flex', alignItems:'center', gap:3, marginTop:1 }}>
+                                      <CheckCircle2 size={9} style={{ color:'var(--text-muted)', flexShrink:0 }} />
+                                      <span style={{ fontSize:9, color:'var(--text-muted)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{lt.title}</span>
+                                    </div>
+                                  ) : null; })()}
                                   {hpx > 40 && (
                                     <div style={{ display:'flex', alignItems:'center', gap:4, marginTop:2 }}>
                                       <Clock size={10} style={{ color:'var(--text-muted)', flexShrink:0 }} />
@@ -682,6 +688,12 @@ export default function Planificacion() {
                           >
                             <div style={{ fontSize: isClass ? 11 : 15, fontWeight: isClass ? 500 : 600, color: isClass ? 'var(--text-muted)' : item.color, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{item.title}</div>
                             {!isClass && <div style={{ fontSize:12, color:'var(--text-muted)', marginTop:4 }}>{fmtTimeRange(item.startTime, item.endTime, settings?.timeFormat)}</div>}
+                            {!isClass && (item as PlanEvent).taskId && (() => { const lt = tasks.find(t => t.id === (item as PlanEvent).taskId); return lt ? (
+                              <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:6, padding:'4px 8px', borderRadius:6, background:`${lt.courseColor||'var(--text-muted)'}10`, borderLeft:`2px solid ${lt.courseColor||'var(--text-muted)'}` }}>
+                                <CheckCircle2 size={10} style={{ color: lt.courseColor||'var(--text-muted)', flexShrink:0 }} />
+                                <span style={{ fontSize:11, color: lt.courseColor||'var(--text-secondary)', fontWeight:500, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{lt.title}</span>
+                              </div>
+                            ) : null; })()}
                             {!isClass && (item as PlanEvent).description && <div style={{ fontSize:13, color:'var(--text-secondary)', marginTop:8, overflow:'hidden', textOverflow:'ellipsis', display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical' }}>{(item as PlanEvent).description}</div>}
                           </div>
                         );
@@ -737,7 +749,8 @@ export default function Planificacion() {
                       const inc=isSameMonth(day,monthStart), tod=isToday(day);
                       const iso=format(day,'yyyy-MM-dd');
                       const dayEvs=[...getAllDayEventsForDate(iso), ...getTimedEventsForDate(iso)];
-                                            const dayTasks=tasks.filter(t=>{if(!t.dueDate||t.status==='completado')return false;try{return format(new Date(t.dueDate+'T12:00:00'),'yyyy-MM-dd')===iso}catch{return false}});
+                      const linkedTaskIds = new Set(dayEvs.map(ev => (ev as PlanEvent).taskId).filter(Boolean));
+                      const dayTasks=tasks.filter(t=>{if(!t.dueDate||t.status==='completado')return false;if(linkedTaskIds.has(t.id))return false;try{return format(new Date(t.dueDate+'T12:00:00'),'yyyy-MM-dd')===iso}catch{return false}});
                       const opacity = isOld(iso) && !tod ? 0.35 : (inc ? 1 : 0.25);
                       return (
                         <div key={di}
@@ -748,7 +761,10 @@ export default function Planificacion() {
                         >
                           <div style={{ width:28,height:28,borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',marginBottom:10, fontSize:13,fontWeight:tod?700:500, background:tod?'var(--accent)':'transparent', color:tod?'#fff':'var(--text-primary)', fontFamily:"'Outfit',sans-serif" }}>{format(day,'d')}</div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, overflow: 'hidden' }}>
-                            {dayEvs.slice(0,3).map((ev,ei)=><div key={ei} style={{ fontSize:10,padding:'4px 8px',borderRadius:6,background:`${ev.color}15`,borderLeft:`2px solid ${ev.color}`,color:ev.color,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',fontWeight:600 }}>{ev.title}</div>)}
+                            {dayEvs.slice(0,3).map((ev,ei)=>{
+                              const evTask = (ev as PlanEvent).taskId ? tasks.find(t => t.id === (ev as PlanEvent).taskId) : null;
+                              return <div key={ei} style={{ fontSize:10,padding:'4px 8px',borderRadius:6,background:`${ev.color}15`,borderLeft:`2px solid ${ev.color}`,color:ev.color,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',fontWeight:600 }}>{ev.title}{evTask ? <span style={{opacity:0.55,fontWeight:500}}> + {evTask.title}</span> : ''}</div>;
+                            })}
                             {dayTasks.slice(0,3).map((t,ti)=><div key={ti} style={{ fontSize:10,padding:'4px 8px',borderRadius:6,background:`${t.courseColor||'var(--text-muted)'}15`,borderLeft:`2px dashed ${t.courseColor||'var(--text-muted)'}`,color:t.courseColor||'var(--text-secondary)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',fontWeight:600 }}>Ent: {t.title}</div>)}
                             {(dayEvs.length+dayTasks.length)>6&&<div style={{ fontSize:10,color:'var(--text-muted)',fontWeight:600, marginTop: 4 }}>+{dayEvs.length+dayTasks.length-6} más</div>}
                           </div>
@@ -808,7 +824,8 @@ export default function Planificacion() {
                             const iso = format(day, 'yyyy-MM-dd');
                             const hasEvent = getEventsForDate(iso).length > 0;
                             const dayEvs2 = getEventsForDate(iso);
-                            const dayTasks2 = tasks.filter(t => { if(!t.dueDate || t.status === 'completado') return false; try { return format(new Date(t.dueDate+'T12:00:00'),'yyyy-MM-dd')===iso } catch { return false } });
+                            const dayLinkedIds2 = new Set(dayEvs2.map(ev => (ev as PlanEvent).taskId).filter(Boolean));
+                            const dayTasks2 = tasks.filter(t => { if(!t.dueDate || t.status === 'completado') return false; if(dayLinkedIds2.has(t.id)) return false; try { return format(new Date(t.dueDate+'T12:00:00'),'yyyy-MM-dd')===iso } catch { return false } });
                             return (
                               <div key={di}
                                 onClick={(e) => { e.stopPropagation(); if (inc) setSelectedItem({ type: 'day', date: day, events: dayEvs2, tasks: dayTasks2 }); }}
@@ -847,7 +864,7 @@ export default function Planificacion() {
         onSelectEvent={(ev) => setSelectedItem({ type: 'event', event: ev })}
         onEditEvent={(ev) => { setEditingEvent(ev); setShowEventModal(true); setSelectedItem(null); }}
         onDeleteEvent={(id) => { deleteEvent(id); }}
-        onViewTask={(id) => { setSelectedItem(null); setNavigateTo(`tareas`); }}
+        onViewTask={(id) => { setSelectedItem(null); setNavigateTo(`tareas`); /* TODO: pass taskId to Tareas to open detail */ }}
         onAddEvent={(date) => { setModalDefaults({ date: format(date, 'yyyy-MM-dd') }); setEditingEvent(null); setShowEventModal(true); setSelectedItem(null); }}
       />
 

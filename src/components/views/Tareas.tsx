@@ -1674,8 +1674,9 @@ export default function Tareas() {
                             }
                             else if (isWeb || isDrive) openFile(f.path);
                             else if (isWord || isExcel || isPPT) openFile(f.path);
-                            else if (isAudio && f.path.startsWith('http')) openFile(f.path);
+                            else if (isAudio) openFile(f.path);
                             else if (f.path.startsWith('http')) setPreviewModalUrl(f.path);
+                            else if (isLocal) openFile(f.path);
                           };
 
                           const s = (d: string, c: string) => <svg viewBox="0 0 24 24" width={17} height={17} fill={c} style={{ flexShrink: 0, display: 'block' }}><path d={d} /></svg>;

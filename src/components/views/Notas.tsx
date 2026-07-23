@@ -1534,7 +1534,7 @@ export default function Notas() {
 
   const handleCreateNote = useCallback(() => {
     const id = addNote({
-      title: "Nuevo cuaderno", content: "Comienza a escribir tus notas aquí...", subtitle: "",
+      title: "", content: "", subtitle: "",
       folderId: selectedFolderId || undefined,
       courseColor: currentFolder?.color || "#8B5CF6",
       isPinned: false, course: currentFolder?.name || "Sin curso", tags: [],
@@ -1542,6 +1542,7 @@ export default function Notas() {
     setSelectedNoteId(id);
     setDrawerTab("contenido");
     setIsEditing(true);
+    setTimeout(() => titleRef.current?.focus(), 100);
   }, [addNote, selectedFolderId, currentFolder]);
 
   // contentEditable caret jumping fix: populate DOM only ONCE when note changes
@@ -1709,10 +1710,16 @@ export default function Notas() {
     }
   }, []);
 
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const handleEditorInput = useCallback(() => {
     setSaveStatus("pending");
     if (editorRef.current && selectedNote) {
-      updateNote(selectedNote.id, { content: editorRef.current.innerHTML });
+      const html = editorRef.current.innerHTML;
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = setTimeout(() => {
+        updateNote(selectedNote.id, { content: html });
+      }, 600);
     }
   }, [selectedNote, updateNote]);
 
@@ -1784,7 +1791,7 @@ export default function Notas() {
     } else if (cmd === "calloutBlock") {
       const text = prompt("Ingresa el texto para el bloque destacado (Callout):", "Nota importante...");
       if (text) {
-        const html = `<div class="notes-callout" style="display:flex;gap:12px;padding:12px 16px;background:var(--bg-elevated);border-left:4px solid var(--accent);border-radius:8px;margin:12px 0;color:var(--text-secondary);align-items:center;"><span style="font-size:18px;">💡</span><div style="flex:1;font-size:14px;line-height:1.5;">${text}</div></div><br>`;
+        const html = `<div class="notes-callout" style="display:flex;gap:12px;padding:12px 16px;background:var(--bg-elevated);border-left:4px solid var(--accent);border-radius:8px;margin:12px 0;color:var(--text-secondary);align-items:center;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Z"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg><div style="flex:1;font-size:14px;line-height:1.5;">${text}</div></div><br>`;
         document.execCommand("insertHTML", false, html);
       }
     } else if (cmd === "insertHR") {
@@ -2279,9 +2286,9 @@ export default function Notas() {
             if (isImg) {
               html = `<img src="${dataUrl}" alt="${file.name}" style="max-width:100%;border-radius:8px;margin:8px 0;" class="editable-image" />`;
             } else if (isAudio) {
-              html = `<div class="notes-attachment" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--border-default);border-radius:10px;margin:8px 0;background:var(--bg-hover);"><span style="font-size:22px;">🎵</span><div style="flex:1;min-width:0"><div style="font-size:12;font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${file.name}</div><audio controls src="${dataUrl}" style="width:100%;height:36px;margin-top:4px;">${file.name}</audio></div><span style="font-size:10px;color:var(--text-tertiary);flex-shrink:0;">${(file.size / 1024).toFixed(0)} KB</span></div>`;
+              html = `<div class="notes-attachment" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--border-default);border-radius:10px;margin:8px 0;background:var(--bg-hover);"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${file.name}</div><audio controls src="${dataUrl}" style="width:100%;height:36px;margin-top:4px;">${file.name}</audio></div><span style="font-size:10px;color:var(--text-tertiary);flex-shrink:0;">${(file.size / 1024).toFixed(0)} KB</span></div>`;
             } else if (isVideo) {
-              html = `<div class="notes-attachment" style="display:flex;flex-direction:column;gap:6px;padding:10px 14px;border:1px solid var(--border-default);border-radius:10px;margin:8px 0;background:var(--bg-hover);"><div style="display:flex;align-items:center;gap:8px;"><span style="font-size:18px;">🎬</span><span style="font-size:12;font-weight:600;color:var(--text-primary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${file.name}</span><span style="font-size:10px;color:var(--text-tertiary);flex-shrink:0;">${(file.size / 1024).toFixed(0)} KB</span></div><video controls src="${dataUrl}" style="width:100%;max-height:400px;border-radius:6px;">${file.name}</video></div>`;
+              html = `<div class="notes-attachment" style="display:flex;flex-direction:column;gap:6px;padding:10px 14px;border:1px solid var(--border-default);border-radius:10px;margin:8px 0;background:var(--bg-hover);"><div style="display:flex;align-items:center;gap:8px;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg><span style="font-size:12px;font-weight:600;color:var(--text-primary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${file.name}</span><span style="font-size:10px;color:var(--text-tertiary);flex-shrink:0;">${(file.size / 1024).toFixed(0)} KB</span></div><video controls src="${dataUrl}" style="width:100%;max-height:400px;border-radius:6px;">${file.name}</video></div>`;
             }
             document.execCommand("insertHTML", false, html);
             setSaveStatus("pending");
@@ -2292,7 +2299,7 @@ export default function Notas() {
         }
       }
     }
-    // Rich text paste: preserve formatting, adapt to theme
+    // Rich text paste: preserve structure, strip ALL external styling
     const htmlData = e.clipboardData.getData("text/html");
     if (htmlData) {
       e.preventDefault();
@@ -2305,18 +2312,56 @@ export default function Notas() {
         style.removeProperty("background");
         style.removeProperty("color");
         style.removeProperty("font-family");
+        style.removeProperty("font-size");
+        style.removeProperty("font-weight");
+        style.removeProperty("font-style");
+        style.removeProperty("line-height");
+        style.removeProperty("letter-spacing");
+        style.removeProperty("text-align");
+        style.removeProperty("text-decoration");
+        style.removeProperty("text-transform");
+        style.removeProperty("text-indent");
         style.removeProperty("margin");
         style.removeProperty("padding");
+        style.removeProperty("border");
+        style.removeProperty("border-color");
+        style.removeProperty("border-style");
+        style.removeProperty("border-width");
+        style.removeProperty("box-shadow");
+        style.removeProperty("width");
+        style.removeProperty("height");
+        style.removeProperty("max-width");
+        style.removeProperty("max-height");
+        style.removeProperty("min-width");
+        style.removeProperty("min-height");
+        style.removeProperty("position");
+        style.removeProperty("top");
+        style.removeProperty("left");
+        style.removeProperty("right");
+        style.removeProperty("bottom");
+        style.removeProperty("float");
+        style.removeProperty("clear");
+        style.removeProperty("display");
+        style.removeProperty("vertical-align");
+        style.removeProperty("white-space");
+        style.removeProperty("word-spacing");
+        style.removeProperty("opacity");
         el.removeAttribute("bgcolor");
         el.removeAttribute("face");
         el.removeAttribute("class");
+        el.removeAttribute("style");
       }
       const cleaned = temp.innerHTML
         .replace(/<meta[^>]*>/gi, "")
         .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
         .replace(/<!--[\s\S]*?-->/g, "")
         .replace(/<o:p[^>]*>[\s\S]*?<\/o:p>/gi, "")
-        .replace(/<span[^>]*>/gi, "<span>");
+        .replace(/<xml[^>]*>[\s\S]*?<\/xml>/gi, "")
+        .replace(/<head[^>]*>[\s\S]*?<\/head>/gi, "")
+        .replace(/<title[^>]*>[\s\S]*?<\/title>/gi, "")
+        .replace(/<span[^>]*>/gi, "<span>")
+        .replace(/<div([^>]*)>/gi, "<p$1>")
+        .replace(/<\/div>/gi, "</p>");
       document.execCommand("insertHTML", false, cleaned);
       setSaveStatus("pending");
     } else {
@@ -2482,7 +2527,8 @@ export default function Notas() {
     const id = setInterval(() => { handleSaveNote(); }, 20000);
     return () => {
       clearInterval(id);
-      handleSaveNote(); // Persistir cambios pendientes al desmontar o cambiar de nota
+      if (saveTimeoutRef.current) { clearTimeout(saveTimeoutRef.current); saveTimeoutRef.current = null; }
+      handleSaveNote();
     };
   }, [selectedNote, isEditing, handleSaveNote]);
 
@@ -2712,14 +2758,14 @@ export default function Notas() {
                     defaultValue={selectedNote?.title || ""}
                     placeholder="Título del cuaderno"
                     style={{
-                      fontSize: 28, fontWeight: 700, color: "var(--text-primary)",
-                      fontFamily: "'Outfit', system-ui, sans-serif",
+                      fontSize: 32, fontWeight: 200, color: "var(--text-primary)",
+                      fontFamily: "'Inter Tight', system-ui, sans-serif",
                       background: "transparent", border: "none", outline: "none",
-                      width: "100%", padding: "0 0 12px", marginBottom: 20,
+                      width: "100%", padding: "0 0 14px", marginBottom: 24,
                       borderBottom: "1px solid var(--border-subtle)",
                       caretColor: "var(--accent)", boxSizing: "border-box",
-                      letterSpacing: "-0.02em",
-                      margin: "0 0 20px",
+                      letterSpacing: "-0.03em",
+                      margin: "0 0 24px",
                     }}
                     onBlur={handleSaveNote}
                   />
@@ -2732,9 +2778,9 @@ export default function Notas() {
                     className="notes-editor-area"
                     style={{
                       flex: 1, outline: "none", minHeight: "100%",
-                      fontSize: 16, lineHeight: 1.75,
+                      fontSize: 15, lineHeight: 1.8,
                       color: "var(--text-primary)",
-                      fontFamily: "'Atkinson Hyperlegible', system-ui, serif",
+                      fontFamily: "'Inter', system-ui, sans-serif",
                       caretColor: "var(--accent)",
                       width: "100%", boxSizing: "border-box",
                       margin: "0",
@@ -3722,7 +3768,7 @@ export default function Notas() {
                         {drawerTab === "contenido" && (
                           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                             <h2 style={{
-                              fontFamily: "'Inter Tight', sans-serif", fontSize: 26, fontWeight: 250,
+                              fontFamily: "'Inter Tight', sans-serif", fontSize: 30, fontWeight: 200,
                               color: "var(--text-primary)", margin: 0, letterSpacing: "-0.03em",
                               lineHeight: 1.15,
                             }}>
@@ -3744,8 +3790,8 @@ export default function Notas() {
                               <div
                                 dangerouslySetInnerHTML={{ __html: formatMathContent(selectedNote.content) }}
                                 style={{
-                                  fontSize: 13.5, lineHeight: 1.75, color: "var(--text-primary)",
-                                  fontFamily: "var(--font-primary)",
+                                  fontSize: 14, lineHeight: 1.8, color: "var(--text-primary)",
+                                  fontFamily: "'Inter', system-ui, sans-serif",
                                   padding: "4px 0",
                                 }}
                                 className="notes-preview-area"
@@ -4281,7 +4327,7 @@ export default function Notas() {
                   <span style={{
                     fontSize: 9.5, color: "var(--text-tertiary)", background: "var(--bg-hover)",
                     padding: "1px 6px", borderRadius: 4, fontWeight: 650,
-                  }}>{notes.filter(n => n.folderId === f.id).length}</span>
+                  }}>{notes.filter(n => n.folderId === f.id && !n.deletedAt).length}</span>
                 </button>
               ))}
             </div>
@@ -4705,7 +4751,7 @@ const trashCount = notes.filter(n => n.deletedAt).length;
             <SortableContext items={folders.map(f => f.id)} strategy={verticalListSortingStrategy}>
               <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
                 {folders.filter(f => !deletedFolderIds.has(f.id)).map((f) => {
-                  const count = notes.filter((n) => n.folderId === f.id).length;
+                  const count = notes.filter((n) => n.folderId === f.id && !n.deletedAt).length;
                   const isSel = selectedFolderId === f.id;
                   const isDragging = activeFolderDragId === f.id;
                   return (
