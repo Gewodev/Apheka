@@ -7,7 +7,7 @@ import {
   Sliders, ListTodo, Music, GraduationCap, FileText, Sheet,
   PlayCircle, Calendar, Database, Upload, ArrowDownToLine, Search,
   Wifi, CheckCircle, Image, Coffee, X, Trash2,
-  Monitor, Activity, Sparkles, LogOut
+  Monitor, Activity, Sparkles, LogOut, Eye, EyeOff, CalendarDays, Clock
 } from 'lucide-react';
 import { useApp, fmtClock } from '../../store/AppContext';
 import { del } from 'idb-keyval';
@@ -125,6 +125,11 @@ export default function Ajustes() {
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<SettingsTab>('perfil');
+
+  type HideMode = 'off' | 'now' | '10m' | '1h' | '6h' | '24h' | '48h';
+  const [hideMode, setHideMode] = useState<HideMode>(() => {
+    try { return (localStorage.getItem('owa_hide_completed') as HideMode) || 'off'; } catch { return 'off'; }
+  });
 
 
   const [downloadPath, setDownloadPathState] = useState('');
@@ -530,6 +535,52 @@ export default function Ajustes() {
                       </div>
                     )}
                   </div>
+                </div>
+
+                {/* Ocultar tareas completadas */}
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                    <EyeOff size={16} style={{ color: 'var(--accent)' }} />
+                    <h3 style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em', margin: 0 }}>Ocultar tareas completadas</h3>
+                  </div>
+                  <p style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 16, lineHeight: 1.5 }}>Controla cuándo se ocultan las tareas completadas en la vista de Tareas</p>
+                  {([
+                    { mode: 'off' as const, label: 'Siempre visible', desc: 'Las tareas completadas nunca se ocultan', icon: <Eye size={13} /> },
+                    { mode: 'now' as const, label: 'Al instante', desc: 'Se ocultan apenas las completas', icon: <Zap size={13} /> },
+                    { mode: '10m' as const, label: '10 minutos', desc: 'Tiempo para revisarlas', icon: <Clock size={13} /> },
+                    { mode: '1h' as const, label: '1 hora', desc: 'Las ves por un rato', icon: <Timer size={13} /> },
+                    { mode: '6h' as const, label: '6 horas', desc: 'Ocultar al pasar el turno', icon: <Coffee size={13} /> },
+                    { mode: '24h' as const, label: '24 horas', desc: 'Ocultar al día siguiente', icon: <Calendar size={13} /> },
+                    { mode: '48h' as const, label: '2 días', desc: 'Dos días para revisar', icon: <CalendarDays size={13} /> },
+                  ]).map((opt, i) => {
+                    const isActive = hideMode === opt.mode;
+                    return (
+                      <React.Fragment key={opt.mode}>
+                        {i === 1 && <div style={{ height: 1, background: 'var(--border-soft)', margin: '6px 0' }} />}
+                        <button onClick={() => {
+                          setHideMode(opt.mode);
+                          localStorage.setItem('owa_hide_completed', opt.mode);
+                        }}
+                          style={{
+                            width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 8,
+                            border: '1px solid', cursor: 'pointer', textAlign: 'left', transition: 'all 150ms', marginBottom: 4,
+                            background: isActive ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : 'transparent',
+                            borderColor: isActive ? 'color-mix(in srgb, var(--accent) 25%, transparent)' : 'transparent',
+                          }}
+                          onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                          onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}>
+                          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, flexShrink: 0, color: isActive ? 'var(--accent)' : 'var(--text-tertiary)' }}>{opt.icon}</span>
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div style={{ fontSize: 12, fontWeight: isActive ? 600 : 400, color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)', lineHeight: 1.3 }}>{opt.label}</div>
+                            <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 1 }}>{opt.desc}</div>
+                          </div>
+                          <div style={{ width: 14, height: 14, borderRadius: '50%', border: isActive ? '2px solid var(--accent)' : '2px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 150ms' }}>
+                            {isActive && <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)' }} />}
+                          </div>
+                        </button>
+                      </React.Fragment>
+                    );
+                  })}
                 </div>
 
                 {/* Danger Zone — Logout + Data Management */}

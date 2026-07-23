@@ -229,17 +229,15 @@ export default function Tareas() {
     try { return (localStorage.getItem('owa_hide_completed') as HideMode) || 'off'; } catch { return 'off'; }
   });
   useEffect(() => { try { localStorage.setItem('owa_hide_completed', hideMode); } catch {} }, [hideMode]);
-  const [showHideMenu, setShowHideMenu] = useState(false);
-  const hideMenuRef = useRef<HTMLDivElement>(null);
-  const eyeLongPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Close dropdown on outside click
-  useEffect(() => {
-    if (!showHideMenu) return;
-    const handler = (e: MouseEvent) => { if (hideMenuRef.current && !hideMenuRef.current.contains(e.target as Node)) setShowHideMenu(false); };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [showHideMenu]);
+  const toggleHideMode = useCallback(() => {
+    if (hideMode === 'off') {
+      setHideMode(lastActiveMode.current);
+    } else {
+      lastActiveMode.current = hideMode;
+      setHideMode('off');
+    }
+  }, [hideMode]);
 
   // Auto-refresh list when in time-based hide modes (every 30s)
   const [hideTick, setHideTick] = useState(0);
@@ -615,27 +613,10 @@ export default function Tareas() {
             {searchQuery && <button onClick={() => setSearchQuery('')} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', padding: 2 }}><X size={10} /></button>}
           </div>
 
-          {/* Eye toggle — short click toggles on/off, long press (only when active) opens mode menu */}
-          <div ref={hideMenuRef} style={{ position: 'relative' }}>
+          {/* Eye toggle — click toggles hide/show completed tasks */}
             <button
-              onClick={() => {
-                if (eyeLongPressTimer.current) { clearTimeout(eyeLongPressTimer.current); eyeLongPressTimer.current = null; return; }
-                if (hideMode === 'off') {
-                  setHideMode(lastActiveMode.current);
-                } else {
-                  lastActiveMode.current = hideMode;
-                  setHideMode('off');
-                }
-              }}
-              onMouseDown={() => {
-                if (hideMode === 'off') return;
-                eyeLongPressTimer.current = setTimeout(() => {
-                  eyeLongPressTimer.current = null;
-                  setShowHideMenu(true);
-                }, 500);
-              }}
-              onMouseUp={() => { if (eyeLongPressTimer.current) { clearTimeout(eyeLongPressTimer.current); eyeLongPressTimer.current = null; } }}
-              title={hideMode === 'off' ? 'Activar ocultar completadas' : 'Desactivar / configurar'}
+              onClick={toggleHideMode}
+              title={hideMode === 'off' ? 'Ocultar completadas' : 'Mostrar completadas'}
               style={{
                 width: 32, height: 32, borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
                 border: '1px solid', transition: 'all 200ms',
@@ -644,53 +625,10 @@ export default function Tareas() {
                 color: hideMode !== 'off' ? 'var(--accent)' : 'var(--text-tertiary)',
                 opacity: hideMode === 'off' ? 0.5 : 1,
               }}
-              onMouseEnter={e => { if (hideMode === 'off') { e.currentTarget.style.opacity = '0.8'; e.currentTarget.style.borderColor = 'var(--border-strong)'; } }}
-              onMouseLeave={e => { if (eyeLongPressTimer.current) { clearTimeout(eyeLongPressTimer.current); eyeLongPressTimer.current = null; } if (hideMode === 'off') { e.currentTarget.style.opacity = '0.5'; e.currentTarget.style.borderColor = 'var(--border-soft)'; } }}>
+              onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.borderColor = hideMode !== 'off' ? 'color-mix(in srgb, var(--accent) 50%, transparent)' : 'var(--border-strong)'; }}
+              onMouseLeave={e => { e.currentTarget.style.opacity = hideMode === 'off' ? '0.5' : '1'; e.currentTarget.style.borderColor = hideMode !== 'off' ? 'color-mix(in srgb, var(--accent) 30%, transparent)' : 'var(--border-soft)'; }}>
               {hideMode !== 'off' ? <EyeOff size={14} /> : <Eye size={14} />}
             </button>
-
-            {showHideMenu && hideMode !== 'off' && (
-              <div style={{
-                position: 'absolute', top: '100%', right: 0, marginTop: 6, zIndex: 100,
-                background: 'var(--bg-surface)', border: '1px solid var(--border-default)',
-                borderRadius: 12, padding: 8, width: 250,
-                boxShadow: '0 16px 48px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.03) inset',
-              }}>
-                <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', padding: '2px 8px 8px', borderBottom: '1px solid var(--border-soft)', marginBottom: 6 }}>
-                  Ocultar completadas
-                </div>
-                {([
-                  { mode: 'now' as HideMode, label: 'Al instante', desc: 'Se ocultan al completar', icon: '⚡' },
-                  { mode: '10m' as HideMode, label: '10 minutos', desc: 'Puedes revisarlas un rato', icon: '🕐' },
-                  { mode: '1h' as HideMode, label: '1 hora', desc: 'Las ves por un tiempo', icon: '⏱' },
-                  { mode: '6h' as HideMode, label: '6 horas', desc: 'Ocultar al pasar el turno', icon: '🌅' },
-                  { mode: '24h' as HideMode, label: '24 horas', desc: 'Ocultar al día siguiente', icon: '📅' },
-                  { mode: '48h' as HideMode, label: '2 días', desc: 'Dos días para revisar', icon: '📆' },
-                ]).map((opt, i) => (
-                  <React.Fragment key={opt.mode}>
-                    {i === 1 && <div style={{ height: 1, background: 'var(--border-soft)', margin: '4px 8px' }} />}
-                    <button onClick={() => { lastActiveMode.current = opt.mode; setHideMode(opt.mode); setShowHideMenu(false); }}
-                      style={{
-                        width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '7px 8px', borderRadius: 8,
-                        border: 'none', cursor: 'pointer', textAlign: 'left', transition: 'all 150ms',
-                        background: hideMode === opt.mode ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : 'transparent',
-                      }}
-                      onMouseEnter={e => { if (hideMode !== opt.mode) e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                      onMouseLeave={e => { if (hideMode !== opt.mode) e.currentTarget.style.background = 'transparent'; }}>
-                      <span style={{ fontSize: 13, width: 20, textAlign: 'center', flexShrink: 0, opacity: hideMode === opt.mode ? 1 : 0.5 }}>{opt.icon}</span>
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ fontSize: 12, fontWeight: hideMode === opt.mode ? 600 : 400, color: hideMode === opt.mode ? 'var(--text-primary)' : 'var(--text-secondary)', lineHeight: 1.3 }}>{opt.label}</div>
-                        <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 0 }}>{opt.desc}</div>
-                      </div>
-                      <div style={{ width: 14, height: 14, borderRadius: '50%', border: hideMode === opt.mode ? '2px solid var(--accent)' : '2px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 150ms' }}>
-                        {hideMode === opt.mode && <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)' }} />}
-                      </div>
-                    </button>
-                  </React.Fragment>
-                ))}
-              </div>
-            )}
-          </div>
 
           <button onClick={() => setShowNewModal(true)} style={{ display: 'flex', alignItems: 'center', gap: 5, height: 32, padding: '0 14px', borderRadius: 6, fontSize: 11, fontWeight: 500, cursor: 'pointer', border: 'none', background: 'var(--accent)', color: '#fff', transition: 'all 200ms' }}>
             <Plus size={14} /> Agregar tarea
