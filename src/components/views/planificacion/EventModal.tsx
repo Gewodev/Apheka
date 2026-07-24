@@ -2,17 +2,19 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { X, Calendar, Clock, Plus, Trash2, Repeat, Check, FileText, Link as LinkIcon, ExternalLink, Music, Video, Image, FileSpreadsheet, File, Globe } from 'lucide-react';
 import { format } from 'date-fns';
 
+const s = (d: string, c: string) => <svg viewBox="0 0 24 24" width={17} height={17} fill={c} style={{ flexShrink: 0, display: 'block' }}><path d={d} /></svg>;
+
 function getEventFileIcon(type: string, size = 14) {
   switch (type) {
-    case 'pdf': return <FileText size={size} style={{ color: '#ef4444' }} />;
-    case 'video': return <Video size={size} style={{ color: '#8b5cf6' }} />;
-    case 'image': return <Image size={size} style={{ color: '#3b82f6' }} />;
-    case 'audio': return <Music size={size} style={{ color: '#10b981' }} />;
-    case 'link': return <LinkIcon size={size} style={{ color: '#3b82f6' }} />;
-    case 'drive': return <ExternalLink size={size} style={{ color: '#f59e0b' }} />;
-    case 'doc':
-    case 'xls':
-    case 'ppt': return <FileText size={size} style={{ color: '#6366f1' }} />;
+    case 'pdf': return s('M23.63 15.3c-.71-.745-2.166-1.17-4.224-1.17-1.1 0-2.377.106-3.761.354a19.443 19.443 0 0 1-2.307-2.661c-.532-.71-.994-1.49-1.42-2.236.817-2.484 1.207-4.507 1.207-5.962 0-1.632-.603-3.336-2.342-3.336-.532 0-1.065.32-1.349.781-.78 1.384-.425 4.4.923 7.381a60.277 60.277 0 0 1-1.703 4.507c-.568 1.349-1.207 2.733-1.917 4.01C2.834 18.53.314 20.34.03 21.758c-.106.533.071 1.03.462 1.42.142.107.639.533 1.49.533 2.59 0 5.323-4.188 6.707-6.707 1.065-.355 2.13-.71 3.194-.994a34.963 34.963 0 0 1 3.407-.745c2.732 2.448 5.145 2.839 6.352 2.839 1.49 0 2.023-.604 2.2-1.1.32-.64.106-1.349-.213-1.704zm-1.42 1.03c-.107.532-.64.887-1.384.887-.213 0-.39-.036-.604-.071-1.348-.32-2.626-.994-3.903-2.059a17.717 17.717 0 0 1 2.98-.248c.746 0 1.385.035 1.81.142.497.106 1.278.426 1.1 1.348zm-7.524-1.668a38.01 38.01 0 0 0-2.945.674 39.68 39.68 0 0 0-2.52.745 40.05 40.05 0 0 0 1.207-2.555c.426-.994.78-2.023 1.136-2.981.354.603.745 1.207 1.135 1.739a50.127 50.127 0 0 0 1.987 2.378zM10.038 1.46a.768.768 0 0 1 .674-.425c.745 0 .887.851.887 1.526 0 1.135-.355 2.874-.958 4.861-1.03-2.768-1.1-5.074-.603-5.962zM6.134 17.997c-1.81 2.981-3.549 4.826-4.613 4.826a.872.872 0 0 1-.532-.177c-.213-.213-.32-.461-.249-.745.213-1.065 2.271-2.555 5.394-3.904Z', '#EF4444');
+    case 'video': return s('M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z', '#8B5CF6');
+    case 'image': return <Image size={size} style={{ color: '#F59E0B' }} />;
+    case 'audio': return <Music size={size} style={{ color: '#8B5CF6' }} />;
+    case 'link': return <Globe size={size} style={{ color: '#10B981' }} />;
+    case 'drive': return <svg viewBox="0 0 24 24" width={size} height={size} style={{ flexShrink: 0, display: 'block' }}><path fill="#4285F4" d="M12 1.5l9 15.6H3L12 1.5z"/><path fill="#34A853" d="M12 22.5L3 17.1h18L12 22.5z"/><path fill="#FBBC05" d="M3 17.1l3-5.2 3 5.2H3z"/><path fill="#EA4335" d="M18 17.1l-3-5.2-3 5.2h6z"/></svg>;
+    case 'doc': return s('M23.004 1.5q.41 0 .703.293t.293.703v19.008q0 .41-.293.703t-.703.293H6.996q-.41 0-.703-.293T6 21.504V18H.996q-.41 0-.703-.293T0 17.004V6.996q0-.41.293-.703T.996 6H6V2.496q0-.41.293-.703t.703-.293zM6.035 11.203l1.442 4.735h1.64l1.57-7.876H9.036l-.937 4.653-1.325-4.5H5.38l-1.406 4.523-.938-4.675H1.312l1.57 7.874h1.641zM22.5 21v-3h-15v3zm0-4.5v-3.75H12v3.75zm0-5.25V7.5H12v3.75zm0-5.25V3h-15v3Z', '#2563EB');
+    case 'xls': return s('M23 1.5q.41 0 .7.3.3.29.3.7v19q0 .41-.3.7-.29.3-.7.3H7q-.41 0-.7-.3-.3-.29-.3-.7V18H1q-.41 0-.7-.3-.3-.29-.3-.7V7q0-.41.3-.7Q.58 6 1 6h5V2.5q0-.41.3-.7.29-.3.7-.3zM6 13.28l1.42 2.66h2.14l-2.38-3.87 2.34-3.8H7.46l-1.3 2.4-.05.08-.04.09-.64-1.28-.66-1.29H2.59l2.27 3.82-2.48 3.85h2.16zM14.25 21v-3H7.5v3zm0-4.5v-3.75H12v3.75zm0-5.25V7.5H12v3.75zm0-5.25V3H7.5v3zm8.25 15v-3h-6.75v3zm0-4.5v-3.75h-6.75v3.75zm0-5.25V7.5h-6.75v3.75zm0-5.25V3h-6.75v3Z', '#10B981');
+    case 'ppt': return s('M13.5 1.5q1.453 0 2.795.375 1.342.375 2.508 1.06 1.166.686 2.12 1.641.956.955 1.641 2.121.686 1.166 1.061 2.508Q24 10.547 24 12q0 1.453-.375 2.795-.375 1.342-1.06 2.508-.686 1.166-1.641 2.12-.955.956-2.121 1.641-1.166.686-2.508 1.061-1.342.375-2.795.375-1.29 0-2.52-.305-1.23-.304-2.337-.884-1.108-.58-2.063-1.418-.955-.838-1.693-1.893H.997q-.411 0-.704-.293T0 17.004V6.996q0-.41.293-.703T.996 6h3.89q.739-1.055 1.694-1.893.955-.837 2.063-1.418 1.107-.58 2.337-.884Q12.21 1.5 13.5 1.5zm.75 1.535v8.215h8.215q-.14-1.64-.826-3.076-.686-1.436-1.782-2.531-1.095-1.096-2.537-1.782-1.441-.685-3.07-.826zm-5.262 7.57q0-.68-.228-1.166-.229-.486-.627-.79-.399-.305-.938-.446-.539-.14-1.172-.14H2.848v7.863h1.84v-2.742H5.93q.574 0 1.119-.17t.978-.493q.434-.322.698-.802.263-.48.263-1.114zM13.5 21q1.172 0 2.262-.287t2.056-.82q.967-.534 1.776-1.278.808-.744 1.418-1.664.61-.92.984-1.986.375-1.067.469-2.227h-9.703V3.035q-1.735.14-3.27.908T6.797 6h4.207q.41 0 .703.293t.293.703v10.008q0 .41-.293.703t-.703.293H6.797q.644.715 1.412 1.271.768.557 1.623.944.855.387 1.781.586Q12.54 21 13.5 21zM5.812 9.598q.575 0 .915.228.34.229.34.838 0 .27-.124.44-.123.17-.31.275-.188.105-.422.146-.234.041-.445.041H4.687V9.598Z', '#F97316');
     default: return <File size={size} style={{ color: 'var(--text-muted)' }} />;
   }
 }
@@ -423,18 +425,31 @@ export default function EventModal({
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {attachments.map((item, i) => {
                       const fileType = detectEventFileType(item.name, item.url);
-                      const isVideo = fileType === 'video' && (item.url.includes('youtube.com') || item.url.includes('youtu.be'));
+                      const isYouTube = fileType === 'video' && (item.url.includes('youtube.com') || item.url.includes('youtu.be'));
                       const isImage = fileType === 'image';
                       const isAudio = fileType === 'audio';
                       const isDrive = fileType === 'drive';
+                      const isWeb = fileType === 'link' && !isYouTube && !isDrive;
+                      const isPdf = fileType === 'pdf';
+                      const isDoc = fileType === 'doc';
+                      const isXls = fileType === 'xls';
+                      const isPpt = fileType === 'ppt';
+                      const isVideoFile = fileType === 'video' && !isYouTube;
+                      let domain = '';
+                      if (isWeb) { try { domain = new URL(item.url).hostname.replace('www.', ''); } catch {} }
+                      const subtitleText = isYouTube ? 'YouTube' : isDrive ? 'Google Drive' : isWeb ? domain : isPdf ? 'PDF' : isDoc ? 'Word' : isXls ? 'Excel' : isPpt ? 'PowerPoint' : isAudio ? 'Audio' : isImage ? 'Imagen' : isVideoFile ? 'Video' : item.size || 'Archivo';
                       return (
                       <div key={i} style={{ background: 'var(--surface)', border: '1px solid var(--border-soft)', borderRadius: 8, overflow: 'hidden' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px' }}>
-                          {getEventFileIcon(fileType, 14)}
-                          <a href={item.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: 'var(--text-primary)', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textDecoration: 'none', fontWeight: 500 }}>
-                            {item.name}
-                          </a>
-                          {item.size && <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: "'JetBrains Mono',monospace", flexShrink: 0 }}>{item.size}</span>}
+                          {isWeb ? (
+                            <img src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`} alt="" style={{ width: 15, height: 15, borderRadius: 2, flexShrink: 0 }}
+                              onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                          ) : getEventFileIcon(fileType, 14)}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</span>
+                            <span style={{ fontSize: 8.5, color: 'var(--text-muted)', fontWeight: 500, display: 'block', marginTop: 1 }}>{subtitleText}</span>
+                          </div>
+                          {item.size && <span style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: "'JetBrains Mono',monospace", flexShrink: 0 }}>{item.size}</span>}
                           <button onClick={() => setAttachments(prev => prev.filter((_, idx) => idx !== i))} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 2, display: 'flex', flexShrink: 0 }}><X size={10} /></button>
                         </div>
                         {isImage && (
@@ -442,7 +457,7 @@ export default function EventModal({
                             <img src={item.url} alt={item.name} style={{ maxWidth: '100%', maxHeight: 120, borderRadius: 6, objectFit: 'contain', background: 'var(--bg-primary)' }} />
                           </div>
                         )}
-                        {isVideo && (
+                        {isYouTube && (
                           <div style={{ padding: '0 12px 8px' }}>
                             <div style={{ padding: '6px 10px', borderRadius: 6, background: 'var(--bg-primary)', fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
                               <Video size={12} /> YouTube · {item.name}

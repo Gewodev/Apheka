@@ -17,6 +17,11 @@ import NotificationBell from '../ui/NotificationBell';
 import AnalyticsDrawer from '../ui/AnalyticsDrawer';
 import { DigitSVG, ColonSVG } from '../LEDDigits';
 
+/** Convert a UTC ISO timestamp to local YYYY-MM-DD (avoids UTC vs local date mismatch) */
+function toLocalDate(iso: string): string {
+  try { return format(new Date(iso), 'yyyy-MM-dd'); } catch { return iso.slice(0, 10); }
+}
+
 function getGoalForDay(dayStr: string, currentGoal: number, dailyGoalHistory?: Record<string, number>, initialDailyGoal?: number): number {
   const changeDates = Object.keys(dailyGoalHistory || {}).sort();
   for (let i = changeDates.length - 1; i >= 0; i--) {
@@ -31,7 +36,9 @@ function calculateStreak(w: Record<string, number>, dailyGoalMin: number, dailyG
 
   const metGoal = (dayStr: string): boolean => {
     const goalForDay = getGoalForDay(dayStr, dailyGoalMin, dailyGoalHistory, initialDailyGoal);
-    return (w[dayStr] || 0) >= goalForDay * 60;
+    if (goalForDay <= 0) return false;
+    const studied = w[dayStr];
+    return studied !== undefined && studied > 0 && studied >= goalForDay * 60;
   };
 
   const startDay = metGoal(todayStr) ? todayStr :
@@ -41,7 +48,8 @@ function calculateStreak(w: Record<string, number>, dailyGoalMin: number, dailyG
 
   let s = 1;
   let d = subDays(new Date(startDay), 1);
-  while (metGoal(format(d, 'yyyy-MM-dd'))) {
+  let maxLookback = 365;
+  while (maxLookback-- > 0 && metGoal(format(d, 'yyyy-MM-dd'))) {
     s++;
     d = subDays(d, 1);
   }
@@ -208,7 +216,7 @@ export default function Estudio() {
 
   // Sessiones de la ultima semana para el feed (reseteo semanal visual)
   const recentSessions = useMemo(() => 
-    studySessions.filter(s => s.startedAt.slice(0, 10) >= weekAgoStr),
+    studySessions.filter(s => toLocalDate(s.startedAt) >= weekAgoStr),
   [studySessions, weekAgoStr]);
 
   const streak = useMemo(() => calculateStreak(weeklyStudyTime, settings?.dailyGoal || 240, settings?.dailyGoalHistory, settings?.initialDailyGoal), [weeklyStudyTime, settings?.dailyGoal, settings?.dailyGoalHistory, settings?.initialDailyGoal]);
@@ -389,13 +397,13 @@ export default function Estudio() {
 
   const efficiencyPct = useMemo(() => {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
-    const todaysSessions = studySessions.filter(s => s.startedAt.startsWith(todayStr));
+    const todaysSessions = studySessions.filter(s => toLocalDate(s.startedAt) === todayStr);
     const clamp = (v: number, mn: number, mx: number) => Math.max(mn, Math.min(v, mx));
 
     const focusSecs = todaysSessions.reduce((acc, s) => acc + s.duration, 0);
     const pauseSecs = todaysSessions.reduce((acc, s) => acc + (s.pauseDuration || 0), 0);
     const distractions = todaysSessions.reduce((acc, s) => acc + (s.pauseCount || 0), 0);
-    const breakSecs = studySessions.filter(s => s.startedAt.startsWith(todayStr) && s.type === 'break')
+    const breakSecs = studySessions.filter(s => toLocalDate(s.startedAt) === todayStr && s.type === 'break')
       .reduce((acc, s) => acc + s.duration, 0);
 
     if (focusSecs <= 0 && todaysSessions.length === 0) return 0;
@@ -449,13 +457,22 @@ export default function Estudio() {
   // Daily trend: compare today vs yesterday
   const yesterdayStr = format(subDays(new Date(), 1), 'yyyy-MM-dd');
   const yesterdayStudySecs = weeklyStudyTime[yesterdayStr] || 0;
-  const yesterdaySessions = studySessions.filter(s => s.startedAt.startsWith(yesterdayStr)).length;
+  const yesterdaySessions = studySessions.filter(s => toLocalDate(s.startedAt) === yesterdayStr).length;
+  // Compute today's distraction count from persisted studySessions (not the transient distractionCount state which resets)
+  const todayDistractionCount = useMemo(() => {
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    return studySessions.filter(s => s.isDistraction && toLocalDate(s.startedAt) === todayStr).length;
+  }, [studySessions]);
+
   const yesterdayDistractions = 0; // not persisted daily, show neutral
   const yesterdayEfficiency = 75; // fallback
 
   const activityFeed: ActivityEntry[] = useMemo(() => {
     const entries: ActivityEntry[] = [];
-    const sortedSessions = [...recentSessions].sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()).slice(0, 10);
+    const sortedSessions = [...recentSessions]
+      .filter(s => !s.isDistraction)
+      .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())
+      .slice(0, 15);
     
     for (const s of sortedSessions) {
       const isPomo = s.type === 'pomodoro';
@@ -937,7 +954,7 @@ export default function Estudio() {
                 <div className="stat-card" style={{ background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', borderRadius: 16, padding: '20px', display: 'flex', flexDirection: 'column', gap: 8, position: 'relative', overflow: 'hidden' }}>
                   <AlertTriangle size={80} style={{ position: 'absolute', bottom: -20, right: -20, color: '#EF4444', opacity: 0.15 }} />
                   <span style={{ fontSize: 10, fontWeight: 300, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', zIndex: 1 }}>Distracciones</span>
-                  <span style={{ fontSize: 26, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", zIndex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{distractionCount}</span>
+                  <span style={{ fontSize: 26, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", zIndex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{todayDistractionCount}</span>
                 </div>
             </div>
           </div>
@@ -977,7 +994,7 @@ export default function Estudio() {
             <div className="no-scrollbar" style={{ flex: 1, overflowY: 'auto' }}>
               {activityFeed.length > 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  {activityFeed.slice(0, 4).map((entry, i) => {
+                  {activityFeed.slice(0, 5).map((entry, i) => {
                     const isPomo = entry.type === 'pomodoro';
                     const isChrono = entry.type === 'chrono';
                     const isBreakEntry = entry.type === 'break';
@@ -995,7 +1012,7 @@ export default function Estudio() {
                           display: 'flex', alignItems: 'center', gap: 8,
                           padding: '10px 6px', borderRadius: 8,
                           opacity: isDist ? 0.45 : 1,
-                          borderBottom: i < Math.min(activityFeed.length, 4) - 1 ? '1px solid var(--border-subtle)' : 'none',
+                          borderBottom: i < Math.min(activityFeed.length, 5) - 1 ? '1px solid var(--border-subtle)' : 'none',
                         }}>
                         <div style={{ width: 26, height: 26, borderRadius: 7, background: isDist ? 'rgba(245,158,11,0.08)' : `${c}12`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                           {isDist ? <Coffee size={12} color="#F59E0B" /> : <Icon size={12} color={c} />}
@@ -1004,7 +1021,7 @@ export default function Estudio() {
                           {mins > 0 ? `${mins}m` : `${secs}s`}
                         </span>
                         {isDist ? (
-                          <span style={{ fontSize: 9, fontWeight: 600, color: '#F59E0B', fontFamily: "'Inter Tight', sans-serif", flex: 1, textAlign: 'center', letterSpacing: '0.02em' }}>No considerado</span>
+                          <span style={{ fontSize: 9, fontWeight: 600, color: '#F59E0B', fontFamily: "'Inter Tight', sans-serif", flex: 1, textAlign: 'center', letterSpacing: '0.02em' }}>Distracción</span>
                         ) : (
                           <>
                             <div style={{ display: 'flex', gap: 2, flex: 1, minWidth: 0, alignItems: 'center' }}>
@@ -1084,13 +1101,11 @@ export default function Estudio() {
                     {/* Summary */}
                     <div style={{ padding: '14px 0 12px', fontSize: 10, color: 'var(--text-tertiary)', fontWeight: 500, borderBottom: '1px solid var(--border-soft)', marginBottom: 8, letterSpacing: '0.02em' }}>
                       {(() => {
-                        const validSecs = activityFeed.filter(e => !e.isDistraction).reduce((s, e) => s + e.duration, 0);
-                        const validCount = activityFeed.filter(e => !e.isDistraction).length;
-                        const distCount = activityFeed.filter(e => e.isDistraction).length;
+                        const validSecs = activityFeed.reduce((s, e) => s + e.duration, 0);
+                        const validCount = activityFeed.length;
                         return (
                           <>
                             Total: <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{(Math.floor(validSecs / 3600)) > 0 ? `${Math.floor(validSecs / 3600)}h ` : ''}{Math.floor((validSecs % 3600) / 60)}m</span> · {validCount} {validCount === 1 ? 'sesión' : 'sesiones'}
-                            {distCount > 0 && <span style={{ marginLeft: 6, color: '#F59E0B', fontWeight: 600 }}>· {distCount} distracción{distCount > 1 ? 'es' : ''}</span>}
                           </>
                         );
                       })()}
@@ -1133,7 +1148,7 @@ export default function Estudio() {
                               {mins > 0 ? `${mins}m` : `${secs}s`}
                             </span>
                             {isDist ? (
-                              <span style={{ fontSize: 9, fontWeight: 600, color: '#F59E0B', fontFamily: "'Inter Tight', sans-serif", flex: 1, textAlign: 'center', letterSpacing: '0.02em' }}>No considerado por reinicio</span>
+                              <span style={{ fontSize: 9, fontWeight: 600, color: '#F59E0B', fontFamily: "'Inter Tight', sans-serif", flex: 1, textAlign: 'center', letterSpacing: '0.02em' }}>Distracción</span>
                             ) : (
                               <>
                                 <div style={{ display: 'flex', gap: 2, flex: 1, minWidth: 0, alignItems: 'center' }}>
@@ -1349,7 +1364,7 @@ export default function Estudio() {
                 style={{ padding: '8px 20px', borderRadius: 8, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
                 {isBreakTime ? 'Seguir descansando' : 'Cancelar'}
               </button>
-              <button onClick={() => { setShowResetConfirm(false); if (sessionTime >= 60 && !isBreakTime) { setDistractionCount((distractionCount ?? 0) + 1); setAccumulatedPauseTime(prev => prev + 30); } handleReset({ isDistraction: true }); }}
+              <button onClick={() => { setShowResetConfirm(false); const wasWarned = sessionTime >= 60 && !isBreakTime; if (wasWarned) { setDistractionCount((distractionCount ?? 0) + 1); setAccumulatedPauseTime(prev => prev + 30); } handleReset({ isDistraction: wasWarned }); }}
                 style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: '#F59E0B', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
                 Reiniciar de todos modos
               </button>

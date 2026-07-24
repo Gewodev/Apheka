@@ -70,7 +70,9 @@ function calculateStreak(w: Record<string, number>, dailyGoalMin: number, dailyG
 
   const metGoal = (dayStr: string): boolean => {
     const goalForDay = getGoalForDay(dayStr, dailyGoalMin, dailyGoalHistory, initialDailyGoal);
-    return (w[dayStr] || 0) >= goalForDay * 60;
+    if (goalForDay <= 0) return false;
+    const studied = w[dayStr];
+    return studied !== undefined && studied > 0 && studied >= goalForDay * 60;
   };
 
   // If today not completed yet, check yesterday first
@@ -82,7 +84,8 @@ function calculateStreak(w: Record<string, number>, dailyGoalMin: number, dailyG
   // Walk backwards to find the start of the streak
   let s = 1;
   let d = subDays(new Date(startDay), 1);
-  while (metGoal(format(d, 'yyyy-MM-dd'))) {
+  let maxLookback = 365;
+  while (maxLookback-- > 0 && metGoal(format(d, 'yyyy-MM-dd'))) {
     s++;
     d = subDays(d, 1);
   }

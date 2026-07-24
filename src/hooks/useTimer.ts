@@ -110,8 +110,9 @@ export function useTimer() {
   }, [setIsTimerActive]);
 
   const handleReset = useCallback((opts?: { isDistraction?: boolean }) => {
-    // Persist the session if it was long enough (>= 10s)
-    if (sessionTime >= 10) {
+    // Only persist when warned distraction session (>= 60s && !isBreak)
+    // Unwarned short resets are discarded — they should not appear in activity feed
+    if (sessionTime >= 10 && opts?.isDistraction) {
       addStudySession({
         type: sessionType,
         startedAt: new Date(Date.now() - sessionTime * 1000).toISOString(),
@@ -121,10 +122,9 @@ export function useTimer() {
         courseId: undefined,
         pauseCount: distractionCount,
         pauseDuration: accumulatedPauseTime,
-        isDistraction: opts?.isDistraction,
+        isDistraction: true,
       });
     }
-    // Reset timer state
     resetTimer();
   }, [sessionTime, sessionType, activeTaskId, addStudySession, resetTimer, distractionCount, accumulatedPauseTime]);
 
