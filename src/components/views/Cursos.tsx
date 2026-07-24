@@ -337,17 +337,21 @@ function NoteCard({ note, courseColor, onSelect }: { note: any; courseColor: str
 // ─── Task Card ───
 function TaskRow({ task, onToggle, onDelete, courseColor }: { task: any; onToggle: () => void; onDelete: () => void; courseColor: string }) {
   const priorityColors: Record<string, string> = { high: '#EF4444', medium: '#F59E0B', low: '#10B981' };
+  const isDone = task.status === 'completado';
+  const isProg = task.status === 'progreso';
+  const statusColor = isDone ? '#10B981' : isProg ? '#3B82F6' : courseColor;
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', transition: 'all 150ms' }}>
       <div onClick={onToggle} style={{
-        width: 18, height: 18, borderRadius: 5, flexShrink: 0, cursor: 'pointer',
-        border: `2px solid ${task.status === 'completado' ? '#10B981' : task.status === 'progreso' ? '#3B82F6' : courseColor}`,
-        background: task.status === 'completado' ? '#10B981' : task.status === 'progreso' ? '#3B82F6' : 'transparent',
+        width: 20, height: 20, borderRadius: 6, flexShrink: 0, cursor: 'pointer',
+        border: `1.5px solid ${statusColor}${isDone ? '' : '40'}`,
+        background: isDone ? '#10B981' : isProg ? '#3B82F6' : `${courseColor}10`,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        transition: 'all 150ms',
+        transition: 'all 180ms cubic-bezier(0.16,1,0.3,1)',
       }}>
-        {task.status === 'completado' && <Check size={10} color="#fff" />}
-        {task.status === 'progreso' && <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#fff' }} />}
+        {isDone && <Check size={11} strokeWidth={2.5} color="#fff" />}
+        {isProg && <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff' }} />}
+        {!isDone && !isProg && <div style={{ width: 6, height: 6, borderRadius: '50%', background: courseColor, opacity: 0.45 }} />}
       </div>
       <span style={{ flex: 1, fontSize: 12, fontWeight: 500, color: task.status === 'completado' ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: task.status === 'completado' ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</span>
       {task.priority !== 'none' && (
@@ -645,6 +649,11 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   useEffect(() => {
     if (editingNoteId) setTimeout(() => editContentRef.current?.focus(), 60);
   }, [editingNoteId]);
+  // Study mode state
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  const [showMaterialsDropdown, setShowMaterialsDropdown] = useState(false);
+  const [studyToolMode, setStudyToolMode] = useState<'none' | 'flashcards' | 'quizzes' | 'notes' | 'mindmap' | 'review' | 'blurting' | 'feynman'>('none');
+
   const [overviewMode, setOverviewMode] = useState<'tareas_notas' | 'temas_archivos'>(() => {
     try { return (localStorage.getItem('owa_course_overview_mode') as 'tareas_notas' | 'temas_archivos') || 'tareas_notas'; } catch { return 'tareas_notas'; }
   });
@@ -1416,15 +1425,16 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                               onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}30`; }}
                               onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; }}>
                               <div onClick={() => handleToggleTask(task.id)}
-                                style={{ width: 24, height: 24, borderRadius: 7, flexShrink: 0, cursor: 'pointer',
-                                  border: `2px solid ${isDone ? '#10B981' : task.status === 'progreso' ? '#3B82F6' : course.color}`,
-                                  background: isDone ? '#10B981' : task.status === 'progreso' ? '#3B82F6' : 'transparent',
+                                style={{ width: 26, height: 26, borderRadius: 7, flexShrink: 0, cursor: 'pointer',
+                                  border: `1.5px solid ${isDone ? '#10B981' : task.status === 'progreso' ? '#3B82F6' : `${course.color}40`}`,
+                                  background: isDone ? '#10B981' : task.status === 'progreso' ? '#3B82F6' : `${course.color}08`,
                                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                                   transition: 'all 200ms ' + EASE,
-                                  boxShadow: isDone ? `0 0 0 3px #10B98120` : task.status === 'inicio' ? `0 0 0 0 ${course.color}00` : `0 0 0 3px #3B82F620` }}
-                                onMouseEnter={e => { if (!isDone && task.status === 'inicio') { e.currentTarget.style.background = course.color + '08'; e.currentTarget.style.transform = 'scale(1.08)'; } }}
-                                onMouseLeave={e => { if (!isDone && task.status === 'inicio') { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.transform = 'scale(1)'; } }}>
-                                {isDone ? <Check size={13} color="#fff" /> : task.status === 'progreso' && <div style={{ width: 8, height: 8, borderRadius: 2, background: '#fff', transform: 'rotate(45deg)' }} />}
+                                  boxShadow: isDone ? '0 0 0 3px #10B98118' : task.status === 'progreso' ? '0 0 0 3px #3B82F618' : 'none' }}
+                                onMouseEnter={e => { if (!isDone && task.status === 'inicio') { e.currentTarget.style.background = `${course.color}15`; e.currentTarget.style.borderColor = `${course.color}60`; e.currentTarget.style.transform = 'scale(1.08)'; } }}
+                                onMouseLeave={e => { if (!isDone && task.status === 'inicio') { e.currentTarget.style.background = `${course.color}08`; e.currentTarget.style.borderColor = `${course.color}40`; e.currentTarget.style.transform = 'scale(1)'; } }}>
+                                {isDone ? <Check size={14} strokeWidth={2.5} color="#fff" /> : task.status === 'progreso' && <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#fff' }} />}
+                                {!isDone && task.status === 'inicio' && <div style={{ width: 7, height: 7, borderRadius: '50%', background: course.color, opacity: 0.4 }} />}
                               </div>
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ fontSize: 14, fontWeight: 500, color: isDone ? 'var(--text-tertiary)' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: "'Inter', sans-serif", textDecoration: isDone ? 'line-through' : 'none' }}>{task.title}</div>
@@ -1442,10 +1452,10 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                 </span>
                               )}
                               <button onClick={(e) => { e.stopPropagation(); setFocusedTaskId(task.id); setNavigateTo('tareas'); }} title="Ir a Tareas"
-                                style={{ width: 22, height: 22, borderRadius: 4, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, opacity: 0, transition: 'all 150ms ' + EASE }}
-                                onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = course.color; }}
-                                onMouseLeave={e => { e.currentTarget.style.opacity = '0'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
-                                <ExternalLink size={11} />
+                                style={{ width: 26, height: 26, borderRadius: 6, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, opacity: 0, transition: 'all 150ms ' + EASE }}
+                                onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = `${course.color}10`; e.currentTarget.style.color = course.color; }}
+                                onMouseLeave={e => { e.currentTarget.style.opacity = '0'; e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
+                                <ArrowUpRight size={13} />
                               </button>
                             </div>
                           );
@@ -1604,181 +1614,480 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                 </div>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 1440, margin: '0 auto', padding: '16px 24px 60px' }}>
-                {/* Study action buttons row */}
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center', paddingBottom: 4 }}>
-                  <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Estudio</span>
-                  <div style={{ flex: 1 }} />
-                  <button onClick={() => { setEditingTopicId(null); setTopicName(''); setShowTopicModal(true); }}
-                    style={{ height: 26, padding: '0 10px', borderRadius: 5, border: 'none', background: `${course.color}14`, color: course.color, fontSize: 8.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, transition: 'all 150ms' }}
-                    onMouseEnter={e => e.currentTarget.style.background = `${course.color}25`}
-                    onMouseLeave={e => e.currentTarget.style.background = `${course.color}14`}>
-                    <PlusCircle size={9} /> Añadir Tema
-                  </button>
-                  <button onClick={() => { setEditingGroupId(null); setGroupName(''); setGroupCover(undefined); setSelectedTopicIds([]); setShowGroupModal(true); }}
-                    style={{ height: 26, padding: '0 10px', borderRadius: 5, border: 'none', background: `${course.color}14`, color: course.color, fontSize: 8.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, transition: 'all 150ms' }}
-                    onMouseEnter={e => e.currentTarget.style.background = `${course.color}25`}
-                    onMouseLeave={e => e.currentTarget.style.background = `${course.color}14`}>
-                    <Layers size={9} /> Añadir Agrupación
-                  </button>
-                </div>
-                <div style={{ display: 'flex', gap: 0 }}>
-                {/* LEFT: Stats + Agrupaciones + Temas */}
-                <div style={{ flex: 5, minWidth: 0, paddingRight: 24 }}>
-                  {/* Stats overview */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 16 }}>
-                    {[
-                      { label: 'Temas', value: parsedTopics.length, icon: Book, color: course.color },
-                      { label: 'Materiales', value: topicMasteryStats.totalMaterials, icon: File, color: '#8B5CF6' },
-                      { label: 'Dominados', value: topicMasteryStats.mastered, icon: Check, color: '#10B981' },
-                      { label: 'Tareas', value: courseTaskStats.total, icon: ListTodo, color: '#F59E0B' },
-                    ].map(s => {
-                      const Icon = s.icon;
-                      return (
-                        <div className="bento-card" key={s.label} style={{ padding: '12px 14px', borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <div style={{ width: 32, height: 32, borderRadius: 8, background: `${s.color}12`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                            <Icon size={14} style={{ color: s.color }} />
-                          </div>
-                          <div>
-                            <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1, letterSpacing: '-0.02em' }}>{s.value}</div>
-                            <div style={{ fontSize: 8, fontWeight: 500, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 2 }}>{s.label}</div>
-                          </div>
-                        </div>
-                      );
-                    })}
+              /* ═══ MODO ESTUDIO — New Study Mode Layout ═══ */
+              currentView === 'topic' && activeTopic ? (
+                /* ─── TOPIC DETAIL VIEW (inside estudio mode) ─── */
+                <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
+                  {/* Left: back to study overview */}
+                  <div style={{ width: 44, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 16, borderRight: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
+                    <button onClick={() => { setCurrentView('overview'); setStudyToolMode('none'); }} style={{ width: 32, height: 32, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', cursor: 'pointer', color: 'var(--text-secondary)', transition: 'all 150ms' }} title="Volver">
+                      <ChevronLeft size={14} />
+                    </button>
                   </div>
-                  {/* Groups */}
-                  {groups.length > 0 && (
-                    <div style={{ marginBottom: 20 }}>
-                      <h3 style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: course.color, marginBottom: 12 }}>Agrupaciones</h3>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
-                        {groups.map(group => {
-                          const members = parsedTopics.filter(t => t.groupId === group.id);
-                          const groupMastery = members.length > 0 ? Math.round((members.filter(t => t.reviewLevel >= 4).length / members.length) * 100) : 0;
+                  {/* Center: topic content */}
+                  <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px 60px' }}>
+                    {/* Breadcrumb */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 16 }}>
+                      <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{course.name}</span>
+                      {activeTopic.groupId && (() => { const grp = groups.find(g => g.id === activeTopic.groupId); return grp ? <><span style={{ color: 'var(--text-muted)', fontSize: 8 }}>/</span><span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>{grp.name}</span></> : null; })()}
+                      <span style={{ color: 'var(--text-muted)', fontSize: 8 }}>/</span>
+                      <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-primary)' }}>{activeTopic.title}</span>
+                    </div>
+                    {/* Topic header */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                      <div>
+                        <h2 style={{ fontSize: 22, fontWeight: 600, color: 'var(--text-primary)', margin: 0, fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em' }}>{activeTopic.title}</h2>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+                          <span style={{ fontSize: 8, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Comprension:</span>
+                          <div style={{ display: 'flex', gap: 3 }}>{[...Array(5)].map((_, i) => (
+                            <button key={i} onClick={() => setTopicReviewLevel(activeTopic.id, i + 1)} style={{ width: 28, height: 6, borderRadius: 3, border: 'none', cursor: 'pointer', background: i < activeTopic.reviewLevel ? course.color : 'var(--bg-hover)', transition: 'all 200ms' }} />
+                          ))}</div>
+                          <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>{activeTopic.reviewLevel}/5</span>
+                        </div>
+                      </div>
+                      <button onClick={() => { setEditingTopicId(activeTopic.id); setTopicName(activeTopic.title); setShowTopicModal(true); }} style={{ width: 30, height: 30, borderRadius: 6, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Edit3 size={12} /></button>
+                    </div>
+                    {/* Material filter */}
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 14, paddingBottom: 10, borderBottom: '1px solid var(--border-subtle)' }}>
+                      <button onClick={() => setFilterMaterialType('all')} style={{ height: 26, padding: '0 8px', borderRadius: 5, fontSize: 9, fontWeight: 600, border: filterMaterialType === 'all' ? 'none' : '1px solid var(--border-subtle)', background: filterMaterialType === 'all' ? course.color : 'transparent', color: filterMaterialType === 'all' ? '#fff' : 'var(--text-secondary)', cursor: 'pointer', transition: 'all 150ms' }}>Todos ({activeTopic.materials?.length || 0})</button>
+                      {(Object.keys(MATERIAL_META) as MaterialType[]).map(type => {
+                        const count = (activeTopic.materials || []).filter(m => m.type === type).length;
+                        if (count === 0) return null;
+                        const Icon = MATERIAL_META[type].icon;
+                        return <button key={type} onClick={() => setFilterMaterialType(type)} style={{ height: 26, padding: '0 8px', borderRadius: 5, fontSize: 9, fontWeight: 600, border: filterMaterialType === type ? 'none' : '1px solid var(--border-subtle)', background: filterMaterialType === type ? course.color : 'transparent', color: filterMaterialType === type ? '#fff' : 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3, transition: 'all 150ms' }}><Icon size={9} /> {MATERIAL_META[type].label} ({count})</button>;
+                      })}
+                    </div>
+                    {/* Quick add */}
+                    <div style={{ display: 'flex', gap: 4, marginBottom: 16, flexWrap: 'wrap' }}>
+                      {(Object.keys(MATERIAL_META) as MaterialType[]).filter(t => t !== 'resource').map(type => {
+                        const Icon = MATERIAL_META[type].icon;
+                        const accentColors: Record<string, string> = { formula: '#8B5CF6', concept: '#3B82F6', 'key-data': '#F59E0B', meaning: '#10B981', quiz: '#EF4444', procedure: '#EC4899' };
+                        const c = accentColors[type] || course.color;
+                        return <button key={type} onClick={() => handleAddMaterialClick(type, 0)} style={{ display: 'flex', alignItems: 'center', gap: 3, height: 24, padding: '0 8px', borderRadius: 5, fontSize: 9, fontWeight: 600, border: 'none', background: `${c}12`, color: c, cursor: 'pointer', transition: 'all 150ms' }}
+                          onMouseEnter={e => e.currentTarget.style.background = `${c}25`} onMouseLeave={e => e.currentTarget.style.background = `${c}12`}><Icon size={9} /> {MATERIAL_META[type].label}</button>;
+                      })}
+                      <button onClick={() => handleAddMaterialClick('resource', 0)} style={{ display: 'flex', alignItems: 'center', gap: 3, height: 24, padding: '0 8px', borderRadius: 5, fontSize: 9, fontWeight: 600, border: '1px dashed var(--border-subtle)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', transition: 'all 150ms' }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = course.color; e.currentTarget.style.color = course.color; }} onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-muted)'; }}><Upload size={9} /> Archivo</button>
+                    </div>
+                    {/* 3-col kanban */}
+                    <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, alignItems: 'start' }}>
+                        {[{ idx: 0, label: 'Teoria', desc: 'Conceptos, formulas' }, { idx: 1, label: 'Practica', desc: 'Cuestionarios, procedimientos' }, { idx: 2, label: 'Anexos', desc: 'Recursos, archivos' }].map(({ idx, label, desc }) => {
+                          const colItems = columns[idx] || [];
                           return (
-                            <div key={group.id} style={{ borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', transition: 'all 250ms ' + EASE }} className="hover-lift">
-                              <div style={{ height: 72, position: 'relative', overflow: 'hidden', background: `linear-gradient(135deg, ${course.color}40, ${course.color}10)` }}>
-                                {group.image && <img src={group.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
-                                <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', padding: '0 14px' }}>
-                                  <div style={{ flex: 1 }}><h4 style={{ fontSize: 14, fontWeight: 700, color: '#fff', margin: 0 }}>{group.name}</h4><span style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)' }}>{members.length} temas</span></div>
-                                  <button onClick={() => startEditGroup(group)} style={{ width: 26, height: 26, borderRadius: 5, border: 'none', background: 'rgba(255,255,255,0.2)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Edit3 size={10} /></button>
-                                </div>
+                            <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                              <div style={{ padding: '8px 10px', borderRadius: 8, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
+                                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-primary)' }}>{label}</div>
+                                <div style={{ fontSize: 8, color: 'var(--text-muted)', marginTop: 2 }}>{desc} · {colItems.length}</div>
                               </div>
-                              <div style={{ padding: '10px 14px' }}>
-                                <div style={{ display: 'flex', gap: 4, marginBottom: 6, flexWrap: 'wrap' }}>
-                                  {members.map(t => (
-                                    <span key={t.id} onClick={() => { setActiveTopicId(t.id); setCurrentView('topic'); }} style={{ fontSize: 10.5, color: 'var(--text-secondary)', cursor: 'pointer', padding: '2px 8px', borderRadius: 4, background: 'var(--bg-hover)' }}
-                                      onMouseEnter={e => e.currentTarget.style.color = 'var(--accent)'} onMouseLeave={e => e.currentTarget.style.color = 'var(--text-secondary)'}>{t.title}</span>
-                                  ))}
-                                </div>
-                                <div style={{ height: 3, borderRadius: 2, background: 'var(--bg-hover)', overflow: 'hidden' }}><div style={{ height: '100%', width: `${groupMastery}%`, borderRadius: 2, background: course.color, transition: 'width 500ms ' + EASE }} /></div>
-                              </div>
+                              <DroppableColumn id={`col-${idx}`} items={colItems}>
+                                {colItems.map(mat => (
+                                  <SortableWrapper key={mat.id} id={mat.id}>
+                                    {({ attributes, listeners }) => <MaterialCard mat={mat} dragAttributes={attributes} dragListeners={listeners} onEdit={startEditMaterial} onDelete={handleDeleteMaterial} onOpenResource={handleOpenResource} />}
+                                  </SortableWrapper>
+                                ))}
+                                {colItems.length === 0 && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 80, borderRadius: 6, border: '1px dashed var(--border-subtle)', opacity: 0.2, fontSize: 9, color: 'var(--text-muted)' }}>Arrastra aqui</div>}
+                              </DroppableColumn>
                             </div>
                           );
                         })}
                       </div>
+                    </DndContext>
+                    <input type="file" ref={resourceInputRef} style={{ display: 'none' }} onChange={handleFileUpload} />
+                  </div>
+                  {/* Right: Study Tools Sidebar */}
+                  <div style={{ width: 220, flexShrink: 0, borderLeft: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                    <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--border-subtle)' }}>
+                      <span style={{ fontSize: 8, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Herramientas</span>
                     </div>
-                  )}
-                  {/* Topics */}
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                      <h3 style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: course.color, margin: 0 }}>
-                        {groups.length > 0 ? 'Temas Independientes' : 'Todos los Temas'}
-                      </h3>
-                      <div style={{ position: 'relative', width: 180 }}>
-                        <Search size={11} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
-                        <input value={topicSearch} onChange={e => setTopicSearch(e.target.value)} placeholder="Buscar..." style={{ width: '100%', height: 30, padding: '0 8px 0 26px', borderRadius: 6, fontSize: 10.5, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box' }} />
-                      </div>
-                    </div>
-                    {(groups.length > 0 ? ungroupedTopics : parsedTopics).filter(t => !topicSearch || t.title.toLowerCase().includes(topicSearch.toLowerCase())).length > 0 ? (
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10 }}>
-                        {(groups.length > 0 ? ungroupedTopics : parsedTopics).filter(t => !topicSearch || t.title.toLowerCase().includes(topicSearch.toLowerCase())).map(topic => {
-                          const matCount = (topic.materials || []).length;
-                          return (
-                            <div key={topic.id} onClick={() => { setActiveTopicId(topic.id); setCurrentView('topic'); }}
-                              style={{ borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', padding: 14, cursor: 'pointer', transition: 'all 250ms ' + EASE, position: 'relative', overflow: 'hidden' }}
-                              className="hover-lift"
-                              onMouseEnter={e => e.currentTarget.style.borderColor = `${course.color}40`}
-                              onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border-subtle)'}>
-                              <div style={{ position: 'absolute', top: 0, left: 0, width: 3, height: '100%', background: course.color, borderRadius: '3px 0 0 3px' }} />
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-                                <h4 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', margin: 0, lineHeight: 1.3 }}>{topic.title}</h4>
-                                <div style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
-                                  <button onClick={(e) => { e.stopPropagation(); setEditingTopicId(topic.id); setTopicName(topic.title); setShowTopicModal(true); }} style={{ width: 22, height: 22, borderRadius: 4, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Edit3 size={9} /></button>
-                                  <button onClick={(e) => { e.stopPropagation(); handleDeleteTopic(topic.id); }} style={{ width: 22, height: 22, borderRadius: 4, border: 'none', background: 'transparent', cursor: 'pointer', color: 'rgba(239,68,68,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={9} /></button>
-                                </div>
-                              </div>
-                              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
-                                {(topic.materials || []).reduce((acc, m) => { acc[m.type] = (acc[m.type] || 0) + 1; return acc; }, {} as Record<string, number>) && Object.entries((topic.materials || []).reduce((acc, m) => { acc[m.type] = (acc[m.type] || 0) + 1; return acc; }, {} as Record<string, number>)).slice(0, 4).map(([type, count]) => {
-                                  const meta = MATERIAL_META[type as MaterialType];
-                                  if (!meta) return null;
-                                  const Icon = meta.icon;
-                                  return <span key={type} style={{ fontSize: 8, display: 'flex', alignItems: 'center', gap: 2, color: 'var(--text-tertiary)' }}><Icon size={8} /> {count}</span>;
-                                })}
-                              </div>
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>{matCount} material{matCount !== 1 ? 'es' : ''}</span>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                                  <span style={{ fontSize: 8, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Nivel:</span>
-                                  <div style={{ display: 'flex', gap: 2 }}>{[...Array(5)].map((_, i) => <div key={i} style={{ width: 6, height: 4, borderRadius: 1, background: i < topic.reviewLevel ? course.color : 'var(--bg-hover)', transition: 'all 200ms' }} />)}</div>
-                                </div>
-                              </div>
+                    <div style={{ flex: 1, overflowY: 'auto', padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {[
+                        { mode: 'flashcards' as const, icon: BookOpen, label: 'Flashcards', desc: 'Repaso activo', color: '#8B5CF6' },
+                        { mode: 'quizzes' as const, icon: HelpCircle, label: 'Cuestionarios', desc: 'Autoevaluacion', color: '#EF4444' },
+                        { mode: 'blurting' as const, icon: NotebookPen, label: 'Blurting', desc: 'Escribir de memoria', color: '#3B82F6' },
+                        { mode: 'feynman' as const, icon: Lightbulb, label: 'Feynman', desc: 'Explicar simplemente', color: '#F59E0B' },
+                        { mode: 'notes' as const, icon: StickyNote, label: 'Notas del tema', desc: 'Apuntes rápidos', color: '#10B981' },
+                        { mode: 'mindmap' as const, icon: Layers, label: 'Mapa Mental', desc: 'Organizar ideas', color: '#EC4899' },
+                        { mode: 'review' as const, icon: Sigma, label: 'Repaso Espaciado', desc: 'SRS / FSRS', color: '#06B6D4' },
+                      ].map(tool => {
+                        const Icon = tool.icon;
+                        const isActive = studyToolMode === tool.mode;
+                        return (
+                          <button key={tool.mode} onClick={() => setStudyToolMode(isActive ? 'none' : tool.mode)}
+                            style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px', borderRadius: 6, border: `1px solid ${isActive ? `${tool.color}40` : 'transparent'}`, background: isActive ? `${tool.color}10` : 'transparent', cursor: 'pointer', textAlign: 'left', transition: 'all 150ms' }}
+                            onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                            onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}>
+                            <div style={{ width: 28, height: 28, borderRadius: 6, background: `${tool.color}12`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                              <Icon size={13} style={{ color: tool.color }} />
                             </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div style={{ padding: '40px 20px', textAlign: 'center', borderRadius: 10, border: '1px dashed var(--border-subtle)' }}>
-                        <Book size={28} style={{ color: 'var(--text-muted)', margin: '0 auto 6px', opacity: 0.3 }} />
-                        <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>No hay temas aún</p>
-                        <button onClick={() => { setEditingTopicId(null); setTopicName(''); setShowTopicModal(true); }} style={{ marginTop: 6, height: 28, padding: '0 12px', borderRadius: 6, border: 'none', background: course.color, color: '#fff', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>Crear tema</button>
+                            <div>
+                              <div style={{ fontSize: 10, fontWeight: 600, color: isActive ? tool.color : 'var(--text-primary)' }}>{tool.label}</div>
+                              <div style={{ fontSize: 8, color: 'var(--text-muted)', marginTop: 1 }}>{tool.desc}</div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {/* Active tool content area */}
+                    {studyToolMode !== 'none' && (
+                      <div style={{ borderTop: '1px solid var(--border-subtle)', padding: '10px 14px', maxHeight: 260, overflowY: 'auto' }}>
+                        {studyToolMode === 'flashcards' && (
+                          <div style={{ textAlign: 'center', padding: '12px 0' }}>
+                            <div style={{ width: 44, height: 44, borderRadius: 10, background: '#8B5CF612', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px' }}><BookOpen size={18} style={{ color: '#8B5CF6' }} /></div>
+                            <p style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 10 }}>Crea tarjetas de repaso con preguntas y respuestas.</p>
+                            <button style={{ width: '100%', height: 30, borderRadius: 6, border: 'none', background: '#8B5CF6', color: '#fff', fontSize: 9, fontWeight: 600, cursor: 'pointer' }}>Nueva Flashcard</button>
+                          </div>
+                        )}
+                        {studyToolMode === 'quizzes' && (
+                          <div style={{ textAlign: 'center', padding: '12px 0' }}>
+                            <div style={{ width: 44, height: 44, borderRadius: 10, background: '#EF444412', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px' }}><HelpCircle size={18} style={{ color: '#EF4444' }} /></div>
+                            <p style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 10 }}>Pon a prueba tu conocimiento con quizzes.</p>
+                            <button style={{ width: '100%', height: 30, borderRadius: 6, border: 'none', background: '#EF4444', color: '#fff', fontSize: 9, fontWeight: 600, cursor: 'pointer' }}>Crear Quiz</button>
+                          </div>
+                        )}
+                        {studyToolMode === 'blurting' && (
+                          <div style={{ textAlign: 'center', padding: '12px 0' }}>
+                            <div style={{ width: 44, height: 44, borderRadius: 10, background: '#3B82F612', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px' }}><NotebookPen size={18} style={{ color: '#3B82F6' }} /></div>
+                            <p style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 10 }}>Escribe todo lo que recuerdas sin mirar apuntes.</p>
+                            <button style={{ width: '100%', height: 30, borderRadius: 6, border: 'none', background: '#3B82F6', color: '#fff', fontSize: 9, fontWeight: 600, cursor: 'pointer' }}>Iniciar Blurting</button>
+                          </div>
+                        )}
+                        {studyToolMode === 'feynman' && (
+                          <div style={{ textAlign: 'center', padding: '12px 0' }}>
+                            <div style={{ width: 44, height: 44, borderRadius: 10, background: '#F59E0B12', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px' }}><Lightbulb size={18} style={{ color: '#F59E0B' }} /></div>
+                            <p style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 10 }}>Explica el concepto como si fueras profesor.</p>
+                            <button style={{ width: '100%', height: 30, borderRadius: 6, border: 'none', background: '#F59E0B', color: '#fff', fontSize: 9, fontWeight: 600, cursor: 'pointer' }}>Iniciar Feynman</button>
+                          </div>
+                        )}
+                        {studyToolMode === 'notes' && (
+                          <div style={{ textAlign: 'center', padding: '12px 0' }}>
+                            <div style={{ width: 44, height: 44, borderRadius: 10, background: '#10B98112', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px' }}><StickyNote size={18} style={{ color: '#10B981' }} /></div>
+                            <p style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 10 }}>Anota ideas clave durante el estudio.</p>
+                            <button onClick={() => { const id = addNote({ title: '', content: '', course: course.name, courseColor: course.color, isCoursePrivate: true, isPinned: false }); setEditingNoteId(id); setNavigateTo('notas'); }} style={{ width: '100%', height: 30, borderRadius: 6, border: 'none', background: '#10B981', color: '#fff', fontSize: 9, fontWeight: 600, cursor: 'pointer' }}>Nuevo Apunte</button>
+                          </div>
+                        )}
+                        {studyToolMode === 'mindmap' && (
+                          <div style={{ textAlign: 'center', padding: '12px 0' }}>
+                            <div style={{ width: 44, height: 44, borderRadius: 10, background: '#EC489912', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px' }}><Layers size={18} style={{ color: '#EC4899' }} /></div>
+                            <p style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 10 }}>Organiza ideas visualmente en un mapa.</p>
+                            <button style={{ width: '100%', height: 30, borderRadius: 6, border: 'none', background: '#EC4899', color: '#fff', fontSize: 9, fontWeight: 600, cursor: 'pointer' }}>Crear Mapa</button>
+                          </div>
+                        )}
+                        {studyToolMode === 'review' && (
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                              <Sigma size={11} style={{ color: '#06B6D4' }} />
+                              <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Cola de Repaso</span>
+                            </div>
+                            {(course.studyTopics || []).filter(t => t.nextReview <= Date.now() && t.reviewLevel > 0).length > 0 ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                {(course.studyTopics || []).filter(t => t.nextReview <= Date.now() && t.reviewLevel > 0).slice(0, 5).map(t => (
+                                  <div key={t.id} onClick={() => { setActiveTopicId(t.id); setCurrentView('topic'); }} style={{ padding: '6px 8px', borderRadius: 5, background: 'var(--bg-hover)', cursor: 'pointer', fontSize: 10, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 6, transition: 'all 120ms' }}
+                                    onMouseEnter={e => e.currentTarget.style.background = `${course.color}15`} onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-hover)'}>
+                                    <div style={{ width: 4, height: 4, borderRadius: '50%', background: '#06B6D4', flexShrink: 0 }} />
+                                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
+                                    <span style={{ fontSize: 8, color: 'var(--text-muted)' }}>{t.reviewLevel}/5</span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p style={{ fontSize: 9, color: 'var(--text-muted)', textAlign: 'center', padding: '10px 0' }}>Sin temas para repasar</p>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
                 </div>
-                {/* RIGHT: Archivos — with upload */}
-                <div style={{ flex: 3, minWidth: 0 }}>
-                  <div className="bento-card" style={{ borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', overflow: 'hidden', padding: 0 }}>
-                    <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <h3 style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-tertiary)', margin: 0 }}>Archivos</h3>
-                      <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>{allCourseMaterials.filter(m => m.type === 'resource').length}</span>
+              ) : (
+                /* ─── ESTUDIO MODE: 3-column layout ─── */
+                <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
+                  {/* LEFT SIDEBAR: Grupos + Materiales */}
+                  <div style={{ width: 220, flexShrink: 0, display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', overflow: 'hidden' }}>
+                    {/* Stats cards — 3 horizontal blocks */}
+                    <div style={{ padding: '10px 10px 8px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {[
+                        { label: 'Temas', value: parsedTopics.length, icon: Book, color: course.color },
+                        { label: 'Materiales', value: topicMasteryStats.totalMaterials, icon: File, color: '#8B5CF6' },
+                        { label: 'Dominados', value: topicMasteryStats.mastered, icon: Check, color: '#10B981' },
+                      ].map(s => {
+                        const Icon = s.icon;
+                        return (
+                          <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 7, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', transition: 'all 150ms' }}>
+                            <div style={{ width: 24, height: 24, borderRadius: 6, background: `${s.color}12`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                              <Icon size={11} style={{ color: s.color }} />
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1, letterSpacing: '-0.02em' }}>{s.value}</div>
+                              <div style={{ fontSize: 7.5, fontWeight: 500, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 1 }}>{s.label}</div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                    <div style={{ padding: '6px 12px', borderBottom: '1px solid var(--border-subtle)' }}>
-                      <button onClick={() => { setActiveTopicId(parsedTopics[0]?.id || ''); resourceInputRef.current?.click(); }} style={{ display: 'flex', alignItems: 'center', gap: 4, width: '100%', height: 28, padding: '0 8px', borderRadius: 4, border: '1px dashed var(--border-subtle)', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 10, textAlign: 'left' }}
-                        onMouseEnter={e => { e.currentTarget.style.borderColor = course.color; e.currentTarget.style.color = course.color; }}
-                        onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
-                        <Upload size={10} /> Subir archivo
+                    <div style={{ height: 1, background: 'var(--border-subtle)', margin: '0 10px' }} />
+                    {/* Grupos list */}
+                    <div style={{ flex: 1, overflowY: 'auto', padding: '8px 10px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <span style={{ fontSize: 8, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Grupos</span>
+                        <button onClick={() => { setEditingGroupId(null); setGroupName(''); setGroupCover(undefined); setSelectedTopicIds([]); setShowGroupModal(true); }}
+                          style={{ width: 20, height: 20, borderRadius: 4, border: 'none', background: `${course.color}14`, cursor: 'pointer', color: course.color, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 120ms' }}
+                          onMouseEnter={e => e.currentTarget.style.background = `${course.color}25`} onMouseLeave={e => e.currentTarget.style.background = `${course.color}14`}
+                          title="Nueva agrupacion">
+                          <Plus size={11} />
+                        </button>
+                      </div>
+                      {/* All topics button */}
+                      <button onClick={() => setSelectedGroupId(null)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 8px', borderRadius: 5, border: selectedGroupId === null ? `1px solid ${course.color}30` : '1px solid transparent', background: selectedGroupId === null ? `${course.color}08` : 'transparent', cursor: 'pointer', textAlign: 'left', marginBottom: 2, transition: 'all 120ms' }}
+                        onMouseEnter={e => { if (selectedGroupId !== null) e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                        onMouseLeave={e => { if (selectedGroupId !== null) e.currentTarget.style.background = 'transparent'; }}>
+                        <div style={{ width: 6, height: 6, borderRadius: '50%', background: course.color, flexShrink: 0 }} />
+                        <span style={{ fontSize: 10.5, fontWeight: selectedGroupId === null ? 600 : 400, color: selectedGroupId === null ? course.color : 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Todos</span>
+                        <span style={{ fontSize: 8, color: 'var(--text-muted)', background: 'var(--bg-hover)', padding: '1px 5px', borderRadius: 3 }}>{parsedTopics.length}</span>
                       </button>
-                    </div>
-                    <div style={{ padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      {allCourseMaterials.filter(m => m.type === 'resource').length > 0 ? allCourseMaterials.filter(m => m.type === 'resource').map(mat => (
-                        <div key={mat.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 6, border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
-                          <div style={{ width: 28, height: 28, borderRadius: 6, background: `${course.color}12`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                            <File size={13} style={{ color: course.color }} />
+                      {groups.map(group => {
+                        const members = parsedTopics.filter(t => t.groupId === group.id);
+                        const isSelected = selectedGroupId === group.id;
+                        const groupMastery = members.length > 0 ? Math.round((members.filter(t => t.reviewLevel >= 4).length / members.length) * 100) : 0;
+                        return (
+                          <div key={group.id}>
+                            <button onClick={() => setSelectedGroupId(isSelected ? null : group.id)}
+                              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 8px', borderRadius: 5, border: isSelected ? `1px solid ${course.color}30` : '1px solid transparent', background: isSelected ? `${course.color}08` : 'transparent', cursor: 'pointer', textAlign: 'left', marginBottom: 2, transition: 'all 120ms' }}
+                              onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                              onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}>
+                              <div style={{ width: 6, height: 6, borderRadius: '50%', background: course.color, flexShrink: 0, opacity: 0.7 }} />
+                              <span style={{ fontSize: 10.5, fontWeight: isSelected ? 600 : 400, color: isSelected ? course.color : 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{group.name}</span>
+                              <span style={{ fontSize: 8, color: 'var(--text-muted)', background: 'var(--bg-hover)', padding: '1px 5px', borderRadius: 3 }}>{members.length}</span>
+                            </button>
+                            {isSelected && (
+                              <div style={{ padding: '2px 0 4px 20px', display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                {members.map(t => (
+                                  <button key={t.id} onClick={() => { setActiveTopicId(t.id); setCurrentView('topic'); }}
+                                    style={{ display: 'flex', alignItems: 'center', gap: 5, width: '100%', padding: '3px 6px', borderRadius: 4, border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left', transition: 'all 100ms' }}
+                                    onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                                    <span style={{ fontSize: 9.5, color: 'var(--text-muted)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
+                                    <div style={{ display: 'flex', gap: 1 }}>{[...Array(5)].map((_, i) => <div key={i} style={{ width: 3, height: 3, borderRadius: 1, background: i < t.reviewLevel ? course.color : 'var(--bg-hover)' }} />)}</div>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{mat.name || 'Archivo'}</div>
-                            {(mat as any)._topicTitle && <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>{(mat as any)._topicTitle}</div>}
-                          </div>
-                          <div style={{ display: 'flex', gap: 2 }}>
-                            {mat.dataUrl && <button onClick={() => handleOpenResource(mat)} style={{ width: 24, height: 24, borderRadius: 4, border: 'none', background: 'var(--bg-hover)', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><ExternalLink size={9} /></button>}
-                            <button onClick={() => { const updated = (course.studyTopics || []).map(t => ({ ...t, materials: (t.materials || []).filter(m => m.id !== mat.id) })); updateCourse(course.id, { studyTopics: updated }); toast.success('Archivo eliminado'); }} style={{ width: 24, height: 24, borderRadius: 4, border: 'none', background: 'transparent', cursor: 'pointer', color: 'rgba(239,68,68,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0 }}
-                              onMouseEnter={e => e.currentTarget.style.opacity = '1'} onMouseLeave={e => e.currentTarget.style.opacity = '0'}><Trash2 size={8} /></button>
-                          </div>
+                        );
+                      })}
+                      {/* Ungrouped topics */}
+                      {ungroupedTopics.length > 0 && groups.length > 0 && (
+                        <div style={{ marginTop: 6 }}>
+                          <span style={{ fontSize: 7.5, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', padding: '0 8px', marginBottom: 3 }}>Sin grupo</span>
+                          {ungroupedTopics.map(t => (
+                            <button key={t.id} onClick={() => { setActiveTopicId(t.id); setCurrentView('topic'); }}
+                              style={{ display: 'flex', alignItems: 'center', gap: 5, width: '100%', padding: '4px 8px', borderRadius: 4, border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left', transition: 'all 100ms' }}
+                              onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                              <span style={{ fontSize: 9.5, color: 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
+                            </button>
+                          ))}
                         </div>
-                      )) : (
-                        <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)' }}>
-                          <FolderOpen size={20} style={{ margin: '0 auto 4px', opacity: 0.3 }} />
-                          <p style={{ fontSize: 10 }}>Sin archivos</p>
+                      )}
+                    </div>
+                    {/* Bottom: Materiales dropdown */}
+                    <div style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                      <button onClick={() => setShowMaterialsDropdown(!showMaterialsDropdown)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: '8px 12px', border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)', transition: 'all 120ms' }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                        <FolderOpen size={12} style={{ color: course.color, flexShrink: 0 }} />
+                        <span style={{ fontSize: 10, fontWeight: 600, flex: 1, textAlign: 'left' }}>Materiales</span>
+                        <span style={{ fontSize: 8, color: 'var(--text-muted)', background: 'var(--bg-hover)', padding: '1px 5px', borderRadius: 3 }}>{allCourseMaterials.filter(m => m.type === 'resource').length}</span>
+                        {showMaterialsDropdown ? <ChevronUp size={10} style={{ color: 'var(--text-muted)' }} /> : <ChevronDown size={10} style={{ color: 'var(--text-muted)' }} />}
+                      </button>
+                      {showMaterialsDropdown && (
+                        <div style={{ maxHeight: 180, overflowY: 'auto', padding: '4px 10px 8px', display: 'flex', flexDirection: 'column', gap: 3 }}>
+                          {allCourseMaterials.filter(m => m.type === 'resource').length > 0 ? allCourseMaterials.filter(m => m.type === 'resource').map(mat => (
+                            <div key={mat.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 6px', borderRadius: 4, background: 'var(--bg-hover)', transition: 'all 100ms' }}>
+                              <File size={10} style={{ color: course.color, flexShrink: 0 }} />
+                              <span style={{ fontSize: 9, color: 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{mat.name || 'Archivo'}</span>
+                              {mat.dataUrl && <button onClick={() => handleOpenResource(mat)} style={{ width: 18, height: 18, borderRadius: 3, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><ExternalLink size={8} /></button>}
+                            </div>
+                          )) : (
+                            <p style={{ fontSize: 9, color: 'var(--text-muted)', textAlign: 'center', padding: '6px 0' }}>Sin archivos</p>
+                          )}
+                          <button onClick={() => { setActiveTopicId(parsedTopics[0]?.id || ''); resourceInputRef.current?.click(); }}
+                            style={{ display: 'flex', alignItems: 'center', gap: 4, width: '100%', padding: '4px 6px', borderRadius: 4, border: '1px dashed var(--border-subtle)', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 9, marginTop: 2, transition: 'all 120ms' }}
+                            onMouseEnter={e => { e.currentTarget.style.borderColor = course.color; e.currentTarget.style.color = course.color; }}
+                            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
+                            <Upload size={9} /> Subir
+                          </button>
                         </div>
                       )}
                     </div>
                   </div>
+
+                  {/* CENTER: Topics or Weekly Review */}
+                  <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px 60px' }}>
+                    {/* Add buttons row */}
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', paddingBottom: 10, borderBottom: '1px solid var(--border-subtle)', marginBottom: 16 }}>
+                      <span style={{ fontSize: 9, fontWeight: 700, color: course.color, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Estudio</span>
+                      <div style={{ flex: 1 }} />
+                      <button onClick={() => { setEditingTopicId(null); setTopicName(''); setShowTopicModal(true); }}
+                        style={{ height: 26, padding: '0 10px', borderRadius: 5, border: 'none', background: `${course.color}14`, color: course.color, fontSize: 8.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, transition: 'all 150ms' }}
+                        onMouseEnter={e => e.currentTarget.style.background = `${course.color}25`} onMouseLeave={e => e.currentTarget.style.background = `${course.color}14`}>
+                        <PlusCircle size={9} /> Tema
+                      </button>
+                    </div>
+
+                    {/* Weekly Review Section */}
+                    {(() => {
+                      const reviewTopics = (course.studyTopics || []).filter(t => t.nextReview <= Date.now() + 7 * 24 * 60 * 60 * 1000 && t.reviewLevel > 0);
+                      if (reviewTopics.length === 0) return null;
+                      const dayNames = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'];
+                      const grouped: Record<string, typeof reviewTopics> = {};
+                      reviewTopics.forEach(t => {
+                        const d = new Date(t.nextReview);
+                        const key = d.toDateString() === new Date().toDateString() ? 'Hoy' : d.toDateString() === new Date(Date.now() + 86400000).toDateString() ? 'Manana' : dayNames[d.getDay()];
+                        if (!grouped[key]) grouped[key] = [];
+                        grouped[key].push(t);
+                      });
+                      return (
+                        <div style={{ marginBottom: 20 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                            <div style={{ width: 3, height: 12, borderRadius: 2, background: '#06B6D4' }} />
+                            <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Repaso de la Semana</span>
+                            <span style={{ fontSize: 8, color: 'var(--text-muted)', background: '#06B6D412', padding: '1px 6px', borderRadius: 3 }}>{reviewTopics.length} temas</span>
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
+                            {['Hoy', 'Manana', ...dayNames.filter(d => d !== 'Hoy' && d !== 'Manana')].map(day => {
+                              const topics = grouped[day] || [];
+                              const isToday = day === 'Hoy';
+                              return (
+                                <div key={day} style={{ padding: '6px 4px', borderRadius: 6, border: `1px solid ${isToday ? '#06B6D430' : 'var(--border-subtle)'}`, background: isToday ? '#06B6D406' : 'var(--bg-elevated)', minHeight: 48 }}>
+                                  <div style={{ fontSize: 8, fontWeight: 700, color: isToday ? '#06B6D4' : 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4, textAlign: 'center' }}>{day}</div>
+                                  {topics.length > 0 ? (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                      {topics.slice(0, 3).map(t => (
+                                        <div key={t.id} onClick={() => { setActiveTopicId(t.id); setCurrentView('topic'); }}
+                                          style={{ padding: '2px 4px', borderRadius: 3, background: 'var(--bg-hover)', cursor: 'pointer', fontSize: 7.5, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center', transition: 'all 100ms' }}
+                                          onMouseEnter={e => e.currentTarget.style.background = `${course.color}15`} onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-hover)'}>
+                                          {t.title}
+                                        </div>
+                                      ))}
+                                      {topics.length > 3 && <div style={{ fontSize: 7, color: 'var(--text-muted)', textAlign: 'center' }}>+{topics.length - 3}</div>}
+                                    </div>
+                                  ) : (
+                                    <div style={{ fontSize: 7, color: 'var(--text-muted)', textAlign: 'center', paddingTop: 4 }}>-</div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Topic blocks — filtered by selected group */}
+                    {(() => {
+                      const visibleTopics = selectedGroupId
+                        ? parsedTopics.filter(t => t.groupId === selectedGroupId)
+                        : parsedTopics;
+                      const filtered = topicSearch
+                        ? visibleTopics.filter(t => t.title.toLowerCase().includes(topicSearch.toLowerCase()))
+                        : visibleTopics;
+                      // Group the visible topics by their group
+                      const groupBlocks: { group: SubjectGroup | null; topics: SubjectTopic[] }[] = [];
+                      if (selectedGroupId) {
+                        const grp = groups.find(g => g.id === selectedGroupId);
+                        groupBlocks.push({ group: grp || null, topics: filtered });
+                      } else {
+                        // Group topics by their group
+                        const groupedMap = new Map<string, SubjectTopic[]>();
+                        filtered.forEach(t => {
+                          const gid = t.groupId || '__ungrouped__';
+                          if (!groupedMap.has(gid)) groupedMap.set(gid, []);
+                          groupedMap.get(gid)!.push(t);
+                        });
+                        // Groups first
+                        groups.forEach(g => {
+                          const topics = groupedMap.get(g.id);
+                          if (topics && topics.length > 0) groupBlocks.push({ group: g, topics });
+                        });
+                        // Ungrouped
+                        const ungrouped = groupedMap.get('__ungrouped__');
+                        if (ungrouped && ungrouped.length > 0) groupBlocks.push({ group: null, topics: ungrouped });
+                      }
+                      return groupBlocks.map(({ group: grp, topics }) => (
+                        <div key={grp?.id || '__ungrouped__'} style={{ marginBottom: 20 }}>
+                          {grp && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                              <div style={{ width: 3, height: 14, borderRadius: 2, background: course.color }} />
+                              <h3 style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: course.color, margin: 0, flex: 1 }}>{grp.name}</h3>
+                              <button onClick={() => startEditGroup(grp)} style={{ width: 20, height: 20, borderRadius: 4, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Edit3 size={9} /></button>
+                              <button onClick={() => handleDeleteGroup(grp.id)} style={{ width: 20, height: 20, borderRadius: 4, border: 'none', background: 'transparent', cursor: 'pointer', color: 'rgba(239,68,68,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={9} /></button>
+                            </div>
+                          )}
+                          {!grp && groups.length > 0 && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                              <div style={{ width: 3, height: 10, borderRadius: 2, background: 'var(--text-muted)', opacity: 0.4 }} />
+                              <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Sin grupo</span>
+                            </div>
+                          )}
+                          {topics.length > 0 ? (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8 }}>
+                              {topics.map(topic => {
+                                const matCount = (topic.materials || []).length;
+                                const isStudying = topic.reviewLevel > 0 && topic.reviewLevel < 4;
+                                const isMastered = topic.reviewLevel >= 4;
+                                return (
+                                  <div key={topic.id} onClick={() => { setActiveTopicId(topic.id); setCurrentView('topic'); }}
+                                    style={{ borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', padding: 12, cursor: 'pointer', transition: 'all 200ms ' + EASE, position: 'relative', overflow: 'hidden' }}
+                                    className="hover-lift"
+                                    onMouseEnter={e => e.currentTarget.style.borderColor = `${course.color}40`}
+                                    onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border-subtle)'}>
+                                    <div style={{ position: 'absolute', top: 0, left: 0, width: 3, height: '100%', background: isMastered ? '#10B981' : isStudying ? '#3B82F6' : course.color, borderRadius: '3px 0 0 3px' }} />
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                                      <h4 style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', margin: 0, lineHeight: 1.3, flex: 1, paddingRight: 4 }}>{topic.title}</h4>
+                                      <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+                                        <button onClick={(e) => { e.stopPropagation(); setEditingTopicId(topic.id); setTopicName(topic.title); setShowTopicModal(true); }} style={{ width: 20, height: 20, borderRadius: 4, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Edit3 size={8} /></button>
+                                        <button onClick={(e) => { e.stopPropagation(); handleDeleteTopic(topic.id); }} style={{ width: 20, height: 20, borderRadius: 4, border: 'none', background: 'transparent', cursor: 'pointer', color: 'rgba(239,68,68,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={8} /></button>
+                                      </div>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 6 }}>
+                                      {(topic.materials || []).reduce((acc, m) => { acc[m.type] = (acc[m.type] || 0) + 1; return acc; }, {} as Record<string, number>) && Object.entries((topic.materials || []).reduce((acc, m) => { acc[m.type] = (acc[m.type] || 0) + 1; return acc; }, {} as Record<string, number>)).slice(0, 3).map(([type, count]) => {
+                                        const meta = MATERIAL_META[type as MaterialType];
+                                        if (!meta) return null;
+                                        const Icon = meta.icon;
+                                        return <span key={type} style={{ fontSize: 7.5, display: 'flex', alignItems: 'center', gap: 2, color: 'var(--text-tertiary)' }}><Icon size={7} /> {count}</span>;
+                                      })}
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                      <span style={{ fontSize: 8, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>{matCount} material{matCount !== 1 ? 'es' : ''}</span>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                        <div style={{ display: 'flex', gap: 1.5 }}>{[...Array(5)].map((_, i) => <div key={i} style={{ width: 5, height: 3, borderRadius: 1, background: i < topic.reviewLevel ? course.color : 'var(--bg-hover)', transition: 'all 200ms' }} />)}</div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div style={{ padding: '24px 16px', textAlign: 'center', borderRadius: 8, border: '1px dashed var(--border-subtle)' }}>
+                              <Book size={22} style={{ color: 'var(--text-muted)', margin: '0 auto 4px', opacity: 0.3 }} />
+                              <p style={{ fontSize: 10, color: 'var(--text-secondary)', margin: 0 }}>No hay temas</p>
+                            </div>
+                          )}
+                        </div>
+                      ));
+                    })()}
+                    {/* Empty state */}
+                    {parsedTopics.length === 0 && (
+                      <div style={{ padding: '48px 20px', textAlign: 'center', borderRadius: 10, border: '1px dashed var(--border-subtle)' }}>
+                        <GraduationCap size={32} style={{ color: 'var(--text-muted)', margin: '0 auto 8px', opacity: 0.2 }} />
+                        <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>Comienza anadiendo temas a tu curso</p>
+                        <button onClick={() => { setEditingTopicId(null); setTopicName(''); setShowTopicModal(true); }} style={{ height: 32, padding: '0 16px', borderRadius: 8, border: 'none', background: course.color, color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>Crear primer tema</button>
+                      </div>
+                    )}
+                  </div>
                 </div>
-            </div>
-          </div>
-          )
-        }
+              )
+            )
+          }
           </div>
         </div>
         ) : activeTab === 'tareas' ? (
@@ -1844,8 +2153,10 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                       onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}30`; e.currentTarget.style.boxShadow = `0 2px 10px ${course.color}08`; }}
                       onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.boxShadow = '0 0 0 0 rgba(0,0,0,0)'; }}>
                       <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-tertiary)', minWidth: 14, textAlign: 'right', flexShrink: 0, fontFamily: "'Inter Tight', sans-serif" }}>{idx + 1}</span>
-                      <div onClick={() => handleToggleTask(task.id)} style={{ width: 18, height: 18, borderRadius: 5, flexShrink: 0, cursor: 'pointer', border: `2px solid ${task.status === 'progreso' ? '#3B82F6' : course.color}`, background: task.status === 'progreso' ? '#3B82F6' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms ' + EASE }}>
-                        {task.status === 'progreso' && <div style={{ width: 7, height: 7, borderRadius: 2, background: '#fff', transform: 'rotate(45deg)' }} />}
+                      <div onClick={() => handleToggleTask(task.id)} style={{ width: 20, height: 20, borderRadius: 6, flexShrink: 0, cursor: 'pointer', border: `1.5px solid ${task.status === 'progreso' ? '#3B82F6' : task.status === 'completado' ? '#10B981' : `${course.color}40`}`, background: task.status === 'progreso' ? '#3B82F6' : task.status === 'completado' ? '#10B981' : `${course.color}08`, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms ' + EASE }}>
+                        {task.status === 'completado' && <Check size={11} strokeWidth={2.5} color="#fff" />}
+                        {task.status === 'progreso' && <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff' }} />}
+                        {task.status === 'inicio' && <div style={{ width: 6, height: 6, borderRadius: '50%', background: course.color, opacity: 0.4 }} />}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: "'Inter', sans-serif" }}>{task.title}</div>

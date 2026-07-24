@@ -693,9 +693,12 @@ export default function Tareas() {
                                 {/* Left toggle strip — cuadrado centrado — also drag handle */}
                                 <div {...attributes} {...listeners}
                                   onClick={(e) => { e.stopPropagation(); if (isLongPressRef.current) { isLongPressRef.current = false; return; } handleToggle(e, t.id); }}
-                                  style={{ width: 30, height: 30, flexShrink: 0, background: stripColor, cursor: 'grab', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, margin: 'auto 0 auto 12px', transition: 'all 150ms', boxShadow: `0 0 12px ${stripColor}30` }}>
-                                  {isDone && <Check size={13} strokeWidth={3} style={{ color: '#fff' }} />}
-                                  {t.status === 'progreso' && <Zap size={12} style={{ color: '#fff' }} />}
+                                  style={{ width: 32, height: 32, flexShrink: 0, background: isDone ? '#10B981' : `${stripColor}14`, cursor: 'grab', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, margin: 'auto 0 auto 12px', transition: 'all 180ms cubic-bezier(0.16,1,0.3,1)', border: `1.5px solid ${isDone ? '#10B981' : `${stripColor}35`}`, boxShadow: isDone ? '0 0 0 3px #10B98118' : 'none' }}
+                                  onMouseEnter={e => { if (!isDone) { e.currentTarget.style.background = `${stripColor}22`; e.currentTarget.style.borderColor = `${stripColor}55`; e.currentTarget.style.transform = 'scale(1.06)'; } }}
+                                  onMouseLeave={e => { if (!isDone) { e.currentTarget.style.background = `${stripColor}14`; e.currentTarget.style.borderColor = `${stripColor}35`; e.currentTarget.style.transform = 'scale(1)'; } }}>
+                                  {isDone && <Check size={14} strokeWidth={2.5} style={{ color: '#fff' }} />}
+                                  {t.status === 'progreso' && <Zap size={13} fill={stripColor} style={{ color: stripColor }} />}
+                                  {t.status === 'inicio' && <div style={{ width: 7, height: 7, borderRadius: '50%', background: stripColor, opacity: 0.5 }} />}
                                 </div>
                                 {/* Content area — click opens detail */}
                                 <div onClick={(e) => { e.stopPropagation(); handleOpenDetail(t.id); }}
@@ -762,10 +765,13 @@ export default function Tareas() {
                             width: 'max-content', maxWidth: 360,
                           }}>
                             <div style={{
-                              width: 28, height: 28, borderRadius: 6, margin: '10px',
-                              background: sc, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              width: 30, height: 30, borderRadius: 7, margin: '9px',
+                              background: t.status === 'completado' ? '#10B981' : `${sc}14`, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              border: `1.5px solid ${t.status === 'completado' ? '#10B981' : `${sc}35`}`,
                             }}>
-                              {t.status === 'completado' && <Check size={12} strokeWidth={3} style={{ color: '#fff' }} />}
+                              {t.status === 'completado' && <Check size={13} strokeWidth={2.5} style={{ color: '#fff' }} />}
+                              {t.status === 'progreso' && <Zap size={12} fill={sc} style={{ color: sc }} />}
+                              {t.status === 'inicio' && <div style={{ width: 6, height: 6, borderRadius: '50%', background: sc, opacity: 0.5 }} />}
                             </div>
                             <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.title}</span>
                           </div>

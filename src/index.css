@@ -208,32 +208,46 @@ body {
 
 .sidebar {
   background: var(--bg-base);
-  backdrop-filter: blur(var(--bg-blur, 16px));
   height: 100%;
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
   width: 220px;
-  border-right: 1px solid var(--border-default);
-   box-shadow: 2px 0 12px rgba(0, 0, 0, 0.08);
+  border-right: none;
+  box-shadow: 2px 0 16px rgba(0, 0, 0, 0.12);
   position: relative;
   z-index: 10;
 }
 
+.sidebar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    var(--border-default) 15%,
+    var(--border-default) 85%,
+    transparent 100%
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+
 /* ── Background image active: panels get opacity-based translucency + blur ── */
-[data-has-bg] .page-container,
-[data-has-bg] .sidebar {
+[data-has-bg] .page-container {
   background: color-mix(in srgb, var(--bg-base) calc(var(--ui-opacity, 0.85) * 100%), transparent);
   backdrop-filter: blur(var(--bg-blur, 0px));
   -webkit-backdrop-filter: blur(var(--bg-blur, 0px));
+}
+[data-has-bg] .sidebar {
+  background: var(--bg-base);
 }
 [data-has-bg] .cursos-root-view {
   background: color-mix(in srgb, var(--bg-base) calc(var(--ui-opacity, 0.85) * 100%), transparent) !important;
-  backdrop-filter: blur(var(--bg-blur, 0px));
-  -webkit-backdrop-filter: blur(var(--bg-blur, 0px));
-}
-[data-has-bg] .sidebar {
-  background: color-mix(in srgb, var(--bg-base) calc(var(--ui-opacity, 0.85) * 100%), transparent);
   backdrop-filter: blur(var(--bg-blur, 0px));
   -webkit-backdrop-filter: blur(var(--bg-blur, 0px));
 }
@@ -283,8 +297,17 @@ body {
 
 [data-theme='claro'] .sidebar {
   background: var(--bg-base);
-  border-right: 1px solid var(--border-default);
   box-shadow: none;
+}
+
+[data-theme='claro'] .sidebar::after {
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    var(--border-default) 15%,
+    var(--border-default) 85%,
+    transparent 100%
+  );
 }
 
 .sidebar.collapsed {
@@ -294,28 +317,42 @@ body {
 /* When cover modal is open, sidebar background matches cover dominant color */
 .sidebar.cover-tinted {
   background: color-mix(in srgb, var(--cover-dominant, var(--bg-base, #0a0a0c)) 85%, #000);
-  border-right-color: color-mix(in srgb, var(--cover-dominant, transparent) 15%, transparent);
+}
+
+.sidebar.cover-tinted::after {
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    color-mix(in srgb, var(--cover-dominant, var(--border-default)) 40%, transparent) 15%,
+    color-mix(in srgb, var(--cover-dominant, var(--border-default)) 40%, transparent) 85%,
+    transparent 100%
+  );
 }
 
 /* ─── Sidebar Logo ─── */
 .sidebar-logo {
-  padding: 32px 16px 0;
+  padding: 10px 0 0 0;
+  height: 62px;
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 10px;
   flex-shrink: 0;
+  cursor: pointer;
+  padding-left: 14px;
 }
 
 .sidebar.collapsed .sidebar-logo {
-  padding: 28px 0 0;
+  height: 62px;
   justify-content: center;
+  padding-left: 0;
   gap: 0;
 }
 
 .sidebar-logo-img {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
   object-fit: cover;
   flex-shrink: 0;
   transition: opacity 200ms;
@@ -326,11 +363,13 @@ body {
 }
 
 .sidebar-logo-text {
-  font-size: 14px;
-  font-weight: 600;
+  font-family: 'Inter Tight', sans-serif;
+  font-size: 17px;
+  font-weight: 300;
   color: var(--text-primary);
-  letter-spacing: -0.02em;
-  flex: 1;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  text-transform: uppercase;
 }
 
 .sidebar.collapsed .sidebar-logo-img {
@@ -339,12 +378,12 @@ body {
 
 /* ─── Navigation ─── */
 .sidebar-nav {
-  padding: 8px 12px;
+  padding: 4px 12px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-top: 8px;
+  gap: 2px;
   flex-shrink: 0;
+  margin-top: 2px;
 }
 
 .sidebar-nav-btn {
@@ -617,8 +656,6 @@ body {
   padding: 20px;
   box-shadow: var(--shadow-card);
   transition: all 250ms cubic-bezier(0.16, 1, 0.3, 1);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
 }
 
 .bento-card:hover {
@@ -673,8 +710,18 @@ body {
 
 [data-theme='vibrante'] .sidebar {
   background: linear-gradient(180deg, var(--bg-base) 0%, var(--bg-surface) 100%);
-  border-right: 1px solid var(--border-subtle);
+  border-right: none;
   box-shadow: 2px 0 12px rgba(100, 60, 200, 0.08);
+}
+
+[data-theme='vibrante'] .sidebar::after {
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    var(--border-subtle) 15%,
+    var(--border-subtle) 85%,
+    transparent 100%
+  );
 }
 
 [data-theme='vibrante'] .sidebar-nav-btn.active {

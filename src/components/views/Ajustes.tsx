@@ -1,12 +1,12 @@
 ﻿import React, { useEffect, useState, useRef, useMemo } from 'react';
 import {
-  User, Palette, Brain, Cloud, Download, Bell,
-  Moon, Sun, Type, Check,
-  Timer, Target, Zap, BookOpen,
-  FolderOpen, RefreshCw, ExternalLink, Shield,
-  Sliders, ListTodo, Music, GraduationCap, FileText, Sheet,
-  PlayCircle, Calendar, Database, Upload, ArrowDownToLine, Search,
-  Wifi, CheckCircle, Image, Coffee, X, Trash2,
+  User, Palette, Brain, Download, Bell,
+  Moon, Sun,
+  Timer, Zap,
+  RefreshCw, Shield,
+  Sliders, Music,
+  Calendar, Database, Upload,
+  Wifi, Image, Coffee, X, Trash2,
   Monitor, Activity, Sparkles, LogOut, Eye, EyeOff, CalendarDays, Clock
 } from 'lucide-react';
 import { useApp, fmtClock } from '../../store/AppContext';
@@ -18,11 +18,9 @@ import { open, save } from '@tauri-apps/plugin-dialog';
 import NotificationBell from '../ui/NotificationBell';
 import { copyFile, mkdir, exists, readFile, writeFile, readTextFile } from '@tauri-apps/plugin-fs';
 import { appCacheDir, join, extname } from '@tauri-apps/api/path';
-import { getDownloadPath, setDownloadPath } from '../../lib/musicApi';
 import {
-  signIn, signOut, isSignedIn, onAuthChange, configureGoogle, ensureToken,
+  signIn, signOut, isSignedIn, onAuthChange, configureGoogle,
 } from '../../lib/google/index';
-import { syncAppEventsToGoogle } from '../../lib/google/calendar';
 import { isTauri } from '../../lib/tauri';
 import {
   supabase, signInWithGoogle as supabaseSignIn, signOutSupabase, getCurrentUser, syncAllToSupabase,
@@ -31,15 +29,15 @@ import {
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 const GOOGLE_CLIENT_SECRET = import.meta.env.VITE_GOOGLE_CLIENT_SECRET || '';
 
-type SettingsTab = 'perfil' | 'Apariencia' | 'estudio' | 'Notificaciones' | 'sistema' | 'musica';
+type SettingsTab = 'perfil' | 'apariencia' | 'estudio' | 'musica' | 'sistema' | 'notificaciones';
 
 const TABS: { id: SettingsTab; label: string; icon: React.ComponentType<{ size?: number }> }[] = [
   { id: 'perfil', label: 'Perfil', icon: User },
-  { id: 'Apariencia', label: 'Apariencia', icon: Palette },
+  { id: 'apariencia', label: 'Apariencia', icon: Palette },
   { id: 'estudio', label: 'Estudio', icon: Brain },
   { id: 'musica', label: 'Música', icon: Music },
   { id: 'sistema', label: 'Sistema', icon: Shield },
-  { id: 'Notificaciones', label: 'Sonidos y Alertas', icon: Bell },
+  { id: 'notificaciones', label: 'Sonidos y Alertas', icon: Bell },
 ];
 
 const FONTS = [
@@ -79,9 +77,9 @@ const ACCENT_COLORS = ['#E11D48', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#
 
 function Toggle({ checked, onChange, label, desc }: { checked: boolean; onChange: (v: boolean) => void; label: string; desc: string }) {
   return (
-    <label className="bento-card hover-lift" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px', border: '1px solid var(--border-subtle)', cursor: 'pointer', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+    <label className="bento-card hover-lift" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px', border: '1px solid var(--border-subtle)', cursor: 'pointer' }}>
       <div style={{ minWidth: 0, flex: 1 }}>
-        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', display: 'block' }}>{label}</span>
+        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', display: 'block' }}>{label}</span>
         <span style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4, display: 'block', lineHeight: 1.5 }}>{desc}</span>
       </div>
       <div style={{ position: 'relative', width: 44, height: 24, borderRadius: 12, background: checked ? 'var(--accent)' : 'var(--bg-deep)', border: '1px solid var(--border-default)', transition: 'all 200ms', flexShrink: 0, marginLeft: 16, display: 'flex', alignItems: 'center', padding: 2 }}>
@@ -132,9 +130,6 @@ export default function Ajustes() {
   });
 
 
-  const [downloadPath, setDownloadPathState] = useState('');
-  const [audioFormat, setAudioFormat] = useState<'mp3' | 'm4a'>('mp3');
-  const [syncing, setSyncing] = useState(false);
   const [googleProfile, setGoogleProfile] = useState<{ displayName: string; givenName: string; photoUrl: string; email: string } | null>(null);
   const [supabaseConnected, setSupabaseConnected] = useState(false);
   const [supabaseUser, setSupabaseUser] = useState<{ email?: string } | null>(null);
@@ -146,7 +141,6 @@ export default function Ajustes() {
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [authLoading, setAuthLoading] = useState(false);
   const [showDrawModal, setShowDrawModal] = useState(false);
-  const [showBarDrawModal, setShowBarDrawModal] = useState(false);
   const [clearAllMusicText, setClearAllMusicText] = useState('');
   const [sysInfo, setSysInfo] = useState<{ cpu: number; ram: number; disk: number; platform: string; arch: string; appVer: string } | null>(null);
   const bgInputRef = useRef<HTMLInputElement>(null);
@@ -177,10 +171,6 @@ export default function Ajustes() {
   const secondsStr = format(currentTime, 'ss');
   const dateStr = format(currentTime, "EEEE, d 'de' MMMM, yyyy", { locale: es as any });
   const dateStrCapitalized = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
-
-  useEffect(() => {
-    getDownloadPath().then(setDownloadPathState).catch(() => {});
-  }, []);
 
   useEffect(() => {
     if (GOOGLE_CLIENT_ID) {
@@ -337,13 +327,11 @@ export default function Ajustes() {
   };
 
   const handleCalendarSync = async () => {
-    setSyncing(true);
     try {
       await triggerCalendarSync();
       const count = await importGoogleEvents();
       addNotification(count > 0 ? `${count} eventos importados de Google Calendar` : 'Eventos sincronizados exitosamente', 'success');
     } catch { addNotification('Error de Sincronización con Google Calendar', 'error'); }
-    setSyncing(false);
   };
 
   const handleFontChange = (font: string) => {
@@ -361,14 +349,14 @@ export default function Ajustes() {
             <h1 style={{ fontSize: 32, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.15, letterSpacing: '-0.02em', fontFamily: "'Inter Tight', sans-serif" }}>Configuración</h1>
             <Sliders size={26} style={{ color: 'var(--accent)' }} />
           </div>
-          <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 6, fontWeight: 500 }}>Personaliza y optimiza tu entorno de estudio.</p>
+          <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 6, fontWeight: 300, letterSpacing: '0.02em' }}>Personaliza cada aspecto de tu entorno</p>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', border: '1px solid var(--border-default)', borderRadius: 16, fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>
               <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--success)', boxShadow: '0 0 8px var(--success)' }} />
-              Conectado
+              En linea
             </div>
             <button className="btn-ghost" style={{ padding: 8, borderRadius: '50%' }}><Wifi size={16} /></button>
             <NotificationBell />
@@ -403,8 +391,8 @@ export default function Ajustes() {
       <div style={{ display: 'flex', flex: 1, gap: 24, minHeight: 600, alignItems: 'flex-start' }}>
         
         {/* INNER SIDEBAR */}
-        <aside className="bento-card" style={{ width: 240, padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8, padding: '0 8px' }}>
+        <aside className="bento-card" style={{ width: 240, padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8, padding: '0 8px' }}>
             Categorías
           </div>
           {TABS.map(tab => {
@@ -426,7 +414,7 @@ export default function Ajustes() {
         </aside>
 
         {/* MAIN AREA */}
-        <main className="bento-card" style={{ flex: 1, padding: '32px 40px', minHeight: 600, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+        <main className="bento-card" style={{ flex: 1, padding: '32px 40px', minHeight: 600 }}>
           <div style={{ maxWidth: 680, margin: '0 auto' }}>
 
             {/* â•â•â•â•â•â•â•â•â•â•â• PERFIL â•â•â•â•â•â•â•â•â•â•â• */}
@@ -438,7 +426,7 @@ export default function Ajustes() {
                 </div>
 
                 {/* Avatar + Name + Photo URL */}
-                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 24, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 24 }}>
                   <div style={{ position: 'relative', flexShrink: 0 }}>
                     {settings.profilePhoto ? (
                       <img src={settings.profilePhoto} alt="" style={{ width: 72, height: 72, borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--accent)' }} />
@@ -463,7 +451,7 @@ export default function Ajustes() {
                 </div>
 
                 {/* Connected Services */}
-                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
                   <h3 style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em', marginBottom: 16 }}>Autenticación y Nube</h3>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {/* Google */}
@@ -538,7 +526,7 @@ export default function Ajustes() {
                 </div>
 
                 {/* Ocultar tareas completadas */}
-                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
                     <EyeOff size={16} style={{ color: 'var(--accent)' }} />
                     <h3 style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em', margin: 0 }}>Ocultar tareas completadas</h3>
@@ -624,7 +612,7 @@ export default function Ajustes() {
             )}
 
             {/* Apariencia */}
-            {activeTab === 'Apariencia' && (
+            {activeTab === 'apariencia' && (
               <section style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
                 <div>
                   <h2 style={{ fontSize: 20, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em', marginBottom: 4 }}>Apariencia y Diseño</h2>
@@ -632,7 +620,7 @@ export default function Ajustes() {
                 </div>
 
                 {/* Selector de modo: Clásico vs 3 Colores */}
-                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                     <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
                       Sistema de Color
@@ -817,7 +805,7 @@ export default function Ajustes() {
                 </div>
 
                 {/* Tipografía */}
-                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
                   <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16, display: 'block' }}>Familia Tipográfica</span>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
                     {FONTS.map(font => {
@@ -837,7 +825,7 @@ export default function Ajustes() {
                 </div>
 
                 {/* Fondo de la Aplicación y Paneles */}
-                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
                   <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16, display: 'block' }}>Fondo y Apariencia de Paneles</span>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                     {settings.backgroundImage && (
@@ -977,7 +965,7 @@ export default function Ajustes() {
                 </div>
 
                 {/* Vista de Portada Grande */}
-                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
                   <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16, display: 'block' }}>
                     Vista de Portada Grande
                   </span>
@@ -1008,7 +996,7 @@ export default function Ajustes() {
                 </div>
 
                 {/* Barra de Reproducción Personalizable */}
-                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
                   <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16, display: 'block' }}>
                     Barra de Reproducción
                   </span>
@@ -1222,19 +1210,6 @@ export default function Ajustes() {
                     />
                   )}
 
-                  {/* Drawing Modal for Bar Track */}
-                  {showBarDrawModal && (
-                    <CharacterDrawModal
-                      currentDraw={settings.playerBarTrackDraw || ''}
-                      currentSpeeds={settings.playerBarTrackFrameSpeeds || ''}
-                      characterSize={48}
-                      onSave={(dataUrl, speedsStr) => {
-                        updateSettings({ playerBarTrackDraw: dataUrl, playerBarTrackFrameSpeeds: speedsStr });
-                        setShowBarDrawModal(false);
-                      }}
-                      onClose={() => setShowBarDrawModal(false)}
-                    />
-                  )}
                 </div>
               </section>
             )}
@@ -1247,7 +1222,7 @@ export default function Ajustes() {
                   <p style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 300, letterSpacing: '0.02em' }}>Configura los intervalos de tu método Pomodoro y objetivos</p>
                 </div>
 
-                <div className="bento-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 20, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                <div className="bento-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
                     <RangeSlider label="Enfoque" value={settings.pomodoroTime / 60} min={10} max={120} unit="min" onChange={v => updateSettings({ pomodoroTime: v * 60 })} color="#E11D48" />
                     <RangeSlider label="Cronómetro (meta por ronda)" value={(settings.chronoGoal || 1500) / 60} min={25} max={180} unit="min" onChange={v => updateSettings({ chronoGoal: v * 60 })} color="#3B82F6" />
@@ -1327,12 +1302,12 @@ export default function Ajustes() {
                 </div>
 
                 {/* Timer Colors */}
-                <div className="bento-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 12, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                <div className="bento-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
                   <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>Formato de Hora</span>
                   <div style={{ display: 'flex', gap: 8 }}>
                     {(['24h', '12h'] as const).map(f => (
                       <button key={f} onClick={() => updateSettings({ timeFormat: f })}
-                        style={{ flex: 1, padding: '12px 0', borderRadius: 12, fontSize: 14, fontWeight: 600, border: `1px solid ${(settings.timeFormat || '24h') === f ? 'var(--accent)' : 'var(--border-soft)'}`, background: (settings.timeFormat || '24h') === f ? 'rgba(225,29,72,0.08)' : 'var(--bg-deep)', color: (settings.timeFormat || '24h') === f ? 'var(--accent)' : 'var(--text-secondary)', cursor: 'pointer', transition: 'all 200ms' }}>
+                        style={{ flex: 1, padding: '12px 0', borderRadius: 12, fontSize: 14, fontWeight: 600, border: `1px solid ${(settings.timeFormat || '24h') === f ? 'var(--accent)' : 'var(--border-soft)'}`, background: (settings.timeFormat || '24h') === f ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : 'var(--bg-deep)', color: (settings.timeFormat || '24h') === f ? 'var(--accent)' : 'var(--text-secondary)', cursor: 'pointer', transition: 'all 200ms' }}>
                         {f === '24h' ? '24 horas (00:00 – 23:59)' : '12 horas (AM / PM)'}
                       </button>
                     ))}
@@ -1341,7 +1316,7 @@ export default function Ajustes() {
                 </div>
 
                 {/* Timer Colors */}
-                <div className="bento-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 12, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                <div className="bento-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
                   <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>Colores de Temporizadores</span>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
                     {[
@@ -1370,7 +1345,6 @@ export default function Ajustes() {
                 {/* Floating Timer Customization */}
                 <div className="bento-card" style={{
                   padding: 0, overflow: 'hidden',
-                  background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)',
                   border: '1px solid var(--border-subtle)',
                 }}>
                   <div style={{
@@ -1413,7 +1387,7 @@ export default function Ajustes() {
                             style={{
                               padding: '7px 16px', borderRadius: 8, fontSize: 10, fontWeight: 500,
                               border: (settings.floatingBgMode || 'custom') === o.value ? '1px solid var(--accent)' : '1px solid var(--border-default)',
-                              background: (settings.floatingBgMode || 'custom') === o.value ? 'rgba(225,29,72,0.08)' : 'var(--bg-deep)',
+                              background: (settings.floatingBgMode || 'custom') === o.value ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : 'var(--bg-deep)',
                               color: (settings.floatingBgMode || 'custom') === o.value ? 'var(--accent)' : 'var(--text-secondary)',
                               cursor: 'pointer', transition: 'all 150ms',
                             }}>{o.label}</button>
@@ -1453,7 +1427,7 @@ export default function Ajustes() {
                             style={{
                               padding: '10px 6px', borderRadius: 8, fontSize: 10,
                               border: settings.floatingFont === opt.value ? '1px solid var(--accent)' : '1px solid var(--border-default)',
-                              background: settings.floatingFont === opt.value ? 'rgba(225,29,72,0.08)' : 'var(--bg-deep)',
+                              background: settings.floatingFont === opt.value ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : 'var(--bg-deep)',
                               color: settings.floatingFont === opt.value ? 'var(--accent)' : 'var(--text-secondary)',
                               cursor: 'pointer', transition: 'all 150ms',
                               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
@@ -1511,7 +1485,7 @@ export default function Ajustes() {
                                 style={{
                                   padding: '10px 6px', borderRadius: 8, fontSize: 10,
                                   border: (settings.floatingAnimationType || 'plant') === a.value ? '1px solid var(--accent)' : '1px solid var(--border-default)',
-                                  background: (settings.floatingAnimationType || 'plant') === a.value ? 'rgba(225,29,72,0.08)' : 'var(--bg-deep)',
+                                  background: (settings.floatingAnimationType || 'plant') === a.value ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : 'var(--bg-deep)',
                                   color: (settings.floatingAnimationType || 'plant') === a.value ? 'var(--accent)' : 'var(--text-secondary)',
                                   cursor: 'pointer', transition: 'all 150ms',
                                   display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
@@ -1541,7 +1515,7 @@ export default function Ajustes() {
                 </div>
 
                 {/* Audio Format */}
-                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
                   <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16, display: 'block' }}>
                     Formato de Descarga
                   </span>
@@ -1567,7 +1541,7 @@ export default function Ajustes() {
                 </div>
 
                 {/* Audio Quality */}
-                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
                   <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16, display: 'block' }}>
                     Calidad de Audio
                   </span>
@@ -1594,7 +1568,7 @@ export default function Ajustes() {
                 </div>
 
                 {/* Cover Art */}
-                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
                   <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16, display: 'block' }}>
                     Portada de Descarga
                   </span>
@@ -1603,7 +1577,7 @@ export default function Ajustes() {
                 </div>
 
                 {/* Playback retries */}
-                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
                   <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16, display: 'block' }}>
                     Reproducción
                   </span>
@@ -1612,7 +1586,7 @@ export default function Ajustes() {
                 </div>
 
                 {/* Download path info */}
-                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
                   <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16, display: 'block' }}>
                     Carpeta de Descargas
                   </span>
@@ -1623,7 +1597,7 @@ export default function Ajustes() {
                 </div>
 
                 {/* Import / Export metadata */}
-                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
                   <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>
                     Importar / Exportar Metadatos
                   </span>
@@ -1694,23 +1668,26 @@ export default function Ajustes() {
               </section>
             )}
 
-            {activeTab === 'Notificaciones' && (
+            {activeTab === 'notificaciones' && (
               <section style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
                 <div>
-                  <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4, fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em' }}>Sonidos y Alertas de Sistema</h2>
-                  <p style={{ fontSize: 13, color: 'var(--text-tertiary)', lineHeight: 1.5 }}>Controla el comportamiento acústico y notificaciones del entorno de estudio</p>
+                  <h2 style={{ fontSize: 20, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em', marginBottom: 4 }}>Sonidos y Alertas de Sistema</h2>
+                  <p style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 300, letterSpacing: '0.02em' }}>Controla el comportamiento acústico y notificaciones del entorno de estudio</p>
                 </div>
 
                 {/* General Toggles */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <Toggle checked={settings.notifications} onChange={v => updateSettings({ notifications: v })}
-                    label="Notificaciones Visuales del Temporizador" desc="Mostrar notificación nativa al finalizar ciclos de estudio o descansos programados." />
-                  <Toggle checked={settings.soundEffects} onChange={v => updateSettings({ soundEffects: v })}
-                    label="Sonidos de Interfaz" desc="Reproducir retroalimentación acústica al interactuar con botones, pestañas, modales y arrastrar elementos." />
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
+                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 14, display: 'block' }}>Configuración General</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <Toggle checked={settings.notifications} onChange={v => updateSettings({ notifications: v })}
+                      label="Notificaciones Visuales del Temporizador" desc="Mostrar notificación nativa al finalizar ciclos de estudio o descansos programados." />
+                    <Toggle checked={settings.soundEffects} onChange={v => updateSettings({ soundEffects: v })}
+                      label="Sonidos de Interfaz" desc="Reproducir retroalimentación acústica al interactuar con botones, pestañas, modales y arrastrar elementos." />
+                  </div>
                 </div>
 
                 {/* Event-specific settings */}
-                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
                   <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 14, display: 'block' }}>Eventos de Temporizador</span>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {[
@@ -1762,7 +1739,7 @@ export default function Ajustes() {
                 </div>
 
                 {/* Platform Info */}
-                <div className="bento-card" style={{ padding: '20px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                <div className="bento-card" style={{ padding: '20px', border: '1px solid var(--border-subtle)' }}>
                   <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
                     <Monitor size={14} style={{ color: 'var(--accent)' }} /> Plataforma
                   </h3>
@@ -1784,7 +1761,7 @@ export default function Ajustes() {
 
                 {/* Hardware Stats */}
                 {sysInfo && (
-                  <div className="bento-card" style={{ padding: '20px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                  <div className="bento-card" style={{ padding: '20px', border: '1px solid var(--border-subtle)' }}>
                     <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
                       <Activity size={14} style={{ color: 'var(--accent)' }} /> Rendimiento
                     </h3>
@@ -1809,7 +1786,7 @@ export default function Ajustes() {
                 )}
 
                 {/* Cache & Storage */}
-                <div className="bento-card" style={{ padding: '20px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                <div className="bento-card" style={{ padding: '20px', border: '1px solid var(--border-subtle)' }}>
                   <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
                     <Database size={14} style={{ color: 'var(--accent)' }} /> Almacenamiento Local
                   </h3>
@@ -1866,7 +1843,7 @@ export default function Ajustes() {
                 </div>
 
                 {/* Music Backup */}
-                <div className="bento-card" style={{ padding: '20px', border: '1px solid var(--border-subtle)', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }}>
+                <div className="bento-card" style={{ padding: '20px', border: '1px solid var(--border-subtle)' }}>
                   <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
                     <Music size={14} style={{ color: 'var(--accent)' }} /> Respaldo de Música
                   </h3>
@@ -1914,7 +1891,7 @@ export default function Ajustes() {
       {/* Google Connect Modal */}
       {showGoogleModal && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={() => setShowGoogleModal(false)}>
-          <div className="bento-card" style={{ width: '100%', maxWidth: 420, padding: '28px 32px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }} onClick={e => e.stopPropagation()}>
+          <div className="bento-card" style={{ width: '100%', maxWidth: 420, padding: '28px 32px' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", display: 'flex', alignItems: 'center', gap: 10 }}>
                 <svg viewBox="0 0 24 24" style={{ width: 22, height: 22 }}>
@@ -1963,26 +1940,26 @@ export default function Ajustes() {
       {/* Clear All Music Confirmation */}
       {showClearAllMusic && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={() => { setShowClearAllMusic(false); setClearAllMusicText(''); }}>
-          <div className="bento-card" style={{ padding: 28, width: 360, maxWidth: '90vw', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)' }} onClick={e => e.stopPropagation()}>
+          <div className="bento-card" style={{ padding: 28, width: 360, maxWidth: '90vw' }} onClick={e => e.stopPropagation()}>
             <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8, fontFamily: "'Inter Tight', sans-serif" }}>Eliminar toda la biblioteca de música</h3>
             <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginBottom: 16 }}>
               Se eliminarán todas las canciones, playlists y descargas. Esta acción no se puede deshacer.
             </p>
             <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
-              Escribe <strong style={{ color: 'var(--error)' }}>Deseoborrartodo</strong> para confirmar:
+              Escribe <strong style={{ color: 'var(--error)' }}>DeseoBorrarTodo</strong> para confirmar:
             </p>
             <input type="text" value={clearAllMusicText} onChange={e => setClearAllMusicText(e.target.value)}
-              placeholder="Escribe Deseoborrartodo"
+              placeholder="DeseoBorrarTodo"
               style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-deep)', color: 'var(--text-primary)', fontSize: 12, outline: 'none', marginBottom: 16 }} />
             <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
               <button onClick={() => { setShowClearAllMusic(false); setClearAllMusicText(''); }} className="btn-secondary" style={{ height: 38, padding: '0 20px', fontSize: 12 }}>Cancelar</button>
               <button onClick={() => {
-                if (clearAllMusicText !== 'Deseoborrartodo') return;
+                if (clearAllMusicText.trim() !== 'DeseoBorrarTodo') return;
                 clearAllMusicData();
                 setShowClearAllMusic(false);
                 setClearAllMusicText('');
                 addNotification('Biblioteca de música eliminada por completo', 'success');
-              }} className="btn-primary" style={{ height: 38, padding: '0 20px', fontSize: 12, background: clearAllMusicText === 'Deseoborrartodo' ? 'var(--error)' : 'var(--bg-deep)', borderColor: clearAllMusicText === 'Deseoborrartodo' ? 'var(--error)' : 'var(--border-default)', opacity: clearAllMusicText === 'Deseoborrartodo' ? 1 : 0.4, cursor: clearAllMusicText === 'Deseoborrartodo' ? 'pointer' : 'not-allowed' }}>
+              }} className="btn-primary" style={{ height: 38, padding: '0 20px', fontSize: 12, background: clearAllMusicText.trim() === 'DeseoBorrarTodo' ? 'var(--error)' : 'var(--bg-deep)', borderColor: clearAllMusicText.trim() === 'DeseoBorrarTodo' ? 'var(--error)' : 'var(--border-default)', opacity: clearAllMusicText.trim() === 'DeseoBorrarTodo' ? 1 : 0.4, cursor: clearAllMusicText.trim() === 'DeseoBorrarTodo' ? 'pointer' : 'not-allowed' }}>
                 Eliminar todo
               </button>
             </div>

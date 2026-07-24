@@ -729,27 +729,43 @@ export default function Inicio() {
               {upcomingEvents.length > 0 && (
                 <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border-soft)' }}>
                   <div style={{ fontSize: 8, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10 }}>Siguientes</div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {upcomingEvents.map(ev => (
-                      <div key={ev.id} style={{
-                        display: 'flex', alignItems: 'center', gap: 10,
-                        padding: '8px 10px', borderRadius: 8,
-                        background: 'var(--bg-deep)',
-                      }}>
-                        <div style={{ width: 6, height: 6, borderRadius: '50%', background: ev.color, flexShrink: 0 }} />
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.title}</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {upcomingEvents.map(ev => {
+                      const evDate = (() => { try { return new Date(ev.date + 'T' + (ev.startTime || '12:00')); } catch { return null; } })();
+                      const daysLeft = evDate ? Math.ceil((evDate.getTime() - Date.now()) / 86400000) : 0;
+                      return (
+                        <div key={ev.id} style={{
+                          display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 10,
+                          background: 'var(--bg-elevated)', border: '1px solid var(--border-soft)',
+                          transition: 'all 200ms ease', cursor: 'default',
+                        }}
+                          onMouseEnter={e => { e.currentTarget.style.borderColor = `${ev.color}25`; e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.background = 'var(--bg-elevated)'; }}>
+                          <div style={{ width: 36, height: 36, borderRadius: 10, background: `${ev.color}10`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <div style={{ fontSize: 8, fontWeight: 700, color: ev.color, textTransform: 'uppercase', lineHeight: 1, letterSpacing: '0.03em' }}>
+                              {evDate ? format(evDate, 'MMM', { locale: es as any }) : ''}
+                            </div>
+                            <div style={{ fontSize: 14, fontWeight: 700, color: ev.color, lineHeight: 1, marginTop: 2, fontFamily: "'Inter Tight', sans-serif" }}>
+                              {evDate ? format(ev.date, 'd') : ''}
+                            </div>
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.title}</div>
+                            <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 3, display: 'flex', alignItems: 'center', gap: 5 }}>
+                              {ev.startTime && !ev.allDay ? (
+                                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: 'var(--text-tertiary)' }}>{ev.startTime}</span>
+                              ) : (
+                                <span style={{ color: 'var(--text-tertiary)' }}>Todo el dia</span>
+                              )}
+                              <span style={{ color: 'var(--text-muted)', opacity: 0.4 }}>-</span>
+                              <span style={{ color: daysLeft === 0 ? '#10B981' : daysLeft <= 3 ? '#F59E0B' : 'var(--text-tertiary)', fontWeight: daysLeft <= 3 ? 600 : 400, fontSize: 9 }}>
+                                {daysLeft === 0 ? 'Hoy' : daysLeft === 1 ? 'Manana' : `${daysLeft}d`}
+                              </span>
+                            </div>
+                          </div>
                         </div>
-                        <div style={{ fontSize: 9, color: 'var(--text-tertiary)', fontFamily: "'JetBrains Mono', monospace", flexShrink: 0 }}>
-                          {(() => {
-                            try {
-                              const ed = new Date(ev.date + 'T' + (ev.startTime || '12:00'));
-                              return format(ed, "d MMM", { locale: es as any });
-                            } catch { return ''; }
-                          })()}
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -771,26 +787,42 @@ export default function Inicio() {
 
               {upcomingEvents.length > 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {upcomingEvents.map(ev => (
-                    <div key={ev.id} style={{
-                      display: 'flex', alignItems: 'center', gap: 10,
-                      padding: '8px 10px', borderRadius: 8,
-                      background: 'var(--bg-deep)',
-                    }}>
-                      <div style={{ width: 6, height: 6, borderRadius: '50%', background: ev.color, flexShrink: 0 }} />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.title}</div>
+                  {upcomingEvents.map(ev => {
+                    const evDate = (() => { try { return new Date(ev.date + 'T' + (ev.startTime || '12:00')); } catch { return null; } })();
+                    const daysLeft = evDate ? Math.ceil((evDate.getTime() - Date.now()) / 86400000) : 0;
+                    return (
+                      <div key={ev.id} style={{
+                        display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 10,
+                        background: 'var(--bg-elevated)', border: '1px solid var(--border-soft)',
+                        transition: 'all 200ms ease', cursor: 'default',
+                      }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = `${ev.color}25`; e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.background = 'var(--bg-elevated)'; }}>
+                        <div style={{ width: 36, height: 36, borderRadius: 10, background: `${ev.color}10`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <div style={{ fontSize: 8, fontWeight: 700, color: ev.color, textTransform: 'uppercase', lineHeight: 1, letterSpacing: '0.03em' }}>
+                            {evDate ? format(evDate, 'MMM', { locale: es as any }) : ''}
+                          </div>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: ev.color, lineHeight: 1, marginTop: 2, fontFamily: "'Inter Tight', sans-serif" }}>
+                            {evDate ? format(ev.date, 'd') : ''}
+                          </div>
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.title}</div>
+                          <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 3, display: 'flex', alignItems: 'center', gap: 5 }}>
+                            {ev.startTime && !ev.allDay ? (
+                              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: 'var(--text-tertiary)' }}>{ev.startTime}</span>
+                            ) : (
+                              <span style={{ color: 'var(--text-tertiary)' }}>Todo el dia</span>
+                            )}
+                            <span style={{ color: 'var(--text-muted)', opacity: 0.4 }}>-</span>
+                            <span style={{ color: daysLeft === 0 ? '#10B981' : daysLeft <= 3 ? '#F59E0B' : 'var(--text-tertiary)', fontWeight: daysLeft <= 3 ? 600 : 400, fontSize: 9 }}>
+                              {daysLeft === 0 ? 'Hoy' : daysLeft === 1 ? 'Manana' : `${daysLeft}d`}
+                            </span>
+                          </div>
+                        </div>
                       </div>
-                      <div style={{ fontSize: 9, color: 'var(--text-tertiary)', fontFamily: "'JetBrains Mono', monospace", flexShrink: 0 }}>
-                        {(() => {
-                          try {
-                            const ed = new Date(ev.date + 'T' + (ev.startTime || '12:00'));
-                            return format(ed, "d MMM", { locale: es as any });
-                          } catch { return ''; }
-                        })()}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '16px 0', gap: 6 }}>
