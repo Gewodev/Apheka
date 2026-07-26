@@ -138,7 +138,7 @@ function getMergedClasses(classes: ScheduleClass[]) {
 }
 
 export default function Planificacion() {
-  const { tasks, courses, setNavigateTo, addNotification, settings, studySessions } = useApp();
+  const { tasks, courses, setNavigateTo, addNotification, settings, studySessions, plannedSessions } = useApp();
 
   const [planView, setPlanView] = useState<PlanView>(() => {
     try { return (localStorage.getItem('owa_planner_view') as PlanView) || 'week'; }
@@ -274,6 +274,10 @@ export default function Planificacion() {
       }
       return false;
     });
+  }
+
+  function getPlannedSessionsForDate(iso: string) {
+    return (plannedSessions || []).filter(s => s.date === iso && !s.completed);
   }
 
   const isOld = (dateStr: string) => {
@@ -481,7 +485,7 @@ export default function Planificacion() {
                         color:tod?'#fff':'var(--text-primary)',
                         fontFamily:"'Outfit',sans-serif",
                       }}>{format(d,'d')}</div>
-                      <AllDayBar events={getAllDayEventsForDate(format(d,'yyyy-MM-dd'))} />
+                      <AllDayBar events={getAllDayEventsForDate(format(d,'yyyy-MM-dd'))} plannedSessions={getPlannedSessionsForDate(format(d,'yyyy-MM-dd'))} />
                     </div>
                   );
                 })}
@@ -602,6 +606,27 @@ export default function Planificacion() {
                             />
                           );
                         })}
+                        {getPlannedSessionsForDate(iso).map(ps => {
+                          const durH = ps.durationMinutes / 60;
+                          const sH = Math.max(durH * H_PX, 20);
+                          const startH = 9;
+                          const sTop = (startH - H_START) * H_PX;
+                          const courseInfo = courses.find(c => c.id === ps.courseId);
+                          return (
+                            <div key={`planned-${ps.id}`} title={`${ps.title} (${ps.durationMinutes}m — ${ps.type})`}
+                              style={{
+                                position:'absolute', top: sTop, left: '4%', width: '92%', height: sH,
+                                borderRadius: 6, zIndex: 2, pointerEvents: 'none',
+                                background: `linear-gradient(135deg, rgba(139,92,246,0.06), rgba(139,92,246,0.02))`,
+                                borderLeft: `2.5px dashed rgba(139,92,246,0.35)`,
+                                display: 'flex', alignItems: 'flex-start', padding: '4px 8px',
+                              }}>
+                              <span style={{ fontSize: 9, fontWeight: 600, color: 'rgba(139,92,246,0.65)', fontFamily: "'Inter', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {ps.title} <span style={{ fontWeight: 400, opacity: 0.6 }}>· {ps.durationMinutes}m</span>
+                              </span>
+                            </div>
+                          );
+                        })}
                         {tod && nowH>=H_START && nowH<=H_END && (
                           <div style={{ position:'absolute', top:nowPx, left:0, right:0, height:2, background:'var(--accent)', zIndex:10, pointerEvents:'none', boxShadow:'0 0 12px var(--accent-glow)' }}>
                             <div style={{ position:'absolute', left:-4, top:-4, width:10, height:10, borderRadius:'50%', background:'var(--accent)', boxShadow:'0 0 16px var(--accent-glow)' }}/>
@@ -644,6 +669,11 @@ export default function Planificacion() {
                 <div style={{ marginTop:16, display:'flex', flexWrap:'wrap', gap:8 }}>
                   {getAllDayEventsForDate(format(navDate,'yyyy-MM-dd')).map(ev => (
                     <span key={ev.id} onClick={()=>{ setSelectedItem({ type: 'event', event: ev }); }} style={{ fontSize:12, fontWeight:600, padding:'6px 16px', borderRadius:10, background:`${ev.color}15`, border:`1px solid ${ev.color}30`, color:ev.color, cursor:'pointer' }}>{ev.title}</span>
+                  ))}
+                  {getPlannedSessionsForDate(format(navDate,'yyyy-MM-dd')).map(s => (
+                    <span key={s.id} style={{ fontSize:11, fontWeight:500, padding:'4px 12px', borderRadius:8, background:'rgba(139,92,246,0.08)', border:'1px solid rgba(139,92,246,0.2)', color:'rgba(139,92,246,0.8)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      {s.title || s.type} <span style={{ fontSize: 9, opacity: 0.6 }}>{s.durationMinutes}m</span>
+                    </span>
                   ))}
                 </div>
               </div>
@@ -765,8 +795,13 @@ export default function Planificacion() {
                               const evTask = (ev as PlanEvent).taskId ? tasks.find(t => t.id === (ev as PlanEvent).taskId) : null;
                               return <div key={ei} style={{ fontSize:10,padding:'4px 8px',borderRadius:6,background:`${ev.color}15`,borderLeft:`2px solid ${ev.color}`,color:ev.color,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',fontWeight:600 }}>{ev.title}{evTask ? <span style={{opacity:0.55,fontWeight:500}}> + {evTask.title}</span> : ''}</div>;
                             })}
+                            {getPlannedSessionsForDate(iso).slice(0, 2).map(s => (
+                              <div key={s.id} style={{ fontSize:9, padding:'3px 7px', borderRadius:5, background:'rgba(139,92,246,0.08)', borderLeft:'2px solid rgba(139,92,246,0.25)', color:'rgba(139,92,246,0.7)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', fontWeight:500 }}>
+                                {s.title || s.type} <span style={{opacity:0.5}}>{s.durationMinutes}m</span>
+                              </div>
+                            ))}
                             {dayTasks.slice(0,3).map((t,ti)=><div key={ti} style={{ fontSize:10,padding:'4px 8px',borderRadius:6,background:`${t.courseColor||'var(--text-muted)'}15`,borderLeft:`2px dashed ${t.courseColor||'var(--text-muted)'}`,color:t.courseColor||'var(--text-secondary)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',fontWeight:600 }}>Ent: {t.title}</div>)}
-                            {(dayEvs.length+dayTasks.length)>6&&<div style={{ fontSize:10,color:'var(--text-muted)',fontWeight:600, marginTop: 4 }}>+{dayEvs.length+dayTasks.length-6} más</div>}
+                            {(dayEvs.length+dayTasks.length+getPlannedSessionsForDate(iso).length)>6&&<div style={{ fontSize:10,color:'var(--text-muted)',fontWeight:600, marginTop: 4 }}>+{dayEvs.length+dayTasks.length+getPlannedSessionsForDate(iso).length-6} más</div>}
                           </div>
                         </div>
                       );
@@ -897,14 +932,21 @@ function DroppablePlanSlot({ id, children }: { id: string; children: (props: { s
   return <>{children({ setNodeRef, isOver })}</>;
 }
 
-function AllDayBar({ events }: { events: PlanEvent[] }) {
-  if (!events.length) return <div style={{ minHeight:8 }}/>;
+function AllDayBar({ events, plannedSessions }: { events: PlanEvent[]; plannedSessions?: { id: string; title: string; durationMinutes: number; type: string; courseId?: string }[] }) {
+  const ps = plannedSessions || [];
+  if (!events.length && !ps.length) return <div style={{ minHeight:8 }}/>;
   return (
-    <div style={{ display:'flex', flexWrap:'wrap', gap:4, padding:'4px 8px', justifyContent:'center' }}>
+    <div style={{ display:'flex', flexWrap:'wrap', gap:4, padding:'4px 8px', justifyContent:'center', flexDirection: 'column', alignItems: 'center' }}>
       {events.slice(0,2).map(ev=>(
         <div key={ev.id} style={{ fontSize:9, padding:'2px 6px', borderRadius:4, background:`${ev.color}15`, borderLeft:`2px solid ${ev.color}`, color:ev.color, maxWidth:80, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', fontWeight:600 }}>{ev.title}</div>
       ))}
       {events.length > 2 && <div style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 600 }}>+{events.length - 2}</div>}
+      {ps.slice(0, 2).map(s => (
+        <div key={s.id} style={{ fontSize: 8, padding: '1px 5px', borderRadius: 3, background: 'rgba(139,92,246,0.08)', borderLeft: '2px solid rgba(139,92,246,0.3)', color: 'rgba(139,92,246,0.7)', maxWidth: 80, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 500 }}>
+          {s.title || s.type}
+        </div>
+      ))}
+      {ps.length > 2 && <div style={{ fontSize: 8, color: 'rgba(139,92,246,0.5)', fontWeight: 500 }}>+{ps.length - 2}</div>}
     </div>
   );
 }

@@ -1,11 +1,13 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
-  GraduationCap, ChevronLeft, ChevronDown, ChevronUp, Pencil, PlusCircle, Layers, Trash2,
+  GraduationCap, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Pencil, PlusCircle, Layers, Trash2,
   Book, Upload, X, Search, Edit3, Plus, File, Sigma, Lightbulb, Key, Type, HelpCircle, ListChecks, ExternalLink,
   Check, GripVertical, StickyNote, BookOpen, ArrowUpRight,
   NotebookPen, ListTodo, Bold, Italic, Underline, Heading1, Heading2, Heading3,
   List, ListOrdered, Highlighter, Paperclip, MoreHorizontal, Eye, FolderOpen,
   ArrowLeftRight, BarChart3, Calendar, Flag, ArrowUpDown, Star, EyeOff, Strikethrough, AlignLeft, AlignCenter, AlertTriangle,
+  Users, MoreVertical, FileText, CheckCircle, FileSpreadsheet, Image as ImageIcon, Music, Link2, Lock,
+  Download, ArrowDownToLine, ArrowUpFromLine, Package, PackageOpen, FileDown, FileUp,
 } from 'lucide-react';
 import { FormatToolbar } from '../ui/FormatToolbar';
 import {
@@ -16,7 +18,9 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useApp, Course, SubjectGroup, SubjectTopic, SubjectMaterial } from '../../store/AppContext';
-import { format } from "date-fns";
+import { save } from '@tauri-apps/plugin-dialog';
+import { writeTextFile } from '@tauri-apps/plugin-fs';
+import { format, subDays, addDays, startOfWeek, endOfWeek } from "date-fns";
 import { es } from "date-fns/locale";
 import toast from 'react-hot-toast';
 
@@ -566,7 +570,7 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
 
 // ─── Main Component ───
 export default function Cursos({ initialCourseId, initialTab = 'overview', onNavigate }: { initialCourseId?: string; initialTab?: 'overview' | 'tareas' | 'notas' | 'archivos'; onNavigate?: (view: string) => void }) {
-  const { courses = [], tasks = [], notes = [], noteFolders = [], updateCourse, deleteCourse, setNavigateTo, setFocusedTaskId, addTask, updateTask, deleteTask, addNote, updateNote, deleteNote, reorderNotes } = useApp();
+  const { courses = [], tasks = [], notes = [], noteFolders = [], updateCourse, deleteCourse, setNavigateTo, setFocusedTaskId, addTask, updateTask, deleteTask, addNote, updateNote, deleteNote, reorderNotes, weeklyStudyTime, plannedSessions, addPlannedSession, deletePlannedSession } = useApp();
   const th = document.documentElement.getAttribute('data-theme');
   const isDarkSelect = !th || th === 'oscuro' || th === 'vibrante';
   const selectBorder = isDarkSelect ? '1px solid rgba(255,255,255,0.12)' : '1px solid rgba(0,0,0,0.12)';
@@ -581,11 +585,14 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
       setSelectedOverviewNoteId(null);
       setOverviewNoteEditMode(false);
       setCurrentView('overview');
+      setSelectedGroupId(null);
+      setStudyToolMode('none');
+      setShowMaterialsDropdown(false);
     }
   }, [initialCourseId]);
 
   // Topic view state
-  const [currentView, setCurrentView] = useState<'overview' | 'topic'>('overview');
+  const [currentView, setCurrentView] = useState<'overview' | 'topic' | 'group'>('overview');
   const [activeTopicId, setActiveTopicId] = useState<string | null>(null);
   const [filterMaterialType, setFilterMaterialType] = useState<MaterialType | 'all'>('all');
 
@@ -603,7 +610,18 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [groupName, setGroupName] = useState('');
   const [groupCover, setGroupCover] = useState<string | undefined>(undefined);
-  const [selectedTopicIds, setSelectedTopicIds] = useState<string[]>([]);
+  const [inlineEditGroupId, setInlineEditGroupId] = useState<string | null>(null);
+  const [inlineGroupName, setInlineGroupName] = useState('');
+  const [inlineGroupCover, setInlineGroupCover] = useState<string | undefined>(undefined);
+  const [showAgrupacionImportExport, setShowAgrupacionImportExport] = useState(false);
+  const [importExportMode, setImportExportMode] = useState<'export' | 'import'>('export');
+  const [hoverEdgePanel, setHoverEdgePanel] = useState(false);
+  const [confirmDeleteGroupId, setConfirmDeleteGroupId] = useState<string | null>(null);
+  const [confirmDeleteMatId, setConfirmDeleteMatId] = useState<string | null>(null);
+  const [importPreviewData, setImportPreviewData] = useState<{ group: { name: string; image?: string }; topics: any[] }[] | null>(null);
+  const [importSelected, setImportSelected] = useState<boolean[][]>([]);
+  const [exportSelectedIds, setExportSelectedIds] = useState<Set<string>>(new Set());
+  const groupCoverInputInlineRef = useRef<HTMLInputElement>(null);
 
   // Topic modals
   const [showTopicModal, setShowTopicModal] = useState(false);
@@ -621,6 +639,27 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const resetForm = () => setMaterialForm({ name: '', clarification: '', title: '', content: '', word: '', meaning: '', question: '', answer: '', description: '', image: undefined });
   const resourceInputRef = useRef<HTMLInputElement>(null);
   const materialImageInputRef = useRef<HTMLInputElement>(null);
+
+  // Add link modal
+  const [showAddLinkModal, setShowAddLinkModal] = useState(false);
+  const [addLinkUrl, setAddLinkUrl] = useState('');
+  const [addLinkName, setAddLinkName] = useState('');
+
+  // Plan session modal
+  const [showPlanModal, setShowPlanModal] = useState(false);
+  const [planDate, setPlanDate] = useState('');
+  const [planTitle, setPlanTitle] = useState('');
+  const [planGroupId, setPlanGroupId] = useState('');
+  const [planTopicId, setPlanTopicId] = useState('');
+  const [planType, setPlanType] = useState<'estudio' | 'repaso' | 'ejercicio' | 'lectura' | 'otro'>('estudio');
+  const [planDuration, setPlanDuration] = useState(30);
+
+  // Week navigation
+  const [weekOffset, setWeekOffset] = useState(0);
+
+  // Day detail modal
+  const [showDayDetail, setShowDayDetail] = useState(false);
+  const [dayDetailDate, setDayDetailDate] = useState('');
 
   // Task state
   const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -669,6 +708,9 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     setTimeout(() => {
       prevMode.current = overviewMode;
       setOverviewMode(prev => prev === 'tareas_notas' ? 'temas_archivos' : 'tareas_notas');
+      setCurrentView('overview');
+      setSelectedGroupId(null);
+      setStudyToolMode('none');
       setModePhase('in');
       setTimeout(() => { setModePhase('idle'); setModeAnimating(false); }, 350);
     }, 200);
@@ -769,6 +811,11 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const groupCoverInputRef = useRef<HTMLInputElement>(null);
 
   const course = useMemo(() => courses.find(c => c.id === selectedCourseId) || courses[0], [courses, selectedCourseId]);
+
+  // Planned sessions for the selected plan date
+  const dayPlannedSessions = useMemo(() => {
+    return (plannedSessions || []).filter(s => s.courseId === course?.id && s.date === planDate && !s.completed);
+  }, [plannedSessions, course?.id, planDate]);
 
   useEffect(() => {
     if (course) {
@@ -915,7 +962,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const allCourseMaterials = useMemo(() => {
     const mats: SubjectMaterial[] = [];
     (course?.studyTopics || []).forEach(t => (t.materials || []).forEach(m => mats.push({ ...m, _topicTitle: t.title } as SubjectMaterial & { _topicTitle: string })));
-    return mats;
+    return mats.filter(m => m.type === 'resource');
   }, [course]);
 
   // --- Handlers ---
@@ -961,23 +1008,16 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const handleSaveGroup = () => {
     if (!groupName.trim()) return;
     const currentGroups = course.groups || [];
-    const groupId = editingGroupId || Math.random().toString();
     let updatedGroups = [...currentGroups];
     if (editingGroupId) updatedGroups = updatedGroups.map(g => g.id === editingGroupId ? { ...g, name: groupName.trim(), image: groupCover } : g);
-    else updatedGroups.push({ id: groupId, name: groupName.trim(), image: groupCover, createdAt: Date.now() });
-    const updatedTopics = (course.studyTopics || []).map(t => {
-      if (selectedTopicIds.includes(t.id)) return { ...t, groupId };
-      if (t.groupId === groupId) return { ...t, groupId: undefined };
-      return t;
-    });
-    updateCourse(course.id, { groups: updatedGroups, studyTopics: updatedTopics });
-    setGroupName(''); setGroupCover(undefined); setSelectedTopicIds([]); setEditingGroupId(null); setShowGroupModal(false);
-    toast.success(editingGroupId ? 'Agrupación actualizada' : 'Agrupación creada');
+    else updatedGroups.push({ id: editingGroupId || Math.random().toString(), name: groupName.trim(), image: groupCover, createdAt: Date.now() });
+    updateCourse(course.id, { groups: updatedGroups });
+    setGroupName(''); setGroupCover(undefined); setEditingGroupId(null); setShowGroupModal(false);
+    toast.success(editingGroupId ? 'Agrupacion actualizada' : 'Agrupacion creada');
   };
 
   const startEditGroup = (g: SubjectGroup) => {
-    const members = (course.studyTopics || []).filter(t => t.groupId === g.id).map(t => t.id);
-    setEditingGroupId(g.id); setGroupName(g.name); setGroupCover(g.image); setSelectedTopicIds(members); setShowGroupModal(true);
+    setEditingGroupId(g.id); setGroupName(g.name); setGroupCover(g.image); setShowGroupModal(true);
   };
   const handleDeleteGroup = (groupId: string) => {
     const currentGroups = course.groups || [];
@@ -991,15 +1031,31 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     setMaterialType(type); setMaterialColIndex(colIdx); setEditingMaterial(null); resetForm(); setShowMaterialModal(true);
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]; if (!file || !activeTopic) return;
+  const estudioFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, overrideTopicId?: string) => {
+    const file = e.target.files?.[0]; if (!file) return;
+    const tid = overrideTopicId || activeTopic?.id;
+    if (!tid) return;
     const reader = new FileReader();
     reader.onload = (event) => {
       const newMat: SubjectMaterial = { id: Math.random().toString(), type: 'resource', createdAt: Date.now(), columnIndex: materialColIndex, name: file.name, fileType: file.type, dataUrl: event.target?.result as string };
-      updateCourse(course.id, { studyTopics: (course.studyTopics || []).map(t => t.id === activeTopic.id ? { ...t, materials: [...(t.materials || []), newMat] } : t) });
+      updateCourse(course.id, { studyTopics: (course.studyTopics || []).map(t => t.id === tid ? { ...t, materials: [...(t.materials || []), newMat] } : t) });
       toast.success('Archivo subido');
     };
     reader.readAsDataURL(file); if (e.target) e.target.value = '';
+  };
+
+  const handleAddLink = () => {
+    if (!addLinkUrl.trim()) return;
+    const topic = parsedTopics[0];
+    if (!topic) return;
+    const url = addLinkUrl.trim();
+    const name = addLinkName.trim() || url;
+    const newMat: SubjectMaterial = { id: Math.random().toString(), type: 'resource', createdAt: Date.now(), columnIndex: 0, name, dataUrl: url };
+    updateCourse(course.id, { studyTopics: (course.studyTopics || []).map(t => t.id === topic.id ? { ...t, materials: [...(t.materials || []), newMat] } : t) });
+    setAddLinkUrl(''); setAddLinkName(''); setShowAddLinkModal(false);
+    toast.success('Enlace agregado');
   };
 
   const handleSaveMaterial = () => {
@@ -1038,6 +1094,12 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     if (!activeTopic) return;
     updateCourse(course.id, { studyTopics: (course.studyTopics || []).map(t => t.id === activeTopic.id ? { ...t, materials: (t.materials || []).filter(m => m.id !== mat.id) } : t) });
     toast.success('Material removido');
+  };
+
+  const handleDeleteResourceFromOverview = (matId: string) => {
+    updateCourse(course.id, { studyTopics: (course.studyTopics || []).map(t => ({ ...t, materials: (t.materials || []).filter(m => m.id !== matId) })) });
+    toast.success('Material eliminado');
+    setConfirmDeleteMatId(null);
   };
 
   const handleOpenResource = (mat: SubjectMaterial) => {
@@ -1187,8 +1249,11 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
 
   // --- Stats ---
   const topicMasteryStats = useMemo(() => {
-    const pt = course.studyTopics || [];
-    return { total: pt.length, mastered: pt.filter(t => t.reviewLevel >= 4).length, studying: pt.filter(t => t.reviewLevel > 0 && t.reviewLevel < 4).length, pending: pt.filter(t => t.reviewLevel === 0).length, totalMaterials: pt.reduce((s, t) => s + (t.materials?.length || 0), 0) };
+    const pt = course?.studyTopics || [];
+    const total = pt.length;
+    const mastered = pt.filter(t => t.reviewLevel >= 4).length;
+    const progressPct = total > 0 ? Math.round((mastered / total) * 100) : 0;
+    return { total, mastered, studying: pt.filter(t => t.reviewLevel > 0 && t.reviewLevel < 4).length, pending: pt.filter(t => t.reviewLevel === 0).length, totalMaterials: pt.reduce((s, t) => s + (t.materials?.length || 0), 0), progressPct };
   }, [course]);
 
   if (!course) {
@@ -1319,22 +1384,51 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
           <div>
             {/* Big banner */}
             <div style={{ position: 'relative', height: 200, overflow: 'hidden', background: `linear-gradient(135deg, ${course.color}33 0%, var(--bg-surface) 100%)` }}>
-              {(course.coverUrl || course.coverImage) ? (
-                <><img src={course.coverUrl || course.coverImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.6 }} /><div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, rgba(0,0,0,0.65) 0%, transparent 60%)' }} /></>
-              ) : <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(135deg, ${course.color}22, rgba(0,0,0,0.4))` }} />}
+              {(() => {
+                const grpImage = currentView === 'group' && selectedGroupId ? groups.find(g => g.id === selectedGroupId)?.image : undefined;
+                const imgSrc = grpImage || course.coverUrl || course.coverImage;
+                return imgSrc ? (
+                  <><img src={imgSrc} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.6 }} /><div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, rgba(0,0,0,0.65) 0%, transparent 60%)' }} /></>
+                ) : <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(135deg, ${course.color}22, rgba(0,0,0,0.4))` }} />;
+              })()}
               <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', padding: '0 32px', gap: 20 }}>
                 <div style={{ flex: 1 }}>
-                  <h1 style={{ fontSize: 48, fontWeight: 200, color: '#fff', margin: '0 0 12px', letterSpacing: '-0.03em', fontFamily: "'Inter Tight', sans-serif", textShadow: '0 2px 20px rgba(0,0,0,0.6)' }}>{course.name}</h1>
-                  {(course.teacher || course.teacherName) && <span style={{ fontSize: 16, fontWeight: 300, color: 'rgba(255,255,255,0.5)', display: 'block', lineHeight: 1.4, letterSpacing: '0.02em' }}>{course.teacher || course.teacherName}</span>}
+                  {currentView === 'group' && selectedGroupId ? (() => {
+                    const activeGrp = groups.find(g => g.id === selectedGroupId);
+                    return activeGrp ? (
+                      <>
+                        <h1 style={{ fontSize: 40, fontWeight: 200, color: '#fff', margin: '0 0 10px', letterSpacing: '-0.03em', fontFamily: "'Inter Tight', sans-serif", textShadow: '0 2px 20px rgba(0,0,0,0.6)' }}>{activeGrp.name}</h1>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          <span style={{ fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.01em', borderBottom: '1px solid rgba(255,255,255,0.15)', paddingBottom: 2 }}>{course.name}</span>
+                        </div>
+                      </>
+                    ) : null;
+                  })() : (
+                    <>
+                      <h1 style={{ fontSize: 48, fontWeight: 200, color: '#fff', margin: '0 0 12px', letterSpacing: '-0.03em', fontFamily: "'Inter Tight', sans-serif", textShadow: '0 2px 20px rgba(0,0,0,0.6)' }}>{course.name}</h1>
+                      {(course.teacher || course.teacherName) && <span style={{ fontSize: 16, fontWeight: 300, color: 'rgba(255,255,255,0.5)', display: 'block', lineHeight: 1.4, letterSpacing: '0.02em' }}>{course.teacher || course.teacherName}</span>}
+                    </>
+                  )}
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <button onClick={() => { setEditCourseName(course.name); setEditCourseTeacher(course.teacher || course.teacherName || ''); setEditCourseCover(course.coverUrl || course.coverImage); setEditCourseColor(course.color); setDeleteConfirmName(''); setShowEditCourse(true); }} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}><Pencil size={13} /></button>
-                  <button onClick={handleToggleMode}
-                    title={overviewMode === 'tareas_notas' ? 'Modo Estudio' : 'Vista General'}
-                    style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 300ms cubic-bezier(0.16, 1, 0.3, 1)' }}>
-                    <ArrowLeftRight size={13} style={{ transition: 'transform 400ms cubic-bezier(0.16, 1, 0.3, 1)', transform: overviewMode === 'temas_archivos' ? 'rotate(180deg)' : 'rotate(0deg)' }} />
-                  </button>
+                  {currentView === 'group' ? (
+                    <>
+                      <button onClick={() => { setCurrentView('overview'); setSelectedGroupId(null); }} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}><ChevronLeft size={14} /></button>
+                       <button onClick={() => { const grp = groups.find(g => g.id === selectedGroupId); if (grp) { setEditingGroupId(grp.id); setGroupName(grp.name); setGroupCover(grp.image); setShowGroupModal(true); } }} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}><Pencil size={13} /></button>
+                    </>
+                  ) : (
+                    <>
+                      <button onClick={() => { setEditCourseName(course.name); setEditCourseTeacher(course.teacher || course.teacherName || ''); setEditCourseCover(course.coverUrl || course.coverImage); setEditCourseColor(course.color); setDeleteConfirmName(''); setShowEditCourse(true); }} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}><Pencil size={13} /></button>
+                      <button onClick={handleToggleMode}
+                        title={overviewMode === 'tareas_notas' ? 'Modo Estudio' : 'Vista General'}
+                        style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 300ms cubic-bezier(0.16, 1, 0.3, 1)' }}>
+                        <ArrowLeftRight size={13} style={{ transition: 'transform 400ms cubic-bezier(0.16, 1, 0.3, 1)', transform: overviewMode === 'temas_archivos' ? 'rotate(180deg)' : 'rotate(0deg)' }} />
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -1589,9 +1683,9 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                         {showOverviewNoteDates && (
                                           <div style={{ padding: '8px 16px 0', fontSize: 9, fontWeight: 600, color: 'rgba(255,255,255,0.2)', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.03em', opacity: 0.8 }}>
                                             {format(new Date(n.createdAt), "dd/MM/yy", { locale: es })}
-                                          </div>
-                                        )}
-                                        {/* ── COLLAPSED (preview) ── */}
+                           </div>
+                                         )}
+                                         {/* ── COLLAPSED (preview) ── */}
                                         <div style={{ padding: showOverviewNoteDates ? '6px 16px 12px' : '12px 16px' }}>
                                           <div style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text-primary)', fontFamily: "'Atkinson Hyperlegible', system-ui, serif", wordBreak: 'break-word', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical' }}
                                             dangerouslySetInnerHTML={{ __html: n.content?.replace(/<img[^>]+style="([^"]*)"/g, (m: string, s: string) => m.replace(s, s + ';max-height:100px;width:auto') ) || '<span style="color:var(--text-muted);font-style:italic;font-size:12px">Vacío</span>' }} />
@@ -1613,10 +1707,10 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                   )}
                 </div>
               </div>
-            ) : (
-              /* ═══ MODO ESTUDIO — New Study Mode Layout ═══ */
-              currentView === 'topic' && activeTopic ? (
-                /* ─── TOPIC DETAIL VIEW (inside estudio mode) ─── */
+              ) : (
+                /* ═══ MODO ESTUDIO — New Study Mode Layout ═══ */
+                currentView === 'topic' && activeTopic ? (
+                  /* ─── TOPIC DETAIL VIEW (inside estudio mode) ─── */
                 <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
                   {/* Left: back to study overview */}
                   <div style={{ width: 44, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 16, borderRight: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
@@ -1763,7 +1857,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                           <div style={{ textAlign: 'center', padding: '12px 0' }}>
                             <div style={{ width: 44, height: 44, borderRadius: 10, background: '#10B98112', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px' }}><StickyNote size={18} style={{ color: '#10B981' }} /></div>
                             <p style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 10 }}>Anota ideas clave durante el estudio.</p>
-                            <button onClick={() => { const id = addNote({ title: '', content: '', course: course.name, courseColor: course.color, isCoursePrivate: true, isPinned: false }); setEditingNoteId(id); setNavigateTo('notas'); }} style={{ width: '100%', height: 30, borderRadius: 6, border: 'none', background: '#10B981', color: '#fff', fontSize: 9, fontWeight: 600, cursor: 'pointer' }}>Nuevo Apunte</button>
+                            <button onClick={() => { const id = addNote({ title: '', content: '', course: course.name, courseColor: course.color, isCoursePrivate: true, isPinned: false }); setEditingNoteId(id); setNavigateTo('apuntes'); }} style={{ width: '100%', height: 30, borderRadius: 6, border: 'none', background: '#10B981', color: '#fff', fontSize: 9, fontWeight: 600, cursor: 'pointer' }}>Nuevo Apunte</button>
                           </div>
                         )}
                         {studyToolMode === 'mindmap' && (
@@ -1799,297 +1893,948 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                     )}
                   </div>
                 </div>
-              ) : (
-                /* ─── ESTUDIO MODE: 3-column layout ─── */
-                <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
-                  {/* LEFT SIDEBAR: Grupos + Materiales */}
-                  <div style={{ width: 220, flexShrink: 0, display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', overflow: 'hidden' }}>
-                    {/* Stats cards — 3 horizontal blocks */}
-                    <div style={{ padding: '10px 10px 8px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      {[
-                        { label: 'Temas', value: parsedTopics.length, icon: Book, color: course.color },
-                        { label: 'Materiales', value: topicMasteryStats.totalMaterials, icon: File, color: '#8B5CF6' },
-                        { label: 'Dominados', value: topicMasteryStats.mastered, icon: Check, color: '#10B981' },
-                      ].map(s => {
-                        const Icon = s.icon;
-                        return (
-                          <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 7, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', transition: 'all 150ms' }}>
-                            <div style={{ width: 24, height: 24, borderRadius: 6, background: `${s.color}12`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                              <Icon size={11} style={{ color: s.color }} />
+              ) : currentView === 'group' && selectedGroupId ? (
+                /* ═══ GROUP DETAIL VIEW ═══ */
+                (() => {
+                  const grp = groups.find(g => g.id === selectedGroupId);
+                  const grpTopics = parsedTopics.filter(t => t.groupId === selectedGroupId);
+                  if (!grp) return null;
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', position: 'relative' }}>
+                       {/* Group Header Bar */}
+                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 20px', flexShrink: 0, borderBottom: '1px solid var(--border-subtle)' }}>
+                            <button onClick={() => { setCurrentView('overview'); setSelectedGroupId(null); }}
+                              style={{ width: 28, height: 28, borderRadius: 7, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 150ms' }}
+                              onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}
+                              title="Volver">
+                              <ChevronLeft size={13} />
+                            </button>
+                            <div style={{ flex: 1 }} />
+                            <button onClick={() => { setEditingGroupId(selectedGroupId!); setInlineGroupName(grp.name); setInlineGroupCover(grp.image); setShowGroupModal(true); }}
+                              style={{ height: 28, padding: '0 10px', borderRadius: 7, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 600, fontFamily: "'Inter Tight', sans-serif", transition: 'all 150ms' }}
+                              onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
+                              <Edit3 size={11} /> Editar
+                            </button>
+                            <button onClick={() => { setImportExportMode(null); setImportPreviewData(null); setImportSelected([]); setShowAgrupacionImportExport(true); }}
+                              style={{ height: 28, padding: '0 10px', borderRadius: 7, border: `1px solid ${course.color}30`, background: `${course.color}08`, color: course.color, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 600, fontFamily: "'Inter Tight', sans-serif", transition: 'all 150ms' }}
+                              onMouseEnter={e => { e.currentTarget.style.background = `${course.color}1a`; }}
+                              onMouseLeave={e => { e.currentTarget.style.background = `${course.color}08`; }}>
+                              <ArrowLeftRight size={11} />
+                            </button>
+                        </div>
+
+              <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 40px' }} className="no-scrollbar">
+                        {grpTopics.length === 0 ? (
+                          <div onClick={() => { setEditingTopicId(null); setTopicName(''); setShowTopicModal(true); }}
+                            style={{ padding: '64px 24px', textAlign: 'center', borderRadius: 16, border: `2px dashed ${course.color}30`, background: `linear-gradient(145deg, ${course.color}06, transparent 70%)`, cursor: 'pointer', transition: 'all 300ms cubic-bezier(0.16,1,0.3,1)', minHeight: 200, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14 }}
+                            onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}55`; e.currentTarget.style.background = `linear-gradient(145deg, ${course.color}0c, ${course.color}04)`; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 8px 32px ${course.color}10`; }}
+                            onMouseLeave={e => { e.currentTarget.style.borderColor = `${course.color}30`; e.currentTarget.style.background = `linear-gradient(145deg, ${course.color}06, transparent 70%)`; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}>
+                            <div style={{ width: 56, height: 56, borderRadius: 16, background: `${course.color}12`, border: `1.5px solid ${course.color}22`, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: `0 4px 16px ${course.color}10` }}>
+                              <Plus size={24} style={{ color: course.color, opacity: 0.7 }} />
                             </div>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1, letterSpacing: '-0.02em' }}>{s.value}</div>
-                              <div style={{ fontSize: 7.5, fontWeight: 500, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 1 }}>{s.label}</div>
+                            <div>
+                              <span style={{ display: 'block', fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", marginBottom: 4 }}>Agregar tema</span>
+                              <span style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.4 }}>Organiza tu contenido en temas dentro de esta agrupacion</span>
                             </div>
                           </div>
-                        );
-                      })}
-                    </div>
-                    <div style={{ height: 1, background: 'var(--border-subtle)', margin: '0 10px' }} />
-                    {/* Grupos list */}
-                    <div style={{ flex: 1, overflowY: 'auto', padding: '8px 10px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                        <span style={{ fontSize: 8, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Grupos</span>
-                        <button onClick={() => { setEditingGroupId(null); setGroupName(''); setGroupCover(undefined); setSelectedTopicIds([]); setShowGroupModal(true); }}
-                          style={{ width: 20, height: 20, borderRadius: 4, border: 'none', background: `${course.color}14`, cursor: 'pointer', color: course.color, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 120ms' }}
-                          onMouseEnter={e => e.currentTarget.style.background = `${course.color}25`} onMouseLeave={e => e.currentTarget.style.background = `${course.color}14`}
-                          title="Nueva agrupacion">
-                          <Plus size={11} />
+                        ) : (
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+                            {grpTopics.map(topic => {
+                                const mats = topic.materials || [];
+                                const matCount = mats.length;
+                                const isConfirmingDelete = confirmDeleteGroupId === `topic_${topic.id}`;
+                                const typeCounts: Record<string, number> = {};
+                                mats.forEach(m => { typeCounts[m.type] = (typeCounts[m.type] || 0) + 1; });
+                                const typeColors: Record<string, string> = { resource: '#3B82F6', flashcard: '#8B5CF6', qa: '#10B981', definition: '#F59E0B', note: '#6B7280' };
+                                const typeLabels: Record<string, string> = { resource: 'Recursos', flashcard: 'Flashcards', qa: 'Preguntas', definition: 'Definiciones', note: 'Notas' };
+                                return (
+                                   <div key={topic.id} onClick={() => { setActiveTopicId(topic.id); setCurrentView('topic'); }}
+                                     style={{ borderRadius: 14, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', overflow: 'hidden', cursor: 'pointer', transition: 'all 250ms cubic-bezier(0.16,1,0.3,1)', display: 'flex', flexDirection: 'column', position: 'relative' }}
+                                     className="topic-card"
+                                     onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}40`; e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = `0 12px 36px ${course.color}14`; const icons = e.currentTarget.querySelector('.topic-hover-icons'); if (icons) (icons as HTMLElement).style.opacity = '1'; }}
+                                     onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; const icons = e.currentTarget.querySelector('.topic-hover-icons'); if (icons) (icons as HTMLElement).style.opacity = '0'; }}>
+                                     {/* Hover material icons overlay */}
+                                     <div className="topic-hover-icons" style={{ position: 'absolute', top: 14, right: 14, display: 'flex', gap: 4, opacity: 0, transition: 'opacity 200ms', zIndex: 3 }}>
+                                       {Object.entries(typeCounts).map(([type, count]) => (
+                                         <div key={type} style={{ width: 24, height: 24, borderRadius: 6, background: `${typeColors[type] || '#6B7280'}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${typeColors[type] || '#6B7280'}25` }} title={`${count} ${typeLabels[type] || type}`}>
+                                           <div style={{ width: 8, height: 8, borderRadius: '50%', background: typeColors[type] || '#6B7280' }} />
+                                         </div>
+                                       ))}
+                                     </div>
+                                     <div style={{ padding: '20px 18px 16px', flex: 1 }}>
+                                       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                                         <h4 style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', margin: 0, fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em', lineHeight: 1.3, flex: 1, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', transition: 'all 200ms' }}>{topic.title}</h4>
+                                        <div style={{ display: 'flex', gap: 2, flexShrink: 0, opacity: 0, transition: 'opacity 150ms' }}
+                                          className="topic-actions">
+                                          <button onClick={(e) => { e.stopPropagation(); setEditingTopicId(topic.id); setTopicName(topic.title); setShowTopicModal(true); }}
+                                            style={{ width: 26, height: 26, borderRadius: 6, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                                            onMouseEnter={ev => { ev.currentTarget.style.background = 'var(--bg-hover)'; ev.currentTarget.style.color = 'var(--text-secondary)'; }}
+                                            onMouseLeave={ev => { ev.currentTarget.style.background = 'transparent'; ev.currentTarget.style.color = 'var(--text-muted)'; }}>
+                                            <Edit3 size={12} />
+                                          </button>
+                                          {!isConfirmingDelete ? (
+                                            <button onClick={(e) => { e.stopPropagation(); setConfirmDeleteGroupId(`topic_${topic.id}`); }}
+                                              style={{ width: 26, height: 26, borderRadius: 6, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                                              onMouseEnter={ev => { ev.currentTarget.style.background = 'rgba(239,68,68,0.08)'; ev.currentTarget.style.color = '#EF4444'; }}
+                                              onMouseLeave={ev => { ev.currentTarget.style.background = 'transparent'; ev.currentTarget.style.color = 'var(--text-muted)'; }}>
+                                              <Trash2 size={12} />
+                                            </button>
+                                          ) : (
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                                              <button onClick={(e) => { e.stopPropagation(); handleDeleteTopic(topic.id); setConfirmDeleteGroupId(null); }}
+                                                style={{ height: 24, padding: '0 10px', borderRadius: 6, border: 'none', background: '#EF4444', color: '#fff', fontSize: 10, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>Eliminar</button>
+                                              <button onClick={(e) => { e.stopPropagation(); setConfirmDeleteGroupId(null); }}
+                                                style={{ width: 24, height: 24, borderRadius: 6, border: 'none', background: 'var(--bg-hover)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                <X size={10} />
+                                              </button>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                      {topic.reviewLevel > 0 && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 3, marginTop: 8 }}>
+                                          <div style={{ display: 'flex', gap: 2 }}>{[...Array(5)].map((_, i) => <div key={i} style={{ width: 10, height: 4, borderRadius: 2, background: i < topic.reviewLevel ? course.color : 'var(--bg-hover)', transition: 'background 200ms' }} />)}</div>
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div style={{ borderTop: '1px solid var(--border-subtle)', padding: '12px 18px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                      {matCount > 0 ? (
+                                        Object.entries(typeCounts).map(([type, count]) => (
+                                          <div key={type} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 500, color: 'var(--text-muted)' }}>
+                                            <div style={{ width: 7, height: 7, borderRadius: '50%', background: typeColors[type] || '#6B7280', flexShrink: 0 }} />
+                                            <span>{count} {typeLabels[type] || type}</span>
+                                          </div>
+                                        ))
+                                      ) : (
+                                        <span style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>Sin materiales</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                            })}
+                            <div onClick={() => { setEditingTopicId(null); setTopicName(''); setShowTopicModal(true); }}
+                              style={{ borderRadius: 14, border: `2px dashed ${course.color}30`, background: `${course.color}05`, cursor: 'pointer', transition: 'all 300ms cubic-bezier(0.16,1,0.3,1)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, minHeight: 140 }}
+                              onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}60`; e.currentTarget.style.background = `${course.color}10`; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 8px 28px ${course.color}12`; }}
+                              onMouseLeave={e => { e.currentTarget.style.borderColor = `${course.color}30`; e.currentTarget.style.background = `${course.color}05`; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}>
+                              <div style={{ width: 48, height: 48, borderRadius: 14, background: `${course.color}14`, border: `1.5px dashed ${course.color}25`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <Plus size={22} style={{ color: course.color, opacity: 0.7 }} />
+                              </div>
+                              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-muted)', fontFamily: "'Inter Tight', sans-serif" }}>Agregar tema</span>
+                              <span style={{ fontSize: 10, color: 'var(--text-muted)', opacity: 0.6 }}>Haz clic para crear</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                       {/* ══ HOVER-ACTIVATED EDGE PANEL ══ */}
+                      <div onMouseEnter={() => setHoverEdgePanel(true)} onMouseLeave={() => setHoverEdgePanel(false)}
+                        style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 36, zIndex: 20, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+                        <button onClick={() => { setImportExportMode('export'); setExportSelectedIds(new Set([selectedGroupId!])); setShowAgrupacionImportExport(true); }}
+                          style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: hoverEdgePanel ? `${course.color}15` : 'transparent', color: hoverEdgePanel ? course.color : 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms' }}
+                          onMouseEnter={e => { e.currentTarget.style.background = `${course.color}20`; e.currentTarget.style.color = course.color; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = hoverEdgePanel ? `${course.color}15` : 'transparent'; e.currentTarget.style.color = hoverEdgePanel ? course.color : 'var(--text-muted)'; }}
+                          title="Exportar">
+                          <FileDown size={14} />
+                        </button>
+                        <button onClick={() => { setImportExportMode('import'); setImportPreviewData(null); setImportSelected([]); setShowAgrupacionImportExport(true); }}
+                          style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: hoverEdgePanel ? `${course.color}15` : 'transparent', color: hoverEdgePanel ? course.color : 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms' }}
+                          onMouseEnter={e => { e.currentTarget.style.background = `${course.color}20`; e.currentTarget.style.color = course.color; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = hoverEdgePanel ? `${course.color}15` : 'transparent'; e.currentTarget.style.color = hoverEdgePanel ? course.color : 'var(--text-muted)'; }}
+                          title="Importar">
+                          <FileUp size={14} />
                         </button>
                       </div>
-                      {/* All topics button */}
-                      <button onClick={() => setSelectedGroupId(null)}
-                        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 8px', borderRadius: 5, border: selectedGroupId === null ? `1px solid ${course.color}30` : '1px solid transparent', background: selectedGroupId === null ? `${course.color}08` : 'transparent', cursor: 'pointer', textAlign: 'left', marginBottom: 2, transition: 'all 120ms' }}
-                        onMouseEnter={e => { if (selectedGroupId !== null) e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                        onMouseLeave={e => { if (selectedGroupId !== null) e.currentTarget.style.background = 'transparent'; }}>
-                        <div style={{ width: 6, height: 6, borderRadius: '50%', background: course.color, flexShrink: 0 }} />
-                        <span style={{ fontSize: 10.5, fontWeight: selectedGroupId === null ? 600 : 400, color: selectedGroupId === null ? course.color : 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Todos</span>
-                        <span style={{ fontSize: 8, color: 'var(--text-muted)', background: 'var(--bg-hover)', padding: '1px 5px', borderRadius: 3 }}>{parsedTopics.length}</span>
-                      </button>
-                      {groups.map(group => {
-                        const members = parsedTopics.filter(t => t.groupId === group.id);
-                        const isSelected = selectedGroupId === group.id;
-                        const groupMastery = members.length > 0 ? Math.round((members.filter(t => t.reviewLevel >= 4).length / members.length) * 100) : 0;
-                        return (
-                          <div key={group.id}>
-                            <button onClick={() => setSelectedGroupId(isSelected ? null : group.id)}
-                              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 8px', borderRadius: 5, border: isSelected ? `1px solid ${course.color}30` : '1px solid transparent', background: isSelected ? `${course.color}08` : 'transparent', cursor: 'pointer', textAlign: 'left', marginBottom: 2, transition: 'all 120ms' }}
-                              onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                              onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}>
-                              <div style={{ width: 6, height: 6, borderRadius: '50%', background: course.color, flexShrink: 0, opacity: 0.7 }} />
-                              <span style={{ fontSize: 10.5, fontWeight: isSelected ? 600 : 400, color: isSelected ? course.color : 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{group.name}</span>
-                              <span style={{ fontSize: 8, color: 'var(--text-muted)', background: 'var(--bg-hover)', padding: '1px 5px', borderRadius: 3 }}>{members.length}</span>
+                    </div>
+                  );
+                })()
+              ) : (
+/* ═══ ESTUDIO MODE ═══ */
+                <>
+                <div style={{ display: 'flex', flexDirection: 'row', height: '100%', overflow: 'hidden' }}>
+
+                  {/* ══ LEFT: PLANNER + MATERIALS + CENTER ══ */}
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+
+                    {/* ══ WEEKLY PLANNER ══ */}
+                    <div style={{ padding: '16px 18px 14px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
+                      {/* Planner Header */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div style={{ width: 28, height: 28, borderRadius: 8, background: `${course.color}12`, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${course.color}20` }}>
+                            <Calendar size={13} style={{ color: course.color }} />
+                          </div>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Plan de Estudio</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <button onClick={() => setWeekOffset(o => o - 1)}
+                            style={{ width: 26, height: 26, borderRadius: 7, border: '1px solid var(--border-subtle)', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.borderColor = `${course.color}40`; e.currentTarget.style.color = course.color; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
+                            <ChevronLeft size={12} />
+                          </button>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', fontFamily: "'Inter', sans-serif", minWidth: 110, textAlign: 'center' }}>
+                            {(() => {
+                              const weekStart = startOfWeek(addDays(new Date(), weekOffset * 7), { weekStartsOn: 1 });
+                              const weekEnd = endOfWeek(addDays(new Date(), weekOffset * 7), { weekStartsOn: 1 });
+                              return `${format(weekStart, 'd MMM', { locale: es })} — ${format(weekEnd, 'd MMM', { locale: es })}`;
+                            })()}
+                          </span>
+                          <button onClick={() => setWeekOffset(o => o + 1)}
+                            style={{ width: 26, height: 26, borderRadius: 7, border: '1px solid var(--border-subtle)', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.borderColor = `${course.color}40`; e.currentTarget.style.color = course.color; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
+                            <ChevronRight size={12} />
+                          </button>
+                          {weekOffset !== 0 && (
+                            <button onClick={() => setWeekOffset(0)}
+                              style={{ height: 26, borderRadius: 7, border: '1px solid var(--border-subtle)', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', padding: '0 10px', fontSize: 10, fontWeight: 600, fontFamily: "'Inter', sans-serif", transition: 'all 150ms' }}
+                              onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
+                              Hoy
                             </button>
-                            {isSelected && (
-                              <div style={{ padding: '2px 0 4px 20px', display: 'flex', flexDirection: 'column', gap: 1 }}>
-                                {members.map(t => (
-                                  <button key={t.id} onClick={() => { setActiveTopicId(t.id); setCurrentView('topic'); }}
-                                    style={{ display: 'flex', alignItems: 'center', gap: 5, width: '100%', padding: '3px 6px', borderRadius: 4, border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left', transition: 'all 100ms' }}
-                                    onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                                    <span style={{ fontSize: 9.5, color: 'var(--text-muted)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
-                                    <div style={{ display: 'flex', gap: 1 }}>{[...Array(5)].map((_, i) => <div key={i} style={{ width: 3, height: 3, borderRadius: 1, background: i < t.reviewLevel ? course.color : 'var(--bg-hover)' }} />)}</div>
+                          )}
+                          <button onClick={() => { setPlanDate(format(new Date(), 'yyyy-MM-dd')); setPlanTitle(''); setPlanGroupId(''); setPlanTopicId(''); setPlanType('estudio'); setPlanDuration(30); setShowPlanModal(true); }}
+                            style={{ height: 26, borderRadius: 7, border: `1px solid ${course.color}30`, background: `${course.color}0d`, cursor: 'pointer', color: course.color, padding: '0 10px', fontSize: 10, fontWeight: 600, fontFamily: "'Inter Tight', sans-serif", display: 'flex', alignItems: 'center', gap: 4, transition: 'all 150ms' }}
+                            onMouseEnter={e => { e.currentTarget.style.background = `${course.color}1a`; e.currentTarget.style.borderColor = `${course.color}50`; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = `${course.color}0d`; e.currentTarget.style.borderColor = `${course.color}30`; }}>
+                            <Plus size={10} /> Agregar
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Day blocks grid */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
+                        {(() => {
+                          const dayNames = ['Lun','Mar','Mie','Jue','Vie','Sab','Dom'];
+                          const typeColors: Record<string, string> = { estudio: '#8B5CF6', repaso: '#3B82F6', ejercicio: '#10B981', lectura: '#F59E0B', otro: '#6B7280' };
+                          const todayStr = format(new Date(), 'yyyy-MM-dd');
+                          const weekStart = startOfWeek(addDays(new Date(), weekOffset * 7), { weekStartsOn: 1 });
+                          return Array.from({ length: 7 }, (_, i) => {
+                            const d = addDays(weekStart, i);
+                            const dayNum = d.getDate();
+                            const dayStr = format(d, 'yyyy-MM-dd');
+                            const today = dayStr === todayStr;
+                            const secs = weeklyStudyTime?.[dayStr] || 0;
+                            const mins = Math.round(secs / 60);
+                            const isFuture = d > new Date() && !today;
+                            const dayPlanned = (plannedSessions || []).filter(s => s.courseId === course.id && s.date === dayStr && !s.completed);
+                            const plannedMins = dayPlanned.reduce((a, s) => a + s.durationMinutes, 0);
+                            return (
+                              <div key={i}
+                                style={{
+                                  borderRadius: 12,
+                                  border: today ? `1.5px solid ${course.color}` : '1px solid var(--border-subtle)',
+                                  background: today ? `${course.color}08` : 'var(--bg-surface)',
+                                  padding: '10px 8px 8px',
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: 0,
+                                  transition: 'all 200ms cubic-bezier(0.16,1,0.3,1)',
+                                  opacity: isFuture ? 0.4 : 1,
+                                  position: 'relative',
+                                  cursor: 'pointer',
+                                  minHeight: 160,
+                                  overflow: 'hidden',
+                                }}
+                                onClick={() => { setDayDetailDate(dayStr); setShowDayDetail(true); }}
+                                onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}50`; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 8px 24px ${course.color}10`; }}
+                                onMouseLeave={e => { e.currentTarget.style.borderColor = today ? `1.5px solid ${course.color}` : 'var(--border-subtle)'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}>
+                                {/* Header: Day name + number */}
+                                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6 }}>
+                                  <span style={{ fontSize: 10, fontWeight: 700, color: today ? course.color : 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '0.04em' }}>{dayNames[i]}</span>
+                                  <span style={{ fontSize: 18, fontWeight: 800, color: today ? course.color : 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", lineHeight: 1 }}>{dayNum}</span>
+                                </div>
+
+                                {/* Planned sessions list */}
+                                {dayPlanned.length > 0 && (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1, overflow: 'hidden' }}>
+                                    {dayPlanned.slice(0, 3).map(s => (
+                                      <div key={s.id} style={{
+                                        display: 'flex', alignItems: 'center', gap: 5,
+                                        padding: '3px 6px', borderRadius: 5,
+                                        background: `${typeColors[s.type] || '#8B5CF6'}0a`,
+                                      }}>
+                                        <div style={{ width: 5, height: 5, borderRadius: '50%', background: typeColors[s.type] || '#8B5CF6', flexShrink: 0 }} />
+                                        <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{s.title}</span>
+                                        <span style={{ fontSize: 8, fontWeight: 700, color: 'var(--text-muted)', fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{s.durationMinutes}m</span>
+                                      </div>
+                                    ))}
+                                    {dayPlanned.length > 3 && (
+                                      <span style={{ fontSize: 8, fontWeight: 600, color: 'var(--text-muted)', textAlign: 'center', fontFamily: "'Inter', sans-serif" }}>+{dayPlanned.length - 3} mas</span>
+                                    )}
+                                  </div>
+                                )}
+                                {dayPlanned.length === 0 && !isFuture && (
+                                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <div style={{ width: 18, height: 18, borderRadius: 5, border: `1px dashed ${course.color}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: `${course.color}50`, fontSize: 11, fontWeight: 700, lineHeight: 1 }}>+</div>
+                                  </div>
+                                )}
+
+                                {/* Bottom: study progress bar */}
+                                <div style={{ marginTop: 'auto', paddingTop: 6 }}>
+                                  {plannedMins > 0 && (
+                                    <div style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                      <div style={{ flex: 1, height: 3, borderRadius: 2, background: `${course.color}12`, position: 'relative', overflow: 'hidden' }}>
+                                        {mins > 0 && (
+                                          <div style={{ position: 'absolute', inset: 0, borderRadius: 2, width: `${Math.min(100, (mins / plannedMins) * 100)}%`, background: mins >= plannedMins ? '#10B981' : course.color, transition: 'width 600ms cubic-bezier(0.16,1,0.3,1)' }} />
+                                        )}
+                                      </div>
+                                      <span style={{ fontSize: 8, fontWeight: 700, color: mins >= plannedMins ? '#10B981' : 'var(--text-muted)', fontFamily: "'Inter Tight', sans-serif", minWidth: 22, textAlign: 'right' }}>{mins}/{plannedMins}m</span>
+                                    </div>
+                                  )}
+                                  {plannedMins === 0 && mins > 0 && !isFuture && (
+                                    <div style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                      <div style={{ flex: 1, height: 3, borderRadius: 2, background: 'var(--border-subtle)', position: 'relative', overflow: 'hidden' }}>
+                                        <div style={{ position: 'absolute', inset: 0, borderRadius: 2, width: `${Math.min(100, (mins / 120) * 100)}%`, background: `${course.color}70` }} />
+                                      </div>
+                                      <span style={{ fontSize: 8, fontWeight: 700, color: course.color, fontFamily: "'Inter Tight', sans-serif" }}>{mins}m</span>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Today top accent */}
+                                {today && (
+                                  <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, borderRadius: '12px 12px 0 0', background: course.color }} />
+                                )}
+                              </div>
+                            );
+                          });
+                        })()}
+                      </div>
+                    </div>
+
+                    {/* ══ MATERIALS + CENTER ROW ══ */}
+                    <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+
+                      {/* ══ LEFT: MATERIALES (380px) ══ */}
+                      <div style={{ width: 380, flexShrink: 0, display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
+
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 20px 14px', flexShrink: 0 }}>
+                          <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: "'Inter Tight', sans-serif" }}>Materiales</h3>
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <button onClick={() => { estudioFileInputRef.current?.click(); }}
+                              style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${course.color}30`, background: `${course.color}10`, cursor: 'pointer', color: course.color, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms ' + EASE }}
+                              onMouseEnter={e => { e.currentTarget.style.background = `${course.color}22`; e.currentTarget.style.borderColor = `${course.color}50`; }}
+                              onMouseLeave={e => { e.currentTarget.style.background = `${course.color}10`; e.currentTarget.style.borderColor = `${course.color}30`; }}
+                              title="Subir archivo">
+                              <Upload size={15} />
+                            </button>
+                            <button onClick={() => { setShowAddLinkModal(true); setAddLinkUrl(''); setAddLinkName(''); }}
+                              style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${course.color}30`, background: `${course.color}10`, cursor: 'pointer', color: course.color, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms ' + EASE }}
+                              onMouseEnter={e => { e.currentTarget.style.background = `${course.color}22`; e.currentTarget.style.borderColor = `${course.color}50`; }}
+                              onMouseLeave={e => { e.currentTarget.style.background = `${course.color}10`; e.currentTarget.style.borderColor = `${course.color}30`; }}
+                              title="Anadir enlace">
+                              <Link2 size={15} />
+                            </button>
+                          </div>
+                        </div>
+                        <input type="file" ref={estudioFileInputRef} style={{ display: 'none' }} onChange={e => handleFileUpload(e, parsedTopics[0]?.id)} />
+                        <div style={{ flex: 1, overflowY: 'auto', padding: '0 14px 20px', display: 'flex', flexDirection: 'column', gap: 8 }} className="no-scrollbar">
+                          {allCourseMaterials.length === 0 ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 120, borderRadius: 12, border: '1px dashed var(--border-subtle)', background: 'var(--bg-surface)', gap: 8 }}>
+                              <File size={20} style={{ color: 'var(--text-muted)', opacity: 0.5 }} />
+                              <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>Sin materiales todavia</p>
+                            </div>
+                          ) : allCourseMaterials.map((mat, idx) => {
+                            const matName = mat.name || 'Sin nombre';
+                            const dataUrl = mat.dataUrl || '';
+                            const isLink = dataUrl.startsWith('http');
+                            const ext = (mat.name || '').split('.').pop()?.toLowerCase() || '';
+                            const isImg = ['png','jpg','jpeg','webp','gif','svg'].includes(ext) || dataUrl.startsWith('data:image');
+                            const isPdf = ext === 'pdf';
+                            const isDoc = ['doc','docx'].includes(ext);
+                            const isXls = ['xls','xlsx','csv'].includes(ext);
+                            const isPpt = ['ppt','pptx'].includes(ext);
+                            const isAudio = ['mp3','wav','ogg','flac','aac'].includes(ext) || dataUrl.startsWith('data:audio');
+                            const isVideo = ['mp4','webm','avi','mov','mkv'].includes(ext) || dataUrl.startsWith('data:video');
+                            const isYouTube = isLink && (dataUrl.includes('youtube.com') || dataUrl.includes('youtu.be'));
+                            const isDrive = isLink && dataUrl.includes('drive.google.com');
+                            const isWeb = isLink && !isYouTube && !isDrive;
+                            const isLocal = dataUrl && !dataUrl.startsWith('http') && !dataUrl.startsWith('data:') && !dataUrl.startsWith('blob:');
+
+                            const openFile = (path: string) => {
+                              if ((window as any).__TAURI__?.shell?.open) {
+                                (window as any).__TAURI__.shell.open(path).catch(() => window.open(path, '_blank', 'noopener,noreferrer'));
+                              } else { window.open(path, '_blank', 'noopener,noreferrer'); }
+                            };
+
+                            const handleMatClick = () => {
+                              if (isPdf && dataUrl) { setPdfPreviewUrl(isLocal ? (window as any).__TAURI__?.convertFileSrc?.(dataUrl) || dataUrl : dataUrl); setPdfPreviewName(matName); setShowPdfPreview(true); }
+                              else if (isImg && dataUrl) { setPdfPreviewUrl(dataUrl); setPdfPreviewName(matName); setShowPdfPreview(true); }
+                              else if (isYouTube) { const v = dataUrl.includes('youtube.com/watch?v=') ? dataUrl.split('v=')[1]?.split('&')[0] : dataUrl.split('youtu.be/')[1]?.split('?')[0]; if (v) { setPdfPreviewUrl(`https://www.youtube.com/embed/${v}`); setPdfPreviewName(matName); setShowPdfPreview(true); } }
+                              else if (isWeb || isDrive || isLink) { openFile(dataUrl); }
+                              else if (isDoc || isXls || isPpt || isAudio || isVideo) { openFile(dataUrl); }
+                              else if (dataUrl.startsWith('http')) { openFile(dataUrl); }
+                              else if (isLocal) { openFile(dataUrl); }
+                            };
+
+                            const svgIcon = (d: string, c: string) => <svg viewBox="0 0 24 24" width={17} height={17} fill={c} style={{ flexShrink: 0, display: 'block' }}><path d={d} /></svg>;
+                            let iconEl: React.ReactNode;
+                            let badgeColor = '#888';
+                            if (isDoc) { badgeColor = '#2563EB'; iconEl = svgIcon('M23.004 1.5q.41 0 .703.293t.293.703v19.008q0 .41-.293.703t-.703.293H6.996q-.41 0-.703-.293T6 21.504V18H.996q-.41 0-.703-.293T0 17.004V6.996q0-.41.293-.703T.996 6H6V2.496q0-.41.293-.703t.703-.293zM6.035 11.203l1.442 4.735h1.64l1.57-7.876H9.036l-.937 4.653-1.325-4.5H5.38l-1.406 4.523-.938-4.675H1.312l1.57 7.874h1.641zM22.5 21v-3h-15v3zm0-4.5v-3.75H12v3.75zm0-5.25V7.5H12v3.75zm0-5.25V3h-15v3Z', '#2563EB'); }
+                            else if (isXls) { badgeColor = '#10B981'; iconEl = svgIcon('M23 1.5q.41 0 .7.3.3.29.3.7v19q0 .41-.3.7-.29.3-.7.3H7q-.41 0-.7-.3-.3-.29-.3-.7V18H1q-.41 0-.7-.3-.3-.29-.3-.7V7q0-.41.3-.7Q.58 6 1 6h5V2.5q0-.41.3-.7.29-.3.7-.3zM6 13.28l1.42 2.66h2.14l-2.38-3.87 2.34-3.8H7.46l-1.3 2.4-.05.08-.04.09-.64-1.28-.66-1.29H2.59l2.27 3.82-2.48 3.85h2.16zM14.25 21v-3H7.5v3zm0-4.5v-3.75H12v3.75zm0-5.25V7.5H12v3.75zm0-5.25V3H7.5v3zm8.25 15v-3h-6.75v3zm0-4.5v-3.75h-6.75v3.75zm0-5.25V7.5h-6.75v3.75zm0-5.25V3h-6.75v3Z', '#10B981'); }
+                            else if (isPpt) { badgeColor = '#F97316'; iconEl = svgIcon('M13.5 1.5q1.453 0 2.795.375 1.342.375 2.508 1.06 1.166.686 2.12 1.641.956.955 1.641 2.121.686 1.166 1.061 2.508Q24 10.547 24 12q0 1.453-.375 2.795-.375 1.342-1.06 2.508-.686 1.166-1.641 2.12-.955.956-2.121 1.641-1.166.686-2.508 1.061-1.342.375-2.795.375-1.29 0-2.52-.305-1.23-.304-2.337-.884-1.108-.58-2.063-1.418-.955-.838-1.693-1.893H.997q-.411 0-.704-.293T0 17.004V6.996q0-.41.293-.703T.996 6h3.89q.739-1.055 1.694-1.893.955-.837 2.063-1.418 1.107-.58 2.337-.884Q12.21 1.5 13.5 1.5z', '#F97316'); }
+                            else if (isPdf) { badgeColor = '#EF4444'; iconEl = svgIcon('M23.63 15.3c-.71-.745-2.166-1.17-4.224-1.17-1.1 0-2.377.106-3.761.354a19.443 19.443 0 0 1-2.307-2.661c-.532-.71-.994-1.49-1.42-2.236.817-2.484 1.207-4.507 1.207-5.962 0-1.632-.603-3.336-2.342-3.336-.532 0-1.065.32-1.349.781-.78 1.384-.425 4.4.923 7.381a60.277 60.277 0 0 1-1.703 4.507c-.568 1.349-1.207 2.733-1.917 4.01C2.834 18.53.314 20.34.03 21.758c-.106.533.071 1.03.462 1.42.142.107.639.533 1.49.533 2.59 0 5.323-4.188 6.707-6.707 1.065-.355 2.13-.71 3.194-.994a34.963 34.963 0 0 1 3.407-.745c2.732 2.448 5.145 2.839 6.352 2.839 1.49 0 2.023-.604 2.2-1.1.32-.64.106-1.349-.213-1.704z', '#EF4444'); }
+                            else if (isYouTube) { badgeColor = '#EF4444'; iconEl = svgIcon('M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z', '#EF4444'); }
+                            else if (isDrive) { badgeColor = '#4285F4'; iconEl = <svg viewBox="0 0 24 24" width={17} height={17} style={{ flexShrink: 0, display: 'block' }}><path fill="#4285F4" d="M12 1.5l9 15.6H3L12 1.5z"/><path fill="#34A853" d="M12 22.5L3 17.1h18L12 22.5z"/><path fill="#FBBC05" d="M3 17.1l3-5.2 3 5.2H3z"/><path fill="#EA4335" d="M18 17.1l-3-5.2-3 5.2h6z"/></svg>; }
+                            else if (isAudio) { badgeColor = '#8B5CF6'; iconEl = <Music size={13} />; }
+                            else if (isImg) { badgeColor = '#F59E0B'; iconEl = <ImageIcon size={13} />; }
+                            else if (isVideo) { badgeColor = '#EC4899'; iconEl = <File size={13} />; }
+                            else if (isWeb) {
+                              badgeColor = '#10B981';
+                              let domain = ''; try { domain = new URL(dataUrl).hostname; } catch {}
+                              iconEl = (
+                                <span style={{ position: 'relative', width: 17, height: 17, display: 'inline-flex', flexShrink: 0 }}>
+                                  <img src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`} alt="" style={{ width: 17, height: 17, borderRadius: 3, position: 'absolute', inset: 0 }}
+                                    onError={e => { e.currentTarget.style.display = 'none'; const fb = e.currentTarget.parentElement?.querySelector('.link-fb') as HTMLElement; if (fb) fb.style.display = 'flex'; }} />
+                                  <span className="link-fb" style={{ display: 'none', position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center', color: '#10B981' }}><Link2 size={12} /></span>
+                                </span>
+                              );
+                            }
+                            else { iconEl = <File size={13} />; }
+
+                            return (
+                              <div key={mat.id || idx} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 7, background: 'var(--bg-elevated)', border: '1px solid var(--border-soft)', cursor: 'pointer', transition: 'all 150ms' }}
+                                onMouseEnter={e => { e.currentTarget.style.borderColor = `${badgeColor}40`; e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.background = 'var(--bg-elevated)'; }}>
+                                <div onClick={handleMatClick} style={{ width: 30, height: 30, borderRadius: 7, background: `${badgeColor}14`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 150ms', color: badgeColor, position: 'relative' }}>
+                                  {iconEl}
+                                </div>
+                                <div onClick={handleMatClick} style={{ flex: 1, minWidth: 0 }}>
+                                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3 }}>{matName}</span>
+                                </div>
+                                <button onClick={e => { e.stopPropagation(); setConfirmDeleteMatId(mat.id); }}
+                                  style={{ width: 24, height: 24, borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, transition: 'all 150ms', opacity: 0 }}
+                                  onMouseEnter={ev => { ev.currentTarget.style.background = 'rgba(239,68,68,0.1)'; ev.currentTarget.style.color = '#EF4444'; ev.currentTarget.style.opacity = '1'; }}
+                                  onMouseLeave={ev => { ev.currentTarget.style.background = 'transparent'; ev.currentTarget.style.color = 'var(--text-muted)'; ev.currentTarget.style.opacity = '0'; }}
+                                  title="Eliminar">
+                                  <X size={11} />
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* ══ CENTER: FLEX ══ */}
+                      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+                        <div style={{ textAlign: 'center', opacity: 0.35 }}>
+                          <BookOpen size={36} style={{ marginBottom: 10 }} />
+                          <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0, fontFamily: "'Inter', sans-serif" }}>Selecciona una agrupacion</p>
+                          <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '4px 0 0', opacity: 0.6 }}>o crea una nueva</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ══ RIGHT: AGRUPACIONES — FULL LATERAL ══ */}
+                  <div style={{ width: 320, flexShrink: 0, display: 'flex', flexDirection: 'column', borderLeft: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 20px 14px', flexShrink: 0 }}>
+                      <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: "'Inter Tight', sans-serif" }}>Agrupaciones</h3>
+                       <button onClick={() => { setEditingGroupId(null); setGroupName(''); setGroupCover(undefined); setShowGroupModal(true); }}
+                        style={{ width: 30, height: 30, borderRadius: 8, border: `1.5px solid ${course.color}40`, background: `${course.color}08`, cursor: 'pointer', color: course.color, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms ' + EASE }}
+                        onMouseEnter={e => { e.currentTarget.style.background = `${course.color}18`; e.currentTarget.style.borderColor = `${course.color}60`; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = `${course.color}08`; e.currentTarget.style.borderColor = `${course.color}40`; }}
+                        title="Nueva agrupacion">
+                        <Plus size={14} />
+                      </button>
+                    </div>
+                    <div style={{ flex: 1, overflowY: 'auto', padding: '0 14px 20px', display: 'flex', flexDirection: 'column', gap: 10 }} className="no-scrollbar">
+                      {groups.length === 0 ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 120, borderRadius: 12, border: '1px dashed var(--border-subtle)', background: 'var(--bg-surface)', gap: 8 }}>
+                          <Layers size={20} style={{ color: 'var(--text-muted)', opacity: 0.5 }} />
+                          <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>Sin agrupaciones</p>
+                        </div>
+                      ) : groups.map(group => {
+                        return (
+                          <div key={group.id}
+                            style={{ borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated-alpha, var(--bg-elevated))', overflow: 'hidden', cursor: 'pointer', transition: 'all 200ms ' + EASE, position: 'relative' }}
+                            onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}40`; e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = `0 6px 20px ${course.color}12`; }}
+                            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
+                            onClick={() => { setSelectedGroupId(group.id); setCurrentView('group'); }}>
+                            {group.image ? (
+                              <div style={{ width: '100%', height: 110, overflow: 'hidden', position: 'relative' }}>
+                                <img src={group.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', transition: 'transform 400ms cubic-bezier(0.16,1,0.3,1)' }}
+                                  onMouseEnter={ev => { ev.currentTarget.style.transform = 'scale(1.04)'; }}
+                                  onMouseLeave={ev => { ev.currentTarget.style.transform = 'scale(1)'; }} />
+                                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.15) 50%, transparent 100%)' }} />
+                                <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '14px 16px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+                                  <div style={{ minWidth: 0, flex: 1 }}>
+                                    <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', fontFamily: "'Inter Tight', sans-serif", textShadow: '0 1px 6px rgba(0,0,0,0.5)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>{group.name}</div>
+                                  </div>
+                                  <button onClick={e => { e.stopPropagation(); setInlineEditGroupId(group.id); setInlineGroupName(group.name); setInlineGroupCover(group.image); }}
+                                    style={{ width: 26, height: 26, borderRadius: 6, border: 'none', background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(6px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 150ms', opacity: 0.7 }}
+                                    onMouseEnter={ev => { ev.currentTarget.style.background = 'rgba(255,255,255,0.22)'; ev.currentTarget.style.opacity = '1'; }}
+                                    onMouseLeave={ev => { ev.currentTarget.style.background = 'rgba(255,255,255,0.12)'; ev.currentTarget.style.opacity = '0.7'; }}
+                                    title="Editar">
+                                    <Edit3 size={11} />
                                   </button>
-                                ))}
+                                </div>
+                                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, transparent, ${course.color}, transparent)` }} />
+                              </div>
+                            ) : (
+                              <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, position: 'relative' }}>
+                                <div style={{ width: 36, height: 36, borderRadius: 10, background: `linear-gradient(135deg, ${course.color}18, ${course.color}08)`, border: `1px solid ${course.color}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 200ms ' + EASE }}>
+                                  <Layers size={15} style={{ color: course.color }} />
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>{group.name}</div>
+                                </div>
+                                <button onClick={e => { e.stopPropagation(); setInlineEditGroupId(group.id); setInlineGroupName(group.name); setInlineGroupCover(group.image); }}
+                                  style={{ width: 26, height: 26, borderRadius: 6, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 150ms', opacity: 0 }}
+                                  onMouseEnter={ev => { ev.currentTarget.style.background = 'var(--bg-hover)'; ev.currentTarget.style.opacity = '1'; }}
+                                  onMouseLeave={ev => { ev.currentTarget.style.background = 'transparent'; ev.currentTarget.style.opacity = '0'; }}
+                                  title="Editar">
+                                  <Edit3 size={11} />
+                                </button>
                               </div>
                             )}
                           </div>
                         );
                       })}
-                      {/* Ungrouped topics */}
-                      {ungroupedTopics.length > 0 && groups.length > 0 && (
-                        <div style={{ marginTop: 6 }}>
-                          <span style={{ fontSize: 7.5, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', padding: '0 8px', marginBottom: 3 }}>Sin grupo</span>
-                          {ungroupedTopics.map(t => (
-                            <button key={t.id} onClick={() => { setActiveTopicId(t.id); setCurrentView('topic'); }}
-                              style={{ display: 'flex', alignItems: 'center', gap: 5, width: '100%', padding: '4px 8px', borderRadius: 4, border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left', transition: 'all 100ms' }}
-                              onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                              <span style={{ fontSize: 9.5, color: 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
                     </div>
-                    {/* Bottom: Materiales dropdown */}
-                    <div style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                      <button onClick={() => setShowMaterialsDropdown(!showMaterialsDropdown)}
-                        style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: '8px 12px', border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)', transition: 'all 120ms' }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                        <FolderOpen size={12} style={{ color: course.color, flexShrink: 0 }} />
-                        <span style={{ fontSize: 10, fontWeight: 600, flex: 1, textAlign: 'left' }}>Materiales</span>
-                        <span style={{ fontSize: 8, color: 'var(--text-muted)', background: 'var(--bg-hover)', padding: '1px 5px', borderRadius: 3 }}>{allCourseMaterials.filter(m => m.type === 'resource').length}</span>
-                        {showMaterialsDropdown ? <ChevronUp size={10} style={{ color: 'var(--text-muted)' }} /> : <ChevronDown size={10} style={{ color: 'var(--text-muted)' }} />}
-                      </button>
-                      {showMaterialsDropdown && (
-                        <div style={{ maxHeight: 180, overflowY: 'auto', padding: '4px 10px 8px', display: 'flex', flexDirection: 'column', gap: 3 }}>
-                          {allCourseMaterials.filter(m => m.type === 'resource').length > 0 ? allCourseMaterials.filter(m => m.type === 'resource').map(mat => (
-                            <div key={mat.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 6px', borderRadius: 4, background: 'var(--bg-hover)', transition: 'all 100ms' }}>
-                              <File size={10} style={{ color: course.color, flexShrink: 0 }} />
-                              <span style={{ fontSize: 9, color: 'var(--text-secondary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{mat.name || 'Archivo'}</span>
-                              {mat.dataUrl && <button onClick={() => handleOpenResource(mat)} style={{ width: 18, height: 18, borderRadius: 3, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><ExternalLink size={8} /></button>}
-                            </div>
-                          )) : (
-                            <p style={{ fontSize: 9, color: 'var(--text-muted)', textAlign: 'center', padding: '6px 0' }}>Sin archivos</p>
-                          )}
-                          <button onClick={() => { setActiveTopicId(parsedTopics[0]?.id || ''); resourceInputRef.current?.click(); }}
-                            style={{ display: 'flex', alignItems: 'center', gap: 4, width: '100%', padding: '4px 6px', borderRadius: 4, border: '1px dashed var(--border-subtle)', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 9, marginTop: 2, transition: 'all 120ms' }}
-                            onMouseEnter={e => { e.currentTarget.style.borderColor = course.color; e.currentTarget.style.color = course.color; }}
-                            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
-                            <Upload size={9} /> Subir
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* CENTER: Topics or Weekly Review */}
-                  <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px 60px' }}>
-                    {/* Add buttons row */}
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', paddingBottom: 10, borderBottom: '1px solid var(--border-subtle)', marginBottom: 16 }}>
-                      <span style={{ fontSize: 9, fontWeight: 700, color: course.color, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Estudio</span>
-                      <div style={{ flex: 1 }} />
-                      <button onClick={() => { setEditingTopicId(null); setTopicName(''); setShowTopicModal(true); }}
-                        style={{ height: 26, padding: '0 10px', borderRadius: 5, border: 'none', background: `${course.color}14`, color: course.color, fontSize: 8.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, transition: 'all 150ms' }}
-                        onMouseEnter={e => e.currentTarget.style.background = `${course.color}25`} onMouseLeave={e => e.currentTarget.style.background = `${course.color}14`}>
-                        <PlusCircle size={9} /> Tema
-                      </button>
-                    </div>
-
-                    {/* Weekly Review Section */}
-                    {(() => {
-                      const reviewTopics = (course.studyTopics || []).filter(t => t.nextReview <= Date.now() + 7 * 24 * 60 * 60 * 1000 && t.reviewLevel > 0);
-                      if (reviewTopics.length === 0) return null;
-                      const dayNames = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'];
-                      const grouped: Record<string, typeof reviewTopics> = {};
-                      reviewTopics.forEach(t => {
-                        const d = new Date(t.nextReview);
-                        const key = d.toDateString() === new Date().toDateString() ? 'Hoy' : d.toDateString() === new Date(Date.now() + 86400000).toDateString() ? 'Manana' : dayNames[d.getDay()];
-                        if (!grouped[key]) grouped[key] = [];
-                        grouped[key].push(t);
-                      });
-                      return (
-                        <div style={{ marginBottom: 20 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-                            <div style={{ width: 3, height: 12, borderRadius: 2, background: '#06B6D4' }} />
-                            <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Repaso de la Semana</span>
-                            <span style={{ fontSize: 8, color: 'var(--text-muted)', background: '#06B6D412', padding: '1px 6px', borderRadius: 3 }}>{reviewTopics.length} temas</span>
-                          </div>
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
-                            {['Hoy', 'Manana', ...dayNames.filter(d => d !== 'Hoy' && d !== 'Manana')].map(day => {
-                              const topics = grouped[day] || [];
-                              const isToday = day === 'Hoy';
-                              return (
-                                <div key={day} style={{ padding: '6px 4px', borderRadius: 6, border: `1px solid ${isToday ? '#06B6D430' : 'var(--border-subtle)'}`, background: isToday ? '#06B6D406' : 'var(--bg-elevated)', minHeight: 48 }}>
-                                  <div style={{ fontSize: 8, fontWeight: 700, color: isToday ? '#06B6D4' : 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4, textAlign: 'center' }}>{day}</div>
-                                  {topics.length > 0 ? (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                      {topics.slice(0, 3).map(t => (
-                                        <div key={t.id} onClick={() => { setActiveTopicId(t.id); setCurrentView('topic'); }}
-                                          style={{ padding: '2px 4px', borderRadius: 3, background: 'var(--bg-hover)', cursor: 'pointer', fontSize: 7.5, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center', transition: 'all 100ms' }}
-                                          onMouseEnter={e => e.currentTarget.style.background = `${course.color}15`} onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-hover)'}>
-                                          {t.title}
-                                        </div>
-                                      ))}
-                                      {topics.length > 3 && <div style={{ fontSize: 7, color: 'var(--text-muted)', textAlign: 'center' }}>+{topics.length - 3}</div>}
-                                    </div>
-                                  ) : (
-                                    <div style={{ fontSize: 7, color: 'var(--text-muted)', textAlign: 'center', paddingTop: 4 }}>-</div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })()}
-
-                    {/* Topic blocks — filtered by selected group */}
-                    {(() => {
-                      const visibleTopics = selectedGroupId
-                        ? parsedTopics.filter(t => t.groupId === selectedGroupId)
-                        : parsedTopics;
-                      const filtered = topicSearch
-                        ? visibleTopics.filter(t => t.title.toLowerCase().includes(topicSearch.toLowerCase()))
-                        : visibleTopics;
-                      // Group the visible topics by their group
-                      const groupBlocks: { group: SubjectGroup | null; topics: SubjectTopic[] }[] = [];
-                      if (selectedGroupId) {
-                        const grp = groups.find(g => g.id === selectedGroupId);
-                        groupBlocks.push({ group: grp || null, topics: filtered });
-                      } else {
-                        // Group topics by their group
-                        const groupedMap = new Map<string, SubjectTopic[]>();
-                        filtered.forEach(t => {
-                          const gid = t.groupId || '__ungrouped__';
-                          if (!groupedMap.has(gid)) groupedMap.set(gid, []);
-                          groupedMap.get(gid)!.push(t);
-                        });
-                        // Groups first
-                        groups.forEach(g => {
-                          const topics = groupedMap.get(g.id);
-                          if (topics && topics.length > 0) groupBlocks.push({ group: g, topics });
-                        });
-                        // Ungrouped
-                        const ungrouped = groupedMap.get('__ungrouped__');
-                        if (ungrouped && ungrouped.length > 0) groupBlocks.push({ group: null, topics: ungrouped });
-                      }
-                      return groupBlocks.map(({ group: grp, topics }) => (
-                        <div key={grp?.id || '__ungrouped__'} style={{ marginBottom: 20 }}>
-                          {grp && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                              <div style={{ width: 3, height: 14, borderRadius: 2, background: course.color }} />
-                              <h3 style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: course.color, margin: 0, flex: 1 }}>{grp.name}</h3>
-                              <button onClick={() => startEditGroup(grp)} style={{ width: 20, height: 20, borderRadius: 4, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Edit3 size={9} /></button>
-                              <button onClick={() => handleDeleteGroup(grp.id)} style={{ width: 20, height: 20, borderRadius: 4, border: 'none', background: 'transparent', cursor: 'pointer', color: 'rgba(239,68,68,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={9} /></button>
-                            </div>
-                          )}
-                          {!grp && groups.length > 0 && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                              <div style={{ width: 3, height: 10, borderRadius: 2, background: 'var(--text-muted)', opacity: 0.4 }} />
-                              <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Sin grupo</span>
-                            </div>
-                          )}
-                          {topics.length > 0 ? (
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8 }}>
-                              {topics.map(topic => {
-                                const matCount = (topic.materials || []).length;
-                                const isStudying = topic.reviewLevel > 0 && topic.reviewLevel < 4;
-                                const isMastered = topic.reviewLevel >= 4;
-                                return (
-                                  <div key={topic.id} onClick={() => { setActiveTopicId(topic.id); setCurrentView('topic'); }}
-                                    style={{ borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', padding: 12, cursor: 'pointer', transition: 'all 200ms ' + EASE, position: 'relative', overflow: 'hidden' }}
-                                    className="hover-lift"
-                                    onMouseEnter={e => e.currentTarget.style.borderColor = `${course.color}40`}
-                                    onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border-subtle)'}>
-                                    <div style={{ position: 'absolute', top: 0, left: 0, width: 3, height: '100%', background: isMastered ? '#10B981' : isStudying ? '#3B82F6' : course.color, borderRadius: '3px 0 0 3px' }} />
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
-                                      <h4 style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', margin: 0, lineHeight: 1.3, flex: 1, paddingRight: 4 }}>{topic.title}</h4>
-                                      <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
-                                        <button onClick={(e) => { e.stopPropagation(); setEditingTopicId(topic.id); setTopicName(topic.title); setShowTopicModal(true); }} style={{ width: 20, height: 20, borderRadius: 4, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Edit3 size={8} /></button>
-                                        <button onClick={(e) => { e.stopPropagation(); handleDeleteTopic(topic.id); }} style={{ width: 20, height: 20, borderRadius: 4, border: 'none', background: 'transparent', cursor: 'pointer', color: 'rgba(239,68,68,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={8} /></button>
-                                      </div>
-                                    </div>
-                                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 6 }}>
-                                      {(topic.materials || []).reduce((acc, m) => { acc[m.type] = (acc[m.type] || 0) + 1; return acc; }, {} as Record<string, number>) && Object.entries((topic.materials || []).reduce((acc, m) => { acc[m.type] = (acc[m.type] || 0) + 1; return acc; }, {} as Record<string, number>)).slice(0, 3).map(([type, count]) => {
-                                        const meta = MATERIAL_META[type as MaterialType];
-                                        if (!meta) return null;
-                                        const Icon = meta.icon;
-                                        return <span key={type} style={{ fontSize: 7.5, display: 'flex', alignItems: 'center', gap: 2, color: 'var(--text-tertiary)' }}><Icon size={7} /> {count}</span>;
-                                      })}
-                                    </div>
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                      <span style={{ fontSize: 8, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>{matCount} material{matCount !== 1 ? 'es' : ''}</span>
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                        <div style={{ display: 'flex', gap: 1.5 }}>{[...Array(5)].map((_, i) => <div key={i} style={{ width: 5, height: 3, borderRadius: 1, background: i < topic.reviewLevel ? course.color : 'var(--bg-hover)', transition: 'all 200ms' }} />)}</div>
-                                      </div>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          ) : (
-                            <div style={{ padding: '24px 16px', textAlign: 'center', borderRadius: 8, border: '1px dashed var(--border-subtle)' }}>
-                              <Book size={22} style={{ color: 'var(--text-muted)', margin: '0 auto 4px', opacity: 0.3 }} />
-                              <p style={{ fontSize: 10, color: 'var(--text-secondary)', margin: 0 }}>No hay temas</p>
-                            </div>
-                          )}
-                        </div>
-                      ));
-                    })()}
-                    {/* Empty state */}
-                    {parsedTopics.length === 0 && (
-                      <div style={{ padding: '48px 20px', textAlign: 'center', borderRadius: 10, border: '1px dashed var(--border-subtle)' }}>
-                        <GraduationCap size={32} style={{ color: 'var(--text-muted)', margin: '0 auto 8px', opacity: 0.2 }} />
-                        <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>Comienza anadiendo temas a tu curso</p>
-                        <button onClick={() => { setEditingTopicId(null); setTopicName(''); setShowTopicModal(true); }} style={{ height: 32, padding: '0 16px', borderRadius: 8, border: 'none', background: course.color, color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>Crear primer tema</button>
-                      </div>
-                    )}
                   </div>
                 </div>
+
+                {/* ══ DELETE MATERIAL CONFIRMATION ══ */}
+                {confirmDeleteMatId && (() => {
+                  const delMat = allCourseMaterials.find(m => m.id === confirmDeleteMatId);
+                  return (
+                    <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      onClick={e => { if (e.target === e.currentTarget) setConfirmDeleteMatId(null); }}>
+                      <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)' }} />
+                      <div style={{ position: 'relative', width: 380, background: 'var(--bg-surface)', borderRadius: 16, border: '1px solid var(--border-subtle)', boxShadow: '0 24px 64px rgba(0,0,0,0.5)', overflow: 'hidden' }} className="bento-card">
+                        <div style={{ padding: '24px 24px 16px', textAlign: 'center' }}>
+                          <div style={{ width: 48, height: 48, borderRadius: 14, background: 'rgba(239,68,68,0.1)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
+                            <AlertTriangle size={24} style={{ color: '#EF4444' }} />
+                          </div>
+                          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>Eliminar material</h3>
+                          {delMat && <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--text-secondary)', fontFamily: "'Inter', sans-serif" }}>"{delMat.name || 'Sin nombre'}" sera eliminado</p>}
+                        </div>
+                        <div style={{ padding: '12px 24px 24px', display: 'flex', gap: 10, justifyContent: 'center' }}>
+                          <button onClick={() => setConfirmDeleteMatId(null)}
+                            style={{ height: 38, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 13, fontWeight: 500, cursor: 'pointer', padding: '0 20px', transition: 'all 150ms', fontFamily: "'Inter', sans-serif" }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
+                            Cancelar
+                          </button>
+                          <button onClick={() => { handleDeleteResourceFromOverview(confirmDeleteMatId); }}
+                            style={{ height: 38, borderRadius: 8, border: 'none', background: '#EF4444', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: '0 20px', transition: 'all 150ms', fontFamily: "'Inter', sans-serif" }}
+                            onMouseEnter={e => { e.currentTarget.style.opacity = '0.9'; }}
+                            onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
+                            Eliminar
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* ══ ADD LINK MODAL ══ */}
+                {showAddLinkModal && (
+                  <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    onClick={e => { if (e.target === e.currentTarget) setShowAddLinkModal(false); }}>
+                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)' }} />
+                    <div style={{ position: 'relative', width: 400, background: 'var(--bg-surface)', borderRadius: 16, border: '1px solid var(--border-subtle)', boxShadow: '0 24px 64px rgba(0,0,0,0.5)', overflow: 'hidden' }} className="bento-card">
+                      <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>Agregar enlace</h3>
+                        <button onClick={() => setShowAddLinkModal(false)}
+                          style={{ width: 28, height: 28, borderRadius: 7, border: 'none', background: 'var(--bg-hover)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#EF4444'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
+                          <X size={14} />
+                        </button>
+                      </div>
+                      <div style={{ padding: '18px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6, letterSpacing: '0.02em' }}>URL del enlace</label>
+                          <input value={addLinkUrl} onChange={e => setAddLinkUrl(e.target.value)}
+                            placeholder="https://..."
+                            onKeyDown={e => { if (e.key === 'Enter') handleAddLink(); }}
+                            autoFocus
+                            style={{ width: '100%', height: 40, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 12px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif" }}
+                            className="input-base" />
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6, letterSpacing: '0.02em' }}>Nombre <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(opcional)</span></label>
+                          <input value={addLinkName} onChange={e => setAddLinkName(e.target.value)}
+                            placeholder="Mi enlace"
+                            onKeyDown={e => { if (e.key === 'Enter') handleAddLink(); }}
+                            style={{ width: '100%', height: 40, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 12px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif" }}
+                            className="input-base" />
+                        </div>
+                      </div>
+                      <div style={{ padding: '12px 24px 18px', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                        <button onClick={() => setShowAddLinkModal(false)}
+                          style={{ height: 36, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '0 16px', transition: 'all 150ms' }}
+                          onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
+                          Cancelar
+                        </button>
+                        <button onClick={handleAddLink}
+                          style={{ height: 36, borderRadius: 8, border: 'none', background: course.color, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '0 20px', transition: 'all 150ms' }}
+                          onMouseEnter={e => { e.currentTarget.style.opacity = '0.9'; }}
+                          onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
+                          Agregar
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ══ PLAN SESSION MODAL ══ */}
+                {showPlanModal && (
+                  <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    onClick={e => { if (e.target === e.currentTarget) setShowPlanModal(false); }}>
+                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)' }} />
+                    <div style={{ position: 'relative', width: 420, background: 'var(--bg-surface)', borderRadius: 16, border: '1px solid var(--border-subtle)', boxShadow: '0 24px 64px rgba(0,0,0,0.5)', overflow: 'hidden' }} className="bento-card">
+                      <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>Planificar sesion</h3>
+                        <button onClick={() => setShowPlanModal(false)}
+                          style={{ width: 28, height: 28, borderRadius: 7, border: 'none', background: 'var(--bg-hover)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#EF4444'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
+                          <X size={14} />
+                        </button>
+                      </div>
+                      <div style={{ padding: '18px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: 6, letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Fecha</label>
+                          <input type="date" value={planDate} onChange={e => setPlanDate(e.target.value)}
+                            style={{ width: '100%', height: 40, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 12px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif" }}
+                            className="input-base" />
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: 6, letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Titulo</label>
+                          <input value={planTitle} onChange={e => setPlanTitle(e.target.value)}
+                            placeholder="Ej: Repasar capitulo 3"
+                            autoFocus
+                            style={{ width: '100%', height: 40, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 12px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif" }}
+                            className="input-base" />
+                        </div>
+                        <div style={{ display: 'flex', gap: 12 }}>
+                          <div style={{ flex: 1 }}>
+                            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: 6, letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Agrupacion</label>
+                            <select value={planGroupId} onChange={e => setPlanGroupId(e.target.value)}
+                              style={{ width: '100%', height: 40, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 12px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif", cursor: 'pointer' }}
+                              className="input-base">
+                              <option value="">Ninguna</option>
+                              {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                            </select>
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: 6, letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Tema</label>
+                            <select value={planTopicId} onChange={e => setPlanTopicId(e.target.value)}
+                              style={{ width: '100%', height: 40, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 12px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif", cursor: 'pointer' }}
+                              className="input-base">
+                              <option value="">Ninguno</option>
+                              {parsedTopics.filter(t => !planGroupId || t.groupId === planGroupId).map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
+                            </select>
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 12 }}>
+                          <div style={{ flex: 1 }}>
+                            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: 6, letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Tipo</label>
+                            <select value={planType} onChange={e => setPlanType(e.target.value as any)}
+                              style={{ width: '100%', height: 40, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 12px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif", cursor: 'pointer' }}
+                              className="input-base">
+                              <option value="estudio">Estudio</option>
+                              <option value="repaso">Repaso</option>
+                              <option value="ejercicio">Ejercicio</option>
+                              <option value="lectura">Lectura</option>
+                              <option value="otro">Otro</option>
+                            </select>
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: 6, letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Duracion (min)</label>
+                            <input type="number" value={planDuration} onChange={e => setPlanDuration(Math.max(5, parseInt(e.target.value) || 5))} min={5} step={5}
+                              style={{ width: '100%', height: 40, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 12px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif" }}
+                              className="input-base" />
+                          </div>
+                        </div>
+                        {dayPlannedSessions.length > 0 && (
+                          <div>
+                            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: 8, letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Sesiones existentes este dia</label>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                              {dayPlannedSessions.map(s => (
+                                <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', borderRadius: 6, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
+                                  <span style={{ fontSize: 12, color: 'var(--text-primary)', fontFamily: "'Inter', sans-serif" }}>{s.title} <span style={{ color: 'var(--text-muted)', fontSize: 10 }}>({s.durationMinutes}m)</span></span>
+                                  <button onClick={() => deletePlannedSession(s.id)}
+                                    style={{ width: 20, height: 20, borderRadius: 5, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <X size={10} />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ padding: '12px 24px 18px', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                        <button onClick={() => setShowPlanModal(false)}
+                          style={{ height: 36, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '0 16px', transition: 'all 150ms' }}
+                          onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
+                          Cancelar
+                        </button>
+                        <button onClick={() => {
+                            if (!planDate || !planTitle.trim()) return;
+                            addPlannedSession({ courseId: course.id, date: planDate, title: planTitle.trim(), groupId: planGroupId || undefined, topicId: planTopicId || undefined, durationMinutes: planDuration, type: planType, completed: false });
+                            setShowPlanModal(false);
+                          }}
+                          style={{ height: 36, borderRadius: 8, border: 'none', background: course.color, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '0 20px', transition: 'all 150ms' }}
+                          onMouseEnter={e => { e.currentTarget.style.opacity = '0.9'; }}
+                          onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
+                          Planificar
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ══ DAY DETAIL MODAL ══ */}
+                {showDayDetail && (
+                  <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    onClick={e => { if (e.target === e.currentTarget) setShowDayDetail(false); }}>
+                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)' }} />
+                    <div style={{ position: 'relative', width: 420, maxHeight: '70vh', background: 'var(--bg-surface)', borderRadius: 16, border: '1px solid var(--border-subtle)', boxShadow: '0 24px 64px rgba(0,0,0,0.5)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }} className="bento-card">
+                      {/* Header */}
+                      <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          <div style={{ width: 36, height: 36, borderRadius: 10, background: `${course.color}12`, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${course.color}20`, flexDirection: 'column' }}>
+                            <span style={{ fontSize: 14, fontWeight: 800, color: course.color, fontFamily: "'Inter Tight', sans-serif", lineHeight: 1 }}>{dayDetailDate ? format(new Date(dayDetailDate + 'T12:00:00'), 'd') : ''}</span>
+                            <span style={{ fontSize: 7, fontWeight: 700, color: `${course.color}80`, fontFamily: "'Inter Tight', sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em' }}>{dayDetailDate ? format(new Date(dayDetailDate + 'T12:00:00'), 'EEE', { locale: es }) : ''}</span>
+                          </div>
+                          <div>
+                            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>
+                              {dayDetailDate ? format(new Date(dayDetailDate + 'T12:00:00'), "d 'de' MMMM", { locale: es }) : ''}
+                            </h3>
+                            <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', fontFamily: "'Inter', sans-serif" }}>
+                              {(plannedSessions || []).filter(s => s.courseId === course.id && s.date === dayDetailDate && !s.completed).length} sesiones planificadas
+                            </span>
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <button onClick={() => { setPlanDate(dayDetailDate); setPlanTitle(''); setPlanGroupId(''); setPlanTopicId(''); setPlanType('estudio'); setPlanDuration(30); setShowDayDetail(false); setShowPlanModal(true); }}
+                            style={{ height: 28, borderRadius: 7, border: `1px solid ${course.color}30`, background: `${course.color}0d`, cursor: 'pointer', color: course.color, padding: '0 10px', fontSize: 10, fontWeight: 600, fontFamily: "'Inter Tight', sans-serif", display: 'flex', alignItems: 'center', gap: 4, transition: 'all 150ms' }}
+                            onMouseEnter={e => { e.currentTarget.style.background = `${course.color}1a`; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = `${course.color}0d`; }}>
+                            <Plus size={10} /> Agregar
+                          </button>
+                          <button onClick={() => setShowDayDetail(false)}
+                            style={{ width: 28, height: 28, borderRadius: 7, border: 'none', background: 'var(--bg-hover)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#EF4444'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
+                            <X size={14} />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Session list */}
+                      <div style={{ flex: 1, overflow: 'auto', padding: '12px 24px 20px' }}>
+                        {(() => {
+                          const typeColors: Record<string, string> = { estudio: '#8B5CF6', repaso: '#3B82F6', ejercicio: '#10B981', lectura: '#F59E0B', otro: '#6B7280' };
+                          const typeLabels: Record<string, string> = { estudio: 'Estudio', repaso: 'Repaso', ejercicio: 'Ejercicio', lectura: 'Lectura', otro: 'Otro' };
+                          const daySessions = (plannedSessions || []).filter(s => s.courseId === course.id && s.date === dayDetailDate && !s.completed);
+                          if (daySessions.length === 0) {
+                            return (
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 0', gap: 8 }}>
+                                <Calendar size={24} style={{ color: 'var(--text-muted)', opacity: 0.4 }} />
+                                <span style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: "'Inter', sans-serif" }}>No hay sesiones planificadas</span>
+                                <button onClick={() => { setPlanDate(dayDetailDate); setPlanTitle(''); setPlanGroupId(''); setPlanTopicId(''); setPlanType('estudio'); setPlanDuration(30); setShowDayDetail(false); setShowPlanModal(true); }}
+                                  style={{ marginTop: 4, height: 28, borderRadius: 7, border: `1px solid ${course.color}30`, background: `${course.color}0d`, cursor: 'pointer', color: course.color, padding: '0 12px', fontSize: 11, fontWeight: 600, fontFamily: "'Inter', sans-serif", display: 'flex', alignItems: 'center', gap: 4, transition: 'all 150ms' }}
+                                  onMouseEnter={e => { e.currentTarget.style.background = `${course.color}1a`; }}
+                                  onMouseLeave={e => { e.currentTarget.style.background = `${course.color}0d`; }}>
+                                  <Plus size={10} /> Planificar primera sesion
+                                </button>
+                              </div>
+                            );
+                          }
+                          const totalMins = daySessions.reduce((a, s) => a + s.durationMinutes, 0);
+                          return (
+                            <>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                                <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: "'Inter Tight', sans-serif" }}>Sesiones</span>
+                                <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', fontFamily: "'Inter', sans-serif" }}>{totalMins} min totales</span>
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                {daySessions.map((s, idx) => {
+                                  const tc = typeColors[s.type] || '#8B5CF6';
+                                  return (
+                                    <div key={s.id} style={{
+                                      display: 'flex', alignItems: 'center', gap: 10,
+                                      padding: '10px 12px', borderRadius: 10,
+                                      background: 'var(--bg-elevated)',
+                                      border: '1px solid var(--border-subtle)',
+                                      transition: 'all 150ms',
+                                    }}
+                                    onMouseEnter={e => { e.currentTarget.style.borderColor = `${tc}30`; e.currentTarget.style.background = `${tc}06`; }}
+                                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = 'var(--bg-elevated)'; }}>
+                                      {/* Type dot */}
+                                      <div style={{ width: 32, height: 32, borderRadius: 8, background: `${tc}12`, border: `1px solid ${tc}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: tc }} />
+                                      </div>
+                                      {/* Info */}
+                                      <div style={{ flex: 1, minWidth: 0 }}>
+                                        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter', sans-serif", display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title}</span>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                                          <span style={{ fontSize: 9, fontWeight: 600, color: tc, fontFamily: "'Inter Tight', sans-serif" }}>{typeLabels[s.type] || 'Otro'}</span>
+                                          <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>·</span>
+                                          <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', fontFamily: "'Inter', sans-serif" }}>{s.durationMinutes} min</span>
+                                        </div>
+                                      </div>
+                                      {/* Delete */}
+                                      <button onClick={(e) => { e.stopPropagation(); deletePlannedSession(s.id); }}
+                                        style={{ width: 26, height: 26, borderRadius: 6, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms', flexShrink: 0 }}
+                                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#EF4444'; }}
+                                        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
+                                        <Trash2 size={12} />
+                                      </button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ══ INLINE EDIT MODAL OVERLAY ══ */}
+                {inlineEditGroupId && (() => {
+                  const editingGroup = groups.find(g => g.id === inlineEditGroupId);
+                  if (!editingGroup) return null;
+                  return (
+                    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      onClick={e => { if (e.target === e.currentTarget) setInlineEditGroupId(null); }}>
+                      <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)' }} />
+                      <div style={{ position: 'relative', width: 440, background: 'var(--bg-surface)', borderRadius: 16, border: '1px solid var(--border-subtle)', boxShadow: '0 24px 64px rgba(0,0,0,0.4)', padding: 0, overflow: 'hidden' }} className="bento-card">
+                        {/* Header */}
+                        <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>Editar agrupacion</h3>
+                          <button onClick={() => setInlineEditGroupId(null)}
+                            style={{ width: 28, height: 28, borderRadius: 7, border: 'none', background: 'var(--bg-hover)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.12)'; e.currentTarget.style.color = '#EF4444'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
+                            <X size={14} />
+                          </button>
+                        </div>
+
+                        {/* Body */}
+                        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                          {/* Name */}
+                          <div>
+                            <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6, display: 'block', fontFamily: "'Inter Tight', sans-serif" }}>Nombre</label>
+                            <input value={inlineGroupName} onChange={e => setInlineGroupName(e.target.value)} placeholder="Nombre de la agrupacion"
+                              style={{ width: '100%', height: 40, borderRadius: 10, padding: '0 14px', fontSize: 13, fontWeight: 500, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', fontFamily: "'Inter', sans-serif", transition: 'border-color 150ms' }}
+                              onFocus={e => { e.currentTarget.style.borderColor = `${course.color}60`; }}
+                              onBlur={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; }} />
+                          </div>
+
+                          {/* Banner */}
+                          <div>
+                            <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6, display: 'block', fontFamily: "'Inter Tight', sans-serif" }}>Banner</label>
+                            {inlineGroupCover ? (
+                              <div style={{ position: 'relative', width: '100%', height: 100, borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
+                                <img src={inlineGroupCover} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                <button onClick={() => setInlineGroupCover(undefined)}
+                                  style={{ position: 'absolute', top: 8, right: 8, width: 24, height: 24, borderRadius: 7, background: 'rgba(239,68,68,0.85)', backdropFilter: 'blur(4px)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                                  onMouseEnter={e => { e.currentTarget.style.background = '#EF4444'; }}
+                                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.85)'; }}>
+                                  <X size={12} />
+                                </button>
+                              </div>
+                            ) : (
+                              <button onClick={() => groupCoverInputInlineRef.current?.click()}
+                                style={{ width: '100%', height: 80, borderRadius: 10, border: '1px dashed var(--border-subtle)', background: 'var(--bg-elevated)', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, color: 'var(--text-muted)', transition: 'all 150ms', fontSize: 12, fontWeight: 500 }}
+                                onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}50`; e.currentTarget.style.background = `${course.color}08`; }}
+                                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = 'var(--bg-elevated)'; }}>
+                                <Upload size={16} />
+                                <span>Subir imagen de portada</span>
+                              </button>
+                            )}
+                            <input type="file" ref={groupCoverInputInlineRef} style={{ display: 'none' }} accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) { const r = new FileReader(); r.onload = ev => setInlineGroupCover(ev.target?.result as string); r.readAsDataURL(f); } }} />
+                          </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div style={{ padding: '16px 24px 20px', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <button onClick={() => setConfirmDeleteGroupId(inlineEditGroupId)}
+                            style={{ height: 36, borderRadius: 8, border: '1px solid rgba(239,68,68,0.25)', background: 'rgba(239,68,68,0.06)', color: '#EF4444', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '0 14px', display: 'flex', alignItems: 'center', gap: 6, transition: 'all 150ms', fontFamily: "'Inter', sans-serif" }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.12)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.06)'; }}>
+                            <Trash2 size={13} /> Eliminar
+                          </button>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <button onClick={() => setInlineEditGroupId(null)}
+                              style={{ height: 36, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 500, cursor: 'pointer', padding: '0 16px', transition: 'all 150ms', fontFamily: "'Inter', sans-serif" }}
+                              onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
+                              Cancelar
+                            </button>
+                            <button onClick={() => {
+                              if (inlineGroupName.trim()) {
+                                const currentGroups = course.groups || [];
+                                updateCourse(course.id, { groups: currentGroups.map(g => g.id === inlineEditGroupId ? { ...g, name: inlineGroupName.trim(), image: inlineGroupCover } : g) });
+                                toast.success('Agrupacion actualizada');
+                              }
+                              setInlineEditGroupId(null);
+                            }}
+                              style={{ height: 36, borderRadius: 8, border: 'none', background: inlineGroupName.trim() ? course.color : 'var(--bg-hover)', color: inlineGroupName.trim() ? '#fff' : 'var(--text-muted)', fontSize: 12, fontWeight: 600, cursor: inlineGroupName.trim() ? 'pointer' : 'default', padding: '0 20px', transition: 'all 150ms', fontFamily: "'Inter', sans-serif" }}
+                              onMouseEnter={e => { if (inlineGroupName.trim()) e.currentTarget.style.opacity = '0.9'; }}
+                              onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
+                              Guardar
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* ══ DELETE CONFIRMATION DIALOG ══ */}
+                {confirmDeleteGroupId && (() => {
+                  const delGroup = groups.find(g => g.id === confirmDeleteGroupId);
+                  const delCount = parsedTopics.filter(t => t.groupId === confirmDeleteGroupId).length;
+                  return (
+                    <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      onClick={e => { if (e.target === e.currentTarget) setConfirmDeleteGroupId(null); }}>
+                      <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)' }} />
+                      <div style={{ position: 'relative', width: 380, background: 'var(--bg-surface)', borderRadius: 16, border: '1px solid var(--border-subtle)', boxShadow: '0 24px 64px rgba(0,0,0,0.5)', overflow: 'hidden' }} className="bento-card">
+                        <div style={{ padding: '24px 24px 16px', textAlign: 'center' }}>
+                          <div style={{ width: 48, height: 48, borderRadius: 14, background: 'rgba(239,68,68,0.1)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
+                            <AlertTriangle size={24} style={{ color: '#EF4444' }} />
+                          </div>
+                          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>Eliminar agrupacion</h3>
+                          {delGroup && <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--text-secondary)', fontFamily: "'Inter', sans-serif" }}>"{delGroup.name}" sera eliminada</p>}
+                          {delCount > 0 && <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>{delCount} tema{delCount !== 1 ? 's' : ''} se desvincular{delCount !== 1 ? 'an' : 'a'}</p>}
+                        </div>
+                        <div style={{ padding: '12px 24px 24px', display: 'flex', gap: 10, justifyContent: 'center' }}>
+                          <button onClick={() => setConfirmDeleteGroupId(null)}
+                            style={{ height: 38, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 13, fontWeight: 500, cursor: 'pointer', padding: '0 20px', transition: 'all 150ms', fontFamily: "'Inter', sans-serif" }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
+                            Cancelar
+                          </button>
+                          <button onClick={() => { handleDeleteGroup(confirmDeleteGroupId); setConfirmDeleteGroupId(null); if (inlineEditGroupId === confirmDeleteGroupId) setInlineEditGroupId(null); }}
+                            style={{ height: 38, borderRadius: 8, border: 'none', background: '#EF4444', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: '0 20px', transition: 'all 150ms', fontFamily: "'Inter', sans-serif" }}
+                            onMouseEnter={e => { e.currentTarget.style.opacity = '0.9'; }}
+                            onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
+                            Eliminar
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+                </>
               )
             )
-          }
+            }
+            </div>
           </div>
-        </div>
         ) : activeTab === 'tareas' ? (
           /* ─── TAREAS TAB ─── */
             <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px 24px 60px' }}>
@@ -2470,50 +3215,300 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
         </div>
       )}
       {showTopicModal && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }} onClick={() => setShowTopicModal(false)}>
-          <div className="bento-card" style={{ width: 360, padding: 22, borderRadius: 12, background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-              <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>{editingTopicId ? 'Editar' : 'Nuevo'} Tema</h3>
-              <button onClick={() => setShowTopicModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}><X size={15} /></button>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={e => { if (e.target === e.currentTarget) setShowTopicModal(false); }}>
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)' }} />
+          <div className="bento-card" style={{ position: 'relative', width: 400, background: 'var(--bg-surface)', borderRadius: 16, border: '1px solid var(--border-subtle)', boxShadow: '0 24px 64px rgba(0,0,0,0.5)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+            <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 32, height: 32, borderRadius: 8, background: `${course.color}12`, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${course.color}20` }}>
+                  <Book size={14} style={{ color: course.color }} />
+                </div>
+                <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', margin: 0, fontFamily: "'Inter Tight', sans-serif" }}>{editingTopicId ? 'Editar' : 'Nuevo'} Tema</h3>
+              </div>
+              <button onClick={() => setShowTopicModal(false)}
+                style={{ width: 28, height: 28, borderRadius: 7, border: 'none', background: 'var(--bg-hover)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#EF4444'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
+                <X size={14} />
+              </button>
             </div>
-            <input value={topicName} onChange={e => setTopicName(e.target.value)} placeholder="Nombre del tema..." autoFocus style={{ width: '100%', height: 36, borderRadius: 6, padding: '0 10px', fontSize: 12, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box' }} />
-            <button onClick={handleAddTopic} disabled={!topicName.trim()} style={{ marginTop: 12, width: '100%', height: 34, borderRadius: 6, border: 'none', background: topicName.trim() ? course.color : 'var(--bg-hover)', color: topicName.trim() ? '#fff' : 'var(--text-muted)', fontSize: 11, fontWeight: 600, cursor: topicName.trim() ? 'pointer' : 'default' }}>{editingTopicId ? 'Guardar' : 'Crear'}</button>
+            <div style={{ padding: '18px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: 6, letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Nombre</label>
+                <input value={topicName} onChange={e => setTopicName(e.target.value)} placeholder="Ej: Capitulo 1 - Introduccion" autoFocus
+                  style={{ width: '100%', height: 40, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 12px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif", transition: 'border-color 150ms' }}
+                  onFocus={e => { e.currentTarget.style.borderColor = `${course.color}60`; }}
+                  onBlur={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; }}
+                  onKeyDown={e => { if (e.key === 'Enter' && topicName.trim()) handleAddTopic(); }} />
+              </div>
+            </div>
+            <div style={{ padding: '12px 24px 18px', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button onClick={() => setShowTopicModal(false)}
+                style={{ height: 36, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 500, cursor: 'pointer', padding: '0 16px', transition: 'all 150ms', fontFamily: "'Inter', sans-serif" }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
+                Cancelar
+              </button>
+              <button onClick={handleAddTopic} disabled={!topicName.trim()}
+                style={{ height: 36, borderRadius: 8, border: 'none', background: topicName.trim() ? course.color : 'var(--bg-hover)', color: topicName.trim() ? '#fff' : 'var(--text-muted)', fontSize: 12, fontWeight: 600, cursor: topicName.trim() ? 'pointer' : 'default', padding: '0 20px', transition: 'all 150ms', fontFamily: "'Inter', sans-serif" }}
+                onMouseEnter={e => { if (topicName.trim()) e.currentTarget.style.opacity = '0.9'; }}
+                onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
+                {editingTopicId ? 'Guardar' : 'Crear'}
+              </button>
+            </div>
           </div>
         </div>
       )}
       {showGroupModal && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }} onClick={() => setShowGroupModal(false)}>
-          <div className="bento-card" style={{ width: 400, padding: 22, borderRadius: 12, background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-              <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>{editingGroupId ? 'Editar' : 'Nueva'} Agrupación</h3>
-              <button onClick={() => setShowGroupModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}><X size={15} /></button>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <input value={groupName} onChange={e => setGroupName(e.target.value)} placeholder="Nombre del grupo..." style={{ width: '100%', height: 34, borderRadius: 6, padding: '0 10px', fontSize: 12, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box' }} />
-              <label style={{ fontSize: 8, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Banner</label>
-              {groupCover ? (
-                <div style={{ position: 'relative', width: '100%', aspectRatio: '16/7', borderRadius: 6, overflow: 'hidden' }}>
-                  <img src={groupCover} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  <button onClick={() => setGroupCover(undefined)} style={{ position: 'absolute', top: 4, right: 4, width: 20, height: 20, borderRadius: '50%', background: 'rgba(239,68,68,0.9)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={9} /></button>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={e => { if (e.target === e.currentTarget) setShowGroupModal(false); }}>
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)' }} />
+          <div className="bento-card" style={{ position: 'relative', width: 440, maxHeight: '80vh', background: 'var(--bg-surface)', borderRadius: 16, border: '1px solid var(--border-subtle)', boxShadow: '0 24px 64px rgba(0,0,0,0.5)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+            <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 32, height: 32, borderRadius: 8, background: `${course.color}12`, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${course.color}20` }}>
+                  <Layers size={14} style={{ color: course.color }} />
                 </div>
-              ) : (
-                <button onClick={() => groupCoverInputRef.current?.click()} style={{ width: '100%', height: 50, borderRadius: 6, border: '1px dashed var(--border-subtle)', background: 'transparent', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, color: 'var(--text-muted)' }}>
-                  <Upload size={11} /><span style={{ fontSize: 8, fontWeight: 600, textTransform: 'uppercase' }}>Subir</span>
-                </button>
-              )}
-              <input type="file" ref={groupCoverInputRef} style={{ display: 'none' }} accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) { const r = new FileReader(); r.onload = ev => setGroupCover(ev.target?.result as string); r.readAsDataURL(f); }}} />
-              <label style={{ fontSize: 8, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Temas</label>
-              <div style={{ maxHeight: 120, overflowY: 'auto', border: '1px solid var(--border-subtle)', borderRadius: 6, padding: 6, background: 'var(--bg-deep)' }}>
-                {parsedTopics.map(t => (
-                  <label key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, cursor: 'pointer', color: 'var(--text-secondary)', padding: '2px 0' }}>
-                    <input type="checkbox" checked={selectedTopicIds.includes(t.id)} style={{ accentColor: course.color }}
-                      onChange={e => { if (e.target.checked) setSelectedTopicIds([...selectedTopicIds, t.id]); else setSelectedTopicIds(selectedTopicIds.filter(id => id !== t.id)); }} />
-                    {t.title}
-                  </label>
-                ))}
-                {parsedTopics.length === 0 && <span style={{ fontSize: 9, color: 'var(--text-muted)', textAlign: 'center', padding: 6, display: 'block' }}>Sin temas</span>}
+                <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', margin: 0, fontFamily: "'Inter Tight', sans-serif" }}>{editingGroupId ? 'Editar' : 'Nueva'} Agrupacion</h3>
               </div>
-              <button onClick={handleSaveGroup} disabled={!groupName.trim()} style={{ width: '100%', height: 34, borderRadius: 6, border: 'none', background: groupName.trim() ? course.color : 'var(--bg-hover)', color: groupName.trim() ? '#fff' : 'var(--text-muted)', fontSize: 11, fontWeight: 600, cursor: groupName.trim() ? 'pointer' : 'default' }}>{editingGroupId ? 'Guardar' : 'Crear'}</button>
+              <button onClick={() => setShowGroupModal(false)}
+                style={{ width: 28, height: 28, borderRadius: 7, border: 'none', background: 'var(--bg-hover)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#EF4444'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
+                <X size={14} />
+              </button>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '18px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: 6, letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Nombre</label>
+                <input value={groupName} onChange={e => setGroupName(e.target.value)} placeholder="Ej: Unidad 1 - Fundamentos"
+                  style={{ width: '100%', height: 40, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 12px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif", transition: 'border-color 150ms' }}
+                  onFocus={e => { e.currentTarget.style.borderColor = `${course.color}60`; }}
+                  onBlur={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: 6, letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Banner</label>
+                {groupCover ? (
+                  <div style={{ position: 'relative', width: '100%', height: 100, borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
+                    <img src={groupCover} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <button onClick={() => setGroupCover(undefined)}
+                      style={{ position: 'absolute', top: 8, right: 8, width: 24, height: 24, borderRadius: 7, background: 'rgba(239,68,68,0.85)', backdropFilter: 'blur(4px)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                      onMouseEnter={e => { e.currentTarget.style.background = '#EF4444'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.85)'; }}>
+                      <X size={12} />
+                    </button>
+                  </div>
+                ) : (
+                  <button onClick={() => groupCoverInputRef.current?.click()}
+                    style={{ width: '100%', height: 80, borderRadius: 10, border: '1px dashed var(--border-subtle)', background: 'var(--bg-elevated)', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, color: 'var(--text-muted)', transition: 'all 150ms', fontSize: 12, fontWeight: 500, fontFamily: "'Inter', sans-serif" }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}50`; e.currentTarget.style.background = `${course.color}08`; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = 'var(--bg-elevated)'; }}>
+                    <Upload size={16} />
+                    <span>Subir imagen de portada</span>
+                  </button>
+                )}
+                <input type="file" ref={groupCoverInputRef} style={{ display: 'none' }} accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) { const r = new FileReader(); r.onload = ev => setGroupCover(ev.target?.result as string); r.readAsDataURL(f); } }} />
+              </div>
+            </div>
+            <div style={{ padding: '12px 24px 18px', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', flexShrink: 0, gap: 8 }}>
+                <button onClick={() => setShowGroupModal(false)}
+                  style={{ height: 36, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 500, cursor: 'pointer', padding: '0 16px', transition: 'all 150ms', fontFamily: "'Inter', sans-serif" }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
+                  Cancelar
+                </button>
+                <button onClick={handleSaveGroup} disabled={!groupName.trim()}
+                  style={{ height: 36, borderRadius: 8, border: 'none', background: groupName.trim() ? course.color : 'var(--bg-hover)', color: groupName.trim() ? '#fff' : 'var(--text-muted)', fontSize: 12, fontWeight: 600, cursor: groupName.trim() ? 'pointer' : 'default', padding: '0 20px', transition: 'all 150ms', fontFamily: "'Inter', sans-serif" }}
+                  onMouseEnter={e => { if (groupName.trim()) e.currentTarget.style.opacity = '0.9'; }}
+                  onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
+                  {editingGroupId ? 'Guardar' : 'Crear'}
+                </button>
+              </div>
+          </div>
+        </div>
+      )}
+      {/* Agrupacion Import/Export Modal */}
+      {showAgrupacionImportExport && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={e => { if (e.target === e.currentTarget) { setShowAgrupacionImportExport(false); setImportPreviewData(null); } }}>
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)' }} />
+          <div className="bento-card" style={{ position: 'relative', width: 420, maxHeight: '80vh', background: 'var(--bg-surface)', borderRadius: 16, border: '1px solid var(--border-subtle)', boxShadow: '0 24px 64px rgba(0,0,0,0.5)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+            <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 32, height: 32, borderRadius: 8, background: `${course.color}12`, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${course.color}20` }}>
+                  {importPreviewData ? <FileUp size={14} style={{ color: course.color }} /> : importExportMode === 'import' ? <FileUp size={14} style={{ color: course.color }} /> : <FileDown size={14} style={{ color: course.color }} />}
+                </div>
+                <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', margin: 0, fontFamily: "'Inter Tight', sans-serif" }}>{importPreviewData ? 'Vista previa de importacion' : importExportMode === 'import' ? 'Importar temas' : 'Exportar temas'}</h3>
+              </div>
+              <button onClick={() => { setShowAgrupacionImportExport(false); setImportPreviewData(null); }}
+                style={{ width: 28, height: 28, borderRadius: 7, border: 'none', background: 'var(--bg-hover)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#EF4444'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
+                <X size={14} />
+              </button>
+            </div>
+            <div style={{ padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: 12, flexShrink: 0, overflowY: 'auto', maxHeight: 'calc(80vh - 70px)' }} className="no-scrollbar">
+              {importPreviewData ? (
+                <>
+                  <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '0 0 4px' }}>Selecciona los temas que deseas importar.</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 320, overflowY: 'auto' }} className="no-scrollbar">
+                    {importPreviewData.map((item, gi) => {
+                      const allSelected = item.topics.every((_, ti) => importSelected[gi]?.[ti]);
+                      const someSelected = item.topics.some((_, ti) => importSelected[gi]?.[ti]);
+                      return (
+                        <div key={gi} style={{ borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', overflow: 'hidden' }}>
+                          <div
+                            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', cursor: 'pointer', transition: 'all 150ms', background: allSelected ? `${course.color}08` : 'transparent' }}
+                            onClick={() => {
+                              const next = importSelected.map((row: boolean[]) => row ? [...row] : []);
+                              const newVal = !allSelected;
+                              next[gi] = item.topics.map(() => newVal);
+                              setImportSelected(next);
+                            }}>
+                            <div style={{ width: 16, height: 16, borderRadius: 5, border: `2px solid ${allSelected ? course.color : someSelected ? `${course.color}60` : 'var(--text-muted)'}`, background: allSelected ? course.color : someSelected ? `${course.color}30` : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 150ms' }}>
+                              {allSelected && <Check size={10} style={{ color: '#fff', strokeWidth: 3 }} />}
+                              {!allSelected && someSelected && <div style={{ width: 6, height: 2, borderRadius: 1, background: '#fff' }} />}
+                            </div>
+                            <Layers size={12} style={{ color: 'var(--text-muted)', opacity: 0.5 }} />
+                            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", flex: 1 }}>{item.group.name}</span>
+                            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{item.topics.length} tema{item.topics.length !== 1 ? 's' : ''}</span>
+                          </div>
+                          <div style={{ borderTop: '1px solid var(--border-subtle)', padding: '4px 8px' }}>
+                            {item.topics.map((topic: any, ti: number) => {
+                              const checked = importSelected[gi]?.[ti] ?? false;
+                              return (
+                                <div key={ti}
+                                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 6, cursor: 'pointer', transition: 'all 150ms', background: checked ? `${course.color}08` : 'transparent' }}
+                                  onClick={() => {
+                                    const next = importSelected.map((row: boolean[]) => row ? [...row] : []);
+                                    if (!next[gi]) next[gi] = [];
+                                    next[gi][ti] = !checked;
+                                    setImportSelected(next);
+                                  }}>
+                                  <div style={{ width: 14, height: 14, borderRadius: 4, border: `2px solid ${checked ? course.color : 'var(--text-muted)'}`, background: checked ? course.color : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 150ms' }}>
+                                    {checked && <Check size={8} style={{ color: '#fff', strokeWidth: 3 }} />}
+                                  </div>
+                                  <Book size={10} style={{ color: 'var(--text-muted)', opacity: 0.5 }} />
+                                  <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 500 }}>{topic.title || 'Sin titulo'}</span>
+                                  {topic.materials?.length > 0 && <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>{topic.materials.length} material{topic.materials.length !== 1 ? 'es' : ''}</span>}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                    <button onClick={() => { setImportPreviewData(null); setImportSelected([]); setImportExportMode('import'); }}
+                      style={{ flex: 1, height: 34, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter', sans-serif", transition: 'all 150ms' }}
+                      onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-elevated)'; }}>
+                      Volver
+                    </button>
+                    <button onClick={() => {
+                      if (!importPreviewData) return;
+                      const totalSelectedTopics = importSelected.reduce((sum, row) => sum + (row?.filter(Boolean).length || 0), 0);
+                      if (totalSelectedTopics === 0) { toast.error('Selecciona al menos un tema'); return; }
+                      const currentTopics = course.studyTopics || [];
+                      const newTopics = [...currentTopics];
+                      let importedCount = 0;
+                      importPreviewData.forEach((data, gi) => {
+                        const selectedTopics = data.topics.filter((_: any, ti: number) => importSelected[gi]?.[ti]);
+                        selectedTopics.forEach((t: any) => {
+                          newTopics.push({ id: Math.random().toString(), title: t.title || 'Sin titulo', status: t.status || 'pending', createdAt: Date.now(), reviewLevel: t.reviewLevel || 0, nextReview: Date.now(), groupId: selectedGroupId!, materials: t.materials || [] });
+                          importedCount++;
+                        });
+                      });
+                      updateCourse(course.id, { studyTopics: newTopics });
+                      setShowAgrupacionImportExport(false);
+                      setImportPreviewData(null);
+                      setImportSelected([]);
+                      toast.success(`${importedCount} tema${importedCount !== 1 ? 's' : ''} importado${importedCount !== 1 ? 's' : ''} en esta agrupacion`);
+                    }}
+                      style={{ flex: 1, height: 34, borderRadius: 8, border: 'none', background: course.color, color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter', sans-serif", transition: 'all 150ms', boxShadow: `0 2px 8px ${course.color}35` }}
+                      onMouseEnter={e => { e.currentTarget.style.opacity = '0.88'; }}
+                      onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
+                      Importar {importSelected.reduce((sum, row) => sum + (row?.filter(Boolean).length || 0), 0) > 0 ? `(${importSelected.reduce((sum, row) => sum + (row?.filter(Boolean).length || 0), 0)})` : ''}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {importExportMode === 'export' ? (
+                    /* ══ EXPORT ══ */
+                    <div>
+                      <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '0 0 10px' }}>Selecciona las agrupaciones cuyos temas deseas exportar.</p>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 200, overflowY: 'auto' }} className="no-scrollbar">
+                        {groups.length === 0 ? (
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', padding: 12 }}>No hay agrupaciones</span>
+                        ) : groups.map(g => {
+                          const count = parsedTopics.filter(t => t.groupId === g.id).length;
+                          const isSelected = exportSelectedIds.has(g.id);
+                          return (
+                            <div key={g.id}
+                              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8, cursor: 'pointer', transition: 'all 150ms', background: isSelected ? `${course.color}08` : 'transparent', border: `1px solid ${isSelected ? `${course.color}25` : 'var(--border-subtle)'}` }}
+                              onClick={() => { const next = new Set(exportSelectedIds); if (isSelected) next.delete(g.id); else next.add(g.id); setExportSelectedIds(next); }}>
+                              <div style={{ width: 16, height: 16, borderRadius: 5, border: `2px solid ${isSelected ? course.color : 'var(--text-muted)'}`, background: isSelected ? course.color : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 150ms' }}>
+                                {isSelected && <Check size={10} style={{ color: '#fff', strokeWidth: 3 }} />}
+                              </div>
+                              <span style={{ flex: 1, fontSize: 12, color: 'var(--text-primary)', fontWeight: 500 }}>{g.name}</span>
+                              <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{count} tema{count !== 1 ? 's' : ''}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {groups.length > 0 && (
+                        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                          <button onClick={async () => {
+                            const selected = groups.filter(g => exportSelectedIds.has(g.id));
+                            if (selected.length === 0) { toast.error('Selecciona al menos una agrupacion'); return; }
+                            try {
+                              const dest = await save({ filters: [{ name: 'JSON', extensions: ['json'] }], defaultPath: `${selected.length === 1 ? selected[0].name.replace(/[^a-zA-Z0-9]/g, '_') : 'agrupaciones'}_export.json`, title: 'Exportar temas' });
+                              if (!dest) return;
+                              const exportData = selected.map(g => {
+                                const gTopics = parsedTopics.filter(t => t.groupId === g.id);
+                                return { group: { name: g.name, image: g.image }, topics: gTopics.map(t => ({ title: t.title, status: t.status, reviewLevel: t.reviewLevel, materials: (t.materials || []).map(m => ({ ...m, dataUrl: m.dataUrl && m.dataUrl.startsWith('data:') ? '[BASE64_DATA]' : m.dataUrl })) })) };
+                              });
+                              await writeTextFile(dest, JSON.stringify(exportData.length === 1 ? exportData[0] : exportData, null, 2));
+                              toast.success(`${selected.length} agrupacion${selected.length !== 1 ? 'es' : ''} exportada${selected.length !== 1 ? 's' : ''}`);
+                              setShowAgrupacionImportExport(false);
+                            } catch (err) { console.error('Export error:', err); toast.error('Error al exportar'); }
+                          }}
+                            style={{ flex: 1, height: 34, borderRadius: 8, border: 'none', background: course.color, color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', transition: 'all 150ms', boxShadow: `0 2px 8px ${course.color}35` }}
+                            onMouseEnter={e => { e.currentTarget.style.opacity = '0.88'; }}
+                            onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
+                            {exportSelectedIds.size > 0 ? `Exportar ${exportSelectedIds.size} seleccionada${exportSelectedIds.size !== 1 ? 's' : ''}` : 'Selecciona una agrupacion'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    /* ══ IMPORT ══ */
+                    <div>
+                      <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '0 0 10px' }}>Selecciona un archivo JSON exportado desde Owa Studio.</p>
+                      <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, height: 44, borderRadius: 8, border: '1px dashed var(--border-subtle)', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 11, fontWeight: 500, transition: 'all 200ms ' + EASE }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}40`; e.currentTarget.style.background = `${course.color}06`; e.currentTarget.style.color = course.color; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
+                        <FileUp size={13} /> Seleccionar archivo
+                        <input type="file" style={{ display: 'none' }} accept=".json" onChange={e => {
+                          const f = e.target.files?.[0]; if (!f) return;
+                          const r = new FileReader(); r.onload = ev => {
+                            try {
+                              const raw = JSON.parse(ev.target?.result as string);
+                              const items = (Array.isArray(raw) ? raw : [raw]).filter((d: any) => d.group && d.topics);
+                              if (items.length === 0) { toast.error('No se encontraron agrupaciones validas'); return; }
+                              setImportPreviewData(items);
+                              setImportSelected(items.map((item: any) => item.topics.map(() => true)));
+                            } catch { toast.error('Error al leer el archivo'); }
+                          }; r.readAsText(f); e.target.value = '';
+                        }} />
+                      </label>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           </div>
         </div>

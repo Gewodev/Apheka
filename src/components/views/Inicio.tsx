@@ -56,6 +56,11 @@ function LEDTime({ time, color, digitWidth = 80, digitHeight = 130, colonWidth =
   );
 }
 
+/** Convert a UTC ISO timestamp to local YYYY-MM-DD */
+function toLocalDate(iso: string): string {
+  try { return format(new Date(iso), 'yyyy-MM-dd'); } catch { return iso.slice(0, 10); }
+}
+
 function getGoalForDay(dayStr: string, currentGoal: number, dailyGoalHistory?: Record<string, number>, initialDailyGoal?: number): number {
   const changeDates = Object.keys(dailyGoalHistory || {}).sort();
   for (let i = changeDates.length - 1; i >= 0; i--) {
@@ -64,24 +69,30 @@ function getGoalForDay(dayStr: string, currentGoal: number, dailyGoalHistory?: R
   return initialDailyGoal ?? currentGoal;
 }
 
-function calculateStreak(w: Record<string, number>, dailyGoalMin: number, dailyGoalHistory?: Record<string, number>, initialDailyGoal?: number): number {
+function calculateStreak(sessions: { startedAt: string; duration: number; isDistraction?: boolean }[], dailyGoalMin: number, dailyGoalHistory?: Record<string, number>, initialDailyGoal?: number): number {
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const yesterdayStr = format(subDays(new Date(), 1), 'yyyy-MM-dd');
+
+  // Build daily totals from actual sessions (excluding distractions)
+  const dailyTotals: Record<string, number> = {};
+  sessions.forEach(s => {
+    if (s.isDistraction) return;
+    const day = toLocalDate(s.startedAt);
+    dailyTotals[day] = (dailyTotals[day] || 0) + s.duration;
+  });
 
   const metGoal = (dayStr: string): boolean => {
     const goalForDay = getGoalForDay(dayStr, dailyGoalMin, dailyGoalHistory, initialDailyGoal);
     if (goalForDay <= 0) return false;
-    const studied = w[dayStr];
+    const studied = dailyTotals[dayStr];
     return studied !== undefined && studied > 0 && studied >= goalForDay * 60;
   };
 
-  // If today not completed yet, check yesterday first
   const startDay = metGoal(todayStr) ? todayStr :
-    metGoal(yesterdayStr) ? yesterdayStr : null;
+                   metGoal(yesterdayStr) ? yesterdayStr : null;
 
   if (!startDay) return 0;
 
-  // Walk backwards to find the start of the streak
   let s = 1;
   let d = subDays(new Date(startDay), 1);
   let maxLookback = 365;
@@ -150,6 +161,7 @@ export default function Inicio() {
     sessionType = 'pomodoro',
     tracks = [],
     trackHistory = [],
+    studySessions = [],
     updateSettings,
     setNavigateTo,
   } = app || {};
@@ -219,7 +231,7 @@ export default function Inicio() {
   const dateStr = format(ct, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es as any });
   const dateCap = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
 
-  const streak = useMemo(() => calculateStreak(weeklyStudyTime, settings?.dailyGoal || 240, settings?.dailyGoalHistory, settings?.initialDailyGoal), [weeklyStudyTime, settings?.dailyGoal, settings?.dailyGoalHistory, settings?.initialDailyGoal]);
+  const streak = useMemo(() => calculateStreak(studySessions, settings?.dailyGoal || 240, settings?.dailyGoalHistory, settings?.initialDailyGoal), [studySessions, settings?.dailyGoal, settings?.dailyGoalHistory, settings?.initialDailyGoal]);
   const phrase = useMemo(() => getWeeklyPhrase(), []);
   const [phraseEditing, setPhraseEditing] = useState(false);
   const [phraseDraft, setPhraseDraft] = useState('');
@@ -732,7 +744,6 @@ export default function Inicio() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {upcomingEvents.map(ev => {
                       const evDate = (() => { try { return new Date(ev.date + 'T' + (ev.startTime || '12:00')); } catch { return null; } })();
-                      const daysLeft = evDate ? Math.ceil((evDate.getTime() - Date.now()) / 86400000) : 0;
                       return (
                         <div key={ev.id} style={{
                           display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 10,
@@ -758,8 +769,8 @@ export default function Inicio() {
                                 <span style={{ color: 'var(--text-tertiary)' }}>Todo el dia</span>
                               )}
                               <span style={{ color: 'var(--text-muted)', opacity: 0.4 }}>-</span>
-                              <span style={{ color: daysLeft === 0 ? '#10B981' : daysLeft <= 3 ? '#F59E0B' : 'var(--text-tertiary)', fontWeight: daysLeft <= 3 ? 600 : 400, fontSize: 9 }}>
-                                {daysLeft === 0 ? 'Hoy' : daysLeft === 1 ? 'Manana' : `${daysLeft}d`}
+                              <span style={{ color: 'var(--text-tertiary)', fontSize: 9 }}>
+                                {evDate ? format(evDate, 'd MMM', { locale: es as any }) : ''}
                               </span>
                             </div>
                           </div>
@@ -789,7 +800,6 @@ export default function Inicio() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {upcomingEvents.map(ev => {
                     const evDate = (() => { try { return new Date(ev.date + 'T' + (ev.startTime || '12:00')); } catch { return null; } })();
-                    const daysLeft = evDate ? Math.ceil((evDate.getTime() - Date.now()) / 86400000) : 0;
                     return (
                       <div key={ev.id} style={{
                         display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 10,
@@ -815,8 +825,8 @@ export default function Inicio() {
                               <span style={{ color: 'var(--text-tertiary)' }}>Todo el dia</span>
                             )}
                             <span style={{ color: 'var(--text-muted)', opacity: 0.4 }}>-</span>
-                            <span style={{ color: daysLeft === 0 ? '#10B981' : daysLeft <= 3 ? '#F59E0B' : 'var(--text-tertiary)', fontWeight: daysLeft <= 3 ? 600 : 400, fontSize: 9 }}>
-                              {daysLeft === 0 ? 'Hoy' : daysLeft === 1 ? 'Manana' : `${daysLeft}d`}
+                            <span style={{ color: 'var(--text-tertiary)', fontSize: 9 }}>
+                              {evDate ? format(evDate, 'd MMM', { locale: es as any }) : ''}
                             </span>
                           </div>
                         </div>

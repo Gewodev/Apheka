@@ -322,6 +322,19 @@ export interface DailyPerformance {
   sessionCount: number;
 }
 
+export interface PlannedSession {
+  id: string;
+  courseId: string;
+  date: string;           // YYYY-MM-DD
+  title: string;
+  groupId?: string;
+  topicId?: string;
+  durationMinutes: number;
+  type: 'estudio' | 'repaso' | 'ejercicio' | 'lectura' | 'otro';
+  completed: boolean;
+  createdAt: string;
+}
+
 export interface Settings {
   // ...existing fields
   chronoGoal: number; // seconds, default 25 * 60
@@ -561,6 +574,11 @@ interface AppContextType extends AppState {
   // Timer / Study
   addStudySession: (session: Omit<StudySession, 'id'>) => string | null;
   updateStudySession: (id: string, updates: Partial<StudySession>) => void;
+  deleteStudySession: (id: string) => void;
+  plannedSessions: PlannedSession[];
+  addPlannedSession: (session: Omit<PlannedSession, 'id' | 'createdAt'>) => void;
+  updatePlannedSession: (id: string, updates: Partial<PlannedSession>) => void;
+  deletePlannedSession: (id: string) => void;
   incrementSessionTime: () => void;
   incrementDailyStudyTime: () => void;
   incrementPomodoroSessions: () => void;
@@ -740,6 +758,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [studySessions, setStudySessions] = useState<StudySession[]>([]);
+  const [plannedSessions, setPlannedSessions] = useState<PlannedSession[]>([]);
   const [settings, setSettings] = useState<Settings>(defaultSettings);
   const [sessionTime, setSessionTime] = useState(0);
   const [weeklyStudyTime, setWeeklyStudyTime] = useState<Record<string, number>>({});
@@ -1021,6 +1040,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (data.courses) setCourses(data.courses);
           if (data.events) setEvents(data.events);
           if (data.studySessions) setStudySessions(data.studySessions);
+          if (data.plannedSessions) setPlannedSessions(data.plannedSessions);
           if (data.settings) {
             // Migration: dailyGoalHistory keys might have been stored in UTC (from old code using toISOString)
             if (data.settings.dailyGoalHistory) {
@@ -1430,7 +1450,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const t = setTimeout(() => {
       set(STORAGE_KEY, JSON.stringify({
-        tasks, habits, notes, noteFolders, courses, events, studySessions,
+      tasks, habits, notes, noteFolders, courses, events, studySessions, plannedSessions,
         settings, sessionTime, sessionType, isRest, isTimerActive, weeklyStudyTime, dailyStudyTime, dailyStudyDate, pomodoroSessions,
         trackHistory, playCounts, musicQueue, musicVolume, shuffleMode, repeatMode, artists, playlists,
         currentTrackId, isPlayingMusic: isPlayingMusic && !globalAudio.paused, musicListeningTime, musicListeningDate, dailyMusicTime,
@@ -1446,7 +1466,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     debounceTimerRef.current = t;
     return () => { if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current); debounceTimerRef.current = null; };
   }, [
-    tasks, habits, notes, noteFolders, courses, events, studySessions, settings, sessionTime,
+    tasks, habits, notes, noteFolders, courses, events, studySessions, plannedSessions, settings, sessionTime,
     weeklyStudyTime, dailyStudyTime, dailyStudyDate, pomodoroSessions, trackHistory, playCounts, musicQueue,
     musicVolume, artists, playlists, currentTrackId, isPlayingMusic, musicListeningTime, musicListeningDate, dailyMusicTime,
     musicProgress, musicDuration, downloadPath,
@@ -2741,6 +2761,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setTimeout(() => recalcDailyPerformance(new Date().toISOString().slice(0, 10)), 0);
   }, []);
 
+  const deleteStudySession = useCallback((id: string) => {
+    setStudySessions(prev => prev.filter(s => s.id !== id));
+    setTimeout(() => recalcDailyPerformance(new Date().toISOString().slice(0, 10)), 0);
+  }, []);
+
+  const addPlannedSession = useCallback((session: Omit<PlannedSession, 'id' | 'createdAt'>) => {
+    const id = `planned_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const newSession: PlannedSession = { ...session, id, createdAt: new Date().toISOString() };
+    setPlannedSessions(prev => [...prev, newSession]);
+  }, []);
+
+  const updatePlannedSession = useCallback((id: string, updates: Partial<PlannedSession>) => {
+    setPlannedSessions(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
+  }, []);
+
+  const deletePlannedSession = useCallback((id: string) => {
+    setPlannedSessions(prev => prev.filter(s => s.id !== id));
+  }, []);
+
   const incrementSessionTime = useCallback(() => {
     setSessionTime(prev => prev + 1);
   }, []);
@@ -3087,7 +3126,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [tasks]);
 
   const value: AppContextType = {
-    tasks, habits, notes, noteFolders, courses, events, tracks, studySessions,
+    tasks, habits, notes, noteFolders, courses, events, tracks, studySessions, plannedSessions,
     settings, sessionTime, sessionType, weeklyStudyTime, dailyStudyTime, pomodoroSessions,
     activeTaskId, timerLocked, isTimerActive, roundsCompleted, showCompletion,
     showRestPrompt, setShowRestPrompt, handlePomodoroBannerClick,
@@ -3132,7 +3171,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }, []),
     addToDownloadQueue, updateDownloadProgress, updateDownloadStatus,
     removeFromDownloadQueue, clearCompletedDownloads, downloadPath, setDownloadPathCtx: setDownloadPathCb,
-    addStudySession, updateStudySession, incrementSessionTime, incrementDailyStudyTime,
+    addStudySession, updateStudySession, deleteStudySession, incrementSessionTime, incrementDailyStudyTime,
+    addPlannedSession, updatePlannedSession, deletePlannedSession,
     incrementPomodoroSessions, resetPomodoroSessions, setActiveTaskId, setTimerLocked,
     linkTaskToTimer, unlinkTaskFromTimer, toggleTimer, resetTimer,
     setIsTimerActive, setSessionTime, setDailyStudyTime, setWeeklyStudyTime,

@@ -442,8 +442,11 @@ export default function EventModal({
                       <div key={i} style={{ background: 'var(--surface)', border: '1px solid var(--border-soft)', borderRadius: 8, overflow: 'hidden' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px' }}>
                           {isWeb ? (
-                            <img src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`} alt="" style={{ width: 15, height: 15, borderRadius: 2, flexShrink: 0 }}
-                              onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                            <span style={{ position: 'relative', width: 15, height: 15, display: 'inline-flex', flexShrink: 0 }}>
+                              <img src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`} alt="" style={{ width: 15, height: 15, borderRadius: 2, position: 'absolute', inset: 0 }}
+                                onError={e => { e.currentTarget.style.display = 'none'; const fb = e.currentTarget.parentElement?.querySelector('.link-fb') as HTMLElement; if (fb) fb.style.display = 'flex'; }} />
+                              <span className="link-fb" style={{ display: 'none', position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center', color: '#10B981' }}><LinkIcon size={10} /></span>
+                            </span>
                           ) : getEventFileIcon(fileType, 14)}
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</span>

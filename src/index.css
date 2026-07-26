@@ -1347,6 +1347,50 @@ h6,
   box-shadow: 0 2px 12px rgba(0,0,0,0.4);
 }
 
+.volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--text-primary);
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  transition: all 150ms;
+}
+
+.volume-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+.volume-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 3px;
+  background: var(--text-tertiary);
+}
+
+.volume-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--text-primary);
+  border: none;
+  cursor: pointer;
+}
+
+.volume-slider::-moz-range-track {
+  height: 4px;
+  border-radius: 3px;
+  background: var(--text-tertiary);
+}
+
+.topic-card:hover h4 {
+  -webkit-line-clamp: unset;
+  display: block;
+  overflow: visible;
+}
+
 *:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;

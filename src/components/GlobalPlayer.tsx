@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   Play, Pause, SkipBack, SkipForward, Volume2, VolumeX,
-  Shuffle, Repeat2, Disc3, Heart
+  Shuffle, Repeat2, Disc3, Heart, ChevronUp
 } from 'lucide-react';
 import { useApp, Track } from '../store/AppContext';
 
@@ -78,6 +78,7 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
   const [seekValue, setSeekValue] = useState(0);
   const [expanded, setExpanded] = useState(false);
   const [arrowVisible, setArrowVisible] = useState(false);
+  const [playerHovered, setPlayerHovered] = useState(false);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const proximityRef = useRef(false);
   const currentTrack = useMemo(() => tracks.find(t => t.id === currentTrackId), [tracks, currentTrackId]);
@@ -87,10 +88,10 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
   const acC = settings.accentColor || '#E11D48';
 
   const barPadding = settings.playerBarEnabled
-    ? (settings.playerBarHeight === 'compact' ? '18px 28px 18px 20px'
-      : settings.playerBarHeight === 'large' ? '32px 36px 30px 28px'
-      : '26px 36px 24px 28px')
-    : '18px 28px 18px 20px';
+    ? (settings.playerBarHeight === 'compact' ? '22px 28px 22px 20px'
+      : settings.playerBarHeight === 'large' ? '36px 36px 34px 28px'
+      : '28px 36px 26px 28px')
+    : '22px 28px 22px 20px';
 
   const barTrackImage = useMemo(() => {
     if (!settings.playerBarEnabled) return null;
@@ -148,7 +149,7 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
   const handleClose = useCallback(() => {
     setExpanded(false);
     proximityRef.current = false;
-    setArrowVisible(false);
+    setPlayerHovered(false);
   }, []);
 
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -195,12 +196,12 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
 
   return (
     <>
-      {/* Entry arrow — centered in content area (excluding sidebar) */}
+      {/* Entry arrow — elegant chevron, no background */}
       <div style={{
         position: 'fixed',
         left: sidebarWidth,
         right: 0,
-        bottom: arrowVisible && !expanded ? 20 : 8,
+        bottom: arrowVisible && !expanded ? 16 : 4,
         display: 'flex',
         justifyContent: 'center',
         pointerEvents: arrowVisible && !expanded ? 'auto' : 'none',
@@ -211,20 +212,20 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
         <div onClick={handleOpen}
           style={{
             cursor: 'pointer',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
-            padding: '10px 24px',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1,
+            padding: '8px 20px',
             userSelect: 'none',
-            borderRadius: 8,
-            background: `${acC}08`,
-            border: `1px solid ${acC}18`,
+            borderRadius: 10,
+            background: 'transparent',
+            border: 'none',
             transition: 'all 200ms',
           }}
-          onMouseEnter={e => { e.currentTarget.style.background = `${acC}14`; e.currentTarget.style.borderColor = `${acC}35`; }}
-          onMouseLeave={e => { e.currentTarget.style.background = `${acC}08`; e.currentTarget.style.borderColor = `${acC}18`; }}
+          onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; }}
+          onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; }}
           title="Abrir reproductor">
-          <svg width="26" height="14" viewBox="0 0 26 14" fill="none">
-            <path d="M4 10L13 2L22 10" stroke={acC} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ filter: `drop-shadow(0 0 6px ${acC}80)` }} />
-            <path d="M4 12.5L13 4.5L22 12.5" stroke={acC} strokeWidth="0.4" strokeLinecap="round" strokeLinejoin="round" opacity="0.15" />
+          <svg width="32" height="14" viewBox="0 0 32 14" fill="none">
+            <path d="M5 11L16 3L27 11" stroke={acC} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.5" />
+            <path d="M8 12.5L16 6L24 12.5" stroke={acC} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" style={{ filter: `drop-shadow(0 0 8px ${acC}60)` }} />
           </svg>
         </div>
       </div>
@@ -236,7 +237,9 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
         transform: expanded ? 'translateY(0)' : 'translateY(100%)',
         transition: 'transform 400ms cubic-bezier(0.16, 1, 0.3, 1)',
         pointerEvents: expanded ? 'auto' : 'none',
-      }}>
+      }}
+        onMouseEnter={() => setPlayerHovered(true)}
+        onMouseLeave={() => setPlayerHovered(false)}>
           {hasTrack && (
           <div style={{
             background: `color-mix(in srgb, var(--bg-primary) calc(var(--ui-opacity, 0.85) * 100%), transparent)`,
@@ -265,15 +268,15 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
             {/* Main content */}
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'auto 1fr auto',
+              gridTemplateColumns: 'minmax(0, 1fr) auto minmax(0, 1fr)',
               alignItems: 'center',
               padding: barPadding,
               gap: 20,
             }}>
               {/* LEFT: Cover + Title/Artist + Heart + Queue Source */}
               <div style={{
-                display: 'flex', alignItems: 'center', gap: 12,
-                minWidth: 0, maxWidth: 360,
+                display: 'flex', alignItems: 'center', gap: 14,
+                minWidth: 0, maxWidth: 380,
               }}>
                 <div style={{
                   width: 58, height: 58, borderRadius: 12, overflow: 'hidden',
@@ -289,8 +292,8 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                     </div>
                   )}
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, gap: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, gap: 2 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <div style={{
                       fontSize: 15, fontWeight: 600,
                       color: 'var(--text-primary)',
@@ -301,15 +304,16 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                     </div>
                     <button onClick={() => currentTrackId && toggleTrackFavorite(currentTrackId)}
                       style={{
-                        background: 'none', border: 'none', padding: 2, cursor: 'pointer',
+                        background: 'none', border: 'none', padding: 4, cursor: 'pointer',
                         color: currentTrack?.isFavorite ? '#F43F5E' : 'var(--text-muted)',
-                        display: 'flex', flexShrink: 0, borderRadius: 4,
-                        transition: 'color 150ms',
+                        display: 'flex', flexShrink: 0, borderRadius: 6,
+                        transition: 'all 200ms',
+                        transform: currentTrack?.isFavorite ? 'scale(1.1)' : 'scale(1)',
                       }}
-                      onMouseEnter={e => { if (!currentTrack?.isFavorite) e.currentTarget.style.color = 'var(--text-tertiary)'; }}
-                      onMouseLeave={e => { if (!currentTrack?.isFavorite) e.currentTarget.style.color = 'var(--text-muted)'; }}
+                      onMouseEnter={e => { if (!currentTrack?.isFavorite) { e.currentTarget.style.color = '#F43F5E'; e.currentTarget.style.transform = 'scale(1.15)'; } }}
+                      onMouseLeave={e => { if (!currentTrack?.isFavorite) { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.transform = 'scale(1)'; } }}
                       title={currentTrack?.isFavorite ? 'Quitar de favoritas' : 'Añadir a favoritas'}>
-                      <Heart size={13} fill={currentTrack?.isFavorite ? '#F43F5E' : 'none'} />
+                      <Heart size={14} fill={currentTrack?.isFavorite ? '#F43F5E' : 'none'} strokeWidth={currentTrack?.isFavorite ? 0 : 2} />
                     </button>
                   </div>
                   <div style={{
@@ -321,7 +325,7 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                   </div>
                   {queueSource?.name && (
                     <div style={{
-                      fontSize: 10, color: acC, opacity: 0.7,
+                      fontSize: 10, color: acC, opacity: 0.6,
                       whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                       lineHeight: 1.2, marginTop: 1, fontWeight: 500,
                     }}>
@@ -333,22 +337,22 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
 
               {/* CENTER: Controls + Progress */}
               <div style={{
-                display: 'flex', flexDirection: 'column', gap: 8,
-                minWidth: 0,
+                display: 'flex', flexDirection: 'column', gap: 10,
+                minWidth: 0, width: '100%', maxWidth: 560,
               }}>
                 {/* Controls row */}
                 <div style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
                   flexShrink: 0,
                 }}>
                   <button onClick={() => setShuffleMode(!shuffleMode)}
                     style={{
-                      background: 'none', border: 'none', padding: 6, cursor: 'pointer',
+                      background: 'none', border: 'none', padding: 7, cursor: 'pointer',
                       color: shuffleMode ? acC : 'var(--text-tertiary)',
-                      display: 'flex', transition: 'color 200ms', borderRadius: 6,
+                      display: 'flex', transition: 'all 200ms', borderRadius: 8,
                     }}
-                    onMouseEnter={e => { if (!shuffleMode) e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}>
+                    onMouseEnter={e => { e.currentTarget.style.color = shuffleMode ? acC : 'var(--text-secondary)'; e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.color = shuffleMode ? acC : 'var(--text-tertiary)'; e.currentTarget.style.background = 'none'; }}>
                     <Shuffle size={15} />
                   </button>
                   <button onClick={() => {
@@ -357,31 +361,34 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                     if (idx > 0) playTrack(pool[idx - 1]);
                     else if (repeatMode !== 'none' && pool.length > 0) playTrack(pool[pool.length - 1]);
                   }}
-                    style={{ background: 'none', border: 'none', padding: 6, cursor: 'pointer', color: 'var(--text-tertiary)', display: 'flex', borderRadius: 6, transition: 'color 150ms' }}
+                    style={{ background: 'none', border: 'none', padding: 7, cursor: 'pointer', color: 'var(--text-tertiary)', display: 'flex', borderRadius: 8, transition: 'all 200ms' }}
                     onMouseEnter={e => { e.currentTarget.style.color = acC; e.currentTarget.style.background = 'var(--bg-hover)'; }}
                     onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-tertiary)'; e.currentTarget.style.background = 'none'; }}>
                     <SkipBack size={18} />
                   </button>
+                  {/* Play/Pause — squircle (rounded square, not circle) */}
                   <button onClick={toggleMusicPlayback}
                     style={{
-                      width: 48, height: 48, borderRadius: '50%',
-                      background: `linear-gradient(135deg, ${acC}, ${acC}cc)`,
+                      width: 44, height: 44, borderRadius: 14,
+                      background: acC,
                       color: '#fff',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       cursor: 'pointer', border: 'none',
-                      boxShadow: `0 2px 12px ${acC}40`,
+                      boxShadow: `0 2px 14px ${acC}35`,
                       transition: 'all 250ms ease',
                     }}
                     onMouseEnter={e => {
-                      e.currentTarget.style.background = `linear-gradient(135deg, ${acC}, ${acC}aa)`;
-                      e.currentTarget.style.boxShadow = `0 4px 18px ${acC}50`;
+                      e.currentTarget.style.background = `${acC}dd`;
+                      e.currentTarget.style.boxShadow = `0 4px 20px ${acC}50`;
+                      e.currentTarget.style.transform = 'scale(1.05)';
                     }}
                     onMouseLeave={e => {
-                      e.currentTarget.style.background = `linear-gradient(135deg, ${acC}, ${acC}cc)`;
-                      e.currentTarget.style.boxShadow = `0 2px 12px ${acC}40`;
+                      e.currentTarget.style.background = acC;
+                      e.currentTarget.style.boxShadow = `0 2px 14px ${acC}35`;
+                      e.currentTarget.style.transform = 'scale(1)';
                     }}
                   >
-                    {isPlayingMusic ? <Pause size={22} fill="currentColor" /> : <Play size={22} fill="currentColor" style={{ marginLeft: 2 }} />}
+                    {isPlayingMusic ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" style={{ marginLeft: 2 }} />}
                   </button>
                   <button onClick={() => {
                     if (musicQueue.length > 0) { setMusicQueue(musicQueue.slice(1)); playTrack(musicQueue[0]); return; }
@@ -396,7 +403,7 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                       else if (repeatMode === 'all' && pool.length > 0) playTrack(pool[(idx + 1) % pool.length]);
                     }
                   }}
-                    style={{ background: 'none', border: 'none', padding: 6, cursor: 'pointer', color: 'var(--text-tertiary)', display: 'flex', borderRadius: 6, transition: 'color 150ms' }}
+                    style={{ background: 'none', border: 'none', padding: 7, cursor: 'pointer', color: 'var(--text-tertiary)', display: 'flex', borderRadius: 8, transition: 'all 200ms' }}
                     onMouseEnter={e => { e.currentTarget.style.color = acC; e.currentTarget.style.background = 'var(--bg-hover)'; }}
                     onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-tertiary)'; e.currentTarget.style.background = 'none'; }}>
                     <SkipForward size={18} />
@@ -406,21 +413,21 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                     setRepeatMode(next);
                   }}
                     style={{
-                      background: 'none', border: 'none', padding: 6, cursor: 'pointer',
+                      background: 'none', border: 'none', padding: 7, cursor: 'pointer',
                       color: repeatMode !== 'none' ? acC : 'var(--text-tertiary)',
-                      position: 'relative', display: 'flex', borderRadius: 6, transition: 'color 200ms',
+                      position: 'relative', display: 'flex', borderRadius: 8, transition: 'all 200ms',
                     }}
-                    onMouseEnter={e => { if (repeatMode === 'none') e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}>
+                    onMouseEnter={e => { e.currentTarget.style.color = repeatMode !== 'none' ? acC : 'var(--text-secondary)'; e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.color = repeatMode !== 'none' ? acC : 'var(--text-tertiary)'; e.currentTarget.style.background = 'none'; }}>
                     <Repeat2 size={15} />
                     {repeatMode === 'one' && <span style={{ position: 'absolute', top: -2, right: -3, fontSize: 8, fontWeight: 700, color: acC }}>1</span>}
                   </button>
                 </div>
-                {/* Progress bar */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {/* Progress bar — fixed max-width, not full width */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'center' }}>
                   <span style={{
                     fontSize: 10, color: 'var(--text-tertiary)',
-                    minWidth: 30, textAlign: 'right',
+                    minWidth: 32, textAlign: 'right',
                     fontFamily: "'JetBrains Mono', monospace", fontWeight: 500,
                     flexShrink: 0,
                   }}>
@@ -430,8 +437,9 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                     onClick={handleProgressClick}
                     onMouseDown={handleSeekMouseDown}
                     style={{
-                      flex: 1,
-                      height: settings.playerBarEnabled ? (settings.playerBarTrackHeight ?? 3) : 3,
+                      width: '100%',
+                      maxWidth: 440,
+                      height: settings.playerBarEnabled ? (settings.playerBarTrackHeight ?? 4) : 4,
                       borderRadius: 4, cursor: 'pointer', position: 'relative',
                       overflow: 'visible',
                       transition: 'height 200ms',
@@ -493,7 +501,7 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                   </div>
                   <span style={{
                     fontSize: 10, color: 'var(--text-tertiary)',
-                    minWidth: 30, textAlign: 'left',
+                    minWidth: 32, textAlign: 'left',
                     fontFamily: "'JetBrains Mono', monospace", fontWeight: 500,
                     flexShrink: 0,
                   }}>
@@ -502,46 +510,50 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                 </div>
               </div>
 
-              {/* RIGHT: Volume + Queue + Close */}
+              {/* RIGHT: Volume + Close */}
               <div style={{
                 display: 'flex', alignItems: 'center',
-                gap: 8, flexShrink: 0,
+                gap: 10, flexShrink: 0, justifyContent: 'flex-end',
               }}>
-                <div style={{ width: 1, height: 28, background: 'var(--border-subtle)', flexShrink: 0 }} />
                 {/* Volume */}
-                <button onClick={() => setMusicVolume(musicVolume > 0 ? 0 : 0.7)}
-                  style={{
-                    background: 'none', border: 'none', padding: 6, cursor: 'pointer',
-                    color: 'var(--text-tertiary)', display: 'flex', borderRadius: 6,
-                    transition: 'color 150ms', flexShrink: 0,
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.color = acC; e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-tertiary)'; e.currentTarget.style.background = 'none'; }}>
-                  {musicVolume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
-                </button>
-                <div style={{ width: 68, flexShrink: 0 }}>
-                  <input type="range" min="0" max="1" step="0.005" value={musicVolume} onChange={handleVolumeChange}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 8, background: 'var(--bg-hover)', border: '1px solid var(--border-subtle)' }}>
+                  <button onClick={() => setMusicVolume(musicVolume > 0 ? 0 : 0.7)}
                     style={{
-                      width: '100%', height: 4, cursor: 'pointer',
-                      WebkitAppearance: 'none', appearance: 'none', outline: 'none', borderRadius: 3,
-                      background: 'var(--bg-hover)',
-                    }}
-                    className="volume-slider" />
+                      background: 'none', border: 'none', padding: 2, cursor: 'pointer',
+                      color: musicVolume === 0 ? '#F59E0B' : 'var(--text-secondary)', display: 'flex', borderRadius: 4,
+                      transition: 'color 150ms', flexShrink: 0,
+                    }}>
+                    {musicVolume === 0 ? <VolumeX size={14} /> : <Volume2 size={14} />}
+                  </button>
+                  <div style={{ width: 72, flexShrink: 0 }}>
+                    <input type="range" min="0" max="1" step="0.005" value={musicVolume} onChange={handleVolumeChange}
+                      style={{
+                        width: '100%', height: 4, cursor: 'pointer',
+                        WebkitAppearance: 'none', appearance: 'none', outline: 'none', borderRadius: 3,
+                        background: 'var(--bg-surface)',
+                      }}
+                      className="volume-slider" />
+                  </div>
                 </div>
+                <div style={{ width: 1, height: 24, background: 'var(--border-subtle)', flexShrink: 0 }} />
+                {/* Collapse button — only visible on player hover */}
                 <button onClick={handleClose}
                   style={{
-                    width: 30, height: 30, borderRadius: 7, flexShrink: 0,
+                    width: 28, height: 28, borderRadius: 7, flexShrink: 0,
                     cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    color: acC, background: `${acC}08`,
-                    border: `1px solid ${acC}15`,
+                    color: 'var(--text-muted)',
+                    background: 'transparent',
+                    border: 'none',
                     transition: 'all 200ms', lineHeight: 0,
+                    opacity: playerHovered ? 1 : 0,
+                    transform: playerHovered ? 'translateY(0)' : 'translateY(4px)',
+                    pointerEvents: playerHovered ? 'auto' : 'none',
                   }}
-                  onMouseEnter={e => { e.currentTarget.style.background = `${acC}18`; e.currentTarget.style.borderColor = `${acC}35`; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = `${acC}08`; e.currentTarget.style.borderColor = `${acC}15`; }}
+                  onMouseEnter={e => { e.currentTarget.style.color = acC; e.currentTarget.style.background = `${acC}12`; }}
+                  onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'transparent'; }}
                   title="Cerrar reproductor">
-                  <svg width="12" height="10" viewBox="0 0 12 10" fill="none">
-                    <path d="M2 6L5 2L8 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                    <path d="M4.25 7L5 4.5L5.75 7" stroke="currentColor" strokeWidth="0.8" strokeLinecap="round" strokeLinejoin="round" opacity="0.12" />
+                  <svg width="14" height="10" viewBox="0 0 14 10" fill="none">
+                    <path d="M2 3L7 8L12 3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </button>
               </div>

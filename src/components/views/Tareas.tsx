@@ -364,17 +364,23 @@ export default function Tareas() {
   const selectedTask = tasks.find(t => t.id === selectedTaskId);
   const taskId = selectedTask?.id;
 
-  const [sectionCollapsed, setSectionCollapsed] = useState<Record<string, boolean>>(() => {
-    if (!taskId) return {};
-    try { return JSON.parse(localStorage.getItem(`owa_task_sec_${taskId}`) || '{}'); } catch { return {}; }
-  });
+  const [sectionCollapsed, setSectionCollapsed] = useState<Record<string, boolean>>({});
+  
+  // Load collapsed state from localStorage when task changes
   useEffect(() => {
-    setSectionCollapsed(() => {
-      if (!taskId) return {};
-      try { return JSON.parse(localStorage.getItem(`owa_task_sec_${taskId}`) || '{}'); } catch { return {}; }
-    });
+    if (!taskId) { setSectionCollapsed({}); return; }
+    try {
+      const saved = JSON.parse(localStorage.getItem(`owa_task_sec_${taskId}`) || '{}');
+      setSectionCollapsed(saved);
+    } catch { setSectionCollapsed({}); }
   }, [taskId]);
-  useEffect(() => { if (taskId) localStorage.setItem(`owa_task_sec_${taskId}`, JSON.stringify(sectionCollapsed)); }, [taskId, sectionCollapsed]);
+
+  // Persist collapsed state to localStorage on every change
+  useEffect(() => {
+    if (taskId) {
+      try { localStorage.setItem(`owa_task_sec_${taskId}`, JSON.stringify(sectionCollapsed)); } catch {}
+    }
+  }, [taskId, sectionCollapsed]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -1701,10 +1707,12 @@ export default function Tareas() {
                             badgeColor = '#10B981';
                             try { domain = new URL(f.path).hostname; } catch {}
                             iconEl = (
-                              <img src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`}
-                                alt="" style={{ width: 16, height: 16, borderRadius: 2 }}
-                                onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                              />
+                              <span style={{ position: 'relative', width: 17, height: 17, display: 'inline-flex', flexShrink: 0 }}>
+                                <img src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`}
+                                  alt="" style={{ width: 17, height: 17, borderRadius: 3, position: 'absolute', inset: 0 }}
+                                  onError={e => { e.currentTarget.style.display = 'none'; const fb = e.currentTarget.parentElement?.querySelector('.link-fb') as HTMLElement; if (fb) fb.style.display = 'flex'; }} />
+                                <span className="link-fb" style={{ display: 'none', position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center', color: '#10B981' }}><Link size={12} /></span>
+                              </span>
                             );
                           }
                           else { iconEl = <File size={13} />; }

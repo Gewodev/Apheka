@@ -30,14 +30,22 @@ function getGoalForDay(dayStr: string, currentGoal: number, dailyGoalHistory?: R
   return initialDailyGoal ?? currentGoal;
 }
 
-function calculateStreak(w: Record<string, number>, dailyGoalMin: number, dailyGoalHistory?: Record<string, number>, initialDailyGoal?: number): number {
+function calculateStreak(sessions: { startedAt: string; duration: number; isDistraction?: boolean }[], dailyGoalMin: number, dailyGoalHistory?: Record<string, number>, initialDailyGoal?: number): number {
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const yesterdayStr = format(subDays(new Date(), 1), 'yyyy-MM-dd');
+
+  // Build daily totals from actual sessions (excluding distractions)
+  const dailyTotals: Record<string, number> = {};
+  sessions.forEach(s => {
+    if (s.isDistraction) return;
+    const day = toLocalDate(s.startedAt);
+    dailyTotals[day] = (dailyTotals[day] || 0) + s.duration;
+  });
 
   const metGoal = (dayStr: string): boolean => {
     const goalForDay = getGoalForDay(dayStr, dailyGoalMin, dailyGoalHistory, initialDailyGoal);
     if (goalForDay <= 0) return false;
-    const studied = w[dayStr];
+    const studied = dailyTotals[dayStr];
     return studied !== undefined && studied > 0 && studied >= goalForDay * 60;
   };
 
@@ -110,7 +118,7 @@ export default function Estudio() {
   const {
     tasks, courses, addSubTask, settings, dailyStudyTime, activeTaskId, setActiveTaskId,
     pomodoroSessions, incrementPomodoroSessions, studySessions,
-    addStudySession, updateStudySession, weeklyStudyTime,
+    addStudySession, updateStudySession, deleteStudySession, weeklyStudyTime,
     dailyPerformances,
     focusPomodoroTime, focusChronoTime, breakTime, dailyBreakTime, dailyFocusPomodoro, dailyFocusChrono,
     accumulatedPauseTime, distractionCount,
@@ -219,7 +227,7 @@ export default function Estudio() {
     studySessions.filter(s => toLocalDate(s.startedAt) >= weekAgoStr),
   [studySessions, weekAgoStr]);
 
-  const streak = useMemo(() => calculateStreak(weeklyStudyTime, settings?.dailyGoal || 240, settings?.dailyGoalHistory, settings?.initialDailyGoal), [weeklyStudyTime, settings?.dailyGoal, settings?.dailyGoalHistory, settings?.initialDailyGoal]);
+  const streak = useMemo(() => calculateStreak(studySessions, settings?.dailyGoal || 240, settings?.dailyGoalHistory, settings?.initialDailyGoal), [studySessions, settings?.dailyGoal, settings?.dailyGoalHistory, settings?.initialDailyGoal]);
 
   const weekDayData = useMemo(() => {
     const dn = ['D','L','M','M','J','V','S'];
@@ -444,12 +452,20 @@ export default function Estudio() {
       ? clamp(1 - Math.abs(ratioDescanso - 0.20) / 0.25, 0.2, 1)
       : 0.5;
 
-    // IRE compuesto
+    // ScorePercepcion — user's 1-20 self-rating blended in
+    const evaluatedSessions = todaysSessions.filter(s => s.volmeter !== undefined && s.volmeter !== null);
+    const scorePercepcion = evaluatedSessions.length > 0
+      ? evaluatedSessions.reduce((sum, s) => sum + ((s.volmeter || 10) / 20), 0) / evaluatedSessions.length
+      : 0.5;
+
+    // IRE compuesto — percepcion weighs in when user has rated sessions
+    const hasRating = evaluatedSessions.length > 0;
     const ire = 100 *
-      Math.pow(scoreMeta, 0.35) *
-      Math.pow(scoreEnfoque, 0.35) *
-      Math.pow(scoreFlujo, 0.20) *
-      Math.pow(scoreDescanso, 0.10);
+      Math.pow(scoreMeta, hasRating ? 0.25 : 0.35) *
+      Math.pow(scoreEnfoque, hasRating ? 0.25 : 0.35) *
+      Math.pow(scoreFlujo, hasRating ? 0.15 : 0.20) *
+      Math.pow(scoreDescanso, hasRating ? 0.08 : 0.10) *
+      Math.pow(scorePercepcion, hasRating ? 0.27 : 0);
 
     return Math.max(1, Math.round(ire));
   }, [studySessions, settings?.dailyGoal]);
@@ -515,7 +531,13 @@ export default function Estudio() {
           else if (focusMin <= 60) sf = 1;
           else if (focusMin <= 90) sf = 0.9;
           else sf = 0.7;
-          return Math.round(100 * Math.pow(sm, 0.40) * Math.pow(se, 0.35) * Math.pow(sf, 0.15));
+          const hasVol = s.volmeter !== undefined && s.volmeter !== null;
+          const sp = hasVol ? (s.volmeter || 10) / 20 : 0.5;
+          return Math.round(100 *
+            Math.pow(sm, hasVol ? 0.30 : 0.40) *
+            Math.pow(se, hasVol ? 0.28 : 0.35) *
+            Math.pow(sf, hasVol ? 0.14 : 0.15) *
+            Math.pow(sp, hasVol ? 0.28 : 0));
         })(),
         evaluated: s.perception !== undefined,
         volmeter: s.volmeter,
@@ -1479,15 +1501,10 @@ export default function Estudio() {
 
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
               <button onClick={() => {
-                if (evalSessionId && sessionType === 'pomodoro') {
-                  updateStudySession(evalSessionId, { isDistraction: true, evaluatedAt: new Date().toISOString() });
-                } else if (evalSessionId) {
-                  updateStudySession(evalSessionId, { evaluatedAt: new Date().toISOString() });
-                }
+                if (evalSessionId) deleteStudySession(evalSessionId);
                 setShowSessionEval(false);
                 setShowFreeStudyPrompt(false);
                 setShowRestPrompt(false);
-                addNotification('Sesión omitida', 'info');
               }}
                 style={{ padding: '8px 20px', borderRadius: 10, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
                 Omitir
@@ -1601,15 +1618,10 @@ export default function Estudio() {
 
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
               <button onClick={() => {
-                if (evalSessionId && sessionType === 'pomodoro') {
-                  updateStudySession(evalSessionId, { isDistraction: true, evaluatedAt: new Date().toISOString() });
-                } else if (evalSessionId) {
-                  updateStudySession(evalSessionId, { evaluatedAt: new Date().toISOString() });
-                }
+                if (evalSessionId) deleteStudySession(evalSessionId);
                 setShowSessionEval(false);
                 setShowFreeStudyPrompt(false);
                 setShowRestPrompt(false);
-                addNotification('Sesión omitida', 'info');
               }}
                 style={{ padding: '8px 20px', borderRadius: 10, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
                 Omitir
