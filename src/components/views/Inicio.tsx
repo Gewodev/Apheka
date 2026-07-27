@@ -779,19 +779,7 @@ export default function Inicio() {
             </>
           ) : (
             <>
-              {/* No goal: show upcoming events */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, paddingBottom: 14, borderBottom: '1px solid var(--border-soft)' }}>
-                <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--bg-surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border-soft)' }}>
-                  <Star size={17} style={{ color: 'var(--text-tertiary)' }} />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', marginBottom: 3 }}>PROXIMOS EVENTOS</div>
-                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-muted)' }}>
-                    {upcomingEvents.length > 0 ? `${upcomingEvents.length} por venir` : 'Ninguno'}
-                  </div>
-                </div>
-              </div>
-
+              {/* No goal: show upcoming events directly */}
               {upcomingEvents.length > 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {upcomingEvents.map(ev => {
@@ -832,9 +820,8 @@ export default function Inicio() {
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '16px 0', gap: 6 }}>
-                  <Star size={24} style={{ color: 'var(--text-muted)', opacity: 0.2 }} />
                   <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 500, textAlign: 'center', lineHeight: 1.5 }}>
-                    Marca un evento como Meta Planificada en Planificador
+                    Sin eventos proximos
                   </div>
                 </div>
               )}

@@ -832,8 +832,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setMusicQueue(weightedShuffle(rest, playCounts));
     }
   }, [playCounts]);
-  const setRepeatMode = useCallback((mode: 'none' | 'all' | 'one') => {
+   const setRepeatMode = useCallback((mode: 'none' | 'all' | 'one') => {
     _setRepeatMode(mode);
+    repeatOnePlayedRef.current = false;
     if (mode !== 'none') _setShuffleMode(false);
   }, []);
   // Shuffle utility (Fisher-Yates)
@@ -940,8 +941,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
    const musicQueueRef = useRef(musicQueue);
    const queueSourceRef = useRef(queueSource);
    const playTrackRef = useRef<(id: string) => void>(() => {});
-  const trackHistoryRef = useRef(trackHistory);
-  const playCountsRef = useRef(playCounts);
+   const trackHistoryRef = useRef(trackHistory);
+   const playCountsRef = useRef(playCounts);
+   const repeatOnePlayedRef = useRef(false);
   const musicVolumeRef = useRef(musicVolume);
    const autoPlayRef = useRef(false);
    const activePlaySessionIdRef = useRef<string | null>(null);
@@ -1235,6 +1237,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   pomodoroSessionsRef.current = pomodoroSessions;
   const sessionsCountRef = useRef(studySessions.length);
   sessionsCountRef.current = studySessions.length;
+  const addStudySessionRef = useRef<(session: Omit<StudySession, 'id'>) => string | null>(() => null);
 
   // Timer interval with sync
   useEffect(() => {
@@ -1446,6 +1449,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
             if (pauseSecs > 600) {
               setDistractionCount(prev => prev + 1);
               addNotification('Distracción detectada (pausa mayor a 10 min)', 'info');
+              addStudySessionRef.current({
+                type: sessionTypeRef.current || 'pomodoro',
+                startedAt: new Date(Date.now() - pauseSecs * 1000).toISOString(),
+                endedAt: new Date().toISOString(),
+                duration: pauseSecs,
+                taskId: activeTaskIdRef.current ?? undefined,
+                courseId: undefined,
+                pauseCount: 0,
+                pauseDuration: 0,
+                isDistraction: true,
+              });
             }
           }
         }
@@ -2119,7 +2133,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addNotification(`${imported} cancion(es) importada(s) correctamente`, 'success');
   }, []);
 
-  const playTrack = useCallback((id: string) => {
+   const playTrack = useCallback((id: string) => {
+    repeatOnePlayedRef.current = false;
     // Auto-detect group context when playing a track outside the current pool
     const currentPool = queueSourceRef.current?.pool;
     if (currentPool && !currentPool.includes(id)) {
@@ -2522,10 +2537,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const onEnded = () => {
       if (currentTrackIdRef.current && tracksRef.current.length > 0) {
         if (repeatModeRef.current === 'one') {
-          globalAudio.currentTime = 0;
-          globalAudio.play().catch(() => {
-            setTimeout(() => globalAudio.play().catch(() => {}), 100);
-          });
+          if (!repeatOnePlayedRef.current) {
+            repeatOnePlayedRef.current = true;
+            globalAudio.currentTime = 0;
+            globalAudio.play().catch(() => {
+              setTimeout(() => globalAudio.play().catch(() => {}), 100);
+            });
+            return;
+          }
+          repeatOnePlayedRef.current = false;
+          _setRepeatMode('none');
+          globalAudio.pause();
+          setIsPlayingMusic(false);
           return;
         }
         let nextId: string | null = null;
@@ -2764,6 +2787,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setTimeout(() => recalcDailyPerformance(new Date().toISOString().slice(0, 10)), 0);
     return id;
   }, [studySessions, settings.dailyGoal, settings.studyGoals]);
+  addStudySessionRef.current = addStudySession;
 
   const updateStudySession = useCallback((id: string, updates: Partial<StudySession>) => {
     setStudySessions(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));

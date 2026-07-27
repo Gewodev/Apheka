@@ -474,10 +474,16 @@ export default function Estudio() {
   const yesterdayStr = format(subDays(new Date(), 1), 'yyyy-MM-dd');
   const yesterdayStudySecs = weeklyStudyTime[yesterdayStr] || 0;
   const yesterdaySessions = studySessions.filter(s => toLocalDate(s.startedAt) === yesterdayStr).length;
-  // Compute today's distraction count from persisted studySessions (not the transient distractionCount state which resets)
+  // Compute this week's distraction count (resets Monday) from persisted studySessions
   const todayDistractionCount = useMemo(() => {
-    const todayStr = format(new Date(), 'yyyy-MM-dd');
-    return studySessions.filter(s => s.isDistraction && toLocalDate(s.startedAt) === todayStr).length;
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+    const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    const weekStart = new Date(today);
+    weekStart.setDate(today.getDate() - mondayOffset);
+    weekStart.setHours(0, 0, 0, 0);
+    const weekStartStr = format(weekStart, 'yyyy-MM-dd');
+    return studySessions.filter(s => s.isDistraction && toLocalDate(s.startedAt) >= weekStartStr).length;
   }, [studySessions]);
 
   const yesterdayDistractions = 0; // not persisted daily, show neutral
@@ -643,12 +649,14 @@ export default function Estudio() {
               const win = new WebviewWindow('floating-timer', {
                 url: '/',
                 title: 'Timer',
-                width: 170, height: 96,
+                width: 156, height: 112,
                 resizable: false,
-                decorations: true,
+                decorations: false,
+                transparent: true,
                 alwaysOnTop: true,
                 skipTaskbar: false,
               });
+              win.setShadow(false).catch(() => {});
               win.once('tauri://error', () => {});
             }} style={{
               padding: 8, borderRadius: '50%', background: 'var(--bg-deep)',
@@ -1427,26 +1435,36 @@ export default function Estudio() {
               </div>
             )}
 
-            {/* Volmeter 1-20 */}
+            {/* Volmeter 1-20 — premium bar display */}
             <div style={{ marginBottom: 20 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
                 <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.02em' }}>¿Qué tan bien lo hiciste?</span>
-                <span style={{ fontSize: 16, fontWeight: 700, color: evalVolmeter > 14 ? '#10B981' : (evalVolmeter > 7 ? '#F59E0B' : '#EF4444'), fontFamily: "'Inter Tight', sans-serif" }}>{evalVolmeter}/20</span>
+                <span style={{ fontSize: 20, fontWeight: 700, color: evalVolmeter > 14 ? '#10B981' : (evalVolmeter > 7 ? '#F59E0B' : '#EF4444'), fontFamily: "'Inter Tight', sans-serif", lineHeight: 1 }}>{evalVolmeter}<span style={{ fontSize: 12, fontWeight: 500, opacity: 0.4 }}>/20</span></span>
               </div>
-              <div style={{ position: 'relative', height: 28, display: 'flex', alignItems: 'flex-end', gap: 2, marginBottom: 4 }}>
-                {Array.from({ length: 20 }, (_, i) => (
-                  <div key={i} style={{
-                    flex: 1, height: i < evalVolmeter ? 6 + (i / 20) * 18 : 3, borderRadius: '2px 2px 0 0',
-                    background: i < evalVolmeter
-                      ? (i < 7 ? '#EF4444' : i < 14 ? '#F59E0B' : '#10B981')
-                      : 'var(--bg-hover)',
-                    transition: 'all 200ms cubic-bezier(0.16, 1, 0.3, 1)',
-                    boxShadow: i < evalVolmeter ? `0 0 3px ${i < 7 ? '#EF4444' : i < 14 ? '#F59E0B' : '#10B981'}50` : 'none',
-                  }} />
-                ))}
+              <div style={{
+                position: 'relative', height: 40, display: 'flex', alignItems: 'flex-end', gap: 3,
+                padding: '4px 0',
+                background: 'var(--bg-surface)', borderRadius: 10,
+                border: '1px solid var(--border-subtle)',
+                overflow: 'hidden',
+              }}>
+                {Array.from({ length: 20 }, (_, i) => {
+                  const isActive = i < evalVolmeter;
+                  const barColor = i < 7 ? '#EF4444' : i < 14 ? '#F59E0B' : '#10B981';
+                  const barH = isActive ? 8 + (i / 20) * 28 : 4;
+                  return (
+                    <div key={i} style={{
+                      flex: 1, height: barH, borderRadius: '3px 3px 1px 1px',
+                      background: isActive ? barColor : 'rgba(255,255,255,0.04)',
+                      transition: 'all 250ms cubic-bezier(0.16, 1, 0.3, 1)',
+                      boxShadow: isActive ? `0 0 8px ${barColor}40, inset 0 1px 0 rgba(255,255,255,0.15)` : 'none',
+                      opacity: isActive ? 1 : 0.5,
+                    }} />
+                  );
+                })}
               </div>
               <input type="range" min="1" max="20" value={evalVolmeter} onChange={e => setEvalVolmeter(Number(e.target.value))}
-                style={{ width: '100%', height: 3, cursor: 'pointer', WebkitAppearance: 'none', appearance: 'none', outline: 'none', borderRadius: 2, background: 'transparent', marginTop: 2 }}
+                style={{ width: '100%', height: 3, cursor: 'pointer', WebkitAppearance: 'none', appearance: 'none', outline: 'none', borderRadius: 2, background: 'transparent', marginTop: 6 }}
                 className="volume-slider" />
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>
                 <span>Bajo</span><span>Alto</span>
@@ -1594,26 +1612,36 @@ export default function Estudio() {
               </div>
             )}
 
-            {/* Volmeter 1-20 */}
+            {/* Volmeter 1-20 — premium bar display */}
             <div style={{ marginBottom: 20 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
                 <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.02em' }}>¿Qué tan bien lo hiciste?</span>
-                <span style={{ fontSize: 16, fontWeight: 700, color: evalVolmeter > 14 ? '#10B981' : (evalVolmeter > 7 ? '#F59E0B' : '#EF4444'), fontFamily: "'Inter Tight', sans-serif" }}>{evalVolmeter}/20</span>
+                <span style={{ fontSize: 20, fontWeight: 700, color: evalVolmeter > 14 ? '#10B981' : (evalVolmeter > 7 ? '#F59E0B' : '#EF4444'), fontFamily: "'Inter Tight', sans-serif", lineHeight: 1 }}>{evalVolmeter}<span style={{ fontSize: 12, fontWeight: 500, opacity: 0.4 }}>/20</span></span>
               </div>
-              <div style={{ position: 'relative', height: 28, display: 'flex', alignItems: 'flex-end', gap: 2, marginBottom: 4 }}>
-                {Array.from({ length: 20 }, (_, i) => (
-                  <div key={i} style={{
-                    flex: 1, height: i < evalVolmeter ? 6 + (i / 20) * 18 : 3, borderRadius: '2px 2px 0 0',
-                    background: i < evalVolmeter
-                      ? (i < 7 ? '#EF4444' : i < 14 ? '#F59E0B' : '#10B981')
-                      : 'var(--bg-hover)',
-                    transition: 'all 200ms cubic-bezier(0.16, 1, 0.3, 1)',
-                    boxShadow: i < evalVolmeter ? `0 0 3px ${i < 7 ? '#EF4444' : i < 14 ? '#F59E0B' : '#10B981'}50` : 'none',
-                  }} />
-                ))}
+              <div style={{
+                position: 'relative', height: 40, display: 'flex', alignItems: 'flex-end', gap: 3,
+                padding: '4px 0',
+                background: 'var(--bg-surface)', borderRadius: 10,
+                border: '1px solid var(--border-subtle)',
+                overflow: 'hidden',
+              }}>
+                {Array.from({ length: 20 }, (_, i) => {
+                  const isActive = i < evalVolmeter;
+                  const barColor = i < 7 ? '#EF4444' : i < 14 ? '#F59E0B' : '#10B981';
+                  const barH = isActive ? 8 + (i / 20) * 28 : 4;
+                  return (
+                    <div key={i} style={{
+                      flex: 1, height: barH, borderRadius: '3px 3px 1px 1px',
+                      background: isActive ? barColor : 'rgba(255,255,255,0.04)',
+                      transition: 'all 250ms cubic-bezier(0.16, 1, 0.3, 1)',
+                      boxShadow: isActive ? `0 0 8px ${barColor}40, inset 0 1px 0 rgba(255,255,255,0.15)` : 'none',
+                      opacity: isActive ? 1 : 0.5,
+                    }} />
+                  );
+                })}
               </div>
               <input type="range" min="1" max="20" value={evalVolmeter} onChange={e => setEvalVolmeter(Number(e.target.value))}
-                style={{ width: '100%', height: 3, cursor: 'pointer', WebkitAppearance: 'none', appearance: 'none', outline: 'none', borderRadius: 2, background: 'transparent', marginTop: 2 }}
+                style={{ width: '100%', height: 3, cursor: 'pointer', WebkitAppearance: 'none', appearance: 'none', outline: 'none', borderRadius: 2, background: 'transparent', marginTop: 6 }}
                 className="volume-slider" />
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>
                 <span>Bajo</span><span>Alto</span>

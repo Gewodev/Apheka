@@ -1403,7 +1403,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
       )}
 
       {/* Content */}
-      <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+      <div style={{ flex: 1, height: '100%', display: 'flex', flexDirection: 'column', overflowY: currentView === 'overview' ? 'hidden' : 'auto', overflowX: 'hidden' }}>
         {currentView === 'topic' && activeTopic ? (
           /* ─── TOPIC VIEW ─── */
           <div style={{ padding: '16px 24px 60px' }}>
@@ -2103,160 +2103,14 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
               ) : (
 /* ═══ ESTUDIO MODE ═══ */
                 <>
-                <div style={{ display: 'flex', flexDirection: 'row', height: '100%', overflow: 'hidden' }}>
+                <div style={{ display: 'flex', flexDirection: 'row', flex: 1, minHeight: 0, overflow: 'hidden' }}>
 
                   {/* ══ LEFT: MATERIALS + CENTER ══ */}
-                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
 
-                    {/* ══ MATERIALS + CENTER ROW ══ */}
-                    <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-
-                      {/* ══ LEFT: MATERIALES (380px) ══ */}
-                      <div style={{ width: 380, flexShrink: 0, display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
-
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 20px 14px', flexShrink: 0 }}>
-                          <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: "'Inter Tight', sans-serif" }}>Materiales</h3>
-                          <div style={{ display: 'flex', gap: 6 }}>
-                            <button onClick={() => { estudioFileInputRef.current?.click(); }}
-                              style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${course.color}30`, background: `${course.color}10`, cursor: 'pointer', color: course.color, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms ' + EASE }}
-                              onMouseEnter={e => { e.currentTarget.style.background = `${course.color}22`; e.currentTarget.style.borderColor = `${course.color}50`; }}
-                              onMouseLeave={e => { e.currentTarget.style.background = `${course.color}10`; e.currentTarget.style.borderColor = `${course.color}30`; }}
-                              title="Subir archivo">
-                              <Upload size={15} />
-                            </button>
-                            <button onClick={() => { setShowAddLinkModal(true); setAddLinkUrl(''); setAddLinkName(''); }}
-                              style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${course.color}30`, background: `${course.color}10`, cursor: 'pointer', color: course.color, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms ' + EASE }}
-                              onMouseEnter={e => { e.currentTarget.style.background = `${course.color}22`; e.currentTarget.style.borderColor = `${course.color}50`; }}
-                              onMouseLeave={e => { e.currentTarget.style.background = `${course.color}10`; e.currentTarget.style.borderColor = `${course.color}30`; }}
-                              title="Anadir enlace">
-                              <Link2 size={15} />
-                            </button>
-                          </div>
-                        </div>
-                        <input type="file" ref={estudioFileInputRef} style={{ display: 'none' }} onChange={e => handleFileUpload(e, parsedTopics[0]?.id)} />
-                        <div style={{ flex: 1, overflowY: 'auto', padding: '0 14px 20px', display: 'flex', flexDirection: 'column', gap: 8 }} className="no-scrollbar">
-                          {allCourseMaterials.length === 0 ? (
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 120, borderRadius: 12, border: '1px dashed var(--border-subtle)', background: 'var(--bg-surface)', gap: 8 }}>
-                              <File size={20} style={{ color: 'var(--text-muted)', opacity: 0.5 }} />
-                              <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>Sin materiales todavia</p>
-                            </div>
-                          ) : allCourseMaterials.map((mat, idx) => {
-                            const matName = mat.name || 'Sin nombre';
-                            const dataUrl = mat.dataUrl || '';
-                            const isLink = dataUrl.startsWith('http');
-                            const ext = (mat.name || '').split('.').pop()?.toLowerCase() || '';
-                            const isImg = ['png','jpg','jpeg','webp','gif','svg'].includes(ext) || dataUrl.startsWith('data:image');
-                            const isPdf = ext === 'pdf';
-                            const isDoc = ['doc','docx'].includes(ext);
-                            const isXls = ['xls','xlsx','csv'].includes(ext);
-                            const isPpt = ['ppt','pptx'].includes(ext);
-                            const isAudio = ['mp3','wav','ogg','flac','aac'].includes(ext) || dataUrl.startsWith('data:audio');
-                            const isVideo = ['mp4','webm','avi','mov','mkv'].includes(ext) || dataUrl.startsWith('data:video');
-                            const isYouTube = isLink && (dataUrl.includes('youtube.com') || dataUrl.includes('youtu.be'));
-                            const isDrive = isLink && dataUrl.includes('drive.google.com');
-                            const isWeb = isLink && !isYouTube && !isDrive;
-                            const isLocal = dataUrl && !dataUrl.startsWith('http') && !dataUrl.startsWith('data:') && !dataUrl.startsWith('blob:');
-
-                            const openFile = (path: string) => {
-                              if ((window as any).__TAURI__?.shell?.open) {
-                                (window as any).__TAURI__.shell.open(path).catch(() => window.open(path, '_blank', 'noopener,noreferrer'));
-                              } else { window.open(path, '_blank', 'noopener,noreferrer'); }
-                            };
-
-                            const handleMatClick = () => {
-                              if (isPdf && dataUrl) { setPdfPreviewUrl(isLocal ? (window as any).__TAURI__?.convertFileSrc?.(dataUrl) || dataUrl : dataUrl); setPdfPreviewName(matName); setShowPdfPreview(true); }
-                              else if (isImg && dataUrl) { setPdfPreviewUrl(dataUrl); setPdfPreviewName(matName); setShowPdfPreview(true); }
-                              else if (isYouTube) { setPipUrl(dataUrl, matName); }
-                              else if (isVideo) { setPipUrl(dataUrl, matName); }
-                              else if (isWeb || isDrive || isLink || isDoc || isXls || isPpt) { openFile(dataUrl); }
-                              else if (isAudio) { /* toggle inline — handled by audio player below */ }
-                              else if (dataUrl.startsWith('http')) { openFile(dataUrl); }
-                              else if (isLocal) { openFile(dataUrl); }
-                            };
-
-                            const svgIcon = (d: string, c: string) => <svg viewBox="0 0 24 24" width={17} height={17} fill={c} style={{ flexShrink: 0, display: 'block' }}><path d={d} /></svg>;
-                            let iconEl: React.ReactNode;
-                            let badgeColor = '#888';
-                            if (isDoc) { badgeColor = '#2563EB'; iconEl = svgIcon('M23.004 1.5q.41 0 .703.293t.293.703v19.008q0 .41-.293.703t-.703.293H6.996q-.41 0-.703-.293T6 21.504V18H.996q-.41 0-.703-.293T0 17.004V6.996q0-.41.293-.703T.996 6H6V2.496q0-.41.293-.703t.703-.293zM6.035 11.203l1.442 4.735h1.64l1.57-7.876H9.036l-.937 4.653-1.325-4.5H5.38l-1.406 4.523-.938-4.675H1.312l1.57 7.874h1.641zM22.5 21v-3h-15v3zm0-4.5v-3.75H12v3.75zm0-5.25V7.5H12v3.75zm0-5.25V3h-15v3Z', '#2563EB'); }
-                            else if (isXls) { badgeColor = '#10B981'; iconEl = svgIcon('M23 1.5q.41 0 .7.3.3.29.3.7v19q0 .41-.3.7-.29.3-.7.3H7q-.41 0-.7-.3-.3-.29-.3-.7V18H1q-.41 0-.7-.3-.3-.29-.3-.7V7q0-.41.3-.7Q.58 6 1 6h5V2.5q0-.41.3-.7.29-.3.7-.3zM6 13.28l1.42 2.66h2.14l-2.38-3.87 2.34-3.8H7.46l-1.3 2.4-.05.08-.04.09-.64-1.28-.66-1.29H2.59l2.27 3.82-2.48 3.85h2.16zM14.25 21v-3H7.5v3zm0-4.5v-3.75H12v3.75zm0-5.25V7.5H12v3.75zm0-5.25V3H7.5v3zm8.25 15v-3h-6.75v3zm0-4.5v-3.75h-6.75v3.75zm0-5.25V7.5h-6.75v3.75zm0-5.25V3h-6.75v3Z', '#10B981'); }
-                            else if (isPpt) { badgeColor = '#F97316'; iconEl = svgIcon('M13.5 1.5q1.453 0 2.795.375 1.342.375 2.508 1.06 1.166.686 2.12 1.641.956.955 1.641 2.121.686 1.166 1.061 2.508Q24 10.547 24 12q0 1.453-.375 2.795-.375 1.342-1.06 2.508-.686 1.166-1.641 2.12-.955.956-2.121 1.641-1.166.686-2.508 1.061-1.342.375-2.795.375-1.29 0-2.52-.305-1.23-.304-2.337-.884-1.108-.58-2.063-1.418-.955-.838-1.693-1.893H.997q-.411 0-.704-.293T0 17.004V6.996q0-.41.293-.703T.996 6h3.89q.739-1.055 1.694-1.893.955-.837 2.063-1.418 1.107-.58 2.337-.884Q12.21 1.5 13.5 1.5z', '#F97316'); }
-                            else if (isPdf) { badgeColor = '#EF4444'; iconEl = svgIcon('M23.63 15.3c-.71-.745-2.166-1.17-4.224-1.17-1.1 0-2.377.106-3.761.354a19.443 19.443 0 0 1-2.307-2.661c-.532-.71-.994-1.49-1.42-2.236.817-2.484 1.207-4.507 1.207-5.962 0-1.632-.603-3.336-2.342-3.336-.532 0-1.065.32-1.349.781-.78 1.384-.425 4.4.923 7.381a60.277 60.277 0 0 1-1.703 4.507c-.568 1.349-1.207 2.733-1.917 4.01C2.834 18.53.314 20.34.03 21.758c-.106.533.071 1.03.462 1.42.142.107.639.533 1.49.533 2.59 0 5.323-4.188 6.707-6.707 1.065-.355 2.13-.71 3.194-.994a34.963 34.963 0 0 1 3.407-.745c2.732 2.448 5.145 2.839 6.352 2.839 1.49 0 2.023-.604 2.2-1.1.32-.64.106-1.349-.213-1.704z', '#EF4444'); }
-                            else if (isYouTube) { badgeColor = '#EF4444'; iconEl = svgIcon('M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z', '#EF4444'); }
-                            else if (isDrive) { badgeColor = '#4285F4'; iconEl = <svg viewBox="0 0 24 24" width={17} height={17} style={{ flexShrink: 0, display: 'block' }}><path fill="#4285F4" d="M12 1.5l9 15.6H3L12 1.5z"/><path fill="#34A853" d="M12 22.5L3 17.1h18L12 22.5z"/><path fill="#FBBC05" d="M3 17.1l3-5.2 3 5.2H3z"/><path fill="#EA4335" d="M18 17.1l-3-5.2-3 5.2h6z"/></svg>; }
-                            else if (isAudio) { badgeColor = '#8B5CF6'; iconEl = <Music size={13} />; }
-                            else if (isImg) { badgeColor = '#F59E0B'; iconEl = <ImageIcon size={13} />; }
-                            else if (isVideo) { badgeColor = '#EC4899'; iconEl = <File size={13} />; }
-                            else if (isWeb) {
-                              badgeColor = '#10B981';
-                              let domain = ''; try { domain = new URL(dataUrl).hostname; } catch {}
-                              iconEl = (
-                                <span style={{ position: 'relative', width: 17, height: 17, display: 'inline-flex', flexShrink: 0 }}>
-                                  <img src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`} alt="" style={{ width: 17, height: 17, borderRadius: 3, position: 'absolute', inset: 0 }}
-                                    onError={e => { e.currentTarget.style.display = 'none'; const fb = e.currentTarget.parentElement?.querySelector('.link-fb') as HTMLElement; if (fb) fb.style.display = 'flex'; }} />
-                                  <span className="link-fb" style={{ display: 'none', position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center', color: '#10B981' }}><Link2 size={12} /></span>
-                                </span>
-                              );
-                            }
-                            else { iconEl = <File size={13} />; }
-
-                            return (
-                              <React.Fragment key={mat.id || idx}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 7, background: isAudio && playingAudioId === mat.id ? `${badgeColor}08` : 'var(--bg-elevated)', border: `1px solid ${isAudio && playingAudioId === mat.id ? `${badgeColor}30` : 'var(--border-soft)'}`, cursor: 'pointer', transition: 'all 150ms' }}
-                                  onMouseEnter={e => { e.currentTarget.style.borderColor = `${badgeColor}40`; e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                                  onMouseLeave={e => { e.currentTarget.style.borderColor = isAudio && playingAudioId === mat.id ? `${badgeColor}30` : 'var(--border-soft)'; e.currentTarget.style.background = isAudio && playingAudioId === mat.id ? `${badgeColor}08` : 'var(--bg-elevated)'; }}>
-                                  <div onClick={() => {
-                                    if (isAudio) {
-                                      if (playingAudioId === mat.id && audioRef.current) {
-                                        audioRef.current.paused ? audioRef.current.play() : audioRef.current.pause();
-                                      } else {
-                                        setPlayingAudioId(mat.id);
-                                        setTimeout(() => { if (audioRef.current) { audioRef.current.src = dataUrl; audioRef.current.play().catch(() => {}); } }, 50);
-                                      }
-                                    } else { handleMatClick(); }
-                                  }} style={{ width: 30, height: 30, borderRadius: 7, background: `${badgeColor}14`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 150ms', color: badgeColor, position: 'relative' }}>
-                                    {iconEl}
-                                  </div>
-                                  <div onClick={() => {
-                                    if (isAudio) {
-                                      if (playingAudioId === mat.id && audioRef.current) {
-                                        audioRef.current.paused ? audioRef.current.play() : audioRef.current.pause();
-                                      } else {
-                                        setPlayingAudioId(mat.id);
-                                        setTimeout(() => { if (audioRef.current) { audioRef.current.src = dataUrl; audioRef.current.play().catch(() => {}); } }, 50);
-                                      }
-                                    } else { handleMatClick(); }
-                                  }} style={{ flex: 1, minWidth: 0 }}>
-                                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3 }}>{matName}</span>
-                                  </div>
-                                  {isAudio && playingAudioId === mat.id && (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                                      <span style={{ fontSize: 9, color: 'var(--text-muted)', minWidth: 28, textAlign: 'right', fontFamily: "'JetBrains Mono', monospace" }}>{formatTime(audioProgress)}</span>
-                                      <div style={{ width: 60, height: 3, borderRadius: 2, background: 'var(--bg-hover)', cursor: 'pointer', position: 'relative' }}
-                                        onClick={e => { if (audioRef.current) { const r = e.currentTarget.getBoundingClientRect(); audioRef.current.currentTime = ((e.clientX - r.left) / r.width) * audioDuration; } }}>
-                                        <div style={{ width: `${(audioProgress / (audioDuration || 1)) * 100}%`, height: '100%', borderRadius: 2, background: badgeColor, transition: 'width 100ms linear' }} />
-                                      </div>
-                                      <span style={{ fontSize: 9, color: 'var(--text-muted)', minWidth: 28, fontFamily: "'JetBrains Mono', monospace" }}>{formatTime(audioDuration)}</span>
-                                    </div>
-                                  )}
-                                  <button onClick={e => { e.stopPropagation(); setConfirmDeleteMatId(mat.id); }}
-                                    style={{ width: 24, height: 24, borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, transition: 'all 150ms', opacity: 0 }}
-                                    onMouseEnter={ev => { ev.currentTarget.style.background = 'rgba(239,68,68,0.1)'; ev.currentTarget.style.color = '#EF4444'; ev.currentTarget.style.opacity = '1'; }}
-                                    onMouseLeave={ev => { ev.currentTarget.style.background = 'transparent'; ev.currentTarget.style.color = 'var(--text-muted)'; ev.currentTarget.style.opacity = '0'; }}
-                                    title="Eliminar">
-                                    <X size={11} />
-                                  </button>
-                                </div>
-                              </React.Fragment>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {/* ══ CENTER: PLANNER + TIME BAR + RADAR ══ */}
-                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 28px', display: 'flex', flexDirection: 'column', gap: 18 }} className="no-scrollbar">
-
-                          {/* ── WEEKLY PLANNER ── */}
+                    {/* ══ WEEKLY PLANNER ══ */}
+                    <div style={{ padding: '16px 18px 14px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0, maxHeight: '38vh', overflowY: 'auto' }} className="no-scrollbar">
+                      {/* ── WEEKLY PLANNER ── */}
                           <div>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -2351,6 +2205,157 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                               })()}
                             </div>
                           </div>
+                    </div>
+
+                    {/* ══ MATERIALS + CENTER ROW ══ */}
+                    <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+
+                      {/* ══ LEFT: MATERIALES (380px) ══ */}
+                      <div style={{ width: 380, flexShrink: 0, display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
+
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 20px 14px', flexShrink: 0 }}>
+                          <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: "'Inter Tight', sans-serif" }}>Materiales</h3>
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <button onClick={() => { estudioFileInputRef.current?.click(); }}
+                              style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${course.color}30`, background: `${course.color}10`, cursor: 'pointer', color: course.color, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms ' + EASE }}
+                              onMouseEnter={e => { e.currentTarget.style.background = `${course.color}22`; e.currentTarget.style.borderColor = `${course.color}50`; }}
+                              onMouseLeave={e => { e.currentTarget.style.background = `${course.color}10`; e.currentTarget.style.borderColor = `${course.color}30`; }}
+                              title="Subir archivo">
+                              <Upload size={15} />
+                            </button>
+                            <button onClick={() => { setShowAddLinkModal(true); setAddLinkUrl(''); setAddLinkName(''); }}
+                              style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${course.color}30`, background: `${course.color}10`, cursor: 'pointer', color: course.color, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms ' + EASE }}
+                              onMouseEnter={e => { e.currentTarget.style.background = `${course.color}22`; e.currentTarget.style.borderColor = `${course.color}50`; }}
+                              onMouseLeave={e => { e.currentTarget.style.background = `${course.color}10`; e.currentTarget.style.borderColor = `${course.color}30`; }}
+                              title="Anadir enlace">
+                              <Link2 size={15} />
+                            </button>
+                          </div>
+                        </div>
+                        <input type="file" ref={estudioFileInputRef} style={{ display: 'none' }} onChange={e => handleFileUpload(e, parsedTopics[0]?.id)} />
+                        <div style={{ flex: 1, minHeight: 0, maxHeight: '34vh', overflowY: 'auto', padding: '0 14px 20px', display: 'flex', flexDirection: 'column', gap: 8 }} className="no-scrollbar">
+                          {allCourseMaterials.length === 0 ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 120, borderRadius: 12, border: '1px dashed var(--border-subtle)', background: 'var(--bg-surface)', gap: 8 }}>
+                              <File size={20} style={{ color: 'var(--text-muted)', opacity: 0.5 }} />
+                              <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>Sin materiales todavia</p>
+                            </div>
+                          ) : allCourseMaterials.map((mat, idx) => {
+                            const matName = mat.name || 'Sin nombre';
+                            const dataUrl = mat.dataUrl || '';
+                            const isLink = dataUrl.startsWith('http');
+                            const ext = (mat.name || '').split('.').pop()?.toLowerCase() || '';
+                            const isImg = ['png','jpg','jpeg','webp','gif','svg'].includes(ext) || dataUrl.startsWith('data:image');
+                            const isPdf = ext === 'pdf';
+                            const isDoc = ['doc','docx'].includes(ext);
+                            const isXls = ['xls','xlsx','csv'].includes(ext);
+                            const isPpt = ['ppt','pptx'].includes(ext);
+                            const isAudio = ['mp3','wav','ogg','flac','aac'].includes(ext) || dataUrl.startsWith('data:audio');
+                            const isVideo = ['mp4','webm','avi','mov','mkv'].includes(ext) || dataUrl.startsWith('data:video');
+                            const isYouTube = isLink && (dataUrl.includes('youtube.com') || dataUrl.includes('youtu.be'));
+                            const isClassroom = isLink && dataUrl.includes('classroom.google.com');
+                            const isDrive = isLink && dataUrl.includes('drive.google.com');
+                            const isWeb = isLink && !isYouTube && !isDrive && !isClassroom;
+                            const isLocal = dataUrl && !dataUrl.startsWith('http') && !dataUrl.startsWith('data:') && !dataUrl.startsWith('blob:');
+
+                            const openFile = (path: string) => {
+                              if ((window as any).__TAURI__?.shell?.open) {
+                                (window as any).__TAURI__.shell.open(path).catch(() => window.open(path, '_blank', 'noopener,noreferrer'));
+                              } else { window.open(path, '_blank', 'noopener,noreferrer'); }
+                            };
+
+                            const handleMatClick = () => {
+                              if (isPdf && dataUrl) { setPdfPreviewUrl(isLocal ? (window as any).__TAURI__?.convertFileSrc?.(dataUrl) || dataUrl : dataUrl); setPdfPreviewName(matName); setShowPdfPreview(true); }
+                              else if (isImg && dataUrl) { setPdfPreviewUrl(dataUrl); setPdfPreviewName(matName); setShowPdfPreview(true); }
+                              else if (isYouTube) { setPipUrl(dataUrl, matName); }
+                              else if (isVideo) { setPipUrl(dataUrl, matName); }
+                              else if (isWeb || isDrive || isClassroom || isLink || isDoc || isXls || isPpt) { openFile(dataUrl); }
+                              else if (isAudio) { /* toggle inline — handled by audio player below */ }
+                              else if (dataUrl.startsWith('http')) { openFile(dataUrl); }
+                              else if (isLocal) { openFile(dataUrl); }
+                            };
+
+                            const svgIcon = (d: string, c: string) => <svg viewBox="0 0 24 24" width={17} height={17} fill={c} style={{ flexShrink: 0, display: 'block' }}><path d={d} /></svg>;
+                            let iconEl: React.ReactNode;
+                            let badgeColor = '#888';
+                            if (isDoc) { badgeColor = '#2563EB'; iconEl = svgIcon('M23.004 1.5q.41 0 .703.293t.293.703v19.008q0 .41-.293.703t-.703.293H6.996q-.41 0-.703-.293T6 21.504V18H.996q-.41 0-.703-.293T0 17.004V6.996q0-.41.293-.703T.996 6H6V2.496q0-.41.293-.703t.703-.293zM6.035 11.203l1.442 4.735h1.64l1.57-7.876H9.036l-.937 4.653-1.325-4.5H5.38l-1.406 4.523-.938-4.675H1.312l1.57 7.874h1.641zM22.5 21v-3h-15v3zm0-4.5v-3.75H12v3.75zm0-5.25V7.5H12v3.75zm0-5.25V3h-15v3Z', '#2563EB'); }
+                            else if (isXls) { badgeColor = '#10B981'; iconEl = svgIcon('M23 1.5q.41 0 .7.3.3.29.3.7v19q0 .41-.3.7-.29.3-.7.3H7q-.41 0-.7-.3-.3-.29-.3-.7V18H1q-.41 0-.7-.3-.3-.29-.3-.7V7q0-.41.3-.7Q.58 6 1 6h5V2.5q0-.41.3-.7.29-.3.7-.3zM6 13.28l1.42 2.66h2.14l-2.38-3.87 2.34-3.8H7.46l-1.3 2.4-.05.08-.04.09-.64-1.28-.66-1.29H2.59l2.27 3.82-2.48 3.85h2.16zM14.25 21v-3H7.5v3zm0-4.5v-3.75H12v3.75zm0-5.25V7.5H12v3.75zm0-5.25V3H7.5v3zm8.25 15v-3h-6.75v3zm0-4.5v-3.75h-6.75v3.75zm0-5.25V7.5h-6.75v3.75zm0-5.25V3h-6.75v3Z', '#10B981'); }
+                            else if (isPpt) { badgeColor = '#F97316'; iconEl = svgIcon('M13.5 1.5q1.453 0 2.795.375 1.342.375 2.508 1.06 1.166.686 2.12 1.641.956.955 1.641 2.121.686 1.166 1.061 2.508Q24 10.547 24 12q0 1.453-.375 2.795-.375 1.342-1.06 2.508-.686 1.166-1.641 2.12-.955.956-2.121 1.641-1.166.686-2.508 1.061-1.342.375-2.795.375-1.29 0-2.52-.305-1.23-.304-2.337-.884-1.108-.58-2.063-1.418-.955-.838-1.693-1.893H.997q-.411 0-.704-.293T0 17.004V6.996q0-.41.293-.703T.996 6h3.89q.739-1.055 1.694-1.893.955-.837 2.063-1.418 1.107-.58 2.337-.884Q12.21 1.5 13.5 1.5z', '#F97316'); }
+                            else if (isPdf) { badgeColor = '#EF4444'; iconEl = svgIcon('M23.63 15.3c-.71-.745-2.166-1.17-4.224-1.17-1.1 0-2.377.106-3.761.354a19.443 19.443 0 0 1-2.307-2.661c-.532-.71-.994-1.49-1.42-2.236.817-2.484 1.207-4.507 1.207-5.962 0-1.632-.603-3.336-2.342-3.336-.532 0-1.065.32-1.349.781-.78 1.384-.425 4.4.923 7.381a60.277 60.277 0 0 1-1.703 4.507c-.568 1.349-1.207 2.733-1.917 4.01C2.834 18.53.314 20.34.03 21.758c-.106.533.071 1.03.462 1.42.142.107.639.533 1.49.533 2.59 0 5.323-4.188 6.707-6.707 1.065-.355 2.13-.71 3.194-.994a34.963 34.963 0 0 1 3.407-.745c2.732 2.448 5.145 2.839 6.352 2.839 1.49 0 2.023-.604 2.2-1.1.32-.64.106-1.349-.213-1.704z', '#EF4444'); }
+                            else if (isYouTube) { badgeColor = '#EF4444'; iconEl = svgIcon('M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z', '#EF4444'); }
+                            else if (isClassroom) { badgeColor = '#0F9D58'; iconEl = <svg viewBox="0 0 24 24" width={17} height={17} style={{ flexShrink: 0, display: 'block' }}><path d="M12 3L1 9l4 2.18v6L12 21l7-3.82v-6l2-1.09V17h2V9L12 3z" fill="#0F9D58"/><path d="M12 3l7 3.82v6L12 17 5 12.82v-6L12 3z" fill="#0F9D58" opacity="0.6"/></svg>; }
+                            else if (isDrive) { badgeColor = '#4285F4'; iconEl = <svg viewBox="0 0 24 24" width={17} height={17} style={{ flexShrink: 0, display: 'block' }}><path d="M8.5 3L3 13l3 5h4l5-10z" fill="#4285F4"/><path d="M15.5 3L21 13l-3 5h-4L9.5 8z" fill="#FBBC04"/><path d="M3 13l3 5h12l3-5H3z" fill="#0F9D58"/></svg>; }
+                            else if (isAudio) { badgeColor = '#8B5CF6'; iconEl = <Music size={13} />; }
+                            else if (isImg) { badgeColor = '#F59E0B'; iconEl = <ImageIcon size={13} />; }
+                            else if (isVideo) { badgeColor = '#EC4899'; iconEl = <File size={13} />; }
+                            else if (isWeb) {
+                              badgeColor = '#10B981';
+                              let domain = ''; try { domain = new URL(dataUrl).hostname; } catch {}
+                              iconEl = (
+                                <span style={{ position: 'relative', width: 17, height: 17, display: 'inline-flex', flexShrink: 0 }}>
+                                  <img src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`} alt="" style={{ width: 17, height: 17, borderRadius: 3, position: 'absolute', inset: 0 }}
+                                    onError={e => { e.currentTarget.style.display = 'none'; const fb = e.currentTarget.parentElement?.querySelector('.link-fb') as HTMLElement; if (fb) fb.style.display = 'flex'; }} />
+                                  <span className="link-fb" style={{ display: 'none', position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center', color: '#10B981' }}><Link2 size={12} /></span>
+                                </span>
+                              );
+                            }
+                            else { iconEl = <File size={13} />; }
+
+                            return (
+                              <React.Fragment key={mat.id || idx}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 7, background: isAudio && playingAudioId === mat.id ? `${badgeColor}08` : 'var(--bg-elevated)', border: `1px solid ${isAudio && playingAudioId === mat.id ? `${badgeColor}30` : 'var(--border-soft)'}`, cursor: 'pointer', transition: 'all 150ms' }}
+                                  onMouseEnter={e => { e.currentTarget.style.borderColor = `${badgeColor}40`; e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                                  onMouseLeave={e => { e.currentTarget.style.borderColor = isAudio && playingAudioId === mat.id ? `${badgeColor}30` : 'var(--border-soft)'; e.currentTarget.style.background = isAudio && playingAudioId === mat.id ? `${badgeColor}08` : 'var(--bg-elevated)'; }}>
+                                  <div onClick={() => {
+                                    if (isAudio) {
+                                      if (playingAudioId === mat.id && audioRef.current) {
+                                        audioRef.current.paused ? audioRef.current.play() : audioRef.current.pause();
+                                      } else {
+                                        setPlayingAudioId(mat.id);
+                                        setTimeout(() => { if (audioRef.current) { audioRef.current.src = dataUrl; audioRef.current.play().catch(() => {}); } }, 50);
+                                      }
+                                    } else { handleMatClick(); }
+                                  }} style={{ width: 30, height: 30, borderRadius: 7, background: `${badgeColor}14`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 150ms', color: badgeColor, position: 'relative' }}>
+                                    {iconEl}
+                                  </div>
+                                  <div onClick={() => {
+                                    if (isAudio) {
+                                      if (playingAudioId === mat.id && audioRef.current) {
+                                        audioRef.current.paused ? audioRef.current.play() : audioRef.current.pause();
+                                      } else {
+                                        setPlayingAudioId(mat.id);
+                                        setTimeout(() => { if (audioRef.current) { audioRef.current.src = dataUrl; audioRef.current.play().catch(() => {}); } }, 50);
+                                      }
+                                    } else { handleMatClick(); }
+                                  }} style={{ flex: 1, minWidth: 0 }}>
+                                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3 }}>{matName}</span>
+                                  </div>
+                                  {isAudio && playingAudioId === mat.id && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                                      <span style={{ fontSize: 9, color: 'var(--text-muted)', minWidth: 28, textAlign: 'right', fontFamily: "'JetBrains Mono', monospace" }}>{formatTime(audioProgress)}</span>
+                                      <div style={{ width: 60, height: 3, borderRadius: 2, background: 'var(--bg-hover)', cursor: 'pointer', position: 'relative' }}
+                                        onClick={e => { if (audioRef.current) { const r = e.currentTarget.getBoundingClientRect(); audioRef.current.currentTime = ((e.clientX - r.left) / r.width) * audioDuration; } }}>
+                                        <div style={{ width: `${(audioProgress / (audioDuration || 1)) * 100}%`, height: '100%', borderRadius: 2, background: badgeColor, transition: 'width 100ms linear' }} />
+                                      </div>
+                                      <span style={{ fontSize: 9, color: 'var(--text-muted)', minWidth: 28, fontFamily: "'JetBrains Mono', monospace" }}>{formatTime(audioDuration)}</span>
+                                    </div>
+                                  )}
+                                  <button onClick={e => { e.stopPropagation(); setConfirmDeleteMatId(mat.id); }}
+                                    style={{ width: 24, height: 24, borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, transition: 'all 150ms', opacity: 0 }}
+                                    onMouseEnter={ev => { ev.currentTarget.style.background = 'rgba(239,68,68,0.1)'; ev.currentTarget.style.color = '#EF4444'; ev.currentTarget.style.opacity = '1'; }}
+                                    onMouseLeave={ev => { ev.currentTarget.style.background = 'transparent'; ev.currentTarget.style.color = 'var(--text-muted)'; ev.currentTarget.style.opacity = '0'; }}
+                                    title="Eliminar">
+                                    <X size={11} />
+                                  </button>
+                                </div>
+                              </React.Fragment>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* ══ CENTER: PLANNER + TIME BAR + RADAR ══ */}
+                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 28px', display: 'flex', flexDirection: 'column', gap: 18 }} className="no-scrollbar">
 
                           {/* ── WEEKLY TIME BAR ── */}
                           {(() => {
@@ -2505,7 +2510,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                         </button>
                       </div>
                     </div>
-                    <div style={{ flex: 1, overflowY: 'auto', padding: '0 14px 20px', display: 'flex', flexDirection: 'column', gap: 10 }} className="no-scrollbar">
+                    <div style={{ flex: 1, minHeight: 0, maxHeight: '45vh', overflowY: 'auto', padding: '0 14px 20px', display: 'flex', flexDirection: 'column', gap: 10 }} className="no-scrollbar">
                       {groups.length === 0 ? (
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 120, borderRadius: 12, border: '1px dashed var(--border-subtle)', background: 'var(--bg-surface)', gap: 8 }}>
                           <Layers size={20} style={{ color: 'var(--text-muted)', opacity: 0.5 }} />

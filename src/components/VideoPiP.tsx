@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect, useCallback, memo } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo, memo } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Minus, Maximize2, GripVertical } from 'lucide-react';
+import { X } from 'lucide-react';
 
 export interface VideoPiPProps {
   url: string | null;
@@ -10,8 +10,9 @@ export interface VideoPiPProps {
 
 const DEFAULT_W = 420;
 const DEFAULT_H = 260;
-const MIN_W = 280;
-const MIN_H = 180;
+const MIN_W = 240;
+const MIN_H = 140;
+const BAR_H = 28;
 
 function extractYouTubeId(raw: string): string | null {
   try {
@@ -40,46 +41,39 @@ function isDirectVideo(url: string): boolean {
 }
 
 function VideoPiPInner({ url, title, onClose }: VideoPiPProps) {
-  const [minimized, setMinimized] = useState(false);
-  const [size, setSize] = useState({ w: DEFAULT_W, h: DEFAULT_H });
+  const [hovered, setHovered] = useState(false);
   const posRef = useRef({ x: 0, y: 0 });
+  const sizeRef = useRef({ w: DEFAULT_W, h: DEFAULT_H });
   const containerRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef({ active: false, startX: 0, startY: 0, origX: 0, origY: 0 });
   const resizeRef = useRef({ active: false, startX: 0, startY: 0, origW: 0, origH: 0 });
-  const sizeRef = useRef(size);
-  const minimizedRef = useRef(minimized);
-  sizeRef.current = size;
-  minimizedRef.current = minimized;
+
+  const initialPos = useMemo(() => {
+    const x = Math.round((window.innerWidth - DEFAULT_W) / 2);
+    const y = Math.round((window.innerHeight - DEFAULT_H) / 2);
+    return { x, y };
+  }, []);
 
   useEffect(() => {
-    posRef.current = {
-      x: Math.round((window.innerWidth - DEFAULT_W) / 2),
-      y: Math.round((window.innerHeight - DEFAULT_H) / 2),
-    };
-    if (containerRef.current) {
-      containerRef.current.style.transform = `translate(${posRef.current.x}px, ${posRef.current.y}px)`;
-    }
-  }, []);
+    posRef.current = initialPos;
+  }, [initialPos]);
 
   useEffect(() => {
     function onMove(e: MouseEvent) {
       const c = containerRef.current;
       if (!c) return;
       if (dragRef.current.active) {
-        const dx = e.clientX - dragRef.current.startX;
-        const dy = e.clientY - dragRef.current.startY;
-        const nx = dragRef.current.origX + dx;
-        const ny = dragRef.current.origY + dy;
+        const nx = dragRef.current.origX + (e.clientX - dragRef.current.startX);
+        const ny = dragRef.current.origY + (e.clientY - dragRef.current.startY);
         posRef.current = { x: nx, y: ny };
         c.style.transform = `translate(${nx}px, ${ny}px)`;
       }
       if (resizeRef.current.active) {
-        const dx = e.clientX - resizeRef.current.startX;
-        const dy = e.clientY - resizeRef.current.startY;
-        setSize({
-          w: Math.max(MIN_W, resizeRef.current.origW + dx),
-          h: Math.max(MIN_H, resizeRef.current.origH + dy),
-        });
+        const nw = Math.max(MIN_W, resizeRef.current.origW + (e.clientX - resizeRef.current.startX));
+        const nh = Math.max(MIN_H, resizeRef.current.origH + (e.clientY - resizeRef.current.startY));
+        sizeRef.current = { w: nw, h: nh };
+        c.style.width = `${nw}px`;
+        c.style.height = `${nh}px`;
       }
     }
     function onUp() {
@@ -95,7 +89,7 @@ function VideoPiPInner({ url, title, onClose }: VideoPiPProps) {
     return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
   }, []);
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+  const handleDragDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     dragRef.current = { active: true, startX: e.clientX, startY: e.clientY, origX: posRef.current.x, origY: posRef.current.y };
@@ -121,116 +115,102 @@ function VideoPiPInner({ url, title, onClose }: VideoPiPProps) {
     setTimeout(onClose, 150);
   }, [onClose]);
 
-  const handleMinimize = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    setMinimized(m => !m);
-  }, []);
-
   if (!url) return null;
 
   const ytId = extractYouTubeId(url);
   const isVideo = isDirectVideo(url);
-  const headerH = 36;
 
   return createPortal(
     <div
       ref={containerRef}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
         position: 'fixed',
         left: 0,
         top: 0,
-        width: size.w,
-        height: minimized ? headerH : size.h,
+        width: DEFAULT_W,
+        height: DEFAULT_H,
+        transform: `translate(${initialPos.x}px, ${initialPos.y}px)`,
         zIndex: 99990,
-        display: 'flex',
-        flexDirection: 'column',
         borderRadius: 12,
         overflow: 'hidden',
-        background: '#111114',
-        border: '1px solid rgba(255,255,255,0.08)',
-        boxShadow: '0 12px 40px rgba(0,0,0,0.55), 0 2px 12px rgba(0,0,0,0.3)',
+        background: '#0a0a0c',
+        border: hovered ? '1px solid rgba(255,255,255,0.15)' : '1px solid rgba(255,255,255,0.08)',
+        boxShadow: hovered
+          ? '0 20px 60px rgba(0,0,0,0.65), 0 4px 20px rgba(0,0,0,0.4)'
+          : '0 12px 40px rgba(0,0,0,0.5), 0 2px 10px rgba(0,0,0,0.3)',
         willChange: 'transform',
-        transition: 'width 200ms cubic-bezier(0.16,1,0.3,1), height 200ms cubic-bezier(0.16,1,0.3,1), border-radius 200ms cubic-bezier(0.16,1,0.3,1)',
+        transition: 'border-color 200ms ease, box-shadow 200ms ease',
       }}
     >
-      {/* Header / grab area */}
+      {/* Thin drag bar at top */}
       <div
-        onMouseDown={handleMouseDown}
+        onMouseDown={handleDragDown}
         style={{
-          height: headerH,
-          minHeight: headerH,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          padding: '0 8px 0 12px',
-          cursor: 'grab',
-          background: '#18181b',
-          borderBottom: minimized ? 'none' : '1px solid rgba(255,255,255,0.06)',
-          userSelect: 'none',
-          WebkitUserSelect: 'none',
+          position: 'absolute', top: 0, left: 0, right: 0, height: BAR_H,
+          cursor: 'grab', zIndex: 5,
+          background: hovered ? 'rgba(255,255,255,0.04)' : 'transparent',
+          transition: 'background 150ms',
+        }}
+      />
+
+      {/* Close button */}
+      <button
+        onClick={(e) => { e.stopPropagation(); handleClose(); }}
+        title="Cerrar"
+        style={{
+          position: 'absolute', top: 4, right: 4, zIndex: 10,
+          width: 20, height: 20, borderRadius: 5, border: 'none',
+          background: hovered ? 'rgba(255,255,255,0.08)' : 'transparent',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: hovered ? 'rgba(255,255,255,0.6)' : 'transparent',
+          cursor: 'pointer', flexShrink: 0,
+          transition: 'all 150ms ease',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.8)'; e.currentTarget.style.color = '#fff'; }}
+        onMouseLeave={e => { e.currentTarget.style.background = hovered ? 'rgba(255,255,255,0.08)' : 'transparent'; e.currentTarget.style.color = hovered ? 'rgba(255,255,255,0.6)' : 'transparent'; }}
+      >
+        <X size={11} strokeWidth={2.5} />
+      </button>
+
+      {/* Title */}
+      <div
+        style={{
+          position: 'absolute', top: 0, left: 12, right: 32, height: BAR_H,
+          display: 'flex', alignItems: 'center', zIndex: 4, pointerEvents: 'none',
         }}
       >
-        <GripVertical size={14} style={{ color: 'rgba(255,255,255,0.25)', flexShrink: 0 }} />
         <span style={{
-          flex: 1,
-          fontSize: 12,
-          fontWeight: 600,
-          color: 'rgba(255,255,255,0.85)',
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          lineHeight: 1,
-          fontFamily: "'Inter Tight', sans-serif",
+          fontSize: 10, fontWeight: 600,
+          color: hovered ? 'rgba(255,255,255,0.55)' : 'transparent',
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          fontFamily: "'Inter', sans-serif",
           letterSpacing: '-0.01em',
+          lineHeight: 1,
+          transition: 'color 150ms',
         }}>
           {title}
         </span>
-        <button
-          onClick={handleMinimize}
-          title={minimized ? 'Expandir' : 'Minimizar'}
-          style={{
-            width: 24, height: 24, borderRadius: 6, border: 'none', background: 'transparent',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: 'rgba(255,255,255,0.45)', cursor: 'pointer', flexShrink: 0,
-            transition: 'all 120ms ease',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = 'rgba(255,255,255,0.8)'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.45)'; }}
-        >
-          {minimized ? <Maximize2 size={13} /> : <Minus size={13} />}
-        </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); handleClose(); }}
-          title="Cerrar"
-          style={{
-            width: 24, height: 24, borderRadius: 6, border: 'none', background: 'transparent',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: 'rgba(255,255,255,0.45)', cursor: 'pointer', flexShrink: 0,
-            transition: 'all 120ms ease',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.2)'; e.currentTarget.style.color = '#EF4444'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.45)'; }}
-        >
-          <X size={13} />
-        </button>
       </div>
 
       {/* Video content */}
       <div style={{
-        width: '100%',
-        flex: 1,
+        position: 'absolute',
+        top: BAR_H,
+        left: 0,
+        right: 0,
+        bottom: 0,
         overflow: 'hidden',
-        borderRadius: minimized ? 0 : '0 0 12px 12px',
-        transition: 'all 200ms cubic-bezier(0.16,1,0.3,1)',
         background: '#000',
+        zIndex: 2,
       }}>
         {ytId ? (
           <iframe
             key={ytId}
             src={`https://www.youtube.com/embed/${ytId}?autoplay=1&controls=1&rel=0&modestbranding=1`}
             style={{ width: '100%', height: '100%', border: 'none' }}
-            allow="autoplay; encrypted-media; fullscreen"
-            allowFullScreen
+            allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
           />
         ) : isVideo ? (
           <video
@@ -251,25 +231,16 @@ function VideoPiPInner({ url, title, onClose }: VideoPiPProps) {
       </div>
 
       {/* Resize grip */}
-      {!minimized && (
-        <div
-          onMouseDown={handleResizeDown}
-          style={{
-            position: 'absolute',
-            right: 1, bottom: 1,
-            width: 16, height: 16,
-            cursor: 'nwse-resize',
-            display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end',
-            padding: 2,
-            zIndex: 2,
-          }}
-        >
-          <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
-            <line x1="8" y1="1" x2="1" y2="8" stroke="rgba(255,255,255,0.2)" strokeWidth="1" strokeLinecap="round" />
-            <line x1="8" y1="4.5" x2="4.5" y2="8" stroke="rgba(255,255,255,0.12)" strokeWidth="1" strokeLinecap="round" />
-          </svg>
-        </div>
-      )}
+      <div
+        onMouseDown={handleResizeDown}
+        style={{
+          position: 'absolute',
+          right: 0, bottom: 0,
+          width: 16, height: 16,
+          cursor: 'nwse-resize',
+          zIndex: 6,
+        }}
+      />
     </div>,
     document.body
   );

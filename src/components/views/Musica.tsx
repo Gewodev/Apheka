@@ -15,8 +15,6 @@ import { open, save } from '@tauri-apps/plugin-dialog';
 import { readFile } from '@tauri-apps/plugin-fs';
 import { format, subDays, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
-import { emitTo } from '@tauri-apps/api/event';
 import {
   fetchMetadata, searchMusic, startDownload, cancelDownload,
   getDownloadPath, setDownloadPath,
@@ -58,6 +56,7 @@ export default function Musica() {
     importLocalTracks,
     setCoverModalTrackId,
     downloadPath: persistentDownloadPath, setDownloadPathCtx,
+    setPipUrl,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<TabId>('biblioteca');
@@ -113,9 +112,7 @@ export default function Musica() {
   const urlInputRef = useRef<HTMLInputElement>(null);
   const searchRequestId = useRef(0);
   const [colocarTrackId, setColocarTrackId] = useState<string | null>(null);
-  const [youtubePlayerUrl, setYoutubePlayerUrl] = useState<string | null>(null);
-  const [youtubePlayerTitle, setYoutubePlayerTitle] = useState('');
-  const [youtubePlayerThumb, setYoutubePlayerThumb] = useState('');
+
 
   const [downloadSelection, setDownloadSelection] = useState<{ url: string; title: string; channel?: string; thumbnail?: string; duration?: number }[]>(() => {
     try {
@@ -155,7 +152,7 @@ export default function Musica() {
 
   // Lock body scroll when any modal is open
   useEffect(() => {
-    const modalOpen = !!(editingArtistId || showCreatePlaylist || editingTrackId || confirmDelete || youtubePlayerUrl || showClearAllConfirm);
+    const modalOpen = !!(editingArtistId || showCreatePlaylist || editingTrackId || confirmDelete || showClearAllConfirm);
     const html = document.documentElement;
     const pageContainer = document.querySelector('.page-container') as HTMLElement | null;
     if (modalOpen) {
@@ -172,7 +169,7 @@ export default function Musica() {
       html.style.overflow = '';
       if (pageContainer) pageContainer.style.overflow = '';
     };
-  }, [editingArtistId, showCreatePlaylist, editingTrackId, confirmDelete, youtubePlayerUrl, showClearAllConfirm]);
+  }, [editingArtistId, showCreatePlaylist, editingTrackId, confirmDelete, showClearAllConfirm]);
 
   const timeStr = format(currentTime, 'HH:mm');
   const secondsStr = format(currentTime, 'ss');
@@ -1570,21 +1567,7 @@ export default function Musica() {
                         onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'transparent'; const ov = e.currentTarget.querySelector('.play-ov') as HTMLElement; if (ov) ov.style.opacity = '0'; const act = e.currentTarget.querySelector('.row-act') as HTMLElement; if (act) act.style.opacity = '0.35'; }}>
                         {/* Thumbnail with play overlay */}
                         <div style={{ width: 60, height: 42, borderRadius: 8, background: 'var(--bg-deep)', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border-subtle)', position: 'relative', cursor: 'pointer' }}
-                          onClick={async () => {
-                            const loadToPlayer = async (videoUrl: string, title: string, thumbnail: string) => {
-                              const data = { videoUrl, title, thumbnail };
-                              for (let attempt = 0; attempt < 5; attempt++) { try { await emitTo('youtube-player', 'youtube:load', data); return true; } catch { await new Promise(resolve => setTimeout(resolve, 400 + attempt * 300)); } }
-                              return false;
-                            };
-                            try {
-                              const existing = await WebviewWindow.getByLabel('youtube-player');
-                              if (existing) { const sent = await loadToPlayer(r.webpage_url, r.title, r.thumbnail || ''); if (sent) { await existing.show(); await existing.setFocus(); return; } }
-                              try { localStorage.setItem('owa_yt_pending', JSON.stringify({ videoUrl: r.webpage_url, title: r.title, thumbnail: r.thumbnail || '' })); } catch {}
-                              const win = new WebviewWindow('youtube-player', { url: '/', title: 'YouTube Player', width: 480, height: 360, minWidth: 320, minHeight: 240, resizable: true, decorations: true, alwaysOnTop: false, skipTaskbar: false, center: true });
-                              win.once('tauri://error', () => {});
-                              await loadToPlayer(r.webpage_url, r.title, r.thumbnail || '');
-                            } catch { setYoutubePlayerUrl(r.webpage_url); setYoutubePlayerTitle(r.title); setYoutubePlayerThumb(r.thumbnail || ''); }
-                          }}>
+                          onClick={() => { setPipUrl(r.webpage_url, r.title); }}>
                           {r.thumbnail ? <img src={r.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={14} color="var(--text-muted)" style={{ opacity: 0.3 }} />}
                           <div className="play-ov" style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 180ms', borderRadius: 8 }}>
                             <Play size={15} fill="white" color="white" />
@@ -1674,18 +1657,7 @@ export default function Musica() {
                     <div style={{ borderTop: '1px solid var(--border-subtle)', padding: '14px 24px', maxHeight: 360, overflowY: 'auto' }} className="no-scrollbar">
                       <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span>{preview.entries.length} canciones</span>
-                        <button onClick={async () => {
-                          for (const entry of preview.entries.slice(0, 3)) {
-                            const loadToPlayer = async (videoUrl: string, title: string, thumbnail: string) => {
-                              for (let attempt = 0; attempt < 3; attempt++) { try { await emitTo('youtube-player', 'youtube:load', { videoUrl, title, thumbnail }); return true; } catch { await new Promise(resolve => setTimeout(resolve, 500)); } }
-                              return false;
-                            };
-                            try {
-                              const existing = await WebviewWindow.getByLabel('youtube-player');
-                              if (existing) { await loadToPlayer(entry.webpage_url, entry.title, entry.thumbnail || ''); await existing.show(); await existing.setFocus(); return; }
-                            } catch {}
-                          }
-                        }} style={{ fontSize: 9, fontWeight: 500, color: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 15%, transparent)', padding: '2px 8px', borderRadius: 5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, transition: 'all 150ms' }}
+                        <button onClick={() => { if (preview.entries.length > 0) { setPipUrl(preview.entries[0].webpage_url, preview.entries[0].title); } }} style={{ fontSize: 9, fontWeight: 500, color: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 15%, transparent)', padding: '2px 8px', borderRadius: 5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, transition: 'all 150ms' }}
                           onMouseEnter={e => { e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 15%, transparent)'; }}
                           onMouseLeave={e => { e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 8%, transparent)'; }}>
                           <Play size={8} fill="currentColor" /> Reproducir
@@ -1697,21 +1669,10 @@ export default function Musica() {
                             onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.borderColor = 'var(--border-subtle)'; }}
                             onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'transparent'; }}>
                             <span style={{ fontSize: 10, color: 'var(--text-muted)', width: 20, textAlign: 'right', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{i + 1}</span>
-                            <div style={{ width: 36, height: 26, borderRadius: 5, background: 'var(--bg-deep)', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', position: 'relative' }}
-                              onClick={async () => {
-                                const loadToPlayer = async (videoUrl: string, title: string, thumbnail: string) => {
-                                  for (let attempt = 0; attempt < 5; attempt++) { try { await emitTo('youtube-player', 'youtube:load', { videoUrl, title, thumbnail }); return true; } catch { await new Promise(resolve => setTimeout(resolve, 400 + attempt * 300)); } }
-                                  return false;
-                                };
-                                try {
-                                  const existing = await WebviewWindow.getByLabel('youtube-player');
-                                  if (existing) { const sent = await loadToPlayer(entry.webpage_url, entry.title, entry.thumbnail || ''); if (sent) { await existing.show(); await existing.setFocus(); return; } }
-                                  try { localStorage.setItem('owa_yt_pending', JSON.stringify({ videoUrl: entry.webpage_url, title: entry.title, thumbnail: entry.thumbnail || '' })); } catch {}
-                                  const win = new WebviewWindow('youtube-player', { url: '/', title: 'YouTube Player', width: 480, height: 360, minWidth: 320, minHeight: 240, resizable: true, decorations: true, alwaysOnTop: false, skipTaskbar: false, center: true });
-                                  win.once('tauri://error', () => {});
-                                  await loadToPlayer(entry.webpage_url, entry.title, entry.thumbnail || '');
-                                } catch {}
-                              }}>
+                            <div
+                              onClick={() => { setPipUrl(entry.webpage_url, entry.title); }}
+                              style={{ width: 36, height: 26, borderRadius: 5, background: 'var(--bg-deep)', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', position: 'relative' }}
+                            >
                               {entry.thumbnail ? <img src={entry.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={10} color="var(--text-muted)" style={{ opacity: 0.3 }} />}
                             </div>
                             <div style={{ flex: 1, minWidth: 0 }}>
@@ -2443,45 +2404,6 @@ export default function Musica() {
                 setConfirmDelete(null);
               }} style={{ height: 38, padding: '0 20px', fontSize: 12, fontWeight: 700, borderRadius: 8, cursor: 'pointer', border: 'none', background: '#EF4444', color: '#fff', display: 'flex', alignItems: 'center', gap: 6 }}>
                 Eliminar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* YOUTUBE FLOATING PLAYER MODAL */}
-      {youtubePlayerUrl && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 10000,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(8px)',
-        }} onClick={() => { setYoutubePlayerUrl(null); }}>
-          <div onClick={e => e.stopPropagation()} className="bento-card" style={{
-            width: '90%', maxWidth: 480,
-            borderRadius: 16, overflow: 'hidden',
-            boxShadow: '0 24px 80px rgba(0,0,0,0.6)',
-          }}>
-            {/* Cover art */}
-            <div style={{ width: '100%', aspectRatio: '16/9', position: 'relative', background: '#000', overflow: 'hidden' }}>
-              {youtubePlayerThumb ? (
-                <img src={youtubePlayerThumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.3, filter: 'blur(20px)', position: 'absolute', inset: 0 }} />
-              ) : null}
-              <iframe
-                src={`https://www.youtube.com/embed/${new URL(youtubePlayerUrl).searchParams.get('v') || youtubePlayerUrl.split('/').pop()}?autoplay=1&rel=0&showinfo=0&color=white&iv_load_policy=3&modestbranding=1`}
-                title={youtubePlayerTitle}
-                style={{ width: '100%', height: '100%', border: 'none', position: 'relative', zIndex: 1 }}
-                allow="autoplay; encrypted-media; picture-in-picture"
-                allowFullScreen
-              />
-            </div>
-            {/* Info bar */}
-            <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{youtubePlayerTitle}</div>
-                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>Reproduciendo desde YouTube</div>
-              </div>
-              <button onClick={() => setYoutubePlayerUrl(null)} style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(255,255,255,0.06)', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: 12 }}>
-                <X size={14} />
               </button>
             </div>
           </div>

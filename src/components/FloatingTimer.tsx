@@ -51,9 +51,7 @@ export default function FloatingTimer() {
   const [fontKey, setFontKey] = useState('led');
   const [hideInFocus, setHideInFocus] = useState(false);
   const [animType, setAnimType] = useState('plant');
-  const [decorated, setDecorated] = useState(true);
-  const decoratedRef = useRef(true);
-  const [showDecoBtn, setShowDecoBtn] = useState(false);
+  const [containerHovered, setContainerHovered] = useState(false);
   const customColors = useRef({ focus: '#E11D48', brk: '#10B981', longBrk: '#F59E0B', chrono: '#3B82F6' });
   const lastSync = useRef<TimerSync & { ts: number }>({
     sessionTime: 0, isTimerActive: false, isRest: false,
@@ -156,42 +154,11 @@ export default function FloatingTimer() {
     else setColor(cc.chrono);
   }
 
-  async function toggleDecorations() {
-    try {
-      const w = getCurrentWindow();
-      const next = !decoratedRef.current;
-      await w.setDecorations(next);
-      // Re-read actual state from the window to avoid inverse bug
-      const actual = await w.isDecorated();
-      decoratedRef.current = actual;
-      setDecorated(actual);
-    } catch {}
-  }
-
   async function startDrag(e: React.MouseEvent) {
     const t = e.target as HTMLElement;
-    if (t.closest('.deco-btn') || t.closest('.close-btn')) return;
+    if (t.closest('.close-btn')) return;
     try { await getCurrentWindow().startDragging(); } catch {}
   }
-
-  // Show decorations button only when cursor hovers top-right ~60px zone
-  useEffect(() => {
-    let hideTimeout: ReturnType<typeof setTimeout> | null = null;
-    function onMove(e: MouseEvent) {
-      const w = window.innerWidth, h = window.innerHeight;
-      const near = e.clientX > w - 60 && e.clientY < 60;
-      if (near) {
-        if (hideTimeout) { clearTimeout(hideTimeout); hideTimeout = null; }
-        setShowDecoBtn(true);
-      } else {
-        if (!hideTimeout) {
-          hideTimeout = setTimeout(() => { setShowDecoBtn(false); hideTimeout = null; }, 250);
-        }
-      }
-    }
-    window.addEventListener('mousemove', onMove);
-    return () => { window.removeEventListener('mousemove', onMove); if (hideTimeout) clearTimeout(hideTimeout); };
-  }, []);
 
   const isActive = lastSync.current.isTimerActive;
   const isPomodoro = lastSync.current.sessionType === 'pomodoro';
@@ -209,6 +176,8 @@ export default function FloatingTimer() {
   return (
     <div
       onMouseDown={startDrag}
+      onMouseEnter={() => setContainerHovered(true)}
+      onMouseLeave={() => setContainerHovered(false)}
       style={{
         width: '100vw', height: '100vh',
         background: bgColor, display: 'flex', flexDirection: 'column',
@@ -218,46 +187,23 @@ export default function FloatingTimer() {
       }}
     >
       <span
-        className="deco-btn"
-        onClick={(e) => { e.stopPropagation(); toggleDecorations(); }}
-        title={decorated ? 'Quitar borde' : 'Restaurar borde'}
-        style={{
-          position: 'absolute', top: 6, right: 6, zIndex: 20,
-          width: 28, height: 28, borderRadius: 6,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: '#aaa', cursor: 'pointer', lineHeight: 1,
-          background: showDecoBtn ? 'rgba(255,255,255,0.1)' : 'transparent',
-          border: showDecoBtn ? '1px solid rgba(255,255,255,0.15)' : '1px solid transparent',
-          opacity: showDecoBtn ? 1 : 0,
-          transition: 'opacity 200ms, background 200ms, border-color 200ms',
-          pointerEvents: showDecoBtn ? 'auto' : 'none',
-        }}
-      >
-        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-          {decorated
-            ? <><rect x="2" y="2" width="12" height="12" rx="1.5" /><line x1="2" y1="5.5" x2="14" y2="5.5" /></>
-            : <rect x="1.4" y="1.4" width="13.2" height="13.2" rx="2.5" />
-          }
-        </svg>
-      </span>
-
-      <span
         className="close-btn"
         onClick={(e) => { e.stopPropagation(); getCurrentWindow().hide(); }}
         title="Ocultar timer"
         style={{
-          position: 'absolute', top: 6, right: 40, zIndex: 20,
-          width: 28, height: 28, borderRadius: 6,
+          position: 'absolute', top: 6, right: 6, zIndex: 20,
+          width: 22, height: 22, borderRadius: 5,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: '#aaa', cursor: 'pointer', lineHeight: 1,
-          background: showDecoBtn ? 'rgba(255,255,255,0.1)' : 'transparent',
-          border: showDecoBtn ? '1px solid rgba(255,255,255,0.15)' : '1px solid transparent',
-          opacity: showDecoBtn ? 1 : 0,
-          transition: 'opacity 200ms, background 200ms, border-color 200ms',
-          pointerEvents: showDecoBtn ? 'auto' : 'none',
+          color: 'rgba(255,255,255,0.5)', cursor: 'pointer', lineHeight: 1,
+          background: 'transparent',
+          border: 'none',
+          opacity: containerHovered ? 1 : 0,
+          transition: 'opacity 200ms, background 150ms, color 150ms',
         }}
+        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.8)'; e.currentTarget.style.color = '#fff'; }}
+        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.5)'; }}
       >
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
           <line x1="4" y1="4" x2="12" y2="12" />
           <line x1="12" y1="4" x2="4" y2="12" />
         </svg>
@@ -278,29 +224,39 @@ export default function FloatingTimer() {
 
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2,
-        minHeight: 48,
+        minHeight: 54,
         opacity: (!pomodoroComplete && hideTime && !showAnimation) ? 0 : 1,
         transition: 'opacity 400ms',
       }}>
         {pomodoroComplete ? (
-          <span style={{
-            fontFamily: "'Inter', sans-serif", fontWeight: 400, fontSize: 18,
-            color, letterSpacing: '0.04em', lineHeight: 1.3, padding: '0 4px',
-            textAlign: 'center', opacity: 0.85,
+          <div style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            gap: 5, padding: '0 8px', textAlign: 'center',
           }}>
-            Te espera un descanso
-          </span>
+            <span style={{
+              fontFamily: "'Inter', sans-serif", fontWeight: 500, fontSize: 11,
+              color, letterSpacing: '0.01em', lineHeight: 1.3,
+            }}>
+              Te espera un descanso
+            </span>
+            <span style={{
+              fontFamily: "'Inter', sans-serif", fontWeight: 400, fontSize: 7.5,
+              color, opacity: 0.45, letterSpacing: '0.1em', textTransform: 'uppercase', lineHeight: 1,
+            }}>
+              Completado
+            </span>
+          </div>
         ) : showAnimation && AnimComponent ? (
           <AnimComponent color={color} />
         ) : useLed ? (
           digits.map((ch, i) =>
             ch === ':'
-              ? <ColonSVG key={i} color={color} width={11} height={52} />
-              : <DigitSVG key={i} d={ch} color={color} width={32} height={52} />
+              ? <ColonSVG key={i} color={color} width={10} height={54} />
+              : <DigitSVG key={i} d={ch} color={color} width={28} height={54} />
           )
         ) : (
           <span style={{
-            fontFamily: fontInfo.family, fontWeight: 300, fontSize: 48,
+            fontFamily: fontInfo.family, fontWeight: 300, fontSize: 44,
             color, letterSpacing: '0.02em', lineHeight: 1, padding: '0 2px',
           }}>
             {time}

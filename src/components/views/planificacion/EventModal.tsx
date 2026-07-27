@@ -11,6 +11,7 @@ function getEventFileIcon(type: string, size = 14) {
     case 'image': return <Image size={size} style={{ color: '#F59E0B' }} />;
     case 'audio': return <Music size={size} style={{ color: '#8B5CF6' }} />;
     case 'link': return <Globe size={size} style={{ color: '#10B981' }} />;
+    case 'classroom': return <svg viewBox="0 0 24 24" width={size} height={size} style={{ flexShrink: 0, display: 'block' }}><path d="M12 3L1 9l4 2.18v6L12 21l7-3.82v-6l2-1.09V17h2V9L12 3z" fill="#0F9D58"/><path d="M12 3l7 3.82v6L12 17 5 12.82v-6L12 3z" fill="#0F9D58" opacity="0.6"/></svg>;
     case 'drive': return <svg viewBox="0 0 24 24" width={size} height={size} style={{ flexShrink: 0, display: 'block' }}><path fill="#4285F4" d="M12 1.5l9 15.6H3L12 1.5z"/><path fill="#34A853" d="M12 22.5L3 17.1h18L12 22.5z"/><path fill="#FBBC05" d="M3 17.1l3-5.2 3 5.2H3z"/><path fill="#EA4335" d="M18 17.1l-3-5.2-3 5.2h6z"/></svg>;
     case 'doc': return s('M23.004 1.5q.41 0 .703.293t.293.703v19.008q0 .41-.293.703t-.703.293H6.996q-.41 0-.703-.293T6 21.504V18H.996q-.41 0-.703-.293T0 17.004V6.996q0-.41.293-.703T.996 6H6V2.496q0-.41.293-.703t.703-.293zM6.035 11.203l1.442 4.735h1.64l1.57-7.876H9.036l-.937 4.653-1.325-4.5H5.38l-1.406 4.523-.938-4.675H1.312l1.57 7.874h1.641zM22.5 21v-3h-15v3zm0-4.5v-3.75H12v3.75zm0-5.25V7.5H12v3.75zm0-5.25V3h-15v3Z', '#2563EB');
     case 'xls': return s('M23 1.5q.41 0 .7.3.3.29.3.7v19q0 .41-.3.7-.29.3-.7.3H7q-.41 0-.7-.3-.3-.29-.3-.7V18H1q-.41 0-.7-.3-.3-.29-.3-.7V7q0-.41.3-.7Q.58 6 1 6h5V2.5q0-.41.3-.7.29-.3.7-.3zM6 13.28l1.42 2.66h2.14l-2.38-3.87 2.34-3.8H7.46l-1.3 2.4-.05.08-.04.09-.64-1.28-.66-1.29H2.59l2.27 3.82-2.48 3.85h2.16zM14.25 21v-3H7.5v3zm0-4.5v-3.75H12v3.75zm0-5.25V7.5H12v3.75zm0-5.25V3H7.5v3zm8.25 15v-3h-6.75v3zm0-4.5v-3.75h-6.75v3.75zm0-5.25V7.5h-6.75v3.75zm0-5.25V3h-6.75v3Z', '#10B981');
@@ -29,6 +30,7 @@ function detectEventFileType(fileName: string, path: string): string {
   };
   if (typeMap[ext]) return typeMap[ext];
   if (path.includes('youtube.com') || path.includes('youtu.be')) return 'video';
+  if (path.includes('classroom.google.com')) return 'classroom';
   if (path.includes('drive.google.com')) return 'drive';
   return 'other';
 }
@@ -195,7 +197,7 @@ export default function EventModal({
         else name = url.replace(/^https?:\/\//, '').slice(0, 40);
       } catch { name = url.replace(/^https?:\/\//, '').slice(0, 40); }
     }
-    const detectedType = url.includes('youtube.com') || url.includes('youtu.be') ? 'video' : url.includes('drive.google.com') ? 'drive' : 'link';
+    const detectedType = url.includes('youtube.com') || url.includes('youtu.be') ? 'video' : url.includes('classroom.google.com') ? 'classroom' : url.includes('drive.google.com') ? 'drive' : 'link';
     setAttachments([...attachments, { type: detectedType as any, name, url }]);
     setLinkUrl('');
     setLinkName('');
@@ -429,7 +431,8 @@ export default function EventModal({
                       const isImage = fileType === 'image';
                       const isAudio = fileType === 'audio';
                       const isDrive = fileType === 'drive';
-                      const isWeb = fileType === 'link' && !isYouTube && !isDrive;
+                      const isClassroom = fileType === 'classroom';
+                      const isWeb = fileType === 'link' && !isYouTube && !isDrive && !isClassroom;
                       const isPdf = fileType === 'pdf';
                       const isDoc = fileType === 'doc';
                       const isXls = fileType === 'xls';
@@ -437,7 +440,7 @@ export default function EventModal({
                       const isVideoFile = fileType === 'video' && !isYouTube;
                       let domain = '';
                       if (isWeb) { try { domain = new URL(item.url).hostname.replace('www.', ''); } catch {} }
-                      const subtitleText = isYouTube ? 'YouTube' : isDrive ? 'Google Drive' : isWeb ? domain : isPdf ? 'PDF' : isDoc ? 'Word' : isXls ? 'Excel' : isPpt ? 'PowerPoint' : isAudio ? 'Audio' : isImage ? 'Imagen' : isVideoFile ? 'Video' : item.size || 'Archivo';
+                      const subtitleText = isYouTube ? 'YouTube' : isClassroom ? 'Classroom' : isDrive ? 'Google Drive' : isWeb ? domain : isPdf ? 'PDF' : isDoc ? 'Word' : isXls ? 'Excel' : isPpt ? 'PowerPoint' : isAudio ? 'Audio' : isImage ? 'Imagen' : isVideoFile ? 'Video' : item.size || 'Archivo';
                       return (
                       <div key={i} style={{ background: 'var(--surface)', border: '1px solid var(--border-soft)', borderRadius: 8, overflow: 'hidden' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px' }}>

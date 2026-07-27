@@ -49,6 +49,13 @@ function AppContent() {
     }
   }, [navigateTo, setNavigateTo]);
 
+  // Clean up PiP when navigating away from Cursos
+  useEffect(() => {
+    if (activeView !== 'curso_detalle' && pipUrl) {
+      setPipUrl(null);
+    }
+  }, [activeView]);
+
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isOAuthCallback, setIsOAuthCallback] = useState(false);
   const [isSupabaseCallback, setIsSupabaseCallback] = useState(false);
@@ -348,15 +355,15 @@ function AppContent() {
           <div onClick={() => { handlePomodoroBannerClick(); setActiveView('estudio'); }}
             style={{
               position: 'absolute', top: 16, left: '50%', transform: 'translateX(-50%)', zIndex: 9999,
-              padding: '12px 20px', borderRadius: 12, backdropFilter: 'blur(16px)',
-              background: 'rgba(245,158,11,0.12)',
-              border: '1px solid rgba(245,158,11,0.25)',
-              boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
-              cursor: 'pointer',
-              fontSize: 13, fontWeight: 500, fontFamily: "'Inter Tight', sans-serif",
+              padding: '12px 24px', borderRadius: 10, backdropFilter: 'blur(16px)',
+              background: 'rgba(245,158,11,0.10)',
+              border: '1px solid rgba(245,158,11,0.22)',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.25)',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10,
               animation: 'fadeInDown 300ms ease-out',
             }}>
-            <span style={{ color: '#fff' }}>Te espera un descanso</span>
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#F59E0B', flexShrink: 0, boxShadow: '0 0 8px rgba(245,158,11,0.4)' }} />
+            <span style={{ color: '#fff', fontSize: 12.5, fontWeight: 500, fontFamily: "'Inter', sans-serif", letterSpacing: '0.01em', whiteSpace: 'nowrap' }}>Te espera un descanso</span>
           </div>
         )}
         {isSupabaseCallback ? (

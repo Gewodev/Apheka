@@ -269,16 +269,16 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
               display: 'grid',
               gridTemplateColumns: '220px 1fr auto',
               alignItems: 'center',
-        padding: '22px 28px 24px 26px',
-        gap: 24,
+        padding: '24px 30px 26px 28px',
+        gap: 28,
             }}>
               {/* LEFT: Cover + Title/Artist */}
               <div style={{
-                display: 'flex', alignItems: 'center', gap: 12,
+                display: 'flex', alignItems: 'center', gap: 14,
                 minWidth: 0,
               }}>
                 <div style={{
-                  width: 56, height: 56, borderRadius: 12, overflow: 'hidden',
+                  width: 58, height: 58, borderRadius: 12, overflow: 'hidden',
                   background: 'var(--bg-deep)', flexShrink: 0,
                   boxShadow: '0 2px 10px rgba(0,0,0,0.3)',
                   cursor: 'pointer', position: 'relative',
@@ -291,10 +291,10 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                     </div>
                   )}
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, gap: 1 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, gap: 2 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span style={{
-                      fontSize: 14, fontWeight: 600,
+                      fontSize: 15, fontWeight: 600,
                       color: 'var(--text-primary)',
                       whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                       lineHeight: 1.3, fontFamily: "'Inter Tight', sans-serif",
@@ -336,18 +336,18 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
 
               {/* CENTER: Controls + Progress */}
               <div style={{
-                display: 'flex', flexDirection: 'column', gap: 6,
+                display: 'flex', flexDirection: 'column', gap: 8,
                 minWidth: 0, width: '100%', maxWidth: 600,
                 margin: '0 auto',
               }}>
                 {/* Controls row */}
                 <div style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
                   flexShrink: 0,
                 }}>
                   <button onClick={() => setShuffleMode(!shuffleMode)}
                     style={{
-                      background: 'none', border: 'none', padding: 7, cursor: 'pointer',
+                      background: 'none', border: 'none', padding: 8, cursor: 'pointer',
                       color: shuffleMode ? acC : 'var(--text-tertiary)',
                       display: 'flex', transition: 'all 150ms', borderRadius: 8,
                     }}
@@ -361,7 +361,7 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                     if (idx > 0) playTrack(pool[idx - 1]);
                     else if (repeatMode !== 'none' && pool.length > 0) playTrack(pool[pool.length - 1]);
                   }}
-                    style={{ background: 'none', border: 'none', padding: 7, cursor: 'pointer', color: 'var(--text-tertiary)', display: 'flex', borderRadius: 8, transition: 'all 150ms' }}
+                    style={{ background: 'none', border: 'none', padding: 8, cursor: 'pointer', color: 'var(--text-tertiary)', display: 'flex', borderRadius: 8, transition: 'all 150ms' }}
                     onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.background = 'var(--bg-hover)'; }}
                     onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-tertiary)'; e.currentTarget.style.background = 'none'; }}>
                     <SkipBack size={18} />
@@ -369,7 +369,7 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                   {/* Play/Pause */}
                   <button onClick={toggleMusicPlayback}
                     style={{
-                      width: 44, height: 44, borderRadius: 14,
+                      width: 46, height: 46, borderRadius: 14,
                       background: acC,
                       color: '#fff',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -381,7 +381,7 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                     onMouseEnter={e => { e.currentTarget.style.boxShadow = `0 3px 18px ${acC}50`; e.currentTarget.style.transform = 'scale(1.05)'; }}
                     onMouseLeave={e => { e.currentTarget.style.boxShadow = `0 2px 12px ${acC}30`; e.currentTarget.style.transform = 'scale(1)'; }}
                   >
-                    {isPlayingMusic ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" style={{ marginLeft: 1 }} />}
+                    {isPlayingMusic ? <Pause size={21} fill="currentColor" /> : <Play size={21} fill="currentColor" style={{ marginLeft: 1 }} />}
                   </button>
                   <button onClick={() => {
                     if (musicQueue.length > 0) { setMusicQueue(musicQueue.slice(1)); playTrack(musicQueue[0]); return; }
@@ -396,7 +396,7 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                       else if (repeatMode === 'all' && pool.length > 0) playTrack(pool[(idx + 1) % pool.length]);
                     }
                   }}
-                    style={{ background: 'none', border: 'none', padding: 7, cursor: 'pointer', color: 'var(--text-tertiary)', display: 'flex', borderRadius: 8, transition: 'all 150ms' }}
+                    style={{ background: 'none', border: 'none', padding: 8, cursor: 'pointer', color: 'var(--text-tertiary)', display: 'flex', borderRadius: 8, transition: 'all 150ms' }}
                     onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.background = 'var(--bg-hover)'; }}
                     onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-tertiary)'; e.currentTarget.style.background = 'none'; }}>
                     <SkipForward size={18} />
@@ -406,7 +406,7 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                     setRepeatMode(next);
                   }}
                     style={{
-                      background: 'none', border: 'none', padding: 7, cursor: 'pointer',
+                      background: 'none', border: 'none', padding: 8, cursor: 'pointer',
                       color: repeatMode !== 'none' ? acC : 'var(--text-tertiary)',
                       position: 'relative', display: 'flex', borderRadius: 8, transition: 'all 150ms',
                     }}
@@ -417,7 +417,7 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                   </button>
                 </div>
                 {/* Progress bar */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <span style={{
                     fontSize: 11, color: 'var(--text-tertiary)',
                     minWidth: 36, textAlign: 'right',
@@ -505,29 +505,30 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
               {/* RIGHT: Volume + Close */}
               <div style={{
                 display: 'flex', alignItems: 'center',
-                gap: 10, flexShrink: 0, justifyContent: 'flex-end',
+                gap: 12, flexShrink: 0, justifyContent: 'flex-end',
               }}>
-                {/* Volume — perfectly centered */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {/* Volume — refined slider */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <button onClick={() => setMusicVolume(musicVolume > 0 ? 0 : 0.7)}
                     style={{
-                      width: 30, height: 30,
+                      width: 32, height: 32,
                       background: 'none', border: 'none', cursor: 'pointer',
                       color: musicVolume === 0 ? '#F59E0B' : 'var(--text-tertiary)',
                       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                      borderRadius: 7, flexShrink: 0,
-                      transition: 'color 120ms ease, background 120ms ease',
+                      borderRadius: 8, flexShrink: 0,
+                      transition: 'color 150ms ease, background 150ms ease',
                     }}
                     onMouseEnter={e => { if (musicVolume > 0) { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.background = 'var(--bg-hover)'; } }}
                     onMouseLeave={e => { if (musicVolume > 0) { e.currentTarget.style.color = 'var(--text-tertiary)'; e.currentTarget.style.background = 'none'; } }}>
                     {musicVolume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
                   </button>
-                  <div style={{ width: 90, position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <div style={{ width: 100, position: 'relative', display: 'flex', alignItems: 'center' }}>
                     <div style={{
                       position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)',
                       width: `${musicVolume * 100}%`, height: 4, borderRadius: 4,
-                      background: musicVolume === 0 ? 'var(--text-muted)' : 'var(--text-tertiary)',
+                      background: musicVolume === 0 ? 'var(--text-muted)' : acC,
                       pointerEvents: 'none', zIndex: 1,
+                      transition: 'width 120ms ease, background 200ms ease',
                     }} />
                     <input type="range" min="0" max="1" step="0.005" value={musicVolume} onChange={handleVolumeChange}
                       style={{
@@ -538,7 +539,7 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                       className="volume-slider" />
                   </div>
                 </div>
-                <div style={{ width: 1, height: 22, background: 'var(--border-subtle)', opacity: 0.3, flexShrink: 0 }} />
+                <div style={{ width: 1, height: 24, background: 'var(--border-subtle)', opacity: 0.3, flexShrink: 0 }} />
                 {/* Close button — appears on hover */}
                 <button onClick={handleClose}
                   style={{
