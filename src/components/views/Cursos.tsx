@@ -42,6 +42,8 @@ const SPINE_COLORS = [
   "#14B8A6", "#D946EF", "#0EA5E9", "#22C55E", "#EAB308",
 ];
 
+function formatTime(s: number) { if (!s || !isFinite(s)) return '0:00'; const m = Math.floor(s / 60); const sec = Math.floor(s % 60); return `${m}:${sec.toString().padStart(2, '0')}`; }
+
 // Reuse SPINE_COLORS token in case the user wants the same selection.
 // ─── Icon Picker Stuff ───
 import * as LI from 'lucide-react';
@@ -570,7 +572,7 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
 
 // ─── Main Component ───
 export default function Cursos({ initialCourseId, initialTab = 'overview', onNavigate }: { initialCourseId?: string; initialTab?: 'overview' | 'tareas' | 'notas' | 'archivos'; onNavigate?: (view: string) => void }) {
-  const { courses = [], tasks = [], notes = [], noteFolders = [], updateCourse, deleteCourse, setNavigateTo, setFocusedTaskId, addTask, updateTask, deleteTask, addNote, updateNote, deleteNote, reorderNotes, weeklyStudyTime, plannedSessions, addPlannedSession, deletePlannedSession } = useApp();
+  const { courses = [], tasks = [], notes = [], noteFolders = [], updateCourse, deleteCourse, setNavigateTo, setFocusedTaskId, addTask, updateTask, deleteTask, addNote, updateNote, deleteNote, reorderNotes, weeklyStudyTime, plannedSessions, addPlannedSession, deletePlannedSession, setPipUrl } = useApp();
   const th = document.documentElement.getAttribute('data-theme');
   const isDarkSelect = !th || th === 'oscuro' || th === 'vibrante';
   const selectBorder = isDarkSelect ? '1px solid rgba(255,255,255,0.12)' : '1px solid rgba(0,0,0,0.12)';
@@ -614,7 +616,8 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const [inlineGroupName, setInlineGroupName] = useState('');
   const [inlineGroupCover, setInlineGroupCover] = useState<string | undefined>(undefined);
   const [showAgrupacionImportExport, setShowAgrupacionImportExport] = useState(false);
-  const [importExportMode, setImportExportMode] = useState<'export' | 'import'>('export');
+  const [importExportMode, setImportExportMode] = useState<'export' | 'import' | 'choose'>('choose');
+  const [importTargetGroupId, setImportTargetGroupId] = useState<string | null>(null);
   const [hoverEdgePanel, setHoverEdgePanel] = useState(false);
   const [confirmDeleteGroupId, setConfirmDeleteGroupId] = useState<string | null>(null);
   const [confirmDeleteMatId, setConfirmDeleteMatId] = useState<string | null>(null);
@@ -661,6 +664,9 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const [showDayDetail, setShowDayDetail] = useState(false);
   const [dayDetailDate, setDayDetailDate] = useState('');
 
+  // Radar chart filter
+  const [radarFilter, setRadarFilter] = useState<'agrupaciones' | 'dias' | 'tipos'>('agrupaciones');
+
   // Task state
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDescription, setNewTaskDescription] = useState('');
@@ -689,7 +695,6 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     if (editingNoteId) setTimeout(() => editContentRef.current?.focus(), 60);
   }, [editingNoteId]);
   // Study mode state
-  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [showMaterialsDropdown, setShowMaterialsDropdown] = useState(false);
   const [studyToolMode, setStudyToolMode] = useState<'none' | 'flashcards' | 'quizzes' | 'notes' | 'mindmap' | 'review' | 'blurting' | 'feynman'>('none');
 
@@ -697,6 +702,61 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     try { return (localStorage.getItem('owa_course_overview_mode') as 'tareas_notas' | 'temas_archivos') || 'tareas_notas'; } catch { return 'tareas_notas'; }
   });
   useEffect(() => { localStorage.setItem('owa_course_overview_mode', overviewMode); }, [overviewMode]);
+
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(() => {
+    if (overviewMode === 'temas_archivos' && selectedCourseId) {
+      return localStorage.getItem(`owa_estudio_last_group_${selectedCourseId}`) || null;
+    }
+    return null;
+  });
+
+  useEffect(() => {
+    if (overviewMode === 'temas_archivos' && selectedCourseId) {
+      if (selectedGroupId) {
+        localStorage.setItem(`owa_estudio_last_group_${selectedCourseId}`, selectedGroupId);
+      } else {
+        localStorage.removeItem(`owa_estudio_last_group_${selectedCourseId}`);
+      }
+    }
+  }, [selectedGroupId, overviewMode, selectedCourseId]);
+
+  // Persist study view state per course
+  useEffect(() => {
+    if (selectedCourseId && overviewMode === 'temas_archivos') {
+      localStorage.setItem(`owa_study_view_${selectedCourseId}`, currentView);
+    }
+  }, [currentView, selectedCourseId, overviewMode]);
+  useEffect(() => {
+    if (selectedCourseId && activeTopicId && overviewMode === 'temas_archivos') {
+      localStorage.setItem(`owa_study_topic_${selectedCourseId}`, activeTopicId);
+    }
+  }, [activeTopicId, selectedCourseId, overviewMode]);
+
+  // Restore study state when course changes
+  const prevCourseRef = useRef(selectedCourseId);
+  useEffect(() => {
+    if (selectedCourseId !== prevCourseRef.current && overviewMode === 'temas_archivos') {
+      prevCourseRef.current = selectedCourseId;
+      const savedView = localStorage.getItem(`owa_study_view_${selectedCourseId}`);
+      if (savedView === 'topic' || savedView === 'group' || savedView === 'overview') {
+        setCurrentView(savedView);
+        if (savedView === 'topic') {
+          const savedTopic = localStorage.getItem(`owa_study_topic_${selectedCourseId}`);
+          if (savedTopic) setActiveTopicId(savedTopic);
+        }
+        if (savedView === 'group') {
+          const savedGroup = localStorage.getItem(`owa_estudio_last_group_${selectedCourseId}`);
+          if (savedGroup && groups.some(g => g.id === savedGroup)) {
+            setSelectedGroupId(savedGroup);
+          }
+        }
+      } else {
+        setCurrentView('overview');
+        setSelectedGroupId(null);
+      }
+    }
+  }, [selectedCourseId, overviewMode]);
+
   const [modeAnimating, setModeAnimating] = useState(false);
   const [modePhase, setModePhase] = useState<'idle' | 'out' | 'in'>('idle');
   const prevMode = useRef(overviewMode);
@@ -707,9 +767,22 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     setModePhase('out');
     setTimeout(() => {
       prevMode.current = overviewMode;
-      setOverviewMode(prev => prev === 'tareas_notas' ? 'temas_archivos' : 'tareas_notas');
+      const nextMode = overviewMode === 'tareas_notas' ? 'temas_archivos' : 'tareas_notas';
+      setOverviewMode(nextMode);
       setCurrentView('overview');
-      setSelectedGroupId(null);
+      if (nextMode === 'temas_archivos' && selectedCourseId) {
+        const savedGroup = localStorage.getItem(`owa_estudio_last_group_${selectedCourseId}`);
+        if (savedGroup && groups.some(g => g.id === savedGroup)) {
+          setSelectedGroupId(savedGroup);
+          setCurrentView('group');
+        } else {
+          setSelectedGroupId(null);
+          setCurrentView('overview');
+        }
+      } else {
+        setSelectedGroupId(null);
+        setCurrentView('overview');
+      }
       setStudyToolMode('none');
       setModePhase('in');
       setTimeout(() => { setModePhase('idle'); setModeAnimating(false); }, 350);
@@ -766,6 +839,24 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const [showPdfPreview, setShowPdfPreview] = useState(false);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState('');
   const [pdfPreviewName, setPdfPreviewName] = useState('');
+
+  // Inline audio player
+  const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
+  const [audioProgress, setAudioProgress] = useState(0);
+  const [audioDuration, setAudioDuration] = useState(0);
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  useEffect(() => {
+    const a = audioRef.current;
+    if (!a) return;
+    const onTime = () => setAudioProgress(a.currentTime);
+    const onDur = () => setAudioDuration(a.duration || 0);
+    const onEnd = () => { setPlayingAudioId(null); setAudioProgress(0); };
+    a.addEventListener('timeupdate', onTime);
+    a.addEventListener('loadedmetadata', onDur);
+    a.addEventListener('ended', onEnd);
+    return () => { a.removeEventListener('timeupdate', onTime); a.removeEventListener('loadedmetadata', onDur); a.removeEventListener('ended', onEnd); };
+  }, []);
 
   // Image preview modal
   const [showImagePreview, setShowImagePreview] = useState(false);
@@ -1417,6 +1508,8 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                         onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}><ChevronLeft size={14} /></button>
                        <button onClick={() => { const grp = groups.find(g => g.id === selectedGroupId); if (grp) { setEditingGroupId(grp.id); setGroupName(grp.name); setGroupCover(grp.image); setShowGroupModal(true); } }} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
                         onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}><Pencil size={13} /></button>
+                       <button onClick={() => { setImportExportMode('choose'); setImportPreviewData(null); setImportSelected([]); setImportTargetGroupId(selectedGroupId); setShowAgrupacionImportExport(true); }} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'} title="Importar / Exportar"><Package size={13} /></button>
                     </>
                   ) : (
                     <>
@@ -1900,30 +1993,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                   const grpTopics = parsedTopics.filter(t => t.groupId === selectedGroupId);
                   if (!grp) return null;
                   return (
-                    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', position: 'relative' }}>
-                       {/* Group Header Bar */}
-                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 20px', flexShrink: 0, borderBottom: '1px solid var(--border-subtle)' }}>
-                            <button onClick={() => { setCurrentView('overview'); setSelectedGroupId(null); }}
-                              style={{ width: 28, height: 28, borderRadius: 7, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 150ms' }}
-                              onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
-                              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}
-                              title="Volver">
-                              <ChevronLeft size={13} />
-                            </button>
-                            <div style={{ flex: 1 }} />
-                            <button onClick={() => { setEditingGroupId(selectedGroupId!); setInlineGroupName(grp.name); setInlineGroupCover(grp.image); setShowGroupModal(true); }}
-                              style={{ height: 28, padding: '0 10px', borderRadius: 7, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 600, fontFamily: "'Inter Tight', sans-serif", transition: 'all 150ms' }}
-                              onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
-                              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
-                              <Edit3 size={11} /> Editar
-                            </button>
-                            <button onClick={() => { setImportExportMode(null); setImportPreviewData(null); setImportSelected([]); setShowAgrupacionImportExport(true); }}
-                              style={{ height: 28, padding: '0 10px', borderRadius: 7, border: `1px solid ${course.color}30`, background: `${course.color}08`, color: course.color, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 600, fontFamily: "'Inter Tight', sans-serif", transition: 'all 150ms' }}
-                              onMouseEnter={e => { e.currentTarget.style.background = `${course.color}1a`; }}
-                              onMouseLeave={e => { e.currentTarget.style.background = `${course.color}08`; }}>
-                              <ArrowLeftRight size={11} />
-                            </button>
-                        </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
 
               <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 40px' }} className="no-scrollbar">
                         {grpTopics.length === 0 ? (
@@ -1963,9 +2033,9 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                          </div>
                                        ))}
                                      </div>
-                                     <div style={{ padding: '20px 18px 16px', flex: 1 }}>
-                                       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-                                         <h4 style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', margin: 0, fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em', lineHeight: 1.3, flex: 1, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', transition: 'all 200ms' }}>{topic.title}</h4>
+                                      <div style={{ padding: '20px 18px 16px', flex: 1 }}>
+                                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                                          <h4 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', margin: 0, fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.03em', lineHeight: 1.2, flex: 1, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', transition: 'all 200ms' }}>{topic.title}</h4>
                                         <div style={{ display: 'flex', gap: 2, flexShrink: 0, opacity: 0, transition: 'opacity 150ms' }}
                                           className="topic-actions">
                                           <button onClick={(e) => { e.stopPropagation(); setEditingTopicId(topic.id); setTopicName(topic.title); setShowTopicModal(true); }}
@@ -2027,24 +2097,6 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                           </div>
                         )}
                       </div>
-                       {/* ══ HOVER-ACTIVATED EDGE PANEL ══ */}
-                      <div onMouseEnter={() => setHoverEdgePanel(true)} onMouseLeave={() => setHoverEdgePanel(false)}
-                        style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 36, zIndex: 20, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
-                        <button onClick={() => { setImportExportMode('export'); setExportSelectedIds(new Set([selectedGroupId!])); setShowAgrupacionImportExport(true); }}
-                          style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: hoverEdgePanel ? `${course.color}15` : 'transparent', color: hoverEdgePanel ? course.color : 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms' }}
-                          onMouseEnter={e => { e.currentTarget.style.background = `${course.color}20`; e.currentTarget.style.color = course.color; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = hoverEdgePanel ? `${course.color}15` : 'transparent'; e.currentTarget.style.color = hoverEdgePanel ? course.color : 'var(--text-muted)'; }}
-                          title="Exportar">
-                          <FileDown size={14} />
-                        </button>
-                        <button onClick={() => { setImportExportMode('import'); setImportPreviewData(null); setImportSelected([]); setShowAgrupacionImportExport(true); }}
-                          style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: hoverEdgePanel ? `${course.color}15` : 'transparent', color: hoverEdgePanel ? course.color : 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms' }}
-                          onMouseEnter={e => { e.currentTarget.style.background = `${course.color}20`; e.currentTarget.style.color = course.color; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = hoverEdgePanel ? `${course.color}15` : 'transparent'; e.currentTarget.style.color = hoverEdgePanel ? course.color : 'var(--text-muted)'; }}
-                          title="Importar">
-                          <FileUp size={14} />
-                        </button>
-                      </div>
                     </div>
                   );
                 })()
@@ -2053,156 +2105,8 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                 <>
                 <div style={{ display: 'flex', flexDirection: 'row', height: '100%', overflow: 'hidden' }}>
 
-                  {/* ══ LEFT: PLANNER + MATERIALS + CENTER ══ */}
+                  {/* ══ LEFT: MATERIALS + CENTER ══ */}
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-
-                    {/* ══ WEEKLY PLANNER ══ */}
-                    <div style={{ padding: '16px 18px 14px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
-                      {/* Planner Header */}
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <div style={{ width: 28, height: 28, borderRadius: 8, background: `${course.color}12`, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${course.color}20` }}>
-                            <Calendar size={13} style={{ color: course.color }} />
-                          </div>
-                          <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Plan de Estudio</span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <button onClick={() => setWeekOffset(o => o - 1)}
-                            style={{ width: 26, height: 26, borderRadius: 7, border: '1px solid var(--border-subtle)', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
-                            onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.borderColor = `${course.color}40`; e.currentTarget.style.color = course.color; }}
-                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
-                            <ChevronLeft size={12} />
-                          </button>
-                          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', fontFamily: "'Inter', sans-serif", minWidth: 110, textAlign: 'center' }}>
-                            {(() => {
-                              const weekStart = startOfWeek(addDays(new Date(), weekOffset * 7), { weekStartsOn: 1 });
-                              const weekEnd = endOfWeek(addDays(new Date(), weekOffset * 7), { weekStartsOn: 1 });
-                              return `${format(weekStart, 'd MMM', { locale: es })} — ${format(weekEnd, 'd MMM', { locale: es })}`;
-                            })()}
-                          </span>
-                          <button onClick={() => setWeekOffset(o => o + 1)}
-                            style={{ width: 26, height: 26, borderRadius: 7, border: '1px solid var(--border-subtle)', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
-                            onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.borderColor = `${course.color}40`; e.currentTarget.style.color = course.color; }}
-                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
-                            <ChevronRight size={12} />
-                          </button>
-                          {weekOffset !== 0 && (
-                            <button onClick={() => setWeekOffset(0)}
-                              style={{ height: 26, borderRadius: 7, border: '1px solid var(--border-subtle)', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', padding: '0 10px', fontSize: 10, fontWeight: 600, fontFamily: "'Inter', sans-serif", transition: 'all 150ms' }}
-                              onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
-                              Hoy
-                            </button>
-                          )}
-                          <button onClick={() => { setPlanDate(format(new Date(), 'yyyy-MM-dd')); setPlanTitle(''); setPlanGroupId(''); setPlanTopicId(''); setPlanType('estudio'); setPlanDuration(30); setShowPlanModal(true); }}
-                            style={{ height: 26, borderRadius: 7, border: `1px solid ${course.color}30`, background: `${course.color}0d`, cursor: 'pointer', color: course.color, padding: '0 10px', fontSize: 10, fontWeight: 600, fontFamily: "'Inter Tight', sans-serif", display: 'flex', alignItems: 'center', gap: 4, transition: 'all 150ms' }}
-                            onMouseEnter={e => { e.currentTarget.style.background = `${course.color}1a`; e.currentTarget.style.borderColor = `${course.color}50`; }}
-                            onMouseLeave={e => { e.currentTarget.style.background = `${course.color}0d`; e.currentTarget.style.borderColor = `${course.color}30`; }}>
-                            <Plus size={10} /> Agregar
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Day blocks grid */}
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
-                        {(() => {
-                          const dayNames = ['Lun','Mar','Mie','Jue','Vie','Sab','Dom'];
-                          const typeColors: Record<string, string> = { estudio: '#8B5CF6', repaso: '#3B82F6', ejercicio: '#10B981', lectura: '#F59E0B', otro: '#6B7280' };
-                          const todayStr = format(new Date(), 'yyyy-MM-dd');
-                          const weekStart = startOfWeek(addDays(new Date(), weekOffset * 7), { weekStartsOn: 1 });
-                          return Array.from({ length: 7 }, (_, i) => {
-                            const d = addDays(weekStart, i);
-                            const dayNum = d.getDate();
-                            const dayStr = format(d, 'yyyy-MM-dd');
-                            const today = dayStr === todayStr;
-                            const secs = weeklyStudyTime?.[dayStr] || 0;
-                            const mins = Math.round(secs / 60);
-                            const isFuture = d > new Date() && !today;
-                            const dayPlanned = (plannedSessions || []).filter(s => s.courseId === course.id && s.date === dayStr && !s.completed);
-                            const plannedMins = dayPlanned.reduce((a, s) => a + s.durationMinutes, 0);
-                            return (
-                              <div key={i}
-                                style={{
-                                  borderRadius: 12,
-                                  border: today ? `1.5px solid ${course.color}` : '1px solid var(--border-subtle)',
-                                  background: today ? `${course.color}08` : 'var(--bg-surface)',
-                                  padding: '10px 8px 8px',
-                                  display: 'flex',
-                                  flexDirection: 'column',
-                                  gap: 0,
-                                  transition: 'all 200ms cubic-bezier(0.16,1,0.3,1)',
-                                  opacity: isFuture ? 0.4 : 1,
-                                  position: 'relative',
-                                  cursor: 'pointer',
-                                  minHeight: 160,
-                                  overflow: 'hidden',
-                                }}
-                                onClick={() => { setDayDetailDate(dayStr); setShowDayDetail(true); }}
-                                onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}50`; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 8px 24px ${course.color}10`; }}
-                                onMouseLeave={e => { e.currentTarget.style.borderColor = today ? `1.5px solid ${course.color}` : 'var(--border-subtle)'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}>
-                                {/* Header: Day name + number */}
-                                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6 }}>
-                                  <span style={{ fontSize: 10, fontWeight: 700, color: today ? course.color : 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '0.04em' }}>{dayNames[i]}</span>
-                                  <span style={{ fontSize: 18, fontWeight: 800, color: today ? course.color : 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", lineHeight: 1 }}>{dayNum}</span>
-                                </div>
-
-                                {/* Planned sessions list */}
-                                {dayPlanned.length > 0 && (
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1, overflow: 'hidden' }}>
-                                    {dayPlanned.slice(0, 3).map(s => (
-                                      <div key={s.id} style={{
-                                        display: 'flex', alignItems: 'center', gap: 5,
-                                        padding: '3px 6px', borderRadius: 5,
-                                        background: `${typeColors[s.type] || '#8B5CF6'}0a`,
-                                      }}>
-                                        <div style={{ width: 5, height: 5, borderRadius: '50%', background: typeColors[s.type] || '#8B5CF6', flexShrink: 0 }} />
-                                        <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{s.title}</span>
-                                        <span style={{ fontSize: 8, fontWeight: 700, color: 'var(--text-muted)', fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{s.durationMinutes}m</span>
-                                      </div>
-                                    ))}
-                                    {dayPlanned.length > 3 && (
-                                      <span style={{ fontSize: 8, fontWeight: 600, color: 'var(--text-muted)', textAlign: 'center', fontFamily: "'Inter', sans-serif" }}>+{dayPlanned.length - 3} mas</span>
-                                    )}
-                                  </div>
-                                )}
-                                {dayPlanned.length === 0 && !isFuture && (
-                                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    <div style={{ width: 18, height: 18, borderRadius: 5, border: `1px dashed ${course.color}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: `${course.color}50`, fontSize: 11, fontWeight: 700, lineHeight: 1 }}>+</div>
-                                  </div>
-                                )}
-
-                                {/* Bottom: study progress bar */}
-                                <div style={{ marginTop: 'auto', paddingTop: 6 }}>
-                                  {plannedMins > 0 && (
-                                    <div style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                      <div style={{ flex: 1, height: 3, borderRadius: 2, background: `${course.color}12`, position: 'relative', overflow: 'hidden' }}>
-                                        {mins > 0 && (
-                                          <div style={{ position: 'absolute', inset: 0, borderRadius: 2, width: `${Math.min(100, (mins / plannedMins) * 100)}%`, background: mins >= plannedMins ? '#10B981' : course.color, transition: 'width 600ms cubic-bezier(0.16,1,0.3,1)' }} />
-                                        )}
-                                      </div>
-                                      <span style={{ fontSize: 8, fontWeight: 700, color: mins >= plannedMins ? '#10B981' : 'var(--text-muted)', fontFamily: "'Inter Tight', sans-serif", minWidth: 22, textAlign: 'right' }}>{mins}/{plannedMins}m</span>
-                                    </div>
-                                  )}
-                                  {plannedMins === 0 && mins > 0 && !isFuture && (
-                                    <div style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                      <div style={{ flex: 1, height: 3, borderRadius: 2, background: 'var(--border-subtle)', position: 'relative', overflow: 'hidden' }}>
-                                        <div style={{ position: 'absolute', inset: 0, borderRadius: 2, width: `${Math.min(100, (mins / 120) * 100)}%`, background: `${course.color}70` }} />
-                                      </div>
-                                      <span style={{ fontSize: 8, fontWeight: 700, color: course.color, fontFamily: "'Inter Tight', sans-serif" }}>{mins}m</span>
-                                    </div>
-                                  )}
-                                </div>
-
-                                {/* Today top accent */}
-                                {today && (
-                                  <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, borderRadius: '12px 12px 0 0', background: course.color }} />
-                                )}
-                              </div>
-                            );
-                          });
-                        })()}
-                      </div>
-                    </div>
 
                     {/* ══ MATERIALS + CENTER ROW ══ */}
                     <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
@@ -2262,9 +2166,10 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                             const handleMatClick = () => {
                               if (isPdf && dataUrl) { setPdfPreviewUrl(isLocal ? (window as any).__TAURI__?.convertFileSrc?.(dataUrl) || dataUrl : dataUrl); setPdfPreviewName(matName); setShowPdfPreview(true); }
                               else if (isImg && dataUrl) { setPdfPreviewUrl(dataUrl); setPdfPreviewName(matName); setShowPdfPreview(true); }
-                              else if (isYouTube) { const v = dataUrl.includes('youtube.com/watch?v=') ? dataUrl.split('v=')[1]?.split('&')[0] : dataUrl.split('youtu.be/')[1]?.split('?')[0]; if (v) { setPdfPreviewUrl(`https://www.youtube.com/embed/${v}`); setPdfPreviewName(matName); setShowPdfPreview(true); } }
-                              else if (isWeb || isDrive || isLink) { openFile(dataUrl); }
-                              else if (isDoc || isXls || isPpt || isAudio || isVideo) { openFile(dataUrl); }
+                              else if (isYouTube) { setPipUrl(dataUrl, matName); }
+                              else if (isVideo) { setPipUrl(dataUrl, matName); }
+                              else if (isWeb || isDrive || isLink || isDoc || isXls || isPpt) { openFile(dataUrl); }
+                              else if (isAudio) { /* toggle inline — handled by audio player below */ }
                               else if (dataUrl.startsWith('http')) { openFile(dataUrl); }
                               else if (isLocal) { openFile(dataUrl); }
                             };
@@ -2295,34 +2200,292 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                             else { iconEl = <File size={13} />; }
 
                             return (
-                              <div key={mat.id || idx} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 7, background: 'var(--bg-elevated)', border: '1px solid var(--border-soft)', cursor: 'pointer', transition: 'all 150ms' }}
-                                onMouseEnter={e => { e.currentTarget.style.borderColor = `${badgeColor}40`; e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.background = 'var(--bg-elevated)'; }}>
-                                <div onClick={handleMatClick} style={{ width: 30, height: 30, borderRadius: 7, background: `${badgeColor}14`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 150ms', color: badgeColor, position: 'relative' }}>
-                                  {iconEl}
+                              <React.Fragment key={mat.id || idx}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 7, background: isAudio && playingAudioId === mat.id ? `${badgeColor}08` : 'var(--bg-elevated)', border: `1px solid ${isAudio && playingAudioId === mat.id ? `${badgeColor}30` : 'var(--border-soft)'}`, cursor: 'pointer', transition: 'all 150ms' }}
+                                  onMouseEnter={e => { e.currentTarget.style.borderColor = `${badgeColor}40`; e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                                  onMouseLeave={e => { e.currentTarget.style.borderColor = isAudio && playingAudioId === mat.id ? `${badgeColor}30` : 'var(--border-soft)'; e.currentTarget.style.background = isAudio && playingAudioId === mat.id ? `${badgeColor}08` : 'var(--bg-elevated)'; }}>
+                                  <div onClick={() => {
+                                    if (isAudio) {
+                                      if (playingAudioId === mat.id && audioRef.current) {
+                                        audioRef.current.paused ? audioRef.current.play() : audioRef.current.pause();
+                                      } else {
+                                        setPlayingAudioId(mat.id);
+                                        setTimeout(() => { if (audioRef.current) { audioRef.current.src = dataUrl; audioRef.current.play().catch(() => {}); } }, 50);
+                                      }
+                                    } else { handleMatClick(); }
+                                  }} style={{ width: 30, height: 30, borderRadius: 7, background: `${badgeColor}14`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 150ms', color: badgeColor, position: 'relative' }}>
+                                    {iconEl}
+                                  </div>
+                                  <div onClick={() => {
+                                    if (isAudio) {
+                                      if (playingAudioId === mat.id && audioRef.current) {
+                                        audioRef.current.paused ? audioRef.current.play() : audioRef.current.pause();
+                                      } else {
+                                        setPlayingAudioId(mat.id);
+                                        setTimeout(() => { if (audioRef.current) { audioRef.current.src = dataUrl; audioRef.current.play().catch(() => {}); } }, 50);
+                                      }
+                                    } else { handleMatClick(); }
+                                  }} style={{ flex: 1, minWidth: 0 }}>
+                                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3 }}>{matName}</span>
+                                  </div>
+                                  {isAudio && playingAudioId === mat.id && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                                      <span style={{ fontSize: 9, color: 'var(--text-muted)', minWidth: 28, textAlign: 'right', fontFamily: "'JetBrains Mono', monospace" }}>{formatTime(audioProgress)}</span>
+                                      <div style={{ width: 60, height: 3, borderRadius: 2, background: 'var(--bg-hover)', cursor: 'pointer', position: 'relative' }}
+                                        onClick={e => { if (audioRef.current) { const r = e.currentTarget.getBoundingClientRect(); audioRef.current.currentTime = ((e.clientX - r.left) / r.width) * audioDuration; } }}>
+                                        <div style={{ width: `${(audioProgress / (audioDuration || 1)) * 100}%`, height: '100%', borderRadius: 2, background: badgeColor, transition: 'width 100ms linear' }} />
+                                      </div>
+                                      <span style={{ fontSize: 9, color: 'var(--text-muted)', minWidth: 28, fontFamily: "'JetBrains Mono', monospace" }}>{formatTime(audioDuration)}</span>
+                                    </div>
+                                  )}
+                                  <button onClick={e => { e.stopPropagation(); setConfirmDeleteMatId(mat.id); }}
+                                    style={{ width: 24, height: 24, borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, transition: 'all 150ms', opacity: 0 }}
+                                    onMouseEnter={ev => { ev.currentTarget.style.background = 'rgba(239,68,68,0.1)'; ev.currentTarget.style.color = '#EF4444'; ev.currentTarget.style.opacity = '1'; }}
+                                    onMouseLeave={ev => { ev.currentTarget.style.background = 'transparent'; ev.currentTarget.style.color = 'var(--text-muted)'; ev.currentTarget.style.opacity = '0'; }}
+                                    title="Eliminar">
+                                    <X size={11} />
+                                  </button>
                                 </div>
-                                <div onClick={handleMatClick} style={{ flex: 1, minWidth: 0 }}>
-                                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3 }}>{matName}</span>
-                                </div>
-                                <button onClick={e => { e.stopPropagation(); setConfirmDeleteMatId(mat.id); }}
-                                  style={{ width: 24, height: 24, borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, transition: 'all 150ms', opacity: 0 }}
-                                  onMouseEnter={ev => { ev.currentTarget.style.background = 'rgba(239,68,68,0.1)'; ev.currentTarget.style.color = '#EF4444'; ev.currentTarget.style.opacity = '1'; }}
-                                  onMouseLeave={ev => { ev.currentTarget.style.background = 'transparent'; ev.currentTarget.style.color = 'var(--text-muted)'; ev.currentTarget.style.opacity = '0'; }}
-                                  title="Eliminar">
-                                  <X size={11} />
-                                </button>
-                              </div>
+                              </React.Fragment>
                             );
                           })}
                         </div>
                       </div>
 
-                      {/* ══ CENTER: FLEX ══ */}
-                      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
-                        <div style={{ textAlign: 'center', opacity: 0.35 }}>
-                          <BookOpen size={36} style={{ marginBottom: 10 }} />
-                          <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0, fontFamily: "'Inter', sans-serif" }}>Selecciona una agrupacion</p>
-                          <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '4px 0 0', opacity: 0.6 }}>o crea una nueva</p>
+                      {/* ══ CENTER: PLANNER + TIME BAR + RADAR ══ */}
+                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 28px', display: 'flex', flexDirection: 'column', gap: 18 }} className="no-scrollbar">
+
+                          {/* ── WEEKLY PLANNER ── */}
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <button onClick={() => setWeekOffset(o => o - 1)}
+                                  style={{ width: 26, height: 26, borderRadius: 7, border: '1px solid var(--border-subtle)', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                                  onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.borderColor = `${course.color}40`; e.currentTarget.style.color = course.color; }}
+                                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
+                                  <ChevronLeft size={12} />
+                                </button>
+                                <span style={{ fontSize: 11, fontWeight: 600, color: weekOffset === 0 ? course.color : 'var(--text-secondary)', fontFamily: "'Inter', sans-serif", minWidth: 100, textAlign: 'center' }}>
+                                  {(() => {
+                                    const ws = startOfWeek(addDays(new Date(), weekOffset * 7), { weekStartsOn: 1 });
+                                    const we = endOfWeek(addDays(new Date(), weekOffset * 7), { weekStartsOn: 1 });
+                                    return `${format(ws, 'd MMM', { locale: es })} — ${format(we, 'd MMM', { locale: es })}`;
+                                  })()}
+                                </span>
+                                <button onClick={() => setWeekOffset(o => o + 1)}
+                                  style={{ width: 26, height: 26, borderRadius: 7, border: '1px solid var(--border-subtle)', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                                  onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.borderColor = `${course.color}40`; e.currentTarget.style.color = course.color; }}
+                                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
+                                  <ChevronRight size={12} />
+                                </button>
+                                {weekOffset !== 0 && (
+                                  <button onClick={() => setWeekOffset(0)}
+                                    style={{ height: 24, borderRadius: 6, border: '1px solid var(--border-subtle)', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', padding: '0 8px', fontSize: 9, fontWeight: 600, fontFamily: "'Inter', sans-serif", transition: 'all 150ms' }}
+                                    onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
+                                    Hoy
+                                  </button>
+                                )}
+                              </div>
+                              <button onClick={() => { setPlanDate(format(new Date(), 'yyyy-MM-dd')); setPlanTitle(''); setPlanGroupId(''); setPlanTopicId(''); setPlanType('estudio'); setPlanDuration(30); setShowPlanModal(true); }}
+                                style={{ height: 26, borderRadius: 7, border: `1px solid ${course.color}30`, background: `${course.color}0d`, cursor: 'pointer', color: course.color, padding: '0 10px', fontSize: 10, fontWeight: 600, fontFamily: "'Inter Tight', sans-serif", display: 'flex', alignItems: 'center', gap: 4, transition: 'all 150ms' }}
+                                onMouseEnter={e => { e.currentTarget.style.background = `${course.color}1a`; e.currentTarget.style.borderColor = `${course.color}50`; }}
+                                onMouseLeave={e => { e.currentTarget.style.background = `${course.color}0d`; e.currentTarget.style.borderColor = `${course.color}30`; }}>
+                                <Plus size={10} /> Agregar
+                              </button>
+                            </div>
+
+                            {/* Day blocks grid */}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 5 }}>
+                              {(() => {
+                                const dayNames = ['Lun','Mar','Mie','Jue','Vie','Sab','Dom'];
+                                const typeColors2: Record<string, string> = { estudio: '#8B5CF6', repaso: '#3B82F6', ejercicio: '#10B981', lectura: '#F59E0B', otro: '#6B7280' };
+                                const todayStr = format(new Date(), 'yyyy-MM-dd');
+                                const ws2 = startOfWeek(addDays(new Date(), weekOffset * 7), { weekStartsOn: 1 });
+                                return Array.from({ length: 7 }, (_, i) => {
+                                  const d = addDays(ws2, i);
+                                  const dayNum = d.getDate();
+                                  const dayStr = format(d, 'yyyy-MM-dd');
+                                  const today = dayStr === todayStr;
+                                  const secs = weeklyStudyTime?.[dayStr] || 0;
+                                  const mins = Math.round(secs / 60);
+                                  const isFuture = d > new Date() && !today;
+                                  const dayPlanned = (plannedSessions || []).filter(s => s.courseId === course.id && s.date === dayStr && !s.completed);
+                                  const plannedMins = dayPlanned.reduce((a, s) => a + s.durationMinutes, 0);
+                                  return (
+                                    <div key={i}
+                                      style={{ borderRadius: 10, border: today ? `1.5px solid ${course.color}` : '1px solid var(--border-subtle)', background: today ? `${course.color}08` : 'var(--bg-surface)', padding: '8px 6px 6px', display: 'flex', flexDirection: 'column', gap: 0, transition: 'all 200ms cubic-bezier(0.16,1,0.3,1)', opacity: isFuture ? 0.4 : 1, position: 'relative', cursor: 'pointer', minHeight: 90, overflow: 'hidden' }}
+                                      onClick={() => { setDayDetailDate(dayStr); setShowDayDetail(true); }}
+                                      onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}50`; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                                      onMouseLeave={e => { e.currentTarget.style.borderColor = today ? `1.5px solid ${course.color}` : 'var(--border-subtle)'; e.currentTarget.style.transform = 'translateY(0)'; }}>
+                                      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 4 }}>
+                                        <span style={{ fontSize: 9, fontWeight: 700, color: today ? course.color : 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '0.04em' }}>{dayNames[i]}</span>
+                                        <span style={{ fontSize: 14, fontWeight: 800, color: today ? course.color : 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", lineHeight: 1 }}>{dayNum}</span>
+                                      </div>
+                                      {dayPlanned.length > 0 && (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, overflow: 'hidden' }}>
+                                          {dayPlanned.slice(0, 2).map(s => (
+                                            <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 4px', borderRadius: 4, background: `${typeColors2[s.type] || '#8B5CF6'}0a` }}>
+                                              <div style={{ width: 4, height: 4, borderRadius: '50%', background: typeColors2[s.type] || '#8B5CF6', flexShrink: 0 }} />
+                                              <span style={{ fontSize: 8, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{s.title}</span>
+                                            </div>
+                                          ))}
+                                          {dayPlanned.length > 2 && <span style={{ fontSize: 7, fontWeight: 600, color: 'var(--text-muted)', textAlign: 'center' }}>+{dayPlanned.length - 2}</span>}
+                                        </div>
+                                      )}
+                                      <div style={{ marginTop: 'auto', paddingTop: 4 }}>
+                                        {plannedMins > 0 && (
+                                          <div style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 3 }}>
+                                            <div style={{ flex: 1, height: 2, borderRadius: 2, background: `${course.color}12`, overflow: 'hidden' }}>
+                                              {mins > 0 && <div style={{ width: `${Math.min(100, (mins / plannedMins) * 100)}%`, height: '100%', background: mins >= plannedMins ? '#10B981' : course.color, borderRadius: 2 }} />}
+                                            </div>
+                                            <span style={{ fontSize: 7, fontWeight: 700, color: mins >= plannedMins ? '#10B981' : 'var(--text-muted)', fontFamily: "'Inter Tight', sans-serif", minWidth: 18, textAlign: 'right' }}>{mins}/{plannedMins}m</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                      {today && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, borderRadius: '10px 10px 0 0', background: course.color }} />}
+                                    </div>
+                                  );
+                                });
+                              })()}
+                            </div>
+                          </div>
+
+                          {/* ── WEEKLY TIME BAR ── */}
+                          {(() => {
+                            const typeColors3: Record<string, string> = { estudio: '#8B5CF6', repaso: '#3B82F6', ejercicio: '#10B981', lectura: '#F59E0B', otro: '#6B7280' };
+                            const typeLabels: Record<string, string> = { estudio: 'Estudio', repaso: 'Repaso', ejercicio: 'Ejercicio', lectura: 'Lectura', otro: 'Otro' };
+                            const ws3 = startOfWeek(addDays(new Date(), weekOffset * 7), { weekStartsOn: 1 });
+                            const we3 = endOfWeek(addDays(new Date(), weekOffset * 7), { weekStartsOn: 1 });
+                            const weekSessions = (plannedSessions || []).filter(s => {
+                              if (s.courseId !== course.id) return false;
+                              const d = new Date(s.date);
+                              return d >= ws3 && d <= we3;
+                            });
+                            const totalTime = weekSessions.reduce((a, s) => a + s.durationMinutes, 0);
+                            if (totalTime === 0) return null;
+                            const byType = Object.keys(typeColors3).map(type => ({ type, minutes: weekSessions.filter(s => s.type === type).reduce((a, s) => a + s.durationMinutes, 0), color: typeColors3[type], label: typeLabels[type] })).filter(t => t.minutes > 0);
+                            return (
+                              <div>
+                                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8, fontFamily: "'Inter Tight', sans-serif" }}>Tiempo Semanal</div>
+                                <div style={{ height: 26, borderRadius: 8, background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', overflow: 'hidden', display: 'flex' }}>
+                                  {byType.map((t, idx) => (
+                                    <div key={t.type}
+                                      title={`${t.label}: ${t.minutes}m (${Math.round((t.minutes / totalTime) * 100)}%)`}
+                                      style={{ width: `${(t.minutes / totalTime) * 100}%`, background: t.color, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'width 400ms cubic-bezier(0.16,1,0.3,1)', cursor: 'default', position: 'relative' }}
+                                      onMouseEnter={e => { e.currentTarget.style.filter = 'brightness(1.15)'; }}
+                                      onMouseLeave={e => { e.currentTarget.style.filter = 'none'; }}>
+                                      {(t.minutes / totalTime) > 0.12 && <span style={{ fontSize: 8, fontWeight: 700, color: '#fff', textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>{Math.round((t.minutes / totalTime) * 100)}%</span>}
+                                    </div>
+                                  ))}
+                                </div>
+                                <div style={{ display: 'flex', gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
+                                  {byType.map(t => (
+                                    <div key={t.type} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                      <div style={{ width: 6, height: 6, borderRadius: '50%', background: t.color }} />
+                                      <span style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: "'Inter', sans-serif" }}>{t.label} {t.minutes}m</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })()}
+
+                          {/* ── RADAR / SPIDER CHART ── */}
+                          {(() => {
+                            const radarCx = 140, radarCy = 120, radarR = 85;
+                            const typeColors4: Record<string, string> = { estudio: '#8B5CF6', repaso: '#3B82F6', ejercicio: '#10B981', lectura: '#F59E0B', otro: '#6B7280' };
+                            const dayLabels = ['Lun','Mar','Mie','Jue','Vie','Sab','Dom'];
+                            const ws4 = startOfWeek(addDays(new Date(), weekOffset * 7), { weekStartsOn: 1 });
+
+                            let labels: string[] = [];
+                            let values: number[] = [];
+
+                            if (radarFilter === 'agrupaciones' && groups.length > 0) {
+                              labels = groups.slice(0, 8).map(g => g.name);
+                              values = groups.slice(0, 8).map(g => {
+                                const gs = (plannedSessions || []).filter(s => s.courseId === course.id && s.groupId === g.id);
+                                const done = gs.filter(s => s.completed).length;
+                                return gs.length > 0 ? done / gs.length : 0;
+                              });
+                            } else if (radarFilter === 'dias') {
+                              labels = dayLabels;
+                              values = Array.from({ length: 7 }, (_, i) => {
+                                const d = format(addDays(ws4, i), 'yyyy-MM-dd');
+                                const ds = (plannedSessions || []).filter(s => s.courseId === course.id && s.date === d);
+                                const done = ds.filter(s => s.completed).length;
+                                return ds.length > 0 ? done / ds.length : 0;
+                              });
+                            } else if (radarFilter === 'tipos') {
+                              labels = Object.keys(typeColors4);
+                              values = Object.keys(typeColors4).map(t => {
+                                const ts = (plannedSessions || []).filter(s => s.courseId === course.id && s.type === t);
+                                const done = ts.filter(s => s.completed).length;
+                                return ts.length > 0 ? done / ts.length : 0;
+                              });
+                            }
+
+                            const n = labels.length;
+                            if (n < 3) return null;
+                            const angleStep = (2 * Math.PI) / n;
+
+                            const gridLevels = [0.25, 0.5, 0.75, 1];
+                            const getPoint = (idx: number, val: number) => {
+                              const angle = angleStep * idx - Math.PI / 2;
+                              return { x: radarCx + radarR * val * Math.cos(angle), y: radarCy + radarR * val * Math.sin(angle) };
+                            };
+                            const dataPoints = values.map((v, i) => getPoint(i, v));
+                            const dataPath = dataPoints.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ') + 'Z';
+
+                            return (
+                              <div>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Progreso</div>
+                                  <div style={{ display: 'flex', gap: 3 }}>
+                                    {([['agrupaciones','Agrupaciones'],['dias','Días'],['tipos','Tipos']] as const).map(([key, lbl]) => (
+                                      <button key={key} onClick={() => setRadarFilter(key)}
+                                        style={{ height: 22, borderRadius: 6, border: `1px solid ${radarFilter === key ? course.color + '50' : 'var(--border-subtle)'}`, background: radarFilter === key ? `${course.color}12` : 'transparent', cursor: 'pointer', color: radarFilter === key ? course.color : 'var(--text-muted)', padding: '0 8px', fontSize: 9, fontWeight: 600, fontFamily: "'Inter', sans-serif", transition: 'all 150ms' }}
+                                        onMouseEnter={e => { if (radarFilter !== key) { e.currentTarget.style.background = 'var(--bg-hover)'; } }}
+                                        onMouseLeave={e => { if (radarFilter !== key) { e.currentTarget.style.background = 'transparent'; } }}>
+                                        {lbl}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                                  <svg width="100%" viewBox="0 0 280 240" style={{ maxWidth: 320 }}>
+                                    {/* Grid */}
+                                    {gridLevels.map(lv => (
+                                      <polygon key={lv}
+                                        points={Array.from({ length: n }, (_, i) => { const p = getPoint(i, lv); return `${p.x},${p.y}`; }).join(' ')}
+                                        fill="none" stroke="var(--border-subtle)" strokeWidth="0.5" opacity={0.5} />
+                                    ))}
+                                    {/* Spokes */}
+                                    {Array.from({ length: n }, (_, i) => {
+                                      const p = getPoint(i, 1);
+                                      return <line key={i} x1={radarCx} y1={radarCy} x2={p.x} y2={p.y} stroke="var(--border-subtle)" strokeWidth="0.5" opacity={0.4} />;
+                                    })}
+                                    {/* Data polygon */}
+                                    <path d={dataPath} fill={`${course.color}18`} stroke={course.color} strokeWidth="1.5" strokeLinejoin="round" style={{ transition: 'all 400ms cubic-bezier(0.16,1,0.3,1)' }} />
+                                    {/* Data points */}
+                                    {dataPoints.map((p, i) => (
+                                      <circle key={i} cx={p.x} cy={p.y} r={3} fill={course.color} stroke="var(--bg-surface)" strokeWidth="1.5" style={{ transition: 'all 400ms cubic-bezier(0.16,1,0.3,1)' }} />
+                                    ))}
+                                    {/* Labels */}
+                                    {labels.map((lbl, i) => {
+                                      const p = getPoint(i, 1.18);
+                                      const anchor = p.x < radarCx - 5 ? 'end' : p.x > radarCx + 5 ? 'start' : 'middle';
+                                      return <text key={i} x={p.x} y={p.y} textAnchor={anchor} dominantBaseline="middle" fill="var(--text-muted)" fontSize="8" fontFamily="'Inter', sans-serif" fontWeight="600">{lbl}</text>;
+                                    })}
+                                    {/* Center dot */}
+                                    <circle cx={radarCx} cy={radarCy} r={2} fill={course.color} opacity={0.3} />
+                                  </svg>
+                                </div>
+                              </div>
+                            );
+                          })()}
+
                         </div>
                       </div>
                     </div>
@@ -2332,13 +2495,15 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                   <div style={{ width: 320, flexShrink: 0, display: 'flex', flexDirection: 'column', borderLeft: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 20px 14px', flexShrink: 0 }}>
                       <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: "'Inter Tight', sans-serif" }}>Agrupaciones</h3>
-                       <button onClick={() => { setEditingGroupId(null); setGroupName(''); setGroupCover(undefined); setShowGroupModal(true); }}
-                        style={{ width: 30, height: 30, borderRadius: 8, border: `1.5px solid ${course.color}40`, background: `${course.color}08`, cursor: 'pointer', color: course.color, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms ' + EASE }}
-                        onMouseEnter={e => { e.currentTarget.style.background = `${course.color}18`; e.currentTarget.style.borderColor = `${course.color}60`; }}
-                        onMouseLeave={e => { e.currentTarget.style.background = `${course.color}08`; e.currentTarget.style.borderColor = `${course.color}40`; }}
-                        title="Nueva agrupacion">
-                        <Plus size={14} />
-                      </button>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <button onClick={() => { setEditingGroupId(null); setGroupName(''); setGroupCover(undefined); setShowGroupModal(true); }}
+                          style={{ width: 28, height: 28, borderRadius: 8, border: `1.5px solid ${course.color}40`, background: `${course.color}08`, cursor: 'pointer', color: course.color, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms ' + EASE }}
+                          onMouseEnter={e => { e.currentTarget.style.background = `${course.color}18`; e.currentTarget.style.borderColor = `${course.color}60`; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = `${course.color}08`; e.currentTarget.style.borderColor = `${course.color}40`; }}
+                          title="Nueva agrupacion">
+                          <Plus size={14} />
+                        </button>
+                      </div>
                     </div>
                     <div style={{ flex: 1, overflowY: 'auto', padding: '0 14px 20px', display: 'flex', flexDirection: 'column', gap: 10 }} className="no-scrollbar">
                       {groups.length === 0 ? (
@@ -3337,9 +3502,9 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
             <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div style={{ width: 32, height: 32, borderRadius: 8, background: `${course.color}12`, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${course.color}20` }}>
-                  {importPreviewData ? <FileUp size={14} style={{ color: course.color }} /> : importExportMode === 'import' ? <FileUp size={14} style={{ color: course.color }} /> : <FileDown size={14} style={{ color: course.color }} />}
+                  {importPreviewData ? <FileUp size={14} style={{ color: course.color }} /> : importExportMode === 'choose' ? <Package size={14} style={{ color: course.color }} /> : importExportMode === 'import' ? <FileUp size={14} style={{ color: course.color }} /> : <FileDown size={14} style={{ color: course.color }} />}
                 </div>
-                <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', margin: 0, fontFamily: "'Inter Tight', sans-serif" }}>{importPreviewData ? 'Vista previa de importacion' : importExportMode === 'import' ? 'Importar temas' : 'Exportar temas'}</h3>
+                <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', margin: 0, fontFamily: "'Inter Tight', sans-serif" }}>{importPreviewData ? 'Vista previa de importacion' : importExportMode === 'choose' ? 'Importar / Exportar' : importExportMode === 'import' ? 'Importar temas' : 'Exportar temas'}</h3>
               </div>
               <button onClick={() => { setShowAgrupacionImportExport(false); setImportPreviewData(null); }}
                 style={{ width: 28, height: 28, borderRadius: 7, border: 'none', background: 'var(--bg-hover)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
@@ -3352,6 +3517,16 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
               {importPreviewData ? (
                 <>
                   <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '0 0 4px' }}>Selecciona los temas que deseas importar.</p>
+                  {!selectedGroupId && groups.length > 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)' }}>
+                      <Layers size={12} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                      <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', flexShrink: 0 }}>Destino:</span>
+                      <select value={importTargetGroupId || ''} onChange={e => setImportTargetGroupId(e.target.value)}
+                        style={{ flex: 1, height: 26, borderRadius: 6, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', fontSize: 11, fontWeight: 500, padding: '0 8px', outline: 'none', cursor: 'pointer' }}>
+                        {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                      </select>
+                    </div>
+                  )}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 320, overflowY: 'auto' }} className="no-scrollbar">
                     {importPreviewData.map((item, gi) => {
                       const allSelected = item.topics.every((_, ti) => importSelected[gi]?.[ti]);
@@ -3401,7 +3576,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                     })}
                   </div>
                   <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-                    <button onClick={() => { setImportPreviewData(null); setImportSelected([]); setImportExportMode('import'); }}
+                    <button onClick={() => { setImportPreviewData(null); setImportSelected([]); setImportExportMode('choose'); }}
                       style={{ flex: 1, height: 34, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter', sans-serif", transition: 'all 150ms' }}
                       onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
                       onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-elevated)'; }}>
@@ -3417,7 +3592,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                       importPreviewData.forEach((data, gi) => {
                         const selectedTopics = data.topics.filter((_: any, ti: number) => importSelected[gi]?.[ti]);
                         selectedTopics.forEach((t: any) => {
-                          newTopics.push({ id: Math.random().toString(), title: t.title || 'Sin titulo', status: t.status || 'pending', createdAt: Date.now(), reviewLevel: t.reviewLevel || 0, nextReview: Date.now(), groupId: selectedGroupId!, materials: t.materials || [] });
+                          newTopics.push({ id: Math.random().toString(), title: t.title || 'Sin titulo', status: t.status || 'pending', createdAt: Date.now(), reviewLevel: t.reviewLevel || 0, nextReview: Date.now(), groupId: selectedGroupId || importTargetGroupId || (groups[0]?.id || ''), materials: t.materials || [] });
                           importedCount++;
                         });
                       });
@@ -3436,7 +3611,37 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                 </>
               ) : (
                 <>
-                  {importExportMode === 'export' ? (
+                  {importExportMode === 'choose' ? (
+                    /* ══ CHOOSE: Two Elegant Blocks ══ */
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '8px 0' }}>
+                      <button onClick={() => setImportExportMode('import')}
+                        style={{ display: 'flex', alignItems: 'center', gap: 14, width: '100%', padding: '16px 18px', borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', cursor: 'pointer', textAlign: 'left', transition: 'all 200ms ' + EASE }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}40`; e.currentTarget.style.background = `${course.color}06`; e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = `0 4px 16px ${course.color}12`; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = 'var(--bg-deep)'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}>
+                        <div style={{ width: 40, height: 40, borderRadius: 10, background: `${course.color}12`, border: `1px solid ${course.color}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <FileUp size={18} style={{ color: course.color }} />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", marginBottom: 2 }}>Importar</div>
+                          <div style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.4 }}>Cargar temas desde un archivo JSON exportado</div>
+                        </div>
+                        <ChevronRight size={14} style={{ color: 'var(--text-muted)', opacity: 0.4 }} />
+                      </button>
+                      <button onClick={() => setImportExportMode('export')}
+                        style={{ display: 'flex', alignItems: 'center', gap: 14, width: '100%', padding: '16px 18px', borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', cursor: 'pointer', textAlign: 'left', transition: 'all 200ms ' + EASE }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}40`; e.currentTarget.style.background = `${course.color}06`; e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = `0 4px 16px ${course.color}12`; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = 'var(--bg-deep)'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}>
+                        <div style={{ width: 40, height: 40, borderRadius: 10, background: `${course.color}12`, border: `1px solid ${course.color}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <FileDown size={18} style={{ color: course.color }} />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", marginBottom: 2 }}>Exportar</div>
+                          <div style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.4 }}>Exportar temas de las agrupaciones a un archivo JSON</div>
+                        </div>
+                        <ChevronRight size={14} style={{ color: 'var(--text-muted)', opacity: 0.4 }} />
+                      </button>
+                    </div>
+                  ) : importExportMode === 'export' ? (
                     /* ══ EXPORT ══ */
                     <div>
                       <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '0 0 10px' }}>Selecciona las agrupaciones cuyos temas deseas exportar.</p>
@@ -3461,6 +3666,12 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                       </div>
                       {groups.length > 0 && (
                         <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                          <button onClick={() => setImportExportMode('choose')}
+                            style={{ flex: 1, height: 34, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter', sans-serif", transition: 'all 150ms' }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-elevated)'; }}>
+                            Volver
+                          </button>
                           <button onClick={async () => {
                             const selected = groups.filter(g => exportSelectedIds.has(g.id));
                             if (selected.length === 0) { toast.error('Selecciona al menos una agrupacion'); return; }
@@ -3678,6 +3889,9 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
           </div>
         </div>
       )}
+
+      {/* Hidden inline audio player */}
+      <audio ref={audioRef} preload="metadata" />
     </div>
   );
 }

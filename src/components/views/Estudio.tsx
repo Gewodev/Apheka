@@ -632,10 +632,14 @@ export default function Estudio() {
             <button onClick={tf} style={{ padding: 8, borderRadius: '50%', background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-secondary)', cursor: 'pointer', transition: 'all 200ms', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Pantalla completa">
               {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
             </button>
-            {/* Floating timer toggle — opens always-on-top floating timer window */}
+            {/* Floating timer toggle — show/hide always-on-top floating timer window */}
             <button className="hidden md:block" onClick={async () => {
               const existing = await WebviewWindow.getByLabel('floating-timer');
-              if (existing) { await existing.show(); await existing.setFocus(); return; }
+              if (existing) {
+                const visible = await existing.isVisible();
+                if (visible) { await existing.hide(); } else { await existing.show(); await existing.setFocus(); }
+                return;
+              }
               const win = new WebviewWindow('floating-timer', {
                 url: '/',
                 title: 'Timer',
@@ -643,7 +647,7 @@ export default function Estudio() {
                 resizable: false,
                 decorations: true,
                 alwaysOnTop: true,
-                skipTaskbar: true,
+                skipTaskbar: false,
               });
               win.once('tauri://error', () => {});
             }} style={{

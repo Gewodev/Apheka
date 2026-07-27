@@ -184,9 +184,9 @@ export default function Inicio() {
       }));
       const today = format(new Date(), 'yyyy-MM-dd');
       const future = all.filter(e => e.date >= today).sort((a, b) => a.date.localeCompare(b.date) || (a.startTime || '').localeCompare(b.startTime || ''));
-      if (!goalEvent) return future.slice(0, 4);
-      const afterGoal = future.filter(e => e.id !== goalEvent.id && e.date >= goalEvent.date);
-      return afterGoal.slice(0, 2);
+      if (!goalEvent) return future.slice(0, 5);
+      const afterGoal = future.filter(e => e.id !== goalEvent.id);
+      return afterGoal.slice(0, 1);
     } catch { return []; }
   }, [goalEvent]);
 
@@ -382,10 +382,6 @@ export default function Inicio() {
               <h1 className="truncate" style={{ fontFamily: "'Inter Tight', sans-serif", fontWeight: 350, fontSize: 'clamp(18px, 3.2vw, 34px)', lineHeight: 1.5, letterSpacing: '0.01em', color: 'var(--text-secondary)', margin: 0 }}>
                 {displayPhrase}
               </h1>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, opacity: 0.4 }}>
-                {phraseCustom ? <Check size={12} style={{ color: '#10B981' }} /> : null}
-                {phraseLocked ? <Lock size={11} style={{ color: '#F59E0B' }} /> : null}
-              </div>
             </div>
           )}
         </div>

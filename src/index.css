@@ -1350,14 +1350,14 @@ h6,
 .volume-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
-  background: var(--text-primary);
+  background: #fff;
   border: none;
   cursor: pointer;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
-  transition: all 150ms;
+  box-shadow: 0 0 6px rgba(0,0,0,0.5);
+  transition: transform 120ms ease;
 }
 
 .volume-slider::-webkit-slider-thumb:hover {
@@ -1366,23 +1366,23 @@ h6,
 
 .volume-slider::-webkit-slider-runnable-track {
   height: 4px;
-  border-radius: 3px;
-  background: var(--text-tertiary);
+  border-radius: 4px;
+  background: rgba(255,255,255,0.12);
 }
 
 .volume-slider::-moz-range-thumb {
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
-  background: var(--text-primary);
+  background: #fff;
   border: none;
   cursor: pointer;
 }
 
 .volume-slider::-moz-range-track {
   height: 4px;
-  border-radius: 3px;
-  background: var(--text-tertiary);
+  border-radius: 4px;
+  background: rgba(255,255,255,0.12);
 }
 
 .topic-card:hover h4 {

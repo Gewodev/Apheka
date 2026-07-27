@@ -170,7 +170,7 @@ export default function FloatingTimer() {
 
   async function startDrag(e: React.MouseEvent) {
     const t = e.target as HTMLElement;
-    if (t.closest('.deco-btn')) return;
+    if (t.closest('.deco-btn') || t.closest('.close-btn')) return;
     try { await getCurrentWindow().startDragging(); } catch {}
   }
 
@@ -238,6 +238,28 @@ export default function FloatingTimer() {
             ? <><rect x="2" y="2" width="12" height="12" rx="1.5" /><line x1="2" y1="5.5" x2="14" y2="5.5" /></>
             : <rect x="1.4" y="1.4" width="13.2" height="13.2" rx="2.5" />
           }
+        </svg>
+      </span>
+
+      <span
+        className="close-btn"
+        onClick={(e) => { e.stopPropagation(); getCurrentWindow().hide(); }}
+        title="Ocultar timer"
+        style={{
+          position: 'absolute', top: 6, right: 40, zIndex: 20,
+          width: 28, height: 28, borderRadius: 6,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: '#aaa', cursor: 'pointer', lineHeight: 1,
+          background: showDecoBtn ? 'rgba(255,255,255,0.1)' : 'transparent',
+          border: showDecoBtn ? '1px solid rgba(255,255,255,0.15)' : '1px solid transparent',
+          opacity: showDecoBtn ? 1 : 0,
+          transition: 'opacity 200ms, background 200ms, border-color 200ms',
+          pointerEvents: showDecoBtn ? 'auto' : 'none',
+        }}
+      >
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="4" y1="4" x2="12" y2="12" />
+          <line x1="12" y1="4" x2="4" y2="12" />
         </svg>
       </span>
 

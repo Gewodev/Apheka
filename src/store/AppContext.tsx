@@ -493,6 +493,9 @@ interface AppState {
   coverModalTrackId: string | null;
   youtubeVideoUrl: string | null;
   isPlayingMusic: boolean;
+  pipUrl: string | null;
+  pipTitle: string;
+  setPipUrl: (url: string | null, title?: string) => void;
 }
 
 export type ViewId = 'inicio' | 'tareas' | 'apuntes' | 'estudio' | 'cursos' | 'analiticas' | 'chat' | 'ajustes' | 'musica' | 'flujo' | 'canvas';
@@ -792,6 +795,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => { coverModalTrackIdRef.current = coverModalTrackId; }, [coverModalTrackId]);
   const [youtubeVideoUrl, setYoutubeVideoUrl] = useState<string | null>(null);
   const [isPlayingMusic, setIsPlayingMusic] = useState(false);
+  const [pipUrl, setPipUrlState] = useState<string | null>(null);
+  const [pipTitle, setPipTitle] = useState('');
+  const setPipUrl = useCallback((url: string | null, title = '') => {
+    setPipUrlState(url);
+    setPipTitle(title);
+  }, []);
   const [musicVolume, setMusicVolume] = useState(0.7);
   const [musicProgress, setMusicProgress] = useState(0);
   const [musicDuration, setMusicDuration] = useState(0);
@@ -3131,6 +3140,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     activeTaskId, timerLocked, isTimerActive, roundsCompleted, showCompletion,
     showRestPrompt, setShowRestPrompt, handlePomodoroBannerClick,
     currentTrackId, coverModalTrackId, youtubeVideoUrl, isPlayingMusic, isAudioLoading, musicVolume, musicProgress, musicDuration, musicListeningTime, dailyMusicTime, weeklyMusicTime, monthlyMusicTime, shuffleMode, repeatMode,
+    pipUrl, pipTitle, setPipUrl,
     trackHistory, playCounts, musicQueue, queueSource, downloadQueue, artists,
     googleConnected, calendarSyncEnabled, lastCalendarSync, importState,
     addTask, updateTask, deleteTask, toggleTaskStatus, clearAllTasks, deleteCompletedTasks, deleteOldCompletedTasks, reorderTasks,

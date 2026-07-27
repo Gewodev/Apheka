@@ -1,4 +1,5 @@
 ﻿import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Play, Pause, SkipBack, SkipForward, Volume2, Search,
   Music, Download, Trash2, X, ListMusic, Upload,
@@ -2162,9 +2163,9 @@ export default function Musica() {
       </div>
 
       {/* Edit Track Dialog */}
-      {editingTrackId && (
+      {editingTrackId && createPortal(
         <div style={{
-          position: 'fixed', inset: 0, zIndex: 1000,
+          position: 'fixed', inset: 0, zIndex: 99995,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
         }} onClick={() => setEditingTrackId(null)}>
@@ -2259,8 +2260,7 @@ export default function Musica() {
               }} className="btn-primary" style={{ height: 38, padding: '0 20px', fontSize: 12 }}>Guardar</button>
             </div>
           </div>
-        </div>
-      )}
+        </div>, document.body)}
 
       {/* Edit Artist Dialog */}
       {editingArtistId && (

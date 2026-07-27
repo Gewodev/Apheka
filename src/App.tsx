@@ -22,6 +22,7 @@ import SupabaseCallback from './components/SupabaseCallback';
 import GlobalPlayer from './components/GlobalPlayer';
 import DownloadManager from './components/ui/DownloadManager';
 import NowPlayingView from './components/NowPlayingView';
+import VideoPiP from './components/VideoPiP';
 import ReactPlayer from 'react-player';
 const Player = ReactPlayer as any;
 
@@ -32,7 +33,7 @@ interface AppContentProps {
 }
 
 function AppContent() {
-  const { settings, courses, addCourse, navigateTo, setNavigateTo, importState, updateSettings, toastMessage, deleteOldCompletedTasks, youtubeVideoUrl, isPlayingMusic, musicVolume, musicProgress, musicDuration, setMusicProgress, setIsPlayingMusic, playTrack, musicQueue, setMusicQueue, shuffleMode, repeatMode, tracks, currentTrackId, setRepeatMode, coverModalTrackId, showRestPrompt, handlePomodoroBannerClick, queueSource } = useApp();
+  const { settings, courses, addCourse, navigateTo, setNavigateTo, importState, updateSettings, toastMessage, deleteOldCompletedTasks, youtubeVideoUrl, isPlayingMusic, musicVolume, musicProgress, musicDuration, setMusicProgress, setIsPlayingMusic, playTrack, musicQueue, setMusicQueue, shuffleMode, repeatMode, tracks, currentTrackId, setRepeatMode, coverModalTrackId, showRestPrompt, handlePomodoroBannerClick, queueSource, pipUrl, pipTitle, setPipUrl } = useApp();
   const [activeView, setActiveView] = useState<ViewId>('inicio');
 
   // Auto-clean completed tasks older than 2 months on startup
@@ -723,6 +724,9 @@ function AppContent() {
           </div>
         </div>
       )}
+
+      {/* PiP Video Player */}
+      <VideoPiP url={pipUrl} title={pipTitle} onClose={() => setPipUrl(null)} />
 
     </div>
   );
