@@ -1258,7 +1258,7 @@ export default function Estudio() {
                       transform="rotate(-90 40 40)"
                       style={{ transition: 'stroke-dasharray 600ms ease', opacity: 0.85 }} />
                   </svg>
-                  <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', marginTop: -4 }}>
                     {detailSession.type === 'pomodoro' ? (
                       <CheckCircle size={20} color={detailSession.volmeter && detailSession.volmeter > 14 ? '#10B981' : detailSession.volmeter && detailSession.volmeter > 7 ? '#F59E0B' : '#EF4444'} />
                     ) : (

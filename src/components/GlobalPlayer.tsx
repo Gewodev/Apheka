@@ -522,7 +522,7 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                     onMouseLeave={e => { if (musicVolume > 0) { e.currentTarget.style.color = 'var(--text-tertiary)'; e.currentTarget.style.background = 'none'; } }}>
                     {musicVolume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
                   </button>
-                  <div style={{ width: 100, position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <div style={{ width: 100, position: 'relative', display: 'flex', alignItems: 'center', height: 20 }}>
                     <div style={{
                       position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)',
                       width: `${musicVolume * 100}%`, height: 4, borderRadius: 4,
@@ -532,9 +532,9 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                     }} />
                     <input type="range" min="0" max="1" step="0.005" value={musicVolume} onChange={handleVolumeChange}
                       style={{
-                        width: '100%', height: 4, cursor: 'pointer', position: 'relative', zIndex: 2,
+                        width: '100%', height: 20, cursor: 'pointer', position: 'relative', zIndex: 2,
                         WebkitAppearance: 'none', appearance: 'none', outline: 'none', borderRadius: 4,
-                        background: 'transparent',
+                        background: 'transparent', margin: 0, padding: 0,
                       }}
                       className="volume-slider" />
                   </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Home, NotebookPen, Clock, ListTodo, Settings,
   Music,
@@ -56,7 +56,16 @@ function AppContent() {
     }
   }, [activeView]);
 
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    try { return localStorage.getItem('owa_sidebar_collapsed') === 'true'; } catch { return false; }
+  });
+  const toggleSidebar = useCallback(() => {
+    setIsCollapsed(prev => {
+      const next = !prev;
+      try { localStorage.setItem('owa_sidebar_collapsed', String(next)); } catch {}
+      return next;
+    });
+  }, []);
   const [isOAuthCallback, setIsOAuthCallback] = useState(false);
   const [isSupabaseCallback, setIsSupabaseCallback] = useState(false);
 
@@ -265,7 +274,7 @@ function AppContent() {
       <aside className={`sidebar ${isCollapsed ? 'collapsed' : ''}${coverModalTrackId ? ' cover-tinted' : ''}`}>
 
         {/* ─── Logo / Home Anchor (click to toggle) ─── */}
-        <div className="sidebar-logo" onClick={() => setIsCollapsed(!isCollapsed)} style={{ cursor: 'pointer' }}>
+        <div className="sidebar-logo" onClick={toggleSidebar} style={{ cursor: 'pointer' }}>
           <img src="/owa_logo.png" alt="OWA Studio" className="sidebar-logo-img" />
           {!isCollapsed && <span className="sidebar-logo-text">OWA Studio</span>}
         </div>

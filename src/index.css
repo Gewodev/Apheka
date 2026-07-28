@@ -1358,10 +1358,11 @@ h6,
   cursor: pointer;
   box-shadow: 0 0 8px rgba(0,0,0,0.4);
   transition: transform 150ms ease, box-shadow 150ms ease;
+  transform: translateY(-2px);
 }
 
 .volume-slider::-webkit-slider-thumb:hover {
-  transform: scale(1.15);
+  transform: translateY(-2px) scale(1.15);
   box-shadow: 0 0 12px rgba(0,0,0,0.5);
 }
 
@@ -1379,6 +1380,7 @@ h6,
   border: 2px solid rgba(255,255,255,0.2);
   cursor: pointer;
   box-shadow: 0 0 8px rgba(0,0,0,0.4);
+  transform: translateY(-2px);
 }
 
 .volume-slider::-moz-range-track {

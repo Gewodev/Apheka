@@ -2536,21 +2536,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
     const onEnded = () => {
       if (currentTrackIdRef.current && tracksRef.current.length > 0) {
-        if (repeatModeRef.current === 'one') {
-          if (!repeatOnePlayedRef.current) {
-            repeatOnePlayedRef.current = true;
-            globalAudio.currentTime = 0;
-            globalAudio.play().catch(() => {
-              setTimeout(() => globalAudio.play().catch(() => {}), 100);
-            });
-            return;
-          }
-          repeatOnePlayedRef.current = false;
-          _setRepeatMode('none');
-          globalAudio.pause();
-          setIsPlayingMusic(false);
+        // REPEAT ALL = loop same track forever
+        if (repeatModeRef.current === 'all') {
+          globalAudio.currentTime = 0;
+          globalAudio.play().catch(() => {
+            setTimeout(() => globalAudio.play().catch(() => {}), 100);
+          });
           return;
         }
+        // REPEAT ONE = play through queue once, then deactivate
         let nextId: string | null = null;
         const q = musicQueueRef.current;
         const cid = currentTrackIdRef.current;
@@ -2559,7 +2553,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const [next] = q;
           setMusicQueue(q.slice(1));
           nextId = next;
-        } else if (hasSource || shuffleModeRef.current || repeatModeRef.current === 'all') {
+        } else if (hasSource || shuffleModeRef.current) {
           const sourcePool = queueSourceRef.current?.pool ?? tracksRef.current.map(t => t.id);
           let refilled: string[];
           if (shuffleModeRef.current) {
@@ -2595,7 +2589,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (nextId) {
           playTrackRef.current(nextId);
           if (coverModalTrackIdRef.current) setCoverModalTrackId(nextId);
-        } else setIsPlayingMusic(false);
+        } else {
+          // Queue empty → deactivate repeat-one
+          _setRepeatMode('none');
+          setIsPlayingMusic(false);
+        }
       } else {
         setIsPlayingMusic(false);
       }

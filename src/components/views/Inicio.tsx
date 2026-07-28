@@ -184,7 +184,7 @@ export default function Inicio() {
       }));
       const today = format(new Date(), 'yyyy-MM-dd');
       const future = all.filter(e => e.date >= today).sort((a, b) => a.date.localeCompare(b.date) || (a.startTime || '').localeCompare(b.startTime || ''));
-      if (!goalEvent) return future.slice(0, 5);
+      if (!goalEvent) return future.slice(0, 4);
       const afterGoal = future.filter(e => e.id !== goalEvent.id);
       return afterGoal.slice(0, 1);
     } catch { return []; }
@@ -779,7 +779,12 @@ export default function Inicio() {
             </>
           ) : (
             <>
-              {/* No goal: show upcoming events directly */}
+              {/* Header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 12, borderBottom: '1px solid var(--border-soft)' }}>
+                <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em' }}>PROXIMOS EVENTOS</span>
+                <span onClick={() => setNavigateTo?.('flujo')} style={{ fontSize: 10, fontWeight: 600, color: 'var(--accent)', cursor: 'pointer' }} className="hover:opacity-80">Ver todo</span>
+              </div>
+              {/* Events */}
               {upcomingEvents.length > 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {upcomingEvents.map(ev => {

@@ -648,6 +648,11 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const [addLinkUrl, setAddLinkUrl] = useState('');
   const [addLinkName, setAddLinkName] = useState('');
 
+  // Edit link modal
+  const [editLinkId, setEditLinkId] = useState<string | null>(null);
+  const [editLinkUrl, setEditLinkUrl] = useState('');
+  const [editLinkName, setEditLinkName] = useState('');
+
   // Plan session modal
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [planDate, setPlanDate] = useState('');
@@ -1147,6 +1152,18 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     updateCourse(course.id, { studyTopics: (course.studyTopics || []).map(t => t.id === topic.id ? { ...t, materials: [...(t.materials || []), newMat] } : t) });
     setAddLinkUrl(''); setAddLinkName(''); setShowAddLinkModal(false);
     toast.success('Enlace agregado');
+  };
+
+  const handleSaveEditLink = () => {
+    if (!editLinkId || !editLinkUrl.trim()) return;
+    updateCourse(course.id, {
+      studyTopics: (course.studyTopics || []).map(t => ({
+        ...t,
+        materials: (t.materials || []).map(m => m.id === editLinkId ? { ...m, name: editLinkName.trim() || editLinkUrl.trim(), dataUrl: editLinkUrl.trim() } : m)
+      }))
+    });
+    setEditLinkId(null); setEditLinkUrl(''); setEditLinkName('');
+    toast.success('Enlace actualizado');
   };
 
   const handleSaveMaterial = () => {
@@ -2208,12 +2225,12 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                     </div>
 
                     {/* ══ MATERIALS + CENTER ROW ══ */}
-                    <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', flex: 1, overflow: 'hidden', marginTop: 4 }}>
 
                       {/* ══ LEFT: MATERIALES (380px) ══ */}
                       <div style={{ width: 380, flexShrink: 0, display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
 
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 20px 14px', flexShrink: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px 8px', flexShrink: 0 }}>
                           <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: "'Inter Tight', sans-serif" }}>Materiales</h3>
                           <div style={{ display: 'flex', gap: 6 }}>
                             <button onClick={() => { estudioFileInputRef.current?.click(); }}
@@ -2233,7 +2250,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                           </div>
                         </div>
                         <input type="file" ref={estudioFileInputRef} style={{ display: 'none' }} onChange={e => handleFileUpload(e, parsedTopics[0]?.id)} />
-                        <div style={{ flex: 1, minHeight: 0, maxHeight: '34vh', overflowY: 'auto', padding: '0 14px 20px', display: 'flex', flexDirection: 'column', gap: 8 }} className="no-scrollbar">
+                        <div style={{ flex: 1, minHeight: 0, maxHeight: 390, overflowY: 'auto', padding: '10px 14px 24px', display: 'flex', flexDirection: 'column', gap: 12 }} className="no-scrollbar">
                           {allCourseMaterials.length === 0 ? (
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 120, borderRadius: 12, border: '1px dashed var(--border-subtle)', background: 'var(--bg-surface)', gap: 8 }}>
                               <File size={20} style={{ color: 'var(--text-muted)', opacity: 0.5 }} />
@@ -2339,13 +2356,23 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                       <span style={{ fontSize: 9, color: 'var(--text-muted)', minWidth: 28, fontFamily: "'JetBrains Mono', monospace" }}>{formatTime(audioDuration)}</span>
                                     </div>
                                   )}
-                                  <button onClick={e => { e.stopPropagation(); setConfirmDeleteMatId(mat.id); }}
-                                    style={{ width: 24, height: 24, borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, transition: 'all 150ms', opacity: 0 }}
-                                    onMouseEnter={ev => { ev.currentTarget.style.background = 'rgba(239,68,68,0.1)'; ev.currentTarget.style.color = '#EF4444'; ev.currentTarget.style.opacity = '1'; }}
-                                    onMouseLeave={ev => { ev.currentTarget.style.background = 'transparent'; ev.currentTarget.style.color = 'var(--text-muted)'; ev.currentTarget.style.opacity = '0'; }}
-                                    title="Eliminar">
-                                    <X size={11} />
-                                  </button>
+                                  {isLink ? (
+                                    <button onClick={e => { e.stopPropagation(); setEditLinkId(mat.id); setEditLinkUrl(dataUrl); setEditLinkName(matName); }}
+                                      style={{ width: 24, height: 24, borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, transition: 'all 150ms', opacity: 0 }}
+                                      onMouseEnter={ev => { ev.currentTarget.style.background = 'var(--bg-hover)'; ev.currentTarget.style.color = 'var(--text-primary)'; ev.currentTarget.style.opacity = '1'; }}
+                                      onMouseLeave={ev => { ev.currentTarget.style.background = 'transparent'; ev.currentTarget.style.color = 'var(--text-muted)'; ev.currentTarget.style.opacity = '0'; }}
+                                      title="Editar enlace">
+                                      <Edit3 size={11} />
+                                    </button>
+                                  ) : (
+                                    <button onClick={e => { e.stopPropagation(); setConfirmDeleteMatId(mat.id); }}
+                                      style={{ width: 24, height: 24, borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, transition: 'all 150ms', opacity: 0 }}
+                                      onMouseEnter={ev => { ev.currentTarget.style.background = 'rgba(239,68,68,0.1)'; ev.currentTarget.style.color = '#EF4444'; ev.currentTarget.style.opacity = '1'; }}
+                                      onMouseLeave={ev => { ev.currentTarget.style.background = 'transparent'; ev.currentTarget.style.color = 'var(--text-muted)'; ev.currentTarget.style.opacity = '0'; }}
+                                      title="Eliminar">
+                                      <X size={11} />
+                                    </button>
+                                  )}
                                 </div>
                               </React.Fragment>
                             );
@@ -2510,7 +2537,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                         </button>
                       </div>
                     </div>
-                    <div style={{ flex: 1, minHeight: 0, maxHeight: '45vh', overflowY: 'auto', padding: '0 14px 20px', display: 'flex', flexDirection: 'column', gap: 10 }} className="no-scrollbar">
+                    <div style={{ flex: 1, minHeight: 0, maxHeight: 550, overflowY: 'auto', padding: '0 14px 24px', display: 'flex', flexDirection: 'column', gap: 7 }} className="no-scrollbar">
                       {groups.length === 0 ? (
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 120, borderRadius: 12, border: '1px dashed var(--border-subtle)', background: 'var(--bg-surface)', gap: 8 }}>
                           <Layers size={20} style={{ color: 'var(--text-muted)', opacity: 0.5 }} />
@@ -2524,7 +2551,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                             onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
                             onClick={() => { setSelectedGroupId(group.id); setCurrentView('group'); }}>
                             {group.image ? (
-                              <div style={{ width: '100%', height: 110, overflow: 'hidden', position: 'relative' }}>
+                                <div style={{ width: '100%', height: 120, overflow: 'hidden', position: 'relative' }}>
                                 <img src={group.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', transition: 'transform 400ms cubic-bezier(0.16,1,0.3,1)' }}
                                   onMouseEnter={ev => { ev.currentTarget.style.transform = 'scale(1.04)'; }}
                                   onMouseLeave={ev => { ev.currentTarget.style.transform = 'scale(1)'; }} />
@@ -2544,7 +2571,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                 <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, transparent, ${course.color}, transparent)` }} />
                               </div>
                             ) : (
-                              <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, position: 'relative' }}>
+                              <div style={{ padding: '18px 20px', display: 'flex', alignItems: 'center', gap: 14, position: 'relative' }}>
                                 <div style={{ width: 36, height: 36, borderRadius: 10, background: `linear-gradient(135deg, ${course.color}18, ${course.color}08)`, border: `1px solid ${course.color}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 200ms ' + EASE }}>
                                   <Layers size={15} style={{ color: course.color }} />
                                 </div>
@@ -2648,6 +2675,66 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                           onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
                           Agregar
                         </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ══ EDIT LINK MODAL ══ */}
+                {editLinkId && (
+                  <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    onClick={e => { if (e.target === e.currentTarget) setEditLinkId(null); }}>
+                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)' }} />
+                    <div style={{ position: 'relative', width: 400, background: 'var(--bg-surface)', borderRadius: 16, border: '1px solid var(--border-subtle)', boxShadow: '0 24px 64px rgba(0,0,0,0.5)', overflow: 'hidden' }} className="bento-card">
+                      <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>Editar enlace</h3>
+                        <button onClick={() => setEditLinkId(null)}
+                          style={{ width: 28, height: 28, borderRadius: 7, border: 'none', background: 'var(--bg-hover)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#EF4444'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
+                          <X size={14} />
+                        </button>
+                      </div>
+                      <div style={{ padding: '18px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6, letterSpacing: '0.02em' }}>URL del enlace</label>
+                          <input value={editLinkUrl} onChange={e => setEditLinkUrl(e.target.value)}
+                            placeholder="https://..."
+                            onKeyDown={e => { if (e.key === 'Enter') handleSaveEditLink(); }}
+                            autoFocus
+                            style={{ width: '100%', height: 40, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 12px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif" }}
+                            className="input-base" />
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6, letterSpacing: '0.02em' }}>Nombre</label>
+                          <input value={editLinkName} onChange={e => setEditLinkName(e.target.value)}
+                            placeholder="Nombre del enlace"
+                            onKeyDown={e => { if (e.key === 'Enter') handleSaveEditLink(); }}
+                            style={{ width: '100%', height: 40, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 12px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif" }}
+                            className="input-base" />
+                        </div>
+                      </div>
+                      <div style={{ padding: '12px 24px 18px', display: 'flex', gap: 10, justifyContent: 'space-between' }}>
+                        <button onClick={() => { setConfirmDeleteMatId(editLinkId); setEditLinkId(null); }}
+                          style={{ height: 36, borderRadius: 8, border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.08)', color: '#EF4444', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '0 16px', transition: 'all 150ms' }}
+                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.15)'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; }}>
+                          Eliminar
+                        </button>
+                        <div style={{ display: 'flex', gap: 10 }}>
+                          <button onClick={() => setEditLinkId(null)}
+                            style={{ height: 36, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '0 16px', transition: 'all 150ms' }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
+                            Cancelar
+                          </button>
+                          <button onClick={handleSaveEditLink}
+                            style={{ height: 36, borderRadius: 8, border: 'none', background: course.color, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '0 20px', transition: 'all 150ms' }}
+                            onMouseEnter={e => { e.currentTarget.style.opacity = '0.9'; }}
+                            onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
+                            Guardar
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
