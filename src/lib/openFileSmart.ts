@@ -1,6 +1,8 @@
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { convertFileSrc } from '@tauri-apps/api/core';
 
+const isTauri = !!(window as any).__TAURI__;
+
 async function saveDataUrlToTempFile(dataUrl: string, fileName: string): Promise<string | null> {
   try {
     const parts = dataUrl.split(',');
@@ -26,7 +28,57 @@ async function saveDataUrlToTempFile(dataUrl: string, fileName: string): Promise
   } catch { return null; }
 }
 
+function dataUrlToBlob(dataUrl: string): Blob | null {
+  try {
+    if (!dataUrl.startsWith('data:')) return null;
+    const parts = dataUrl.split(',');
+    const mimeMatch = parts[0].match(/data:([^;]+)/);
+    if (!mimeMatch) return null;
+    const mime = mimeMatch[1];
+    const byteString = atob(parts[1]);
+    const ab = new ArrayBuffer(byteString.length);
+    const ia = new Uint8Array(ab);
+    for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
+    return new Blob([ab], { type: mime });
+  } catch { return null; }
+}
+
+function openDataUrlInBrowser(dataUrl: string, fileName: string) {
+  const blob = dataUrlToBlob(dataUrl);
+  if (!blob) return false;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const isViewable = blob.type.startsWith('image/') || blob.type === 'application/pdf';
+  if (isViewable) {
+    a.target = '_blank';
+    a.rel = 'noopener,noreferrer';
+  } else {
+    a.download = fileName || 'file';
+  }
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  return true;
+}
+
+function openLinkInBrowser(url: string) {
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
 async function openPdfViewer(dataUrl: string, title: string, type: string) {
+  if (!isTauri) {
+    if (dataUrl.startsWith('http') || dataUrl.startsWith('blob:')) {
+      openLinkInBrowser(dataUrl);
+    } else if (dataUrl.startsWith('data:')) {
+      openDataUrlInBrowser(dataUrl, title);
+    } else {
+      openLinkInBrowser(dataUrl);
+    }
+    return;
+  }
+
   try {
     const existing = await WebviewWindow.getByLabel('pdf-viewer');
     if (existing) {
@@ -35,7 +87,6 @@ async function openPdfViewer(dataUrl: string, title: string, type: string) {
     }
   } catch {}
 
-  // Convert the data to a URL the viewer window can load directly
   let finalUrl = dataUrl;
   if (dataUrl.startsWith('data:')) {
     const savedPath = await saveDataUrlToTempFile(dataUrl, title);
@@ -71,45 +122,14 @@ async function openPdfViewer(dataUrl: string, title: string, type: string) {
 }
 
 function openWithSystemApp(path: string) {
-  if ((window as any).__TAURI__?.shell?.open) {
-    (window as any).__TAURI__.shell.open(path).catch(() => {
-      window.open(path, '_blank', 'noopener,noreferrer');
+  const shell = (window as any).__TAURI__?.shell;
+  if (shell?.open) {
+    shell.open(path).catch(() => {
+      openLinkInBrowser(path);
     });
   } else {
-    window.open(path, '_blank', 'noopener,noreferrer');
+    openLinkInBrowser(path);
   }
-}
-
-function dataUrlToBlob(dataUrl: string): { blob: Blob; ext: string; mime: string } | null {
-  try {
-    if (!dataUrl.startsWith('data:')) return null;
-    const parts = dataUrl.split(',');
-    const mimeMatch = parts[0].match(/data:([^;]+)/);
-    if (!mimeMatch) return null;
-    const mime = mimeMatch[1];
-    const ext = mime.split('/')[1]?.replace('jpeg', 'jpg') || 'bin';
-    const byteString = atob(parts[1]);
-    const ab = new ArrayBuffer(byteString.length);
-    const ia = new Uint8Array(ab);
-    for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
-    return { blob: new Blob([ab], { type: mime }), ext, mime };
-  } catch { return null; }
-}
-
-async function saveBase64ToFile(dataUrl: string, fileName: string): Promise<string | null> {
-  const result = dataUrlToBlob(dataUrl);
-  if (!result) return null;
-  try {
-    const pathMod = await import('@tauri-apps/api/path');
-    const { writeFile, exists, mkdir } = await import('@tauri-apps/plugin-fs');
-    const appDataDirPath = await pathMod.appDataDir();
-    const tempDir = await pathMod.join(appDataDirPath, 'temp_files');
-    if (!await exists(tempDir)) await mkdir(tempDir, { recursive: true });
-    const filePath = await pathMod.join(tempDir, fileName);
-    const arrayBuffer = await result.blob.arrayBuffer();
-    await writeFile(filePath, new Uint8Array(arrayBuffer));
-    return filePath;
-  } catch { return null; }
 }
 
 export async function openFileSmart(dataUrl: string, fileName: string) {
@@ -128,6 +148,26 @@ export async function openFileSmart(dataUrl: string, fileName: string) {
   const isYouTube = isLink && (dataUrl.includes('youtube.com') || dataUrl.includes('youtu.be'));
   const isWeb = isLink && !isYouTube;
 
+  if (!isTauri) {
+    if (isYouTube) {
+      const match = dataUrl.match(/(?:v=|\.be\/|embed\/)([^&?#]+)/);
+      const ytUrl = `https://www.youtube.com/watch?v=${match?.[1] || ''}`;
+      openLinkInBrowser(ytUrl);
+      return;
+    }
+    if (isLink || isLocal) {
+      openLinkInBrowser(dataUrl);
+      return;
+    }
+    if (isImage || isPdf || isAudio || isVideo || isData) {
+      openDataUrlInBrowser(dataUrl, fileName);
+      return;
+    }
+    openLinkInBrowser(dataUrl);
+    return;
+  }
+
+  // ── Tauri mode ──
   if (isYouTube || isVideo) {
     let embedUrl = dataUrl;
     if (isYouTube) {
@@ -153,26 +193,9 @@ export async function openFileSmart(dataUrl: string, fileName: string) {
     return;
   }
 
-  if (isOffice) {
-    if (isData) {
-      const savedPath = await saveBase64ToFile(dataUrl, fileName);
-      if (savedPath) { openWithSystemApp(savedPath); return; }
-    } else if (isLocal) {
-      openWithSystemApp(dataUrl);
-      return;
-    }
+  if (isOffice || isData || isLocal) {
     openWithSystemApp(dataUrl);
     return;
-  }
-
-  if (isLocal) {
-    openWithSystemApp(dataUrl);
-    return;
-  }
-
-  if (isData) {
-    const savedPath = await saveBase64ToFile(dataUrl, fileName);
-    if (savedPath) { openWithSystemApp(savedPath); return; }
   }
 
   openWithSystemApp(dataUrl);

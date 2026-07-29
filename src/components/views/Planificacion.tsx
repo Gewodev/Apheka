@@ -491,7 +491,7 @@ export default function Planificacion() {
                 })}
               </div>
               <DndContext sensors={planSensors} onDragStart={e => { if (!('dayOfWeek' in (events.find(ev => ev.id === e.active.id) || {} as any))) setActiveDragPlanId(e.active.id as string); }} onDragEnd={handleDragEndPlan}>
-              <div ref={timelineRef} style={{ flex:1, overflowY:'auto' }}>
+              <div ref={timelineRef} style={{ flex:1, overflowY:'auto', paddingBottom:24 }}>
                 <div style={{ display:'grid', gridTemplateColumns:`60px repeat(7,1fr)`, minHeight:(H_END-H_START+1)*H_PX }}>
                   <div style={{ borderRight:'1px solid var(--border-soft)' }}>
                     {HOURS.map(h => (
@@ -677,7 +677,7 @@ export default function Planificacion() {
                   ))}
                 </div>
               </div>
-              <div ref={timelineRef} style={{ flex:1, overflowY:'auto' }}>
+              <div ref={timelineRef} style={{ flex:1, overflowY:'auto', paddingBottom:24 }}>
                 <div style={{ display:'grid', gridTemplateColumns:'80px 1fr', minHeight:(H_END-H_START+1)*H_PX }}>
                   <div style={{ borderRight:'1px solid var(--border-soft)', background: 'color-mix(in srgb, var(--bg-elevated) 40%, transparent)' }}>
                     {HOURS.map(h=>(
@@ -772,7 +772,7 @@ export default function Planificacion() {
               <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', borderBottom:'1px solid var(--border-soft)', flexShrink:0, backdropFilter: 'blur(var(--bg-blur, 10px))', WebkitBackdropFilter: 'blur(var(--bg-blur, 10px))' }}>
                 {DAY_LABELS.map(d=><div key={d} style={{ padding:'12px 0', textAlign:'center', fontSize:11, fontWeight:700, color:'var(--text-tertiary)', textTransform:'uppercase', letterSpacing:'0.08em' }}>{d}</div>)}
               </div>
-              <div style={{ flex:1, overflowY:'auto' }}>
+              <div style={{ flex:1, overflowY:'auto', paddingBottom:24 }}>
                 {weekRows.map((week,wi)=>(
                   <div key={wi} style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', borderBottom:'1px solid var(--border-soft)' }}>
                     {week.map((day,di)=>{
@@ -847,7 +847,7 @@ export default function Planificacion() {
                         {format(monthDate, 'MMMM', { locale: es as any })}
                       </div>
                       <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:2, marginBottom:4 }}>
-                        {['L','M','M','J','V','S','D'].map(l => (
+                        {['L','M','X','J','V','S','D'].map(l => (
                           <div key={l} style={{ fontSize:8, fontWeight:700, color:'var(--text-tertiary)', textAlign:'center', textTransform:'uppercase', letterSpacing:'0.04em' }}>{l}</div>
                         ))}
                       </div>

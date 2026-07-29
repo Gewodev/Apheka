@@ -89,8 +89,14 @@ function AppContent() {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
-  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
+  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(() => {
+    try { return localStorage.getItem('owa_selected_course_id'); } catch { return null; }
+  });
   const [selectedCourseTab, setSelectedCourseTab] = useState<string>('overview');
+  useEffect(() => {
+    if (selectedCourseId) localStorage.setItem('owa_selected_course_id', selectedCourseId);
+    else localStorage.removeItem('owa_selected_course_id');
+  }, [selectedCourseId]);
   const [showCoursesPopup, setShowCoursesPopup] = useState(false);
   const coursesPopupRef = useRef<HTMLDivElement>(null);
   const [showPopupAddModal, setShowPopupAddModal] = useState(false);

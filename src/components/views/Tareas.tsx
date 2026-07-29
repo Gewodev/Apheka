@@ -555,7 +555,7 @@ export default function Tareas() {
   }, [tasks]);
 
   const weeklyHours = useMemo(() => {
-    const dayNames = ['L','M','M','J','V','S','D'];
+    const dayNames = ['L','M','X','J','V','S','D'];
     return dayNames.map((d, i) => ({ l: d, h: [30, 55, 40, 75, 25, 10, 5][i] }));
   }, []);
 

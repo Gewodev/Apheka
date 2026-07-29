@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
   GraduationCap, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Pencil, PlusCircle, Layers, Trash2,
   Book, Upload, X, Search, Edit3, Plus, File, Sigma, Lightbulb, Key, Type, HelpCircle, ListChecks, ExternalLink,
@@ -410,6 +411,7 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
   };
 
   const trackFormats = () => {
+    const block = document.queryCommandValue('formatBlock')?.replace(/[<>]/g, '')?.toLowerCase() || '';
     setActiveFormats({
       bold: document.queryCommandState('bold'),
       italic: document.queryCommandState('italic'),
@@ -417,13 +419,24 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
       strikeThrough: document.queryCommandState('strikeThrough'),
       insertUnorderedList: document.queryCommandState('insertUnorderedList'),
       insertOrderedList: document.queryCommandState('insertOrderedList'),
+      heading1: block === 'h1',
+      heading2: block === 'h2',
+      heading3: block === 'h3',
+      blockquote: block === 'blockquote',
     });
   };
 
   const scheduleTrack = () => {
     if (trackTimeout.current) clearTimeout(trackTimeout.current);
-    trackTimeout.current = setTimeout(trackFormats, 10);
+    trackTimeout.current = setTimeout(trackFormats, 0);
   };
+
+  useEffect(() => {
+    if (!editable) return;
+    const onSelChange = () => scheduleTrack();
+    document.addEventListener('selectionchange', onSelChange);
+    return () => document.removeEventListener('selectionchange', onSelChange);
+  }, [editable]);
 
   const handlePaste = (e: React.ClipboardEvent) => {
     e.preventDefault();
@@ -442,8 +455,24 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
         return;
       }
     }
-    document.execCommand('insertHTML', false, e.clipboardData.getData('text/plain'));
+    const text = e.clipboardData.getData('text/plain');
+    const html = e.clipboardData.getData('text/html');
+    if (html) {
+      const cleaned = html.replace(/<style[^>]*>.*?<\/style>/gi, '')
+        .replace(/<meta[^>]*>/gi, '')
+        .replace(/<link[^>]*>/gi, '')
+        .replace(/class="[^"]*"/gi, '')
+        .replace(/id="[^"]*"/gi, '')
+        .replace(/background(?:-color)?:\s*[^;"]+;?/gi, '')
+        .replace(/color:\s*[^;"]+;?/gi, '')
+        .replace(/font-family:\s*[^;"]+;?/gi, '')
+        .replace(/font-size:\s*[^;"]+;?/gi, '');
+      document.execCommand('insertHTML', false, cleaned);
+    } else {
+      document.execCommand('insertHTML', false, text);
+    }
     markDirty();
+    scheduleTrack();
   };
 
   const handleEditorKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -540,20 +569,79 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
     }
   };
 
+  const blockquoteButtonRef = useRef<HTMLButtonElement>(null);
   const applyFormat = (cmd: string, value?: string) => {
-    document.execCommand(cmd, false, value);
+    if (cmd === 'h1' || cmd === 'h2' || cmd === 'h3') {
+      const block = document.queryCommandValue('formatBlock')?.replace(/[<>]/g, '')?.toLowerCase() || '';
+      document.execCommand('formatBlock', false, block === cmd ? '<p>' : `<${cmd}>`);
+    } else if (cmd === 'blockquote') {
+      const block = document.queryCommandValue('formatBlock')?.replace(/[<>]/g, '')?.toLowerCase() || '';
+      if (block === 'blockquote') {
+        document.execCommand('formatBlock', false, '<p>');
+      } else {
+        document.execCommand('formatBlock', false, '<blockquote>');
+      }
+    } else {
+      document.execCommand(cmd, false, value);
+    }
     editorRef.current?.focus();
     markDirty();
     trackFormats();
   };
 
+  const insertLink = () => {
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount || sel.isCollapsed) return;
+    const url = prompt('URL del enlace:');
+    if (url) {
+      document.execCommand('createLink', false, url);
+      markDirty();
+      trackFormats();
+    }
+  };
+
+  const insertCode = () => {
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return;
+    document.execCommand('insertHTML', false, `<code style="background:var(--bg-hover);padding:2px 6px;border-radius:4px;font-size:13px;font-family:'JetBrains Mono',monospace">${sel.toString()}</code>`);
+    markDirty();
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', background: 'transparent' }}>
       {editable && !hideToolbar && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '0 10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '8px 10px', borderBottom: '1px solid var(--border-subtle)', background: `${courseColor}04`, flexWrap: 'wrap' }}>
           <FormatToolbar onFormat={applyFormat} color={courseColor}
-            toolbarItems={['bold','italic','underline','strikethrough','list','orderedList']}
+            toolbarItems={['bold','italic','underline','strikethrough','list','orderedList','heading3']}
             activeFormats={activeFormats} />
+          <div style={{ width: 1, height: 18, background: 'var(--border-subtle)', margin: '0 6px', flexShrink: 0 }} />
+          <button onClick={() => applyFormat('h1')} title="Título 1"
+            style={{ width: 26, height: 26, borderRadius: 5, border: 'none', background: activeFormats.heading1 ? `${courseColor}18` : 'transparent', cursor: 'pointer', color: activeFormats.heading1 ? courseColor : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, transition: 'all 150ms' }}
+            onMouseEnter={e => e.currentTarget.style.background = `${courseColor}12`}
+            onMouseLeave={e => { if (!activeFormats.heading1) e.currentTarget.style.background = 'transparent'; }}>H1</button>
+          <button onClick={() => applyFormat('h2')} title="Título 2"
+            style={{ width: 26, height: 26, borderRadius: 5, border: 'none', background: activeFormats.heading2 ? `${courseColor}18` : 'transparent', cursor: 'pointer', color: activeFormats.heading2 ? courseColor : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, transition: 'all 150ms' }}
+            onMouseEnter={e => e.currentTarget.style.background = `${courseColor}12`}
+            onMouseLeave={e => { if (!activeFormats.heading2) e.currentTarget.style.background = 'transparent'; }}>H2</button>
+          <button onClick={() => applyFormat('h3')} title="Título 3"
+            style={{ width: 26, height: 26, borderRadius: 5, border: 'none', background: activeFormats.heading3 ? `${courseColor}18` : 'transparent', cursor: 'pointer', color: activeFormats.heading3 ? courseColor : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, transition: 'all 150ms' }}
+            onMouseEnter={e => e.currentTarget.style.background = `${courseColor}12`}
+            onMouseLeave={e => { if (!activeFormats.heading3) e.currentTarget.style.background = 'transparent'; }}>H3</button>
+          <div style={{ width: 1, height: 18, background: 'var(--border-subtle)', margin: '0 6px', flexShrink: 0 }} />
+          <button ref={blockquoteButtonRef} onClick={() => applyFormat('blockquote')} title="Cita"
+            style={{ width: 26, height: 26, borderRadius: 5, border: 'none', background: activeFormats.blockquote ? `${courseColor}18` : 'transparent', cursor: 'pointer', color: activeFormats.blockquote ? courseColor : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms', fontSize: 14 }}
+            onMouseEnter={e => e.currentTarget.style.background = `${courseColor}12`}
+            onMouseLeave={e => { if (!activeFormats.blockquote) e.currentTarget.style.background = 'transparent'; }}>❝</button>
+          <button onClick={insertCode} title="Código"
+            style={{ width: 26, height: 26, borderRadius: 5, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms', fontSize: 12, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}
+            onMouseEnter={e => e.currentTarget.style.background = `${courseColor}12`}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>&lt;/&gt;</button>
+          <button onClick={insertLink} title="Insertar enlace"
+            style={{ width: 26, height: 26, borderRadius: 5, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+            onMouseEnter={e => e.currentTarget.style.background = `${courseColor}12`}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          </button>
           <div style={{ flex: 1 }} />
           {toolbarEnd}
         </div>
@@ -627,6 +715,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const [importPreviewData, setImportPreviewData] = useState<{ group: { name: string; image?: string }; topics: any[] }[] | null>(null);
   const [importSelected, setImportSelected] = useState<boolean[][]>([]);
   const [exportSelectedIds, setExportSelectedIds] = useState<Set<string>>(new Set());
+  const [deleteTopicId, setDeleteTopicId] = useState<string | null>(null);
   const groupCoverInputInlineRef = useRef<HTMLInputElement>(null);
 
   // Topic modals
@@ -727,42 +816,39 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
         localStorage.removeItem(`owa_estudio_last_group_${selectedCourseId}`);
       }
     }
-  }, [selectedGroupId, overviewMode, selectedCourseId]);
+  }, [selectedGroupId, selectedCourseId]);
 
   // Persist study view state per course
   useEffect(() => {
     if (selectedCourseId && overviewMode === 'temas_archivos') {
       localStorage.setItem(`owa_study_view_${selectedCourseId}`, currentView);
     }
-  }, [currentView, selectedCourseId, overviewMode]);
+  }, [currentView, selectedCourseId]);
   useEffect(() => {
     if (selectedCourseId && activeTopicId && overviewMode === 'temas_archivos') {
       localStorage.setItem(`owa_study_topic_${selectedCourseId}`, activeTopicId);
     }
-  }, [activeTopicId, selectedCourseId, overviewMode]);
+  }, [activeTopicId, selectedCourseId]);
 
-  // Restore study state when course changes
-  const prevCourseRef = useRef(selectedCourseId);
+  // Restore study state on mount and when course/mode changes
   useEffect(() => {
-    if (selectedCourseId !== prevCourseRef.current && overviewMode === 'temas_archivos') {
-      prevCourseRef.current = selectedCourseId;
-      const savedView = localStorage.getItem(`owa_study_view_${selectedCourseId}`);
-      if (savedView === 'topic' || savedView === 'group' || savedView === 'overview') {
-        setCurrentView(savedView);
-        if (savedView === 'topic') {
-          const savedTopic = localStorage.getItem(`owa_study_topic_${selectedCourseId}`);
-          if (savedTopic) setActiveTopicId(savedTopic);
-        }
-        if (savedView === 'group') {
-          const savedGroup = localStorage.getItem(`owa_estudio_last_group_${selectedCourseId}`);
-          if (savedGroup && groups.some(g => g.id === savedGroup)) {
-            setSelectedGroupId(savedGroup);
-          }
-        }
-      } else {
-        setCurrentView('overview');
-        setSelectedGroupId(null);
+    if (!selectedCourseId || overviewMode !== 'temas_archivos') return;
+    const savedView = localStorage.getItem(`owa_study_view_${selectedCourseId}`);
+    if (savedView === 'topic' || savedView === 'group' || savedView === 'overview') {
+      setCurrentView(savedView);
+      if (savedView === 'topic') {
+        const savedTopic = localStorage.getItem(`owa_study_topic_${selectedCourseId}`);
+        if (savedTopic) setActiveTopicId(savedTopic);
       }
+      if (savedView === 'group') {
+        const savedGroup = localStorage.getItem(`owa_estudio_last_group_${selectedCourseId}`);
+        if (savedGroup && groups.some(g => g.id === savedGroup)) {
+          setSelectedGroupId(savedGroup);
+        }
+      }
+    } else {
+      setCurrentView('overview');
+      setSelectedGroupId(null);
     }
   }, [selectedCourseId, overviewMode]);
 
@@ -775,23 +861,10 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     setModeAnimating(true);
     setModePhase('out');
     setTimeout(() => {
-      prevMode.current = overviewMode;
       const nextMode = overviewMode === 'tareas_notas' ? 'temas_archivos' : 'tareas_notas';
       setOverviewMode(nextMode);
       setCurrentView('overview');
-      if (nextMode === 'temas_archivos' && selectedCourseId) {
-        const savedGroup = localStorage.getItem(`owa_estudio_last_group_${selectedCourseId}`);
-        if (savedGroup && groups.some(g => g.id === savedGroup)) {
-          setSelectedGroupId(savedGroup);
-          setCurrentView('group');
-        } else {
-          setSelectedGroupId(null);
-          setCurrentView('overview');
-        }
-      } else {
-        setSelectedGroupId(null);
-        setCurrentView('overview');
-      }
+      setSelectedGroupId(null);
       setStudyToolMode('none');
       setModePhase('in');
       setTimeout(() => { setModePhase('idle'); setModeAnimating(false); }, 350);
@@ -923,7 +996,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
       setEditCourseCover(course.coverUrl || course.coverImage);
       setEditCourseTeacher(course.teacher || course.teacherName || '');
     }
-  }, [course]);
+  }, [selectedCourseId, course?.name, course?.coverUrl, course?.coverImage, course?.teacher, course?.teacherName]);
 
   // Sync initial tab
   useEffect(() => { setActiveTab(initialTab); }, [initialTab]);
@@ -1473,7 +1546,10 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <button onClick={() => setCurrentView('overview')} style={{ width: 30, height: 30, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', cursor: 'pointer', color: 'var(--text-secondary)' }}><ChevronLeft size={13} /></button>
                 <div>
-                  <div style={{ fontSize: 8, fontWeight: 700, color: course.color, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{course.name}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                    <span style={{ fontSize: 8, fontWeight: 700, color: course.color, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{course.name}</span>
+                    {(() => { const grp = groups.find(g => g.id === activeTopic.groupId); return grp ? <><span style={{ color: 'var(--text-muted)', fontSize: 7 }}>·</span><span style={{ fontSize: 8, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{grp.name}</span></> : null; })()}
+                  </div>
                   <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', margin: '2px 0 0', fontFamily: "'Inter Tight', sans-serif" }}>{activeTopic.title}</h2>
                 </div>
               </div>
@@ -1571,14 +1647,15 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                        <button onClick={() => { const grp = groups.find(g => g.id === selectedGroupId); if (grp) { setEditingGroupId(grp.id); setGroupName(grp.name); setGroupCover(grp.image); setShowGroupModal(true); } }} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
                         onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}><Pencil size={13} /></button>
                        <button onClick={() => {
-                         const currentGrp = groups.find(g => g.id === selectedGroupId);
-                         const hasTopics = currentGrp ? parsedTopics.filter(t => t.groupId === selectedGroupId).length > 0 : false;
-                         if (currentGrp && !hasTopics) { toast.error('No hay temas dentro de esta agrupacion'); return; }
-                         if (currentGrp && selectedGroupId) { setExportSelectedIds(new Set([selectedGroupId])); setImportExportMode('export'); }
-                         else { setImportExportMode('choose'); }
-                         setImportPreviewData(null); setImportSelected([]); setImportTargetGroupId(selectedGroupId); setShowAgrupacionImportExport(true);
-                       }} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
-                         onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'} title="Importar / Exportar"><Package size={13} /></button>
+                          const currentGrp = groups.find(g => g.id === selectedGroupId);
+                          const grpTopics = parsedTopics.filter(t => t.groupId === selectedGroupId);
+                          const hasTopics = grpTopics.length > 0;
+                          if (currentGrp && !hasTopics) { toast.error('No hay temas dentro de esta agrupacion'); return; }
+                          if (currentGrp && selectedGroupId) { setExportSelectedIds(new Set(grpTopics.map(t => t.id))); setImportExportMode('export'); }
+                          else { setImportExportMode('choose'); }
+                          setImportPreviewData(null); setImportSelected([]); setImportTargetGroupId(selectedGroupId); setShowAgrupacionImportExport(true);
+                        }} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'} title="Importar / Exportar"><Package size={13} /></button>
 
                     </>
                   ) : (
@@ -1604,12 +1681,12 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
               filter: modePhase === 'out' ? 'blur(4px)' : modePhase === 'in' ? 'blur(1px)' : 'none',
             }}>
             {overviewMode === 'tareas_notas' ? (
-              <div key="tasks_notes" style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', gap: 36, margin: '0 auto', padding: '28px 48px 60px' }} className="no-scrollbar">
+              <div key="tasks_notes" style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', gap: 48, padding: '32px 40px 60px', width: '100%', boxSizing: 'border-box' }} className="no-scrollbar">
                 {/* ─── LEFT: Tasks ─── */}
-                <div style={{ flex: 3, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 32 }}>
+                <div style={{ flex: 4, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 32 }}>
                   {/* Task Creator Card */}
-                  <div className="bento-card" style={{ borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', overflow: 'hidden', padding: 0, boxShadow: '0 1px 8px rgba(0,0,0,0.04)' }}>
-                      <div style={{ padding: '22px 24px' }}>
+                  <div className="bento-card" style={{ borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', overflow: 'hidden', padding: 0, boxShadow: '0 1px 8px rgba(0,0,0,0.04)' }}>
+                      <div style={{ padding: '24px 28px' }}>
                       <input value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} placeholder="Nombre de la tarea"
                         style={{ width: '100%', border: 'none', borderBottom: 'none', height: 'auto', padding: '4px 0', fontSize: 18, fontWeight: 600, background: 'transparent', color: 'var(--text-primary)', outline: 'none', fontFamily: "'Inter Tight', sans-serif", borderRadius: 0, letterSpacing: '-0.02em' }}
                         onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) handleAddTask(); }} />
@@ -1662,7 +1739,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                         })
                       : pendingTasks;
                     return tasksToShow.length > 0 ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                         {tasksToShow.map(task => {
                           const descPreview = (task.notes || '').replace(/<[^>]+>/g, '').trim().slice(0, 45);
                           let dueDisplay = '';
@@ -1679,7 +1756,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                           }
                           const isDone = task.status === 'completado';
                           return (
-                            <div key={task.id} className={isDone ? '' : 'item-card'} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 22px', borderRadius: 10, border: '1px solid var(--border-subtle)', background: isDone ? 'var(--bg-surface-alpha, var(--bg-surface))' : 'var(--bg-elevated-alpha, var(--bg-elevated))', transition: 'all 200ms ' + EASE, opacity: isDone ? 0.7 : 1 }}
+                            <div key={task.id} className={isDone ? '' : 'item-card'} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '18px 24px', borderRadius: 12, border: '1px solid var(--border-subtle)', background: isDone ? 'var(--bg-surface-alpha, var(--bg-surface))' : 'var(--bg-elevated-alpha, var(--bg-elevated))', transition: 'all 200ms ' + EASE, opacity: isDone ? 0.7 : 1 }}
                               onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}30`; }}
                               onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; }}>
                               <div onClick={() => handleToggleTask(task.id)}
@@ -1727,7 +1804,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                   })()}
                 </div>
                 {/* ─── RIGHT: Mis Apuntes — Vertical Expandable Blocks ─── */}
-                  <div style={{ flex: 2.2, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 0 }}>
+                  <div style={{ flex: 3, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 0 }}>
                   {/* Header */}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 0, marginBottom: 16 }}>
                     <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: "'Inter Tight', sans-serif" }}>{showCourseNotesInOverview ? 'Mi conocimiento' : 'Mis apuntes'}</h3>
@@ -1759,7 +1836,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                   {filteredCourseNotes.length > 0 ? (
                     <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleOverviewNoteDragEnd}>
                       <SortableContext items={sortedIds} strategy={rectSortingStrategy}>
-                        <div ref={overviewNoteContainerRef} style={{ display: 'flex', flexDirection: 'column', gap: 12, position: 'relative', zIndex: 2, padding: '0 8px' }}>
+                        <div ref={overviewNoteContainerRef} style={{ display: 'flex', flexDirection: 'column', gap: 14, position: 'relative', zIndex: 2, padding: '0 12px' }}>
                           {expandedFirst.map(n => {
                             const isHighlighted = overviewNoteHighlights.includes(n.id);
                             const isCourseNote = !n.isCoursePrivate;
@@ -1894,6 +1971,10 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                     {/* Topic header */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                       <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                          <span style={{ fontSize: 8, fontWeight: 700, color: course.color, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{course.name}</span>
+                          {activeTopic.groupId && (() => { const grp = groups.find(g => g.id === activeTopic.groupId); return grp ? <><span style={{ color: 'var(--text-muted)', fontSize: 7 }}>·</span><span style={{ fontSize: 8, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{grp.name}</span></> : null; })()}
+                        </div>
                         <h2 style={{ fontSize: 22, fontWeight: 600, color: 'var(--text-primary)', margin: 0, fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em' }}>{activeTopic.title}</h2>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
                           <span style={{ fontSize: 8, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Comprension:</span>
@@ -2067,6 +2148,32 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
 
               <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 40px' }} className="no-scrollbar">
+                        {/* ═══ GROUP HEADER ═══ */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <button onClick={() => setCurrentView('overview')} style={{ width: 30, height: 30, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', cursor: 'pointer', color: 'var(--text-secondary)' }}><ChevronLeft size={13} /></button>
+                            <div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                                <span style={{ fontSize: 8, fontWeight: 700, color: course.color, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{course.name}</span>
+                                <span style={{ color: 'var(--text-muted)', fontSize: 7 }}>·</span>
+                                <span style={{ fontSize: 8, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{grp.name}</span>
+                              </div>
+                              <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', margin: '2px 0 0', fontFamily: "'Inter Tight', sans-serif" }}>{grp.name}</h2>
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 500 }}>{grpTopics.length} temas · {grpTopics.reduce((s, t) => s + (t.materials?.length || 0), 0)} materiales</span>
+                            <button onClick={() => { setEditingGroupId(grp.id); setGroupName(grp.name); setGroupCover(grp.image); setShowGroupModal(true); }} style={{ width: 30, height: 30, borderRadius: 6, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                              onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}40`; e.currentTarget.style.color = course.color; }} onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-muted)'; }}><Edit3 size={12} /></button>
+                            <button onClick={() => {
+                              const hasTopics = grpTopics.length > 0;
+                              if (!hasTopics) { toast.error('No hay temas dentro de esta agrupacion'); return; }
+                              setExportSelectedIds(new Set(grpTopics.map(t => t.id))); setImportExportMode('export');
+                              setImportPreviewData(null); setImportSelected([]); setImportTargetGroupId(selectedGroupId); setShowAgrupacionImportExport(true);
+                            }} style={{ width: 30, height: 30, borderRadius: 6, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                              onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}40`; e.currentTarget.style.color = course.color; }} onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-muted)'; }} title="Exportar temas"><LI.Package size={12} /></button>
+                          </div>
+                        </div>
                         {grpTopics.length === 0 ? (
                           <div onClick={() => { setEditingTopicId(null); setTopicName(''); setShowTopicModal(true); }}
                             style={{ padding: '64px 24px', textAlign: 'center', borderRadius: 16, border: `2px dashed ${course.color}30`, background: `linear-gradient(145deg, ${course.color}06, transparent 70%)`, cursor: 'pointer', transition: 'all 300ms cubic-bezier(0.16,1,0.3,1)', minHeight: 200, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14 }}
@@ -2085,28 +2192,26 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                             {grpTopics.map(topic => {
                                 const mats = topic.materials || [];
                                 const matCount = mats.length;
-                                const isConfirmingDelete = confirmDeleteGroupId === `topic_${topic.id}`;
                                 const typeCounts: Record<string, number> = {};
                                 mats.forEach(m => { typeCounts[m.type] = (typeCounts[m.type] || 0) + 1; });
                                 const typeColors: Record<string, string> = { resource: '#3B82F6', flashcard: '#8B5CF6', qa: '#10B981', definition: '#F59E0B', note: '#6B7280' };
                                 const typeLabels: Record<string, string> = { resource: 'Recursos', flashcard: 'Flashcards', qa: 'Preguntas', definition: 'Definiciones', note: 'Notas' };
                                 return (
-                                   <div key={topic.id} onClick={() => { setActiveTopicId(topic.id); setCurrentView('topic'); }}
-                                     style={{ borderRadius: 14, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', overflow: 'hidden', cursor: 'pointer', transition: 'all 250ms cubic-bezier(0.16,1,0.3,1)', display: 'flex', flexDirection: 'column', position: 'relative' }}
-                                     className="topic-card"
-                                      onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}40`; e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = `0 12px 36px ${course.color}14`; const a = e.currentTarget; a.querySelectorAll('.topic-hover-icons, .topic-actions').forEach(el => (el as HTMLElement).style.opacity = '1'); }}
-                                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; const a = e.currentTarget; a.querySelectorAll('.topic-hover-icons, .topic-actions').forEach(el => (el as HTMLElement).style.opacity = '0'); }}>
-                                     {/* Hover material icons overlay */}
-                                     <div className="topic-hover-icons" style={{ position: 'absolute', top: 14, right: 14, display: 'flex', gap: 4, opacity: 0, transition: 'opacity 200ms', zIndex: 3 }}>
-                                       {Object.entries(typeCounts).map(([type, count]) => (
-                                         <div key={type} style={{ width: 24, height: 24, borderRadius: 6, background: `${typeColors[type] || '#6B7280'}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${typeColors[type] || '#6B7280'}25` }} title={`${count} ${typeLabels[type] || type}`}>
-                                           <div style={{ width: 8, height: 8, borderRadius: '50%', background: typeColors[type] || '#6B7280' }} />
-                                         </div>
-                                       ))}
-                                     </div>
-                                      <div style={{ padding: '20px 18px 16px', flex: 1 }}>
-                                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-                                          <h4 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', margin: 0, fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.03em', lineHeight: 1.2, flex: 1, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', transition: 'all 200ms' }}>{topic.title}</h4>
+                                  <div key={topic.id} onClick={() => { setActiveTopicId(topic.id); setCurrentView('topic'); }}
+                                    style={{ borderRadius: 14, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', overflow: 'hidden', cursor: 'pointer', transition: 'all 250ms cubic-bezier(0.16,1,0.3,1)', display: 'flex', flexDirection: 'column', position: 'relative' }}
+                                    className="topic-card"
+                                    onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}40`; e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = `0 12px 36px ${course.color}14`; const a = e.currentTarget; a.querySelectorAll('.topic-hover-icons, .topic-actions').forEach(el => (el as HTMLElement).style.opacity = '1'); }}
+                                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; const a = e.currentTarget; a.querySelectorAll('.topic-hover-icons, .topic-actions').forEach(el => (el as HTMLElement).style.opacity = '0'); }}>
+                                    <div className="topic-hover-icons" style={{ position: 'absolute', top: 14, right: 14, display: 'flex', gap: 4, opacity: 0, transition: 'opacity 200ms', zIndex: 3 }}>
+                                      {Object.entries(typeCounts).map(([type, count]) => (
+                                        <div key={type} style={{ width: 24, height: 24, borderRadius: 6, background: `${typeColors[type] || '#6B7280'}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${typeColors[type] || '#6B7280'}25` }} title={`${count} ${typeLabels[type] || type}`}>
+                                          <div style={{ width: 8, height: 8, borderRadius: '50%', background: typeColors[type] || '#6B7280' }} />
+                                        </div>
+                                      ))}
+                                    </div>
+                                    <div style={{ padding: '22px 20px 14px', flex: 1, display: 'flex', flexDirection: 'column' }}>
+                                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                                        <h4 style={{ fontSize: 17, fontWeight: 600, color: 'var(--text-primary)', margin: 0, fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em', lineHeight: 1.25, flex: 1, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{topic.title}</h4>
                                         <div style={{ display: 'flex', gap: 2, flexShrink: 0, opacity: 0, transition: 'opacity 150ms' }}
                                           className="topic-actions">
                                           <button onClick={(e) => { e.stopPropagation(); setEditingTopicId(topic.id); setTopicName(topic.title); setShowTopicModal(true); }}
@@ -2115,41 +2220,32 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                             onMouseLeave={ev => { ev.currentTarget.style.background = 'transparent'; ev.currentTarget.style.color = 'var(--text-muted)'; }}>
                                             <Edit3 size={12} />
                                           </button>
-                                          {!isConfirmingDelete ? (
-                                            <button onClick={(e) => { e.stopPropagation(); setConfirmDeleteGroupId(`topic_${topic.id}`); }}
-                                              style={{ width: 26, height: 26, borderRadius: 6, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
-                                              onMouseEnter={ev => { ev.currentTarget.style.background = 'rgba(239,68,68,0.08)'; ev.currentTarget.style.color = '#EF4444'; }}
-                                              onMouseLeave={ev => { ev.currentTarget.style.background = 'transparent'; ev.currentTarget.style.color = 'var(--text-muted)'; }}>
-                                              <Trash2 size={12} />
-                                            </button>
-                                          ) : (
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                                              <button onClick={(e) => { e.stopPropagation(); handleDeleteTopic(topic.id); setConfirmDeleteGroupId(null); }}
-                                                style={{ height: 24, padding: '0 10px', borderRadius: 6, border: 'none', background: '#EF4444', color: '#fff', fontSize: 10, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>Eliminar</button>
-                                              <button onClick={(e) => { e.stopPropagation(); setConfirmDeleteGroupId(null); }}
-                                                style={{ width: 24, height: 24, borderRadius: 6, border: 'none', background: 'var(--bg-hover)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                <X size={10} />
-                                              </button>
-                                            </div>
-                                          )}
+                                          <button onClick={(e) => { e.stopPropagation(); setDeleteTopicId(topic.id); }}
+                                            style={{ width: 26, height: 26, borderRadius: 6, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                                            onMouseEnter={ev => { ev.currentTarget.style.background = 'rgba(239,68,68,0.08)'; ev.currentTarget.style.color = '#EF4444'; }}
+                                            onMouseLeave={ev => { ev.currentTarget.style.background = 'transparent'; ev.currentTarget.style.color = 'var(--text-muted)'; }}>
+                                            <Trash2 size={12} />
+                                          </button>
                                         </div>
                                       </div>
-                                      {topic.reviewLevel > 0 && (
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 3, marginTop: 8 }}>
-                                          <div style={{ display: 'flex', gap: 2 }}>{[...Array(5)].map((_, i) => <div key={i} style={{ width: 10, height: 4, borderRadius: 2, background: i < topic.reviewLevel ? course.color : 'var(--bg-hover)', transition: 'background 200ms' }} />)}</div>
-                                        </div>
-                                      )}
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 'auto', paddingTop: 12 }}>
+                                        {topic.reviewLevel > 0 ? (
+                                          <div style={{ display: 'flex', gap: 2 }}>{[...Array(5)].map((_, i) => <div key={i} style={{ width: 8, height: 4, borderRadius: 2, background: i < topic.reviewLevel ? course.color : 'var(--border-subtle)', transition: 'background 200ms' }} />)}</div>
+                                        ) : (
+                                          <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 400 }}>Sin repasar</span>
+                                        )}
+                                      </div>
                                     </div>
-                                    <div style={{ borderTop: '1px solid var(--border-subtle)', padding: '12px 18px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                    <div style={{ borderTop: '1px solid var(--border-subtle)', padding: '10px 20px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                                       {matCount > 0 ? (
                                         Object.entries(typeCounts).map(([type, count]) => (
-                                          <div key={type} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 500, color: 'var(--text-muted)' }}>
-                                            <div style={{ width: 7, height: 7, borderRadius: '50%', background: typeColors[type] || '#6B7280', flexShrink: 0 }} />
+                                          <div key={type} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 500, color: 'var(--text-muted)', padding: '2px 6px', borderRadius: 5, background: `${typeColors[type] || '#6B7280'}10`, border: `1px solid ${typeColors[type] || '#6B7280'}18` }}>
+                                            <div style={{ width: 5, height: 5, borderRadius: '50%', background: typeColors[type] || '#6B7280', flexShrink: 0 }} />
                                             <span>{count} {typeLabels[type] || type}</span>
                                           </div>
                                         ))
                                       ) : (
-                                        <span style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>Sin materiales</span>
+                                        <span style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic', padding: '2px 0' }}>Sin materiales</span>
                                       )}
                                     </div>
                                   </div>
@@ -2642,7 +2738,6 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                     <Edit3 size={11} />
                                   </button>
                                 </div>
-                                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, transparent, ${course.color}, transparent)` }} />
                               </div>
                             ) : (
                               <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10, position: 'relative' }}>
@@ -3814,28 +3909,32 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                     </div>
                   ) : importExportMode === 'export' ? (
                     /* ══ EXPORT ══ */
-                    <div>
-                      <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '0 0 10px' }}>Selecciona las agrupaciones cuyos temas deseas exportar.</p>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 200, overflowY: 'auto' }} className="no-scrollbar">
-                        {groups.length === 0 ? (
-                          <span style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', padding: 12 }}>No hay agrupaciones</span>
-                        ) : groups.map(g => {
-                          const count = parsedTopics.filter(t => t.groupId === g.id).length;
-                          const isSelected = exportSelectedIds.has(g.id);
-                          return (
-                            <div key={g.id}
-                              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8, cursor: 'pointer', transition: 'all 150ms', background: isSelected ? `${course.color}08` : 'transparent', border: `1px solid ${isSelected ? `${course.color}25` : 'var(--border-subtle)'}` }}
-                              onClick={() => { const next = new Set(exportSelectedIds); if (isSelected) next.delete(g.id); else next.add(g.id); setExportSelectedIds(next); }}>
-                              <div style={{ width: 16, height: 16, borderRadius: 5, border: `2px solid ${isSelected ? course.color : 'var(--text-muted)'}`, background: isSelected ? course.color : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 150ms' }}>
-                                {isSelected && <Check size={10} style={{ color: '#fff', strokeWidth: 3 }} />}
-                              </div>
-                              <span style={{ flex: 1, fontSize: 12, color: 'var(--text-primary)', fontWeight: 500 }}>{g.name}</span>
-                              <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{count} tema{count !== 1 ? 's' : ''}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      {groups.length > 0 && (
+                    selectedGroupId ? (
+                      /* ── Export topics within current group ── */
+                      <div>
+                        <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '0 0 10px' }}>Selecciona los temas que deseas exportar de esta agrupacion.</p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 280, overflowY: 'auto' }} className="no-scrollbar">
+                          {(() => {
+                            const currentGrp = groups.find(g => g.id === selectedGroupId);
+                            const grpTopics = parsedTopics.filter(t => t.groupId === selectedGroupId);
+                            if (grpTopics.length === 0) return <span style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', padding: 12 }}>No hay temas en esta agrupacion</span>;
+                            return grpTopics.map(topic => {
+                              const isSelected = exportSelectedIds.has(topic.id);
+                              return (
+                                <div key={topic.id}
+                                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8, cursor: 'pointer', transition: 'all 150ms', background: isSelected ? `${course.color}08` : 'transparent', border: `1px solid ${isSelected ? `${course.color}25` : 'var(--border-subtle)'}` }}
+                                  onClick={() => { const next = new Set(exportSelectedIds); if (isSelected) next.delete(topic.id); else next.add(topic.id); setExportSelectedIds(next); }}>
+                                  <div style={{ width: 16, height: 16, borderRadius: 5, border: `2px solid ${isSelected ? course.color : 'var(--text-muted)'}`, background: isSelected ? course.color : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 150ms' }}>
+                                    {isSelected && <Check size={10} style={{ color: '#fff', strokeWidth: 3 }} />}
+                                  </div>
+                                  <Book size={10} style={{ color: 'var(--text-muted)', opacity: 0.5 }} />
+                                  <span style={{ flex: 1, fontSize: 12, color: 'var(--text-primary)', fontWeight: 500 }}>{topic.title}</span>
+                                  <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{(topic.materials || []).length} material{(topic.materials || []).length !== 1 ? 'es' : ''}</span>
+                                </div>
+                              );
+                            });
+                          })()}
+                        </div>
                         <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                           <button onClick={() => setImportExportMode('choose')}
                             style={{ flex: 1, height: 34, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter', sans-serif", transition: 'all 150ms' }}
@@ -3844,28 +3943,81 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                             Volver
                           </button>
                           <button onClick={async () => {
-                            const selected = groups.filter(g => exportSelectedIds.has(g.id));
-                            if (selected.length === 0) { toast.error('Selecciona al menos una agrupacion'); return; }
+                            const currentGrp = groups.find(g => g.id === selectedGroupId);
+                            if (!currentGrp) { toast.error('Agrupacion no encontrada'); return; }
+                            const selectedTopics = parsedTopics.filter(t => exportSelectedIds.has(t.id));
+                            if (selectedTopics.length === 0) { toast.error('Selecciona al menos un tema'); return; }
                             try {
-                              const dest = await save({ filters: [{ name: 'JSON', extensions: ['json'] }], defaultPath: `${selected.length === 1 ? selected[0].name.replace(/[^a-zA-Z0-9]/g, '_') : 'agrupaciones'}_export.json`, title: 'Exportar temas' });
+                              const dest = await save({ filters: [{ name: 'JSON', extensions: ['json'] }], defaultPath: `${currentGrp.name.replace(/[^a-zA-Z0-9]/g, '_')}_export.json`, title: 'Exportar temas' });
                               if (!dest) return;
-                              const exportData = selected.map(g => {
-                                const gTopics = parsedTopics.filter(t => t.groupId === g.id);
-                                return { group: { name: g.name, image: g.image }, topics: gTopics.map(t => ({ title: t.title, status: t.status, reviewLevel: t.reviewLevel, materials: (t.materials || []).map(m => ({ ...m, dataUrl: m.dataUrl && m.dataUrl.startsWith('data:') ? '[BASE64_DATA]' : m.dataUrl })) })) };
-                              });
-                              await writeTextFile(dest, JSON.stringify(exportData.length === 1 ? exportData[0] : exportData, null, 2));
-                              toast.success(`${selected.length} agrupacion${selected.length !== 1 ? 'es' : ''} exportada${selected.length !== 1 ? 's' : ''}`);
+                              const exportData = { group: { name: currentGrp.name, image: currentGrp.image }, topics: selectedTopics.map(t => ({ title: t.title, status: t.status, reviewLevel: t.reviewLevel, materials: (t.materials || []).map(m => ({ ...m, dataUrl: m.dataUrl && m.dataUrl.startsWith('data:') ? '[BASE64_DATA]' : m.dataUrl })) })) };
+                              await writeTextFile(dest, JSON.stringify(exportData, null, 2));
+                              toast.success(`${selectedTopics.length} tema${selectedTopics.length !== 1 ? 's' : ''} exportado${selectedTopics.length !== 1 ? 's' : ''}`);
                               setShowAgrupacionImportExport(false);
                             } catch (err) { console.error('Export error:', err); toast.error('Error al exportar'); }
                           }}
                             style={{ flex: 1, height: 34, borderRadius: 8, border: 'none', background: course.color, color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', transition: 'all 150ms', boxShadow: `0 2px 8px ${course.color}35` }}
                             onMouseEnter={e => { e.currentTarget.style.opacity = '0.88'; }}
                             onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
-                            {exportSelectedIds.size > 0 ? `Exportar ${exportSelectedIds.size} seleccionada${exportSelectedIds.size !== 1 ? 's' : ''}` : 'Selecciona una agrupacion'}
+                            {exportSelectedIds.size > 0 ? `Exportar ${exportSelectedIds.size} seleccionado${exportSelectedIds.size !== 1 ? 's' : ''}` : 'Selecciona un tema'}
                           </button>
                         </div>
-                      )}
-                    </div>
+                      </div>
+                    ) : (
+                      /* ── Export groups (fallback when no group selected) ── */
+                      <div>
+                        <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '0 0 10px' }}>Selecciona las agrupaciones cuyos temas deseas exportar.</p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 200, overflowY: 'auto' }} className="no-scrollbar">
+                          {groups.length === 0 ? (
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', padding: 12 }}>No hay agrupaciones</span>
+                          ) : groups.map(g => {
+                            const count = parsedTopics.filter(t => t.groupId === g.id).length;
+                            const isSelected = exportSelectedIds.has(g.id);
+                            return (
+                              <div key={g.id}
+                                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8, cursor: 'pointer', transition: 'all 150ms', background: isSelected ? `${course.color}08` : 'transparent', border: `1px solid ${isSelected ? `${course.color}25` : 'var(--border-subtle)'}` }}
+                                onClick={() => { const next = new Set(exportSelectedIds); if (isSelected) next.delete(g.id); else next.add(g.id); setExportSelectedIds(next); }}>
+                                <div style={{ width: 16, height: 16, borderRadius: 5, border: `2px solid ${isSelected ? course.color : 'var(--text-muted)'}`, background: isSelected ? course.color : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 150ms' }}>
+                                  {isSelected && <Check size={10} style={{ color: '#fff', strokeWidth: 3 }} />}
+                                </div>
+                                <span style={{ flex: 1, fontSize: 12, color: 'var(--text-primary)', fontWeight: 500 }}>{g.name}</span>
+                                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{count} tema{count !== 1 ? 's' : ''}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        {groups.length > 0 && (
+                          <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                            <button onClick={() => setImportExportMode('choose')}
+                              style={{ flex: 1, height: 34, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter', sans-serif", transition: 'all 150ms' }}
+                              onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                              onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-elevated)'; }}>
+                              Volver
+                            </button>
+                            <button onClick={async () => {
+                              const selected = groups.filter(g => exportSelectedIds.has(g.id));
+                              if (selected.length === 0) { toast.error('Selecciona al menos una agrupacion'); return; }
+                              try {
+                                const dest = await save({ filters: [{ name: 'JSON', extensions: ['json'] }], defaultPath: `${selected.length === 1 ? selected[0].name.replace(/[^a-zA-Z0-9]/g, '_') : 'agrupaciones'}_export.json`, title: 'Exportar temas' });
+                                if (!dest) return;
+                                const exportData = selected.map(g => {
+                                  const gTopics = parsedTopics.filter(t => t.groupId === g.id);
+                                  return { group: { name: g.name, image: g.image }, topics: gTopics.map(t => ({ title: t.title, status: t.status, reviewLevel: t.reviewLevel, materials: (t.materials || []).map(m => ({ ...m, dataUrl: m.dataUrl && m.dataUrl.startsWith('data:') ? '[BASE64_DATA]' : m.dataUrl })) })) };
+                                });
+                                await writeTextFile(dest, JSON.stringify(exportData.length === 1 ? exportData[0] : exportData, null, 2));
+                                toast.success(`${selected.length} agrupacion${selected.length !== 1 ? 'es' : ''} exportada${selected.length !== 1 ? 's' : ''}`);
+                                setShowAgrupacionImportExport(false);
+                              } catch (err) { console.error('Export error:', err); toast.error('Error al exportar'); }
+                            }}
+                              style={{ flex: 1, height: 34, borderRadius: 8, border: 'none', background: course.color, color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', transition: 'all 150ms', boxShadow: `0 2px 8px ${course.color}35` }}
+                              onMouseEnter={e => { e.currentTarget.style.opacity = '0.88'; }}
+                              onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
+                              {exportSelectedIds.size > 0 ? `Exportar ${exportSelectedIds.size} seleccionada${exportSelectedIds.size !== 1 ? 's' : ''}` : 'Selecciona una agrupacion'}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )
                   ) : (
                     /* ══ IMPORT ══ */
                     <div>
@@ -3894,6 +4046,37 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
             </div>
           </div>
         </div>
+      )}
+      {/* Delete Topic Confirmation Modal */}
+      {deleteTopicId && createPortal(
+        <div style={{ position: 'fixed', inset: 0, zIndex: 99995, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => setDeleteTopicId(null)}>
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)' }} />
+          <div className="bento-card" style={{ position: 'relative', width: 360, padding: '28px 32px 24px', borderRadius: 16, background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', boxShadow: '0 24px 64px rgba(0,0,0,0.5)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }} onClick={e => e.stopPropagation()}>
+            <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(239,68,68,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(239,68,68,0.2)' }}>
+              <Trash2 size={20} style={{ color: '#EF4444' }} />
+            </div>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', margin: 0, fontFamily: "'Inter Tight', sans-serif", textAlign: 'center' }}>Eliminar tema</h3>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0, textAlign: 'center', lineHeight: 1.5, maxWidth: 260 }}>
+              Esta accion eliminara permanentemente este tema y todo su contenido. No se puede deshacer.
+            </p>
+            <div style={{ display: 'flex', gap: 8, width: '100%', marginTop: 8 }}>
+              <button onClick={() => setDeleteTopicId(null)}
+                style={{ flex: 1, height: 36, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter', sans-serif", transition: 'all 150ms' }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-elevated)'; }}>
+                Cancelar
+              </button>
+              <button onClick={() => { if (deleteTopicId) handleDeleteTopic(deleteTopicId); setDeleteTopicId(null); }}
+                style={{ flex: 1, height: 36, borderRadius: 8, border: 'none', background: '#EF4444', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter', sans-serif", transition: 'all 150ms', boxShadow: '0 2px 8px rgba(239,68,68,0.35)' }}
+                onMouseEnter={e => { e.currentTarget.style.opacity = '0.88'; }}
+                onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
+                Eliminar
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
       {/* PDF Preview Modal */}
       {showPdfPreview && (

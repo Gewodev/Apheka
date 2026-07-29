@@ -29,7 +29,7 @@ const CONF: Record<ToolbarItem, { icon: React.ComponentType<{size?: number}>, cm
   strikethrough: { icon: Strikethrough, cmd: 'strikeThrough', title: 'Tachado', stateCmd: 'strikeThrough' },
   list: { icon: List, cmd: 'insertUnorderedList', title: 'Lista', stateCmd: 'insertUnorderedList' },
   orderedList: { icon: ListOrdered, cmd: 'insertOrderedList', title: 'Lista ordenada', stateCmd: 'insertOrderedList' },
-  heading3: { icon: Heading3, cmd: 'formatBlock', value: '<h3>', title: 'Título' },
+  heading3: { icon: Heading3, cmd: 'formatBlock', value: '<h3>', title: 'Título', stateCmd: 'heading3' },
   highlight: { icon: Highlighter, cmd: 'hiliteColor', value: '#FFF9C4', title: 'Resaltar' },
   alignLeft: { icon: AlignLeft, cmd: 'justifyLeft', title: 'Alinear' },
   alignCenter: { icon: AlignCenter, cmd: 'justifyCenter', title: 'Centrar' },
