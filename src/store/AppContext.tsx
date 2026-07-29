@@ -2544,7 +2544,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
           });
           return;
         }
-        // REPEAT ONE = play through queue once, then deactivate
+        // REPEAT ONE = replay track once, then deactivate
+        if (repeatModeRef.current === 'one') {
+          globalAudio.currentTime = 0;
+          globalAudio.play().catch(() => {
+            setTimeout(() => globalAudio.play().catch(() => {}), 100);
+          });
+          _setRepeatMode('none');
+          return;
+        }
         let nextId: string | null = null;
         const q = musicQueueRef.current;
         const cid = currentTrackIdRef.current;
@@ -2590,7 +2598,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           playTrackRef.current(nextId);
           if (coverModalTrackIdRef.current) setCoverModalTrackId(nextId);
         } else {
-          // Queue empty → deactivate repeat-one
+          // Queue empty
           _setRepeatMode('none');
           setIsPlayingMusic(false);
         }

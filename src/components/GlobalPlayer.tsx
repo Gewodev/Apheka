@@ -196,38 +196,46 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
 
   return (
     <>
-      {/* Entry arrow — refined double chevron */}
-      <div style={{
-        position: 'fixed',
-        left: sidebarWidth,
-        right: 0,
-        bottom: arrowVisible && !expanded ? 16 : 4,
-        display: 'flex',
-        justifyContent: 'center',
-        pointerEvents: arrowVisible && !expanded ? 'auto' : 'none',
-        zIndex: 9998,
-        opacity: arrowVisible && !expanded ? 1 : 0,
-        transition: 'opacity 250ms ease, bottom 300ms cubic-bezier(0.32,0.72,0,1)',
-      }}>
-        <div onClick={handleOpen}
-          style={{
-            cursor: 'pointer',
-            display: 'flex', flexDirection: 'column', alignItems: 'center',
-            padding: '10px 28px',
-            userSelect: 'none',
-            borderRadius: 10,
-            background: 'transparent',
-            border: 'none',
-            transition: 'all 250ms cubic-bezier(0.16,1,0.3,1)',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; }}
-          onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; }}
-          title="Abrir reproductor">
-          <svg width="40" height="16" viewBox="0 0 40 16" fill="none">
-            <path d="M6 12L20 4L34 12" stroke={acC} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.3" />
-            <path d="M10 14L20 7L30 14" stroke={acC} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" style={{ filter: `drop-shadow(0 0 6px ${acC}50)` }} />
-          </svg>
-        </div>
+      {/* Entry arrow — clean protruding toggle */}
+      <div
+        onClick={handleOpen}
+        style={{
+          position: 'fixed',
+          left: sidebarWidth,
+          right: 0,
+          bottom: arrowVisible && !expanded ? 24 : 4,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 16,
+          pointerEvents: arrowVisible && !expanded ? 'auto' : 'none',
+          zIndex: 9998,
+          opacity: arrowVisible && !expanded ? 1 : 0,
+          transition: 'opacity 250ms ease, bottom 350ms cubic-bezier(0.32,0.72,0,1)',
+          cursor: 'pointer',
+          userSelect: 'none',
+        }}
+        onMouseEnter={e => {
+          const c = e.currentTarget.children as HTMLCollectionOf<HTMLElement>;
+          if (c[0]) c[0].style.width = '56px';
+          if (c[1]) { c[1].style.transform = 'translateY(-2px)'; c[1].style.opacity = '1'; }
+          if (c[2]) c[2].style.width = '56px';
+        }}
+        onMouseLeave={e => {
+          const c = e.currentTarget.children as HTMLCollectionOf<HTMLElement>;
+          if (c[0]) c[0].style.width = '32px';
+          if (c[1]) { c[1].style.transform = 'translateY(0)'; c[1].style.opacity = '0.6'; }
+          if (c[2]) c[2].style.width = '32px';
+        }}
+        title="Abrir reproductor">
+        {/* Left decorative line */}
+        <div style={{ width: 32, height: 1, background: `linear-gradient(90deg, transparent 10%, ${acC}50)`, borderRadius: 1, transition: 'width 350ms cubic-bezier(0.16,1,0.3,1)' }} />
+        {/* Chevron — pointing down (expand/open) */}
+        <svg width="18" height="10" viewBox="0 0 18 10" fill="none" style={{ opacity: 0.6, flexShrink: 0, transition: 'all 350ms cubic-bezier(0.16,1,0.3,1)' }}>
+          <path d="M2 8L9 2L16 8" stroke={acC} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        {/* Right decorative line */}
+        <div style={{ width: 32, height: 1, background: `linear-gradient(270deg, transparent 10%, ${acC}50)`, borderRadius: 1, transition: 'width 350ms cubic-bezier(0.16,1,0.3,1)' }} />
       </div>
 
       {/* Player panel */}
@@ -522,18 +530,26 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                     onMouseLeave={e => { if (musicVolume > 0) { e.currentTarget.style.color = 'var(--text-tertiary)'; e.currentTarget.style.background = 'none'; } }}>
                     {musicVolume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
                   </button>
-                  <div style={{ width: 100, position: 'relative', display: 'flex', alignItems: 'center', height: 20 }}>
+                  <div style={{
+                    position: 'relative', width: 100, height: 14,
+                    display: 'flex', alignItems: 'center',
+                  }}>
                     <div style={{
                       position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)',
-                      width: `${musicVolume * 100}%`, height: 4, borderRadius: 4,
+                      width: '100%', height: 3, borderRadius: 3,
+                      background: 'rgba(255,255,255,0.1)',
+                    }} />
+                    <div style={{
+                      position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)',
+                      width: `${musicVolume * 100}%`, height: 3, borderRadius: 3,
                       background: musicVolume === 0 ? 'var(--text-muted)' : acC,
+                      transition: 'width 80ms ease, background 200ms ease',
                       pointerEvents: 'none', zIndex: 1,
-                      transition: 'width 120ms ease, background 200ms ease',
                     }} />
                     <input type="range" min="0" max="1" step="0.005" value={musicVolume} onChange={handleVolumeChange}
                       style={{
-                        width: '100%', height: 20, cursor: 'pointer', position: 'relative', zIndex: 2,
-                        WebkitAppearance: 'none', appearance: 'none', outline: 'none', borderRadius: 4,
+                        width: '100%', height: 14, cursor: 'pointer', position: 'relative', zIndex: 2,
+                        WebkitAppearance: 'none', appearance: 'none', outline: 'none',
                         background: 'transparent', margin: 0, padding: 0,
                       }}
                       className="volume-slider" />

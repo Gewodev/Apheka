@@ -799,7 +799,7 @@ export default function Musica() {
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 24 }}>
                     {playlists.map(pl => {
                       const plTracks = pl.trackIds.map(id => tracks.find(t => t.id === id)).filter((t): t is Track => !!t);
-                      const firstCover = plTracks.find(t => t.coverImage)?.coverImage || pl.coverImage;
+                      const firstCover = pl.coverImage || plTracks.find(t => t.coverImage)?.coverImage;
                       return (
                         <div key={pl.id} className="hover-lift bento-card" style={{ padding: '24px', borderRadius: 16, border: '1px solid var(--border-subtle)', transition: 'all 250ms', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, position: 'relative', cursor: 'pointer' }}
                           onClick={() => setSelectedPlaylistId(pl.id)}>
@@ -830,7 +830,7 @@ export default function Musica() {
                 const pl = playlists.find(p => p.id === selectedPlaylistId);
                 if (!pl) return null;
                 const plTracks = pl.trackIds.map(id => tracks.find(t => t.id === id)).filter((t): t is Track => !!t);
-                const firstCover = plTracks.find(t => t.coverImage)?.coverImage || pl.coverImage;
+                const firstCover = pl.coverImage || plTracks.find(t => t.coverImage)?.coverImage;
                 const isPlayingAll = currentTrackId && plTracks.some(t => t.id === currentTrackId) && isPlayingMusic;
                 return (
                   <div>
@@ -2224,9 +2224,9 @@ export default function Musica() {
         </div>, document.body)}
 
       {/* Edit Artist Dialog */}
-      {editingArtistId && (
+      {editingArtistId && createPortal(
         <div style={{
-          position: 'fixed', inset: 0, zIndex: 1100,
+          position: 'fixed', inset: 0, zIndex: 99995,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
         }} onClick={() => setEditingArtistId(null)}>
@@ -2372,28 +2372,28 @@ export default function Musica() {
               </button>
             </div>
           </div>
-        </div>
+        </div>, document.body
       )}
 
-      {confirmDelete && (
+      {confirmDelete && createPortal(
         <div style={{
-          position: 'fixed', inset: 0, zIndex: 1000,
+          position: 'fixed', inset: 0, zIndex: 99995,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
         }} onClick={() => setConfirmDelete(null)}>
-          <div style={{ padding: 28, width: 340, maxWidth: '90vw', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 16 }} onClick={e => e.stopPropagation()}>
-            <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>
+          <div className="bento-card" style={{ padding: 28, width: 360, maxWidth: '90vw' }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontSize: 17, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 10 }}>
               {confirmDelete.type === 'artist' ? 'Eliminar Artista' : confirmDelete.type === 'playlist' ? 'Eliminar Playlist' : 'Eliminar Canción'}
             </h3>
-            <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginBottom: 24, lineHeight: 1.5 }}>
+            <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginBottom: 22, lineHeight: 1.5 }}>
               {confirmDelete.type === 'track'
                 ? `Se eliminará "${confirmDelete.name}" de tu biblioteca.`
                 : confirmDelete.type === 'artist'
                   ? `Se eliminará "${confirmDelete.name}" y se desvincularán sus canciones.`
                   : `Se eliminará la playlist "${confirmDelete.name}" de tu biblioteca.`}
             </p>
-            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-              <button onClick={() => setConfirmDelete(null)} style={{ height: 38, padding: '0 20px', fontSize: 12, fontWeight: 600, borderRadius: 8, cursor: 'pointer', border: '1px solid var(--border-default)', background: 'var(--bg-surface)', color: 'var(--text-secondary)' }}>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button onClick={() => setConfirmDelete(null)} className="btn-secondary" style={{ height: 36, padding: '0 18px', fontSize: 12, fontWeight: 600 }}>
                 Cancelar
               </button>
               <button onClick={() => {
@@ -2402,12 +2402,12 @@ export default function Musica() {
                 else if (d.type === 'artist') deleteArtist(d.id);
                 else if (d.type === 'playlist') deletePlaylist(d.id);
                 setConfirmDelete(null);
-              }} style={{ height: 38, padding: '0 20px', fontSize: 12, fontWeight: 700, borderRadius: 8, cursor: 'pointer', border: 'none', background: '#EF4444', color: '#fff', display: 'flex', alignItems: 'center', gap: 6 }}>
+              }} style={{ height: 36, padding: '0 18px', fontSize: 12, fontWeight: 700, borderRadius: 8, cursor: 'pointer', border: 'none', background: '#EF4444', color: '#fff', display: 'flex', alignItems: 'center', gap: 6 }}>
                 Eliminar
               </button>
             </div>
           </div>
-        </div>
+        </div>, document.body
       )}
 
 

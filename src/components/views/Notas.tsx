@@ -37,6 +37,7 @@ import {
   ZoomIn, ZoomOut
 } from "lucide-react";
 import { useApp, Note, NoteFolder, NoteAttachment, fmtClock } from "../../store/AppContext";
+import { openFileSmart } from '../../lib/openFileSmart';
 import { createDownloadTask, updateDownloadTask, completeDownloadTask } from '../ui/DownloadManager';
 import {
   DndContext, closestCenter,
@@ -3835,7 +3836,7 @@ export default function Notas() {
                                         </span>
                                         <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
                                           {(isImg || isPdf) && (
-                                            <button onClick={(e) => { e.stopPropagation(); setPreviewFile({ url: att.dataUrl, name: att.name, type: isPdf ? 'pdf' : 'img' }); }}
+                                            <button onClick={(e) => { e.stopPropagation(); openFileSmart(att.dataUrl, att.name); }}
                                               style={{ width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", color: "var(--text-tertiary)", cursor: "pointer", borderRadius: 4 }}
                                               className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]" title="Vista previa">
                                               <Eye size={11} />

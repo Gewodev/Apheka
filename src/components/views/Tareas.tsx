@@ -16,6 +16,8 @@ import {
   Star, Pencil, ChevronDown, Globe,
 } from 'lucide-react';
 import { useApp, Task, fmtClock } from '../../store/AppContext';
+import { openFileSmart } from '../../lib/openFileSmart';
+import { GoogleClassroomIcon, GoogleDriveIcon, GoogleDocsIcon, GoogleSheetsIcon, GoogleSlidesIcon, GoogleFormsIcon } from '../ui/GoogleIcons';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, isToday, addMonths, subMonths, addWeeks, subWeeks } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { isSignedIn, signIn, signOut, onAuthChange } from '../../lib/google';
@@ -1660,13 +1662,17 @@ export default function Tareas() {
                         )}
                         {selectedTask.files.map(f => {
                            const isYouTube = f.type === 'video' || (f.type === 'link' && (f.path.includes('youtube.com') || f.path.includes('youtu.be')));
-                           const isClassroom = f.path.includes('classroom.google.com') || f.type === 'classroom';
-                           const isDrive = f.path.includes('drive.google.com') || f.type === 'drive';
-                          const isAudio = f.type === 'audio' || (f.type === 'other' && (f.path.endsWith('.mp3') || f.path.endsWith('.wav') || f.path.endsWith('.ogg')));
-                           const isWeb = f.type === 'link' && !isYouTube && !isDrive && !isClassroom;
-                          const isExcel = f.type === 'xls' || (f.type === 'other' && (f.path.endsWith('.xlsx') || f.path.endsWith('.xls') || f.path.includes('sheets')));
-                          const isWord = f.type === 'doc' || (f.type === 'other' && (f.path.endsWith('.docx') || f.path.endsWith('.doc')));
-                          const isPPT = f.type === 'ppt' || (f.type === 'other' && (f.path.endsWith('.pptx') || f.path.endsWith('.ppt')));
+                            const isClassroom = f.path.includes('classroom.google.com') || f.type === 'classroom';
+                            const isDrive = f.path.includes('drive.google.com') || f.type === 'drive';
+                            const isGoogleDocs = f.path.includes('docs.google.com') || f.type === 'doc';
+                            const isGoogleSheets = f.path.includes('sheets.google.com') || f.type === 'xls';
+                            const isGoogleSlides = f.path.includes('slides.google.com') || f.type === 'ppt';
+                            const isGoogleForms = f.path.includes('forms.google.com');
+                           const isAudio = f.type === 'audio' || (f.type === 'other' && (f.path.endsWith('.mp3') || f.path.endsWith('.wav') || f.path.endsWith('.ogg')));
+                            const isWeb = f.type === 'link' && !isYouTube && !isDrive && !isClassroom && !isGoogleDocs && !isGoogleSheets && !isGoogleSlides && !isGoogleForms;
+                           const isExcel = f.type === 'xls' || (f.type === 'other' && (f.path.endsWith('.xlsx') || f.path.endsWith('.xls') || f.path.includes('sheets')));
+                           const isWord = f.type === 'doc' || (f.type === 'other' && (f.path.endsWith('.docx') || f.path.endsWith('.doc')));
+                           const isPPT = f.type === 'ppt' || (f.type === 'other' && (f.path.endsWith('.pptx') || f.path.endsWith('.ppt')));
                           const isPdf = f.type === 'pdf';
                           const isImage = f.type === 'image';
                           const isLocal = !f.path.startsWith('http') && !f.path.startsWith('blob:') && !f.path.startsWith('data:');
@@ -1679,31 +1685,22 @@ export default function Tareas() {
                               window.open(path, '_blank', 'noopener,noreferrer');
                             }
                           };
-                          const handleCardClick = () => {
-                            if (isPdf) setPdfPreviewUrl(isLocal ? localSrc : f.path);
-                            else if (isImage) setPreviewModalUrl(f.path);
-                            else if (isYouTube) {
-                              const v = f.path.includes('youtube.com/watch?v=') ? f.path.split('v=')[1]?.split('&')[0] : f.path.includes('youtu.be/') ? f.path.split('youtu.be/')[1]?.split('?')[0] : '';
-                              if (v) setPreviewModalUrl(`https://www.youtube.com/embed/${v}`);
-                            }
-                            else if (isWeb || isDrive) openFile(f.path);
-                            else if (isWord || isExcel || isPPT) openFile(f.path);
-                            else if (isAudio) openFile(f.path);
-                            else if (f.path.startsWith('http')) setPreviewModalUrl(f.path);
-                            else if (isLocal) openFile(f.path);
+                          const handleCardClick = async () => {
+                            try { await openFileSmart(f.path, f.name); } catch (e) { console.error('[Tareas] material open failed', e); }
                           };
 
                           const s = (d: string, c: string) => <svg viewBox="0 0 24 24" width={17} height={17} fill={c} style={{ flexShrink: 0, display: 'block' }}><path d={d} /></svg>;
                           let iconEl: React.ReactNode;
                           let badgeColor = '#888';
                           let domain = '';
-                          if (isWord) { badgeColor = '#2563EB'; iconEl = s('M23.004 1.5q.41 0 .703.293t.293.703v19.008q0 .41-.293.703t-.703.293H6.996q-.41 0-.703-.293T6 21.504V18H.996q-.41 0-.703-.293T0 17.004V6.996q0-.41.293-.703T.996 6H6V2.496q0-.41.293-.703t.703-.293zM6.035 11.203l1.442 4.735h1.64l1.57-7.876H9.036l-.937 4.653-1.325-4.5H5.38l-1.406 4.523-.938-4.675H1.312l1.57 7.874h1.641zM22.5 21v-3h-15v3zm0-4.5v-3.75H12v3.75zm0-5.25V7.5H12v3.75zm0-5.25V3h-15v3Z', '#2563EB'); }
-                          else if (isExcel) { badgeColor = '#10B981'; iconEl = s('M23 1.5q.41 0 .7.3.3.29.3.7v19q0 .41-.3.7-.29.3-.7.3H7q-.41 0-.7-.3-.3-.29-.3-.7V18H1q-.41 0-.7-.3-.3-.29-.3-.7V7q0-.41.3-.7Q.58 6 1 6h5V2.5q0-.41.3-.7.29-.3.7-.3zM6 13.28l1.42 2.66h2.14l-2.38-3.87 2.34-3.8H7.46l-1.3 2.4-.05.08-.04.09-.64-1.28-.66-1.29H2.59l2.27 3.82-2.48 3.85h2.16zM14.25 21v-3H7.5v3zm0-4.5v-3.75H12v3.75zm0-5.25V7.5H12v3.75zm0-5.25V3H7.5v3zm8.25 15v-3h-6.75v3zm0-4.5v-3.75h-6.75v3.75zm0-5.25V7.5h-6.75v3.75zm0-5.25V3h-6.75v3Z', '#10B981'); }
-                          else if (isPPT) { badgeColor = '#F97316'; iconEl = s('M13.5 1.5q1.453 0 2.795.375 1.342.375 2.508 1.06 1.166.686 2.12 1.641.956.955 1.641 2.121.686 1.166 1.061 2.508Q24 10.547 24 12q0 1.453-.375 2.795-.375 1.342-1.06 2.508-.686 1.166-1.641 2.12-.955.956-2.121 1.641-1.166.686-2.508 1.061-1.342.375-2.795.375-1.29 0-2.52-.305-1.23-.304-2.337-.884-1.108-.58-2.063-1.418-.955-.838-1.693-1.893H.997q-.411 0-.704-.293T0 17.004V6.996q0-.41.293-.703T.996 6h3.89q.739-1.055 1.694-1.893.955-.837 2.063-1.418 1.107-.58 2.337-.884Q12.21 1.5 13.5 1.5zm.75 1.535v8.215h8.215q-.14-1.64-.826-3.076-.686-1.436-1.782-2.531-1.095-1.096-2.537-1.782-1.441-.685-3.07-.826zm-5.262 7.57q0-.68-.228-1.166-.229-.486-.627-.79-.399-.305-.938-.446-.539-.14-1.172-.14H2.848v7.863h1.84v-2.742H5.93q.574 0 1.119-.17t.978-.493q.434-.322.698-.802.263-.48.263-1.114zM13.5 21q1.172 0 2.262-.287t2.056-.82q.967-.534 1.776-1.278.808-.744 1.418-1.664.61-.92.984-1.986.375-1.067.469-2.227h-9.703V3.035q-1.735.14-3.27.908T6.797 6h4.207q.41 0 .703.293t.293.703v10.008q0 .41-.293.703t-.703.293H6.797q.644.715 1.412 1.271.768.557 1.623.944.855.387 1.781.586Q12.54 21 13.5 21zM5.812 9.598q.575 0 .915.228.34.229.34.838 0 .27-.124.44-.123.17-.31.275-.188.105-.422.146-.234.041-.445.041H4.687V9.598Z', '#F97316'); }
+                          if (isWord || isGoogleDocs) { badgeColor = '#2563EB'; iconEl = <GoogleDocsIcon />; }
+                          else if (isExcel || isGoogleSheets) { badgeColor = '#10B981'; iconEl = <GoogleSheetsIcon />; }
+                          else if (isPPT || isGoogleSlides) { badgeColor = '#F97316'; iconEl = <GoogleSlidesIcon />; }
                           else if (isPdf) { badgeColor = '#EF4444'; iconEl = s('M23.63 15.3c-.71-.745-2.166-1.17-4.224-1.17-1.1 0-2.377.106-3.761.354a19.443 19.443 0 0 1-2.307-2.661c-.532-.71-.994-1.49-1.42-2.236.817-2.484 1.207-4.507 1.207-5.962 0-1.632-.603-3.336-2.342-3.336-.532 0-1.065.32-1.349.781-.78 1.384-.425 4.4.923 7.381a60.277 60.277 0 0 1-1.703 4.507c-.568 1.349-1.207 2.733-1.917 4.01C2.834 18.53.314 20.34.03 21.758c-.106.533.071 1.03.462 1.42.142.107.639.533 1.49.533 2.59 0 5.323-4.188 6.707-6.707 1.065-.355 2.13-.71 3.194-.994a34.963 34.963 0 0 1 3.407-.745c2.732 2.448 5.145 2.839 6.352 2.839 1.49 0 2.023-.604 2.2-1.1.32-.64.106-1.349-.213-1.704zm-1.42 1.03c-.107.532-.64.887-1.384.887-.213 0-.39-.036-.604-.071-1.348-.32-2.626-.994-3.903-2.059a17.717 17.717 0 0 1 2.98-.248c.746 0 1.385.035 1.81.142.497.106 1.278.426 1.1 1.348zm-7.524-1.668a38.01 38.01 0 0 0-2.945.674 39.68 39.68 0 0 0-2.52.745 40.05 40.05 0 0 0 1.207-2.555c.426-.994.78-2.023 1.136-2.981.354.603.745 1.207 1.135 1.739a50.127 50.127 0 0 0 1.987 2.378zM10.038 1.46a.768.768 0 0 1 .674-.425c.745 0 .887.851.887 1.526 0 1.135-.355 2.874-.958 4.861-1.03-2.768-1.1-5.074-.603-5.962zM6.134 17.997c-1.81 2.981-3.549 4.826-4.613 4.826a.872.872 0 0 1-.532-.177c-.213-.213-.32-.461-.249-.745.213-1.065 2.271-2.555 5.394-3.904Z', '#EF4444'); }
                           else if (isYouTube) { badgeColor = '#EF4444'; iconEl = s('M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z', '#EF4444'); }
-                          else if (isClassroom) { badgeColor = '#0F9D58'; iconEl = <svg viewBox="0 0 24 24" width={17} height={17} style={{ flexShrink: 0, display: 'block' }}><path d="M12 3L1 9l4 2.18v6L12 21l7-3.82v-6l2-1.09V17h2V9L12 3z" fill="#0F9D58"/><path d="M12 3l7 3.82v6L12 17 5 12.82v-6L12 3z" fill="#0F9D58" opacity="0.6"/></svg>; }
-                          else if (isDrive) { badgeColor = '#4285F4'; iconEl = <svg viewBox="0 0 24 24" width={17} height={17} style={{ flexShrink: 0, display: 'block' }}><path d="M8.5 3L3 13l3 5h4l5-10z" fill="#4285F4"/><path d="M15.5 3L21 13l-3 5h-4L9.5 8z" fill="#FBBC04"/><path d="M3 13l3 5h12l3-5H3z" fill="#0F9D58"/></svg>; }
+                          else if (isClassroom) { badgeColor = '#0F9D58'; iconEl = <GoogleClassroomIcon />; }
+                          else if (isDrive) { badgeColor = '#4285F4'; iconEl = <GoogleDriveIcon />; }
+                          else if (isGoogleForms) { badgeColor = '#7C3AED'; iconEl = <GoogleFormsIcon />; }
                           else if (isAudio) { badgeColor = '#8B5CF6'; iconEl = <Music size={13} />; }
                           else if (isImage) { badgeColor = '#F59E0B'; iconEl = <Image size={13} />; }
                           else if (isWeb) {

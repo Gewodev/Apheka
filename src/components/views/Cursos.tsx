@@ -10,13 +10,15 @@ import {
   Download, ArrowDownToLine, ArrowUpFromLine, Package, PackageOpen, FileDown, FileUp,
 } from 'lucide-react';
 import { FormatToolbar } from '../ui/FormatToolbar';
+import { GoogleClassroomIcon, GoogleDriveIcon, GoogleDocsIcon, GoogleSheetsIcon, GoogleSlidesIcon, GoogleFormsIcon, WordIcon, ExcelIcon, PowerPointIcon } from '../ui/GoogleIcons';
 import {
   DndContext, closestCorners, useSensor, useSensors, PointerSensor, useDroppable, DragEndEvent
 } from '@dnd-kit/core';
 import {
-  SortableContext, rectSortingStrategy, useSortable
+  SortableContext, rectSortingStrategy, useSortable, arrayMove, verticalListSortingStrategy
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { restrictToParentElement } from '@dnd-kit/modifiers';
 import { useApp, Course, SubjectGroup, SubjectTopic, SubjectMaterial } from '../../store/AppContext';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
@@ -47,6 +49,7 @@ function formatTime(s: number) { if (!s || !isFinite(s)) return '0:00'; const m 
 // Reuse SPINE_COLORS token in case the user wants the same selection.
 // ─── Icon Picker Stuff ───
 import * as LI from 'lucide-react';
+import { openFileSmart } from '../../lib/openFileSmart';
 const AVAILABLE_ICONS: { name: string; icon: React.ComponentType<{ size?: number; color?: string; style?: React.CSSProperties }>; label: string }[] = (() => {
   const NAMES = [
     "FileText","BookOpen","Code","Folder","Brain","Target","Coffee","Compass","Award",
@@ -640,6 +643,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const [materialForm, setMaterialForm] = useState({ name: '', clarification: '', title: '', content: '', word: '', meaning: '', question: '', answer: '', description: '', image: undefined as string | undefined });
   const setForm = (p: Partial<typeof materialForm>) => setMaterialForm(prev => ({ ...prev, ...p }));
   const resetForm = () => setMaterialForm({ name: '', clarification: '', title: '', content: '', word: '', meaning: '', question: '', answer: '', description: '', image: undefined });
+  const [loadingMatId, setLoadingMatId] = useState<string | null>(null);
   const resourceInputRef = useRef<HTMLInputElement>(null);
   const materialImageInputRef = useRef<HTMLInputElement>(null);
 
@@ -1088,7 +1092,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
       updateCourse(course.id, { studyTopics: current.map(t => t.id === editingTopicId ? { ...t, title: topicName.trim() } : t) });
       toast.success('Tema actualizado');
     } else {
-      updateCourse(course.id, { studyTopics: [...current, { id: Math.random().toString(), title: topicName.trim(), status: 'pending' as const, createdAt: Date.now(), reviewLevel: 0, nextReview: Date.now(), materials: [] }] });
+      updateCourse(course.id, { studyTopics: [...current, { id: Math.random().toString(), title: topicName.trim(), status: 'pending' as const, createdAt: Date.now(), reviewLevel: 0, nextReview: Date.now(), materials: [], groupId: selectedGroupId || undefined }] });
       toast.success('Tema creado');
     }
     setTopicName(''); setEditingTopicId(null); setShowTopicModal(false);
@@ -1247,6 +1251,47 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     const tm = mats.find(m => m.id === activeId);
     if (tm) { tm.columnIndex = oci; tm.createdAt = Date.now(); updateCourse(course.id, { studyTopics: (course.studyTopics || []).map(t => t.id === activeTopic.id ? { ...t, materials: mats } : t) }); }
   };
+
+  const [activeMatDragId, setActiveMatDragId] = useState<string | null>(null);
+  const [activeGroupDragId, setActiveGroupDragId] = useState<string | null>(null);
+  const studySensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
+  const handleStudyMatDragEnd = useCallback((event: DragEndEvent) => {
+    setActiveMatDragId(null);
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const ids = allCourseMaterials.map(m => m.id);
+    const oldIdx = ids.indexOf(active.id as string);
+    const newIdx = ids.indexOf(over.id as string);
+    if (oldIdx < 0 || newIdx < 0) return;
+    const newOrder = arrayMove(ids, oldIdx, newIdx);
+    updateCourse(course.id, {
+      studyTopics: (course.studyTopics || []).map(t => {
+        const reordered = (t.materials || []).sort((a, b) => {
+          const ai = newOrder.indexOf(a.id), bi = newOrder.indexOf(b.id);
+          return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+        });
+        return t.id === activeTopic?.id ? { ...t, materials: reordered } : t;
+      })
+    });
+  }, [allCourseMaterials, activeTopic, course.id, updateCourse]);
+
+  const handleGroupDragEnd = useCallback((event: DragEndEvent) => {
+    setActiveGroupDragId(null);
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const currentGroups = course.groups || [];
+    const ids = currentGroups.map(g => g.id);
+    const oldIdx = ids.indexOf(active.id as string);
+    const newIdx = ids.indexOf(over.id as string);
+    if (oldIdx < 0 || newIdx < 0) return;
+    const newOrder = arrayMove(ids, oldIdx, newIdx);
+    const reordered = [...currentGroups].sort((a, b) => {
+      const ai = newOrder.indexOf(a.id), bi = newOrder.indexOf(b.id);
+      return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+    });
+    updateCourse(course.id, { groups: reordered });
+  }, [course.id, course.groups, updateCourse]);
 
   const handleNoteDragEnd = (event: DragEndEvent) => {
     if (notesSearch) return;
@@ -1489,7 +1534,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
           </div>
         ) : activeTab === 'overview' ? (
             /* ─── OVERVIEW TAB ─── */
-          <div>
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
             {/* Big banner */}
             <div style={{ position: 'relative', height: 200, overflow: 'hidden', background: `linear-gradient(135deg, ${course.color}33 0%, var(--bg-surface) 100%)` }}>
               {(() => {
@@ -1525,8 +1570,16 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                         onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}><ChevronLeft size={14} /></button>
                        <button onClick={() => { const grp = groups.find(g => g.id === selectedGroupId); if (grp) { setEditingGroupId(grp.id); setGroupName(grp.name); setGroupCover(grp.image); setShowGroupModal(true); } }} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
                         onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}><Pencil size={13} /></button>
-                       <button onClick={() => { setImportExportMode('choose'); setImportPreviewData(null); setImportSelected([]); setImportTargetGroupId(selectedGroupId); setShowAgrupacionImportExport(true); }} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'} title="Importar / Exportar"><Package size={13} /></button>
+                       <button onClick={() => {
+                         const currentGrp = groups.find(g => g.id === selectedGroupId);
+                         const hasTopics = currentGrp ? parsedTopics.filter(t => t.groupId === selectedGroupId).length > 0 : false;
+                         if (currentGrp && !hasTopics) { toast.error('No hay temas dentro de esta agrupacion'); return; }
+                         if (currentGrp && selectedGroupId) { setExportSelectedIds(new Set([selectedGroupId])); setImportExportMode('export'); }
+                         else { setImportExportMode('choose'); }
+                         setImportPreviewData(null); setImportSelected([]); setImportTargetGroupId(selectedGroupId); setShowAgrupacionImportExport(true);
+                       }} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                         onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'} title="Importar / Exportar"><Package size={13} /></button>
+
                     </>
                   ) : (
                     <>
@@ -1544,20 +1597,21 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
             </div>
             {/* Content based on mode — with crossfade animation */}
             <div style={{
+              flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column',
               transition: 'all 350ms cubic-bezier(0.16, 1, 0.3, 1)',
               opacity: modePhase === 'out' ? 0 : 1,
               transform: modePhase === 'out' ? 'translateY(8px) scale(0.97)' : modePhase === 'in' ? 'translateY(-4px) scale(1.005)' : 'none',
               filter: modePhase === 'out' ? 'blur(4px)' : modePhase === 'in' ? 'blur(1px)' : 'none',
             }}>
             {overviewMode === 'tareas_notas' ? (
-              <div key="tasks_notes" style={{ display: 'flex', gap: 24, maxWidth: 1440, margin: '0 auto', padding: '16px 24px 60px' }}>
-                {/* ─── LEFT: Tasks — AETHER CLONE (3/5) ─── */}
-                <div style={{ flex: 3, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 24 }}>
+              <div key="tasks_notes" style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', gap: 36, margin: '0 auto', padding: '28px 48px 60px' }} className="no-scrollbar">
+                {/* ─── LEFT: Tasks ─── */}
+                <div style={{ flex: 3, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 32 }}>
                   {/* Task Creator Card */}
                   <div className="bento-card" style={{ borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', overflow: 'hidden', padding: 0, boxShadow: '0 1px 8px rgba(0,0,0,0.04)' }}>
-                    <div style={{ padding: '14px 16px' }}>
+                      <div style={{ padding: '22px 24px' }}>
                       <input value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} placeholder="Nombre de la tarea"
-                        style={{ width: '100%', border: 'none', borderBottom: 'none', height: 'auto', padding: '2px 0', fontSize: 16, fontWeight: 600, background: 'transparent', color: 'var(--text-primary)', outline: 'none', fontFamily: "'Inter Tight', sans-serif", borderRadius: 0, letterSpacing: '-0.02em' }}
+                        style={{ width: '100%', border: 'none', borderBottom: 'none', height: 'auto', padding: '4px 0', fontSize: 18, fontWeight: 600, background: 'transparent', color: 'var(--text-primary)', outline: 'none', fontFamily: "'Inter Tight', sans-serif", borderRadius: 0, letterSpacing: '-0.02em' }}
                         onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) handleAddTask(); }} />
                       <div style={{ padding: '0 0', margin: '6px 0' }}>
                         <div style={{ height: 1, background: `linear-gradient(to right, transparent, ${course.color}30, transparent)` }} />
@@ -1586,7 +1640,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                     </div>
                   </div>
                   {/* Task list header */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, marginBottom: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 0, marginBottom: 16 }}>
                     <div style={{ height: 1, flex: 1, background: `linear-gradient(to right, transparent, ${course.color}25)` }} />
                     <h3 style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: "'Inter Tight', sans-serif" }}>Tareas académicas</h3>
                     <button onClick={() => setShowCompletedTasks(prev => !prev)}
@@ -1625,7 +1679,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                           }
                           const isDone = task.status === 'completado';
                           return (
-                            <div key={task.id} className={isDone ? '' : 'item-card'} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, border: '1px solid var(--border-subtle)', background: isDone ? 'var(--bg-surface-alpha, var(--bg-surface))' : 'var(--bg-elevated-alpha, var(--bg-elevated))', transition: 'all 200ms ' + EASE, opacity: isDone ? 0.7 : 1 }}
+                            <div key={task.id} className={isDone ? '' : 'item-card'} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 22px', borderRadius: 10, border: '1px solid var(--border-subtle)', background: isDone ? 'var(--bg-surface-alpha, var(--bg-surface))' : 'var(--bg-elevated-alpha, var(--bg-elevated))', transition: 'all 200ms ' + EASE, opacity: isDone ? 0.7 : 1 }}
                               onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}30`; }}
                               onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; }}>
                               <div onClick={() => handleToggleTask(task.id)}
@@ -1673,9 +1727,9 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                   })()}
                 </div>
                 {/* ─── RIGHT: Mis Apuntes — Vertical Expandable Blocks ─── */}
-                <div style={{ flex: 2, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 0 }}>
+                  <div style={{ flex: 2.2, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 0 }}>
                   {/* Header */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2px', marginBottom: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 0, marginBottom: 16 }}>
                     <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: "'Inter Tight', sans-serif" }}>{showCourseNotesInOverview ? 'Mi conocimiento' : 'Mis apuntes'}</h3>
                     <div style={{ display: 'flex', gap: 6 }}>
                       <button
@@ -1705,7 +1759,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                   {filteredCourseNotes.length > 0 ? (
                     <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleOverviewNoteDragEnd}>
                       <SortableContext items={sortedIds} strategy={rectSortingStrategy}>
-                        <div ref={overviewNoteContainerRef} style={{ display: 'flex', flexDirection: 'column', gap: 8, position: 'relative', zIndex: 2 }}>
+                        <div ref={overviewNoteContainerRef} style={{ display: 'flex', flexDirection: 'column', gap: 12, position: 'relative', zIndex: 2, padding: '0 8px' }}>
                           {expandedFirst.map(n => {
                             const isHighlighted = overviewNoteHighlights.includes(n.id);
                             const isCourseNote = !n.isCoursePrivate;
@@ -1776,7 +1830,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                             <X size={12} />
                                           </button>
                                         </div>
-                                        <div style={{ maxHeight: 340, overflowY: 'auto', minHeight: 0 }}>
+                                        <div style={{ maxHeight: 420, overflowY: 'auto', minHeight: 0 }}>
                                           <NoteEditor
                                             note={n}
                                             courseColor={course.color}
@@ -2040,8 +2094,8 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                    <div key={topic.id} onClick={() => { setActiveTopicId(topic.id); setCurrentView('topic'); }}
                                      style={{ borderRadius: 14, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', overflow: 'hidden', cursor: 'pointer', transition: 'all 250ms cubic-bezier(0.16,1,0.3,1)', display: 'flex', flexDirection: 'column', position: 'relative' }}
                                      className="topic-card"
-                                     onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}40`; e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = `0 12px 36px ${course.color}14`; const icons = e.currentTarget.querySelector('.topic-hover-icons'); if (icons) (icons as HTMLElement).style.opacity = '1'; }}
-                                     onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; const icons = e.currentTarget.querySelector('.topic-hover-icons'); if (icons) (icons as HTMLElement).style.opacity = '0'; }}>
+                                      onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}40`; e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = `0 12px 36px ${course.color}14`; const a = e.currentTarget; a.querySelectorAll('.topic-hover-icons, .topic-actions').forEach(el => (el as HTMLElement).style.opacity = '1'); }}
+                                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; const a = e.currentTarget; a.querySelectorAll('.topic-hover-icons, .topic-actions').forEach(el => (el as HTMLElement).style.opacity = '0'); }}>
                                      {/* Hover material icons overlay */}
                                      <div className="topic-hover-icons" style={{ position: 'absolute', top: 14, right: 14, display: 'flex', gap: 4, opacity: 0, transition: 'opacity 200ms', zIndex: 3 }}>
                                        {Object.entries(typeCounts).map(([type, count]) => (
@@ -2225,12 +2279,12 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                     </div>
 
                     {/* ══ MATERIALS + CENTER ROW ══ */}
-                    <div style={{ display: 'flex', flex: 1, overflow: 'hidden', marginTop: 4 }}>
+                    <div style={{ display: 'flex', flex: 1, overflow: 'hidden', marginTop: 40 }}>
 
                       {/* ══ LEFT: MATERIALES (380px) ══ */}
-                      <div style={{ width: 380, flexShrink: 0, display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
+                      <div style={{ width: 380, flexShrink: 0, display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border-subtle)', overflow: 'hidden', alignSelf: 'stretch' }}>
 
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px 8px', flexShrink: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '24px 20px 10px', flexShrink: 0 }}>
                           <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: "'Inter Tight', sans-serif" }}>Materiales</h3>
                           <div style={{ display: 'flex', gap: 6 }}>
                             <button onClick={() => { estudioFileInputRef.current?.click(); }}
@@ -2250,13 +2304,16 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                           </div>
                         </div>
                         <input type="file" ref={estudioFileInputRef} style={{ display: 'none' }} onChange={e => handleFileUpload(e, parsedTopics[0]?.id)} />
-                        <div style={{ flex: 1, minHeight: 0, maxHeight: 390, overflowY: 'auto', padding: '10px 14px 24px', display: 'flex', flexDirection: 'column', gap: 12 }} className="no-scrollbar">
+                        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '10px 14px 40px', display: 'flex', flexDirection: 'column', gap: 12 }} className="no-scrollbar">
                           {allCourseMaterials.length === 0 ? (
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 120, borderRadius: 12, border: '1px dashed var(--border-subtle)', background: 'var(--bg-surface)', gap: 8 }}>
                               <File size={20} style={{ color: 'var(--text-muted)', opacity: 0.5 }} />
                               <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>Sin materiales todavia</p>
                             </div>
-                          ) : allCourseMaterials.map((mat, idx) => {
+                          ) : (
+                          <DndContext sensors={studySensors} collisionDetection={closestCorners} onDragStart={e => setActiveMatDragId(e.active.id as string)} onDragEnd={handleStudyMatDragEnd}>
+                          <SortableContext items={allCourseMaterials.map(m => m.id)} strategy={verticalListSortingStrategy}>
+                          {allCourseMaterials.map((mat, idx) => {
                             const matName = mat.name || 'Sin nombre';
                             const dataUrl = mat.dataUrl || '';
                             const isLink = dataUrl.startsWith('http');
@@ -2271,7 +2328,11 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                             const isYouTube = isLink && (dataUrl.includes('youtube.com') || dataUrl.includes('youtu.be'));
                             const isClassroom = isLink && dataUrl.includes('classroom.google.com');
                             const isDrive = isLink && dataUrl.includes('drive.google.com');
-                            const isWeb = isLink && !isYouTube && !isDrive && !isClassroom;
+                            const isGoogleDocs = isLink && dataUrl.includes('docs.google.com');
+                            const isGoogleSheets = isLink && dataUrl.includes('sheets.google.com');
+                            const isGoogleSlides = isLink && dataUrl.includes('slides.google.com');
+                            const isGoogleForms = isLink && dataUrl.includes('forms.google.com');
+                            const isWeb = isLink && !isYouTube && !isDrive && !isClassroom && !isGoogleDocs && !isGoogleSheets && !isGoogleSlides && !isGoogleForms;
                             const isLocal = dataUrl && !dataUrl.startsWith('http') && !dataUrl.startsWith('data:') && !dataUrl.startsWith('blob:');
 
                             const openFile = (path: string) => {
@@ -2280,27 +2341,30 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                               } else { window.open(path, '_blank', 'noopener,noreferrer'); }
                             };
 
-                            const handleMatClick = () => {
-                              if (isPdf && dataUrl) { setPdfPreviewUrl(isLocal ? (window as any).__TAURI__?.convertFileSrc?.(dataUrl) || dataUrl : dataUrl); setPdfPreviewName(matName); setShowPdfPreview(true); }
-                              else if (isImg && dataUrl) { setPdfPreviewUrl(dataUrl); setPdfPreviewName(matName); setShowPdfPreview(true); }
-                              else if (isYouTube) { setPipUrl(dataUrl, matName); }
-                              else if (isVideo) { setPipUrl(dataUrl, matName); }
-                              else if (isWeb || isDrive || isClassroom || isLink || isDoc || isXls || isPpt) { openFile(dataUrl); }
-                              else if (isAudio) { /* toggle inline — handled by audio player below */ }
-                              else if (dataUrl.startsWith('http')) { openFile(dataUrl); }
-                              else if (isLocal) { openFile(dataUrl); }
+                            const handleMatClick = async () => {
+                              setLoadingMatId(mat.id || `idx_${idx}`);
+                              try {
+                                await openFileSmart(dataUrl, matName);
+                              } catch (e) {
+                                console.error('[Mat] open failed', e);
+                              }
+                              setTimeout(() => setLoadingMatId(null), 400);
                             };
 
                             const svgIcon = (d: string, c: string) => <svg viewBox="0 0 24 24" width={17} height={17} fill={c} style={{ flexShrink: 0, display: 'block' }}><path d={d} /></svg>;
                             let iconEl: React.ReactNode;
                             let badgeColor = '#888';
-                            if (isDoc) { badgeColor = '#2563EB'; iconEl = svgIcon('M23.004 1.5q.41 0 .703.293t.293.703v19.008q0 .41-.293.703t-.703.293H6.996q-.41 0-.703-.293T6 21.504V18H.996q-.41 0-.703-.293T0 17.004V6.996q0-.41.293-.703T.996 6H6V2.496q0-.41.293-.703t.703-.293zM6.035 11.203l1.442 4.735h1.64l1.57-7.876H9.036l-.937 4.653-1.325-4.5H5.38l-1.406 4.523-.938-4.675H1.312l1.57 7.874h1.641zM22.5 21v-3h-15v3zm0-4.5v-3.75H12v3.75zm0-5.25V7.5H12v3.75zm0-5.25V3h-15v3Z', '#2563EB'); }
-                            else if (isXls) { badgeColor = '#10B981'; iconEl = svgIcon('M23 1.5q.41 0 .7.3.3.29.3.7v19q0 .41-.3.7-.29.3-.7.3H7q-.41 0-.7-.3-.3-.29-.3-.7V18H1q-.41 0-.7-.3-.3-.29-.3-.7V7q0-.41.3-.7Q.58 6 1 6h5V2.5q0-.41.3-.7.29-.3.7-.3zM6 13.28l1.42 2.66h2.14l-2.38-3.87 2.34-3.8H7.46l-1.3 2.4-.05.08-.04.09-.64-1.28-.66-1.29H2.59l2.27 3.82-2.48 3.85h2.16zM14.25 21v-3H7.5v3zm0-4.5v-3.75H12v3.75zm0-5.25V7.5H12v3.75zm0-5.25V3H7.5v3zm8.25 15v-3h-6.75v3zm0-4.5v-3.75h-6.75v3.75zm0-5.25V7.5h-6.75v3.75zm0-5.25V3h-6.75v3Z', '#10B981'); }
-                            else if (isPpt) { badgeColor = '#F97316'; iconEl = svgIcon('M13.5 1.5q1.453 0 2.795.375 1.342.375 2.508 1.06 1.166.686 2.12 1.641.956.955 1.641 2.121.686 1.166 1.061 2.508Q24 10.547 24 12q0 1.453-.375 2.795-.375 1.342-1.06 2.508-.686 1.166-1.641 2.12-.955.956-2.121 1.641-1.166.686-2.508 1.061-1.342.375-2.795.375-1.29 0-2.52-.305-1.23-.304-2.337-.884-1.108-.58-2.063-1.418-.955-.838-1.693-1.893H.997q-.411 0-.704-.293T0 17.004V6.996q0-.41.293-.703T.996 6h3.89q.739-1.055 1.694-1.893.955-.837 2.063-1.418 1.107-.58 2.337-.884Q12.21 1.5 13.5 1.5z', '#F97316'); }
+                            if (isDoc) { badgeColor = '#2563EB'; iconEl = <WordIcon />; }
+                            else if (isGoogleDocs) { badgeColor = '#2563EB'; iconEl = <GoogleDocsIcon />; }
+                            else if (isXls) { badgeColor = '#10B981'; iconEl = <ExcelIcon />; }
+                            else if (isGoogleSheets) { badgeColor = '#10B981'; iconEl = <GoogleSheetsIcon />; }
+                            else if (isPpt) { badgeColor = '#F97316'; iconEl = <PowerPointIcon />; }
+                            else if (isGoogleSlides) { badgeColor = '#F97316'; iconEl = <GoogleSlidesIcon />; }
                             else if (isPdf) { badgeColor = '#EF4444'; iconEl = svgIcon('M23.63 15.3c-.71-.745-2.166-1.17-4.224-1.17-1.1 0-2.377.106-3.761.354a19.443 19.443 0 0 1-2.307-2.661c-.532-.71-.994-1.49-1.42-2.236.817-2.484 1.207-4.507 1.207-5.962 0-1.632-.603-3.336-2.342-3.336-.532 0-1.065.32-1.349.781-.78 1.384-.425 4.4.923 7.381a60.277 60.277 0 0 1-1.703 4.507c-.568 1.349-1.207 2.733-1.917 4.01C2.834 18.53.314 20.34.03 21.758c-.106.533.071 1.03.462 1.42.142.107.639.533 1.49.533 2.59 0 5.323-4.188 6.707-6.707 1.065-.355 2.13-.71 3.194-.994a34.963 34.963 0 0 1 3.407-.745c2.732 2.448 5.145 2.839 6.352 2.839 1.49 0 2.023-.604 2.2-1.1.32-.64.106-1.349-.213-1.704z', '#EF4444'); }
                             else if (isYouTube) { badgeColor = '#EF4444'; iconEl = svgIcon('M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z', '#EF4444'); }
-                            else if (isClassroom) { badgeColor = '#0F9D58'; iconEl = <svg viewBox="0 0 24 24" width={17} height={17} style={{ flexShrink: 0, display: 'block' }}><path d="M12 3L1 9l4 2.18v6L12 21l7-3.82v-6l2-1.09V17h2V9L12 3z" fill="#0F9D58"/><path d="M12 3l7 3.82v6L12 17 5 12.82v-6L12 3z" fill="#0F9D58" opacity="0.6"/></svg>; }
-                            else if (isDrive) { badgeColor = '#4285F4'; iconEl = <svg viewBox="0 0 24 24" width={17} height={17} style={{ flexShrink: 0, display: 'block' }}><path d="M8.5 3L3 13l3 5h4l5-10z" fill="#4285F4"/><path d="M15.5 3L21 13l-3 5h-4L9.5 8z" fill="#FBBC04"/><path d="M3 13l3 5h12l3-5H3z" fill="#0F9D58"/></svg>; }
+                            else if (isClassroom) { badgeColor = '#0F9D58'; iconEl = <GoogleClassroomIcon />; }
+                            else if (isDrive) { badgeColor = '#4285F4'; iconEl = <GoogleDriveIcon />; }
+                            else if (isGoogleForms) { badgeColor = '#7C3AED'; iconEl = <GoogleFormsIcon />; }
                             else if (isAudio) { badgeColor = '#8B5CF6'; iconEl = <Music size={13} />; }
                             else if (isImg) { badgeColor = '#F59E0B'; iconEl = <ImageIcon size={13} />; }
                             else if (isVideo) { badgeColor = '#EC4899'; iconEl = <File size={13} />; }
@@ -2318,10 +2382,11 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                             else { iconEl = <File size={13} />; }
 
                             return (
-                              <React.Fragment key={mat.id || idx}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 7, background: isAudio && playingAudioId === mat.id ? `${badgeColor}08` : 'var(--bg-elevated)', border: `1px solid ${isAudio && playingAudioId === mat.id ? `${badgeColor}30` : 'var(--border-soft)'}`, cursor: 'pointer', transition: 'all 150ms' }}
-                                  onMouseEnter={e => { e.currentTarget.style.borderColor = `${badgeColor}40`; e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                                  onMouseLeave={e => { e.currentTarget.style.borderColor = isAudio && playingAudioId === mat.id ? `${badgeColor}30` : 'var(--border-soft)'; e.currentTarget.style.background = isAudio && playingAudioId === mat.id ? `${badgeColor}08` : 'var(--bg-elevated)'; }}>
+                              <SortableWrapper key={mat.id || idx} id={String(mat.id || idx)}>
+                              {({ attributes, listeners, isDragging }) => (
+                              <div {...attributes} {...listeners} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 7, background: loadingMatId === (mat.id || `idx_${idx}`) ? `${badgeColor}15` : isAudio && playingAudioId === mat.id ? `${badgeColor}08` : 'var(--bg-elevated)', border: `1px solid ${loadingMatId === (mat.id || `idx_${idx}`) ? `${badgeColor}50` : isAudio && playingAudioId === mat.id ? `${badgeColor}30` : 'var(--border-soft)'}`, cursor: loadingMatId === (mat.id || `idx_${idx}`) ? 'default' : 'grab', transition: 'all 150ms', opacity: isDragging ? 0.5 : 1 }}
+                                  onMouseEnter={e => { if (loadingMatId !== (mat.id || `idx_${idx}`)) { e.currentTarget.style.borderColor = `${badgeColor}40`; e.currentTarget.style.background = 'var(--bg-hover)'; } }}
+                                  onMouseLeave={e => { if (loadingMatId !== (mat.id || `idx_${idx}`)) { e.currentTarget.style.borderColor = isAudio && playingAudioId === mat.id ? `${badgeColor}30` : 'var(--border-soft)'; e.currentTarget.style.background = isAudio && playingAudioId === mat.id ? `${badgeColor}08` : 'var(--bg-elevated)'; } }}>
                                   <div onClick={() => {
                                     if (isAudio) {
                                       if (playingAudioId === mat.id && audioRef.current) {
@@ -2358,25 +2423,29 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                   )}
                                   {isLink ? (
                                     <button onClick={e => { e.stopPropagation(); setEditLinkId(mat.id); setEditLinkUrl(dataUrl); setEditLinkName(matName); }}
-                                      style={{ width: 24, height: 24, borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, transition: 'all 150ms', opacity: 0 }}
+                                      style={{ width: 24, height: 24, borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, transition: 'all 150ms', opacity: 0.4 }}
                                       onMouseEnter={ev => { ev.currentTarget.style.background = 'var(--bg-hover)'; ev.currentTarget.style.color = 'var(--text-primary)'; ev.currentTarget.style.opacity = '1'; }}
-                                      onMouseLeave={ev => { ev.currentTarget.style.background = 'transparent'; ev.currentTarget.style.color = 'var(--text-muted)'; ev.currentTarget.style.opacity = '0'; }}
+                                      onMouseLeave={ev => { ev.currentTarget.style.background = 'transparent'; ev.currentTarget.style.color = 'var(--text-muted)'; ev.currentTarget.style.opacity = '0.4'; }}
                                       title="Editar enlace">
                                       <Edit3 size={11} />
                                     </button>
                                   ) : (
                                     <button onClick={e => { e.stopPropagation(); setConfirmDeleteMatId(mat.id); }}
-                                      style={{ width: 24, height: 24, borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, transition: 'all 150ms', opacity: 0 }}
+                                      style={{ width: 24, height: 24, borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, transition: 'all 150ms', opacity: 0.4 }}
                                       onMouseEnter={ev => { ev.currentTarget.style.background = 'rgba(239,68,68,0.1)'; ev.currentTarget.style.color = '#EF4444'; ev.currentTarget.style.opacity = '1'; }}
-                                      onMouseLeave={ev => { ev.currentTarget.style.background = 'transparent'; ev.currentTarget.style.color = 'var(--text-muted)'; ev.currentTarget.style.opacity = '0'; }}
+                                      onMouseLeave={ev => { ev.currentTarget.style.background = 'transparent'; ev.currentTarget.style.color = 'var(--text-muted)'; ev.currentTarget.style.opacity = '0.4'; }}
                                       title="Eliminar">
                                       <X size={11} />
                                     </button>
                                   )}
                                 </div>
-                              </React.Fragment>
+                              )}
+                              </SortableWrapper>
                             );
                           })}
+                          </SortableContext>
+                          </DndContext>
+                          )}
                         </div>
                       </div>
 
@@ -2525,7 +2594,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
 
                   {/* ══ RIGHT: AGRUPACIONES — FULL LATERAL ══ */}
                   <div style={{ width: 320, flexShrink: 0, display: 'flex', flexDirection: 'column', borderLeft: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 20px 14px', flexShrink: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '24px 20px 10px', flexShrink: 0 }}>
                       <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: "'Inter Tight', sans-serif" }}>Agrupaciones</h3>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <button onClick={() => { setEditingGroupId(null); setGroupName(''); setGroupCover(undefined); setShowGroupModal(true); }}
@@ -2537,28 +2606,33 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                         </button>
                       </div>
                     </div>
-                    <div style={{ flex: 1, minHeight: 0, maxHeight: 550, overflowY: 'auto', padding: '0 14px 24px', display: 'flex', flexDirection: 'column', gap: 7 }} className="no-scrollbar">
+                    <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '6px 12px 40px', display: 'flex', flexDirection: 'column', gap: 12 }} className="no-scrollbar">
                       {groups.length === 0 ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 120, borderRadius: 12, border: '1px dashed var(--border-subtle)', background: 'var(--bg-surface)', gap: 8 }}>
-                          <Layers size={20} style={{ color: 'var(--text-muted)', opacity: 0.5 }} />
-                          <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>Sin agrupaciones</p>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 100, borderRadius: 10, border: '1px dashed var(--border-subtle)', background: 'var(--bg-surface)', gap: 6 }}>
+                          <Layers size={18} style={{ color: 'var(--text-muted)', opacity: 0.5 }} />
+                          <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0 }}>Sin agrupaciones</p>
                         </div>
-                      ) : groups.map(group => {
+                      ) : (
+                      <DndContext sensors={studySensors} collisionDetection={closestCorners} onDragStart={e => setActiveGroupDragId(e.active.id as string)} onDragEnd={handleGroupDragEnd}>
+                      <SortableContext items={groups.map(g => g.id)} strategy={verticalListSortingStrategy}>
+                      {groups.map(group => {
                         return (
-                          <div key={group.id}
-                            style={{ borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated-alpha, var(--bg-elevated))', overflow: 'hidden', cursor: 'pointer', transition: 'all 200ms ' + EASE, position: 'relative' }}
-                            onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}40`; e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = `0 6px 20px ${course.color}12`; }}
-                            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
+                          <SortableWrapper key={group.id} id={group.id}>
+                          {({ attributes, listeners, isDragging }) => (
+                          <div {...attributes} {...listeners}
+                            style={{ flexShrink: 0, borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated-alpha, var(--bg-elevated))', overflow: 'hidden', cursor: 'grab', transition: 'all 200ms ' + EASE, position: 'relative', opacity: isDragging ? 0.5 : 1 }}
+                            onMouseEnter={e => { if (!group.image) { e.currentTarget.style.borderColor = `${course.color}40`; } e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = `0 4px 14px ${course.color}12`; }}
+                            onMouseLeave={e => { if (!group.image) { e.currentTarget.style.borderColor = 'var(--border-subtle)'; } e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
                             onClick={() => { setSelectedGroupId(group.id); setCurrentView('group'); }}>
                             {group.image ? (
-                                <div style={{ width: '100%', height: 120, overflow: 'hidden', position: 'relative' }}>
+                                <div style={{ width: '100%', height: 88, overflow: 'hidden', position: 'relative' }}>
                                 <img src={group.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', transition: 'transform 400ms cubic-bezier(0.16,1,0.3,1)' }}
                                   onMouseEnter={ev => { ev.currentTarget.style.transform = 'scale(1.04)'; }}
                                   onMouseLeave={ev => { ev.currentTarget.style.transform = 'scale(1)'; }} />
-                                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.15) 50%, transparent 100%)' }} />
-                                <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '14px 16px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+                                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.1) 50%, transparent 100%)' }} />
+                                <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '12px 16px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
                                   <div style={{ minWidth: 0, flex: 1 }}>
-                                    <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', fontFamily: "'Inter Tight', sans-serif", textShadow: '0 1px 6px rgba(0,0,0,0.5)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>{group.name}</div>
+                                    <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', fontFamily: "'Inter Tight', sans-serif", textShadow: '0 1px 6px rgba(0,0,0,0.5)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>{group.name}</div>
                                   </div>
                                   <button onClick={e => { e.stopPropagation(); setInlineEditGroupId(group.id); setInlineGroupName(group.name); setInlineGroupCover(group.image); }}
                                     style={{ width: 26, height: 26, borderRadius: 6, border: 'none', background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(6px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 150ms', opacity: 0.7 }}
@@ -2571,9 +2645,9 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                 <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, transparent, ${course.color}, transparent)` }} />
                               </div>
                             ) : (
-                              <div style={{ padding: '18px 20px', display: 'flex', alignItems: 'center', gap: 14, position: 'relative' }}>
-                                <div style={{ width: 36, height: 36, borderRadius: 10, background: `linear-gradient(135deg, ${course.color}18, ${course.color}08)`, border: `1px solid ${course.color}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 200ms ' + EASE }}>
-                                  <Layers size={15} style={{ color: course.color }} />
+                              <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10, position: 'relative' }}>
+                                <div style={{ width: 38, height: 38, borderRadius: 10, background: `linear-gradient(135deg, ${course.color}18, ${course.color}08)`, border: `1px solid ${course.color}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 200ms ' + EASE }}>
+                                  <Layers size={16} style={{ color: course.color }} />
                                 </div>
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                   <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>{group.name}</div>
@@ -2588,8 +2662,13 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                               </div>
                             )}
                           </div>
+                          )}
+                          </SortableWrapper>
                         );
                       })}
+                      </SortableContext>
+                      </DndContext>
+                      )}
                     </div>
                   </div>
                 </div>

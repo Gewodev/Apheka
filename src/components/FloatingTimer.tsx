@@ -188,8 +188,8 @@ export default function FloatingTimer() {
     >
       <span
         className="close-btn"
-        onClick={(e) => { e.stopPropagation(); getCurrentWindow().hide(); }}
-        title="Ocultar timer"
+        onClick={(e) => { e.stopPropagation(); getCurrentWindow().close(); }}
+        title="Cerrar timer"
         style={{
           position: 'absolute', top: 6, right: 6, zIndex: 20,
           width: 22, height: 22, borderRadius: 5,

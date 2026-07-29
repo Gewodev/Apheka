@@ -397,7 +397,11 @@ function AppContent() {
             onProgress={(state: any) => { if (musicDuration > 0) setMusicProgress(state.playedSeconds / musicDuration); }}
             onEnded={() => {
               if (tracks.length > 0 && currentTrackId) {
-                if (repeatMode === 'one') { playTrack(currentTrackId); return; }
+                if (repeatMode === 'one') { 
+                  playTrack(currentTrackId);
+                  setRepeatMode('none');
+                  return; 
+                }
                 let nextId: string | null = null;
                 const q = musicQueue;
                 if (q.length > 0) {
