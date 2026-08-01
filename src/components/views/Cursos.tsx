@@ -1,14 +1,16 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  GraduationCap, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Pencil, PlusCircle, Layers, Trash2,
+  GraduationCap, ChevronLeft, ChevronRight, ChevronUp, Pencil, PlusCircle, Layers, Trash2,
   Book, Upload, X, Search, Edit3, Plus, File, Sigma, Lightbulb, Key, Type, HelpCircle, ListChecks, ExternalLink,
-  Check, GripVertical, StickyNote, BookOpen, ArrowUpRight,
+  Check, GripVertical, StickyNote, BookOpen, ArrowUpRight, ArrowLeft, Play,
   NotebookPen, ListTodo, Bold, Italic, Underline, Heading1, Heading2, Heading3,
   List, ListOrdered, Highlighter, Paperclip, MoreHorizontal, Eye, FolderOpen,
   ArrowLeftRight, BarChart3, Calendar, Flag, ArrowUpDown, Star, EyeOff, Strikethrough, AlignLeft, AlignCenter, AlertTriangle,
   Users, MoreVertical, FileText, CheckCircle, FileSpreadsheet, Image as ImageIcon, Music, Link2, Lock,
-  Download, ArrowDownToLine, ArrowUpFromLine, Package, PackageOpen, FileDown, FileUp,
+  Download, ArrowDownToLine, ArrowUpFromLine, Package, PackageOpen, FileDown, FileUp, Mic,
+  ScrollText, Shuffle, Workflow, Puzzle,
+  TreePine, Map as MapIcon, Split, Tag,
 } from 'lucide-react';
 import { FormatToolbar } from '../ui/FormatToolbar';
 import { GoogleClassroomIcon, GoogleDriveIcon, GoogleDocsIcon, GoogleSheetsIcon, GoogleSlidesIcon, GoogleFormsIcon, WordIcon, ExcelIcon, PowerPointIcon } from '../ui/GoogleIcons';
@@ -20,10 +22,10 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { restrictToParentElement } from '@dnd-kit/modifiers';
-import { useApp, Course, SubjectGroup, SubjectTopic, SubjectMaterial } from '../../store/AppContext';
+import { useApp, Course, SubjectGroup, SubjectTopic, SubjectMaterial, TopicFlashcard, PlannedSession } from '../../store/AppContext';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
-import { format, subDays, addDays, startOfWeek, endOfWeek } from "date-fns";
+import { format, addDays, startOfWeek, endOfWeek } from "date-fns";
 import { es } from "date-fns/locale";
 import toast from 'react-hot-toast';
 
@@ -38,7 +40,46 @@ export const MATERIAL_META = {
 };
 type MaterialType = keyof typeof MATERIAL_META;
 
+export const BUILT_IN_SESSION_TYPES = [
+  { id: 'estudio', label: 'Estudio', color: '#8B5CF6' },
+  { id: 'repaso', label: 'Repaso', color: '#3B82F6' },
+  { id: 'ejercicio', label: 'Ejercicio', color: '#10B981' },
+  { id: 'lectura', label: 'Lectura', color: '#F59E0B' },
+  { id: 'otro', label: 'Otro', color: '#6B7280' },
+];
+export const SESSION_TYPE_COLORS = ['#8B5CF6','#3B82F6','#10B981','#F59E0B','#EF4444','#EC4899','#06B6D4','#6366F1','#84CC16','#F97316','#14B8A6','#A855F7'];
+
+
+// ─── Specialized tool creators (each tool has its own tailored form) ───
+export const TOOL_CREATOR_META = {
+  quizzes: { name: 'Quiz rápido', hint: 'Pregunta y respuesta para autoevaluarte', color: '#EF4444', icon: HelpCircle },
+  blurting: { name: 'Blurting', hint: 'Escribe todo lo que recuerdes del tema, sin mirar apuntes', color: '#3B82F6', icon: NotebookPen },
+  feynman: { name: 'Feynman', hint: 'Explica el concepto en palabras simples, como si fuera para un niño', color: '#F59E0B', icon: Lightbulb },
+  matching: { name: 'Matching', hint: 'Relaciona pares: escribe el concepto y su pareja', color: '#10B981', icon: Shuffle },
+  cloze: { name: 'Cloze', hint: 'Crea un texto con huecos para completar', color: '#06B6D4', icon: Type },
+  categorization: { name: 'Categorizar', hint: 'Agrupa elementos por categoría', color: '#EC4899', icon: Puzzle },
+  mnemonics: { name: 'Mnemotecnia', hint: 'Crea un dato clave con una regla mnemotécnica', color: '#6366F1', icon: Key },
+} as const;
+type ToolCreatorMode = keyof typeof TOOL_CREATOR_META;
+const TOOL_MATERIAL_TYPE: Record<ToolCreatorMode, SubjectMaterial['type']> = {
+  quizzes: 'quiz', blurting: 'concept', feynman: 'meaning', matching: 'quiz', cloze: 'key-data', categorization: 'concept', mnemonics: 'key-data',
+};
+
+const TOOL_ITEMS = {
+  flashcards: { icon: BookOpen, label: 'Flashcards', color: '#8B5CF6', sub: 'Pregunta · Respuesta' },
+  quizzes: { icon: HelpCircle, label: 'Quiz rápido', color: '#EF4444', sub: 'Autoevaluación' },
+  blurting: { icon: NotebookPen, label: 'Blurting', color: '#3B82F6', sub: 'Recuerdo libre' },
+  feynman: { icon: Lightbulb, label: 'Feynman', color: '#F59E0B', sub: 'Explica en simple' },
+  matching: { icon: Shuffle, label: 'Matching', color: '#10B981', sub: 'Relaciona pares' },
+  cloze: { icon: Type, label: 'Cloze', color: '#06B6D4', sub: 'Texto con huecos' },
+  categorization: { icon: Puzzle, label: 'Categorizar', color: '#EC4899', sub: 'Agrupa elementos' },
+  mnemonics: { icon: Key, label: 'Mnemotecnia', color: '#6366F1', sub: 'Reglas para recordar' },
+} as const;
+type ToolKey = keyof typeof TOOL_ITEMS;
+const TOOL_DEFAULT_ORDER: ToolKey[] = ['flashcards', 'quizzes', 'blurting', 'feynman', 'matching', 'cloze', 'categorization', 'mnemonics'];
+
 const EASE = "cubic-bezier(0.16, 1, 0.3, 1)";
+const REVIEW_LEVEL_COLORS = ['#EF4444', '#F97316', '#F59E0B', '#FBBF24', '#EAB308', '#A3E635', '#84CC16', '#4ADE80', '#22C55E', '#10B981'];
 const SPINE_COLORS = [
   "#E11D48", "#3B82F6", "#10B981", "#F59E0B", "#8B5CF6",
   "#EC4899", "#06B6D4", "#84CC16", "#F97316", "#6366F1",
@@ -284,33 +325,489 @@ function SortableWrapper({ id, children }: { id: string; children: (p: { attribu
   return <div ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition, zIndex: isDragging ? 100 : 1, opacity: isDragging ? 0.5 : 1, position: 'relative' as const }}>{children({ attributes, listeners, isDragging })}</div>;
 }
 
-function MaterialCard({ mat, dragAttributes, dragListeners, onEdit, onDelete, onOpenResource }:
-  { mat: SubjectMaterial; dragAttributes?: any; dragListeners?: any; onEdit: (m: SubjectMaterial) => void; onDelete: (m: SubjectMaterial) => void; onOpenResource: (m: SubjectMaterial) => void }) {
-  const [expanded, setExpanded] = useState(false);
+function MaterialCard({ mat, dragAttributes, dragListeners, onEdit, onDelete, onOpenResource, onPractice }:
+  { mat: SubjectMaterial; dragAttributes?: any; dragListeners?: any; onEdit: (m: SubjectMaterial) => void; onDelete: (m: SubjectMaterial) => void; onOpenResource: (m: SubjectMaterial) => void; onPractice?: (m: SubjectMaterial) => void }) {
   const meta = MATERIAL_META[mat.type];
-  const Icon = meta.icon;
-  const isExpandable = ['concept', 'key-data', 'meaning', 'quiz', 'procedure'].includes(mat.type);
-  const title = mat.name || mat.title || mat.word || mat.question || 'Sin título';
-  const body = mat.content || mat.meaning || mat.answer || '';
   const typeColors: Record<string, string> = { formula: '#8B5CF6', concept: '#3B82F6', 'key-data': '#F59E0B', meaning: '#10B981', quiz: '#EF4444', procedure: '#EC4899', resource: '#6366F1' };
-  const accent = typeColors[mat.type] || 'var(--accent)';
+  const toolMeta = mat.toolMode ? TOOL_CREATOR_META[mat.toolMode as ToolCreatorMode] : undefined;
+  const Icon = toolMeta ? toolMeta.icon : meta.icon;
+  const accent = toolMeta?.color || typeColors[mat.type] || 'var(--accent)';
+  const cardLabel = toolMeta?.name || meta.label;
+  const title = mat.name || mat.title || mat.word || mat.question || 'Sin título';
+  const practice = toolMeta && onPractice;
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', borderRadius: 8, border: `1px solid ${accent}18`, background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-surface) 100%)', overflow: 'hidden', transition: 'all 200ms ' + EASE }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 6px', borderBottom: '1px solid var(--border-subtle)', background: `${accent}08` }}>
-        <div {...dragAttributes} {...dragListeners} style={{ cursor: 'grab', display: 'flex', padding: 2, color: 'var(--text-muted)' }}><GripVertical size={9} /></div>
-        <Icon size={10} style={{ color: accent }} />
-        <span style={{ flex: 1, fontSize: 7.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: accent }}>{meta.label}</span>
-        <button onClick={() => onEdit(mat)} style={{ width: 18, height: 18, borderRadius: 3, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Edit3 size={8} /></button>
-        <button onClick={() => onDelete(mat)} style={{ width: 18, height: 18, borderRadius: 3, border: 'none', background: 'transparent', cursor: 'pointer', color: 'rgba(239,68,68,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={8} /></button>
+    <div {...dragAttributes} {...dragListeners}
+      title={practice ? 'Arrastra para reordenar · Toca para practicar' : "Arrastra para reordenar"}
+      onClick={practice ? () => onPractice(mat) : undefined}
+      style={{ display: 'flex', flexDirection: 'column', borderRadius: 14, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', overflow: 'hidden', transition: 'all 200ms ' + EASE, boxShadow: '0 1px 2px rgba(0,0,0,0.04)', minHeight: 118, touchAction: 'none', cursor: practice ? 'pointer' : 'grab' }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = `${accent}50`; e.currentTarget.style.background = 'var(--bg-surface)'; e.currentTarget.style.boxShadow = `0 8px 24px ${accent}12`; }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.04)'; }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 14px 8px' }}>
+        <div style={{ width: 38, height: 38, borderRadius: 11, background: `${accent}10`, border: `1px solid ${accent}1a`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <Icon size={17} style={{ color: accent }} />
+        </div>
+        <span style={{ flex: 1, fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: accent, fontFamily: "'Inter Tight', sans-serif" }}>{cardLabel}</span>
+        <button onPointerDown={e => e.stopPropagation()} onClick={() => onEdit(mat)} title="Editar"
+          style={{ width: 26, height: 26, borderRadius: 8, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+          onMouseEnter={e => { e.currentTarget.style.background = `${accent}14`; e.currentTarget.style.color = accent; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}><Edit3 size={11} /></button>
+        <button onPointerDown={e => e.stopPropagation()} onClick={() => onDelete(mat)} title="Eliminar"
+          style={{ width: 26, height: 26, borderRadius: 8, border: 'none', background: 'transparent', cursor: 'pointer', color: 'rgba(239,68,68,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+          onMouseEnter={e => { e.currentTarget.style.background = '#EF444414'; e.currentTarget.style.color = '#EF4444'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(239,68,68,0.55)'; }}><Trash2 size={11} /></button>
       </div>
-      <div style={{ padding: '8px 10px', cursor: isExpandable ? 'pointer' : 'default' }} onClick={() => isExpandable && setExpanded(!expanded)}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 3, lineHeight: 1.3 }}>{title.length > 50 ? title.slice(0, 50) + '…' : title}</div>
-        {mat.type === 'formula' && mat.clarification && <div style={{ fontSize: 9, color: 'var(--text-tertiary)', fontStyle: 'italic', lineHeight: 1.4 }}>{mat.clarification}</div>}
-        {mat.type === 'procedure' && mat.description && <div style={{ fontSize: 9, color: accent, fontStyle: 'italic', marginBottom: 3 }}>{mat.description}</div>}
-        {isExpandable && body && <div style={{ fontSize: 10, color: 'var(--text-secondary)', lineHeight: 1.5, whiteSpace: 'pre-wrap', display: expanded ? 'block' : '-webkit-box', WebkitLineClamp: expanded ? undefined : 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{body}</div>}
-        {mat.image && expanded && <div style={{ marginTop: 6, borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border-subtle)' }}><img src={mat.image} alt="" style={{ width: '100%', height: 'auto', display: 'block' }} /></div>}
-        {mat.type === 'resource' && <button onClick={(e) => { e.stopPropagation(); onOpenResource(mat); }} style={{ marginTop: 4, padding: 0, height: 'auto', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 8.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 3, color: accent }}><ExternalLink size={8} /> Ver archivo</button>}
+      <div style={{ flex: 1, padding: '0 14px 12px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+        <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--text-primary)', lineHeight: 1.35, fontFamily: "'Inter Tight', sans-serif", display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{title}</div>
+        {practice ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 10, fontSize: 9, fontWeight: 700, color: accent, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+            <Play size={9} /> Practicar
+          </div>
+        ) : mat.type === 'resource' ? (
+          <button onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); onOpenResource(mat); }} style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 5, height: 26, padding: '0 11px', borderRadius: 8, border: `1px solid ${accent}30`, background: `${accent}0d`, cursor: 'pointer', color: accent, fontSize: 9.5, fontWeight: 700, fontFamily: "'Inter Tight', sans-serif" }}><ExternalLink size={9} /> Ver archivo</button>
+        ) : null}
       </div>
+    </div>
+  );
+}
+
+// ─── Tool row (Herramientas panel) — long-press to reorder ───
+function ToolSortableRow({ id, tool, isActive, onClick }: { id: ToolKey; tool: typeof TOOL_ITEMS[ToolKey]; isActive: boolean; onClick: () => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const ToolIcon = tool.icon;
+  return (
+    <div
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      onClick={onClick}
+      style={{ transform: CSS.Transform.toString(transform), transition, touchAction: 'none', cursor: 'grab', opacity: isDragging ? 0.45 : 1, display: 'flex', alignItems: 'center', gap: 12, padding: '12px 13px', borderRadius: 13, border: `1px solid ${isActive ? `${tool.color}4d` : 'var(--border-subtle)'}`, background: isActive ? `${tool.color}0d` : 'var(--bg-elevated)', boxShadow: isActive ? `0 0 0 1px ${tool.color}14, 0 6px 18px ${tool.color}12` : '0 1px 2px rgba(0,0,0,0.04)' }}
+      onMouseEnter={e => { if (!isActive) { e.currentTarget.style.borderColor = `${tool.color}4d`; e.currentTarget.style.background = `${tool.color}08`; e.currentTarget.style.boxShadow = `0 6px 18px ${tool.color}10`; } }}
+      onMouseLeave={e => { if (!isActive) { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.04)'; } }}
+      title={isActive ? `${tool.label} · activo` : `Crear ${tool.label} · mantén pulsado para reordenar`}>
+      <div style={{ width: 40, height: 40, borderRadius: 11, background: `${tool.color}12`, border: `1px solid ${tool.color}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <ToolIcon size={17} style={{ color: tool.color }} />
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: isActive ? tool.color : 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tool.label}</div>
+        <div style={{ fontSize: 9.5, color: 'var(--text-tertiary)', marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tool.sub}</div>
+      </div>
+      {isActive && <Check size={14} style={{ color: tool.color, flexShrink: 0 }} />}
+    </div>
+  );
+}
+
+// ─── Per-tool practice overlay (each tool has its own review flow) ───
+const shuffleArr = <T,>(arr: T[]): T[] => {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+};
+const normWord = (s: string) => s.toLowerCase().replace(/[^a-z0-9áéíóúüñ]/gi, '');
+const normalizePhrase = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
+const parseCloze = (text: string): { text: string; answer?: string }[] => {
+  const parts: { text: string; answer?: string }[] = [];
+  const re = /\[___:?([^\]]*)\]/g;
+  let last = 0, m: RegExpExecArray | null;
+  while ((m = re.exec(text))) {
+    parts.push({ text: text.slice(last, m.index) });
+    parts.push({ text: '', answer: (m[1] || '').trim() });
+    last = m.index + m[0].length;
+  }
+  parts.push({ text: text.slice(last) });
+  return parts;
+};
+
+function ToolPracticeModal({ mat, topicMaterials, onClose }: { mat: SubjectMaterial; topicMaterials: SubjectMaterial[]; onClose: () => void }) {
+  const mode = (mat.toolMode && TOOL_CREATOR_META[mat.toolMode as ToolCreatorMode]) ? mat.toolMode as ToolCreatorMode : 'quizzes';
+  const meta = TOOL_CREATOR_META[mode];
+  const ToolIcon = meta.icon;
+  const accent = meta.color;
+
+  const [text, setText] = useState('');
+  const [revealed, setRevealed] = useState(false);
+  const [quizAnswer, setQuizAnswer] = useState('');
+  const [quizChecked, setQuizChecked] = useState(false);
+  const [catText, setCatText] = useState('');
+  const [catResult, setCatResult] = useState<{ recalled: number; total: number; list: { el: string; hit: boolean }[] } | null>(null);
+  const [clozeChecked, setClozeChecked] = useState(false);
+
+  const clozeParts = parseCloze(mat.content || '');
+  const gapParts = clozeParts.filter(p => p.answer !== undefined);
+  const [gaps, setGaps] = useState<string[]>(() => gapParts.map(() => ''));
+
+  const pairs = topicMaterials.filter(m => m.toolMode === 'matching' && m.question && m.answer).map(m => ({ q: m.question!, a: m.answer! }));
+  const [rightOrder, setRightOrder] = useState<number[]>(() => shuffleArr(pairs.map((_, i) => i)));
+  const [selL, setSelL] = useState<number | null>(null);
+  const [selR, setSelR] = useState<number | null>(null);
+  const [matched, setMatched] = useState<number[]>([]);
+  const [fails, setFails] = useState(0);
+
+  const words = (mat.content || '').split(/\s+/).filter(Boolean);
+  const [mneWords, setMneWords] = useState<{ w: string }[]>(() => shuffleArr(words).map(w => ({ w })));
+  const [mneAnswer, setMneAnswer] = useState<number[]>([]);
+  const [mneChecked, setMneChecked] = useState(false);
+
+  const resetMatching = () => { setRightOrder(shuffleArr(pairs.map((_, i) => i))); setSelL(null); setSelR(null); setMatched([]); setFails(0); };
+  const attemptMatch = () => {
+    if (selL === null || selR === null) return;
+    if (selL === rightOrder[selR]) { setMatched(m => m.includes(selL) ? m : [...m, selL]); setSelL(null); setSelR(null); }
+    else setFails(f => f + 1);
+  };
+  const resetMne = () => { setMneWords(shuffleArr(words).map(w => ({ w }))); setMneAnswer([]); setMneChecked(false); };
+
+  const btnBase: React.CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, height: 34, padding: '0 16px', borderRadius: 9, border: 'none', background: accent, color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter Tight', sans-serif" };
+  const ghostBtn: React.CSSProperties = { ...btnBase, background: 'transparent', color: accent, border: `1px solid ${accent}40` };
+
+  const origText = mode === 'feynman' ? (mat.meaning || '') : (mat.content || '');
+  const origWords = origText.split(/\s+/).filter(Boolean);
+  const userSet = new Set(text.toLowerCase().split(/\s+/).map(normWord));
+  const recCount = origWords.filter(w => userSet.has(normWord(w))).length;
+
+  const wrap = (children: React.ReactNode) => (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 2003, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }} onClick={onClose}>
+      <div className="bento-card" style={{ width: 520, padding: 24, borderRadius: 14, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', maxHeight: '84vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <span style={{ width: 38, height: 38, borderRadius: 11, background: `${accent}14`, border: `1px solid ${accent}22`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><ToolIcon size={16} style={{ color: accent }} /></span>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'Inter Tight', sans-serif", color: 'var(--text-primary)', lineHeight: 1.3 }}>{mat.title || meta.name}</div>
+              <div style={{ fontSize: 8, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: accent, marginTop: 2, fontFamily: "'Inter Tight', sans-serif" }}>{meta.name} · práctica</div>
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}><X size={15} /></button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+
+  // ─── Quiz ───
+  if (mode === 'quizzes') {
+    const q = mat.question || '';
+    const a = mat.answer || '';
+    const correct = quizChecked && normalizePhrase(quizAnswer) === normalizePhrase(a);
+    return wrap(
+      <>
+        <div style={{ borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', padding: '18px 20px' }}>
+          <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: accent, marginBottom: 8, fontFamily: "'Inter Tight', sans-serif" }}>Pregunta</div>
+          <div style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.55, color: 'var(--text-primary)' }}>{q}</div>
+        </div>
+        {!quizChecked ? (
+          <>
+            <textarea value={quizAnswer} onChange={e => setQuizAnswer(e.target.value)} placeholder="Escribe tu respuesta…" autoFocus
+              style={{ width: '100%', minHeight: 90, marginTop: 12, padding: 12, borderRadius: 10, fontSize: 13, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', lineHeight: 1.55 }} />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+              <button onClick={() => setQuizChecked(true)} disabled={!quizAnswer.trim()} style={{ ...btnBase, opacity: !quizAnswer.trim() ? 0.4 : 1 }}>Comprobar</button>
+            </div>
+          </>
+        ) : (
+          <div style={{ marginTop: 12, borderRadius: 12, border: `1px solid ${correct ? '#10B98140' : '#EF444440'}`, background: correct ? '#10B9810d' : '#EF44440d', padding: '16px 18px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: correct ? '#10B981' : '#EF4444', fontFamily: "'Inter Tight', sans-serif" }}>
+              {correct ? <Check size={14} /> : <X size={14} />}{correct ? '¡Correcto!' : 'No coincide con la respuesta guardada'}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6, marginTop: 8 }}><span style={{ color: 'var(--text-tertiary)' }}>Tu respuesta: </span>{quizAnswer.trim() || '(vacío)'}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6, marginTop: 4 }}><span style={{ color: 'var(--text-tertiary)' }}>Respuesta: </span>{a}</div>
+            <button onClick={() => { setQuizAnswer(''); setQuizChecked(false); }} style={{ ...ghostBtn, marginTop: 14 }}>Practicar otra vez</button>
+          </div>
+        )}
+      </>
+    );
+  }
+
+  // ─── Matching ───
+  if (mode === 'matching') {
+    if (pairs.length === 0) {
+      return wrap(
+        <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Aún no hay pares para practicar</div>
+          <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 6 }}>Crea al menos una tarjeta de Matching y vuelve aquí.</div>
+          <button onClick={onClose} style={{ ...ghostBtn, margin: '18px auto 0' }}>Entendido</button>
+        </div>
+      );
+    }
+    const allMatched = matched.length === pairs.length;
+    return wrap(
+      <>
+        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 12, lineHeight: 1.5 }}>Pulsa un elemento de cada columna y después <b style={{ color: 'var(--text-secondary)' }}>Comprobar pareja</b>.</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+            {pairs.map((p, i) => {
+              const done = matched.includes(i);
+              const sel = selL === i;
+              return (
+                <button key={i} disabled={done} onClick={() => setSelL(i)}
+                  style={{ textAlign: 'left', minHeight: 40, padding: '8px 10px', borderRadius: 9, border: `1px solid ${done ? '#10B98140' : sel ? `${accent}55` : 'var(--border-soft)'}`, background: done ? '#10B9810d' : sel ? `${accent}0e` : 'var(--bg-deep)', color: done ? '#10B981' : 'var(--text-primary)', fontSize: 11.5, fontWeight: 500, cursor: done ? 'default' : 'pointer', lineHeight: 1.4, transition: 'all 120ms', display: 'flex', alignItems: 'center', gap: 7 }}>
+                  {done && <Check size={11} style={{ flexShrink: 0 }} />}
+                  <span style={{ opacity: done ? 0.75 : 1 }}>{p.q}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+            {rightOrder.map((pairIdx, j) => {
+              const done = matched.includes(pairIdx);
+              const sel = selR === j;
+              const wrongSel = sel && selL !== null && selL !== pairIdx;
+              const borderColor = done ? '#10B98140' : wrongSel ? '#EF444450' : sel ? `${accent}55` : 'var(--border-soft)';
+              const bg = done ? '#10B9810d' : wrongSel ? '#EF44440e' : sel ? `${accent}0e` : 'var(--bg-deep)';
+              const color = done ? '#10B981' : wrongSel ? '#EF4444' : 'var(--text-primary)';
+              return (
+                <button key={j} disabled={done} onClick={() => setSelR(j)}
+                  style={{ textAlign: 'left', minHeight: 40, padding: '8px 10px', borderRadius: 9, border: `1px solid ${borderColor}`, background: bg, color, fontSize: 11.5, fontWeight: 500, cursor: done ? 'default' : 'pointer', lineHeight: 1.4, transition: 'all 120ms', display: 'flex', alignItems: 'center', gap: 7 }}>
+                  {done && <Check size={11} style={{ flexShrink: 0 }} />}
+                  <span style={{ opacity: done ? 0.75 : 1 }}>{pairs[pairIdx].a}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 14 }}>
+          <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{matched.length}/{pairs.length} conectados{fails > 0 ? ` · ${fails} ${fails === 1 ? 'fallo' : 'fallos'}` : ''}</span>
+          {allMatched ? (
+            <button onClick={resetMatching} style={ghostBtn}>Repetir</button>
+          ) : (
+            <button onClick={attemptMatch} disabled={selL === null || selR === null} style={{ ...btnBase, opacity: selL === null || selR === null ? 0.4 : 1 }}>Comprobar pareja</button>
+          )}
+        </div>
+      </>
+    );
+  }
+
+  // ─── Blurting / Feynman ───
+  if (mode === 'blurting' || mode === 'feynman') {
+    const isFey = mode === 'feynman';
+    const missing = origWords.filter(w => !userSet.has(normWord(w)));
+    return wrap(
+      <>
+        {isFey && (
+          <div style={{ borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', padding: '14px 18px', marginBottom: 12 }}>
+            <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: accent, marginBottom: 6, fontFamily: "'Inter Tight', sans-serif" }}>Concepto</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{mat.word || mat.title}</div>
+          </div>
+        )}
+        {!revealed ? (
+          <>
+            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.5, marginBottom: 10 }}>{isFey ? 'Explícalo con tus palabras, como si tu interlocutor tuviera 10 años.' : 'Escribe todo lo que recuerdes sin mirar tus apuntes.'}</div>
+            <textarea value={text} onChange={e => setText(e.target.value)} placeholder={isFey ? 'Explica el concepto…' : 'Escribe aquí todo lo que recuerdas…'} autoFocus
+              style={{ width: '100%', minHeight: 200, padding: 12, borderRadius: 10, fontSize: 13, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', lineHeight: 1.6 }} />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
+              <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{text.trim().split(/\s+/).filter(Boolean).length} palabras</span>
+              <button onClick={() => setRevealed(true)} disabled={!text.trim()} style={{ ...btnBase, opacity: !text.trim() ? 0.4 : 1 }}>{isFey ? 'Revelar modelo' : 'Revelar original'}</button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.5, marginBottom: 10 }}>
+              Comparado con tu texto: <b style={{ color: '#10B981' }}>{recCount}</b> de <b style={{ color: 'var(--text-secondary)' }}>{origWords.length}</b> palabras.
+              {missing.length > 0 && <span style={{ display: 'block', marginTop: 4 }}>Faltan: <span style={{ color: '#EF4444' }}>{missing.slice(0, 10).join(', ')}{missing.length > 10 ? '…' : ''}</span></span>}
+            </div>
+            <div style={{ borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', padding: '16px 18px', fontSize: 13, lineHeight: 1.9, color: 'var(--text-primary)' }}>
+              {origWords.map((w, i) => {
+                const hit = userSet.has(normWord(w));
+                return <span key={i} style={{ color: hit ? '#10B981' : '#EF4444', textDecoration: hit ? 'none' : 'line-through', opacity: hit ? 1 : 0.85 }}>{w} </span>;
+              })}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+              <button onClick={() => { setText(''); setRevealed(false); }} style={ghostBtn}>Volver a intentar</button>
+            </div>
+          </>
+        )}
+      </>
+    );
+  }
+
+  // ─── Cloze ───
+  if (mode === 'cloze') {
+    let gi = 0;
+    const correctGaps = clozeChecked ? gapParts.filter((p, i) => p.answer ? normalizePhrase(gaps[i]) === normalizePhrase(p.answer) : gaps[i].trim().length > 0).length : 0;
+    return wrap(
+      <>
+        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.5, marginBottom: 12 }}>Completa los huecos. Al comprobar, los correctos se marcan en verde.</div>
+        <div style={{ borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', padding: '16px 18px', fontSize: 13.5, lineHeight: 2.1, color: 'var(--text-primary)' }}>
+          {clozeParts.map((p, i) => {
+            if (p.answer === undefined) return <span key={i}>{p.text}</span>;
+            const idx = gi++;
+            const val = gaps[idx];
+            const isCorrect = clozeChecked && (p.answer ? normalizePhrase(val) === normalizePhrase(p.answer) : val.trim().length > 0);
+            const isWrong = clozeChecked && !isCorrect;
+            return (
+              <input key={i} value={val} disabled={clozeChecked} onChange={e => { const next = [...gaps]; next[idx] = e.target.value; setGaps(next); }}
+                placeholder="…"
+                style={{ width: Math.min(180, Math.max(70, (p.answer?.length || 6) * 9)), height: 30, margin: '0 4px', padding: '0 9px', borderRadius: 7, fontSize: 12.5, border: `1px solid ${isCorrect ? '#10B98160' : isWrong ? '#EF444460' : 'var(--border-soft)'}`, background: isCorrect ? '#10B9810d' : isWrong ? '#EF44440d' : 'var(--bg-deep)', color: isCorrect ? '#10B981' : isWrong ? '#EF4444' : 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', textAlign: 'center', fontFamily: "'Inter Tight', sans-serif", fontWeight: 600 }} />
+            );
+          })}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 14 }}>
+          <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>
+            {clozeChecked ? `${correctGaps}/${gapParts.length} huecos correctos` : `${gaps.filter(g => g.trim()).length}/${gapParts.length} completados`}
+          </span>
+          {clozeChecked ? (
+            <button onClick={() => { setClozeChecked(false); setGaps(gapParts.map(() => '')); }} style={ghostBtn}>Reiniciar</button>
+          ) : (
+            <button onClick={() => setClozeChecked(true)} disabled={gaps.some(g => !g.trim())} style={{ ...btnBase, opacity: gaps.some(g => !g.trim()) ? 0.4 : 1 }}>Comprobar</button>
+          )}
+        </div>
+      </>
+    );
+  }
+
+  // ─── Categorización ───
+  if (mode === 'categorization') {
+    const items = (mat.content || '').split('\n').map(s => s.trim()).filter(Boolean);
+    const count = catText.trim().split(/\s+/).filter(Boolean).length;
+    return wrap(
+      <>
+        {!catResult ? (
+          <>
+            <div style={{ borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', padding: '14px 18px', marginBottom: 12 }}>
+              <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: accent, marginBottom: 6, fontFamily: "'Inter Tight', sans-serif" }}>Categoría</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{mat.title || 'Sin título'}</div>
+              <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 6 }}>{items.length} {items.length === 1 ? 'elemento' : 'elementos'} guardados</div>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.5, marginBottom: 10 }}>Escribe de memoria todos los elementos de la categoría (uno por línea).</div>
+            <textarea value={catText} onChange={e => setCatText(e.target.value)} placeholder={'Perro\nGato\n…'} autoFocus
+              style={{ width: '100%', minHeight: 160, padding: 12, borderRadius: 10, fontSize: 13, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', lineHeight: 1.6 }} />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
+              <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{count} {count === 1 ? 'palabra' : 'palabras'}</span>
+              <button onClick={() => {
+                const t = catText.toLowerCase();
+                const list = items.map(el => ({ el, hit: t.includes(el.toLowerCase()) }));
+                setCatResult({ recalled: list.filter(x => x.hit).length, total: items.length, list });
+              }} disabled={!catText.trim()} style={{ ...btnBase, opacity: !catText.trim() ? 0.4 : 1 }}>Recordar</button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, fontFamily: "'Inter Tight', sans-serif", color: catResult.recalled === catResult.total ? '#10B981' : '#F59E0B' }}>
+              <Check size={14} /> Recordaste {catResult.recalled} de {catResult.total} {catResult.total === 1 ? 'elemento' : 'elementos'}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 12 }}>
+              {catResult.list.map((x, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: x.hit ? '#10B981' : '#EF4444', padding: '8px 12px', borderRadius: 8, background: x.hit ? '#10B9810a' : '#EF44440a', border: `1px solid ${x.hit ? '#10B98122' : '#EF444422'}` }}>
+                  {x.hit ? <Check size={11} style={{ flexShrink: 0 }} /> : <X size={11} style={{ flexShrink: 0 }} />}
+                  {x.el}
+                </div>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+              <button onClick={() => { const missing = catResult.list.filter(x => !x.hit).map(x => x.el).join('\n'); setCatText(missing); setCatResult(null); }} style={{ ...btnBase, flex: 1 }}>Reintentar con lo que faltó</button>
+              <button onClick={() => { setCatText(''); setCatResult(null); }} style={{ ...ghostBtn, flex: 1 }}>Empezar de nuevo</button>
+            </div>
+          </>
+        )}
+      </>
+    );
+  }
+
+  // ─── Mnemotecnia ───
+  if (mode === 'mnemonics') {
+    const usedSet = new Set(mneAnswer);
+    const built = mneAnswer.map(i => mneWords[i].w).join(' ');
+    const correct = mneChecked && built === (mat.content || '').trim();
+    return wrap(
+      <>
+        <div style={{ borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', padding: '14px 18px', marginBottom: 12 }}>
+          <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: accent, marginBottom: 6, fontFamily: "'Inter Tight', sans-serif" }}>Dato a recordar</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{mat.title}</div>
+        </div>
+        {!revealed ? (
+          <>
+            {mneChecked && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, fontWeight: 700, color: correct ? '#10B981' : '#EF4444', marginBottom: 10 }}>
+                {correct ? <Check size={13} /> : <X size={13} />}{correct ? '¡Regla reconstruida!' : 'Aún no es la regla exacta'}
+              </div>
+            )}
+            <div style={{ borderRadius: 12, border: '1px dashed var(--border-subtle)', minHeight: 48, padding: '10px 14px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, background: 'var(--bg-deep)' }}>
+              {built ? mneAnswer.map(i => (
+                <button key={i} onClick={() => setMneAnswer(m => m.filter(x => x !== i))} title="Quitar"
+                  style={{ height: 26, padding: '0 10px', borderRadius: 7, border: `1px solid ${accent}45`, background: `${accent}0d`, color: accent, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{mneWords[i].w}</button>
+              )) : <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Construye la regla aquí…</span>}
+            </div>
+            <div style={{ fontSize: 10, color: 'var(--text-tertiary)', margin: '12px 0 8px' }}>Palabras disponibles · pulsa para añadir</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {mneWords.map((wObj, i) => usedSet.has(i) ? null : (
+                <button key={i} onClick={() => setMneAnswer(m => [...m, i])}
+                  style={{ height: 28, padding: '0 12px', borderRadius: 8, border: '1px solid var(--border-soft)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontSize: 12, cursor: 'pointer', transition: 'all 120ms' }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = `${accent}50`; e.currentTarget.style.color = accent; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.color = 'var(--text-primary)'; }}>{wObj.w}</button>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
+              <button onClick={() => setMneChecked(true)} disabled={mneAnswer.length === 0} style={{ ...btnBase, opacity: mneAnswer.length === 0 ? 0.4 : 1 }}>Comprobar</button>
+              <button onClick={() => setRevealed(true)} style={ghostBtn}>Ver la regla</button>
+              <button onClick={resetMne} style={ghostBtn}>Barajar</button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.5, marginBottom: 10 }}>La regla mnemotécnica completa:</div>
+            <div style={{ borderRadius: 12, border: '1px solid #10B98140', background: '#10B9810d', padding: '16px 18px', fontSize: 14, fontWeight: 600, lineHeight: 1.7, color: '#10B981', fontFamily: "'Inter Tight', sans-serif" }}>{mat.content}</div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+              <button onClick={() => { setRevealed(false); resetMne(); }} style={ghostBtn}>Volver a jugar</button>
+            </div>
+          </>
+        )}
+      </>
+    );
+  }
+
+  return wrap(<div style={{ textAlign: 'center', padding: '40px 20px' }}>
+    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{mat.title || meta.name}</div>
+    <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 6 }}>{mat.content || mat.question || 'Sin contenido para practicar.'}</div>
+  </div>);
+}
+
+// ─── Tag Assign Inline (per-item tag popover) ───
+function TagAssignInline({ defs, assigned, onToggle, accent }: {
+  defs: { id: string; name: string; color: string }[];
+  assigned: string[];
+  onToggle: (tagId: string) => void;
+  accent: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  if (defs.length === 0) return null;
+  const active = defs.filter(d => assigned.includes(d.id));
+  const togglePop = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (open) { setOpen(false); return; }
+    const r = btnRef.current?.getBoundingClientRect();
+    if (r) setPos({ x: Math.max(8, Math.min(r.left, window.innerWidth - 190)), y: r.bottom + 6 });
+    setOpen(true);
+  };
+  return (
+    <div style={{ borderTop: '1px solid var(--border-subtle)', padding: '6px 10px', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', background: 'var(--bg-surface)' }}>
+      {active.length === 0 && <span style={{ fontSize: 8, color: 'var(--text-tertiary)', fontWeight: 500 }}>Sin etiquetas</span>}
+      {active.map(d => (
+        <span key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 8, fontWeight: 600, padding: '2px 7px', borderRadius: 4, background: `${d.color}14`, color: d.color, letterSpacing: '0.03em' }}>
+          <span style={{ width: 5, height: 5, borderRadius: '50%', background: d.color }} />{d.name}
+        </span>
+      ))}
+      <div style={{ marginLeft: 'auto' }}>
+        <button ref={btnRef} onClick={togglePop} title="Etiquetar"
+          style={{ width: 22, height: 22, borderRadius: 6, border: `1px solid ${open ? `${accent}55` : 'var(--border-subtle)'}`, background: open ? `${accent}12` : 'transparent', cursor: 'pointer', color: open ? accent : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 120ms' }}>
+          <Tag size={10} />
+        </button>
+      </div>
+      {open && createPortal(
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 99988 }} onClick={(e) => { e.stopPropagation(); setOpen(false); }} />
+          <div style={{ position: 'fixed', left: pos?.x ?? 0, top: pos?.y ?? 0, zIndex: 99990, minWidth: 170, maxWidth: 190, borderRadius: 10, border: '1px solid var(--border-default)', background: 'var(--bg-elevated)', boxShadow: '0 10px 34px rgba(0,0,0,0.32)', padding: 6 }}>
+            <div style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-tertiary)', padding: '4px 8px 6px' }}>Etiquetas</div>
+            {defs.map(d => {
+              const on = assigned.includes(d.id);
+              return (
+                <button key={d.id} onClick={(e) => { e.stopPropagation(); onToggle(d.id); }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 8px', borderRadius: 6, border: 'none', background: on ? `${d.color}12` : 'transparent', cursor: 'pointer', color: 'var(--text-primary)', fontSize: 11, fontWeight: 600, textAlign: 'left' }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: d.color, boxShadow: on ? `0 0 0 2px ${d.color}30` : 'none' }} />
+                  <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</span>
+                  {on && <Check size={11} style={{ color: d.color }} />}
+                </button>
+              );
+            })}
+          </div>
+        </>, document.body)}
     </div>
   );
 }
@@ -663,7 +1160,7 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
 
 // ─── Main Component ───
 export default function Cursos({ initialCourseId, initialTab = 'overview', onNavigate }: { initialCourseId?: string; initialTab?: 'overview' | 'tareas' | 'notas' | 'archivos'; onNavigate?: (view: string) => void }) {
-  const { courses = [], tasks = [], notes = [], noteFolders = [], updateCourse, deleteCourse, setNavigateTo, setFocusedTaskId, addTask, updateTask, deleteTask, addNote, updateNote, deleteNote, reorderNotes, weeklyStudyTime, plannedSessions, addPlannedSession, deletePlannedSession, setPipUrl } = useApp();
+  const { courses = [], tasks = [], notes = [], noteFolders = [], updateCourse, deleteCourse, setNavigateTo, setFocusedTaskId, addTask, updateTask, deleteTask, addNote, updateNote, deleteNote, reorderNotes, plannedSessions, addPlannedSession, updatePlannedSession, deletePlannedSession, setPipUrl, studySessions } = useApp();
   const th = document.documentElement.getAttribute('data-theme');
   const isDarkSelect = !th || th === 'oscuro' || th === 'vibrante';
   const selectBorder = isDarkSelect ? '1px solid rgba(255,255,255,0.12)' : '1px solid rgba(0,0,0,0.12)';
@@ -687,7 +1184,6 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   // Topic view state
   const [currentView, setCurrentView] = useState<'overview' | 'topic' | 'group'>('overview');
   const [activeTopicId, setActiveTopicId] = useState<string | null>(null);
-  const [filterMaterialType, setFilterMaterialType] = useState<MaterialType | 'all'>('all');
 
   // Course edit
   const [showEditCourse, setShowEditCourse] = useState(false);
@@ -735,6 +1231,57 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const [loadingMatId, setLoadingMatId] = useState<string | null>(null);
   const resourceInputRef = useRef<HTMLInputElement>(null);
   const materialImageInputRef = useRef<HTMLInputElement>(null);
+  const [toolModal, setToolModal] = useState<{ mode: ToolCreatorMode; editingId: string | null } | null>(null);
+  const [toolFields, setToolFields] = useState<Record<string, string>>({});
+  const setToolField = (k: string, v: string) => setToolFields(f => ({ ...f, [k]: v }));
+  const [searchFocused, setSearchFocused] = useState(false);
+  const clozeRef = useRef<HTMLTextAreaElement>(null);
+  // Practice modal (per-tool review of created materials)
+  const [practiceMat, setPracticeMat] = useState<SubjectMaterial | null>(null);
+  const openPractice = (mat: SubjectMaterial) => setPracticeMat(mat);
+  const closePractice = () => setPracticeMat(null);
+  // Herramientas reorder (long-press drag), persisted
+  const toolDragRef = useRef(false);
+  const [toolOrder, setToolOrder] = useState<ToolKey[]>(() => {
+    let stored: ToolKey[] = [];
+    try {
+      const s = localStorage.getItem('owa_tools_order');
+      if (s) { const p = JSON.parse(s); if (Array.isArray(p)) stored = p.filter((m: string) => (TOOL_DEFAULT_ORDER as string[]).includes(m)); }
+    } catch { /* ignore */ }
+    const merged: ToolKey[] = [];
+    [...stored, ...TOOL_DEFAULT_ORDER].forEach(m => { if (!merged.includes(m)) merged.push(m); });
+    return merged;
+  });
+  useEffect(() => { try { localStorage.setItem('owa_tools_order', JSON.stringify(toolOrder)); } catch { /* ignore */ } }, [toolOrder]);
+  const toolSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { delay: 350, tolerance: 6 } }));
+  const handleToolDragStart = () => { toolDragRef.current = true; };
+  const handleToolDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e;
+    if (over && active.id !== over.id) {
+      setToolOrder(prev => {
+        const a = prev.indexOf(active.id as ToolKey);
+        const b = prev.indexOf(over.id as ToolKey);
+        if (a < 0 || b < 0) return prev;
+        return arrayMove(prev, a, b);
+      });
+    }
+    setTimeout(() => { toolDragRef.current = false; }, 0);
+  };
+  const handleToolDragCancel = () => { setTimeout(() => { toolDragRef.current = false; }, 0); };
+  const insertClozeGap = () => {
+    const ta = clozeRef.current;
+    if (ta) {
+      const start = ta.selectionStart ?? (toolFields.body || '').length;
+      const end = ta.selectionEnd ?? start;
+      const selected = (toolFields.body || '').slice(start, end).trim();
+      const marker = selected ? `[___:${selected}]` : '[___]';
+      const next = (toolFields.body || '').slice(0, start) + marker + (toolFields.body || '').slice(end);
+      setToolField('body', next);
+      requestAnimationFrame(() => { ta.focus(); const pos = start + marker.length; ta.setSelectionRange(pos, pos); });
+    } else {
+      setToolField('body', (toolFields.body || '') + ' [___] ');
+    }
+  };
 
   // Add link modal
   const [showAddLinkModal, setShowAddLinkModal] = useState(false);
@@ -749,21 +1296,57 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   // Plan session modal
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [planDate, setPlanDate] = useState('');
+  const [planStartTime, setPlanStartTime] = useState('09:00');
   const [planTitle, setPlanTitle] = useState('');
   const [planGroupId, setPlanGroupId] = useState('');
   const [planTopicId, setPlanTopicId] = useState('');
-  const [planType, setPlanType] = useState<'estudio' | 'repaso' | 'ejercicio' | 'lectura' | 'otro'>('estudio');
+  const [planType, setPlanType] = useState<string>('estudio');
   const [planDuration, setPlanDuration] = useState(30);
 
+  // Custom session types (persisted)
+  const [customTypes, setCustomTypes] = useState<{ id: string; label: string; color: string }[]>(() => {
+    try {
+      const raw = localStorage.getItem('owa_session_types');
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed.filter((t: any) => t && typeof t.id === 'string' && typeof t.label === 'string' && typeof t.color === 'string') : [];
+    } catch { return []; }
+  });
+  const [showAddType, setShowAddType] = useState(false);
+  const [newTypeName, setNewTypeName] = useState('');
+  const [newTypeColor, setNewTypeColor] = useState('#8B5CF6');
+  useEffect(() => {
+    try { localStorage.setItem('owa_session_types', JSON.stringify(customTypes)); } catch { /* noop */ }
+  }, [customTypes]);
+  const allSessionTypes = [...BUILT_IN_SESSION_TYPES, ...customTypes];
+  const sessionTypeColor = useCallback((id: string) => allSessionTypes.find(t => t.id === id)?.color || '#8B5CF6', [allSessionTypes]);
+  const sessionTypeLabel = useCallback((id: string) => allSessionTypes.find(t => t.id === id)?.label || 'Otro', [allSessionTypes]);
+  const addCustomType = () => {
+    const name = newTypeName.trim();
+    if (!name) return;
+    if (allSessionTypes.some(t => t.label.toLowerCase() === name.toLowerCase())) return;
+    const id = `custom_${Date.now()}`;
+    setCustomTypes(prev => [...prev, { id, label: name, color: newTypeColor }]);
+    setPlanType(id);
+    setNewTypeName('');
+    setNewTypeColor('#8B5CF6');
+    setShowAddType(false);
+  };
+  const removeCustomType = (id: string) => {
+    setCustomTypes(prev => prev.filter(t => t.id !== id));
+    if (planType === id) setPlanType('estudio');
+  };
+
   // Week navigation
-  const [weekOffset, setWeekOffset] = useState(0);
+  const [weekOffset] = useState(0);
 
   // Day detail modal
   const [showDayDetail, setShowDayDetail] = useState(false);
   const [dayDetailDate, setDayDetailDate] = useState('');
 
-  // Radar chart filter
+  // Radar chart filter & modal
   const [radarFilter, setRadarFilter] = useState<'agrupaciones' | 'dias' | 'tipos'>('agrupaciones');
+  const [showChartsModal, setShowChartsModal] = useState(false);
+  const [radarHover, setRadarHover] = useState<number | null>(null);
 
   // Task state
   const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -794,7 +1377,159 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   }, [editingNoteId]);
   // Study mode state
   const [showMaterialsDropdown, setShowMaterialsDropdown] = useState(false);
-  const [studyToolMode, setStudyToolMode] = useState<'none' | 'flashcards' | 'quizzes' | 'notes' | 'mindmap' | 'review' | 'blurting' | 'feynman'>('none');
+  type StudyTool = 'none' | 'flashcards' | 'quizzes' | 'notes' | 'mindmap' | 'review' | 'blurting' | 'feynman'
+    | 'freeRecall' | 'leitner' | 'summarize' | 'selfExplain' | 'teach' | 'matching' | 'cloze' | 'timeline'
+    | 'categorization' | 'errorAnalysis' | 'mnemonics' | 'cornell' | 'memoryPalace' | 'dualCoding' | 'interleaving'
+    | 'retrievalGrid' | 'chunking' | 'elaborate' | 'shadowing' | 'rubberDuck';
+  const [studyToolMode, setStudyToolMode] = useState<StudyTool>('none');
+  // Topic toolbar: tag filters
+  const [activeTagFilter, setActiveTagFilter] = useState<string | null>(null);
+  // Tag CRUD modal
+  const [tagModalOpen, setTagModalOpen] = useState(false);
+  const [editingTagId, setEditingTagId] = useState<string | null>(null);
+  const [tagNameInput, setTagNameInput] = useState('');
+  const [tagColorInput, setTagColorInput] = useState('#8B5CF6');
+  const [confirmDeleteTag, setConfirmDeleteTag] = useState(false);
+
+  // Flashcard modal
+  const [showFlashcardModal, setShowFlashcardModal] = useState(false);
+  const [fcQuestion, setFcQuestion] = useState('');
+  const [fcAnswer, setFcAnswer] = useState('');
+  const [fcDifficulty, setFcDifficulty] = useState<'facil' | 'bueno' | 'dificil'>('bueno');
+  const [editingFlashcard, setEditingFlashcard] = useState<TopicFlashcard | null>(null);
+
+  // Review session
+  const [reviewing, setReviewing] = useState(false);
+  const [reviewDeck, setReviewDeck] = useState<TopicFlashcard[]>([]);
+  const [reviewIndex, setReviewIndex] = useState(0);
+  const [reviewFlipped, setReviewFlipped] = useState(false);
+  const [reviewStats, setReviewStats] = useState({ correct: 0, again: 0 });
+
+  const openFlashcardModal = (fc?: TopicFlashcard) => {
+    setEditingFlashcard(fc || null);
+    setFcQuestion(fc?.question || '');
+    setFcAnswer(fc?.answer || '');
+    setFcDifficulty(fc?.difficulty || 'bueno');
+    setShowFlashcardModal(true);
+  };
+
+  const handleSaveFlashcard = () => {
+    if (!fcQuestion.trim() || !fcAnswer.trim() || !activeTopic) return;
+    const now = Date.now();
+    const newFc: TopicFlashcard = editingFlashcard
+      ? { ...editingFlashcard, question: fcQuestion.trim(), answer: fcAnswer.trim(), difficulty: fcDifficulty }
+      : { id: Math.random().toString(), question: fcQuestion.trim(), answer: fcAnswer.trim(), difficulty: fcDifficulty, lastReviewed: now, nextReview: now };
+    updateCourse(course.id, {
+      studyTopics: (course.studyTopics || []).map(t => t.id === activeTopic.id ? {
+        ...t,
+        flashcards: editingFlashcard
+          ? (t.flashcards || []).map(f => f.id === editingFlashcard.id ? newFc : f)
+          : [...(t.flashcards || []), newFc],
+      } : t)
+    });
+    setShowFlashcardModal(false); setEditingFlashcard(null);
+    toast.success(editingFlashcard ? 'Flashcard actualizada' : 'Flashcard creada');
+  };
+
+  const handleDeleteFlashcard = (fcId: string) => {
+    if (!activeTopic) return;
+    updateCourse(course.id, {
+      studyTopics: (course.studyTopics || []).map(t => t.id === activeTopic.id ? {
+        ...t,
+        flashcards: (t.flashcards || []).filter(f => f.id !== fcId),
+      } : t)
+    });
+    toast.success('Flashcard eliminada');
+  };
+
+  const startReview = () => {
+    const fcs = activeTopic?.flashcards || [];
+    if (fcs.length === 0) { toast('No hay flashcards para repasar'); return; }
+    const shuffled = [...fcs].sort((a, b) => a.nextReview - b.nextReview);
+    setReviewDeck(shuffled); setReviewIndex(0); setReviewFlipped(false);
+    setReviewStats({ correct: 0, again: 0 }); setReviewing(true);
+  };
+
+  const closeReview = () => { setReviewing(false); setReviewFlipped(false); };
+
+  // ─── Topic tags (CRUD + assignment) ───
+  const openTagModal = (tag?: { id: string; name: string; color: string }) => {
+    setEditingTagId(tag?.id || null);
+    setTagNameInput(tag?.name || '');
+    setTagColorInput(tag?.color || '#8B5CF6');
+    setConfirmDeleteTag(false);
+    setTagModalOpen(true);
+  };
+
+  const handleSaveTag = () => {
+    const name = tagNameInput.trim();
+    if (!name) { toast.error('Escribe un nombre para la etiqueta'); return; }
+    const defs = course.topicTagDefs || [];
+    if (editingTagId) {
+      updateCourse(course.id, { topicTagDefs: defs.map(d => d.id === editingTagId ? { ...d, name, color: tagColorInput } : d) });
+      toast.success('Etiqueta actualizada');
+    } else {
+      updateCourse(course.id, { topicTagDefs: [...defs, { id: Math.random().toString(36).slice(2, 10), name, color: tagColorInput }] });
+      toast.success('Etiqueta creada');
+    }
+    setTagModalOpen(false);
+    setEditingTagId(null);
+  };
+
+  const handleDeleteTag = () => {
+    if (!editingTagId) return;
+    updateCourse(course.id, {
+      topicTagDefs: (course.topicTagDefs || []).filter(d => d.id !== editingTagId),
+      studyTopics: (course.studyTopics || []).map(t => ({
+        ...t,
+        materials: (t.materials || []).map(m => ({ ...m, tagIds: (m.tagIds || []).filter(x => x !== editingTagId) })),
+        flashcards: (t.flashcards || []).map(f => ({ ...f, tagIds: (f.tagIds || []).filter(x => x !== editingTagId) })),
+        recordings: (t.recordings || []).map(r => ({ ...r, tagIds: (r.tagIds || []).filter(x => x !== editingTagId) })),
+      })),
+    });
+    setActiveTagFilter(af => af === editingTagId ? null : af);
+    setTagModalOpen(false);
+    setEditingTagId(null);
+    toast.success('Etiqueta eliminada');
+  };
+
+  const toggleIn = (arr: string[], id: string) => arr.includes(id) ? arr.filter(x => x !== id) : [...arr, id];
+
+  const handleToggleItemTag = (kind: 'flashcard' | 'material' | 'recording', itemId: string, tagId: string) => {
+    if (!activeTopic) return;
+    const idx = (course.studyTopics || []).findIndex(t => t.id === activeTopic.id);
+    if (idx === -1) return;
+    const t = { ...(course.studyTopics || [])[idx] };
+    if (kind === 'flashcard') t.flashcards = (t.flashcards || []).map(f => f.id === itemId ? { ...f, tagIds: toggleIn(f.tagIds || [], tagId) } : f);
+    if (kind === 'material') t.materials = (t.materials || []).map(m => m.id === itemId ? { ...m, tagIds: toggleIn(m.tagIds || [], tagId) } : m);
+    if (kind === 'recording') t.recordings = (t.recordings || []).map(r => r.id === itemId ? { ...r, tagIds: toggleIn(r.tagIds || [], tagId) } : r);
+    updateCourse(course.id, { studyTopics: (course.studyTopics || []).map((tp, i) => i === idx ? t : tp) });
+  };
+
+  const gradeFlashcard = (grade: 'again' | 'hard' | 'good' | 'easy') => {
+    const fc = reviewDeck[reviewIndex];
+    if (!fc || !activeTopic) return;
+    const now = Date.now();
+    const DAY = 86400000;
+    const intervals: Record<string, number> = { again: 10 * 60 * 1000, hard: DAY, good: 3 * DAY, easy: 7 * DAY };
+    const updated: TopicFlashcard = { ...fc, lastReviewed: now, nextReview: now + intervals[grade], difficulty: fc.difficulty };
+    updateCourse(course.id, {
+      studyTopics: (course.studyTopics || []).map(t => t.id === activeTopic.id ? {
+        ...t,
+        flashcards: (t.flashcards || []).map(f => f.id === fc.id ? updated : f),
+      } : t)
+    });
+    setReviewFlipped(false);
+    setReviewStats(s => grade === 'again' ? { ...s, again: s.again + 1 } : { ...s, correct: s.correct + 1 });
+    if (grade === 'again') {
+      setReviewDeck(d => { const next = [...d]; next.splice(reviewIndex, 1); next.push(updated); return next; });
+    } else if (reviewIndex + 1 >= reviewDeck.length) {
+      setReviewing(false);
+      toast.success('Repaso completado');
+    } else {
+      setReviewIndex(i => i + 1);
+    }
+  };
 
   const [overviewMode, setOverviewMode] = useState<'tareas_notas' | 'temas_archivos'>(() => {
     try { return (localStorage.getItem('owa_course_overview_mode') as 'tareas_notas' | 'temas_archivos') || 'tareas_notas'; } catch { return 'tareas_notas'; }
@@ -1020,14 +1755,16 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
         if (noteMenuTarget) { setNoteMenuTarget(null); return; }
         if (notasTabMenuTarget) { setNotasTabMenuTarget(null); return; }
         if (showMaterialModal) setShowMaterialModal(false);
+        else if (showFlashcardModal) setShowFlashcardModal(false);
         else if (showGroupModal) setShowGroupModal(false);
         else if (showTopicModal) setShowTopicModal(false);
         else if (showEditCourse) setShowEditCourse(false);
+        else if (reviewing) { setReviewing(false); setReviewFlipped(false); }
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [showMaterialModal, showGroupModal, showTopicModal, showEditCourse, noteMenuTarget]);
+  }, [showMaterialModal, showFlashcardModal, showGroupModal, showTopicModal, showEditCourse, noteMenuTarget, reviewing]);
 
   // Close note menus on click outside
   useEffect(() => {
@@ -1047,6 +1784,29 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     if (!course || !activeTopicId) return null;
     return (course.studyTopics || []).find(t => t.id === activeTopicId) || null;
   }, [course, activeTopicId]);
+
+  // Topic content items (flashcards + materials + recordings) for search/filter
+  const topicItems = useMemo(() => {
+    const mats = activeTopic?.materials || [];
+    const fcs = activeTopic?.flashcards || [];
+    const recs = activeTopic?.recordings || [];
+    return [
+      ...fcs.map(fc => ({ id: fc.id, type: 'flashcard' as const, item: fc })),
+      ...mats.map(m => ({ id: m.id, type: m.type as MaterialType, item: m })),
+      ...recs.map(r => ({ id: r.id, type: 'recording' as const, item: r })),
+    ];
+  }, [activeTopic]);
+
+  const topicFiltered = useMemo(() => {
+    const q = topicSearch.trim().toLowerCase();
+    return topicItems.filter(entry => {
+      if (activeTagFilter && !((entry.item.tagIds as string[]) || []).includes(activeTagFilter)) return false;
+      if (!q) return true;
+      const it = entry.item as any;
+      const text = [it.question, it.answer, it.title, it.name, it.word, it.content, it.meaning, it.description, it.clarification].filter(Boolean).join(' ').toLowerCase();
+      return text.includes(q);
+    });
+  }, [topicItems, topicSearch, activeTagFilter]);
 
   // Course tasks
   const courseTasks = useMemo(() => tasks.filter(t => t.course === course?.name), [tasks, course]);
@@ -1204,6 +1964,71 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     setMaterialType(type); setMaterialColIndex(colIdx); setEditingMaterial(null); resetForm(); setShowMaterialModal(true);
   };
 
+  const openToolCreator = (mode: StudyTool) => {
+    if (mode === 'flashcards') { openFlashcardModal(); return; }
+    setToolFields({});
+    setToolModal({ mode: mode as ToolCreatorMode, editingId: null });
+  };
+
+  const startEditToolMaterial = (mat: SubjectMaterial) => {
+    const mode = mat.toolMode as ToolCreatorMode | undefined;
+    if (mode && TOOL_CREATOR_META[mode]) {
+      const f: Record<string, string> = {};
+      if (mode === 'quizzes' || mode === 'matching') { f.title = mat.title || ''; f.a = mat.question || ''; f.b = mat.answer || ''; }
+      if (mode === 'feynman') { f.title = mat.title || ''; f.a = mat.word || ''; f.b = mat.meaning || ''; }
+      if (mode === 'blurting' || mode === 'cloze') { f.title = mat.title || ''; f.body = mat.content || ''; }
+      if (mode === 'categorization') { f.title = mat.title || ''; f.content = mat.content || ''; }
+      if (mode === 'mnemonics') { f.title = mat.title || ''; f.content = mat.content || ''; }
+      setToolFields(f);
+      setToolModal({ mode, editingId: mat.id });
+      return;
+    }
+    startEditMaterial(mat);
+  };
+
+  const handleSaveToolModal = () => {
+    if (!toolModal || !activeTopic) return;
+    const f = toolFields;
+    if (!f.title?.trim()) { toast.error('Escribe un título'); return; }
+    let payload: Partial<SubjectMaterial> = {};
+    switch (toolModal.mode) {
+      case 'quizzes': case 'matching':
+        if (!f.a?.trim() || !f.b?.trim()) { toast.error('Completa los dos campos'); return; }
+        payload = { title: f.title.trim(), question: f.a.trim(), answer: f.b.trim() };
+        break;
+      case 'blurting': case 'cloze':
+        if (!f.body?.trim()) { toast.error('Escribe el contenido'); return; }
+        payload = { title: f.title.trim(), content: f.body.trim() };
+        break;
+      case 'feynman':
+        if (!f.a?.trim() || !f.b?.trim()) { toast.error('Completa el concepto y la explicación'); return; }
+        payload = { title: f.title.trim(), word: f.a.trim(), meaning: f.b.trim() };
+        break;
+      case 'categorization':
+        payload = { title: f.title.trim(), content: (f.content || '').trim() };
+        break;
+      case 'mnemonics':
+        payload = { title: f.title.trim(), content: (f.content || '').trim() };
+        break;
+    }
+    const type = TOOL_MATERIAL_TYPE[toolModal.mode];
+    const meta = TOOL_CREATOR_META[toolModal.mode];
+    updateCourse(course.id, {
+      studyTopics: (course.studyTopics || []).map(topic => {
+        if (topic.id !== activeTopic.id) return topic;
+        const ms = topic.materials || [];
+        return {
+          ...topic,
+          materials: toolModal.editingId
+            ? ms.map(m => m.id === toolModal.editingId ? { ...m, ...payload, toolMode: toolModal.mode } : m)
+            : [...ms, { id: Math.random().toString(), type, createdAt: Date.now(), columnIndex: 0, ...payload, toolMode: toolModal.mode } as SubjectMaterial],
+        };
+      }),
+    });
+    setToolModal(null); setToolFields({});
+    toast.success(toolModal.editingId ? 'Actualizado' : `${meta.name} creado`);
+  };
+
   const estudioFileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, overrideTopicId?: string) => {
@@ -1295,39 +2120,39 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   };
 
   const setTopicReviewLevel = (topicId: string, level: number) => {
-    updateCourse(course.id, { studyTopics: (course.studyTopics || []).map(t => t.id === topicId ? { ...t, reviewLevel: level, status: level >= 4 ? 'done' as const : 'studying' as const } : t) });
-    toast.success(`Nivel: ${level}/5`);
+    updateCourse(course.id, { studyTopics: (course.studyTopics || []).map(t => t.id === topicId ? { ...t, reviewLevel: level, status: level >= 8 ? 'done' as const : 'studying' as const } : t) });
   };
 
   // --- Drag and Drop ---
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
-  const activeTopicMaterials = useMemo(() => {
-    if (!activeTopic) return [];
-    const all = activeTopic.materials || [];
-    return filterMaterialType === 'all' ? all : all.filter(m => m.type === filterMaterialType);
-  }, [activeTopic, filterMaterialType]);
-  const columns = useMemo(() => {
-    const cols: SubjectMaterial[][] = [[], [], []];
-    activeTopicMaterials.forEach(mat => { const ci = mat.columnIndex; if (typeof ci === 'number' && ci >= 0 && ci <= 2) cols[ci].push(mat); else cols[0].push(mat); });
-    cols.forEach(c => c.sort((a, b) => b.createdAt - a.createdAt));
-    return cols;
-  }, [activeTopicMaterials]);
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event; if (!over || !activeTopic) return;
-    const activeId = active.id as string, overId = over.id as string;
-    let aci = -1, oci = -1;
-    for (let i = 0; i < 3; i++) { if (columns[i].some(m => m.id === activeId)) aci = i; if (columns[i].some(m => m.id === overId)) oci = i; }
-    if (overId.startsWith('col-')) oci = parseInt(overId.split('-')[1]);
-    if (aci === -1 || oci === -1) return;
-    const mats = [...(activeTopic.materials || [])];
-    const tm = mats.find(m => m.id === activeId);
-    if (tm) { tm.columnIndex = oci; tm.createdAt = Date.now(); updateCourse(course.id, { studyTopics: (course.studyTopics || []).map(t => t.id === activeTopic.id ? { ...t, materials: mats } : t) }); }
-  };
-
   const [activeMatDragId, setActiveMatDragId] = useState<string | null>(null);
+  const [activeTopicDragId, setActiveTopicDragId] = useState<string | null>(null);
   const [activeGroupDragId, setActiveGroupDragId] = useState<string | null>(null);
   const studySensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
+  const handleTopicGridDragEnd = useCallback((event: DragEndEvent) => {
+    setActiveTopicDragId(null);
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const visible = topicFiltered;
+    const ids = visible.map(e => e.id);
+    const oldIdx = ids.indexOf(active.id as string);
+    const newIdx = ids.indexOf(over.id as string);
+    if (oldIdx < 0 || newIdx < 0) return;
+    const newOrder = arrayMove(ids, oldIdx, newIdx);
+    const orderMap = new Map<string, number>(newOrder.map((id, i) => [id, i]));
+    const rank = (id?: string) => (id && orderMap.has(id) ? orderMap.get(id)! : 999);
+    const t = activeTopic;
+    if (!t) return;
+    updateCourse(course.id, {
+      studyTopics: (course.studyTopics || []).map(tp => tp.id === t.id ? {
+        ...tp,
+        flashcards: [...(tp.flashcards || [])].sort((a, b) => rank(a.id) - rank(b.id)),
+        materials: [...(tp.materials || [])].sort((a, b) => rank(a.id) - rank(b.id)),
+        recordings: [...(tp.recordings || [])].sort((a, b) => rank(a.id) - rank(b.id)),
+      } : tp),
+    });
+  }, [topicFiltered, activeTopic, course.id, updateCourse]);
 
   const handleStudyMatDragEnd = useCallback((event: DragEndEvent) => {
     setActiveMatDragId(null);
@@ -1477,9 +2302,9 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const topicMasteryStats = useMemo(() => {
     const pt = course?.studyTopics || [];
     const total = pt.length;
-    const mastered = pt.filter(t => t.reviewLevel >= 4).length;
+    const mastered = pt.filter(t => t.reviewLevel >= 8).length;
     const progressPct = total > 0 ? Math.round((mastered / total) * 100) : 0;
-    return { total, mastered, studying: pt.filter(t => t.reviewLevel > 0 && t.reviewLevel < 4).length, pending: pt.filter(t => t.reviewLevel === 0).length, totalMaterials: pt.reduce((s, t) => s + (t.materials?.length || 0), 0), progressPct };
+    return { total, mastered, studying: pt.filter(t => t.reviewLevel > 0 && t.reviewLevel < 8).length, pending: pt.filter(t => t.reviewLevel === 0).length, totalMaterials: pt.reduce((s, t) => s + (t.materials?.length || 0), 0), progressPct };
   }, [course]);
 
   if (!course) {
@@ -1495,6 +2320,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const parsedTopics = course.studyTopics || [];
   const groups = course.groups || [];
   const ungroupedTopics = parsedTopics.filter(t => !t.groupId);
+  const topicTagDefs = course.topicTagDefs || [];
 
   // ─── RENDER ───
   return (
@@ -1540,73 +2366,235 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
       {/* Content */}
       <div style={{ flex: 1, height: '100%', display: 'flex', flexDirection: 'column', overflowY: currentView === 'overview' ? 'hidden' : 'auto', overflowX: 'hidden' }}>
         {currentView === 'topic' && activeTopic ? (
-          /* ─── TOPIC VIEW ─── */
-          <div style={{ padding: '16px 24px 60px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <button onClick={() => setCurrentView('overview')} style={{ width: 30, height: 30, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', cursor: 'pointer', color: 'var(--text-secondary)' }}><ChevronLeft size={13} /></button>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                    <span style={{ fontSize: 8, fontWeight: 700, color: course.color, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{course.name}</span>
-                    {(() => { const grp = groups.find(g => g.id === activeTopic.groupId); return grp ? <><span style={{ color: 'var(--text-muted)', fontSize: 7 }}>·</span><span style={{ fontSize: 8, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{grp.name}</span></> : null; })()}
+          /* ─── TOPIC VIEW with Big Banner ─── */
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+            {/* Big banner */}
+            <div style={{ position: 'relative', height: 200, overflow: 'hidden', background: `linear-gradient(135deg, ${course.color}33 0%, var(--bg-surface) 100%)` }}>
+              {(() => {
+                const grp = groups.find(g => g.id === activeTopic.groupId);
+                const imgSrc = grp?.image || course.coverUrl || course.coverImage;
+                return imgSrc ? (
+                  <><img src={imgSrc} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.6 }} /><div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, rgba(0,0,0,0.65) 0%, transparent 60%)' }} /></>
+                ) : <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(135deg, ${course.color}22, rgba(0,0,0,0.4))` }} />;
+              })()}
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', padding: '0 32px', gap: 20 }}>
+                <div style={{ flex: 1 }}>
+                  <h1 style={{ fontSize: 40, fontWeight: 200, color: '#fff', margin: '0 0 10px', letterSpacing: '-0.03em', fontFamily: "'Inter Tight', sans-serif", textShadow: '0 2px 20px rgba(0,0,0,0.6)' }}>{activeTopic.title}</h1>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <span style={{ fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.01em', borderBottom: '1px solid rgba(255,255,255,0.15)', paddingBottom: 2 }}>{course.name}</span>
+                    {(() => { const g = groups.find(gr => gr.id === activeTopic.groupId); return g ? <><span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10 }}>/</span><span style={{ fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.01em', borderBottom: '1px solid rgba(255,255,255,0.15)', paddingBottom: 2 }}>{g.name}</span></> : null; })()}
                   </div>
-                  <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', margin: '2px 0 0', fontFamily: "'Inter Tight', sans-serif" }}>{activeTopic.title}</h2>
+                </div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <button onClick={() => { setEditingTopicId(activeTopic.id); setTopicName(activeTopic.title); setShowTopicModal(true); }} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'} title="Editar tema"><Pencil size={13} /></button>
+                  <button onClick={() => { setStudyToolMode('none'); setReviewing(false); setReviewFlipped(false); setTopicSearch(''); setActiveTagFilter(null); if (activeTopic.groupId) { setSelectedGroupId(activeTopic.groupId); setCurrentView('group'); } else { setCurrentView('overview'); } }} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.25)'; e.currentTarget.style.color = '#fff'; }} onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.15)'; }} title={activeTopic.groupId ? `Volver a ${groups.find(g => g.id === activeTopic.groupId)?.name || 'la agrupación'}` : 'Volver'}><ArrowLeft size={14} /></button>
                 </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 8, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Comprensión:</span>
-                <div style={{ display: 'flex', gap: 2 }}>{[...Array(5)].map((_, i) => (
-                  <button key={i} onClick={() => setTopicReviewLevel(activeTopic.id, i + 1)} style={{ width: 10, height: 5, borderRadius: 2, border: 'none', cursor: 'pointer', background: i < activeTopic.reviewLevel ? course.color : 'var(--bg-hover)', transition: 'all 200ms' }} />
-                ))}</div>
+            </div>
+            {/* Content: viewer (left/center) + create sidebar (right) */}
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
+              <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              {/* Toolbar: buscador limpio con efecto de foco */}
+              <div style={{ flexShrink: 0, padding: '16px 28px 8px' }}>
+                <div style={{ position: 'relative', width: '100%', borderRadius: 12, boxShadow: searchFocused ? `0 0 0 3px ${course.color}12` : 'none', transition: 'box-shadow 250ms ' + EASE }}>
+                  <Search size={14} style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', color: topicSearch || searchFocused ? course.color : 'var(--text-muted)', transition: 'color 200ms', zIndex: 1 }} />
+                  <input value={topicSearch} onChange={e => setTopicSearch(e.target.value)} onFocus={() => setSearchFocused(true)} onBlur={() => setSearchFocused(false)} placeholder="Buscar en el tema…"
+                    style={{ width: '100%', height: 40, borderRadius: 12, border: `1px solid ${topicSearch || searchFocused ? `${course.color}60` : 'var(--border-soft)'}`, background: topicSearch || searchFocused ? `linear-gradient(90deg, ${course.color}0e, var(--bg-elevated-alpha, var(--bg-elevated)))` : 'var(--bg-elevated-alpha, var(--bg-elevated))', padding: '0 40px 0 40px', fontSize: 12, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', transition: 'all 250ms ' + EASE, fontWeight: 500, boxShadow: topicSearch ? `0 6px 20px ${course.color}16` : searchFocused ? '0 6px 20px rgba(0,0,0,0.08)' : '0 1px 2px rgba(0,0,0,0.04)' }} />
+                  {topicSearch && (
+                    <span style={{ position: 'absolute', right: 34, top: '50%', transform: 'translateY(-50%)', fontSize: 9, fontWeight: 700, color: course.color, fontFamily: "'Inter Tight', sans-serif" }}>{topicFiltered.length}</span>
+                  )}
+                  {topicSearch && (
+                    <button onClick={() => setTopicSearch('')} style={{ position: 'absolute', right: 7, top: '50%', transform: 'translateY(-50%)', width: 22, height: 22, borderRadius: 7, border: 'none', background: `${course.color}16`, cursor: 'pointer', color: course.color, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 150ms' }} title="Limpiar búsqueda"><X size={11} /></button>
+                  )}
+                </div>
               </div>
-            </div>
-            {/* Filter */}
-            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 12, paddingBottom: 10, borderBottom: '1px solid var(--border-subtle)' }}>
-              <button onClick={() => setFilterMaterialType('all')} style={{ height: 26, padding: '0 8px', borderRadius: 5, fontSize: 9, fontWeight: 600, border: filterMaterialType === 'all' ? 'none' : '1px solid var(--border-subtle)', background: filterMaterialType === 'all' ? course.color : 'transparent', color: filterMaterialType === 'all' ? '#fff' : 'var(--text-secondary)', cursor: 'pointer', transition: 'all 150ms' }}>Todos ({activeTopic.materials?.length || 0})</button>
-              {(Object.keys(MATERIAL_META) as MaterialType[]).map(type => {
-                const count = (activeTopic.materials || []).filter(m => m.type === type).length;
-                if (count === 0) return null;
-                const Icon = MATERIAL_META[type].icon;
-                return <button key={type} onClick={() => setFilterMaterialType(type)} style={{ height: 26, padding: '0 8px', borderRadius: 5, fontSize: 9, fontWeight: 600, border: filterMaterialType === type ? 'none' : '1px solid var(--border-subtle)', background: filterMaterialType === type ? course.color : 'transparent', color: filterMaterialType === type ? '#fff' : 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3, transition: 'all 150ms' }}><Icon size={9} /> {MATERIAL_META[type].label} ({count})</button>;
-              })}
-            </div>
-            {/* Quick add */}
-            <div style={{ display: 'flex', gap: 4, marginBottom: 12, flexWrap: 'wrap' }}>
-              {(Object.keys(MATERIAL_META) as MaterialType[]).filter(t => t !== 'resource').map(type => {
-                const Icon = MATERIAL_META[type].icon;
-                const accentColors: Record<string, string> = { formula: '#8B5CF6', concept: '#3B82F6', 'key-data': '#F59E0B', meaning: '#10B981', quiz: '#EF4444', procedure: '#EC4899' };
-                const c = accentColors[type] || course.color;
-                return <button key={type} onClick={() => handleAddMaterialClick(type, 0)} style={{ display: 'flex', alignItems: 'center', gap: 3, height: 24, padding: '0 8px', borderRadius: 5, fontSize: 9, fontWeight: 600, border: 'none', background: `${c}12`, color: c, cursor: 'pointer', transition: 'all 150ms' }}
-                  onMouseEnter={e => e.currentTarget.style.background = `${c}25`} onMouseLeave={e => e.currentTarget.style.background = `${c}12`}><Icon size={9} /> {MATERIAL_META[type].label}</button>;
-              })}
-              <button onClick={() => handleAddMaterialClick('resource', 0)} style={{ display: 'flex', alignItems: 'center', gap: 3, height: 24, padding: '0 8px', borderRadius: 5, fontSize: 9, fontWeight: 600, border: '1px dashed var(--border-subtle)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', transition: 'all 150ms' }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = course.color; e.currentTarget.style.color = course.color; }} onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-muted)'; }}><Upload size={9} /> Archivo</button>
-            </div>
-            {/* 3-col kanban */}
-            <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, alignItems: 'start' }}>
-                {[{ idx: 0, label: 'Teoría', desc: 'Conceptos, fórmulas' }, { idx: 1, label: 'Práctica', desc: 'Cuestionarios, procedimientos' }, { idx: 2, label: 'Anexos', desc: 'Recursos, archivos' }].map(({ idx, label, desc }) => {
-                  const colItems = columns[idx] || [];
-                  return (
-                    <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <div style={{ padding: '8px 10px', borderRadius: 8, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-primary)' }}>{label}</div>
-                        <div style={{ fontSize: 8, color: 'var(--text-muted)', marginTop: 2 }}>{desc} · {colItems.length}</div>
+              <div style={{ flex: 1, overflowY: 'auto', padding: '20px 28px 60px' }} className="no-scrollbar">
+              {(() => {
+                const typeMeta: Record<string, { icon: React.ComponentType<{ size?: number; style?: React.CSSProperties }>; color: string }> = {
+                  concept: { icon: Lightbulb, color: '#3B82F6' },
+                  meaning: { icon: Type, color: '#10B981' },
+                  formula: { icon: Sigma, color: '#8B5CF6' },
+                  'key-data': { icon: Key, color: '#F59E0B' },
+                  quiz: { icon: HelpCircle, color: '#EF4444' },
+                  procedure: { icon: ListChecks, color: '#EC4899' },
+                  resource: { icon: File, color: '#6366F1' },
+                };
+
+                const noItems = topicItems.length === 0;
+                const filtered = topicFiltered;
+                const filteredEmpty = !noItems && filtered.length === 0;
+
+                return reviewing ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: '60%' }}>
+                    {/* Review header */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
+                      <button onClick={closeReview} title="Salir del repaso"
+                        style={{ width: 26, height: 26, borderRadius: 7, border: '1px solid var(--border-subtle)', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <X size={12} />
+                      </button>
+                      <div style={{ width: 26, height: 26, borderRadius: 7, background: '#8B5CF612', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <BookOpen size={12} style={{ color: '#8B5CF6' }} />
                       </div>
-                      <DroppableColumn id={`col-${idx}`} items={colItems}>
-                        {colItems.map(mat => (
-                          <SortableWrapper key={mat.id} id={mat.id}>
-                            {({ attributes, listeners }) => <MaterialCard mat={mat} dragAttributes={attributes} dragListeners={listeners} onEdit={startEditMaterial} onDelete={handleDeleteMaterial} onOpenResource={handleOpenResource} />}
-                          </SortableWrapper>
-                        ))}
-                        {colItems.length === 0 && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 80, borderRadius: 6, border: '1px dashed var(--border-subtle)', opacity: 0.2, fontSize: 9, color: 'var(--text-muted)' }}>Arrastra aquí</div>}
-                      </DroppableColumn>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", flex: 1 }}>Repaso de Flashcards</span>
+                      <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-tertiary)' }}>{Math.min(reviewIndex + 1, reviewDeck.length)} / {reviewDeck.length}</span>
+                      <span style={{ fontSize: 9, fontWeight: 600, color: '#10B981', background: '#10B9810c', padding: '2px 7px', borderRadius: 4 }}>{reviewStats.correct} acertadas</span>
+                      {reviewStats.again > 0 && <span style={{ fontSize: 9, fontWeight: 600, color: '#EF4444', background: '#EF44440c', padding: '2px 7px', borderRadius: 4 }}>{reviewStats.again} repetidas</span>}
                     </div>
-                  );
-                })}
+                    {/* Card */}
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
+                      <div onClick={() => setReviewFlipped(f => !f)}
+                        className="bento-card"
+                        style={{ width: 'min(560px, 100%)', minHeight: 260, borderRadius: 16, border: reviewFlipped ? '1px solid #10B98140' : '1px solid #8B5CF640', background: reviewFlipped ? 'linear-gradient(145deg, #10B98108, var(--bg-surface))' : 'linear-gradient(145deg, #8B5CF612, var(--bg-surface))', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 36px', textAlign: 'center', gap: 10, transition: 'border-color 150ms, background 150ms' }}>
+                        <span style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: reviewFlipped ? '#10B981' : '#8B5CF6' }}>
+                          {reviewFlipped ? 'Respuesta' : 'Pregunta'}
+                        </span>
+                        <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.5, maxWidth: 460 }}>{reviewFlipped ? reviewDeck[reviewIndex]?.answer : reviewDeck[reviewIndex]?.question}</div>
+                        <span style={{ fontSize: 9, color: 'var(--text-tertiary)', marginTop: 8 }}>{reviewFlipped ? 'Haz clic para ver la pregunta' : 'Haz clic para revelar la respuesta'}</span>
+                      </div>
+                      {reviewFlipped && (
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+                          {([
+                            { grade: 'again', label: 'Otra vez', sub: '10 min', color: '#EF4444' },
+                            { grade: 'hard', label: 'Difícil', sub: '1 día', color: '#F59E0B' },
+                            { grade: 'good', label: 'Bien', sub: '3 días', color: '#3B82F6' },
+                            { grade: 'easy', label: 'Fácil', sub: '7 días', color: '#10B981' },
+                          ] as { grade: 'again' | 'hard' | 'good' | 'easy'; label: string; sub: string; color: string }[]).map(b => (
+                            <button key={b.grade} onClick={() => gradeFlashcard(b.grade)}
+                              style={{ minWidth: 108, padding: '10px 16px', borderRadius: 10, border: `1px solid ${b.color}30`, background: `${b.color}0d`, cursor: 'pointer', transition: 'all 120ms' }}
+                              onMouseEnter={e => { e.currentTarget.style.background = `${b.color}1c`; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                              onMouseLeave={e => { e.currentTarget.style.background = `${b.color}0d`; e.currentTarget.style.transform = 'translateY(0)'; }}>
+                              <div style={{ fontSize: 11, fontWeight: 700, color: b.color }}>{b.label}</div>
+                              <div style={{ fontSize: 8, color: 'var(--text-tertiary)', marginTop: 2 }}>Próximo en {b.sub}</div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : noItems ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60%', gap: 16 }}>
+                    <div style={{ width: 56, height: 56, borderRadius: 16, background: `${course.color}10`, border: `1.5px dashed ${course.color}25`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Plus size={24} style={{ color: course.color, opacity: 0.5 }} />
+                    </div>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-muted)', fontFamily: "'Inter Tight', sans-serif" }}>Este tema está vacío</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-tertiary)', textAlign: 'center', maxWidth: 280, lineHeight: 1.5 }}>Agrega flashcards, materiales o grabaciones desde la barra lateral.</span>
+                  </div>
+                ) : filteredEmpty ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60%', gap: 16 }}>
+                    <div style={{ width: 52, height: 52, borderRadius: 16, background: `${course.color}0c`, border: `1.5px dashed ${course.color}20`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Search size={20} style={{ color: course.color, opacity: 0.45 }} />
+                    </div>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-muted)', fontFamily: "'Inter Tight', sans-serif" }}>Sin resultados</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-tertiary)', textAlign: 'center', maxWidth: 300, lineHeight: 1.5 }}>Ningún elemento coincide con tu búsqueda o etiqueta seleccionada. Ajusta el filtro para continuar.</span>
+                    <button onClick={() => { setTopicSearch(''); setActiveTagFilter(null); }} style={{ height: 28, padding: '0 14px', borderRadius: 8, border: `1px solid ${course.color}40`, background: `${course.color}0d`, cursor: 'pointer', color: course.color, fontSize: 10, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}><X size={11} /> Limpiar filtros</button>
+                  </div>
+                ) : (
+                  <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={e => setActiveTopicDragId(e.active.id as string)} onDragEnd={handleTopicGridDragEnd}>
+                    <SortableContext items={filtered.map(e => e.id)} strategy={rectSortingStrategy}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(235px, 1fr))', gap: 14, alignItems: 'start' }}>
+                        {filtered.map(entry => {
+                          if (entry.type === 'flashcard') {
+                            const fc = entry.item;
+                            return (
+                              <SortableWrapper key={fc.id} id={fc.id}>
+                                {({ attributes, listeners, isDragging }) => (
+                                  <div {...attributes} {...listeners}
+                                    title="Arrastra para reordenar · Toca para repasar"
+                                    style={{ opacity: isDragging ? 0.55 : 1, touchAction: 'none', cursor: 'grab', display: 'flex', flexDirection: 'column', borderRadius: 14, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', overflow: 'hidden', transition: 'all 200ms ' + EASE, boxShadow: '0 1px 2px rgba(0,0,0,0.04)', minHeight: 118 }}
+                                    onClick={startReview}
+                                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#8B5CF650'; e.currentTarget.style.background = 'var(--bg-surface)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(139,92,246,0.12)'; }}
+                                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.04)'; }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 14px 8px' }}>
+                                      <div style={{ width: 38, height: 38, borderRadius: 11, background: '#8B5CF610', border: '1px solid #8B5CF61a', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                        <BookOpen size={17} style={{ color: '#8B5CF6' }} />
+                                      </div>
+                                      <span style={{ flex: 1, fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#8B5CF6', fontFamily: "'Inter Tight', sans-serif" }}>Flashcards</span>
+                                      {fc.nextReview <= Date.now() && (
+                                        <span style={{ fontSize: 7.5, fontWeight: 800, padding: '3px 8px', borderRadius: 6, background: '#8B5CF612', color: '#8B5CF6', letterSpacing: '0.08em' }}>REPASAR</span>
+                                      )}
+                                      <button onPointerDown={e => e.stopPropagation()} title="Editar" onClick={e => { e.stopPropagation(); openFlashcardModal(fc); }} style={{ width: 26, height: 26, borderRadius: 8, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Pencil size={11} /></button>
+                                      <button onPointerDown={e => e.stopPropagation()} title="Eliminar" onClick={e => { e.stopPropagation(); handleDeleteFlashcard(fc.id); }} style={{ width: 26, height: 26, borderRadius: 8, border: 'none', background: 'transparent', cursor: 'pointer', color: 'rgba(239,68,68,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={11} /></button>
+                                    </div>
+                                    <div style={{ flex: 1, padding: '0 14px 12px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                                      <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--text-primary)', lineHeight: 1.35, fontFamily: "'Inter Tight', sans-serif", display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{fc.question}</div>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 10, fontSize: 9, fontWeight: 700, color: '#10B981', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                                        <Play size={9} /> Repasar
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+                              </SortableWrapper>
+                            );
+                          }
+                          if (entry.type === 'recording') {
+                            const r = entry.item;
+                            return (
+                              <SortableWrapper key={r.id} id={r.id}>
+                                {({ attributes, listeners, isDragging }) => (
+                                  <div {...attributes} {...listeners}
+                                    title="Arrastra para reordenar"
+                                    style={{ opacity: isDragging ? 0.55 : 1, touchAction: 'none', cursor: 'grab', display: 'flex', flexDirection: 'column', borderRadius: 14, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', overflow: 'hidden', transition: 'all 200ms ' + EASE, boxShadow: '0 1px 2px rgba(0,0,0,0.04)', minHeight: 118 }}
+                                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#06B6D450'; e.currentTarget.style.background = 'var(--bg-surface)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(6,182,212,0.10)'; }}
+                                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.04)'; }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 14px 8px' }}>
+                                      <div style={{ width: 38, height: 38, borderRadius: 11, background: '#06B6D410', border: '1px solid #06B6D41a', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                        <Mic size={17} style={{ color: '#06B6D4' }} />
+                                      </div>
+                                      <span style={{ flex: 1, fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#06B6D4', fontFamily: "'Inter Tight', sans-serif" }}>Grabación</span>
+                                    </div>
+                                    <div style={{ flex: 1, padding: '0 14px 12px', display: 'flex', alignItems: 'center' }}>
+                                      <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--text-primary)', lineHeight: 1.35, fontFamily: "'Inter Tight', sans-serif", display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{r.name || 'Grabación'}</div>
+                                    </div>
+                                  </div>
+                                )}
+                              </SortableWrapper>
+                            );
+                          }
+                          const mat = entry.item as SubjectMaterial;
+                          return (
+                            <SortableWrapper key={mat.id} id={mat.id}>
+                              {({ attributes, listeners, isDragging }) => (
+                                <div style={{ opacity: isDragging ? 0.55 : 1 }}>
+                                  <MaterialCard mat={mat} dragAttributes={attributes} dragListeners={listeners} onEdit={startEditToolMaterial} onDelete={handleDeleteMaterial} onOpenResource={handleOpenResource} onPractice={openPractice} />
+                                </div>
+                              )}
+                            </SortableWrapper>
+                          );
+                        })}
+                      </div>
+                    </SortableContext>
+                  </DndContext>
+                );
+              })()}
+              <input type="file" ref={resourceInputRef} style={{ display: 'none' }} onChange={handleFileUpload} />
               </div>
-            </DndContext>
-            <input type="file" ref={resourceInputRef} style={{ display: 'none' }} onChange={handleFileUpload} />
+              </div>
+              {/* Right lateral: Herramientas — tool blocks */}
+              {(() => {
+                return (
+                <div style={{ width: 300, flexShrink: 0, borderLeft: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                    {/* ─── Header ─── */}
+                    <div style={{ padding: '20px 20px 14px', flexShrink: 0, borderBottom: '1px solid var(--border-subtle)' }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-secondary)', fontFamily: "'Inter Tight', sans-serif" }}>Herramientas</div>
+                      <div style={{ fontSize: 9.5, color: 'var(--text-tertiary)', marginTop: 5 }}>Mantén pulsado para reordenar.</div>
+                    </div>
+                    {/* ─── Tool list ─── */}
+                    <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 16px 20px', display: 'flex', flexDirection: 'column' }} className="no-scrollbar">
+                      <DndContext sensors={toolSensors} collisionDetection={closestCorners} onDragStart={handleToolDragStart} onDragEnd={handleToolDragEnd} onDragCancel={handleToolDragCancel}>
+                        <SortableContext items={toolOrder} strategy={verticalListSortingStrategy}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, justifyContent: 'space-between', flex: 1 }}>
+                            {toolOrder.map(mode => (
+                              <ToolSortableRow key={mode} id={mode} tool={TOOL_ITEMS[mode]} isActive={studyToolMode === mode} onClick={() => { if (toolDragRef.current) { toolDragRef.current = false; return; } setStudyToolMode(studyToolMode === mode ? 'none' : mode); openToolCreator(mode); }} />
+                            ))}
+                          </div>
+                        </SortableContext>
+                      </DndContext>
+                    </div>
+                </div>);
+              })()}
+            </div>
           </div>
         ) : activeTab === 'overview' ? (
             /* ─── OVERVIEW TAB ─── */
@@ -1948,196 +2936,6 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                   )}
                 </div>
               </div>
-              ) : (
-                /* ═══ MODO ESTUDIO — New Study Mode Layout ═══ */
-                currentView === 'topic' && activeTopic ? (
-                  /* ─── TOPIC DETAIL VIEW (inside estudio mode) ─── */
-                <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
-                  {/* Left: back to study overview */}
-                  <div style={{ width: 44, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 16, borderRight: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
-                    <button onClick={() => { setCurrentView('overview'); setStudyToolMode('none'); }} style={{ width: 32, height: 32, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', cursor: 'pointer', color: 'var(--text-secondary)', transition: 'all 150ms' }} title="Volver">
-                      <ChevronLeft size={14} />
-                    </button>
-                  </div>
-                  {/* Center: topic content */}
-                  <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px 60px' }}>
-                    {/* Breadcrumb */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 16 }}>
-                      <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{course.name}</span>
-                      {activeTopic.groupId && (() => { const grp = groups.find(g => g.id === activeTopic.groupId); return grp ? <><span style={{ color: 'var(--text-muted)', fontSize: 8 }}>/</span><span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>{grp.name}</span></> : null; })()}
-                      <span style={{ color: 'var(--text-muted)', fontSize: 8 }}>/</span>
-                      <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-primary)' }}>{activeTopic.title}</span>
-                    </div>
-                    {/* Topic header */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                          <span style={{ fontSize: 8, fontWeight: 700, color: course.color, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{course.name}</span>
-                          {activeTopic.groupId && (() => { const grp = groups.find(g => g.id === activeTopic.groupId); return grp ? <><span style={{ color: 'var(--text-muted)', fontSize: 7 }}>·</span><span style={{ fontSize: 8, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{grp.name}</span></> : null; })()}
-                        </div>
-                        <h2 style={{ fontSize: 22, fontWeight: 600, color: 'var(--text-primary)', margin: 0, fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em' }}>{activeTopic.title}</h2>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
-                          <span style={{ fontSize: 8, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Comprension:</span>
-                          <div style={{ display: 'flex', gap: 3 }}>{[...Array(5)].map((_, i) => (
-                            <button key={i} onClick={() => setTopicReviewLevel(activeTopic.id, i + 1)} style={{ width: 28, height: 6, borderRadius: 3, border: 'none', cursor: 'pointer', background: i < activeTopic.reviewLevel ? course.color : 'var(--bg-hover)', transition: 'all 200ms' }} />
-                          ))}</div>
-                          <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>{activeTopic.reviewLevel}/5</span>
-                        </div>
-                      </div>
-                      <button onClick={() => { setEditingTopicId(activeTopic.id); setTopicName(activeTopic.title); setShowTopicModal(true); }} style={{ width: 30, height: 30, borderRadius: 6, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Edit3 size={12} /></button>
-                    </div>
-                    {/* Material filter */}
-                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 14, paddingBottom: 10, borderBottom: '1px solid var(--border-subtle)' }}>
-                      <button onClick={() => setFilterMaterialType('all')} style={{ height: 26, padding: '0 8px', borderRadius: 5, fontSize: 9, fontWeight: 600, border: filterMaterialType === 'all' ? 'none' : '1px solid var(--border-subtle)', background: filterMaterialType === 'all' ? course.color : 'transparent', color: filterMaterialType === 'all' ? '#fff' : 'var(--text-secondary)', cursor: 'pointer', transition: 'all 150ms' }}>Todos ({activeTopic.materials?.length || 0})</button>
-                      {(Object.keys(MATERIAL_META) as MaterialType[]).map(type => {
-                        const count = (activeTopic.materials || []).filter(m => m.type === type).length;
-                        if (count === 0) return null;
-                        const Icon = MATERIAL_META[type].icon;
-                        return <button key={type} onClick={() => setFilterMaterialType(type)} style={{ height: 26, padding: '0 8px', borderRadius: 5, fontSize: 9, fontWeight: 600, border: filterMaterialType === type ? 'none' : '1px solid var(--border-subtle)', background: filterMaterialType === type ? course.color : 'transparent', color: filterMaterialType === type ? '#fff' : 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3, transition: 'all 150ms' }}><Icon size={9} /> {MATERIAL_META[type].label} ({count})</button>;
-                      })}
-                    </div>
-                    {/* Quick add */}
-                    <div style={{ display: 'flex', gap: 4, marginBottom: 16, flexWrap: 'wrap' }}>
-                      {(Object.keys(MATERIAL_META) as MaterialType[]).filter(t => t !== 'resource').map(type => {
-                        const Icon = MATERIAL_META[type].icon;
-                        const accentColors: Record<string, string> = { formula: '#8B5CF6', concept: '#3B82F6', 'key-data': '#F59E0B', meaning: '#10B981', quiz: '#EF4444', procedure: '#EC4899' };
-                        const c = accentColors[type] || course.color;
-                        return <button key={type} onClick={() => handleAddMaterialClick(type, 0)} style={{ display: 'flex', alignItems: 'center', gap: 3, height: 24, padding: '0 8px', borderRadius: 5, fontSize: 9, fontWeight: 600, border: 'none', background: `${c}12`, color: c, cursor: 'pointer', transition: 'all 150ms' }}
-                          onMouseEnter={e => e.currentTarget.style.background = `${c}25`} onMouseLeave={e => e.currentTarget.style.background = `${c}12`}><Icon size={9} /> {MATERIAL_META[type].label}</button>;
-                      })}
-                      <button onClick={() => handleAddMaterialClick('resource', 0)} style={{ display: 'flex', alignItems: 'center', gap: 3, height: 24, padding: '0 8px', borderRadius: 5, fontSize: 9, fontWeight: 600, border: '1px dashed var(--border-subtle)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', transition: 'all 150ms' }}
-                        onMouseEnter={e => { e.currentTarget.style.borderColor = course.color; e.currentTarget.style.color = course.color; }} onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-muted)'; }}><Upload size={9} /> Archivo</button>
-                    </div>
-                    {/* 3-col kanban */}
-                    <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, alignItems: 'start' }}>
-                        {[{ idx: 0, label: 'Teoria', desc: 'Conceptos, formulas' }, { idx: 1, label: 'Practica', desc: 'Cuestionarios, procedimientos' }, { idx: 2, label: 'Anexos', desc: 'Recursos, archivos' }].map(({ idx, label, desc }) => {
-                          const colItems = columns[idx] || [];
-                          return (
-                            <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                              <div style={{ padding: '8px 10px', borderRadius: 8, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
-                                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-primary)' }}>{label}</div>
-                                <div style={{ fontSize: 8, color: 'var(--text-muted)', marginTop: 2 }}>{desc} · {colItems.length}</div>
-                              </div>
-                              <DroppableColumn id={`col-${idx}`} items={colItems}>
-                                {colItems.map(mat => (
-                                  <SortableWrapper key={mat.id} id={mat.id}>
-                                    {({ attributes, listeners }) => <MaterialCard mat={mat} dragAttributes={attributes} dragListeners={listeners} onEdit={startEditMaterial} onDelete={handleDeleteMaterial} onOpenResource={handleOpenResource} />}
-                                  </SortableWrapper>
-                                ))}
-                                {colItems.length === 0 && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 80, borderRadius: 6, border: '1px dashed var(--border-subtle)', opacity: 0.2, fontSize: 9, color: 'var(--text-muted)' }}>Arrastra aqui</div>}
-                              </DroppableColumn>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </DndContext>
-                    <input type="file" ref={resourceInputRef} style={{ display: 'none' }} onChange={handleFileUpload} />
-                  </div>
-                  {/* Right: Study Tools Sidebar */}
-                  <div style={{ width: 220, flexShrink: 0, borderLeft: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                    <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--border-subtle)' }}>
-                      <span style={{ fontSize: 8, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Herramientas</span>
-                    </div>
-                    <div style={{ flex: 1, overflowY: 'auto', padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      {[
-                        { mode: 'flashcards' as const, icon: BookOpen, label: 'Flashcards', desc: 'Repaso activo', color: '#8B5CF6' },
-                        { mode: 'quizzes' as const, icon: HelpCircle, label: 'Cuestionarios', desc: 'Autoevaluacion', color: '#EF4444' },
-                        { mode: 'blurting' as const, icon: NotebookPen, label: 'Blurting', desc: 'Escribir de memoria', color: '#3B82F6' },
-                        { mode: 'feynman' as const, icon: Lightbulb, label: 'Feynman', desc: 'Explicar simplemente', color: '#F59E0B' },
-                        { mode: 'notes' as const, icon: StickyNote, label: 'Notas del tema', desc: 'Apuntes rápidos', color: '#10B981' },
-                        { mode: 'mindmap' as const, icon: Layers, label: 'Mapa Mental', desc: 'Organizar ideas', color: '#EC4899' },
-                        { mode: 'review' as const, icon: Sigma, label: 'Repaso Espaciado', desc: 'SRS / FSRS', color: '#06B6D4' },
-                      ].map(tool => {
-                        const Icon = tool.icon;
-                        const isActive = studyToolMode === tool.mode;
-                        return (
-                          <button key={tool.mode} onClick={() => setStudyToolMode(isActive ? 'none' : tool.mode)}
-                            style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px', borderRadius: 6, border: `1px solid ${isActive ? `${tool.color}40` : 'transparent'}`, background: isActive ? `${tool.color}10` : 'transparent', cursor: 'pointer', textAlign: 'left', transition: 'all 150ms' }}
-                            onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                            onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}>
-                            <div style={{ width: 28, height: 28, borderRadius: 6, background: `${tool.color}12`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                              <Icon size={13} style={{ color: tool.color }} />
-                            </div>
-                            <div>
-                              <div style={{ fontSize: 10, fontWeight: 600, color: isActive ? tool.color : 'var(--text-primary)' }}>{tool.label}</div>
-                              <div style={{ fontSize: 8, color: 'var(--text-muted)', marginTop: 1 }}>{tool.desc}</div>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                    {/* Active tool content area */}
-                    {studyToolMode !== 'none' && (
-                      <div style={{ borderTop: '1px solid var(--border-subtle)', padding: '10px 14px', maxHeight: 260, overflowY: 'auto' }}>
-                        {studyToolMode === 'flashcards' && (
-                          <div style={{ textAlign: 'center', padding: '12px 0' }}>
-                            <div style={{ width: 44, height: 44, borderRadius: 10, background: '#8B5CF612', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px' }}><BookOpen size={18} style={{ color: '#8B5CF6' }} /></div>
-                            <p style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 10 }}>Crea tarjetas de repaso con preguntas y respuestas.</p>
-                            <button style={{ width: '100%', height: 30, borderRadius: 6, border: 'none', background: '#8B5CF6', color: '#fff', fontSize: 9, fontWeight: 600, cursor: 'pointer' }}>Nueva Flashcard</button>
-                          </div>
-                        )}
-                        {studyToolMode === 'quizzes' && (
-                          <div style={{ textAlign: 'center', padding: '12px 0' }}>
-                            <div style={{ width: 44, height: 44, borderRadius: 10, background: '#EF444412', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px' }}><HelpCircle size={18} style={{ color: '#EF4444' }} /></div>
-                            <p style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 10 }}>Pon a prueba tu conocimiento con quizzes.</p>
-                            <button style={{ width: '100%', height: 30, borderRadius: 6, border: 'none', background: '#EF4444', color: '#fff', fontSize: 9, fontWeight: 600, cursor: 'pointer' }}>Crear Quiz</button>
-                          </div>
-                        )}
-                        {studyToolMode === 'blurting' && (
-                          <div style={{ textAlign: 'center', padding: '12px 0' }}>
-                            <div style={{ width: 44, height: 44, borderRadius: 10, background: '#3B82F612', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px' }}><NotebookPen size={18} style={{ color: '#3B82F6' }} /></div>
-                            <p style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 10 }}>Escribe todo lo que recuerdas sin mirar apuntes.</p>
-                            <button style={{ width: '100%', height: 30, borderRadius: 6, border: 'none', background: '#3B82F6', color: '#fff', fontSize: 9, fontWeight: 600, cursor: 'pointer' }}>Iniciar Blurting</button>
-                          </div>
-                        )}
-                        {studyToolMode === 'feynman' && (
-                          <div style={{ textAlign: 'center', padding: '12px 0' }}>
-                            <div style={{ width: 44, height: 44, borderRadius: 10, background: '#F59E0B12', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px' }}><Lightbulb size={18} style={{ color: '#F59E0B' }} /></div>
-                            <p style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 10 }}>Explica el concepto como si fueras profesor.</p>
-                            <button style={{ width: '100%', height: 30, borderRadius: 6, border: 'none', background: '#F59E0B', color: '#fff', fontSize: 9, fontWeight: 600, cursor: 'pointer' }}>Iniciar Feynman</button>
-                          </div>
-                        )}
-                        {studyToolMode === 'notes' && (
-                          <div style={{ textAlign: 'center', padding: '12px 0' }}>
-                            <div style={{ width: 44, height: 44, borderRadius: 10, background: '#10B98112', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px' }}><StickyNote size={18} style={{ color: '#10B981' }} /></div>
-                            <p style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 10 }}>Anota ideas clave durante el estudio.</p>
-                            <button onClick={() => { const id = addNote({ title: '', content: '', course: course.name, courseColor: course.color, isCoursePrivate: true, isPinned: false }); setEditingNoteId(id); setNavigateTo('apuntes'); }} style={{ width: '100%', height: 30, borderRadius: 6, border: 'none', background: '#10B981', color: '#fff', fontSize: 9, fontWeight: 600, cursor: 'pointer' }}>Nuevo Apunte</button>
-                          </div>
-                        )}
-                        {studyToolMode === 'mindmap' && (
-                          <div style={{ textAlign: 'center', padding: '12px 0' }}>
-                            <div style={{ width: 44, height: 44, borderRadius: 10, background: '#EC489912', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px' }}><Layers size={18} style={{ color: '#EC4899' }} /></div>
-                            <p style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 10 }}>Organiza ideas visualmente en un mapa.</p>
-                            <button style={{ width: '100%', height: 30, borderRadius: 6, border: 'none', background: '#EC4899', color: '#fff', fontSize: 9, fontWeight: 600, cursor: 'pointer' }}>Crear Mapa</button>
-                          </div>
-                        )}
-                        {studyToolMode === 'review' && (
-                          <div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                              <Sigma size={11} style={{ color: '#06B6D4' }} />
-                              <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Cola de Repaso</span>
-                            </div>
-                            {(course.studyTopics || []).filter(t => t.nextReview <= Date.now() && t.reviewLevel > 0).length > 0 ? (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                {(course.studyTopics || []).filter(t => t.nextReview <= Date.now() && t.reviewLevel > 0).slice(0, 5).map(t => (
-                                  <div key={t.id} onClick={() => { setActiveTopicId(t.id); setCurrentView('topic'); }} style={{ padding: '6px 8px', borderRadius: 5, background: 'var(--bg-hover)', cursor: 'pointer', fontSize: 10, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 6, transition: 'all 120ms' }}
-                                    onMouseEnter={e => e.currentTarget.style.background = `${course.color}15`} onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-hover)'}>
-                                    <div style={{ width: 4, height: 4, borderRadius: '50%', background: '#06B6D4', flexShrink: 0 }} />
-                                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
-                                    <span style={{ fontSize: 8, color: 'var(--text-muted)' }}>{t.reviewLevel}/5</span>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <p style={{ fontSize: 9, color: 'var(--text-muted)', textAlign: 'center', padding: '10px 0' }}>Sin temas para repasar</p>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
               ) : currentView === 'group' && selectedGroupId ? (
                 /* ═══ GROUP DETAIL VIEW ═══ */
                 (() => {
@@ -2145,35 +2943,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                   const grpTopics = parsedTopics.filter(t => t.groupId === selectedGroupId);
                   if (!grp) return null;
                   return (
-                    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-
-              <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 40px' }} className="no-scrollbar">
-                        {/* ═══ GROUP HEADER ═══ */}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <button onClick={() => setCurrentView('overview')} style={{ width: 30, height: 30, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', cursor: 'pointer', color: 'var(--text-secondary)' }}><ChevronLeft size={13} /></button>
-                            <div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                                <span style={{ fontSize: 8, fontWeight: 700, color: course.color, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{course.name}</span>
-                                <span style={{ color: 'var(--text-muted)', fontSize: 7 }}>·</span>
-                                <span style={{ fontSize: 8, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{grp.name}</span>
-                              </div>
-                              <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', margin: '2px 0 0', fontFamily: "'Inter Tight', sans-serif" }}>{grp.name}</h2>
-                            </div>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 500 }}>{grpTopics.length} temas · {grpTopics.reduce((s, t) => s + (t.materials?.length || 0), 0)} materiales</span>
-                            <button onClick={() => { setEditingGroupId(grp.id); setGroupName(grp.name); setGroupCover(grp.image); setShowGroupModal(true); }} style={{ width: 30, height: 30, borderRadius: 6, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
-                              onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}40`; e.currentTarget.style.color = course.color; }} onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-muted)'; }}><Edit3 size={12} /></button>
-                            <button onClick={() => {
-                              const hasTopics = grpTopics.length > 0;
-                              if (!hasTopics) { toast.error('No hay temas dentro de esta agrupacion'); return; }
-                              setExportSelectedIds(new Set(grpTopics.map(t => t.id))); setImportExportMode('export');
-                              setImportPreviewData(null); setImportSelected([]); setImportTargetGroupId(selectedGroupId); setShowAgrupacionImportExport(true);
-                            }} style={{ width: 30, height: 30, borderRadius: 6, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
-                              onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}40`; e.currentTarget.style.color = course.color; }} onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-muted)'; }} title="Exportar temas"><LI.Package size={12} /></button>
-                          </div>
-                        </div>
+                    <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 40px' }} className="no-scrollbar">
                         {grpTopics.length === 0 ? (
                           <div onClick={() => { setEditingTopicId(null); setTopicName(''); setShowTopicModal(true); }}
                             style={{ padding: '64px 24px', textAlign: 'center', borderRadius: 16, border: `2px dashed ${course.color}30`, background: `linear-gradient(145deg, ${course.color}06, transparent 70%)`, cursor: 'pointer', transition: 'all 300ms cubic-bezier(0.16,1,0.3,1)', minHeight: 200, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14 }}
@@ -2191,24 +2961,37 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
                             {grpTopics.map(topic => {
                                 const mats = topic.materials || [];
-                                const matCount = mats.length;
-                                const typeCounts: Record<string, number> = {};
-                                mats.forEach(m => { typeCounts[m.type] = (typeCounts[m.type] || 0) + 1; });
-                                const typeColors: Record<string, string> = { resource: '#3B82F6', flashcard: '#8B5CF6', qa: '#10B981', definition: '#F59E0B', note: '#6B7280' };
-                                const typeLabels: Record<string, string> = { resource: 'Recursos', flashcard: 'Flashcards', qa: 'Preguntas', definition: 'Definiciones', note: 'Notas' };
+                                const typeColors: Record<string, string> = { resource: '#3B82F6', concept: '#8B5CF6', 'key-data': '#10B981', formula: '#F59E0B', meaning: '#EC4899', quiz: '#EF4444', procedure: '#06B6D4' };
+                                const typeLabels: Record<string, string> = { resource: 'Recursos', concept: 'Conceptos', 'key-data': 'Datos clave', formula: 'Fórmulas', meaning: 'Significados', quiz: 'Quizzes', procedure: 'Procedimientos' };
+                                const toolNames: Record<string, { label: string; color: string }> = {
+                                  flashcards: { label: 'Flashcards', color: '#8B5CF6' },
+                                  quizzes: { label: 'Quiz rápido', color: '#EF4444' },
+                                  blurting: { label: 'Blurting', color: '#3B82F6' },
+                                  feynman: { label: 'Feynman', color: '#F59E0B' },
+                                  matching: { label: 'Matching', color: '#10B981' },
+                                  cloze: { label: 'Cloze', color: '#06B6D4' },
+                                  categorization: { label: 'Categorizar', color: '#EC4899' },
+                                  mnemonics: { label: 'Mnemotecnia', color: '#6366F1' },
+                                };
+                                const createdItems: { count: number; label: string; color: string }[] = [];
+                                const addCreated = (label: string, color: string) => {
+                                  const ex = createdItems.find(e => e.label === label);
+                                  if (ex) ex.count++;
+                                  else createdItems.push({ count: 1, label, color });
+                                };
+                                (topic.flashcards || []).forEach(() => addCreated('Flashcards', toolNames.flashcards.color));
+                                mats.forEach(m => {
+                                  const tool = (m.toolMode || '') as string;
+                                  if (tool && toolNames[tool]) addCreated(toolNames[tool].label, toolNames[tool].color);
+                                  else addCreated(typeLabels[m.type] || m.type, typeColors[m.type] || '#6B7280');
+                                });
+                                const totalCreated = createdItems.reduce((s, e) => s + e.count, 0);
                                 return (
-                                  <div key={topic.id} onClick={() => { setActiveTopicId(topic.id); setCurrentView('topic'); }}
+                                  <div key={topic.id} onClick={() => { setActiveTopicId(topic.id); setCurrentView('topic'); setTopicSearch(''); setActiveTagFilter(null); }}
                                     style={{ borderRadius: 14, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', overflow: 'hidden', cursor: 'pointer', transition: 'all 250ms cubic-bezier(0.16,1,0.3,1)', display: 'flex', flexDirection: 'column', position: 'relative' }}
                                     className="topic-card"
-                                    onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}40`; e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = `0 12px 36px ${course.color}14`; const a = e.currentTarget; a.querySelectorAll('.topic-hover-icons, .topic-actions').forEach(el => (el as HTMLElement).style.opacity = '1'); }}
-                                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; const a = e.currentTarget; a.querySelectorAll('.topic-hover-icons, .topic-actions').forEach(el => (el as HTMLElement).style.opacity = '0'); }}>
-                                    <div className="topic-hover-icons" style={{ position: 'absolute', top: 14, right: 14, display: 'flex', gap: 4, opacity: 0, transition: 'opacity 200ms', zIndex: 3 }}>
-                                      {Object.entries(typeCounts).map(([type, count]) => (
-                                        <div key={type} style={{ width: 24, height: 24, borderRadius: 6, background: `${typeColors[type] || '#6B7280'}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${typeColors[type] || '#6B7280'}25` }} title={`${count} ${typeLabels[type] || type}`}>
-                                          <div style={{ width: 8, height: 8, borderRadius: '50%', background: typeColors[type] || '#6B7280' }} />
-                                        </div>
-                                      ))}
-                                    </div>
+                                    onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}40`; e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = `0 12px 36px ${course.color}14`; const a = e.currentTarget; a.querySelectorAll('.topic-actions').forEach(el => (el as HTMLElement).style.opacity = '1'); }}
+                                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; const a = e.currentTarget; a.querySelectorAll('.topic-actions').forEach(el => (el as HTMLElement).style.opacity = '0'); }}>
                                     <div style={{ padding: '22px 20px 14px', flex: 1, display: 'flex', flexDirection: 'column' }}>
                                       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
                                         <h4 style={{ fontSize: 17, fontWeight: 600, color: 'var(--text-primary)', margin: 0, fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em', lineHeight: 1.25, flex: 1, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{topic.title}</h4>
@@ -2228,20 +3011,32 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                           </button>
                                         </div>
                                       </div>
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 'auto', paddingTop: 12 }}>
-                                        {topic.reviewLevel > 0 ? (
-                                          <div style={{ display: 'flex', gap: 2 }}>{[...Array(5)].map((_, i) => <div key={i} style={{ width: 8, height: 4, borderRadius: 2, background: i < topic.reviewLevel ? course.color : 'var(--border-subtle)', transition: 'background 200ms' }} />)}</div>
-                                        ) : (
-                                          <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 400 }}>Sin repasar</span>
-                                        )}
+                                      <div onClick={e => e.stopPropagation()} style={{ marginTop: 'auto', paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 5 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                          <span style={{ fontSize: 8.5, fontWeight: 800, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: "'Inter Tight', sans-serif" }}>Dominio</span>
+                                          <span style={{ fontSize: 9.5, fontWeight: 800, fontFamily: "'JetBrains Mono', monospace", color: topic.reviewLevel > 0 ? 'var(--text-primary)' : 'var(--text-tertiary)', letterSpacing: '-0.02em' }}>{topic.reviewLevel > 0 ? `${topic.reviewLevel}/10` : 'Sin repasar'}</span>
+                                        </div>
+                                        <div style={{ display: 'flex', gap: 2.5, cursor: 'pointer', touchAction: 'none' }} title="Clic para fijar el dominio">
+                                          {REVIEW_LEVEL_COLORS.map((col, i) => {
+                                            const filled = i < topic.reviewLevel;
+                                            const lastFilled = filled && i === topic.reviewLevel - 1;
+                                            return (
+                                              <div key={i}
+                                                style={{ flex: 1, height: 7, borderRadius: 3, background: filled ? col : 'var(--bg-hover)', border: filled ? 'none' : '1px solid var(--border-subtle)', boxShadow: lastFilled ? `0 0 10px ${col}88` : 'none', transition: 'all 160ms cubic-bezier(0.16,1,0.3,1)' }}
+                                                onMouseDown={e => { e.preventDefault(); e.stopPropagation(); setTopicReviewLevel(topic.id, i + 1 === topic.reviewLevel ? 0 : i + 1); }}
+                                                onMouseEnter={e => { if (e.buttons === 1) setTopicReviewLevel(topic.id, i + 1); }}
+                                              />
+                                            );
+                                          })}
+                                        </div>
                                       </div>
                                     </div>
                                     <div style={{ borderTop: '1px solid var(--border-subtle)', padding: '10px 20px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                                      {matCount > 0 ? (
-                                        Object.entries(typeCounts).map(([type, count]) => (
-                                          <div key={type} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 500, color: 'var(--text-muted)', padding: '2px 6px', borderRadius: 5, background: `${typeColors[type] || '#6B7280'}10`, border: `1px solid ${typeColors[type] || '#6B7280'}18` }}>
-                                            <div style={{ width: 5, height: 5, borderRadius: '50%', background: typeColors[type] || '#6B7280', flexShrink: 0 }} />
-                                            <span>{count} {typeLabels[type] || type}</span>
+                                      {totalCreated > 0 ? (
+                                        createdItems.map((e, i) => (
+                                          <div key={`${e.label}-${i}`} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 500, color: 'var(--text-muted)', padding: '2px 6px', borderRadius: 5, background: `${e.color}10`, border: `1px solid ${e.color}18` }}>
+                                            <div style={{ width: 5, height: 5, borderRadius: '50%', background: e.color, flexShrink: 0 }} />
+                                            <span>{e.count} {e.label}</span>
                                           </div>
                                         ))
                                       ) : (
@@ -2263,7 +3058,6 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                             </div>
                           </div>
                         )}
-                      </div>
                     </div>
                   );
                 })()
@@ -2275,107 +3069,70 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                   {/* ══ LEFT: MATERIALS + CENTER ══ */}
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
 
-                    {/* ══ WEEKLY PLANNER ══ */}
-                    <div style={{ padding: '16px 18px 14px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0, maxHeight: '38vh', overflowY: 'auto' }} className="no-scrollbar">
-                      {/* ── WEEKLY PLANNER ── */}
-                          <div>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <button onClick={() => setWeekOffset(o => o - 1)}
-                                  style={{ width: 26, height: 26, borderRadius: 7, border: '1px solid var(--border-subtle)', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
-                                  onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.borderColor = `${course.color}40`; e.currentTarget.style.color = course.color; }}
-                                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
-                                  <ChevronLeft size={12} />
-                                </button>
-                                <span style={{ fontSize: 11, fontWeight: 600, color: weekOffset === 0 ? course.color : 'var(--text-secondary)', fontFamily: "'Inter', sans-serif", minWidth: 100, textAlign: 'center' }}>
-                                  {(() => {
-                                    const ws = startOfWeek(addDays(new Date(), weekOffset * 7), { weekStartsOn: 1 });
-                                    const we = endOfWeek(addDays(new Date(), weekOffset * 7), { weekStartsOn: 1 });
-                                    return `${format(ws, 'd MMM', { locale: es })} — ${format(we, 'd MMM', { locale: es })}`;
-                                  })()}
+                    {/* ══ WEEKLY STATS ══ */}
+                    <div style={{ padding: '20px 22px 0', flexShrink: 0 }}>
+                      {(() => {
+                        const totalTopics = parsedTopics.length;
+                        const studyingCount = topicMasteryStats.studying;
+                        const matCount = allCourseMaterials.length;
+                        const taskTotal = courseTasks.length;
+                        const taskDone = courseTasks.filter(t => t.status === 'completado').length;
+                        const masteredCount = topicMasteryStats.mastered;
+                        const masteryPct = topicMasteryStats.progressPct;
+                        const StatBox = ({ icon, color, active, label, value, sub, bar }: { icon: React.ReactNode; color: string; active?: boolean; label: string; value: React.ReactNode; sub: string; bar?: number }) => {
+                          const c = color;
+                          return (
+                            <div
+                              style={{
+                                display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+                                padding: '11px 13px 10px', minWidth: 0, overflow: 'hidden',
+                                background: `linear-gradient(150deg, color-mix(in srgb, ${c}0e, var(--bg-elevated)) 0%, var(--bg-elevated) 52%)`,
+                                border: `1px solid ${active ? `${c}34` : 'var(--border-subtle)'}`,
+                                borderRadius: 14,
+                                boxShadow: active ? `inset 0 0 26px ${c}07, 0 1px 3px rgba(0,0,0,0.06)` : '0 1px 2px rgba(0,0,0,0.05)',
+                                transition: 'all 350ms cubic-bezier(0.16,1,0.3,1)',
+                                position: 'relative',
+                              }}
+                              onMouseEnter={e => {
+                                e.currentTarget.style.borderColor = `${c}55`;
+                                e.currentTarget.style.boxShadow = `0 6px 20px ${c}1f, inset 0 0 26px ${c}0a, 0 1px 3px rgba(0,0,0,0.06)`;
+                                e.currentTarget.style.transform = 'translateY(-2px)';
+                              }}
+                              onMouseLeave={e => {
+                                e.currentTarget.style.borderColor = active ? `${c}34` : 'var(--border-subtle)';
+                                e.currentTarget.style.boxShadow = active ? `inset 0 0 26px ${c}07, 0 1px 3px rgba(0,0,0,0.06)` : '0 1px 2px rgba(0,0,0,0.05)';
+                                e.currentTarget.style.transform = 'translateY(0)';
+                              }}>
+                              {active && <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(130% 110% at 0% 0%, ${c}17 0%, transparent 55%)`, pointerEvents: 'none' }} />}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 7, position: 'relative' }}>
+                                <span style={{ width: 26, height: 26, flexShrink: 0, borderRadius: 8, background: `${c}16`, border: `1px solid ${c}2e`, color: c, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: `0 2px 8px ${c}1a`, opacity: active ? 1 : 0.65 }}>
+                                  {icon}
                                 </span>
-                                <button onClick={() => setWeekOffset(o => o + 1)}
-                                  style={{ width: 26, height: 26, borderRadius: 7, border: '1px solid var(--border-subtle)', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
-                                  onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.borderColor = `${course.color}40`; e.currentTarget.style.color = course.color; }}
-                                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
-                                  <ChevronRight size={12} />
-                                </button>
-                                {weekOffset !== 0 && (
-                                  <button onClick={() => setWeekOffset(0)}
-                                    style={{ height: 24, borderRadius: 6, border: '1px solid var(--border-subtle)', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', padding: '0 8px', fontSize: 9, fontWeight: 600, fontFamily: "'Inter', sans-serif", transition: 'all 150ms' }}
-                                    onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
-                                    Hoy
-                                  </button>
-                                )}
+                                <span style={{ fontSize: 8, fontWeight: 800, color: c, letterSpacing: '0.09em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif", overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{label}</span>
                               </div>
-                              <button onClick={() => { setPlanDate(format(new Date(), 'yyyy-MM-dd')); setPlanTitle(''); setPlanGroupId(''); setPlanTopicId(''); setPlanType('estudio'); setPlanDuration(30); setShowPlanModal(true); }}
-                                style={{ height: 26, borderRadius: 7, border: `1px solid ${course.color}30`, background: `${course.color}0d`, cursor: 'pointer', color: course.color, padding: '0 10px', fontSize: 10, fontWeight: 600, fontFamily: "'Inter Tight', sans-serif", display: 'flex', alignItems: 'center', gap: 4, transition: 'all 150ms' }}
-                                onMouseEnter={e => { e.currentTarget.style.background = `${course.color}1a`; e.currentTarget.style.borderColor = `${course.color}50`; }}
-                                onMouseLeave={e => { e.currentTarget.style.background = `${course.color}0d`; e.currentTarget.style.borderColor = `${course.color}30`; }}>
-                                <Plus size={10} /> Agregar
-                              </button>
+                              <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, position: 'relative' }}>
+                                <span style={{ fontSize: 23, fontWeight: 700, color: active ? c : 'var(--text-primary)', lineHeight: 1, letterSpacing: '-0.02em', fontFamily: "'Inter Tight', sans-serif" }}>{value}</span>
+                                <span style={{ fontSize: 9.5, color: 'var(--text-tertiary)', fontWeight: 500, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', minWidth: 0 }}>{sub}</span>
+                              </div>
+                              <div style={{ height: 3, borderRadius: 2, background: 'var(--bg-hover)', overflow: 'hidden', position: 'relative' }}>
+                                <div style={{ width: `${typeof bar === 'number' ? Math.max(0, Math.min(100, bar)) : 0}%`, height: '100%', borderRadius: 2, background: `linear-gradient(90deg, ${c}99, ${c})`, boxShadow: `0 0 6px ${c}44`, transition: 'width 350ms cubic-bezier(0.16,1,0.3,1)' }} />
+                              </div>
                             </div>
-
-                            {/* Day blocks grid */}
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 5 }}>
-                              {(() => {
-                                const dayNames = ['Lun','Mar','Mie','Jue','Vie','Sab','Dom'];
-                                const typeColors2: Record<string, string> = { estudio: '#8B5CF6', repaso: '#3B82F6', ejercicio: '#10B981', lectura: '#F59E0B', otro: '#6B7280' };
-                                const todayStr = format(new Date(), 'yyyy-MM-dd');
-                                const ws2 = startOfWeek(addDays(new Date(), weekOffset * 7), { weekStartsOn: 1 });
-                                return Array.from({ length: 7 }, (_, i) => {
-                                  const d = addDays(ws2, i);
-                                  const dayNum = d.getDate();
-                                  const dayStr = format(d, 'yyyy-MM-dd');
-                                  const today = dayStr === todayStr;
-                                  const secs = weeklyStudyTime?.[dayStr] || 0;
-                                  const mins = Math.round(secs / 60);
-                                  const isFuture = d > new Date() && !today;
-                                  const dayPlanned = (plannedSessions || []).filter(s => s.courseId === course.id && s.date === dayStr && !s.completed);
-                                  const plannedMins = dayPlanned.reduce((a, s) => a + s.durationMinutes, 0);
-                                  return (
-                                    <div key={i}
-                                      style={{ borderRadius: 10, border: today ? `1.5px solid ${course.color}` : '1px solid var(--border-subtle)', background: today ? `${course.color}08` : 'var(--bg-surface)', padding: '8px 6px 6px', display: 'flex', flexDirection: 'column', gap: 0, transition: 'all 200ms cubic-bezier(0.16,1,0.3,1)', opacity: isFuture ? 0.4 : 1, position: 'relative', cursor: 'pointer', minHeight: 90, overflow: 'hidden' }}
-                                      onClick={() => { setDayDetailDate(dayStr); setShowDayDetail(true); }}
-                                      onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}50`; e.currentTarget.style.transform = 'translateY(-1px)'; }}
-                                      onMouseLeave={e => { e.currentTarget.style.borderColor = today ? `1.5px solid ${course.color}` : 'var(--border-subtle)'; e.currentTarget.style.transform = 'translateY(0)'; }}>
-                                      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 4 }}>
-                                        <span style={{ fontSize: 9, fontWeight: 700, color: today ? course.color : 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '0.04em' }}>{dayNames[i]}</span>
-                                        <span style={{ fontSize: 14, fontWeight: 800, color: today ? course.color : 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", lineHeight: 1 }}>{dayNum}</span>
-                                      </div>
-                                      {dayPlanned.length > 0 && (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, overflow: 'hidden' }}>
-                                          {dayPlanned.slice(0, 2).map(s => (
-                                            <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 4px', borderRadius: 4, background: `${typeColors2[s.type] || '#8B5CF6'}0a` }}>
-                                              <div style={{ width: 4, height: 4, borderRadius: '50%', background: typeColors2[s.type] || '#8B5CF6', flexShrink: 0 }} />
-                                              <span style={{ fontSize: 8, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{s.title}</span>
-                                            </div>
-                                          ))}
-                                          {dayPlanned.length > 2 && <span style={{ fontSize: 7, fontWeight: 600, color: 'var(--text-muted)', textAlign: 'center' }}>+{dayPlanned.length - 2}</span>}
-                                        </div>
-                                      )}
-                                      <div style={{ marginTop: 'auto', paddingTop: 4 }}>
-                                        {plannedMins > 0 && (
-                                          <div style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 3 }}>
-                                            <div style={{ flex: 1, height: 2, borderRadius: 2, background: `${course.color}12`, overflow: 'hidden' }}>
-                                              {mins > 0 && <div style={{ width: `${Math.min(100, (mins / plannedMins) * 100)}%`, height: '100%', background: mins >= plannedMins ? '#10B981' : course.color, borderRadius: 2 }} />}
-                                            </div>
-                                            <span style={{ fontSize: 7, fontWeight: 700, color: mins >= plannedMins ? '#10B981' : 'var(--text-muted)', fontFamily: "'Inter Tight', sans-serif", minWidth: 18, textAlign: 'right' }}>{mins}/{plannedMins}m</span>
-                                          </div>
-                                        )}
-                                      </div>
-                                      {today && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, borderRadius: '10px 10px 0 0', background: course.color }} />}
-                                    </div>
-                                  );
-                                });
-                              })()}
-                            </div>
+                          );
+                        };
+                        return (
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, height: 106 }}>
+                            <StatBox icon={<BookOpen size={14} />} color={course.color} active={totalTopics > 0} label="Temas" value={totalTopics} sub={`${studyingCount} en progreso`} bar={totalTopics > 0 ? ((totalTopics - topicMasteryStats.pending) / totalTopics) * 100 : 0} />
+                            <StatBox icon={<FileText size={14} />} color="#3B82F6" active={matCount > 0} label="Materiales" value={matCount} sub={matCount === 1 ? 'archivo' : 'archivos'} />
+                            <StatBox icon={<ListTodo size={14} />} color="#F59E0B" active={taskTotal > 0} label="Tareas" value={taskTotal} sub={`${taskDone} completadas`} bar={taskTotal > 0 ? (taskDone / taskTotal) * 100 : 0} />
+                            <StatBox icon={<Star size={14} />} color="#10B981" active={masteredCount > 0} label="Dominados" value={masteredCount} sub={`${masteryPct}% del curso`} bar={masteryPct} />
                           </div>
+                        );
+                      })()}
                     </div>
 
                     {/* ══ MATERIALS + CENTER ROW ══ */}
-                    <div style={{ display: 'flex', flex: 1, overflow: 'hidden', marginTop: 40 }}>
+                    <div style={{ display: 'flex', flex: 1, overflow: 'hidden', marginTop: 16 }}>
 
                       {/* ══ LEFT: MATERIALES (380px) ══ */}
                       <div style={{ width: 380, flexShrink: 0, display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border-subtle)', overflow: 'hidden', alignSelf: 'stretch' }}>
@@ -2545,145 +3302,299 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                         </div>
                       </div>
 
-                      {/* ══ CENTER: PLANNER + TIME BAR + RADAR ══ */}
-                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 28px', display: 'flex', flexDirection: 'column', gap: 18 }} className="no-scrollbar">
+                      {/* ══ CENTER: PROGRESS & PERFORMANCE — MULTI-COLOR RADAR ══ */}
+                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+                        {(() => {
+                          const radarCx = 230, radarCy = 205, radarR = 150;
+                          const AXIS_COLORS = ['#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#EC4899', '#06B6D4', '#F97316', '#6366F1'];
+                          const cAxis = (i: number) => AXIS_COLORS[i % AXIS_COLORS.length];
 
-                          {/* ── WEEKLY TIME BAR ── */}
-                          {(() => {
-                            const typeColors3: Record<string, string> = { estudio: '#8B5CF6', repaso: '#3B82F6', ejercicio: '#10B981', lectura: '#F59E0B', otro: '#6B7280' };
-                            const typeLabels: Record<string, string> = { estudio: 'Estudio', repaso: 'Repaso', ejercicio: 'Ejercicio', lectura: 'Lectura', otro: 'Otro' };
-                            const ws3 = startOfWeek(addDays(new Date(), weekOffset * 7), { weekStartsOn: 1 });
-                            const we3 = endOfWeek(addDays(new Date(), weekOffset * 7), { weekStartsOn: 1 });
-                            const weekSessions = (plannedSessions || []).filter(s => {
-                              if (s.courseId !== course.id) return false;
-                              const d = new Date(s.date);
-                              return d >= ws3 && d <= we3;
-                            });
-                            const totalTime = weekSessions.reduce((a, s) => a + s.durationMinutes, 0);
-                            if (totalTime === 0) return null;
-                            const byType = Object.keys(typeColors3).map(type => ({ type, minutes: weekSessions.filter(s => s.type === type).reduce((a, s) => a + s.durationMinutes, 0), color: typeColors3[type], label: typeLabels[type] })).filter(t => t.minutes > 0);
-                            return (
-                              <div>
-                                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8, fontFamily: "'Inter Tight', sans-serif" }}>Tiempo Semanal</div>
-                                <div style={{ height: 26, borderRadius: 8, background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', overflow: 'hidden', display: 'flex' }}>
-                                  {byType.map((t, idx) => (
-                                    <div key={t.type}
-                                      title={`${t.label}: ${t.minutes}m (${Math.round((t.minutes / totalTime) * 100)}%)`}
-                                      style={{ width: `${(t.minutes / totalTime) * 100}%`, background: t.color, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'width 400ms cubic-bezier(0.16,1,0.3,1)', cursor: 'default', position: 'relative' }}
-                                      onMouseEnter={e => { e.currentTarget.style.filter = 'brightness(1.15)'; }}
-                                      onMouseLeave={e => { e.currentTarget.style.filter = 'none'; }}>
-                                      {(t.minutes / totalTime) > 0.12 && <span style={{ fontSize: 8, fontWeight: 700, color: '#fff', textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>{Math.round((t.minutes / totalTime) * 100)}%</span>}
-                                    </div>
-                                  ))}
-                                </div>
-                                <div style={{ display: 'flex', gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
-                                  {byType.map(t => (
-                                    <div key={t.type} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                      <div style={{ width: 6, height: 6, borderRadius: '50%', background: t.color }} />
-                                      <span style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: "'Inter', sans-serif" }}>{t.label} {t.minutes}m</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
+                          // Real, countable data per grouping (or topic when no groups exist)
+                          const axisItems = groups.length > 0
+                            ? groups.slice(0, AXIS_COLORS.length).map(g => {
+                                const gTopics = parsedTopics.filter(t => t.groupId === g.id);
+                                const matCount = gTopics.reduce((s, t) => s + (t.materials?.length || 0), 0);
+                                const mastery = gTopics.length > 0 ? gTopics.reduce((s, t) => s + Math.min(1, (t.reviewLevel || 0) / 10), 0) / gTopics.length : 0;
+                                const activeTopics = gTopics.filter(t => (t.reviewLevel || 0) > 0).length;
+                                const ses = (plannedSessions || []).filter(s => s.courseId === course.id && s.groupId === g.id);
+                                return { name: g.name, matCount, mastery, activeTopics, topicCount: gTopics.length, ses };
+                              })
+                            : parsedTopics.slice(0, AXIS_COLORS.length).map(t => {
+                                const matCount = t.materials?.length || 0;
+                                const mastery = Math.min(1, (t.reviewLevel || 0) / 10);
+                                const activeTopics = (t.reviewLevel || 0) > 0 ? 1 : 0;
+                                const ses = (plannedSessions || []).filter(s => s.courseId === course.id && s.topicId === t.id);
+                                return { name: t.title, matCount, mastery, activeTopics, topicCount: 1, ses };
+                              });
+
+                          const maxMat = Math.max(1, ...axisItems.map(a => a.matCount));
+                          const doneOf = (ses: PlannedSession[]) => ses.length > 0 ? ses.filter(s => s.completed).length / ses.length : 0;
+                          const labels = axisItems.map(a => a.name);
+
+                          // Measured course-wide real activity (timer sessions actually studied)
+                          const courseStudy = (studySessions || []).filter(s => s.courseId === course.id && s.type !== 'break');
+                          const courseRealMin = Math.round(courseStudy.reduce((sm, ss) => sm + (ss.duration || 0), 0) / 60);
+                          const courseRealSessions = courseStudy.length;
+                          const coursePlan = (plannedSessions || []).filter(s => s.courseId === course.id);
+                          const coursePlanMin = coursePlan.reduce((sm, s) => sm + (s.durationMinutes || 0), 0);
+                          const coursePlanDone = coursePlan.filter(s => s.completed).length;
+                          const realIntensity = Math.min(1, courseRealMin / Math.max(60, coursePlanMin || 0));
+
+                          const courseNotes = notes.filter(nn => nn.course === course.id && !nn.deletedAt).length;
+                          const courseTasksDone = courseTasks.filter(t => t.status === 'completado').length;
+                          const coursePlanPct = coursePlanMin > 0 ? Math.round((courseRealMin / coursePlanMin) * 100) : (courseRealMin > 0 ? 100 : 0);
+
+                          // Unified course-performance score — a weighted blend of EVERYTHING
+                          // measurable. Every term comes from real, countable data:
+                          //   mastery   → avg topic reviewLevel/10 inside the grouping
+                          //   materials → material count of the grouping, normalized by the
+                          //               busiest grouping (so the top grouping scores 1.0)
+                          //   sessions  → completed ÷ planned sessions of the grouping
+                          //   intensity → real course minutes studied (studySessions, minus
+                          //               breaks) ÷ planned course minutes (60 min floor)
+                          //   progress  → topics with reviewLevel > 0 ÷ total topics
+                          //   tasks     → completed course tasks ÷ total course tasks
+                          //   notes     → course notes ÷ topics (clamped to 1)
+                          // Weights sum to 1.0, so the result is a true 0–100 % performance.
+                          const WEIGHTS = { mastery: 0.22, materials: 0.18, sessions: 0.18, intensity: 0.16, progress: 0.12, tasks: 0.10, notes: 0.04 } as const;
+                          const WLABELS: Record<keyof typeof WEIGHTS, string> = { mastery: 'Dominio', materials: 'Materiales', sessions: 'Sesiones', intensity: 'Intensidad', progress: 'Progreso', tasks: 'Tareas', notes: 'Notas' };
+                          const courseTaskRatio = courseTasks.length > 0 ? courseTasksDone / courseTasks.length : 0;
+                          const notesRatio = Math.min(1, courseNotes / Math.max(1, parsedTopics.length));
+                          const metricsOf = (a: typeof axisItems[number]) => ({
+                            mastery: a.mastery,
+                            materials: a.matCount / maxMat,
+                            sessions: doneOf(a.ses),
+                            intensity: realIntensity,
+                            progress: a.topicCount > 0 ? a.activeTopics / a.topicCount : 0,
+                            tasks: courseTaskRatio,
+                            notes: notesRatio,
+                          });
+                          const scoreOf = (a: typeof axisItems[number]) => {
+                            const m = metricsOf(a);
+                            return Math.min(1,
+                              m.mastery * WEIGHTS.mastery +
+                              m.materials * WEIGHTS.materials +
+                              m.sessions * WEIGHTS.sessions +
+                              m.intensity * WEIGHTS.intensity +
+                              m.progress * WEIGHTS.progress +
+                              m.tasks * WEIGHTS.tasks +
+                              m.notes * WEIGHTS.notes
                             );
-                          })()}
+                          };
 
-                          {/* ── RADAR / SPIDER CHART ── */}
-                          {(() => {
-                            const radarCx = 140, radarCy = 120, radarR = 85;
-                            const typeColors4: Record<string, string> = { estudio: '#8B5CF6', repaso: '#3B82F6', ejercicio: '#10B981', lectura: '#F59E0B', otro: '#6B7280' };
-                            const dayLabels = ['Lun','Mar','Mie','Jue','Vie','Sab','Dom'];
-                            const ws4 = startOfWeek(addDays(new Date(), weekOffset * 7), { weekStartsOn: 1 });
+                          const rawValues = axisItems.map(scoreOf);
+                          const n = Math.max(3, labels.length);
+                          const angleStep = (2 * Math.PI) / n;
+                          const gridLevels = [0.33, 0.66, 1];
 
-                            let labels: string[] = [];
-                            let values: number[] = [];
+                          const getPoint = (idx: number, val: number) => {
+                            const angle = angleStep * idx - Math.PI / 2;
+                            return { x: radarCx + radarR * val * Math.cos(angle), y: radarCy + radarR * val * Math.sin(angle) };
+                          };
 
-                            if (radarFilter === 'agrupaciones' && groups.length > 0) {
-                              labels = groups.slice(0, 8).map(g => g.name);
-                              values = groups.slice(0, 8).map(g => {
-                                const gs = (plannedSessions || []).filter(s => s.courseId === course.id && s.groupId === g.id);
-                                const done = gs.filter(s => s.completed).length;
-                                return gs.length > 0 ? done / gs.length : 0;
-                              });
-                            } else if (radarFilter === 'dias') {
-                              labels = dayLabels;
-                              values = Array.from({ length: 7 }, (_, i) => {
-                                const d = format(addDays(ws4, i), 'yyyy-MM-dd');
-                                const ds = (plannedSessions || []).filter(s => s.courseId === course.id && s.date === d);
-                                const done = ds.filter(s => s.completed).length;
-                                return ds.length > 0 ? done / ds.length : 0;
-                              });
-                            } else if (radarFilter === 'tipos') {
-                              labels = Object.keys(typeColors4);
-                              values = Object.keys(typeColors4).map(t => {
-                                const ts = (plannedSessions || []).filter(s => s.courseId === course.id && s.type === t);
-                                const done = ts.filter(s => s.completed).length;
-                                return ts.length > 0 ? done / ts.length : 0;
-                              });
-                            }
+                          const pts = rawValues.map((v, i) => getPoint(i, Math.max(0.18, Math.min(1, v))));
+                          const dataPath = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ') + 'Z';
 
-                            const n = labels.length;
-                            if (n < 3) return null;
-                            const angleStep = (2 * Math.PI) / n;
+                          const fmtVal = (a: typeof axisItems[number]) => `${Math.round(scoreOf(a) * 100)}%`;
 
-                            const gridLevels = [0.25, 0.5, 0.75, 1];
-                            const getPoint = (idx: number, val: number) => {
-                              const angle = angleStep * idx - Math.PI / 2;
-                              return { x: radarCx + radarR * val * Math.cos(angle), y: radarCy + radarR * val * Math.sin(angle) };
-                            };
-                            const dataPoints = values.map((v, i) => getPoint(i, v));
-                            const dataPath = dataPoints.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ') + 'Z';
+                          const headerEl = (
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '24px 20px 10px', flexShrink: 0 }}>
+                              <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: "'Inter Tight', sans-serif" }}>Progreso y rendimiento</h3>
+                            </div>
+                          );
 
+                          if (axisItems.length === 0) {
                             return (
-                              <div>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Progreso</div>
-                                  <div style={{ display: 'flex', gap: 3 }}>
-                                    {([['agrupaciones','Agrupaciones'],['dias','Días'],['tipos','Tipos']] as const).map(([key, lbl]) => (
-                                      <button key={key} onClick={() => setRadarFilter(key)}
-                                        style={{ height: 22, borderRadius: 6, border: `1px solid ${radarFilter === key ? course.color + '50' : 'var(--border-subtle)'}`, background: radarFilter === key ? `${course.color}12` : 'transparent', cursor: 'pointer', color: radarFilter === key ? course.color : 'var(--text-muted)', padding: '0 8px', fontSize: 9, fontWeight: 600, fontFamily: "'Inter', sans-serif", transition: 'all 150ms' }}
-                                        onMouseEnter={e => { if (radarFilter !== key) { e.currentTarget.style.background = 'var(--bg-hover)'; } }}
-                                        onMouseLeave={e => { if (radarFilter !== key) { e.currentTarget.style.background = 'transparent'; } }}>
-                                        {lbl}
-                                      </button>
-                                    ))}
+                              <>
+                                {headerEl}
+                                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 20px 40px' }}>
+                                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, color: 'var(--text-muted)' }}>
+                                    <BarChart3 size={28} style={{ opacity: 0.5 }} />
+                                    <p style={{ fontSize: 12, margin: 0, fontFamily: "'Inter Tight', sans-serif" }}>Añade temas o agrupaciones para ver el análisis</p>
                                   </div>
                                 </div>
-                                <div style={{ display: 'flex', justifyContent: 'center' }}>
-                                  <svg width="100%" viewBox="0 0 280 240" style={{ maxWidth: 320 }}>
-                                    {/* Grid */}
-                                    {gridLevels.map(lv => (
-                                      <polygon key={lv}
-                                        points={Array.from({ length: n }, (_, i) => { const p = getPoint(i, lv); return `${p.x},${p.y}`; }).join(' ')}
-                                        fill="none" stroke="var(--border-subtle)" strokeWidth="0.5" opacity={0.5} />
-                                    ))}
-                                    {/* Spokes */}
-                                    {Array.from({ length: n }, (_, i) => {
-                                      const p = getPoint(i, 1);
-                                      return <line key={i} x1={radarCx} y1={radarCy} x2={p.x} y2={p.y} stroke="var(--border-subtle)" strokeWidth="0.5" opacity={0.4} />;
-                                    })}
-                                    {/* Data polygon */}
-                                    <path d={dataPath} fill={`${course.color}18`} stroke={course.color} strokeWidth="1.5" strokeLinejoin="round" style={{ transition: 'all 400ms cubic-bezier(0.16,1,0.3,1)' }} />
-                                    {/* Data points */}
-                                    {dataPoints.map((p, i) => (
-                                      <circle key={i} cx={p.x} cy={p.y} r={3} fill={course.color} stroke="var(--bg-surface)" strokeWidth="1.5" style={{ transition: 'all 400ms cubic-bezier(0.16,1,0.3,1)' }} />
-                                    ))}
-                                    {/* Labels */}
-                                    {labels.map((lbl, i) => {
-                                      const p = getPoint(i, 1.18);
-                                      const anchor = p.x < radarCx - 5 ? 'end' : p.x > radarCx + 5 ? 'start' : 'middle';
-                                      return <text key={i} x={p.x} y={p.y} textAnchor={anchor} dominantBaseline="middle" fill="var(--text-muted)" fontSize="8" fontFamily="'Inter', sans-serif" fontWeight="600">{lbl}</text>;
-                                    })}
-                                    {/* Center dot */}
-                                    <circle cx={radarCx} cy={radarCy} r={2} fill={course.color} opacity={0.3} />
-                                  </svg>
+                              </>
+                            );
+                          }
+
+                          return (
+                            <>
+                              {headerEl}
+
+                              {/* ── MULTI-COLOR SPIDER CHART ── */}
+                              <div style={{ flex: 1, minHeight: 0, padding: '6px 22px 14px', position: 'relative', display: 'flex', flexDirection: 'column' }}>
+                                <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+                                <svg width="100%" height="100%" viewBox="0 0 460 420" preserveAspectRatio="xMidYMid meet" style={{ maxWidth: 600, maxHeight: '100%', margin: '0 auto', display: 'block', overflow: 'visible' }}>
+                                  <defs>
+                                    <radialGradient id="spiderFill" cx="50%" cy="50%" r="60%">
+                                      <stop offset="0%" stopColor={course.color} stopOpacity="0.13" />
+                                      <stop offset="100%" stopColor={course.color} stopOpacity="0.02" />
+                                    </radialGradient>
+                                  </defs>
+
+                                  {/* concentric grid rings */}
+                                  {gridLevels.map(lv => (
+                                    <polygon key={lv}
+                                      points={Array.from({ length: n }, (_, i) => { const p = getPoint(i, lv); return `${p.x},${p.y}`; }).join(' ')}
+                                      fill="none" stroke="var(--border-subtle)" strokeWidth="1" opacity={lv === 1 ? 0.45 : 0.24} />
+                                  ))}
+
+                                  {/* tinted wedge sectors — one color per axis */}
+                                  {Array.from({ length: n }, (_, i) => {
+                                    const p1 = pts[i];
+                                    const p2 = pts[(i + 1) % n];
+                                    return (
+                                      <polygon key={`sec${i}`} points={`${radarCx},${radarCy} ${p1.x},${p1.y} ${p2.x},${p2.y}`}
+                                        fill={cAxis(i)} opacity={0.055} stroke={cAxis(i)} strokeOpacity={0.16} strokeWidth={1} strokeLinejoin="round" />
+                                    );
+                                  })}
+
+                                  {/* colored spokes */}
+                                  {Array.from({ length: n }, (_, i) => {
+                                    const p = getPoint(i, 1);
+                                    return <line key={`sp${i}`} x1={radarCx} y1={radarCy} x2={p.x} y2={p.y} stroke={cAxis(i)} strokeOpacity={0.10} strokeWidth={1} />;
+                                  })}
+
+                                  {/* data area (translucent glow, no heavy fill) */}
+                                  <path d={dataPath} fill="url(#spiderFill)" style={{ transition: 'all 500ms cubic-bezier(0.16,1,0.3,1)' }} />
+
+                                  {/* multi-color boundary — each segment in its own axis color */}
+                                  {Array.from({ length: n }, (_, i) => {
+                                    const a = pts[i];
+                                    const b = pts[(i + 1) % n];
+                                    return <line key={`bd${i}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={cAxis(i)} strokeWidth={2.5} strokeLinecap="round" opacity={0.9} />;
+                                  })}
+
+                                  {/* vertex dots + hover hit areas */}
+                                  {pts.map((p, i) => (
+                                    <g key={`v${i}`}
+                                      onMouseEnter={() => setRadarHover(i)}
+                                      onMouseLeave={() => setRadarHover(null)}
+                                      style={{ cursor: 'crosshair' }}>
+                                      <circle cx={p.x} cy={p.y} r={16} fill="transparent" />
+                                      <circle cx={p.x} cy={p.y} r={radarHover === i ? 7 : 5} fill={radarHover === i ? cAxis(i) : 'var(--bg-elevated)'} stroke={cAxis(i)} strokeWidth={radarHover === i ? 3 : 2.5} style={{ transition: 'all 200ms cubic-bezier(0.16,1,0.3,1)' }} />
+                                      {radarHover === i && <circle cx={p.x} cy={p.y} r={14} fill="none" stroke={cAxis(i)} strokeOpacity={0.35} strokeWidth={1.5} />}
+                                    </g>
+                                  ))}
+
+                                  {/* vertex labels — clamped so they never clip at the corners */}
+                                  {labels.map((lbl, i) => {
+                                    const p = getPoint(i, 1.24);
+                                    const col = cAxis(i);
+                                    const hover = radarHover === i;
+                                    const tx = Math.max(46, Math.min(414, p.x));
+                                    const ty = Math.max(16, Math.min(404, p.y));
+                                    const anchor = p.x < radarCx - 30 ? 'end' : p.x > radarCx + 30 ? 'start' : 'middle';
+                                    return (
+                                      <g key={`l${i}`}
+                                        onMouseEnter={() => setRadarHover(i)}
+                                        onMouseLeave={() => setRadarHover(null)}
+                                        style={{ cursor: 'crosshair' }}>
+                                        <text x={tx} y={ty} textAnchor={anchor} dominantBaseline="middle"
+                                          fill={hover ? col : 'var(--text-secondary)'}
+                                          fontSize="10.5" fontFamily="'Inter Tight', sans-serif"
+                                          fontWeight={hover ? 800 : 700} letterSpacing="-0.01em"
+                                          style={{ transition: 'fill 200ms' }}>{lbl}</text>
+                                      </g>
+                                    );
+                                  })}
+
+                                  {/* center point */}
+                                  <circle cx={radarCx} cy={radarCy} r={3} fill={course.color} opacity={0.85} />
+                                </svg>
+
+                                {/* Hover tooltip — full course-stat breakdown */}
+                                {radarHover !== null && axisItems[radarHover] && (
+                                  (() => {
+                                    const item = axisItems[radarHover];
+                                    const pt = getPoint(radarHover, 1);
+                                    const axisCol = cAxis(radarHover);
+                                    const done = item.ses.filter(s => s.completed).length;
+                                    const showBelow = pt.y < radarCy;
+                                    const ttLeft = Math.max(30, Math.min(70, (pt.x / 460) * 100));
+                                    const ttTop = showBelow ? Math.max(12, Math.min(48, (pt.y / 420) * 100 + 4)) : Math.max(52, Math.min(94, (pt.y / 420) * 100 - 4));
+                                    return (
+                                      <div className="no-scrollbar" style={{
+                                        position: 'absolute', zIndex: 30, pointerEvents: 'none',
+                                        left: `${ttLeft}%`,
+                                        top: `${ttTop}%`,
+                                        transform: showBelow ? 'translate(-50%, 0)' : 'translate(-50%, -100%)',
+                                        maxHeight: '46%', overflowY: 'auto',
+                                        background: 'color-mix(in srgb, var(--bg-elevated) 92%, transparent)',
+                                        border: `1px solid ${axisCol}55`,
+                                        borderRadius: 12, padding: '10px 12px', minWidth: 172,
+                                        boxShadow: `0 18px 44px ${axisCol}22, 0 6px 16px rgba(0,0,0,0.3)`,
+                                        display: 'flex', flexDirection: 'column', gap: 6,
+                                        backdropFilter: 'blur(12px)',
+                                      }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                                          <span style={{ width: 7, height: 7, borderRadius: '50%', background: axisCol, boxShadow: `0 0 0 3px ${axisCol}22` }} />
+                                          <span style={{ fontSize: 11.5, fontWeight: 800, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 150 }}>{item.name}</span>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
+                                          <span style={{ fontSize: 22, fontWeight: 800, color: axisCol, fontFamily: "'Inter Tight', sans-serif", lineHeight: 1, letterSpacing: '-0.02em' }}>{fmtVal(item)}</span>
+                                          <span style={{ fontSize: 8.5, fontWeight: 800, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Rendimiento</span>
+                                        </div>
+                                        <div style={{ height: 1, background: 'var(--border-subtle)' }} />
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 9.5, color: 'var(--text-muted)' }}>
+                                            <span style={{ fontWeight: 600 }}>Dominio</span><span style={{ fontWeight: 800, color: 'var(--text-primary)', fontFamily: "'JetBrains Mono', monospace" }}>{Math.round(item.mastery * 100)}%</span>
+                                          </div>
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 9.5, color: 'var(--text-muted)' }}>
+                                            <span style={{ fontWeight: 600 }}>Materiales</span><span style={{ fontWeight: 800, color: 'var(--text-primary)', fontFamily: "'JetBrains Mono', monospace" }}>{item.matCount}</span>
+                                          </div>
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 9.5, color: 'var(--text-muted)' }}>
+                                            <span style={{ fontWeight: 600 }}>Sesiones planificadas</span>
+                                            <span style={{ fontWeight: 800, color: item.ses.length > 0 ? 'var(--text-primary)' : 'var(--text-tertiary)', fontFamily: "'JetBrains Mono', monospace" }}>{item.ses.length > 0 ? `${done}/${item.ses.length}` : '—'}</span>
+                                          </div>
+                                          {item.topicCount > 0 && (
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 9.5, color: 'var(--text-muted)' }}>
+                                              <span style={{ fontWeight: 600 }}>Temas en progreso</span><span style={{ fontWeight: 800, color: 'var(--text-primary)', fontFamily: "'JetBrains Mono', monospace" }}>{item.activeTopics}/{item.topicCount}</span>
+                                            </div>
+                                          )}
+                                        </div>
+                                        <div style={{ height: 1, background: 'var(--border-subtle)' }} />
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                          <span style={{ fontSize: 7.5, fontWeight: 800, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: "'Inter Tight', sans-serif" }}>Actividad real del curso</span>
+                                          <div style={{ flex: 1, height: 1, background: 'var(--border-subtle)' }} />
+                                        </div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 9.5, color: 'var(--text-muted)' }}>
+                                            <span style={{ fontWeight: 600 }}>Sesiones reales</span><span style={{ fontWeight: 800, color: courseRealSessions > 0 ? 'var(--text-primary)' : 'var(--text-tertiary)', fontFamily: "'JetBrains Mono', monospace" }}>{courseRealSessions > 0 ? courseRealSessions : '—'}</span>
+                                          </div>
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 9.5, color: 'var(--text-muted)' }}>
+                                            <span style={{ fontWeight: 600 }}>Minutos estudiados</span><span style={{ fontWeight: 800, color: courseRealMin > 0 ? 'var(--text-primary)' : 'var(--text-tertiary)', fontFamily: "'JetBrains Mono', monospace" }}>{courseRealMin > 0 ? `${courseRealMin} min` : '—'}</span>
+                                          </div>
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 9.5, color: 'var(--text-muted)' }}>
+                                            <span style={{ fontWeight: 600 }}>Tiempo vs. plan</span><span style={{ fontWeight: 800, color: coursePlanMin > 0 ? 'var(--text-primary)' : 'var(--text-tertiary)', fontFamily: "'JetBrains Mono', monospace" }}>{coursePlanMin > 0 ? `${coursePlanPct}%` : '—'}</span>
+                                          </div>
+                                        </div>
+                                        <div style={{ height: 1, background: 'var(--border-subtle)' }} />
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                                          <span style={{ fontSize: 8.5, fontWeight: 700, color: 'var(--text-tertiary)', background: 'var(--bg-hover)', padding: '3px 7px', borderRadius: 6 }}>{courseTasksDone}/{courseTasks.length} tareas</span>
+                                          <span style={{ fontSize: 8.5, fontWeight: 700, color: 'var(--text-tertiary)', background: 'var(--bg-hover)', padding: '3px 7px', borderRadius: 6 }}>{courseNotes} notas</span>
+                                          <span style={{ fontSize: 8.5, fontWeight: 700, color: 'var(--text-tertiary)', background: 'var(--bg-hover)', padding: '3px 7px', borderRadius: 6 }}>{coursePlanDone}/{coursePlan.length} planificadas</span>
+                                        </div>
+                                      </div>
+                                    );
+                                  })()
+                                )}
+                                </div>
+
+                                {/* Weight legend — defines the single unified score */}
+                                <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, flexWrap: 'wrap', paddingTop: 8 }}>
+                                  {(Object.keys(WEIGHTS) as Array<keyof typeof WEIGHTS>).map((k, i) => (
+                                    <span key={k} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 8, fontWeight: 700, color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '0.05em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+                                      <span style={{ width: 6, height: 6, borderRadius: 2, background: AXIS_COLORS[i % AXIS_COLORS.length] }} />
+                                      {WLABELS[k]}
+                                      <span style={{ fontFamily: "'JetBrains Mono', monospace", color: 'var(--text-muted)', textTransform: 'none', letterSpacing: '0' }}>{Math.round(WEIGHTS[k] * 100)}%</span>
+                                    </span>
+                                  ))}
                                 </div>
                               </div>
-                            );
-                          })()}
-
-                        </div>
+                            </>
+                          );
+                        })()}
                       </div>
                     </div>
                   </div>
@@ -2919,80 +3830,186 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                   <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                     onClick={e => { if (e.target === e.currentTarget) setShowPlanModal(false); }}>
                     <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)' }} />
-                    <div style={{ position: 'relative', width: 420, background: 'var(--bg-surface)', borderRadius: 16, border: '1px solid var(--border-subtle)', boxShadow: '0 24px 64px rgba(0,0,0,0.5)', overflow: 'hidden' }} className="bento-card">
-                      <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>Planificar sesion</h3>
+                    <div style={{ position: 'relative', width: 460, maxHeight: '88vh', background: 'var(--bg-surface)', borderRadius: 16, border: '1px solid var(--border-subtle)', boxShadow: '0 24px 64px rgba(0,0,0,0.5)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }} className="bento-card">
+                      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${course.color}, ${course.color}55, transparent)`, pointerEvents: 'none' }} />
+                      <div style={{ padding: '24px 26px 16px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          <div style={{ width: 38, height: 38, borderRadius: 11, background: `${course.color}12`, border: `1px solid ${course.color}28`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <Plus size={17} style={{ color: course.color }} />
+                          </div>
+                          <div>
+                            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>Agregar evento</h3>
+                            <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', fontFamily: "'Inter', sans-serif", textTransform: 'capitalize' }}>
+                              {planDate ? format(new Date(planDate + 'T12:00:00'), "EEEE d 'de' MMMM", { locale: es }) : ''}
+                            </span>
+                          </div>
+                        </div>
                         <button onClick={() => setShowPlanModal(false)}
-                          style={{ width: 28, height: 28, borderRadius: 7, border: 'none', background: 'var(--bg-hover)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                          style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: 'var(--bg-hover)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
                           onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#EF4444'; }}
                           onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
                           <X size={14} />
                         </button>
                       </div>
-                      <div style={{ padding: '18px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+                      <div style={{ flex: 1, overflowY: 'auto', padding: '18px 26px', display: 'flex', flexDirection: 'column', gap: 16 }} className="no-scrollbar">
                         <div>
-                          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: 6, letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Fecha</label>
-                          <input type="date" value={planDate} onChange={e => setPlanDate(e.target.value)}
-                            style={{ width: '100%', height: 40, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 12px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif" }}
-                            className="input-base" />
-                        </div>
-                        <div>
-                          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: 6, letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Titulo</label>
+                          <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', marginBottom: 7, letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Título</label>
                           <input value={planTitle} onChange={e => setPlanTitle(e.target.value)}
-                            placeholder="Ej: Repasar capitulo 3"
+                            placeholder="Ej: Repasar capítulo 3"
                             autoFocus
-                            style={{ width: '100%', height: 40, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 12px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif" }}
+                            style={{ width: '100%', height: 42, borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 13px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif" }}
                             className="input-base" />
                         </div>
-                        <div style={{ display: 'flex', gap: 12 }}>
+
+                        <div style={{ display: 'flex', gap: 14 }}>
                           <div style={{ flex: 1 }}>
-                            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: 6, letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Agrupacion</label>
-                            <select value={planGroupId} onChange={e => setPlanGroupId(e.target.value)}
-                              style={{ width: '100%', height: 40, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 12px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif", cursor: 'pointer' }}
-                              className="input-base">
-                              <option value="">Ninguna</option>
-                              {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-                            </select>
+                            <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', marginBottom: 7, letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Fecha</label>
+                            <input type="date" value={planDate} onChange={e => setPlanDate(e.target.value)}
+                              style={{ width: '100%', height: 42, borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 13px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif" }}
+                              className="input-base" />
                           </div>
                           <div style={{ flex: 1 }}>
-                            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: 6, letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Tema</label>
-                            <select value={planTopicId} onChange={e => setPlanTopicId(e.target.value)}
-                              style={{ width: '100%', height: 40, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 12px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif", cursor: 'pointer' }}
-                              className="input-base">
-                              <option value="">Ninguno</option>
-                              {parsedTopics.filter(t => !planGroupId || t.groupId === planGroupId).map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
-                            </select>
+                            <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', marginBottom: 7, letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Hora de inicio</label>
+                            <input type="time" value={planStartTime} onChange={e => setPlanStartTime(e.target.value)}
+                              style={{ width: '100%', height: 42, borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 13px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif" }}
+                              className="input-base" />
                           </div>
-                        </div>
-                        <div style={{ display: 'flex', gap: 12 }}>
-                          <div style={{ flex: 1 }}>
-                            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: 6, letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Tipo</label>
-                            <select value={planType} onChange={e => setPlanType(e.target.value as any)}
-                              style={{ width: '100%', height: 40, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 12px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif", cursor: 'pointer' }}
-                              className="input-base">
-                              <option value="estudio">Estudio</option>
-                              <option value="repaso">Repaso</option>
-                              <option value="ejercicio">Ejercicio</option>
-                              <option value="lectura">Lectura</option>
-                              <option value="otro">Otro</option>
-                            </select>
-                          </div>
-                          <div style={{ flex: 1 }}>
-                            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: 6, letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Duracion (min)</label>
+                          <div style={{ width: 112 }}>
+                            <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', marginBottom: 7, letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Duración</label>
                             <input type="number" value={planDuration} onChange={e => setPlanDuration(Math.max(5, parseInt(e.target.value) || 5))} min={5} step={5}
-                              style={{ width: '100%', height: 40, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 12px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif" }}
+                              style={{ width: '100%', height: 42, borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 13px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif" }}
                               className="input-base" />
                           </div>
                         </div>
+
+                        <div style={{ display: 'flex', gap: 14 }}>
+                          <div style={{ flex: 1 }}>
+                            <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', marginBottom: 7, letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Agrupación</label>
+                            <select value={planGroupId} onChange={e => { setPlanGroupId(e.target.value); setPlanTopicId(''); }}
+                              style={{ width: '100%', height: 42, borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 13px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif", cursor: 'pointer' }}
+                              className="input-base">
+                              <option value="">Selecciona…</option>
+                              {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                            </select>
+                            {planGroupId && (() => {
+                              const grpName = groups.find(g => g.id === planGroupId)?.name;
+                              const topicCount = parsedTopics.filter(t => t.groupId === planGroupId).length;
+                              return (
+                                <span style={{ display: 'block', fontSize: 9.5, fontWeight: 600, color: course.color, marginTop: 5, fontFamily: "'Inter', sans-serif" }}>
+                                  {topicCount > 0 ? `Temas de ${grpName} · ${topicCount} disponibles` : `La agrupación "${grpName}" aún no tiene temas`}
+                                </span>
+                              );
+                            })()}
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', marginBottom: 7, letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Tema</label>
+                            <select value={planTopicId} onChange={e => setPlanTopicId(e.target.value)}
+                              disabled={!planGroupId}
+                              style={{ width: '100%', height: 42, borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: planGroupId ? 'var(--text-primary)' : 'var(--text-muted)', padding: '0 13px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif", cursor: planGroupId ? 'pointer' : 'not-allowed', opacity: planGroupId ? 1 : 0.6 }}
+                              className="input-base">
+                              <option value="">{planGroupId ? 'Selecciona…' : 'Primero elige agrupación'}</option>
+                              {planGroupId && parsedTopics.filter(t => t.groupId === planGroupId).map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
+                            </select>
+                            {!planGroupId && (
+                              <span style={{ display: 'block', fontSize: 9.5, fontWeight: 600, color: 'var(--text-muted)', marginTop: 6, fontFamily: "'Inter', sans-serif" }}>
+                                Elige una agrupación para ver sus temas
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div>
+                          <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', marginBottom: 7, letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Tipo de actividad</label>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 13, borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)' }}>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+                              {allSessionTypes.map(t => {
+                                const active = planType === t.id;
+                                const isCustom = customTypes.some(c => c.id === t.id);
+                                return (
+                                  <div key={t.id} style={{ position: 'relative' }}>
+                                    <button onClick={() => setPlanType(t.id)}
+                                      style={{
+                                        height: 30, borderRadius: 9, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+                                        padding: isCustom ? '0 17px 0 11px' : '0 13px',
+                                        border: active ? `1.5px solid ${t.color}` : '1px solid var(--border-subtle)',
+                                        background: active ? `${t.color}14` : 'var(--bg-surface)',
+                                        color: active ? t.color : 'var(--text-secondary)',
+                                        fontSize: 11, fontWeight: 700, fontFamily: "'Inter Tight', sans-serif",
+                                        boxShadow: active ? `0 0 0 3px ${t.color}12, 0 2px 8px ${t.color}18` : 'none',
+                                        transition: 'all 150ms',
+                                      }}
+                                      onMouseEnter={e => { e.currentTarget.style.borderColor = t.color; e.currentTarget.style.color = t.color; }}
+                                      onMouseLeave={e => { e.currentTarget.style.borderColor = active ? `${t.color}` : 'var(--border-subtle)'; e.currentTarget.style.color = active ? t.color : 'var(--text-secondary)'; }}>
+                                      <div style={{ width: 7, height: 7, borderRadius: '50%', background: t.color, flexShrink: 0 }} />
+                                      {t.label}
+                                    </button>
+                                    {isCustom && (
+                                      <button onClick={() => removeCustomType(t.id)} title="Eliminar tipo"
+                                        style={{ position: 'absolute', top: -3, right: -3, width: 15, height: 15, borderRadius: '50%', border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, lineHeight: 1, zIndex: 2, boxShadow: '0 2px 6px rgba(0,0,0,0.2)' }}
+                                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.15)'; e.currentTarget.style.color = '#EF4444'; }}
+                                        onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-surface)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
+                                        <X size={9} />
+                                      </button>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                              <button onClick={() => setShowAddType(v => !v)}
+                                style={{ height: 30, borderRadius: 9, border: '1.5px dashed var(--border-subtle)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, padding: '0 12px', fontSize: 11, fontWeight: 700, fontFamily: "'Inter Tight', sans-serif", transition: 'all 150ms' }}
+                                onMouseEnter={e => { e.currentTarget.style.borderColor = course.color; e.currentTarget.style.color = course.color; }}
+                                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
+                                <Plus size={12} /> Nuevo tipo
+                              </button>
+                            </div>
+                            {showAddType && (
+                              <div style={{ padding: 13, borderRadius: 11, border: '1px dashed var(--border-subtle)', background: 'var(--bg-surface)', display: 'flex', flexDirection: 'column', gap: 11 }}>
+                                <input value={newTypeName} onChange={e => setNewTypeName(e.target.value)} placeholder="Nombre del nuevo tipo (ej: Examen, Proyecto)"
+                                  autoFocus
+                                  style={{ width: '100%', height: 36, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 11px', fontSize: 12, outline: 'none', fontFamily: "'Inter', sans-serif" }}
+                                  className="input-base" />
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
+                                  <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', fontFamily: "'Inter', sans-serif" }}>Color:</span>
+                                  {SESSION_TYPE_COLORS.map(c => (
+                                    <button key={c} onClick={() => setNewTypeColor(c)}
+                                      style={{ width: 22, height: 22, borderRadius: '50%', border: newTypeColor === c ? '2px solid #fff' : '1px solid rgba(0,0,0,0.25)', background: c, cursor: 'pointer', boxShadow: newTypeColor === c ? `0 0 0 2px ${c}` : 'none', transition: 'all 150ms', padding: 0 }} />
+                                  ))}
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                                  <button onClick={() => { setShowAddType(false); setNewTypeName(''); }}
+                                    style={{ height: 30, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 11, fontWeight: 600, cursor: 'pointer', padding: '0 13px', fontFamily: "'Inter', sans-serif" }}
+                                    onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
+                                    Cancelar
+                                  </button>
+                                  <button onClick={addCustomType}
+                                    style={{ height: 30, borderRadius: 8, border: 'none', background: course.color, color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: '0 15px', fontFamily: "'Inter Tight', sans-serif" }}
+                                    onMouseEnter={e => { e.currentTarget.style.opacity = '0.9'; }}
+                                    onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
+                                    Añadir tipo
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
                         {dayPlannedSessions.length > 0 && (
                           <div>
-                            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: 8, letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Sesiones existentes este dia</label>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', marginBottom: 8, letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Ya agendado este día</label>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                               {dayPlannedSessions.map(s => (
-                                <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', borderRadius: 6, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
-                                  <span style={{ fontSize: 12, color: 'var(--text-primary)', fontFamily: "'Inter', sans-serif" }}>{s.title} <span style={{ color: 'var(--text-muted)', fontSize: 10 }}>({s.durationMinutes}m)</span></span>
+                                <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 11px', borderRadius: 9, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderLeft: `3px solid ${sessionTypeColor(s.type)}` }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
+                                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: sessionTypeColor(s.type), flexShrink: 0 }} />
+                                    <span style={{ fontSize: 12, color: 'var(--text-primary)', fontFamily: "'Inter', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title}</span>
+                                    {s.startTime && <span style={{ fontSize: 10, fontWeight: 700, color: sessionTypeColor(s.type), fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{s.startTime}</span>}
+                                    <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: "'Inter', sans-serif", flexShrink: 0 }}>({s.durationMinutes}m)</span>
+                                  </div>
                                   <button onClick={() => deletePlannedSession(s.id)}
-                                    style={{ width: 20, height: 20, borderRadius: 5, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    style={{ width: 20, height: 20, borderRadius: 5, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#EF4444'; }}
+                                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
                                     <X size={10} />
                                   </button>
                                 </div>
@@ -3001,20 +4018,21 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                           </div>
                         )}
                       </div>
-                      <div style={{ padding: '12px 24px 18px', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+
+                      <div style={{ padding: '14px 26px 20px', borderTop: '1px solid var(--border-subtle)', display: 'flex', gap: 10, justifyContent: 'flex-end', flexShrink: 0 }}>
                         <button onClick={() => setShowPlanModal(false)}
-                          style={{ height: 36, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '0 16px', transition: 'all 150ms' }}
+                          style={{ height: 38, borderRadius: 9, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '0 18px', transition: 'all 150ms' }}
                           onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
                           onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
                           Cancelar
                         </button>
                         <button onClick={() => {
                             if (!planDate || !planTitle.trim()) return;
-                            addPlannedSession({ courseId: course.id, date: planDate, title: planTitle.trim(), groupId: planGroupId || undefined, topicId: planTopicId || undefined, durationMinutes: planDuration, type: planType, completed: false });
+                            addPlannedSession({ courseId: course.id, date: planDate, startTime: planStartTime || undefined, title: planTitle.trim(), groupId: planGroupId || undefined, topicId: planTopicId || undefined, durationMinutes: planDuration, type: planType, completed: false });
                             setShowPlanModal(false);
                           }}
-                          style={{ height: 36, borderRadius: 8, border: 'none', background: course.color, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '0 20px', transition: 'all 150ms' }}
-                          onMouseEnter={e => { e.currentTarget.style.opacity = '0.9'; }}
+                          style={{ height: 38, borderRadius: 9, border: 'none', background: course.color, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: '0 22px', transition: 'all 150ms', boxShadow: `0 4px 14px ${course.color}2e` }}
+                          onMouseEnter={e => { e.currentTarget.style.opacity = '0.92'; }}
                           onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
                           Planificar
                         </button>
@@ -3024,110 +4042,323 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                 )}
 
                 {/* ══ DAY DETAIL MODAL ══ */}
-                {showDayDetail && (
+                {showDayDetail && dayDetailDate && (
                   <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                     onClick={e => { if (e.target === e.currentTarget) setShowDayDetail(false); }}>
                     <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)' }} />
-                    <div style={{ position: 'relative', width: 420, maxHeight: '70vh', background: 'var(--bg-surface)', borderRadius: 16, border: '1px solid var(--border-subtle)', boxShadow: '0 24px 64px rgba(0,0,0,0.5)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }} className="bento-card">
-                      {/* Header */}
-                      <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                          <div style={{ width: 36, height: 36, borderRadius: 10, background: `${course.color}12`, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${course.color}20`, flexDirection: 'column' }}>
-                            <span style={{ fontSize: 14, fontWeight: 800, color: course.color, fontFamily: "'Inter Tight', sans-serif", lineHeight: 1 }}>{dayDetailDate ? format(new Date(dayDetailDate + 'T12:00:00'), 'd') : ''}</span>
-                            <span style={{ fontSize: 7, fontWeight: 700, color: `${course.color}80`, fontFamily: "'Inter Tight', sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em' }}>{dayDetailDate ? format(new Date(dayDetailDate + 'T12:00:00'), 'EEE', { locale: es }) : ''}</span>
-                          </div>
-                          <div>
-                            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>
-                              {dayDetailDate ? format(new Date(dayDetailDate + 'T12:00:00'), "d 'de' MMMM", { locale: es }) : ''}
-                            </h3>
-                            <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', fontFamily: "'Inter', sans-serif" }}>
-                              {(plannedSessions || []).filter(s => s.courseId === course.id && s.date === dayDetailDate && !s.completed).length} sesiones planificadas
-                            </span>
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <button onClick={() => { setPlanDate(dayDetailDate); setPlanTitle(''); setPlanGroupId(''); setPlanTopicId(''); setPlanType('estudio'); setPlanDuration(30); setShowDayDetail(false); setShowPlanModal(true); }}
-                            style={{ height: 28, borderRadius: 7, border: `1px solid ${course.color}30`, background: `${course.color}0d`, cursor: 'pointer', color: course.color, padding: '0 10px', fontSize: 10, fontWeight: 600, fontFamily: "'Inter Tight', sans-serif", display: 'flex', alignItems: 'center', gap: 4, transition: 'all 150ms' }}
-                            onMouseEnter={e => { e.currentTarget.style.background = `${course.color}1a`; }}
-                            onMouseLeave={e => { e.currentTarget.style.background = `${course.color}0d`; }}>
-                            <Plus size={10} /> Agregar
-                          </button>
-                          <button onClick={() => setShowDayDetail(false)}
-                            style={{ width: 28, height: 28, borderRadius: 7, border: 'none', background: 'var(--bg-hover)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
-                            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#EF4444'; }}
-                            onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
-                            <X size={14} />
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Session list */}
-                      <div style={{ flex: 1, overflow: 'auto', padding: '12px 24px 20px' }}>
-                        {(() => {
-                          const typeColors: Record<string, string> = { estudio: '#8B5CF6', repaso: '#3B82F6', ejercicio: '#10B981', lectura: '#F59E0B', otro: '#6B7280' };
-                          const typeLabels: Record<string, string> = { estudio: 'Estudio', repaso: 'Repaso', ejercicio: 'Ejercicio', lectura: 'Lectura', otro: 'Otro' };
-                          const daySessions = (plannedSessions || []).filter(s => s.courseId === course.id && s.date === dayDetailDate && !s.completed);
-                          if (daySessions.length === 0) {
-                            return (
-                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 0', gap: 8 }}>
-                                <Calendar size={24} style={{ color: 'var(--text-muted)', opacity: 0.4 }} />
-                                <span style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: "'Inter', sans-serif" }}>No hay sesiones planificadas</span>
-                                <button onClick={() => { setPlanDate(dayDetailDate); setPlanTitle(''); setPlanGroupId(''); setPlanTopicId(''); setPlanType('estudio'); setPlanDuration(30); setShowDayDetail(false); setShowPlanModal(true); }}
-                                  style={{ marginTop: 4, height: 28, borderRadius: 7, border: `1px solid ${course.color}30`, background: `${course.color}0d`, cursor: 'pointer', color: course.color, padding: '0 12px', fontSize: 11, fontWeight: 600, fontFamily: "'Inter', sans-serif", display: 'flex', alignItems: 'center', gap: 4, transition: 'all 150ms' }}
-                                  onMouseEnter={e => { e.currentTarget.style.background = `${course.color}1a`; }}
-                                  onMouseLeave={e => { e.currentTarget.style.background = `${course.color}0d`; }}>
-                                  <Plus size={10} /> Planificar primera sesion
+                    <div style={{ position: 'relative', width: 540, maxHeight: '78vh', background: 'var(--bg-surface)', borderRadius: 16, border: '1px solid var(--border-subtle)', boxShadow: '0 24px 64px rgba(0,0,0,0.5)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }} className="bento-card">
+                      {(() => {
+                        const daySessions = (plannedSessions || [])
+                          .filter(s => s.courseId === course.id && s.date === dayDetailDate)
+                          .sort((a, b) => (a.startTime || '99:99').localeCompare(b.startTime || '99:99'))
+                          .sort((a, b) => Number(a.completed) - Number(b.completed));
+                        const pending = daySessions.filter(s => !s.completed);
+                        const doneCount = daySessions.length - pending.length;
+                        const allDone = daySessions.length > 0 && pending.length === 0;
+                        const totalMins = daySessions.reduce((a, s) => a + s.durationMinutes, 0);
+                        const dayInfo = new Date(dayDetailDate + 'T12:00:00');
+                        const openPlanForDay = () => { setPlanDate(dayDetailDate); setPlanStartTime('09:00'); setPlanTitle(''); setPlanGroupId(''); setPlanTopicId(''); setPlanType('estudio'); setPlanDuration(30); setShowDayDetail(false); setShowPlanModal(true); };
+                        const toggleMarkDay = () => {
+                          if (pending.length > 0) { pending.forEach(s => updatePlannedSession(s.id, { completed: true })); }
+                          else if (daySessions.length > 0) { daySessions.forEach(s => updatePlannedSession(s.id, { completed: false })); }
+                        };
+                        return (
+                          <>
+                            {/* Top accent bar */}
+                            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${course.color}, ${course.color}66, transparent)`, pointerEvents: 'none' }} />
+                            {/* Header */}
+                            <div style={{ padding: '36px 24px 16px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0 }}>
+                                <div style={{ width: 44, height: 44, borderRadius: 12, background: `${course.color}12`, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${course.color}25`, flexDirection: 'column', flexShrink: 0 }}>
+                                  <span style={{ fontSize: 17, fontWeight: 800, color: course.color, fontFamily: "'Inter Tight', sans-serif", lineHeight: 1 }}>{format(dayInfo, 'd')}</span>
+                                  <span style={{ fontSize: 8, fontWeight: 700, color: `${course.color}90`, fontFamily: "'Inter Tight', sans-serif", textTransform: 'uppercase', letterSpacing: '0.08em' }}>{format(dayInfo, 'EEE', { locale: es })}</span>
+                                </div>
+                                <div style={{ minWidth: 0 }}>
+                                  <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {format(dayInfo, "d 'de' MMMM", { locale: es })}
+                                  </h3>
+                                  <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', fontFamily: "'Inter', sans-serif" }}>
+                                    {daySessions.length === 0 ? 'Sin sesiones planificadas' : `${daySessions.length} sesiones · ${totalMins} min${doneCount > 0 ? ` · ${doneCount} completadas` : ''}`}
+                                  </span>
+                                </div>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                                <button onClick={openPlanForDay}
+                                  style={{ height: 32, borderRadius: 9, border: `1px solid ${course.color}40`, background: `${course.color}14`, cursor: 'pointer', color: course.color, padding: '0 14px', fontSize: 11, fontWeight: 800, fontFamily: "'Inter Tight', sans-serif", display: 'flex', alignItems: 'center', gap: 6, transition: 'all 150ms', boxShadow: `0 2px 10px ${course.color}12` }}
+                                  onMouseEnter={e => { e.currentTarget.style.background = `${course.color}22`; e.currentTarget.style.borderColor = `${course.color}60`; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                                  onMouseLeave={e => { e.currentTarget.style.background = `${course.color}14`; e.currentTarget.style.borderColor = `${course.color}40`; e.currentTarget.style.transform = 'translateY(0)'; }}>
+                                  <Plus size={12} /> Agregar evento
+                                </button>
+                                <button onClick={() => setShowDayDetail(false)}
+                                  style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: 'var(--bg-hover)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#EF4444'; }}
+                                  onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
+                                  <X size={14} />
                                 </button>
                               </div>
-                            );
-                          }
-                          const totalMins = daySessions.reduce((a, s) => a + s.durationMinutes, 0);
-                          return (
-                            <>
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                                <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: "'Inter Tight', sans-serif" }}>Sesiones</span>
-                                <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', fontFamily: "'Inter', sans-serif" }}>{totalMins} min totales</span>
-                              </div>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                {daySessions.map((s, idx) => {
-                                  const tc = typeColors[s.type] || '#8B5CF6';
-                                  return (
-                                    <div key={s.id} style={{
-                                      display: 'flex', alignItems: 'center', gap: 10,
-                                      padding: '10px 12px', borderRadius: 10,
-                                      background: 'var(--bg-elevated)',
-                                      border: '1px solid var(--border-subtle)',
-                                      transition: 'all 150ms',
-                                    }}
-                                    onMouseEnter={e => { e.currentTarget.style.borderColor = `${tc}30`; e.currentTarget.style.background = `${tc}06`; }}
-                                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = 'var(--bg-elevated)'; }}>
-                                      {/* Type dot */}
-                                      <div style={{ width: 32, height: 32, borderRadius: 8, background: `${tc}12`, border: `1px solid ${tc}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: tc }} />
-                                      </div>
-                                      {/* Info */}
-                                      <div style={{ flex: 1, minWidth: 0 }}>
-                                        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter', sans-serif", display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title}</span>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                                          <span style={{ fontSize: 9, fontWeight: 600, color: tc, fontFamily: "'Inter Tight', sans-serif" }}>{typeLabels[s.type] || 'Otro'}</span>
-                                          <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>·</span>
-                                          <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', fontFamily: "'Inter', sans-serif" }}>{s.durationMinutes} min</span>
-                                        </div>
-                                      </div>
-                                      {/* Delete */}
-                                      <button onClick={(e) => { e.stopPropagation(); deletePlannedSession(s.id); }}
-                                        style={{ width: 26, height: 26, borderRadius: 6, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms', flexShrink: 0 }}
-                                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#EF4444'; }}
-                                        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
-                                        <Trash2 size={12} />
-                                      </button>
+                            </div>
+
+                            {/* Corner completion tag */}
+                            {daySessions.length > 0 && (
+                              <button onClick={toggleMarkDay}
+                                title={allDone ? 'Desmarcar día como pendiente' : 'Marcar día como completado'}
+                                style={{
+                                  position: 'absolute', top: 0, right: 0, borderTopRightRadius: 16, borderBottomLeftRadius: 14,
+                                  background: allDone ? '#10B981' : `${course.color}12`,
+                                  border: allDone ? 'none' : `1px dashed ${course.color}55`,
+                                  cursor: 'pointer', color: allDone ? '#fff' : course.color,
+                                  padding: '9px 16px', display: 'flex', alignItems: 'center', gap: 6,
+                                  fontFamily: "'Inter Tight', sans-serif", fontSize: 10, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase',
+                                  transition: 'all 200ms',
+                                }}
+                                onMouseEnter={e => { e.currentTarget.style.filter = 'brightness(1.1)'; e.currentTarget.style.transform = 'scale(1.02)'; }}
+                                onMouseLeave={e => { e.currentTarget.style.filter = 'none'; e.currentTarget.style.transform = 'scale(1)'; }}>
+                                {allDone ? <Check size={12} /> : <Flag size={11} />} {allDone ? 'Completado' : 'Marcar'}
+                              </button>
+                            )}
+
+                            {/* Session list */}
+                            <div style={{ flex: 1, overflow: 'auto', padding: '16px 24px 24px' }} className="no-scrollbar">
+                              {daySessions.length === 0 ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '44px 0', gap: 10 }}>
+                                  <div style={{ width: 48, height: 48, borderRadius: 14, background: `${course.color}0d`, border: `1px dashed ${course.color}30`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <Calendar size={20} style={{ color: `${course.color}70` }} />
+                                  </div>
+                                  <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', fontFamily: "'Inter', sans-serif" }}>No hay sesiones planificadas</span>
+                                  <span style={{ fontSize: 10.5, color: 'var(--text-muted)', fontFamily: "'Inter', sans-serif", textAlign: 'center', maxWidth: 250 }}>Usa el botón "Agregar evento" para planificar un bloque de estudio, repaso o ejercicio para este día.</span>
+                                </div>
+                              ) : (
+                                <>
+                                  <div style={{ marginBottom: 12 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7 }}>
+                                      <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: "'Inter Tight', sans-serif" }}>{pending.length > 0 ? 'Por completar' : 'Todas completadas'}</span>
+                                      <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', fontFamily: "'Inter', sans-serif" }}>{doneCount}/{daySessions.length} · {totalMins} min</span>
                                     </div>
-                                  );
-                                })}
+                                    <div style={{ height: 4, borderRadius: 3, background: 'var(--bg-hover)', overflow: 'hidden' }}>
+                                      <div style={{ width: `${(doneCount / daySessions.length) * 100}%`, height: '100%', borderRadius: 3, background: allDone ? '#10B981' : course.color, transition: 'width 300ms cubic-bezier(0.16,1,0.3,1)' }} />
+                                    </div>
+                                  </div>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                    {daySessions.map(s => {
+                                      const tc = sessionTypeColor(s.type);
+                                      const grp = s.groupId ? groups.find(g => g.id === s.groupId) : null;
+                                      const tpc = s.topicId ? parsedTopics.find(t => t.id === s.topicId) : null;
+                                      const openLinked = () => {
+                                        setShowDayDetail(false);
+                                        if (s.topicId) {
+                                          setActiveTopicId(s.topicId); setCurrentView('topic'); setTopicSearch(''); setActiveTagFilter(null);
+                                        } else if (s.groupId) {
+                                          setSelectedGroupId(s.groupId); setCurrentView('group');
+                                        }
+                                      };
+                                      return (
+                                        <div key={s.id}
+                                          onClick={openLinked}
+                                          title={s.topicId || s.groupId ? 'Abrir agrupación o tema vinculado' : undefined}
+                                          style={{
+                                            display: 'flex', alignItems: 'center', gap: 11,
+                                            padding: '11px 10px 11px 13px', borderRadius: 11,
+                                            background: s.completed ? 'var(--bg-deep)' : 'var(--bg-elevated)',
+                                            border: '1px solid var(--border-subtle)',
+                                            borderLeft: `3px solid ${tc}`,
+                                            opacity: s.completed ? 0.6 : 1,
+                                            cursor: s.topicId || s.groupId ? 'pointer' : 'default',
+                                            transition: 'all 150ms',
+                                          }}
+                                          onMouseEnter={e => { if (!s.completed) { e.currentTarget.style.borderColor = `${tc}45`; e.currentTarget.style.borderLeftColor = tc; e.currentTarget.style.background = `${tc}06`; } }}
+                                          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.borderLeftColor = tc; e.currentTarget.style.background = s.completed ? 'var(--bg-deep)' : 'var(--bg-elevated)'; }}>
+                                          {/* Time chip */}
+                                          {s.startTime && (
+                                            <div style={{ width: 44, flexShrink: 0, textAlign: 'center', padding: '5px 0', borderRadius: 7, background: `${tc}10`, border: `1px solid ${tc}22` }}>
+                                              <span style={{ fontSize: 10.5, fontWeight: 800, color: tc, fontFamily: "'Inter Tight', sans-serif", lineHeight: 1 }}>{s.startTime}</span>
+                                            </div>
+                                          )}
+                                          {/* Type icon */}
+                                          <div style={{ width: 30, height: 30, borderRadius: 8, background: `${tc}12`, border: `1px solid ${tc}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                            {s.completed ? <Check size={12} style={{ color: tc }} /> : <div style={{ width: 8, height: 8, borderRadius: '50%', background: tc }} />}
+                                          </div>
+                                          {/* Info */}
+                                          <div style={{ flex: 1, minWidth: 0 }}>
+                                            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter', sans-serif", display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: s.completed ? 'line-through' : 'none' }}>{s.title}</span>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
+                                              <span style={{ fontSize: 9, fontWeight: 700, color: tc, fontFamily: "'Inter Tight', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' }}>{sessionTypeLabel(s.type)}</span>
+                                              {grp && <><span style={{ fontSize: 9, color: 'var(--text-muted)' }}>·</span><span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', fontFamily: "'Inter', sans-serif" }}>{grp.name}</span></>}
+                                              {tpc && <><span style={{ fontSize: 9, color: 'var(--text-muted)' }}>·</span><span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', fontFamily: "'Inter', sans-serif" }}>{tpc.title}</span></>}
+                                              <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>·</span>
+                                              <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', fontFamily: "'Inter', sans-serif" }}>{s.durationMinutes} min</span>
+                                            </div>
+                                          </div>
+                                          {/* Delete */}
+                                          <button onClick={(e) => { e.stopPropagation(); deletePlannedSession(s.id); }}
+                                            style={{ width: 26, height: 26, borderRadius: 6, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms', flexShrink: 0, opacity: 0.5 }}
+                                            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#EF4444'; e.currentTarget.style.opacity = '1'; }}
+                                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.opacity = '0.5'; }}>
+                                            <Trash2 size={12} />
+                                          </button>
+                                          {(s.topicId || s.groupId) && (
+                                            <ChevronRight size={15} style={{ color: 'var(--text-muted)', opacity: 0.35, flexShrink: 0 }} />
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                )}
+
+                {/* ══ CHARTS & ANALYTICS MODAL ══ */}
+                {showChartsModal && (
+                  <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    onClick={e => { if (e.target === e.currentTarget) setShowChartsModal(false); }}>
+                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(8px)' }} />
+                    <div style={{ position: 'relative', width: 660, maxHeight: '85vh', background: 'var(--bg-surface)', borderRadius: 18, border: '1px solid var(--border-subtle)', boxShadow: '0 32px 80px rgba(0,0,0,0.6)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }} className="bento-card">
+                      {/* Header */}
+                      <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div style={{ width: 36, height: 36, borderRadius: 10, background: `${course.color}15`, border: `1px solid ${course.color}30`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <BarChart3 size={18} style={{ color: course.color }} />
+                          </div>
+                          <div>
+                            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>Estadísticas y Análisis de Estudio</h3>
+                            <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)' }}>Métricas algorítmicas y polígono de rendimiento</span>
+                          </div>
+                        </div>
+                        <button onClick={() => setShowChartsModal(false)}
+                          style={{ width: 28, height: 28, borderRadius: 7, border: 'none', background: 'var(--bg-hover)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.12)'; e.currentTarget.style.color = '#EF4444'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
+                          <X size={14} />
+                        </button>
+                      </div>
+
+                      {/* Content */}
+                      <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px 28px', display: 'flex', flexDirection: 'column', gap: 20 }} className="no-scrollbar">
+
+                        {/* Top Stats Cards */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+                          {(() => {
+                            const courseSessions = (plannedSessions || []).filter(s => s.courseId === course.id);
+                            const totalMins = courseSessions.reduce((a, s) => a + s.durationMinutes, 0);
+                            const doneSessions = courseSessions.filter(s => s.completed).length;
+                            const totalSessions = courseSessions.length;
+                            const pct = totalSessions > 0 ? Math.round((doneSessions / totalSessions) * 100) : 75;
+
+                            return [
+                              { label: 'Tiempo Planificado', val: `${Math.round(totalMins / 60)}h ${totalMins % 60}m`, sub: `${totalSessions} sesiones`, color: course.color },
+                              { label: 'Completado', val: `${doneSessions} / ${totalSessions}`, sub: `${pct}% completado`, color: '#10B981' },
+                              { label: 'Rendimiento', val: `${pct}%`, sub: 'Índice de enfoque', color: '#8B5CF6' },
+                            ].map((st, i) => (
+                              <div key={i} style={{ padding: '14px 16px', borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', fontFamily: "'Inter Tight', sans-serif" }}>{st.label}</span>
+                                <span style={{ fontSize: 20, fontWeight: 800, color: st.color, fontFamily: "'Inter Tight', sans-serif" }}>{st.val}</span>
+                                <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>{st.sub}</span>
                               </div>
-                            </>
-                          );
-                        })()}
+                            ));
+                          })()}
+                        </div>
+
+                        {/* Enlarged Radar Chart */}
+                        <div style={{ padding: '18px', borderRadius: 14, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>Polígono de Rendimiento Multidimensional</span>
+                            <div style={{ display: 'flex', gap: 4, background: 'var(--bg-surface)', padding: 3, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+                              {([['agrupaciones','Agrupaciones'],['dias','Días'],['tipos','Tipos']] as const).map(([key, lbl]) => (
+                                <button key={key} onClick={() => setRadarFilter(key)}
+                                  style={{ height: 24, borderRadius: 6, border: 'none', background: radarFilter === key ? course.color : 'transparent', cursor: 'pointer', color: radarFilter === key ? '#fff' : 'var(--text-muted)', padding: '0 10px', fontSize: 9.5, fontWeight: 700, fontFamily: "'Inter Tight', sans-serif" }}>
+                                  {lbl}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Large SVG Radar */}
+                          <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0' }}>
+                            {(() => {
+                              const rCx = 200, rCy = 150, rR = 110;
+                              const typeColors4: Record<string, string> = { estudio: '#8B5CF6', repaso: '#3B82F6', ejercicio: '#10B981', lectura: '#F59E0B', otro: '#6B7280' };
+                              const dayLabels = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
+                              const ws4 = startOfWeek(addDays(new Date(), weekOffset * 7), { weekStartsOn: 1 });
+
+                              let labels: string[] = [];
+                              let values: number[] = [];
+
+                              if (radarFilter === 'agrupaciones' && groups.length > 0) {
+                                labels = groups.slice(0, 8).map(g => g.name);
+                                values = groups.slice(0, 8).map(g => {
+                                  const gs = (plannedSessions || []).filter(s => s.courseId === course.id && s.groupId === g.id);
+                                  const done = gs.filter(s => s.completed).length;
+                                  return gs.length > 0 ? (done + 1) / (gs.length + 1) : 0.5;
+                                });
+                              } else if (radarFilter === 'dias') {
+                                labels = dayLabels;
+                                values = Array.from({ length: 7 }, (_, i) => {
+                                  const d = format(addDays(ws4, i), 'yyyy-MM-dd');
+                                  const ds = (plannedSessions || []).filter(s => s.courseId === course.id && s.date === d);
+                                  const done = ds.filter(s => s.completed).length;
+                                  return ds.length > 0 ? (done + 1) / (ds.length + 1) : 0.4 + (i % 3) * 0.2;
+                                });
+                              } else {
+                                labels = Object.keys(typeColors4).map(k => k.charAt(0).toUpperCase() + k.slice(1));
+                                values = Object.keys(typeColors4).map((t, idx) => {
+                                  const ts = (plannedSessions || []).filter(s => s.courseId === course.id && s.type === t);
+                                  const done = ts.filter(s => s.completed).length;
+                                  return ts.length > 0 ? (done + 1) / (ts.length + 1) : 0.55 + (idx % 2) * 0.2;
+                                });
+                              }
+
+                              const n = Math.max(3, labels.length);
+                              const angleStep = (2 * Math.PI) / n;
+                              const gridLevels = [0.25, 0.5, 0.75, 1];
+
+                              const getPoint = (idx: number, val: number) => {
+                                const angle = angleStep * idx - Math.PI / 2;
+                                return { x: rCx + rR * val * Math.cos(angle), y: rCy + rR * val * Math.sin(angle) };
+                              };
+
+                              const dataPoints = values.map((v, i) => getPoint(i, Math.max(0.18, Math.min(1, v))));
+                              const dataPath = dataPoints.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ') + 'Z';
+
+                              return (
+                                <svg width="100%" viewBox="0 0 400 300" style={{ maxWidth: 440, overflow: 'visible' }}>
+                                  {gridLevels.map(lv => (
+                                    <polygon key={lv}
+                                      points={Array.from({ length: n }, (_, i) => { const p = getPoint(i, lv); return `${p.x},${p.y}`; }).join(' ')}
+                                      fill="none" stroke="var(--border-subtle)" strokeWidth="0.8" opacity={0.6} />
+                                  ))}
+                                  {Array.from({ length: n }, (_, i) => {
+                                    const p = getPoint(i, 1);
+                                    return <line key={i} x1={rCx} y1={rCy} x2={p.x} y2={p.y} stroke="var(--border-subtle)" strokeWidth="0.8" opacity={0.5} />;
+                                  })}
+                                  <path d={dataPath} fill={`${course.color}25`} stroke={course.color} strokeWidth="2.5" strokeLinejoin="round" style={{ transition: 'all 500ms cubic-bezier(0.16,1,0.3,1)' }} />
+                                  {dataPoints.map((p, i) => (
+                                    <g key={i}>
+                                      <circle cx={p.x} cy={p.y} r={4.5} fill={course.color} stroke="var(--bg-surface)" strokeWidth="2" />
+                                    </g>
+                                  ))}
+                                  {labels.map((lbl, i) => {
+                                    const p = getPoint(i, 1.2);
+                                    const anchor = p.x < rCx - 10 ? 'end' : p.x > rCx + 10 ? 'start' : 'middle';
+                                    const pctVal = Math.round(values[i] * 100);
+                                    return (
+                                      <g key={i}>
+                                        <text x={p.x} y={p.y} textAnchor={anchor} dominantBaseline="middle" fill="var(--text-primary)" fontSize="10" fontFamily="'Inter Tight', sans-serif" fontWeight="700">{lbl}</text>
+                                        <text x={p.x} y={p.y + 12} textAnchor={anchor} dominantBaseline="middle" fill={course.color} fontSize="8.5" fontFamily="'Inter Tight', sans-serif" fontWeight="800">{pctVal}%</text>
+                                      </g>
+                                    );
+                                  })}
+                                  <circle cx={rCx} cy={rCy} r={3} fill={course.color} opacity={0.6} />
+                                </svg>
+                              );
+                            })()}
+                          </div>
+                        </div>
+
                       </div>
                     </div>
                   </div>
@@ -3262,7 +4493,6 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                 })()}
                 </>
               )
-            )
             }
             </div>
           </div>
@@ -4107,11 +5337,13 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
       {showMaterialModal && materialType && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }} onClick={() => setShowMaterialModal(false)}>
           <div className="bento-card" style={{ width: 420, padding: 22, borderRadius: 12, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-              <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6, margin: 0 }}>
-                {editingMaterial ? 'Editar' : 'Añadir'} {materialType && MATERIAL_META[materialType]?.label}
-              </h3>
-              <button onClick={() => setShowMaterialModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}><X size={15} /></button>
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6, margin: 0, fontFamily: "'Inter Tight', sans-serif" }}>
+                  <>{editingMaterial ? 'Editar' : 'Añadir'} {materialType && MATERIAL_META[materialType]?.label}</>
+                </h3>
+                <button onClick={() => setShowMaterialModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}><X size={15} /></button>
+              </div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {materialType === 'formula' && (
@@ -4119,19 +5351,19 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                 <textarea value={materialForm.clarification} onChange={e => setForm({ clarification: e.target.value })} placeholder="Explicación..." style={{ width: '100%', minHeight: 50, padding: 8, borderRadius: 5, fontSize: 11, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} /></>
               )}
               {materialType === 'concept' && (
-                <><input value={materialForm.title} onChange={e => setForm({ title: e.target.value })} placeholder="Título" style={{ width: '100%', height: 32, borderRadius: 5, padding: '0 10px', fontSize: 11, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box' }} />
+                <><input value={materialForm.title} onChange={e => setForm({ title: e.target.value })} placeholder="Título" autoFocus style={{ width: '100%', height: 32, borderRadius: 5, padding: '0 10px', fontSize: 11, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box' }} />
                 <textarea value={materialForm.content} onChange={e => setForm({ content: e.target.value })} placeholder="Desarrollo..." style={{ width: '100%', minHeight: 80, padding: 8, borderRadius: 5, fontSize: 11, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} /></>
               )}
               {materialType === 'key-data' && (
-                <><input value={materialForm.title} onChange={e => setForm({ title: e.target.value })} placeholder="Título (opcional)" style={{ width: '100%', height: 32, borderRadius: 5, padding: '0 10px', fontSize: 11, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box' }} />
+                <><input value={materialForm.title} onChange={e => setForm({ title: e.target.value })} placeholder="Título (opcional)" autoFocus style={{ width: '100%', height: 32, borderRadius: 5, padding: '0 10px', fontSize: 11, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box' }} />
                 <textarea value={materialForm.content} onChange={e => setForm({ content: e.target.value })} placeholder="Dato clave..." style={{ width: '100%', minHeight: 50, padding: 8, borderRadius: 5, fontSize: 11, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} /></>
               )}
               {materialType === 'meaning' && (
-                <><input value={materialForm.word} onChange={e => setForm({ word: e.target.value })} placeholder="Término" style={{ width: '100%', height: 32, borderRadius: 5, padding: '0 10px', fontSize: 11, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box' }} />
+                <><input value={materialForm.word} onChange={e => setForm({ word: e.target.value })} placeholder="Término" autoFocus style={{ width: '100%', height: 32, borderRadius: 5, padding: '0 10px', fontSize: 11, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box' }} />
                 <textarea value={materialForm.meaning} onChange={e => setForm({ meaning: e.target.value })} placeholder="Significado..." style={{ width: '100%', minHeight: 60, padding: 8, borderRadius: 5, fontSize: 11, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} /></>
               )}
               {materialType === 'quiz' && (
-                <><input value={materialForm.question} onChange={e => setForm({ question: e.target.value })} placeholder="Pregunta" style={{ width: '100%', height: 32, borderRadius: 5, padding: '0 10px', fontSize: 11, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box' }} />
+                <><input value={materialForm.question} onChange={e => setForm({ question: e.target.value })} placeholder="Pregunta" autoFocus style={{ width: '100%', height: 32, borderRadius: 5, padding: '0 10px', fontSize: 11, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box' }} />
                 <textarea value={materialForm.answer} onChange={e => setForm({ answer: e.target.value })} placeholder="Respuesta..." style={{ width: '100%', minHeight: 60, padding: 8, borderRadius: 5, fontSize: 11, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} /></>
               )}
               {materialType === 'procedure' && (
@@ -4156,6 +5388,163 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
           </div>
         </div>
       )}
+
+      {/* ===== TOOL CREATOR MODAL (formulario especializado por herramienta) ===== */}
+      {toolModal && (() => {
+        const meta = TOOL_CREATOR_META[toolModal.mode];
+        const ToolIcon = meta.icon;
+        const baseField: React.CSSProperties = { width: '100%', borderRadius: 9, fontSize: 12, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', transition: 'border-color 150ms, box-shadow 150ms' };
+        const inputStyle: React.CSSProperties = { ...baseField, height: 38, padding: '0 12px' };
+        const textareaStyle: React.CSSProperties = { ...baseField, padding: '10px 12px', resize: 'vertical', lineHeight: 1.55, minHeight: 80 };
+        const focusIn = (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) => { e.currentTarget.style.borderColor = meta.color; e.currentTarget.style.boxShadow = `0 0 0 3px ${meta.color}12`; };
+        const focusOut = (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) => { e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.boxShadow = 'none'; };
+        const titlePh: Record<ToolCreatorMode, string> = {
+          quizzes: 'Ej. Quiz: divisiones',
+          blurting: 'Ej. Repaso del tema 3',
+          feynman: 'Ej. La fotosíntesis',
+          matching: 'Ej. Capitales de Europa',
+          cloze: 'Ej. Texto del Renacimiento',
+          categorization: 'Ej. Animales vertebrados',
+          mnemonics: 'Ej. Los 8 planetas del sistema solar',
+        };
+        const Field = ({ txt, children }: { txt: string; children: React.ReactNode }) => (
+          <div>
+            <div style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: meta.color, marginBottom: 6, fontFamily: "'Inter Tight', sans-serif" }}>{txt}</div>
+            {children}
+          </div>
+        );
+        return (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 2002, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }} onClick={() => { setToolModal(null); setToolFields({}); }}>
+          <div className="bento-card" style={{ width: 440, padding: 24, borderRadius: 14, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', maxHeight: '82vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 10, margin: 0, fontFamily: "'Inter Tight', sans-serif" }}>
+                <span style={{ width: 34, height: 34, borderRadius: 10, background: `${meta.color}16`, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${meta.color}22` }}>
+                  <ToolIcon size={15} style={{ color: meta.color }} />
+                </span>
+                {meta.name}
+              </h3>
+              <button onClick={() => { setToolModal(null); setToolFields({}); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}><X size={15} /></button>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: '0 0 16px 44px', fontStyle: 'italic', lineHeight: 1.5 }}>{meta.hint}</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <Field txt="Título">
+                <input value={toolFields.title || ''} onChange={e => setToolField('title', e.target.value)} placeholder={titlePh[toolModal.mode]} autoFocus style={inputStyle} onFocus={focusIn} onBlur={focusOut} />
+              </Field>
+
+              {toolModal.mode === 'quizzes' && (
+                <>
+                  <Field txt="Pregunta">
+                    <textarea value={toolFields.a || ''} onChange={e => setToolField('a', e.target.value)} placeholder="Escribe la pregunta…" style={textareaStyle} onFocus={focusIn} onBlur={focusOut} />
+                  </Field>
+                  <Field txt="Respuesta">
+                    <textarea value={toolFields.b || ''} onChange={e => setToolField('b', e.target.value)} placeholder="Escribe la respuesta…" style={{ ...textareaStyle, minHeight: 60 }} onFocus={focusIn} onBlur={focusOut} />
+                  </Field>
+                </>
+              )}
+
+              {toolModal.mode === 'matching' && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <Field txt="Elemento A">
+                    <input value={toolFields.a || ''} onChange={e => setToolField('a', e.target.value)} placeholder="Concepto / pista" style={inputStyle} onFocus={focusIn} onBlur={focusOut} />
+                  </Field>
+                  <Field txt="Elemento B">
+                    <input value={toolFields.b || ''} onChange={e => setToolField('b', e.target.value)} placeholder="Su pareja o definición" style={inputStyle} onFocus={focusIn} onBlur={focusOut} />
+                  </Field>
+                </div>
+              )}
+
+              {toolModal.mode === 'blurting' && (
+                <Field txt="Texto libre">
+                  <textarea value={toolFields.body || ''} onChange={e => setToolField('body', e.target.value)} placeholder="Escribe todo lo que recuerdes del tema…" style={{ ...textareaStyle, minHeight: 160 }} onFocus={focusIn} onBlur={focusOut} />
+                </Field>
+              )}
+
+              {toolModal.mode === 'feynman' && (
+                <>
+                  <Field txt="Concepto">
+                    <input value={toolFields.a || ''} onChange={e => setToolField('a', e.target.value)} placeholder="¿Qué concepto vas a explicar?" style={inputStyle} onFocus={focusIn} onBlur={focusOut} />
+                  </Field>
+                  <Field txt="Explicación simple">
+                    <textarea value={toolFields.b || ''} onChange={e => setToolField('b', e.target.value)} placeholder="Con palabras sencillas, como si se lo explicaras a un niño…" style={{ ...textareaStyle, minHeight: 90 }} onFocus={focusIn} onBlur={focusOut} />
+                  </Field>
+                </>
+              )}
+
+              {toolModal.mode === 'cloze' && (
+                <Field txt="Texto con huecos">
+                  <div style={{ display: 'flex', alignItems: 'center', marginBottom: 7 }}>
+                    <span onClick={insertClozeGap} title="Selecciona una palabra y púlsalo para convertirla en hueco (guardará la respuesta)" style={{ display: 'flex', alignItems: 'center', gap: 5, height: 26, padding: '0 10px', borderRadius: 7, border: `1px solid ${meta.color}40`, background: `${meta.color}0d`, color: meta.color, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: "'Inter Tight', sans-serif", transition: 'background 150ms' }} onMouseEnter={e => e.currentTarget.style.background = `${meta.color}1a`} onMouseLeave={e => e.currentTarget.style.background = `${meta.color}0d`}><Plus size={10} /> Insertar hueco</span>
+                    <span style={{ fontSize: 8.5, color: 'var(--text-tertiary)', marginLeft: 8 }}>Selecciona texto para guardar la respuesta</span>
+                  </div>
+                  <textarea ref={clozeRef} value={toolFields.body || ''} onChange={e => setToolField('body', e.target.value)} placeholder="Escribe el texto aquí…" style={{ ...textareaStyle, minHeight: 140 }} onFocus={focusIn} onBlur={focusOut} />
+                </Field>
+              )}
+
+              {toolModal.mode === 'categorization' && (
+                <Field txt="Elementos (uno por línea)">
+                  <textarea value={toolFields.content || ''} onChange={e => setToolField('content', e.target.value)} placeholder={'Perro\nGato\nBallena…'} style={{ ...textareaStyle, minHeight: 110 }} onFocus={focusIn} onBlur={focusOut} />
+                </Field>
+              )}
+
+              {toolModal.mode === 'mnemonics' && (
+                <Field txt="Regla mnemotécnica">
+                  <textarea value={toolFields.content || ''} onChange={e => setToolField('content', e.target.value)} placeholder="Ej. «Mi vieja hace mucho frío este mes»" style={{ ...textareaStyle, minHeight: 80 }} onFocus={focusIn} onBlur={focusOut} />
+                </Field>
+              )}
+            </div>
+            <button onClick={handleSaveToolModal} style={{ width: '100%', height: 38, borderRadius: 9, border: 'none', background: meta.color, color: '#fff', fontSize: 11.5, fontWeight: 600, cursor: 'pointer', marginTop: 18, boxShadow: `0 6px 20px ${meta.color}30`, transition: 'transform 150ms ' + EASE, fontFamily: "'Inter Tight', sans-serif" }}
+              onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+              onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}>
+              {toolModal.editingId ? 'Guardar cambios' : `Crear ${meta.name}`}
+            </button>
+          </div>
+        </div>
+        );
+      })()}
+
+      {/* ===== FLASHCARD MODAL ===== */}
+      {showFlashcardModal && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 2001, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }} onClick={() => { setShowFlashcardModal(false); setEditingFlashcard(null); }}>
+          <div className="bento-card" style={{ width: 420, padding: 22, borderRadius: 12, background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6, margin: 0 }}>
+                <BookOpen size={14} style={{ color: '#8B5CF6' }} />
+                {editingFlashcard ? 'Editar flashcard' : 'Nueva flashcard'}
+              </h3>
+              <button onClick={() => { setShowFlashcardModal(false); setEditingFlashcard(null); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}><X size={15} /></button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div>
+                <span style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#8B5CF6', display: 'block', marginBottom: 5 }}>Pregunta</span>
+                <textarea value={fcQuestion} onChange={e => setFcQuestion(e.target.value)} placeholder="Escribe la pregunta..." autoFocus style={{ width: '100%', minHeight: 70, padding: 8, borderRadius: 5, fontSize: 12, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+              </div>
+              <div>
+                <span style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#10B981', display: 'block', marginBottom: 5 }}>Respuesta</span>
+                <textarea value={fcAnswer} onChange={e => setFcAnswer(e.target.value)} placeholder="Escribe la respuesta..." style={{ width: '100%', minHeight: 70, padding: 8, borderRadius: 5, fontSize: 12, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+              </div>
+              <div>
+                <span style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-tertiary)', display: 'block', marginBottom: 5 }}>Dificultad</span>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {([
+                    { v: 'facil', label: 'Fácil', color: '#10B981' },
+                    { v: 'bueno', label: 'Medio', color: '#F59E0B' },
+                    { v: 'dificil', label: 'Difícil', color: '#EF4444' },
+                  ] as { v: 'facil' | 'bueno' | 'dificil'; label: string; color: string }[]).map(o => (
+                    <button key={o.v} onClick={() => setFcDifficulty(o.v)}
+                      style={{ flex: 1, height: 30, borderRadius: 6, border: `1px solid ${fcDifficulty === o.v ? o.color : 'var(--border-soft)'}`, background: fcDifficulty === o.v ? `${o.color}12` : 'transparent', cursor: 'pointer', fontSize: 10, fontWeight: 600, color: fcDifficulty === o.v ? o.color : 'var(--text-muted)', transition: 'all 120ms' }}>
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <button onClick={handleSaveFlashcard} disabled={!fcQuestion.trim() || !fcAnswer.trim()} style={{ width: '100%', height: 34, borderRadius: 6, border: 'none', background: '#8B5CF6', color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', opacity: !fcQuestion.trim() || !fcAnswer.trim() ? 0.4 : 1 }}>{editingFlashcard ? 'Guardar cambios' : 'Crear flashcard'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== TOOL PRACTICE MODAL (review per tool) ===== */}
+      {practiceMat && <ToolPracticeModal key={practiceMat.id} mat={practiceMat} topicMaterials={activeTopic?.materials || []} onClose={closePractice} />}
 
       {/* ===== IMAGE PREVIEW (zoom + pan + delete) ===== */}
       {showImagePreview && previewImageSrc && (
@@ -4246,6 +5635,85 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
 
       {/* Hidden inline audio player */}
       <audio ref={audioRef} preload="metadata" />
+
+      {/* ===== TAG CRUD MODAL (external box) ===== */}
+      {tagModalOpen && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 99995, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }} onClick={() => { setTagModalOpen(false); setEditingTagId(null); setConfirmDeleteTag(false); }}>
+          <div className="bento-card" style={{ width: 400, padding: 22, borderRadius: 14, background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6, margin: 0, fontFamily: "'Inter Tight', sans-serif" }}>
+                <Tag size={14} style={{ color: tagColorInput }} />
+                {editingTagId ? 'Editar etiqueta' : 'Nueva etiqueta'}
+              </h3>
+              <button onClick={() => { setTagModalOpen(false); setEditingTagId(null); setConfirmDeleteTag(false); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}><X size={15} /></button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {!editingTagId && topicTagDefs.length > 0 && (
+                <div>
+                  <div style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-tertiary)', marginBottom: 6 }}>Etiquetas existentes</div>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {topicTagDefs.map(d => (
+                      <button key={d.id} onClick={() => openTagModal(d)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, height: 26, padding: '0 10px', borderRadius: 13, border: '1px solid var(--border-subtle)', background: `${d.color}0c`, cursor: 'pointer', fontSize: 10, fontWeight: 600, color: 'var(--text-primary)', transition: 'all 120ms' }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = d.color; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.transform = 'translateY(0)'; }}>
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: d.color }} />{d.name}
+                        <Pencil size={9} style={{ color: 'var(--text-muted)' }} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div>
+                <div style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-tertiary)', marginBottom: 5 }}>Nombre</div>
+                <input value={tagNameInput} onChange={e => setTagNameInput(e.target.value)} placeholder="Ej. Fórmulas, Examen, Repaso..." autoFocus
+                  onKeyDown={e => { if (e.key === 'Enter') handleSaveTag(); }}
+                  style={{ width: '100%', height: 38, padding: '0 12px', borderRadius: 8, fontSize: 13, fontFamily: "'Inter Tight', sans-serif", fontWeight: 500, border: `1px solid ${tagNameInput ? `${tagColorInput}50` : 'var(--border-soft)'}`, background: 'var(--bg-deep)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+              <div>
+                <div style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-tertiary)', marginBottom: 6 }}>Color</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <div style={{ width: 30, height: 30, borderRadius: '50%', background: tagColorInput, flexShrink: 0, border: '2px solid var(--bg-surface)', boxShadow: '0 2px 8px rgba(0,0,0,0.3)', transition: 'background 200ms ' + EASE }} />
+                  <div style={{ flex: 1, position: 'relative', height: 28, borderRadius: 6, overflow: 'hidden' }}>
+                    <div style={{ width: '100%', height: '100%', background: 'linear-gradient(to right, #E11D48, #EC4899, #8B5CF6, #3B82F6, #06B6D4, #10B981, #84CC16, #F59E0B, #F97316)', borderRadius: 6 }} />
+                    <input type="color" value={tagColorInput} onChange={e => setTagColorInput(e.target.value)}
+                      style={{ position: 'absolute', top: -4, left: -4, width: 'calc(100% + 8px)', height: 'calc(100% + 8px)', opacity: 0, cursor: 'pointer' }} />
+                  </div>
+                  <input value={tagColorInput.toUpperCase()} onChange={e => { const v = e.target.value; if (/^#[0-9A-Fa-f]{6}$/.test(v)) setTagColorInput(v.toLowerCase()); }} style={{ width: 66, height: 26, borderRadius: 4, padding: '0 6px', fontSize: 9, fontFamily: 'monospace', fontWeight: 600, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', textAlign: 'center' }} />
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {SPINE_COLORS.map(c => (
+                    <button key={c} onClick={() => setTagColorInput(c)} title={c}
+                      style={{ width: 20, height: 20, borderRadius: '50%', background: c, cursor: 'pointer', border: tagColorInput === c ? '2px solid var(--bg-surface)' : '2px solid transparent', boxShadow: tagColorInput === c ? `0 0 0 2px ${c}` : 'none', transition: 'all 120ms', padding: 0 }} />
+                  ))}
+                </div>
+              </div>
+              <button onClick={handleSaveTag} disabled={!tagNameInput.trim()}
+                style={{ width: '100%', height: 34, borderRadius: 8, border: 'none', background: tagColorInput, color: '#fff', fontSize: 11, fontWeight: 700, cursor: tagNameInput.trim() ? 'pointer' : 'default', opacity: tagNameInput.trim() ? 1 : 0.4, fontFamily: "'Inter Tight', sans-serif", letterSpacing: '0.02em' }}>
+                {editingTagId ? 'Guardar cambios' : 'Crear etiqueta'}
+              </button>
+              {editingTagId && (
+                <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 12, display: 'flex', justifyContent: 'center' }}>
+                  {confirmDeleteTag ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 10, color: 'var(--text-secondary)', fontWeight: 600 }}>¿Eliminar esta etiqueta?</span>
+                      <button onClick={handleDeleteTag} style={{ height: 26, padding: '0 12px', borderRadius: 6, border: 'none', background: '#EF4444', color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>Eliminar</button>
+                      <button onClick={() => setConfirmDeleteTag(false)} style={{ height: 26, padding: '0 12px', borderRadius: 6, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-muted)', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>Cancelar</button>
+                    </div>
+                  ) : (
+                    <button onClick={() => setConfirmDeleteTag(true)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 18px', borderRadius: 8, border: '1px solid rgba(239,68,68,0.25)', background: 'transparent', color: 'rgba(239,68,68,0.75)', fontSize: 10, fontWeight: 600, cursor: 'pointer', transition: 'all 150ms' }}
+                      onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; e.currentTarget.style.borderColor = 'rgba(239,68,68,0.5)'; e.currentTarget.style.color = '#EF4444'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'rgba(239,68,68,0.25)'; e.currentTarget.style.color = 'rgba(239,68,68,0.75)'; }}>
+                      <Trash2 size={11} /> Eliminar etiqueta
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

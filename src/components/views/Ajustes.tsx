@@ -6,20 +6,23 @@ import {
   RefreshCw, Shield,
   Sliders, Music,
   Calendar, Database, Upload,
-  Wifi, Image, Coffee, X, Trash2,
-  Monitor, Activity, Sparkles, LogOut, Eye, EyeOff, CalendarDays, Clock
+  Wifi, WifiOff, Image, Coffee, X, Trash2, Save,
+  Monitor, Activity, Sparkles, LogOut, Eye, EyeOff, CalendarDays, Clock, ChevronDown,
+  FolderOpen, Boxes, AppWindow, HardDrive, Copy, Check, RefreshCcw,
+  CheckSquare, GraduationCap, FileText, ClipboardList, MonitorPlay, ExternalLink, Loader2, CalendarPlus, ListTodo
 } from 'lucide-react';
 import { useApp, fmtClock } from '../../store/AppContext';
 import { del } from 'idb-keyval';
-import { invoke } from '@tauri-apps/api/core';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import NotificationBell from '../ui/NotificationBell';
 import { copyFile, mkdir, exists, readFile, writeFile, readTextFile } from '@tauri-apps/plugin-fs';
-import { appCacheDir, join, extname } from '@tauri-apps/api/path';
+import { appCacheDir, appConfigDir, appDataDir, appLocalDataDir, appLogDir, resourceDir, join, extname } from '@tauri-apps/api/path';
+import { getVersion, getName, getTauriVersion } from '@tauri-apps/api/app';
+import { openPath, openUrl } from '@tauri-apps/plugin-opener';
 import {
-  signIn, signOut, isSignedIn, onAuthChange, configureGoogle,
+  signIn, signOut, isSignedIn, onAuthChange, configureGoogle, restoreSession,
 } from '../../lib/google/index';
 import { isTauri } from '../../lib/tauri';
 import {
@@ -31,7 +34,7 @@ const GOOGLE_CLIENT_SECRET = import.meta.env.VITE_GOOGLE_CLIENT_SECRET || '';
 
 type SettingsTab = 'perfil' | 'apariencia' | 'estudio' | 'musica' | 'sistema' | 'notificaciones';
 
-const TABS: { id: SettingsTab; label: string; icon: React.ComponentType<{ size?: number }> }[] = [
+const TABS: { id: SettingsTab; label: string; icon: React.ComponentType<{ size?: number; style?: React.CSSProperties }> }[] = [
   { id: 'perfil', label: 'Perfil', icon: User },
   { id: 'apariencia', label: 'Apariencia', icon: Palette },
   { id: 'estudio', label: 'Estudio', icon: Brain },
@@ -75,9 +78,20 @@ const THEME_PRESETS = [
 
 const ACCENT_COLORS = ['#E11D48', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#06B6D4', '#EC4899', '#F97316', '#84CC16', '#D946EF', '#14B8A6', '#6366F1'];
 
+const GOOGLE_SERVICES: { id: string; name: string; desc: string; icon: typeof Calendar; color: string }[] = [
+  { id: 'calendar', name: 'Calendar', desc: 'Eventos bidireccionales con tu agenda de Google', icon: Calendar, color: '#1A73E8' },
+  { id: 'tasks', name: 'Tasks', desc: 'Tareas bidireccionales con tu lista de Google', icon: ListTodo, color: '#34A853' },
+  { id: 'classroom', name: 'Classroom', desc: 'Importa cursos y entregas pendientes', icon: GraduationCap, color: '#F9AB00' },
+  { id: 'drive', name: 'Drive', desc: 'Crea un respaldo de tus datos en la nube', icon: HardDrive, color: '#EA4335' },
+  { id: 'docs', name: 'Docs y Sheets', desc: 'Exporta tus notas y estadísticas', icon: FileText, color: '#4285F4' },
+  { id: 'forms', name: 'Forms', desc: 'Genera quizzes de repaso automáticos', icon: ClipboardList, color: '#9334E6' },
+  { id: 'youtube', name: 'YouTube', desc: 'Música y videos para tu sesión de estudio', icon: MonitorPlay, color: '#FF0000' },
+  { id: 'profile', name: 'Perfil', desc: 'Sincroniza foto, nombre y datos de la cuenta', icon: User, color: '#5F6368' },
+];
+
 function Toggle({ checked, onChange, label, desc }: { checked: boolean; onChange: (v: boolean) => void; label: string; desc: string }) {
   return (
-    <label className="bento-card hover-lift" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px', border: '1px solid var(--border-subtle)', cursor: 'pointer' }}>
+    <label className="bento-card hover-lift" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '24px', border: '1px solid var(--border-subtle)', cursor: 'pointer' }}>
       <div style={{ minWidth: 0, flex: 1 }}>
         <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', display: 'block' }}>{label}</span>
         <span style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4, display: 'block', lineHeight: 1.5 }}>{desc}</span>
@@ -111,12 +125,96 @@ function RangeSlider({ label, value, min, max, step = 1, unit, onChange, color }
   );
 }
 
+function CardHeader({ icon, title, desc }: { icon: React.ReactNode; title: string; desc?: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+      <span style={{
+        width: 30, height: 30, borderRadius: 9, flexShrink: 0,
+        background: 'color-mix(in srgb, var(--accent) 10%, transparent)',
+        border: '1px solid color-mix(in srgb, var(--accent) 22%, transparent)',
+        color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        boxShadow: '0 2px 8px color-mix(in srgb, var(--accent) 10%, transparent)',
+      }}>{icon}</span>
+      <div style={{ minWidth: 0 }}>
+        <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase', display: 'block', lineHeight: 1.2 }}>{title}</span>
+        {desc && <span style={{ fontSize: 12, color: 'var(--text-primary)', display: 'block', marginTop: 3, fontWeight: 400 }}>{desc}</span>}
+      </div>
+    </div>
+  );
+}
+
+function InfoRow({ label, value, mono, color, last }: { label: string; value: React.ReactNode; mono?: boolean; color?: string; last?: boolean }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, padding: '10px 0', borderBottom: last ? 'none' : '1px solid var(--border-subtle)' }}>
+      <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{label}</span>
+      <span style={{
+        fontSize: 11, fontWeight: 600, color: color || 'var(--text-primary)',
+        fontFamily: mono ? "'JetBrains Mono', monospace" : undefined,
+        textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '72%',
+      }}>{value}</span>
+    </div>
+  );
+}
+
+const fmtBytes = (b: number) => b > 1024 * 1024 ? `${(b / 1024 / 1024).toFixed(1)} MB` : b > 1024 ? `${(b / 1024).toFixed(1)} KB` : `${b} B`;
+
+// ── REAL network measurement (not simulated) ────────────────────────────────
+const LATENCY_URL = 'https://www.gstatic.com/generate_204';
+const SPEED_URL = 'https://speed.cloudflare.com/__down?bytes=1000000';
+
+async function measureLatency(): Promise<number | null> {
+  const samples: number[] = [];
+  for (let i = 0; i < 3; i++) {
+    const t0 = performance.now();
+    try {
+      await fetch(LATENCY_URL, { cache: 'no-store', mode: 'cors' });
+      samples.push(performance.now() - t0);
+    } catch { /* sample perdido */ }
+  }
+  if (samples.length === 0) return null;
+  samples.sort((a, b) => a - b);
+  return Math.round(samples[0]);
+}
+
+async function measureDownSpeed(latencyMs: number | null): Promise<number | null> {
+  const t0 = performance.now();
+  try {
+    const res = await fetch(SPEED_URL, { cache: 'no-store' });
+    if (!res.ok) return null;
+    const buf = await res.arrayBuffer();
+    const seconds = (performance.now() - t0) / 1000;
+    const corrected = Math.max(seconds - (latencyMs ? latencyMs / 1000 : 0), 0.05);
+    return Math.round((buf.byteLength * 8) / (corrected * 1_000_000) * 10) / 10;
+  } catch {
+    return null;
+  }
+}
+
+function CopyButton({ text, size }: { text: string; size?: number }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button onClick={async (e) => {
+      e.stopPropagation();
+      try {
+        await navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1600);
+      } catch { /* sin permisos de portapapeles */ }
+    }} title={copied ? '¡Copiado!' : 'Copiar'}
+      style={{ width: size || 24, height: size || 24, borderRadius: 6, flexShrink: 0, background: copied ? 'rgba(16,185,129,0.1)' : 'var(--bg-deep)', border: `1px solid ${copied ? 'rgba(16,185,129,0.3)' : 'var(--border-subtle)'}`, color: copied ? '#10B981' : 'var(--text-tertiary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}>
+      {copied ? <Check size={12} /> : <Copy size={12} />}
+    </button>
+  );
+}
+
 export default function Ajustes() {
   const {
     settings, updateSettings, googleConnected, setGoogleConnected,
     setCalendarSyncEnabled, lastCalendarSync, setLastCalendarSync,
-    triggerCalendarSync, importGoogleEvents,
-    loadGoogleProfile,
+    triggerCalendarSync, importGoogleEvents, syncCalendarTwoWay, syncTasksTwoWay,
+    triggerTasksSync, importGoogleTasks, loadGoogleProfile,
+    importClassroomCourses, importClassroomAssignments,
+    triggerDriveBackup, exportNotesToGoogleDoc, exportStatsToGoogleSheets,
     events, tasks, notes, clearAllMusicData, addNotification, deleteCompletedTasks,
     exportMusicLibrary, importMusicLibrary,
     tracks, updateTrack,
@@ -135,6 +233,9 @@ export default function Ajustes() {
   const [supabaseUser, setSupabaseUser] = useState<{ email?: string } | null>(null);
   const [supabaseSyncing, setSupabaseSyncing] = useState(false);
   const [showGoogleModal, setShowGoogleModal] = useState(false);
+  const [googleBusy, setGoogleBusy] = useState<string | null>(null);
+  const [lastTasksSync, setLastTasksSync] = useState<string | null>(null);
+  const [serviceResults, setServiceResults] = useState<Record<string, string>>({});
   const [showClearAllMusic, setShowClearAllMusic] = useState(false);
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
@@ -142,8 +243,143 @@ export default function Ajustes() {
   const [authLoading, setAuthLoading] = useState(false);
   const [showDrawModal, setShowDrawModal] = useState(false);
   const [clearAllMusicText, setClearAllMusicText] = useState('');
-  const [sysInfo, setSysInfo] = useState<{ cpu: number; ram: number; disk: number; platform: string; arch: string; appVer: string } | null>(null);
+  const [appInfo, setAppInfo] = useState<{ name: string; version: string; tauriVersion: string } | null>(null);
+  const [appDirs, setAppDirs] = useState<{ label: string; path: string; root?: boolean }[]>([]);
   const bgInputRef = useRef<HTMLInputElement>(null);
+  const profilePhotoInputRef = useRef<HTMLInputElement>(null);
+
+  const handleProfilePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { addNotification('El archivo debe ser una imagen', 'error'); return; }
+    if (file.size > 5 * 1024 * 1024) { addNotification('La imagen debe pesar menos de 5 MB', 'error'); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      updateSettings({ profilePhoto: reader.result as string });
+      addNotification('Foto de perfil actualizada', 'success');
+    };
+    reader.onerror = () => addNotification('No se pudo leer la imagen', 'error');
+    reader.readAsDataURL(file);
+  };
+
+  // Internet / network status — datos reales medidos, no simulados
+  const [netInfo, setNetInfo] = useState<{
+    online: boolean;
+    type?: string;
+    effectiveType?: string;
+    downlink?: number;
+    rtt?: number;
+    saveData?: boolean;
+    latency?: number | null;
+    downSpeed?: number | null;
+    lastChecked?: string;
+    checking?: boolean;
+  }>(() => ({ online: typeof navigator !== 'undefined' ? navigator.onLine : true }));
+  const [speedTesting, setSpeedTesting] = useState(false);
+  const [showNet, setShowNet] = useState(false);
+  const netRef = useRef<HTMLDivElement>(null);
+  const netBusyRef = useRef(false);
+  const downSpeedRef = useRef<number | null>(null);
+
+  const refreshNet = async (opts?: { speed?: boolean }) => {
+    if (netBusyRef.current) return;
+    netBusyRef.current = true;
+    if (!navigator.onLine) {
+      setNetInfo(n => ({ ...n, online: false, latency: null, downSpeed: null, lastChecked: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) }));
+      netBusyRef.current = false;
+      return;
+    }
+    setNetInfo(n => ({ ...n, checking: true }));
+    const latency = await measureLatency();
+    let downSpeed = downSpeedRef.current;
+    if (opts?.speed) {
+      setSpeedTesting(true);
+      downSpeed = await measureDownSpeed(latency);
+      downSpeedRef.current = downSpeed;
+      setSpeedTesting(false);
+    }
+    setNetInfo(n => ({
+      ...n,
+      online: true,
+      latency,
+      downSpeed,
+      checking: false,
+      lastChecked: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    }));
+    netBusyRef.current = false;
+  };
+
+  useEffect(() => {
+    const update = () => {
+      const c = (navigator as any).connection;
+      setNetInfo(prev => ({
+        ...prev,
+        online: navigator.onLine,
+        type: c?.type as string | undefined,
+        effectiveType: c?.effectiveType as string | undefined,
+        downlink: c?.downlink != null ? Number(c.downlink) : undefined,
+        rtt: c?.rtt != null ? Number(c.rtt) : undefined,
+        saveData: c?.saveData,
+      }));
+    };
+    update();
+    const onOnline = () => { update(); refreshNet(); };
+    const onOffline = () => { update(); };
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    const c = (navigator as any).connection;
+    if (c?.addEventListener) {
+      c.addEventListener('change', update);
+      return () => {
+        window.removeEventListener('online', onOnline);
+        window.removeEventListener('offline', onOffline);
+        c.removeEventListener('change', update);
+      };
+    }
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+    };
+  }, []);
+  useEffect(() => {
+    const t = setInterval(() => {
+      if (navigator.onLine) refreshNet();
+    }, 30000);
+    return () => clearInterval(t);
+  }, []);
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (netRef.current && !netRef.current.contains(e.target as Node)) setShowNet(false);
+    };
+    if (showNet) document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [showNet]);
+
+  // Cargar información real de la app (no del equipo)
+  useEffect(() => {
+    if (!isTauri()) {
+      setAppInfo({ name: 'OWA Studio', version: '1.0.0', tauriVersion: '—' });
+      return;
+    }
+    (async () => {
+      try {
+        const [name, version, tauriVersion] = await Promise.all([getName(), getVersion(), getTauriVersion()]);
+        setAppInfo({ name, version, tauriVersion });
+        const [data, config, local, cache, log, res] = await Promise.all([appDataDir(), appConfigDir(), appLocalDataDir(), appCacheDir(), appLogDir(), resourceDir()]);
+        setAppDirs([
+          { label: 'Carpeta de datos', path: data },
+          { label: 'Carpeta de configuración', path: config },
+          { label: 'Carpeta local', path: local },
+          { label: 'Carpeta de caché', path: cache },
+          { label: 'Carpeta de registros', path: log },
+          { label: 'Carpeta raíz (recursos)', path: res, root: true },
+        ]);
+      } catch (e) {
+        console.error('Error cargando información de la app', e);
+      }
+    })();
+  }, []);
 
   // Load theme colors from saved settings on mount
   useEffect(() => {
@@ -173,32 +409,21 @@ export default function Ajustes() {
   const dateStrCapitalized = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
 
   useEffect(() => {
-    if (GOOGLE_CLIENT_ID) {
-      configureGoogle(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET);
-      setGoogleConnected(isSignedIn());
-      const unsub = onAuthChange(connected => setGoogleConnected(connected));
-      return unsub;
-    }
-  }, [setGoogleConnected]);
-
-  useEffect(() => {
-    if (!isTauri()) return;
-    (async () => {
-      try {
-        const raw: any = await invoke('get_system_stats');
-        setSysInfo({
-          cpu: Math.round(raw.cpu || 0),
-          ram: Math.round(raw.mem ? Math.round((parseInt(raw.mem.Total) - parseInt(raw.mem.Free)) / parseInt(raw.mem.Total) * 100) : 0),
-          disk: raw.disk || 0,
-          platform: navigator.platform,
-          arch: '',
-          appVer: '1.0.0',
+    if (!GOOGLE_CLIENT_ID) return;
+    configureGoogle(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET);
+    let mounted = true;
+    restoreSession().then(ok => {
+      if (!mounted) return;
+      setGoogleConnected(ok);
+      if (ok) {
+        loadGoogleProfile().then(profile => {
+          if (mounted && profile) setGoogleProfile(profile);
         });
-      } catch {
-        setSysInfo({ cpu: 0, ram: 0, disk: 0, platform: navigator.platform, arch: '', appVer: '1.0.0' });
       }
-    })();
-  }, []);
+    });
+    const unsub = onAuthChange(connected => setGoogleConnected(connected));
+    return () => { mounted = false; unsub(); };
+  }, [loadGoogleProfile, setGoogleConnected]);
 
   useEffect(() => {
     const success = localStorage.getItem('owa_auth_success');
@@ -326,12 +551,93 @@ export default function Ajustes() {
     addNotification('Google desconectado exitosamente', 'success');
   };
 
+  const handleSignOutAll = async () => {
+    try {
+      await signOutSupabase();
+      setSupabaseConnected(false);
+      setSupabaseUser(null);
+      signOut();
+      setGoogleConnected(false);
+      setCalendarSyncEnabled(false);
+      setLastCalendarSync(null);
+      setGoogleProfile(null);
+      addNotification('Sesión cerrada exitosamente', 'success');
+    } catch { addNotification('Error al cerrar sesión', 'error'); }
+  };
+
   const handleCalendarSync = async () => {
     try {
       await triggerCalendarSync();
       const count = await importGoogleEvents();
       addNotification(count > 0 ? `${count} eventos importados de Google Calendar` : 'Eventos sincronizados exitosamente', 'success');
     } catch { addNotification('Error de Sincronización con Google Calendar', 'error'); }
+  };
+
+  const openGoogleUrl = (url: string | null | undefined) => {
+    if (!url) { addNotification('No se pudo generar el enlace', 'error'); return; }
+    if (isTauri()) {
+      openUrl(url).catch(() => window.open(url, '_blank'));
+    } else {
+      window.open(url, '_blank');
+    }
+  };
+
+  const runGoogleService = async (id: string) => {
+    if (googleBusy) return;
+    setGoogleBusy(id);
+    try {
+      switch (id) {
+        case 'calendar': {
+          const r = await syncCalendarTwoWay();
+          if (r.errors > 0) addNotification('Calendar: hubo errores al sincronizar', 'error');
+          else addNotification(`Calendar: ${r.pushed} enviados a Google, ${r.created} nuevos en la app`, 'success');
+          break;
+        }
+        case 'tasks': {
+          const r = await syncTasksTwoWay();
+          setLastTasksSync(new Date().toISOString());
+          if (r.errors > 0) addNotification('Tasks: hubo errores al sincronizar', 'error');
+          else addNotification(`Tasks: ${r.pushed} enviadas a Google, ${r.created} nuevas en la app`, 'success');
+          break;
+        }
+        case 'classroom': {
+          await importClassroomCourses();
+          const n = await importClassroomAssignments();
+          addNotification(n > 0 ? `Classroom: ${n} entregas importadas como tareas` : 'Classroom: cursos importados', 'success');
+          break;
+        }
+        case 'drive': {
+          const url = await triggerDriveBackup();
+          if (url) { addNotification('Respaldo creado en Google Drive', 'success'); openGoogleUrl(url); }
+          else addNotification('No se pudo crear el respaldo en Drive', 'error');
+          break;
+        }
+        case 'docs': {
+          const url = await exportNotesToGoogleDoc();
+          openGoogleUrl(url);
+          break;
+        }
+        case 'forms': {
+          addNotification('Genera quizzes desde un curso en Estudio', 'info');
+          break;
+        }
+        case 'youtube': {
+          addNotification('Busca música y videos desde la sección Música', 'info');
+          break;
+        }
+        case 'profile': {
+          const p = await loadGoogleProfile();
+          if (p) { setGoogleProfile(p); addNotification('Perfil de Google actualizado', 'success'); }
+          else addNotification('No se pudo actualizar el perfil', 'error');
+          break;
+        }
+      }
+    } catch (e) {
+      console.error('Google service failed:', e);
+      addNotification('Error al ejecutar la acción de Google', 'error');
+    } finally {
+      setGoogleBusy(null);
+    }
   };
 
   const handleFontChange = (font: string) => {
@@ -342,45 +648,98 @@ export default function Ajustes() {
   return (
     <div className="page-container" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto' }}>
       
-      {/* â”€â”€ HEADER â”€â”€ */}
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, paddingTop: 8 }}>
+      {/* ── HEADER ── */}
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 26, paddingTop: 6 }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <h1 style={{ fontSize: 32, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.15, letterSpacing: '-0.02em', fontFamily: "'Inter Tight', sans-serif" }}>Configuración</h1>
-            <Sliders size={26} style={{ color: 'var(--accent)' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <h1 style={{ fontSize: 26, fontWeight: 300, color: 'var(--text-primary)', lineHeight: 1.1, letterSpacing: '-0.03em', fontFamily: "'Inter Tight', sans-serif", margin: 0 }}>Configuración</h1>
+            <Sliders size={17} style={{ color: 'var(--accent)', opacity: 0.9 }} />
           </div>
-          <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 6, fontWeight: 300, letterSpacing: '0.02em' }}>Personaliza cada aspecto de tu entorno</p>
+          <p style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: 5, fontWeight: 300, letterSpacing: '0.03em' }}>Personaliza cada aspecto de tu entorno</p>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', border: '1px solid var(--border-default)', borderRadius: 16, fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>
-              <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--success)', boxShadow: '0 0 8px var(--success)' }} />
-              En linea
-            </div>
-            <button className="btn-ghost" style={{ padding: 8, borderRadius: '50%' }}><Wifi size={16} /></button>
-            <NotificationBell />
+          {/* Internet status — datos reales medidos de la conexión */}
+          <div ref={netRef} style={{ position: 'relative' }}>
+            <button onClick={() => { setShowNet(!showNet); if (!showNet && navigator.onLine) refreshNet(); }} className="btn-ghost"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8, padding: '7px 13px', borderRadius: 12,
+                border: `1px solid ${netInfo.online ? 'var(--border-default)' : 'rgba(239,68,68,0.4)'}`,
+                background: netInfo.online ? 'var(--bg-elevated-alpha, var(--bg-elevated))' : 'rgba(239,68,68,0.08)',
+                cursor: 'pointer', transition: 'all 200ms', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)',
+              }}>
+              {netInfo.online ? <Wifi size={15} style={{ color: '#10B981' }} /> : <WifiOff size={15} style={{ color: '#EF4444' }} />}
+              <span style={{ color: netInfo.online ? '#10B981' : '#EF4444' }}>{netInfo.online ? 'Conectado' : 'Sin conexión'}</span>
+              {netInfo.online && netInfo.latency != null && (
+                <span style={{ fontSize: 9.5, fontWeight: 500, color: 'var(--text-tertiary)', fontFamily: "'JetBrains Mono', monospace", paddingLeft: 8, borderLeft: '1px solid var(--border-subtle)' }}>
+                  {netInfo.latency} ms
+                </span>
+              )}
+              <ChevronDown size={13} style={{ color: 'var(--text-tertiary)', transform: showNet ? 'rotate(180deg)' : 'none', transition: 'transform 200ms' }} />
+            </button>
+
+            {showNet && (
+              <div style={{
+                position: 'absolute', right: 0, top: 'calc(100% + 8px)', width: 280, zIndex: 60,
+                background: 'color-mix(in srgb, var(--bg-elevated) 96%, transparent)', border: '1px solid var(--border-default)',
+                borderRadius: 14, padding: 16, boxShadow: '0 18px 44px rgba(0,0,0,0.28)', backdropFilter: 'blur(14px)',
+                display: 'flex', flexDirection: 'column', gap: 6,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 10, borderBottom: '1px solid var(--border-subtle)' }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: netInfo.online ? '#10B981' : '#EF4444', boxShadow: `0 0 8px ${netInfo.online ? '#10B981' : '#EF4444'}` }} />
+                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>{netInfo.online ? 'Conexión activa' : 'Sin conexión a internet'}</span>
+                </div>
+                {[
+                  { label: 'Estado', value: netInfo.online ? 'En línea' : 'Desconectado', color: netInfo.online ? '#10B981' : '#EF4444' },
+                  { label: 'Tipo de red', value: netInfo.type ? ({ wifi: 'Wi-Fi', ethernet: 'Ethernet (cable)', cellular: 'Datos móviles', wimax: 'WiMax', bluetooth: 'Bluetooth', other: 'Otra', none: 'Sin red', unknown: 'Desconocida' } as Record<string, string>)[netInfo.type] || netInfo.type : '—' },
+                  { label: 'Conectividad', value: netInfo.effectiveType ? ({ 'slow-2g': '2G lenta', '2g': '2G', '3g': '3G', '4g': '4G / 5G' } as Record<string, string>)[netInfo.effectiveType] || netInfo.effectiveType.toUpperCase() : '—' },
+                  { label: 'Latencia (medida)', value: netInfo.latency != null ? `${netInfo.latency} ms` : (netInfo.checking ? 'Midiendo…' : '—'), color: netInfo.latency != null ? (netInfo.latency < 60 ? '#10B981' : netInfo.latency < 150 ? '#F59E0B' : '#EF4444') : undefined },
+                  { label: 'Descarga (medida)', value: speedTesting ? 'Probando…' : netInfo.downSpeed != null ? `${netInfo.downSpeed} Mbps` : 'Pulsa "Medir"', color: netInfo.downSpeed != null ? (netInfo.downSpeed >= 10 ? '#10B981' : netInfo.downSpeed >= 3 ? '#F59E0B' : '#EF4444') : undefined },
+                  { label: 'Ahorro de datos', value: netInfo.saveData ? 'Activado' : 'Desactivado' },
+                ].map(row => (
+                  <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, fontSize: 11, padding: '2px 0' }}>
+                    <span style={{ color: 'var(--text-tertiary)', fontWeight: 500 }}>{row.label}</span>
+                    <span style={{ color: row.color || 'var(--text-primary)', fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", fontSize: 10, textAlign: 'right' }}>{row.value}</span>
+                  </div>
+                ))}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 10, borderTop: '1px solid var(--border-subtle)' }}>
+                  <button onClick={() => refreshNet({ speed: true })} disabled={speedTesting || !netInfo.online}
+                    style={{
+                      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 0', borderRadius: 8, fontSize: 10.5, fontWeight: 600, cursor: 'pointer',
+                      background: 'color-mix(in srgb, var(--accent) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', color: 'var(--accent)',
+                      opacity: speedTesting || !netInfo.online ? 0.5 : 1, transition: 'all 150ms',
+                    }}>
+                    <RefreshCcw size={12} /> {speedTesting ? 'Midiendo…' : 'Medir conexión'}
+                  </button>
+                </div>
+                <div style={{ fontSize: 9, color: 'var(--text-muted)', lineHeight: 1.4, paddingTop: 4 }}>
+                  {netInfo.lastChecked ? `Comprobado a las ${netInfo.lastChecked} · medición real, no estimada.` : 'Latencia y descarga se miden en tiempo real.'}
+                </div>
+              </div>
+            )}
           </div>
+
+          <NotificationBell />
 
           <div style={{ textAlign: 'right', borderLeft: '1px solid var(--border-subtle)', paddingLeft: 16, position: 'relative' }}>
             {/* Clock background illumination */}
-            <div style={{ 
-              position: 'absolute', 
-              top: '50%', 
-              right: 0, 
-              width: 120, 
-              height: 80, 
-              background: 'radial-gradient(circle at center, var(--accent-dim) 0%, transparent 70%)', 
-              opacity: 0.4, 
+            <div style={{
+              position: 'absolute',
+              top: '50%',
+              right: 0,
+              width: 110,
+              height: 72,
+              background: 'radial-gradient(circle at center, var(--accent-dim) 0%, transparent 70%)',
+              opacity: 0.35,
               transform: 'translateY(-50%)',
               pointerEvents: 'none',
               zIndex: 0
             }} />
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, justifyContent: 'flex-end', position: 'relative', zIndex: 1 }}>
-              <div className="led-display" style={{ fontSize: 28, lineHeight: 1, color: 'var(--accent)', textShadow: '0 0 15px var(--accent-glow)' }}>{timeStr}</div>
-              <div className="led-seconds" style={{ fontSize: 14, color: 'var(--accent)', opacity: 0.8 }}>{secondsStr}</div>
+              <div className="led-display" style={{ fontSize: 25, lineHeight: 1, color: 'var(--accent)', textShadow: '0 0 15px var(--accent-glow)' }}>{timeStr}</div>
+              <div className="led-seconds" style={{ fontSize: 13, color: 'var(--accent)', opacity: 0.8 }}>{secondsStr}</div>
             </div>
-            <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: 4, position: 'relative', zIndex: 1 }}>
+            <div style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: 4, position: 'relative', zIndex: 1 }}>
               {dateStrCapitalized}
             </div>
           </div>
@@ -399,18 +758,22 @@ export default function Ajustes() {
             const Icon = tab.icon;
             const active = activeTab === tab.id;
             return (
-              <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
-                display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 8,
-                background: active ? 'var(--accent)' : 'transparent',
-                border: 'none', color: active ? '#fff' : 'var(--text-secondary)',
-                fontSize: 13, fontWeight: 600, cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'all 200ms'
-              }}>
-                <Icon size={18} />
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                onMouseEnter={e => { if (activeTab !== tab.id) { e.currentTarget.style.background = 'var(--bg-hover)'; } }}
+                onMouseLeave={e => { if (activeTab !== tab.id) { e.currentTarget.style.background = 'transparent'; } }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', borderRadius: 10, position: 'relative',
+                  background: active ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : 'transparent',
+                  border: `1px solid ${active ? 'color-mix(in srgb, var(--accent) 28%, transparent)' : 'transparent'}`,
+                  color: active ? 'var(--accent)' : 'var(--text-secondary)',
+                  fontSize: 13, fontWeight: 600, cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'all 200ms'
+                }}>
+                {active && <span style={{ position: 'absolute', left: -16, top: '50%', transform: 'translateY(-50%)', width: 3, height: 22, borderRadius: 2, background: 'var(--accent)', boxShadow: '0 0 8px var(--accent)' }} />}
+                <Icon size={17} style={{ opacity: active ? 1 : 0.85 }} />
                 <span>{tab.label}</span>
               </button>
             );
           })}
-          <div style={{ borderTop: '1px solid var(--border-subtle)', margin: '16px 0 8px 0' }} />
         </aside>
 
         {/* MAIN AREA */}
@@ -421,32 +784,52 @@ export default function Ajustes() {
             {activeTab === 'perfil' && (
               <section style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
                 <div>
-                  <h2 style={{ fontSize: 20, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em', marginBottom: 4 }}>Perfil de Usuario</h2>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                    <span style={{ width: 32, height: 32, borderRadius: 10, background: 'color-mix(in srgb, var(--accent) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 2px 8px color-mix(in srgb, var(--accent) 12%, transparent)' }}>
+                      <User size={15} />
+                    </span>
+                    <h2 style={{ fontSize: 18, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em', margin: 0 }}>Perfil de Usuario</h2>
+                  </div>
                   <p style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 300, letterSpacing: '0.02em' }}>Tu identidad y conexiones en OWA Studio</p>
                 </div>
 
-                {/* Avatar + Name + Photo URL */}
+                {/* Avatar + Nombre + Foto */}
                 <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 24 }}>
                   <div style={{ position: 'relative', flexShrink: 0 }}>
                     {settings.profilePhoto ? (
-                      <img src={settings.profilePhoto} alt="" style={{ width: 72, height: 72, borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--accent)' }} />
+                      <img src={settings.profilePhoto} alt="" style={{ width: 84, height: 84, borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--accent)', boxShadow: '0 0 0 4px color-mix(in srgb, var(--accent) 15%, transparent), 0 8px 24px rgba(0,0,0,0.25)' }} />
                     ) : (
-                      <div style={{ width: 72, height: 72, borderRadius: '50%', background: 'var(--accent-dim)', border: '2px solid var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, fontWeight: 300, color: 'var(--accent)', fontFamily: "'Inter Tight', sans-serif" }}>
+                      <div style={{ width: 84, height: 84, borderRadius: '50%', background: 'var(--accent-dim)', border: '2px solid var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32, fontWeight: 300, color: 'var(--accent)', fontFamily: "'Inter Tight', sans-serif" }}>
                         {settings.userName ? settings.userName.charAt(0).toUpperCase() : 'O'}
                       </div>
                     )}
+                    <button onClick={() => profilePhotoInputRef.current?.click()} title="Cambiar foto de perfil"
+                      style={{ position: 'absolute', bottom: 0, right: 0, width: 28, height: 28, borderRadius: '50%', background: 'var(--accent)', border: '2px solid var(--bg-elevated)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.35)' }}>
+                      <Image size={13} />
+                    </button>
+                    <input ref={profilePhotoInputRef} type="file" accept="image/*" onChange={handleProfilePhotoUpload} style={{ display: 'none' }} />
                   </div>
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Nombre</label>
-                    <input type="text" value={settings.userName}
-                      onChange={e => updateSettings({ userName: e.target.value })}
-                      className="input-base" style={{ width: '100%', height: 40, fontSize: 14, fontWeight: 500 }}
-                      placeholder="Tu nombre" />
-                    <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginTop: 4 }}>Foto de perfil (URL)</label>
-                    <input type="text" value={settings.profilePhoto || ''}
-                      onChange={e => updateSettings({ profilePhoto: e.target.value || undefined })}
-                      className="input-base" style={{ width: '100%', height: 38, fontSize: 12, fontWeight: 400 }}
-                      placeholder="https://..." />
+                    <div>
+                      <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Nombre</label>
+                      <input type="text" value={settings.userName}
+                        onChange={e => updateSettings({ userName: e.target.value })}
+                        className="input-base" style={{ width: '100%', height: 40, fontSize: 14, fontWeight: 500 }}
+                        placeholder="Tu nombre" />
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                      <button onClick={() => profilePhotoInputRef.current?.click()} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 16px', borderRadius: 8, fontSize: 11.5, fontWeight: 600, cursor: 'pointer', background: 'color-mix(in srgb, var(--accent) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 28%, transparent)', color: 'var(--accent)', transition: 'all 150ms' }}>
+                        <Image size={14} /> {settings.profilePhoto ? 'Cambiar foto' : 'Subir foto desde tu equipo'}
+                      </button>
+                      {settings.profilePhoto && (
+                        <button onClick={() => updateSettings({ profilePhoto: undefined })} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 14px', borderRadius: 8, fontSize: 11.5, fontWeight: 600, cursor: 'pointer', background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.18)', color: '#EF4444', transition: 'all 150ms' }}>
+                          <Trash2 size={13} /> Quitar
+                        </button>
+                      )}
+                      <span style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.4, maxWidth: 200 }}>
+                        Se guarda localmente en tu dispositivo. JPG, PNG o WebP (máx. 5 MB).
+                      </span>
+                    </div>
                   </div>
                 </div>
 
@@ -457,14 +840,18 @@ export default function Ajustes() {
                     {/* Google */}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <svg viewBox="0 0 24 24" style={{ width: 20, height: 20 }}>
-                          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/>
-                          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                        </svg>
+                        {googleConnected && googleProfile?.photoUrl ? (
+                          <img src={googleProfile.photoUrl} alt="" style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border-subtle)' }} />
+                        ) : (
+                          <svg viewBox="0 0 24 24" style={{ width: 20, height: 20 }}>
+                            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/>
+                            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                          </svg>
+                        )}
                         <div>
-                          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Google</span>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{googleProfile?.displayName || 'Google'}</span>
                           <span style={{ fontSize: 10, color: googleConnected ? '#10B981' : 'var(--text-tertiary)', display: 'block', marginTop: 1 }}>{googleConnected ? (googleProfile?.email || 'Conectado') : 'Desconectado'}</span>
                         </div>
                       </div>
@@ -523,101 +910,75 @@ export default function Ajustes() {
                       </div>
                     )}
                   </div>
-                </div>
-
-                {/* Ocultar tareas completadas */}
-                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                    <EyeOff size={16} style={{ color: 'var(--accent)' }} />
-                    <h3 style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em', margin: 0 }}>Ocultar tareas completadas</h3>
-                  </div>
-                  <p style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 16, lineHeight: 1.5 }}>Controla cuándo se ocultan las tareas completadas en la vista de Tareas</p>
-                  {([
-                    { mode: 'off' as const, label: 'Siempre visible', desc: 'Las tareas completadas nunca se ocultan', icon: <Eye size={13} /> },
-                    { mode: 'now' as const, label: 'Al instante', desc: 'Se ocultan apenas las completas', icon: <Zap size={13} /> },
-                    { mode: '10m' as const, label: '10 minutos', desc: 'Tiempo para revisarlas', icon: <Clock size={13} /> },
-                    { mode: '1h' as const, label: '1 hora', desc: 'Las ves por un rato', icon: <Timer size={13} /> },
-                    { mode: '6h' as const, label: '6 horas', desc: 'Ocultar al pasar el turno', icon: <Coffee size={13} /> },
-                    { mode: '24h' as const, label: '24 horas', desc: 'Ocultar al día siguiente', icon: <Calendar size={13} /> },
-                    { mode: '48h' as const, label: '2 días', desc: 'Dos días para revisar', icon: <CalendarDays size={13} /> },
-                  ]).map((opt, i) => {
-                    const isActive = hideMode === opt.mode;
-                    return (
-                      <React.Fragment key={opt.mode}>
-                        {i === 1 && <div style={{ height: 1, background: 'var(--border-soft)', margin: '6px 0' }} />}
-                        <button onClick={() => {
-                          setHideMode(opt.mode);
-                          localStorage.setItem('owa_hide_completed', opt.mode);
-                        }}
-                          style={{
-                            width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 8,
-                            border: '1px solid', cursor: 'pointer', textAlign: 'left', transition: 'all 150ms', marginBottom: 4,
-                            background: isActive ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : 'transparent',
-                            borderColor: isActive ? 'color-mix(in srgb, var(--accent) 25%, transparent)' : 'transparent',
-                          }}
-                          onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                          onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}>
-                          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, flexShrink: 0, color: isActive ? 'var(--accent)' : 'var(--text-tertiary)' }}>{opt.icon}</span>
-                          <div style={{ minWidth: 0, flex: 1 }}>
-                            <div style={{ fontSize: 12, fontWeight: isActive ? 600 : 400, color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)', lineHeight: 1.3 }}>{opt.label}</div>
-                            <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 1 }}>{opt.desc}</div>
-                          </div>
-                          <div style={{ width: 14, height: 14, borderRadius: '50%', border: isActive ? '2px solid var(--accent)' : '2px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 150ms' }}>
-                            {isActive && <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)' }} />}
-                          </div>
-                        </button>
-                      </React.Fragment>
-                    );
-                  })}
-                </div>
-
-                {/* Danger Zone — Logout + Data Management */}
-                <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {(googleConnected || supabaseConnected) && (
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
-                      <button onClick={async () => {
-                        try {
-                          await signOutSupabase();
-                          setSupabaseConnected(false);
-                          setSupabaseUser(null);
-                          signOut();
-                          setGoogleConnected(false);
-                          setCalendarSyncEnabled(false);
-                          setLastCalendarSync(null);
-                          setGoogleProfile(null);
-                          addNotification('Sesión cerrada exitosamente', 'success');
-                        } catch { addNotification('Error al cerrar sesión', 'error'); }
-                      }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 8, fontSize: 12, fontWeight: 600, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#EF4444', cursor: 'pointer', transition: 'all 200ms' }}>
-                        <LogOut size={14} /> Cerrar Sesión
+                    <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border-subtle)' }}>
+                      <button onClick={handleSignOutAll} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 16px', borderRadius: 8, fontSize: 11.5, fontWeight: 600, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.22)', color: '#EF4444', cursor: 'pointer', transition: 'all 200ms', width: 'fit-content' }}>
+                        <LogOut size={14} /> Cerrar sesión de todas las cuentas
                       </button>
                     </div>
                   )}
-                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                    <button onClick={() => setShowClearAllMusic(true)}
-                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 8, fontSize: 12, fontWeight: 500, background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)', color: '#EF4444', cursor: 'pointer', transition: 'all 200ms' }}>
-                      <Music size={14} /> Borrar toda la música
-                    </button>
-                    <button onClick={() => {
-                      const completedCount = tasks.filter(t => t.status === 'completado').length;
-                      if (completedCount === 0) { addNotification('No hay tareas completadas para eliminar', 'info'); return; }
-                      if (confirm(`¿Eliminar ${completedCount} tarea${completedCount !== 1 ? 's' : ''} completada${completedCount !== 1 ? 's' : ''}? Esta acción no se puede deshacer.`)) {
-                        deleteCompletedTasks();
-                      }
-                    }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 8, fontSize: 12, fontWeight: 500, background: '#EF4444', border: 'none', color: '#fff', cursor: 'pointer' }}>
-                      <Trash2 size={14} /> Borrar completadas
-                    </button>
-                  </div>
                 </div>
+
+                {/* Servicios de Google */}
+                {googleConnected && (
+                  <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+                      <div>
+                        <h3 style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em', marginBottom: 4 }}>Servicios de Google</h3>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Cada servicio explica cómo se usa dentro de OWA</span>
+                      </div>
+                      <button onClick={() => { runGoogleService('calendar'); setTimeout(() => runGoogleService('tasks'), 800); }}
+                        disabled={!!googleBusy}
+                        style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 14px', borderRadius: 8, fontSize: 11.5, fontWeight: 600, cursor: 'pointer', background: 'color-mix(in srgb, var(--accent) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 28%, transparent)', color: 'var(--accent)', opacity: googleBusy ? 0.6 : 1, transition: 'all 150ms' }}>
+                        <RefreshCcw size={13} className={googleBusy ? 'spin' : ''} /> Sincronizar todo
+                      </button>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(235px, 1fr))', gap: 10 }}>
+                      {GOOGLE_SERVICES.map(s => {
+                        const Icon = s.icon;
+                        const busy = googleBusy === s.id;
+                        const ok = s.id === 'calendar' ? lastCalendarSync : s.id === 'tasks' ? lastTasksSync : serviceResults[s.id];
+                        const okLabel = s.id === 'calendar' ? (lastCalendarSync ? `Última: ${new Date(lastCalendarSync).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}` : null)
+                          : s.id === 'tasks' ? (lastTasksSync ? `Última: ${new Date(lastTasksSync).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}` : null)
+                          : serviceResults[s.id];
+                        return (
+                          <div key={s.id} style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '14px', borderRadius: 10, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', transition: 'border-color 150ms' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <span style={{ width: 30, height: 30, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `color-mix(in srgb, ${s.color} 14%, transparent)`, border: `1px solid color-mix(in srgb, ${s.color} 30%, transparent)`, color: s.color, flexShrink: 0 }}>
+                                <Icon size={14} />
+                              </span>
+                              <div style={{ minWidth: 0 }}>
+                                <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)', display: 'block' }}>{s.name}</span>
+                                <span style={{ fontSize: 9.5, color: 'var(--text-tertiary)', display: 'block', lineHeight: 1.35 }}>{okLabel || 'No sincronizado aún'}</span>
+                              </div>
+                            </div>
+                            <span style={{ fontSize: 10.5, color: 'var(--text-muted)', lineHeight: 1.5, flex: 1 }}>{s.desc}</span>
+                            <button onClick={() => runGoogleService(s.id)} disabled={!!googleBusy}
+                              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, height: 28, borderRadius: 7, fontSize: 10.5, fontWeight: 600, cursor: 'pointer', background: `color-mix(in srgb, ${s.color} 8%, transparent)`, border: `1px solid color-mix(in srgb, ${s.color} 26%, transparent)`, color: s.color, opacity: googleBusy ? 0.6 : 1, transition: 'all 150ms' }}>
+                              {busy ? <Loader2 size={12} className="spin" /> : s.id === 'drive' || s.id === 'docs' ? <ExternalLink size={12} /> : <RefreshCcw size={12} />}
+                              {busy ? 'Trabajando…' : s.id === 'calendar' ? 'Sincronizar ahora' : s.id === 'tasks' ? 'Sincronizar ahora' : s.id === 'classroom' ? 'Importar cursos' : s.id === 'drive' ? 'Crear respaldo' : s.id === 'docs' ? 'Exportar notas' : s.id === 'forms' ? 'Ver cómo' : s.id === 'youtube' ? 'Explorar' : 'Actualizar perfil'}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </section>
             )}
 
             {/* Apariencia */}
             {activeTab === 'apariencia' && (
-              <section style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+              <section style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
                 <div>
-                  <h2 style={{ fontSize: 20, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em', marginBottom: 4 }}>Apariencia y Diseño</h2>
-                  <p style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 300, letterSpacing: '0.02em' }}>Personaliza cada aspecto visual de OWA Studio</p>
-                </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                        <span style={{ width: 32, height: 32, borderRadius: 10, background: 'color-mix(in srgb, var(--accent) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 2px 8px color-mix(in srgb, var(--accent) 12%, transparent)' }}>
+                          <Palette size={15} />
+                        </span>
+                        <h2 style={{ fontSize: 18, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em', margin: 0 }}>Apariencia y Diseño</h2>
+                      </div>
+                      <p style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 300, letterSpacing: '0.02em' }}>Personaliza cada aspecto visual de OWA Studio</p>
+                    </div>
 
                 {/* Selector de modo: Clásico vs 3 Colores */}
                 <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
@@ -982,7 +1343,7 @@ export default function Ajustes() {
                       const active = (settings.coverBgMode ?? 'auto') === opt.id;
                       return (
                         <button key={opt.id} onClick={() => updateSettings({ coverBgMode: opt.id })} style={{
-                          flex: 1, padding: '12px 8px', borderRadius: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                          flex: 1, padding: '14px 12px', borderRadius: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
                           background: active ? 'var(--accent)' : 'var(--bg-deep)', border: '1px solid var(--border-default)',
                           color: active ? '#fff' : 'var(--text-secondary)', fontSize: 11, fontWeight: 500, cursor: 'pointer',
                           transition: 'all 200ms',
@@ -1218,7 +1579,12 @@ export default function Ajustes() {
             {activeTab === 'estudio' && (
               <section style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
                 <div>
-                  <h2 style={{ fontSize: 20, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em', marginBottom: 4 }}>Tiempos y Metas de Estudio</h2>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                    <span style={{ width: 32, height: 32, borderRadius: 10, background: 'color-mix(in srgb, var(--accent) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 2px 8px color-mix(in srgb, var(--accent) 12%, transparent)' }}>
+                      <Brain size={15} />
+                    </span>
+                    <h2 style={{ fontSize: 18, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em', margin: 0 }}>Tiempos y Metas de Estudio</h2>
+                  </div>
                   <p style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 300, letterSpacing: '0.02em' }}>Configura los intervalos de tu método Pomodoro y objetivos</p>
                 </div>
 
@@ -1301,22 +1667,8 @@ export default function Ajustes() {
                   </div>
                 </div>
 
-                {/* Timer Colors */}
-                <div className="bento-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>Formato de Hora</span>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    {(['24h', '12h'] as const).map(f => (
-                      <button key={f} onClick={() => updateSettings({ timeFormat: f })}
-                        style={{ flex: 1, padding: '12px 0', borderRadius: 12, fontSize: 14, fontWeight: 600, border: `1px solid ${(settings.timeFormat || '24h') === f ? 'var(--accent)' : 'var(--border-soft)'}`, background: (settings.timeFormat || '24h') === f ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : 'var(--bg-deep)', color: (settings.timeFormat || '24h') === f ? 'var(--accent)' : 'var(--text-secondary)', cursor: 'pointer', transition: 'all 200ms' }}>
-                        {f === '24h' ? '24 horas (00:00 – 23:59)' : '12 horas (AM / PM)'}
-                      </button>
-                    ))}
-                  </div>
-                  <p style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>Afecta a todo el planificador, horario, eventos, cabeceras y tiempos en toda la app.</p>
-                </div>
-
-                {/* Timer Colors */}
-                <div className="bento-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {/* Colores de Temporizadores */}
+                <div className="bento-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
                   <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>Colores de Temporizadores</span>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
                     {[
@@ -1510,7 +1862,12 @@ export default function Ajustes() {
             {activeTab === 'musica' && (
               <section style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
                 <div>
-                  <h2 style={{ fontSize: 20, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em', marginBottom: 4 }}>Configuración de Música</h2>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                    <span style={{ width: 32, height: 32, borderRadius: 10, background: 'color-mix(in srgb, var(--accent) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 2px 8px color-mix(in srgb, var(--accent) 12%, transparent)' }}>
+                      <Music size={15} />
+                    </span>
+                    <h2 style={{ fontSize: 18, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em', margin: 0 }}>Configuración de Música</h2>
+                  </div>
                   <p style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 300, letterSpacing: '0.02em' }}>Preferencias de audio, descargas y reproducción</p>
                 </div>
 
@@ -1527,7 +1884,7 @@ export default function Ajustes() {
                       const active = (settings.downloadFormat || 'mp3') === opt.id;
                       return (
                         <button key={opt.id} onClick={() => updateSettings({ downloadFormat: opt.id })} style={{
-                          flex: 1, padding: '12px 8px', borderRadius: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                          flex: 1, padding: '14px 12px', borderRadius: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
                           background: active ? 'var(--accent)' : 'var(--bg-deep)', border: '1px solid var(--border-default)',
                           color: active ? '#fff' : 'var(--text-secondary)', fontSize: 11, fontWeight: 600, cursor: 'pointer',
                           transition: 'all 200ms',
@@ -1554,7 +1911,7 @@ export default function Ajustes() {
                       const active = (settings.audioQuality || '3') === opt.id;
                       return (
                         <button key={opt.id} onClick={() => updateSettings({ audioQuality: opt.id })} style={{
-                          flex: 1, padding: '12px 8px', borderRadius: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                          flex: 1, padding: '14px 12px', borderRadius: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
                           background: active ? 'var(--accent)' : 'var(--bg-deep)', border: '1px solid var(--border-default)',
                           color: active ? '#fff' : 'var(--text-secondary)', fontSize: 11, fontWeight: 600, cursor: 'pointer',
                           transition: 'all 200ms',
@@ -1567,32 +1924,19 @@ export default function Ajustes() {
                   </div>
                 </div>
 
-                {/* Cover Art */}
+                {/* Reproducción — grouped card for toggles + info */}
                 <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
                   <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16, display: 'block' }}>
-                    Portada de Descarga
+                    Reproducción y Descargas
                   </span>
-                  <Toggle checked={settings.includeCover !== false} onChange={v => updateSettings({ includeCover: v })}
-                    label="Incluir portada" desc="Incrustar la imagen de portada en el archivo de audio descargado." />
-                </div>
-
-                {/* Playback retries */}
-                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
-                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16, display: 'block' }}>
-                    Reproducción
-                  </span>
-                  <Toggle checked={settings.autoRetryOnError !== false} onChange={v => updateSettings({ autoRetryOnError: v })}
-                    label="Reintentar al fallar" desc="Reintentar automáticamente la reproducción hasta 3 veces si ocurre un error de audio." />
-                </div>
-
-                {/* Download path info */}
-                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
-                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16, display: 'block' }}>
-                    Carpeta de Descargas
-                  </span>
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12, lineHeight: 1.4 }}>
-                    Las canciones descargadas se guardan en la carpeta configurada del sistema. 
-                    Puedes cambiarla desde la sección de música.
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <Toggle checked={settings.includeCover !== false} onChange={v => updateSettings({ includeCover: v })}
+                      label="Incluir portada" desc="Incrustar la imagen de portada en el archivo de audio descargado." />
+                    <Toggle checked={settings.autoRetryOnError !== false} onChange={v => updateSettings({ autoRetryOnError: v })}
+                      label="Reintentar al fallar" desc="Reintentar automáticamente la reproducción hasta 3 veces si ocurre un error de audio." />
+                  </div>
+                  <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border-subtle)', fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.5 }}>
+                    Las canciones descargadas se guardan en la carpeta configurada del sistema. Puedes cambiarla desde la sección de música.
                   </div>
                 </div>
 
@@ -1665,13 +2009,81 @@ export default function Ajustes() {
                     </button>
                   </div>
                 </div>
+
+                {/* Respaldo de biblioteca */}
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
+                  <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Save size={14} style={{ color: 'var(--accent)' }} /> Respaldo de Música
+                  </h3>
+                  <p style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.5, marginBottom: 14 }}>
+                    Exporta toda tu biblioteca de música (metadatos + archivos de audio) a una carpeta.
+                    Luego puedes importarla desde esa misma carpeta para restaurarla.
+                  </p>
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    <button onClick={async () => {
+                      try {
+                        const selected = await open({ directory: true, title: 'Seleccionar carpeta para exportar música' });
+                        if (!selected) return;
+                        const count = await exportMusicLibrary(selected);
+                        addNotification(`Biblioteca exportada: ${count} archivos copiados`, 'success');
+                      } catch (e) {
+                        addNotification('Error al exportar música', 'error');
+                        console.error(e);
+                      }
+                    }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.15)', color: '#3B82F6' }}>
+                      <Upload size={14} /> Exportar biblioteca
+                    </button>
+                    <button onClick={async () => {
+                      try {
+                        const selected = await open({ directory: true, title: 'Seleccionar carpeta para importar música' });
+                        if (!selected) return;
+                        const count = await importMusicLibrary(selected);
+                        addNotification(`Biblioteca importada: ${count} canciones restauradas`, 'success');
+                      } catch (e) {
+                        addNotification('Error al importar música', 'error');
+                        console.error(e);
+                      }
+                    }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.15)', color: '#10B981' }}>
+                      <Download size={14} /> Importar biblioteca
+                    </button>
+                  </div>
+                </div>
+
+                {/* Zona de Peligro */}
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid rgba(239,68,68,0.15)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                    <Trash2 size={14} style={{ color: '#EF4444' }} />
+                    <h3 style={{ fontSize: 13, fontWeight: 600, color: '#EF4444', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em', margin: 0 }}>Zona de Peligro</h3>
+                  </div>
+                  <p style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.5, marginBottom: 14 }}>Acciones destructivas sobre tu biblioteca y datos de tareas. No se pueden deshacer.</p>
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    <button onClick={() => setShowClearAllMusic(true)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 8, fontSize: 12, fontWeight: 500, background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)', color: '#EF4444', cursor: 'pointer', transition: 'all 200ms' }}>
+                      <Music size={14} /> Borrar toda la música
+                    </button>
+                    <button onClick={() => {
+                      const completedCount = tasks.filter(t => t.status === 'completado').length;
+                      if (completedCount === 0) { addNotification('No hay tareas completadas para eliminar', 'info'); return; }
+                      if (confirm(`¿Eliminar ${completedCount} tarea${completedCount !== 1 ? 's' : ''} completada${completedCount !== 1 ? 's' : ''}? Esta acción no se puede deshacer.`)) {
+                        deleteCompletedTasks();
+                      }
+                    }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 8, fontSize: 12, fontWeight: 500, background: '#EF4444', border: 'none', color: '#fff', cursor: 'pointer' }}>
+                      <Trash2 size={14} /> Borrar completadas
+                    </button>
+                  </div>
+                </div>
               </section>
             )}
 
             {activeTab === 'notificaciones' && (
               <section style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
                 <div>
-                  <h2 style={{ fontSize: 20, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em', marginBottom: 4 }}>Sonidos y Alertas de Sistema</h2>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                    <span style={{ width: 32, height: 32, borderRadius: 10, background: 'color-mix(in srgb, var(--accent) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 2px 8px color-mix(in srgb, var(--accent) 12%, transparent)' }}>
+                      <Bell size={15} />
+                    </span>
+                    <h2 style={{ fontSize: 18, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em', margin: 0 }}>Sonidos y Alertas de Sistema</h2>
+                  </div>
                   <p style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 300, letterSpacing: '0.02em' }}>Controla el comportamiento acústico y notificaciones del entorno de estudio</p>
                 </div>
 
@@ -1717,15 +2129,18 @@ export default function Ajustes() {
                 </div>
 
                 {/* Test notification */}
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                  <button onClick={() => { import('../../lib/notifications').then(m => m.sendNativeNotification('🔔 OWA Studio', 'Notificaciones funcionando correctamente')); }}
-                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'var(--accent)', border: 'none', color: '#fff', transition: 'all 200ms' }}>
-                    <Bell size={14} /> Probar Notificación
-                  </button>
-                  <button onClick={() => { addNotification('✅ Notificación de prueba enviada', 'success'); }}
-                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)', transition: 'all 200ms' }}>
-                    <Bell size={14} /> Probar Toast
-                  </button>
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
+                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 14, display: 'block' }}>Prueba de Notificaciones</span>
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    <button onClick={() => { import('../../lib/notifications').then(m => m.sendNativeNotification('🔔 OWA Studio', 'Notificaciones funcionando correctamente')); }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'var(--accent)', border: 'none', color: '#fff', transition: 'all 200ms' }}>
+                      <Bell size={14} /> Probar Notificación
+                    </button>
+                    <button onClick={() => { addNotification('✅ Notificación de prueba enviada', 'success'); }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)', transition: 'all 200ms' }}>
+                      <Bell size={14} /> Probar Toast
+                    </button>
+                  </div>
                 </div>
               </section>
             )}
@@ -1734,59 +2149,57 @@ export default function Ajustes() {
             {activeTab === 'sistema' && (
               <section style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
                 <div>
-                  <h2 style={{ fontSize: 20, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em', marginBottom: 4 }}>Diagnóstico del Sistema</h2>
-                  <p style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 300, letterSpacing: '0.02em' }}>Información del entorno y rendimiento de OWA Studio</p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                    <span style={{ width: 32, height: 32, borderRadius: 10, background: 'color-mix(in srgb, var(--accent) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 2px 8px color-mix(in srgb, var(--accent) 12%, transparent)' }}>
+                      <Shield size={15} />
+                    </span>
+                    <h2 style={{ fontSize: 18, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em', margin: 0 }}>Sistema</h2>
+                  </div>
+                  <p style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 300, letterSpacing: '0.02em' }}>Información de la aplicación, sus datos y almacenamiento local</p>
                 </div>
 
-                {/* Platform Info */}
-                <div className="bento-card" style={{ padding: '20px', border: '1px solid var(--border-subtle)' }}>
-                  <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Monitor size={14} style={{ color: 'var(--accent)' }} /> Plataforma
-                  </h3>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {[
-                      { label: 'Sistema operativo', value: sysInfo?.platform || navigator.platform || 'Desconocido' },
-                      { label: 'Arquitectura', value: sysInfo?.arch || navigator.platform.includes('64') ? 'x64' : 'x86' },
-                      { label: 'Entorno', value: isTauri() ? 'Tauri (nativo)' : 'Navegador web' },
-                      { label: 'Versión de la app', value: sysInfo?.appVer || '1.0.0' },
-                      { label: 'User Agent', value: navigator.userAgent.slice(0, 80) + '…' },
-                    ].map((r, i) => (
-                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: i < 4 ? '1px solid var(--border-subtle)' : 'none' }}>
-                        <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)' }}>{r.label}</span>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Share Tech Mono', monospace" }}>{r.value}</span>
-                      </div>
-                    ))}
+                {/* App info */}
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
+                  <CardHeader icon={<AppWindow size={14} />} title="Sobre OWA" desc="Aplicación instalada" />
+                  <div>
+                    <InfoRow label="Nombre" value={appInfo?.name || 'OWA Studio'} mono />
+                    <InfoRow label="Versión" value={appInfo?.version || '1.0.0'} mono />
+                    <InfoRow label="Tauri" value={appInfo?.tauriVersion || '—'} mono />
+                    <InfoRow label="Entorno" value={isTauri() ? 'Aplicación nativa (Tauri)' : 'Navegador web'} last />
                   </div>
                 </div>
 
-                {/* Hardware Stats */}
-                {sysInfo && (
-                  <div className="bento-card" style={{ padding: '20px', border: '1px solid var(--border-subtle)' }}>
-                    <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <Activity size={14} style={{ color: 'var(--accent)' }} /> Rendimiento
-                    </h3>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-                      {[
-                        { label: 'CPU', val: sysInfo.cpu, unit: '%', color: '#3B82F6' },
-                        { label: 'RAM', val: sysInfo.ram, unit: '%', color: '#F59E0B' },
-                        { label: 'DISCO', val: sysInfo.disk, unit: '%', color: '#8B5CF6' },
-                      ].map(m => (
-                        <div key={m.label} style={{ background: 'var(--bg-deep)', borderRadius: 8, padding: '12px', border: '1px solid var(--border-subtle)' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                            <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.04em' }}>{m.label}</span>
-                            <span style={{ fontSize: 14, fontWeight: 700, color: m.color, fontFamily: "'Share Tech Mono', monospace" }}>{m.val}{m.unit}</span>
+                {/* App folders */}
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
+                  <CardHeader icon={<FolderOpen size={14} />} title="Rutas de la aplicación" desc="Dónde guarda OWA sus datos" />
+                  {isTauri() ? (
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      {appDirs.map((d, i) => (
+                        <div key={d.label} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderBottom: i < appDirs.length - 1 ? '1px solid var(--border-subtle)' : 'none' }}>
+                          <span style={{ width: 26, height: 26, borderRadius: 7, background: d.root ? 'rgba(16,185,129,0.08)' : 'var(--bg-deep)', border: '1px solid var(--border-subtle)', color: d.root ? '#10B981' : 'var(--text-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            {d.root ? <Boxes size={13} /> : <HardDrive size={13} />}
+                          </span>
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{d.label}</div>
+                            <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontFamily: "'JetBrains Mono', monospace", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={d.path}>{d.path}</div>
                           </div>
-                          <div style={{ height: 4, borderRadius: 2, background: 'var(--bg-base)', overflow: 'hidden' }}>
-                            <div style={{ height: '100%', borderRadius: 2, background: m.color, width: `${Math.min(m.val, 100)}%`, boxShadow: `0 0 6px ${m.color}40` }} />
-                          </div>
+                          <CopyButton text={d.path} />
+                          <button onClick={() => { openPath(d.path).catch(() => addNotification('No se pudo abrir la carpeta', 'error')); }}
+                            title="Abrir en el Explorador" style={{ width: 24, height: 24, borderRadius: 6, flexShrink: 0, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', color: 'var(--accent)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <FolderOpen size={12} />
+                          </button>
                         </div>
                       ))}
                     </div>
-                  </div>
-                )}
+                  ) : (
+                    <p style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.5 }}>
+                      Las rutas de carpetas solo están disponibles dentro de la aplicación nativa.
+                    </p>
+                  )}
+                </div>
 
                 {/* Cache & Storage */}
-                <div className="bento-card" style={{ padding: '20px', border: '1px solid var(--border-subtle)' }}>
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
                   <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
                     <Database size={14} style={{ color: 'var(--accent)' }} /> Almacenamiento Local
                   </h3>
@@ -1800,17 +2213,16 @@ export default function Ajustes() {
                         totalSize += sz;
                         items.push({ key: k, size: sz });
                       }
-                      const fmt = (b: number) => b > 1024 * 1024 ? `${(b / 1024 / 1024).toFixed(1)} MB` : b > 1024 ? `${(b / 1024).toFixed(1)} KB` : `${b} B`;
                       return (
                         <>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 8, borderBottom: '1px solid var(--border-subtle)' }}>
                             <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)' }}>Total localStorage</span>
-                            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Share Tech Mono', monospace" }}>{fmt(totalSize)} ({keys.length} entradas)</span>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Share Tech Mono', monospace" }}>{fmtBytes(totalSize)} ({keys.length} entradas)</span>
                           </div>
                           {items.sort((a, b) => b.size - a.size).slice(0, 6).map(it => (
                             <div key={it.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 0' }}>
                               <span style={{ fontSize: 10, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{it.key}</span>
-                              <span style={{ fontSize: 10, fontFamily: "'Share Tech Mono', monospace", color: 'var(--text-muted)', flexShrink: 0, marginLeft: 8 }}>{fmt(it.size)}</span>
+                              <span style={{ fontSize: 10, fontFamily: "'Share Tech Mono', monospace", color: 'var(--text-muted)', flexShrink: 0, marginLeft: 8 }}>{fmtBytes(it.size)}</span>
                             </div>
                           ))}
                           {items.length > 6 && (
@@ -1842,43 +2254,18 @@ export default function Ajustes() {
                   </div>
                 </div>
 
-                {/* Music Backup */}
-                <div className="bento-card" style={{ padding: '20px', border: '1px solid var(--border-subtle)' }}>
-                  <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Music size={14} style={{ color: 'var(--accent)' }} /> Respaldo de Música
-                  </h3>
-                  <p style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.5, marginBottom: 14 }}>
-                    Exporta toda tu biblioteca de música (metadatos + archivos de audio) a una carpeta.
-                    Luego puedes importarla desde esa misma carpeta para restaurarla.
-                  </p>
-                  <div style={{ display: 'flex', gap: 10 }}>
-                    <button onClick={async () => {
-                      try {
-                        const selected = await open({ directory: true, title: 'Seleccionar carpeta para exportar música' });
-                        if (!selected) return;
-                        const count = await exportMusicLibrary(selected);
-                        addNotification(`Biblioteca exportada: ${count} archivos copiados`, 'success');
-                      } catch (e) {
-                        addNotification('Error al exportar música', 'error');
-                        console.error(e);
-                      }
-                    }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.15)', color: '#3B82F6' }}>
-                      <Upload size={14} /> Exportar biblioteca
-                    </button>
-                    <button onClick={async () => {
-                      try {
-                        const selected = await open({ directory: true, title: 'Seleccionar carpeta para importar música' });
-                        if (!selected) return;
-                        const count = await importMusicLibrary(selected);
-                        addNotification(`Biblioteca importada: ${count} canciones restauradas`, 'success');
-                      } catch (e) {
-                        addNotification('Error al importar música', 'error');
-                        console.error(e);
-                      }
-                    }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.15)', color: '#10B981' }}>
-                      <Download size={14} /> Importar biblioteca
-                    </button>
+                {/* Formato de Hora */}
+                <div className="bento-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>Formato de Hora</span>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {(['24h', '12h'] as const).map(f => (
+                      <button key={f} onClick={() => updateSettings({ timeFormat: f })}
+                        style={{ flex: 1, padding: '12px 0', borderRadius: 12, fontSize: 14, fontWeight: 600, border: `1px solid ${(settings.timeFormat || '24h') === f ? 'var(--accent)' : 'var(--border-soft)'}`, background: (settings.timeFormat || '24h') === f ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : 'var(--bg-deep)', color: (settings.timeFormat || '24h') === f ? 'var(--accent)' : 'var(--text-secondary)', cursor: 'pointer', transition: 'all 200ms' }}>
+                        {f === '24h' ? '24 horas (00:00 – 23:59)' : '12 horas (AM / PM)'}
+                      </button>
+                    ))}
                   </div>
+                  <p style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>Afecta a todo el planificador, horario, eventos, cabeceras y tiempos en toda la app.</p>
                 </div>
 
               </section>

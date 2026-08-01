@@ -1,5 +1,6 @@
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { convertFileSrc } from '@tauri-apps/api/core';
+import { openUrl, openPath } from '@tauri-apps/plugin-opener';
 
 const isTauri = !!(window as any).__TAURI__;
 
@@ -122,11 +123,12 @@ async function openPdfViewer(dataUrl: string, title: string, type: string) {
 }
 
 function openWithSystemApp(path: string) {
-  const shell = (window as any).__TAURI__?.shell;
-  if (shell?.open) {
-    shell.open(path).catch(() => {
-      openLinkInBrowser(path);
-    });
+  if (isTauri) {
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      openUrl(path).catch(() => openLinkInBrowser(path));
+    } else {
+      openPath(path).catch(() => openLinkInBrowser(path));
+    }
   } else {
     openLinkInBrowser(path);
   }

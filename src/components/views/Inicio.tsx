@@ -4,7 +4,7 @@ import {
   Target, Star, Lock, Check, X
 } from 'lucide-react';
 import { useApp, fmtClock } from '../../store/AppContext';
-import { format, subDays, subWeeks, addDays, addWeeks, startOfWeek, parseISO } from 'date-fns';
+import { format, subDays, subWeeks, addDays, addWeeks, startOfWeek, parseISO, isBefore } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { getWeeklyPhrase } from '../../data/phrases';
 import NotificationBell from '../ui/NotificationBell';
@@ -110,6 +110,9 @@ interface GoalEvent {
   startTime?: string;
   allDay?: boolean;
   color: string;
+  repeat?: string;
+  repeatDays?: number[];
+  repeatUntil?: string;
 }
 
 const GOAL_KEY = 'owa_planned_goal';
@@ -124,7 +127,7 @@ function loadGoalEvent(): GoalEvent | null {
     const data = JSON.parse(raw);
     const ev = (data.events || []).find((e: any) => e.id === goalId);
     if (!ev) return null;
-    return { id: ev.id, title: ev.title, date: ev.date, startTime: ev.startTime, allDay: ev.allDay, color: ev.color };
+    return { id: ev.id, title: ev.title, date: ev.date, startTime: ev.startTime, allDay: ev.allDay, color: ev.color, repeat: ev.repeat, repeatDays: ev.repeatDays, repeatUntil: ev.repeatUntil };
   } catch { return null; }
 }
 
@@ -164,6 +167,7 @@ export default function Inicio() {
     studySessions = [],
     updateSettings,
     setNavigateTo,
+    setFocusedEventId,
   } = app || {};
   const [ct, setCt] = useState(new Date());
 
@@ -179,11 +183,38 @@ export default function Inicio() {
       const raw = localStorage.getItem(STORE_KEY);
       if (!raw) return [];
       const data = JSON.parse(raw);
-      const all: GoalEvent[] = (data.events || []).map((e: any) => ({
+      const seen = new Set<string>();
+      const all: GoalEvent[] = (data.events || []).filter((e: any) => {
+        if (seen.has(e.id)) return false;
+        seen.add(e.id);
+        return true;
+      }).map((e: any) => ({
         id: e.id, title: e.title, date: e.date, startTime: e.startTime, allDay: e.allDay, color: e.color,
+        repeat: e.repeat, repeatDays: e.repeatDays, repeatUntil: e.repeatUntil,
       }));
       const today = format(new Date(), 'yyyy-MM-dd');
-      const future = all.filter(e => e.date >= today).sort((a, b) => a.date.localeCompare(b.date) || (a.startTime || '').localeCompare(b.startTime || ''));
+      const future = all.filter(e => {
+        if (!e.repeat || e.repeat === 'none') return e.date >= today;
+        if (e.repeatUntil && e.repeatUntil < today) return false;
+        return true;
+      }).map(e => {
+        if (!e.repeat || e.repeat === 'none' || e.date >= today) return e;
+        const base = new Date(e.date + 'T12:00:00');
+        const tgt = new Date(today + 'T12:00:00');
+        let next: Date | null = null;
+        if (e.repeat === 'daily') next = tgt;
+        else if (e.repeat === 'weekly') {
+          const diff = (base.getDay() - tgt.getDay() + 7) % 7;
+          next = addDays(tgt, diff);
+        } else if (e.repeat === 'custom_days' && e.repeatDays?.length) {
+          const jsToday = (tgt.getDay() + 6) % 7;
+          for (let i = 0; i < 7; i++) {
+            if (e.repeatDays.includes((jsToday + i) % 7)) { next = addDays(tgt, i); break; }
+          }
+        }
+        if (!next) next = tgt;
+        return { ...e, date: format(next, 'yyyy-MM-dd') };
+      }).sort((a, b) => a.date.localeCompare(b.date) || (a.startTime || '').localeCompare(b.startTime || ''));
       if (!goalEvent) return future.slice(0, 4);
       const afterGoal = future.filter(e => e.id !== goalEvent.id);
       return afterGoal.slice(0, 1);
@@ -744,8 +775,9 @@ export default function Inicio() {
                         <div key={ev.id} style={{
                           display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 10,
                           background: 'var(--bg-elevated)', border: '1px solid var(--border-soft)',
-                          transition: 'all 200ms ease', cursor: 'default',
+                          transition: 'all 200ms ease', cursor: 'pointer',
                         }}
+                          onClick={() => { setNavigateTo('flujo'); setFocusedEventId(ev.id); }}
                           onMouseEnter={e => { e.currentTarget.style.borderColor = `${ev.color}25`; e.currentTarget.style.background = 'var(--bg-hover)'; }}
                           onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.background = 'var(--bg-elevated)'; }}>
                           <div style={{ width: 36, height: 36, borderRadius: 10, background: `${ev.color}10`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -793,8 +825,9 @@ export default function Inicio() {
                       <div key={ev.id} style={{
                         display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 10,
                         background: 'var(--bg-elevated)', border: '1px solid var(--border-soft)',
-                        transition: 'all 200ms ease', cursor: 'default',
+                        transition: 'all 200ms ease', cursor: 'pointer',
                       }}
+                        onClick={() => { setNavigateTo('flujo'); setFocusedEventId(ev.id); }}
                         onMouseEnter={e => { e.currentTarget.style.borderColor = `${ev.color}25`; e.currentTarget.style.background = 'var(--bg-hover)'; }}
                         onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.background = 'var(--bg-elevated)'; }}>
                         <div style={{ width: 36, height: 36, borderRadius: 10, background: `${ev.color}10`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>

@@ -138,7 +138,7 @@ function getMergedClasses(classes: ScheduleClass[]) {
 }
 
 export default function Planificacion() {
-  const { tasks, courses, setNavigateTo, addNotification, settings, studySessions, plannedSessions } = useApp();
+  const { tasks, courses, setNavigateTo, addNotification, settings, studySessions, plannedSessions, focusedEventId, setFocusedEventId } = useApp();
 
   const [planView, setPlanView] = useState<PlanView>(() => {
     try { return (localStorage.getItem('owa_planner_view') as PlanView) || 'week'; }
@@ -181,6 +181,16 @@ export default function Planificacion() {
   const dateStr = format(now, "EEEE d 'de' MMMM yyyy", { locale: es as any });
 
   useEffect(() => { const d = loadStore(); setEvents(d.events); setClasses(d.classes); }, []);
+  useEffect(() => {
+    if (!focusedEventId || events.length === 0) return;
+    const ev = events.find(e => e.id === focusedEventId);
+    if (ev) {
+      setEditingEvent(ev);
+      setModalDefaults({ date: ev.date });
+      setShowEventModal(true);
+    }
+    setFocusedEventId(null);
+  }, [focusedEventId, events]);
   useEffect(() => { const t = setTimeout(() => saveStore(events, classes), 400); return () => clearTimeout(t); }, [events, classes]);
 
   const weekStart = startOfWeek(navDate, { weekStartsOn: 1 });

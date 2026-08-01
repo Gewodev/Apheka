@@ -42,7 +42,10 @@ function loadTokens(): GoogleTokens | null {
     const raw = localStorage.getItem(TOKEN_KEY);
     if (!raw) return null;
     const t = JSON.parse(raw) as GoogleTokens;
-    if (t.expiryDate < Date.now()) {
+    // El access token puede haber expirado, pero mientras exista refresh token
+    // la sesión sigue viva (se refresca automáticamente al usar la API).
+    // Solo se descarta si no hay forma de renovar la sesión.
+    if (t.expiryDate < Date.now() && !t.refreshToken) {
       localStorage.removeItem(TOKEN_KEY);
       return null;
     }
@@ -73,12 +76,26 @@ export function configureGoogle(clientId_: string, clientSecret_?: string) {
 }
 
 export function isSignedIn(): boolean {
-  return currentTokens !== null && currentTokens.expiryDate > Date.now();
+  return currentTokens !== null && (currentTokens.expiryDate > Date.now() || !!currentTokens.refreshToken);
 }
 
 export function getAccessToken(): string | null {
-  if (!currentTokens || currentTokens.expiryDate < Date.now()) return null;
-  return currentTokens.accessToken;
+  if (!currentTokens) return null;
+  if (currentTokens.expiryDate > Date.now()) return currentTokens.accessToken;
+  // Access token expirado: la sesión se mantiene vía refresh token (ensureToken lo renueva).
+  return null;
+}
+
+/**
+ * Restaura la sesión persistida y, si el access token está expirado,
+ * lo renueva automáticamente usando el refresh token. Devuelve si hay sesión.
+ */
+export async function restoreSession(): Promise<boolean> {
+  loadTokens();
+  if (!currentTokens) return false;
+  if (currentTokens.expiryDate > Date.now()) return true;
+  const token = await refreshAccessToken();
+  return token !== null;
 }
 
 async function refreshAccessToken(): Promise<string | null> {

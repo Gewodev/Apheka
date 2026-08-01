@@ -1,0 +1,85 @@
+name: Build & Release
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  release:
+    strategy:
+      matrix:
+        os: [windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install deps
+        run: pnpm install
+
+      - name: Build & bundle
+        run: pnpm tauri build
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+
+      - name: Upload installer as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-${{ matrix.os }}
+          path: src-tauri/target/release/bundle/
+
+  create-release:
+    needs: release
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: installer-*
+          merge-multiple: true
+
+      - name: Generate updater JSON
+        id: updater
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = $tag -replace '^v', ''
+          $msi = Get-ChildItem -Filter "*.msi" | Select-Object -First 1
+          $sig = Get-ChildItem -Filter "*.sig" | Select-Object -First 1
+          $sigContent = Get-Content $sig.FullName -Raw
+          $pubDate = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
+          $json = @{
+            version = $version
+            notes = "Nueva versión $version"
+            pub_date = $pubDate
+            platforms = @{
+              "windows-x86_64" = @{
+                signature = $sigContent.Trim()
+                url = "https://github.com/AuthomiaAgency/Owa_Studio/releases/download/$tag/$($msi.Name)"
+              }
+            }
+          }
+          $json | ConvertTo-Json | Set-Content "updater.json"
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "OWA Studio ${{ steps.updater.outputs.version }}"
+          draft: false
+          prerelease: false
+          files: |
+            updater.json
+            *.msi
+            *.sig

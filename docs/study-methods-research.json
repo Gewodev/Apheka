@@ -1,0 +1,410 @@
+[
+  {
+    "name": "Flashcards (SRS)",
+    "description": "Digital cards with question on front, answer on back. Spaced Repetition Algorithm (SM-2/FSRS) schedules review intervals based on recall confidence. Core mechanism: active retrieval with spaced scheduling.",
+    "viability": "easy",
+    "impact": "high",
+    "versatile": "yes",
+    "bestFor": ["languages", "medicine", "history", "biology", "law", "any fact-based subject"]
+  },
+  {
+    "name": "Active Recall",
+    "description": "Actively retrieving information from memory without looking at source material. UI prompts user to recall answers before revealing correct info. Foundation of most other techniques.",
+    "viability": "easy",
+    "impact": "high",
+    "versatile": "yes",
+    "bestFor": ["all subjects"]
+  },
+  {
+    "name": "Pomodoro Technique",
+    "description": "Timer-based focus sessions (25 min work / 5 min break). UI shows countdown with session tracking, break prompts, and daily focus statistics. Productivity multiplier for any study method.",
+    "viability": "easy",
+    "impact": "medium",
+    "versatile": "yes",
+    "bestFor": ["all subjects", "homework", "exam preparation"]
+  },
+  {
+    "name": "Feynman Technique",
+    "description": "Explain a concept in simple language as if teaching a child. UI provides: concept input, plain-English explanation field, identify gaps step, simplify/analogize step. Identifies knowledge gaps.",
+    "viability": "medium",
+    "impact": "high",
+    "versatile": "yes",
+    "bestFor": ["science", "mathematics", "programming", "philosophy", "economics"]
+  },
+  {
+    "name": "Blurting",
+    "description": "Write down everything you remember about a topic in a timed session (5-10 min) without notes. Then compare to source material to find gaps. UI: timer + text area + comparison view.",
+    "viability": "easy",
+    "impact": "high",
+    "versatile": "yes",
+    "bestFor": ["history", "biology", "psychology", "any content-heavy subject"]
+  },
+  {
+    "name": "Mind Mapping",
+    "description": "Hierarchical diagram connecting related concepts around a central topic. Interactive canvas with drag-and-drop nodes, color coding, collapsible branches, and export.",
+    "viability": "hard",
+    "impact": "high",
+    "versatile": "yes",
+    "bestFor": ["brainstorming", "essay planning", "biology", "history", "project management"]
+  },
+  {
+    "name": "Concept Mapping",
+    "description": "Network diagram showing relationships between concepts with labeled edges (\"causes\", \"is-a\", \"leads-to\"). More structured than mind maps. UI: node-link editor with relationship labels.",
+    "viability": "hard",
+    "impact": "high",
+    "versatile": "yes",
+    "bestFor": ["science", "mathematics", "computer science", "philosophy", "any structured domain"]
+  },
+  {
+    "name": "Practice Quizzes",
+    "description": "Auto-generated or user-created quizzes with multiple choice, true/false, and short answer. Immediate feedback with explanations. Randomized question order and difficulty scaling.",
+    "viability": "medium",
+    "impact": "high",
+    "versatile": "yes",
+    "bestFor": ["all subjects"]
+  },
+  {
+    "name": "Cornell Note-Taking",
+    "description": "Structured note page divided into: cue column (keywords/questions), notes column (main content), summary section at bottom. UI: split-pane editor with auto-formatting.",
+    "viability": "easy",
+    "impact": "medium",
+    "versatile": "partial",
+    "bestFor": ["lecture-based subjects", "history", "psychology", "biology", "any linear content"]
+  },
+  {
+    "name": "Summarization",
+    "description": "Condense a passage into key points. UI: source text on left, summary input on right, optional AI comparison/additional points. Builds comprehension and identifying main ideas.",
+    "viability": "easy",
+    "impact": "high",
+    "versatile": "yes",
+    "bestFor": ["any text-heavy subject", "reading comprehension", "exam revision"]
+  },
+  {
+    "name": "Self-Explanation",
+    "description": "Explain the reasoning behind each step of a solution or concept out loud or in writing. UI: step-through interface prompting \"Why?\" and \"How?\" after each step.",
+    "viability": "medium",
+    "impact": "high",
+    "versatile": "yes",
+    "bestFor": ["mathematics", "programming", "physics", "any problem-solving subject"]
+  },
+  {
+    "name": "Interleaving",
+    "description": "Mix practice problems from different topics rather than blocking by topic. UI: mixed-problem generator that shuffles across subjects/topics, forces topic-switching.",
+    "viability": "medium",
+    "impact": "high",
+    "versatile": "partial",
+    "bestFor": ["mathematics", "physics", "chemistry", "languages (grammar)", "music theory"]
+  },
+  {
+    "name": "Elaborative Interrogation",
+    "description": "Generate \"why\" questions about facts and concepts, then answer them. UI: fact card with prompt \"Why is this true?\" + input field + reveals additional context.",
+    "viability": "medium",
+    "impact": "high",
+    "versatile": "yes",
+    "bestFor": ["history", "science", "any fact with underlying mechanism"]
+  },
+  {
+    "name": "Dual Coding",
+    "description": "Combine verbal/text information with visual representations (diagrams, charts, sketches). UI: split canvas with text editor + drawing/import tools side by side.",
+    "viability": "medium",
+    "impact": "high",
+    "versatile": "yes",
+    "bestFor": ["biology (diagrams)", "physics (forces)", "geography (maps)", "anatomy", "any visual subject"]
+  },
+  {
+    "name": "Worked Examples",
+    "description": "Step-by-step solved problem with each step revealed progressively. UI: collapsible step cards, annotated solutions, fade-out effect where later steps are hidden for self-completion.",
+    "viability": "easy",
+    "impact": "medium",
+    "versatile": "partial",
+    "bestFor": ["mathematics", "physics", "chemistry", "programming", "any procedural subject"]
+  },
+  {
+    "name": "Leitner System",
+    "description": "Physical (or digital) boxes where cards advance based on correct recall. Box 1 (daily), Box 2 (every 2 days), Box 3 (weekly). Wrong answers drop back to Box 1. UI: animated box system.",
+    "viability": "medium",
+    "impact": "high",
+    "versatile": "yes",
+    "bestFor": ["vocabulary", "historical dates", "formulas", "anatomy", "any discrete facts"]
+  },
+  {
+    "name": "SQ3R Method",
+    "description": "Survey → Question → Read → Recite → Review. Structured reading workflow. UI: 5-step wizard guiding through each phase with note-taking at each stage.",
+    "viability": "medium",
+    "impact": "medium",
+    "versatile": "partial",
+    "bestFor": ["textbook-heavy subjects", "history", "psychology", "any dense reading material"]
+  },
+  {
+    "name": "PQ4R Method",
+    "description": "Preview → Question → Read → Reflect → Recite → Review. Extended version of SQ3R with emphasis on reflection. UI: guided multi-step template with completion tracking.",
+    "viability": "medium",
+    "impact": "medium",
+    "versatile": "partial",
+    "bestFor": ["textbook-heavy subjects", "academic reading", "any dense material"]
+  },
+  {
+    "name": "Memory Palace (Method of Loci)",
+    "description": "Associate items with spatial locations in a familiar environment. Walk through mentally to recall. UI: 3D or 2D spatial grid where users place \"items\" in rooms/locations.",
+    "viability": "hard",
+    "impact": "high",
+    "versatile": "partial",
+    "bestFor": ["ordered lists", "speeches", "anatomy", "historical timelines", "any sequential information"]
+  },
+  {
+    "name": "Chunking",
+    "description": "Group individual pieces of information into meaningful chunks. UI: drag-and-drop grouping interface, auto-chunk suggestions for numbers/sequences, practice mode.",
+    "viability": "easy",
+    "impact": "medium",
+    "versatile": "yes",
+    "bestFor": ["memory tasks", "numbers", "vocabulary groups", "programming concepts", "music"]
+  },
+  {
+    "name": "Mnemonics",
+    "description": "Create acronyms, acrostics, rhymes, or associative phrases. UI: mnemonic generator template, shared community mnemonics, convert-list-to-acronym tool.",
+    "viability": "easy",
+    "impact": "medium",
+    "versatile": "partial",
+    "bestFor": ["medical terminology", "anatomy", "law", "languages", "any rote memorization"]
+  },
+  {
+    "name": "Active Reading",
+    "description": "Reading with annotation: highlight, margin notes, underline, questions. UI: PDF/text reader with highlight colors, margin note fields, sticky notes, bookmark system.",
+    "viability": "medium",
+    "impact": "medium",
+    "versatile": "partial",
+    "bestFor": ["literature", "history", "philosophy", "law", "any text-heavy subject"]
+  },
+  {
+    "name": "Teaching Others (AI Mode)",
+    "description": "Explain concepts to an AI that asks follow-up questions. UI: chat interface where AI plays \"student\" asking clarifying questions. Highlights gaps in understanding.",
+    "viability": "hard",
+    "impact": "high",
+    "versatile": "yes",
+    "bestFor": ["any subject where deep understanding is needed"]
+  },
+  {
+    "name": "Visualization",
+    "description": "Create mental or on-screen visual representations of abstract concepts. UI: drawing canvas, pre-made diagram templates, image gallery, animation tools for processes.",
+    "viability": "medium",
+    "impact": "medium",
+    "versatile": "yes",
+    "bestFor": ["physics (fields/forces)", "biology (processes)", "chemistry (molecular)", "mathematics (graphs)"]
+  },
+  {
+    "name": "Peer Discussion",
+    "description": "Discuss concepts with peers to deepen understanding. UI: subject-specific chat rooms, structured discussion prompts, debate format, Q&A board with voting.",
+    "viability": "hard",
+    "impact": "medium",
+    "versatile": "partial",
+    "bestFor": ["philosophy", "literature", "history", "ethics", "any discussion-based subject"]
+  },
+  {
+    "name": "Practice Problems",
+    "description": "Solve varied problems with increasing difficulty. UI: problem display with input area, step-by-step solution reveal, hint system, difficulty progression, answer validation.",
+    "viability": "medium",
+    "impact": "high",
+    "versatile": "partial",
+    "bestFor": ["mathematics", "physics", "chemistry", "engineering", "economics"]
+  },
+  {
+    "name": "Code Exercises",
+    "description": "Interactive coding challenges with real-time compilation, test cases, and feedback. UI: code editor with syntax highlighting, test runner, console output, diff view for solutions.",
+    "viability": "hard",
+    "impact": "high",
+    "versatile": "no",
+    "bestFor": ["programming", "computer science", "web development"]
+  },
+  {
+    "name": "Audio Recordings (Lectures)",
+    "description": "Record and replay lectures or self-explanations. UI: audio recorder with playback speed control, transcript sync, bookmarkable timestamps, note-taking linked to timestamps.",
+    "viability": "easy",
+    "impact": "low",
+    "versatile": "yes",
+    "bestFor": ["lecture review", "languages (listening)", "music", "any auditory learning"]
+  },
+  {
+    "name": "Anki-Style Cards",
+    "description": "Digital flashcards with SM-2 spaced repetition: three confidence buttons (Again/Hard/Good/Easy). UI: card flip animation, rating buttons, deck organization, scheduling visualization.",
+    "viability": "easy",
+    "impact": "high",
+    "versatile": "yes",
+    "bestFor": ["any fact-based learning", "languages", "medicine", "history", "geography"]
+  },
+  {
+    "name": "Cloze Deletion Cards",
+    "description": "Cards with key information blanked out. Fill in the missing word/phrase. UI: text with highlighted blanks, type-in reveal, auto-generate cloze from selected text.",
+    "viability": "easy",
+    "impact": "high",
+    "versatile": "partial",
+    "bestFor": ["languages (vocab in context)", "definitions", "formulas", "historical dates in context"]
+  },
+  {
+    "name": "Image Occlusion Cards",
+    "description": "Hide parts of an image (labels, areas) and quiz yourself. UI: image upload, rectangle/brush occlusion tool, reveal-on-click, occlusion layers for progressive disclosure.",
+    "viability": "medium",
+    "impact": "medium",
+    "versatile": "partial",
+    "bestFor": ["anatomy", "geography (maps)", "biology (diagrams)", "art history", "any visual identification"]
+  },
+  {
+    "name": "Error Analysis",
+    "description": "Log mistakes, categorize error type, review patterns. UI: mistake journal with tag categories, pattern recognition dashboard, targeted practice recommendations based on error frequency.",
+    "viability": "medium",
+    "impact": "high",
+    "versatile": "yes",
+    "bestFor": ["mathematics", "programming", "languages (grammar)", "any subject with right/wrong answers"]
+  },
+  {
+    "name": "Free Recall",
+    "description": "Write or type everything you remember from a study session without cues. UI: blank page with timer, then compare to source material via highlight-difference view.",
+    "viability": "easy",
+    "impact": "high",
+    "versatile": "yes",
+    "bestFor": ["any subject after reading/watching content"]
+  },
+  {
+    "name": "Retrieval Grid",
+    "description": "Grid of review questions where rows = topics and columns = time periods (last week, last month, etc.). Forces spaced retrieval across multiple topics. UI: interactive grid with color-coded confidence.",
+    "viability": "medium",
+    "impact": "high",
+    "versatile": "yes",
+    "bestFor": ["multi-topic exam revision", "cumulative subjects", "any long-term review"]
+  },
+  {
+    "name": "Categorization / Sorting",
+    "description": "Drag items into correct categories. UI: drag-and-drop cards into category buckets, auto-check correctness, timed mode, competing categories.",
+    "viability": "easy",
+    "impact": "medium",
+    "versatile": "partial",
+    "bestFor": ["biology (classification)", "chemistry (reaction types)", "history (periods)", "languages (word types)"]
+  },
+  {
+    "name": "Matching Exercises",
+    "description": "Match items from two columns (term↔definition, cause↔effect, date↔event). UI: two-column layout, click-to-match lines, shuffle mode, timed scoring.",
+    "viability": "easy",
+    "impact": "medium",
+    "versatile": "partial",
+    "bestFor": ["vocabulary", "historical matches", "scientific terms", "language learning"]
+  },
+  {
+    "name": "Fill-in-the-Blank",
+    "description": "Complete sentences with missing words/phrases. UI: text with inline inputs, word bank option, auto-check, context-aware hint system.",
+    "viability": "easy",
+    "impact": "medium",
+    "versatile": "partial",
+    "bestFor": ["languages", "history", "fill-in formulas", "any contextual recall"]
+  },
+  {
+    "name": "Timeline Builder",
+    "description": "Create interactive chronological timelines. UI: horizontal timeline with draggable events, zoom levels, category color coding, click-to-expand event details.",
+    "viability": "medium",
+    "impact": "medium",
+    "versatile": "no",
+    "bestFor": ["history", "art history", "literary periods", "scientific discoveries", "biography"]
+  },
+  {
+    "name": "Diagram Labeling",
+    "description": "Label parts of a diagram from memory. UI: image with numbered pointers, drag-label or type-label, self-check reveal, multiple difficulty levels (labels provided vs blank).",
+    "viability": "medium",
+    "impact": "medium",
+    "versatile": "no",
+    "bestFor": ["anatomy", "biology (cell/plant)", "geography (maps)", "engineering diagrams", "geology"]
+  },
+  {
+    "name": "Comparative Matrix",
+    "description": "Compare multiple concepts across shared dimensions in a grid. UI: editable table where rows = concepts, columns = criteria. Auto-highlights similarities/differences.",
+    "viability": "medium",
+    "impact": "medium",
+    "versatile": "partial",
+    "bestFor": ["history (compare civilizations)", "biology (compare species)", "philosophy (compare theories)"]
+  },
+  {
+    "name": "Shadowing (Language)",
+    "description": "Repeat audio immediately after hearing it, mimicking pronunciation and intonation. UI: audio player with recording, waveform comparison, playback speed control, repeat section loops.",
+    "viability": "medium",
+    "impact": "high",
+    "versatile": "no",
+    "bestFor": ["language learning (pronunciation)", "public speaking", "music (ear training)"]
+  },
+  {
+    "name": "Rubber Duck Debugging",
+    "description": "Explain code/reasoning line-by-line to an AI \"duck\" that signals confusion at unclear steps. UI: code paste + chat AI that asks \"Why does this line work?\" at each step.",
+    "viability": "medium",
+    "impact": "medium",
+    "versatile": "no",
+    "bestFor": ["programming", "debugging", "algorithm understanding"]
+  },
+  {
+    "name": "Role-Playing Scenarios",
+    "description": "Simulate real-world scenarios where knowledge is applied. UI: choose-your-own-adventure style branching narrative with knowledge-based choices and consequences.",
+    "viability": "hard",
+    "impact": "high",
+    "versatile": "partial",
+    "bestFor": ["history (historical figures)", "languages (conversation practice)", "medicine (patient scenarios)", "law (case arguments)"]
+  },
+  {
+    "name": "Adaptive Difficulty Progression",
+    "description": "Content difficulty adjusts automatically based on performance. UI: difficulty meter, mastery threshold tracking, unlocks harder content at 80%+ mastery, remedial loops for weak areas.",
+    "viability": "hard",
+    "impact": "high",
+    "versatile": "yes",
+    "bestFor": ["mathematics", "languages", "programming", "any hierarchical subject"]
+  },
+  {
+    "name": "Incremental Reading",
+    "description": "Read portions of multiple articles/texts in rotation, extracting key points as cards. UI: reading pane with priority queue, extract-as-card button, cloze-on-selection, progress tracking per article.",
+    "viability": "hard",
+    "impact": "high",
+    "versatile": "partial",
+    "bestFor": ["research-heavy subjects", "medicine", "law", "any content-saturated field"]
+  },
+  {
+    "name": "Deliberate Practice",
+    "description": "Targeted practice on specific weaknesses with immediate feedback and repetition. UI: skill matrix identifying weak areas, targeted exercise generator, progress tracking per sub-skill.",
+    "viability": "hard",
+    "impact": "high",
+    "versatile": "yes",
+    "bestFor": ["music", "sports theory", "mathematics", "programming", "any skill-based subject"]
+  },
+  {
+    "name": "Multi-Modal Note-Taking",
+    "description": "Combine text, images, voice recordings, and web clippings in one note block. UI: rich note editor with /-commands for media embedding, voice recording widget, web clipper import.",
+    "viability": "hard",
+    "impact": "medium",
+    "versatile": "yes",
+    "bestFor": ["any subject (adaptable format)"]
+  },
+  {
+    "name": "Retrieval Practice with Feedback",
+    "description": "Attempt to answer then receive immediate, detailed feedback explaining why the answer is correct/incorrect. UI: answer input → scoring → expandable explanation panel with related links.",
+    "viability": "medium",
+    "impact": "high",
+    "versatile": "yes",
+    "bestFor": ["all subjects"]
+  },
+  {
+    "name": "Gamified Quiz Battles",
+    "description": "Head-to-head or solo timed quizzes with points, streaks, leaderboards. UI: countdown timer, points animation, streak counter, combo multiplier, season rankings.",
+    "viability": "medium",
+    "impact": "medium",
+    "versatile": "yes",
+    "bestFor": ["vocabulary", "general knowledge", "any drill-based memorization"]
+  },
+  {
+    "name": "Case-Based Learning",
+    "description": "Present real-world cases requiring application of knowledge to solve. UI: case narrative display, evidence tabs, diagnosis/solution input, expert solution comparison.",
+    "viability": "hard",
+    "impact": "high",
+    "versatile": "partial",
+    "bestFor": ["medicine", "law", "business", "engineering", "any applied profession"]
+  },
+  {
+    "name": "Spaced Handwriting Practice",
+    "description": "Write characters/kanji/formulas with spaced repetition scheduling. UI: drawing canvas with stroke detection, recognition scoring, stroke order guide, SRS scheduling.",
+    "viability": "medium",
+    "impact": "high",
+    "versatile": "no",
+    "bestFor": ["language writing systems (kanji, hanzi, hangul)", "mathematical notation", "chemistry formulas"]
+  }
+]

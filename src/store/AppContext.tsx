@@ -128,6 +128,7 @@ export interface Task {
   apuntes: string;     // local inline notes (task detail panel)
   studyTime: number;   // seconds studied on this task
   sortOrder?: number;
+  googleTaskId?: string; // mapeo a Google Tasks (sync bidireccional)
 }
 
 export interface NoteAttachment {
@@ -201,6 +202,27 @@ export interface SubjectMaterial {
   image?: string;      // supportive base64 image (formula, procedure)
   dataUrl?: string;    // resource file data URL (base64)
   fileType?: string;   // resource mime type
+  tagIds?: string[];   // topic tag references (topicTagDefs)
+  toolMode?: string;   // study tool that created this material (specialized editing)
+}
+
+export interface TopicFlashcard {
+  id: string;
+  question: string;
+  answer: string;
+  difficulty: 'facil' | 'bueno' | 'dificil';
+  lastReviewed: number;
+  nextReview: number;
+  tagIds?: string[];   // topic tag references (topicTagDefs)
+}
+
+export interface TopicRecording {
+  id: string;
+  name: string;
+  dataUrl: string;
+  duration: number;
+  createdAt: number;
+  tagIds?: string[];   // topic tag references (topicTagDefs)
 }
 
 export interface SubjectTopic {
@@ -208,10 +230,12 @@ export interface SubjectTopic {
   title: string;
   status: 'pending' | 'studying' | 'done';
   createdAt: number;
-  reviewLevel: number; // 0 to 5
+  reviewLevel: number; // 0 to 10 (speedometer scale, migrated from 0–5)
   nextReview: number;  // timestamp
   groupId?: string;    // linked SubjectGroup id
   materials: SubjectMaterial[];
+  flashcards?: TopicFlashcard[];
+  recordings?: TopicRecording[];
 }
 
 export interface Course {
@@ -239,6 +263,7 @@ export interface Course {
   topics?: string[];
   groups?: SubjectGroup[];
   studyTopics?: SubjectTopic[];
+  topicTagDefs?: { id: string; name: string; color: string }[];
 }
 
 export interface ScheduleEvent {
@@ -254,6 +279,7 @@ export interface ScheduleEvent {
   tags: string[];
   files: TaskFile[];
   recurring?: 'none' | 'daily' | 'weekly' | 'monthly';
+  googleEventId?: string; // mapeo a Google Calendar (sync bidireccional)
 }
 
 export interface Track {
@@ -327,10 +353,11 @@ export interface PlannedSession {
   courseId: string;
   date: string;           // YYYY-MM-DD
   title: string;
+  startTime?: string;     // HH:MM
   groupId?: string;
   topicId?: string;
   durationMinutes: number;
-  type: 'estudio' | 'repaso' | 'ejercicio' | 'lectura' | 'otro';
+  type: string;   // 'estudio' | 'repaso' | 'ejercicio' | 'lectura' | 'otro' | custom
   completed: boolean;
   createdAt: string;
 }
@@ -414,6 +441,12 @@ export interface Settings {
   audioQuality?: string;
   includeCover?: boolean;
   autoRetryOnError?: boolean;
+  // Owa Brain AI Engine settings
+  owaBrainEnabled?: boolean;
+  owaBrainShortcut?: string;
+  owaBrainApiKey?: string;
+  owaBrainBaseUrl?: string;
+  owaBrainModel?: string;
 }
 
 export interface AppNotification {
@@ -439,272 +472,12 @@ interface AppState {
   tracks: Track[];
   studySessions: StudySession[];
   settings: Settings;
-  sessionTime: number;
-  weeklyStudyTime: Record<string, number>; // 'YYYY-MM-DD' -> seconds
-  dailyStudyTime: number;
-  pomodoroSessions: number;
-  activeTaskId: string | null;       // currently linked task to timer
-  timerLocked: boolean;              // prevent switching during active session
-  isTimerActive: boolean;
-  isRest: boolean;
-  
-  sessionType: 'pomodoro' | 'chrono';
-  // Pause tracking and time distribution
-  accumulatedPauseTime: number;
-  pauseStartTime: number | null;
-  distractionCount: number;
-  focusPomodoroTime: number;
-  focusChronoTime: number;
-  breakTime: number;
-  dailyBreakTime: Record<string, number>;
-  dailyFocusPomodoro: Record<string, number>;
-  dailyFocusChrono: Record<string, number>;
-  dailyPerformances: DailyPerformance[];
-  // Music Player
-  isAudioLoading: boolean;
-  // Downloads
-  downloadQueue: DownloadItem[];
-  downloadPath: string;
-  setDownloadPathCtx: (path: string) => void;
   // Integrations
-  googleConnected: boolean;
-  calendarSyncEnabled: boolean;
-  lastCalendarSync: string | null;
-  showCompletion: boolean;
-  showRestPrompt: boolean;
-  setShowRestPrompt: Dispatch<SetStateAction<boolean>>;
-  handlePomodoroBannerClick: () => void;
-  importState: ImportState;
-  artists: { id: string; name: string; profileImage?: string }[];
-  trackHistory: string[];
-  playCounts: Record<string, number>;
-  musicQueue: string[];
-  queueSource: { pool: string[]; name?: string } | null;
-  musicVolume: number;
-  musicProgress: number;
-  musicDuration: number;
-  musicListeningTime: number;
-  dailyMusicTime: Record<string, number>;
-  weeklyMusicTime: number;
-  monthlyMusicTime: number;
-  shuffleMode: boolean;
-  repeatMode: 'none' | 'all' | 'one';
-  currentTrackId: string | null;
-  coverModalTrackId: string | null;
-  youtubeVideoUrl: string | null;
-  isPlayingMusic: boolean;
-  pipUrl: string | null;
   pipTitle: string;
   setPipUrl: (url: string | null, title?: string) => void;
 }
 
-export type ViewId = 'inicio' | 'tareas' | 'apuntes' | 'estudio' | 'cursos' | 'analiticas' | 'chat' | 'ajustes' | 'musica' | 'flujo' | 'canvas';
-
-interface AppContextType extends AppState {
-  setSessionType: (val: 'pomodoro' | 'chrono') => void;
-  // Tasks
-  addTask: (task: Omit<Task, 'id' | 'createdAt' | 'status' | 'subtasks' | 'files' | 'notes' | 'apuntes' | 'studyTime'> & { notes?: string; apuntes?: string; files?: TaskFile[]; subtasks?: SubTask[] }) => void;
-  clearAllTasks: () => void;
-  deleteCompletedTasks: () => void;
-  deleteOldCompletedTasks: () => void;
-  reorderTasks: (taskIds: string[]) => void;
-  updateTask: (id: string, updates: Partial<Task>) => void;
-  deleteTask: (id: string) => void;
-  toggleTaskStatus: (id: string) => void;
-  addSubTask: (taskId: string, title: string) => void;
-  toggleSubTask: (taskId: string, subId: string) => void;
-  deleteSubTask: (taskId: string, subId: string) => void;
-  addTaskFile: (taskId: string, file: Omit<TaskFile, 'id'>) => void;
-  removeTaskFile: (taskId: string, fileId: string) => void;
-  incrementTaskStudyTime: (taskId: string) => void;
-  // Notes
-  addNote: (note: Omit<Note, 'id' | 'createdAt' | 'updatedAt'>) => string;
-  updateNote: (id: string, updates: Partial<Note>) => void;
-  updateNoteVisual: (id: string, updates: Partial<Note>) => void;
-  deleteNote: (id: string) => void;
-  restoreNote: (id: string) => void;
-  permanentlyDeleteNote: (id: string) => void;
-  addNoteFolder: (folder: Omit<NoteFolder, 'id'>) => void;
-  deleteNoteFolder: (id: string) => void;
-  reorderFolders: (folderIds: string[]) => void;
-  reorderNotes: (noteIds: string[]) => void;
-  updateNoteFolder: (id: string, updates: Partial<NoteFolder>) => void;
-  duplicateNote: (noteId: string) => string | null;
-  // Courses
-  addCourse: (course: Omit<Course, 'id' | 'sortOrder'>) => string;
-  updateCourse: (id: string, updates: Partial<Course>) => void;
-  deleteCourse: (id: string) => void;
-  reorderCourses: (courseIds: string[]) => void;
-  // Events
-  addEvent: (event: Omit<ScheduleEvent, 'id'>) => void;
-  updateEvent: (id: string, updates: Partial<ScheduleEvent>) => void;
-  deleteEvent: (id: string) => void;
-  // Habits
-  addHabit: (name: string) => void;
-  updateHabit: (id: string, updates: Partial<Habit>) => void;
-  deleteHabit: (id: string) => void;
-  setHabits: Dispatch<SetStateAction<Habit[]>>;
-  // Music
-  addTrack: (track: Omit<Track, 'id'>) => string;
-  updateTrack: (id: string, updates: Partial<Track>) => void;
-  deleteTrack: (id: string) => void;
-  toggleTrackFavorite: (id: string) => void;
-  importLocalTracks: (paths: string[]) => Promise<void>;
-  setCoverModalTrackId: Dispatch<SetStateAction<string | null>>;
-  // Music Player
-  isAudioLoading: boolean;
-  playTrack: (id: string) => void;
-  toggleMusicPlayback: () => void;
-  setIsPlayingMusic: (v: boolean | ((prev: boolean) => boolean)) => void;
-  setMusicVolume: (volume: number) => void;
-  setMusicProgress: (progress: number) => void;
-  setShuffleMode: (mode: boolean) => void;
-  setRepeatMode: (mode: 'none' | 'all' | 'one') => void;
-  setMusicQueue: (queue: string[]) => void;
-  setQueueSource: (source: { pool: string[]; name?: string } | null) => void;
-  clearCurrentTrack: () => void;
-  clearAllMusicData: () => void;
-  exportMusicLibrary: (destDir: string) => Promise<number>;
-  importMusicLibrary: (srcDir: string) => Promise<number>;
-  addArtist: (name: string, profileImage?: string) => void;
-  updateArtist: (id: string, updates: { name?: string; profileImage?: string }) => void;
-  deleteArtist: (id: string) => void;
-  // Playlists
-  playlists: Playlist[];
-  addPlaylist: (name: string, trackIds: string[], coverImage?: string, isPublic?: boolean) => void;
-  updatePlaylist: (id: string, updates: Partial<Playlist>) => void;
-  deletePlaylist: (id: string) => void;
   // Timer / Study
-  addStudySession: (session: Omit<StudySession, 'id'>) => string | null;
-  updateStudySession: (id: string, updates: Partial<StudySession>) => void;
-  deleteStudySession: (id: string) => void;
-  plannedSessions: PlannedSession[];
-  addPlannedSession: (session: Omit<PlannedSession, 'id' | 'createdAt'>) => void;
-  updatePlannedSession: (id: string, updates: Partial<PlannedSession>) => void;
-  deletePlannedSession: (id: string) => void;
-  incrementSessionTime: () => void;
-  incrementDailyStudyTime: () => void;
-  incrementPomodoroSessions: () => void;
-  resetPomodoroSessions: () => void;
-  setActiveTaskId: (taskId: string | null) => void;
-  setTimerLocked: (locked: boolean) => void;
-  linkTaskToTimer: (taskId: string) => void;
-  unlinkTaskFromTimer: () => void;
-  toggleTimer: () => void;
-  resetTimer: () => void;
-  setIsTimerActive: Dispatch<SetStateAction<boolean>>;
-  setSessionTime: Dispatch<SetStateAction<number>>;
-  setDailyStudyTime: Dispatch<SetStateAction<number>>;
-  setWeeklyStudyTime: Dispatch<SetStateAction<Record<string, number>>>;
-  setTasks: Dispatch<SetStateAction<Task[]>>;
-  setPomodoroSessions: Dispatch<SetStateAction<number>>;
-  setShowCompletion: Dispatch<SetStateAction<boolean>>;
-  setRoundsCompleted: Dispatch<SetStateAction<number>>;
-  setIsRest: Dispatch<SetStateAction<boolean>>;
-  setAccumulatedPauseTime: Dispatch<SetStateAction<number>>;
-  setPauseStartTime: Dispatch<SetStateAction<number | null>>;
-  setDistractionCount: Dispatch<SetStateAction<number>>;
-  setFocusPomodoroTime: Dispatch<SetStateAction<number>>;
-  setFocusChronoTime: Dispatch<SetStateAction<number>>;
-  setBreakTime: Dispatch<SetStateAction<number>>;
-  setDailyFocusPomodoro: Dispatch<SetStateAction<Record<string, number>>>;
-  setDailyFocusChrono: Dispatch<SetStateAction<Record<string, number>>>;
-  dailyPerformances: DailyPerformance[];
-  setDailyPerformances: Dispatch<SetStateAction<DailyPerformance[]>>;
-  // Downloads
-  addToDownloadQueue: (item: Omit<DownloadItem, 'id' | 'progress' | 'status' | 'completedItems'>) => string;
-  updateDownloadProgress: (id: string, progress: number) => void;
-  updateDownloadStatus: (id: string, status: DownloadItem['status'], errorMessage?: string) => void;
-  removeFromDownloadQueue: (id: string) => void;
-  clearCompletedDownloads: () => void;
-  // Navigation
-  navigateTo: ViewId | null;
-  setNavigateTo: (view: ViewId | null) => void;
-  focusedTaskId: string | null;
-  setFocusedTaskId: (id: string | null) => void;
-  // Settings
-  updateSettings: (updates: Partial<Settings>) => void;
-  // Integrations
-  setGoogleConnected: (v: boolean) => void;
-  setCalendarSyncEnabled: (v: boolean) => void;
-  setLastCalendarSync: (v: string | null) => void;
-  triggerCalendarSync: () => Promise<void>;
-  importGoogleEvents: () => Promise<number>;
-  triggerTasksSync: () => Promise<void>;
-  importGoogleTasks: () => Promise<number>;
-  searchYouTubeMusic: (query: string) => Promise<{ videoId: string; title: string; channel: string; thumbnail: string }[]>;
-  searchVideos: (query: string) => Promise<{ videoId: string; title: string; channel: string; thumbnail: string }[]>;
-  importClassroomCourses: () => Promise<void>;
-  importClassroomAssignments: () => Promise<number>;
-  exportNotesToGoogleDoc: () => Promise<string | null>;
-  exportStatsToGoogleSheets: () => Promise<string | null>;
-  loadGoogleProfile: () => Promise<{ displayName: string; givenName: string; photoUrl: string; email: string } | null>;
-  triggerDriveBackup: () => Promise<string | null>;
-  searchStudyResources: (topic: string) => Promise<{ title: string; url: string; description: string }[]>;
-  createStudyQuiz: (courseName: string, topics: string[]) => Promise<string | null>;
-  initFirebaseNotifications: () => Promise<string | null>;
-  syncAllToCloud: () => Promise<void>;
-  // Notifications
-  notifications: AppNotification[];
-  addNotification: (message: string, type?: 'success' | 'error' | 'info') => void;
-  clearNotifications: () => void;
-  removeNotification: (id: string) => void;
-  toastMessage: { message: string; type: 'success' | 'error' | 'info' } | null;
-}
-
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-//  DEFAULTS
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-
-const defaultCourses: Course[] = [
-  { id: '1', name: 'Matemáticas', color: '#6366f1', progress: 72, totalTasks: 25, completedTasks: 18, hoursStudied: 12.5, sortOrder: 0 },
-  { id: '2', name: 'Física', color: '#10b981', progress: 58, totalTasks: 18, completedTasks: 10, hoursStudied: 8.3, sortOrder: 1 },
-  { id: '3', name: 'Historia', color: '#f59e0b', progress: 85, totalTasks: 12, completedTasks: 10, hoursStudied: 6.2, sortOrder: 2 },
-  { id: '4', name: 'Inglés', color: '#ec4899', progress: 90, totalTasks: 20, completedTasks: 18, hoursStudied: 5.8, sortOrder: 3 },
-  { id: '5', name: 'Computación', color: '#06b6d4', progress: 45, totalTasks: 15, completedTasks: 7, hoursStudied: 4.5, sortOrder: 4 },
-];
-
-const defaultSettings: Settings = {
-  chronoGoal: 25 * 60,
-  theme: 'oscuro',
-  accentColor: '#E11D48',
-  userName: 'MaxCB',
-  uiOpacity: 0.85,
-  notifications: true,
-  soundEffects: true,
-  event_pomodoro: true,
-  event_break: true,
-  event_task: true,
-  dailyGoal: 240,
-  pomodoroTime: 25 * 60,
-  shortBreakTime: 5 * 60,
-  longBreakTime: 15 * 60,
-  pomodoroGoal: 4,
-  fontFamily: 'Inter',
-  floatingBgColor: '#020203',
-  floatingClockType: 'led',
-  floatingShowAnimation: false,
-  floatingBgMode: 'app',
-  floatingFont: 'led',
-  floatingHideInFocus: false,
-  floatingAnimationType: 'plant',
-  selectedThemePreset: null,
-  secondaryColor: '#3B82F6',
-  surfaceColor: '#1a1a22',
-  playerBarEnabled: false,
-  playerBarCharacterSource: 'url',
-  playerBarCharacterUrl: '',
-  playerBarCharacterDraw: '',
-  playerBarFrameSpeeds: '',
-  playerBarTrackColor: '#E11D48',
-  playerBarCharacterSize: 40,
-  playerBarBgUrl: '',
-  playerBarTrackImage: '',
-  playerBarTrackSource: 'url',
-  playerBarTrackUrl: '',
-  playerBarTrackDraw: '',
-  playerBarTrackFrameSpeeds: '',
-  playerBarCharacterBorderColor: '',
   playerBarCharacterBorderWidth: 0,
   playerBarCharacterShadow: 6,
   playerBarCharacterOffsetY: 0,
@@ -713,20 +486,6 @@ const defaultSettings: Settings = {
   playerBarBorderColor: '',
   playerBarBorderWidth: 0,
   playerBarHeight: 'normal',
-  coverBgMode: 'auto',
-  playerBarBgColor: '',
-  playerBarTrackHeight: 3,
-  useThreeColors: false,
-  timeFormat: '24h',
-  downloadFormat: 'mp3',
-  audioQuality: '3',
-  includeCover: true,
-  autoRetryOnError: true,
-};
-
-const defaultFolders: NoteFolder[] = [
-  { id: 'f1', name: 'Matemáticas', color: '#6366f1', courseId: '1', isManual: false, sortOrder: 0 },
-  { id: 'f2', name: 'Física', color: '#10b981', courseId: '2', isManual: false, sortOrder: 1 },
   { id: 'f3', name: 'Historia', color: '#f59e0b', courseId: '3', isManual: false, sortOrder: 2 },
   { id: 'f4', name: 'Inglés', color: '#ec4899', courseId: '4', isManual: false, sortOrder: 3 },
   { id: 'f5', name: 'Computación', color: '#06b6d4', courseId: '5', isManual: false, sortOrder: 4 },
@@ -1015,6 +774,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
    const [navigateTo, setNavigateTo] = useState<ViewId | null>(null);
   const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null);
+  const [focusedEventId, setFocusedEventId] = useState<string | null>(null);
   const [googleConnected, setGoogleConnected] = useState(false);
   const [calendarSyncEnabled, setCalendarSyncEnabled] = useState(false);
   const [lastCalendarSync, setLastCalendarSync] = useState<string | null>(null);
@@ -1048,7 +808,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (data.habits) setHabits(data.habits);
           if (data.notes) setNotes(data.notes);
           if (data.noteFolders) setNoteFolders(data.noteFolders);
-          if (data.courses) setCourses(data.courses);
+          if (data.courses) {
+            // Migration: topic reviewLevel scale was 0–5, now a 0–10 speedometer
+            if (!localStorage.getItem('owa_review_scale_10')) {
+              data.courses = (data.courses as any[]).map((c: any) => ({
+                ...c,
+                studyTopics: (c.studyTopics || []).map((t: any) => ({ ...t, reviewLevel: Math.min(10, (t.reviewLevel || 0) * 2) })),
+              }));
+              localStorage.setItem('owa_review_scale_10', '1');
+            }
+            setCourses(data.courses);
+          }
           if (data.events) setEvents(data.events);
           if (data.studySessions) setStudySessions(data.studySessions);
           if (data.plannedSessions) setPlannedSessions(data.plannedSessions);
@@ -2986,6 +2756,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (e) { console.error('Import events failed:', e); return 0; }
   }, [addEvent]);
 
+  const syncCalendarTwoWayCb = useCallback(async (): Promise<{ created: number; updated: number; pushed: number; deleted: number; errors: number }> => {
+    try {
+      const { syncCalendarTwoWay } = await import('../lib/google/calendar');
+      const res = await syncCalendarTwoWay(
+        events.map(e => ({
+          id: e.id, title: e.title, description: e.description, date: e.date,
+          startTime: e.startTime, endTime: e.endTime, allDay: e.allDay, color: e.color, googleEventId: e.googleEventId,
+        }))
+      );
+      // Guardar mapeos de los eventos recién creados en Google
+      for (const m of res.newMappings) updateEvent(m.appEventId, { googleEventId: m.googleEventId });
+      // Importar eventos externos de Google
+      for (const ev of res.imported) {
+        addEvent({ title: ev.title, description: ev.description, date: ev.date, startTime: ev.startTime, endTime: ev.endTime, color: ev.color, allDay: ev.allDay, tags: [], files: [], recurring: 'none', googleEventId: ev.googleEventId });
+      }
+      // Actualizar en la app los eventos externos modificados en Google
+      for (const u of res.updates) updateEvent(u.id, u.changes);
+      setLastCalendarSync(new Date().toISOString());
+      return { created: res.created, updated: res.updated, pushed: res.pushed, deleted: res.deleted, errors: res.errors };
+    } catch (e) {
+      console.error('Calendar two-way sync failed:', e);
+      return { created: 0, updated: 0, pushed: 0, deleted: 0, errors: 1 };
+    }
+  }, [events, addEvent, updateEvent, setLastCalendarSync]);
+
   const triggerTasksSync = useCallback(async () => {
     try {
       const { syncAppTasksToGoogle } = await import('../lib/google/tasks');
@@ -3010,6 +2805,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return imported.length;
     } catch (e) { console.error('Import tasks failed:', e); return 0; }
   }, [addTask]);
+
+  const syncTasksTwoWayCb = useCallback(async (): Promise<{ created: number; updated: number; pushed: number; deleted: number; errors: number }> => {
+    try {
+      const { syncTasksTwoWay } = await import('../lib/google/tasks');
+      const res = await syncTasksTwoWay(
+        tasks.map(t => ({
+          id: t.id, title: t.title, notes: t.notes || '', dueDate: t.dueDate,
+          status: t.status === 'completado' ? 'completed' as const : t.status === 'progreso' ? 'in_progress' as const : 'pending' as const,
+          googleTaskId: t.googleTaskId,
+        }))
+      );
+      // Guardar mapeos de las tareas recién creadas en Google
+      for (const m of res.newMappings) updateTask(m.appTaskId, { googleTaskId: m.googleTaskId });
+      // Importar tareas añadidas directamente en la lista de Google
+      for (const t of res.imported) {
+        addTask({
+          title: t.title, course: '', courseColor: '', priority: 'medium',
+          urgent: false, important: false, dueDate: t.dueDate,
+          notes: t.notes, googleTaskId: t.googleTaskId,
+        });
+      }
+      // Aplicar actualizaciones traídas desde Google
+      for (const u of res.updates) {
+        updateTask(u.id, {
+          title: u.changes.title, notes: u.changes.notes, dueDate: u.changes.dueDate,
+          status: u.changes.status === 'completed' ? 'completado' : u.changes.status === 'in_progress' ? 'progreso' : 'inicio',
+        });
+      }
+      return { created: res.created, updated: res.updated, pushed: res.pushed, deleted: res.deleted, errors: res.errors };
+    } catch (e) {
+      console.error('Tasks two-way sync failed:', e);
+      return { created: 0, updated: 0, pushed: 0, deleted: 0, errors: 1 };
+    }
+  }, [tasks, addTask, updateTask]);
 
   const searchYouTubeMusicCb = useCallback(async (query: string) => {
     try {
@@ -3222,10 +3051,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dailyPerformances, setDailyPerformances,
     navigateTo, setNavigateTo,
     focusedTaskId, setFocusedTaskId,
+    focusedEventId, setFocusedEventId,
     updateSettings: updateSettingsCb,
     setGoogleConnected, setCalendarSyncEnabled, setLastCalendarSync,
-    triggerCalendarSync, importGoogleEvents: importGoogleEventsCb,
-    triggerTasksSync, importGoogleTasks: importGoogleTasksCb,
+    triggerCalendarSync, syncCalendarTwoWay: syncCalendarTwoWayCb, importGoogleEvents: importGoogleEventsCb,
+    triggerTasksSync, syncTasksTwoWay: syncTasksTwoWayCb, importGoogleTasks: importGoogleTasksCb,
     searchYouTubeMusic: searchYouTubeMusicCb, searchVideos: searchVideosCb, importClassroomCourses: importClassroomCoursesCb,
     importClassroomAssignments: importClassroomAssignmentsCb,
     exportNotesToGoogleDoc: exportNotesToGoogleDocCb, exportStatsToGoogleSheets: exportStatsToGoogleSheetsCb,
