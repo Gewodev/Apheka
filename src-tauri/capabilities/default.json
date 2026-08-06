@@ -31,6 +31,15 @@
     "dialog:allow-open",
     "dialog:allow-save",
     {
+      "identifier": "http:default",
+      "allow": [
+        { "url": "https://opencode.ai/zen/v1/**" },
+        { "url": "https://opencode.ai/**" },
+        { "url": "https://openrouter.ai/api/v1/**" },
+        { "url": "https://**" }
+      ]
+    },
+    {
       "identifier": "fs:default",
       "allow": [
         { "path": "$APPCACHE/**" },

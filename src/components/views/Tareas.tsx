@@ -17,8 +17,9 @@ import {
 } from 'lucide-react';
 import { useApp, Task, fmtClock } from '../../store/AppContext';
 import { openFileSmart } from '../../lib/openFileSmart';
+import { BRAIN_DROP_MIME, writeBrainAnchor } from '../../lib/brainDrop';
 import { GoogleClassroomIcon, GoogleDriveIcon, GoogleDocsIcon, GoogleSheetsIcon, GoogleSlidesIcon, GoogleFormsIcon } from '../ui/GoogleIcons';
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, isToday, addMonths, subMonths, addWeeks, subWeeks } from 'date-fns';
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, isToday, addMonths, subMonths, addWeeks, subWeeks, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { isSignedIn, signIn, signOut, onAuthChange } from '../../lib/google';
 import NotificationBell from '../ui/NotificationBell';
@@ -122,7 +123,7 @@ function SortableCalendarTask({ task, children }: { task: Task; children: (dragP
 }
 
 export default function Tareas() {
-  const { tasks, courses, notes, addTask, updateTask, toggleTaskStatus, deleteTask, addSubTask, toggleSubTask, deleteSubTask, addTaskFile, removeTaskFile, clearAllTasks, addNotification, setNavigateTo, focusedTaskId, setFocusedTaskId, settings, addNote, updateNote } = useApp();
+  const { tasks, courses, notes, addTask, updateTask, toggleTaskStatus, deleteTask, addSubTask, toggleSubTask, deleteSubTask, addTaskFile, removeTaskFile, clearAllTasks, addNotification, setNavigateTo, focusedTaskId, setFocusedTaskId, settings, addNote, updateNote, activePlannedSessionId, activeTaskId } = useApp();
   const th = document.documentElement.getAttribute('data-theme');
   const isDarkSelect = !th || th === 'oscuro' || th === 'vibrante';
   const selectBorder = isDarkSelect ? '1px solid rgba(255,255,255,0.12)' : '1px solid rgba(0,0,0,0.12)';
@@ -350,6 +351,7 @@ export default function Tareas() {
       reorderTasks(newIds);
     }
     setActiveDragId(null);
+    setLongPressedTaskId(null);
   }, [filteredTasks, reorderTasks]);
 
   const handleDragEndCalendar = useCallback((event: any) => {
@@ -412,6 +414,7 @@ export default function Tareas() {
 
   const handleDragStart = (e: React.DragEvent, taskId: string) => {
     e.dataTransfer.setData('text/plain', taskId);
+    e.dataTransfer.setData(BRAIN_DROP_MIME, writeBrainAnchor('task', taskId));
     setDraggingTaskId(taskId);
     if (e.currentTarget instanceof HTMLElement) {
       e.dataTransfer.effectAllowed = 'move';
@@ -655,7 +658,7 @@ export default function Tareas() {
         {viewMode === 'list' && (
             <div className="bento-card" style={{ width: '100%', display: 'flex', flexDirection: 'column', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 12, flex: 1 }}>
               {/* Column headers */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 0, padding: '11px 18px 11px 12px', borderBottom: '1px solid var(--border-soft)', flexShrink: 0, background: 'var(--bg-elevated)', borderRadius: '12px 12px 0 0' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 0, padding: '11px 18px 11px 8px', borderBottom: '1px solid var(--border-soft)', flexShrink: 0, background: 'var(--bg-elevated)', borderRadius: '12px 12px 0 0' }}>
                 <span style={{ width: 30, flexShrink: 0 }} />
                 <span style={{ flex: 4, fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', textAlign: 'left' }}>Tarea</span>
                 <span style={{ flex: 2.2, fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', paddingLeft: 16, textAlign: 'center' }}>Curso</span>
@@ -692,22 +695,21 @@ export default function Tareas() {
                         return (
                           <SortableTaskRow key={t.id} task={t}>
                             {({ attributes, listeners, setNodeRef, style: dndStyle, isDragging: isDndDragging }) => (
-                              <div ref={setNodeRef} style={{ ...dndStyle, display: 'flex', alignItems: 'center', gap: 0, padding: '0', minHeight: 50, borderBottom: '1px solid var(--border-soft)', background: selectedTaskId === t.id ? `${stripColor}06` : bgStatus, transition: 'all 120ms', opacity: isDndDragging ? 0.4 : 1 }}
+                              <div ref={setNodeRef} {...attributes} {...listeners} style={{ ...dndStyle, display: 'flex', alignItems: 'center', gap: 0, padding: '0', minHeight: 50, borderBottom: '1px solid var(--border-soft)', background: selectedTaskId === t.id ? `${stripColor}06` : bgStatus, transition: 'all 120ms', opacity: isDndDragging ? 0.4 : 1, cursor: 'grab' }}
                                 className="hover:bg-white/[0.025]"
                                 onMouseDown={() => { isLongPressRef.current = false; longPressTimer.current = setTimeout(() => { isLongPressRef.current = true; setLongPressedTaskId(prev => prev === t.id ? null : t.id); }, 500); }}
                                 onMouseUp={() => { if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; } }}
                                 onMouseLeave={() => { if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; } }}
                                 onTouchStart={() => { isLongPressRef.current = false; longPressTimer.current = setTimeout(() => { isLongPressRef.current = true; setLongPressedTaskId(prev => prev === t.id ? null : t.id); }, 500); }}
                                 onTouchEnd={() => { if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; } }}>
-                                {/* Left toggle strip — cuadrado centrado — also drag handle */}
-                                <div {...attributes} {...listeners}
+                                {/* Left toggle strip — cuadrado centrado */}
+                                <div
                                   onClick={(e) => { e.stopPropagation(); if (isLongPressRef.current) { isLongPressRef.current = false; return; } handleToggle(e, t.id); }}
-                                  style={{ width: 32, height: 32, flexShrink: 0, background: isDone ? '#10B981' : `${stripColor}14`, cursor: 'grab', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, margin: 'auto 0 auto 12px', transition: 'all 180ms cubic-bezier(0.16,1,0.3,1)', border: `1.5px solid ${isDone ? '#10B981' : `${stripColor}35`}`, boxShadow: isDone ? '0 0 0 3px #10B98118' : 'none' }}
-                                  onMouseEnter={e => { if (!isDone) { e.currentTarget.style.background = `${stripColor}22`; e.currentTarget.style.borderColor = `${stripColor}55`; e.currentTarget.style.transform = 'scale(1.06)'; } }}
-                                  onMouseLeave={e => { if (!isDone) { e.currentTarget.style.background = `${stripColor}14`; e.currentTarget.style.borderColor = `${stripColor}35`; e.currentTarget.style.transform = 'scale(1)'; } }}>
+                                  style={{ width: 32, height: 32, flexShrink: 0, background: isDone ? '#10B981' : t.status === 'progreso' ? '#3B82F6' : 'transparent', cursor: 'grab', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, margin: 'auto 0 auto 8px', transition: 'all 180ms cubic-bezier(0.16,1,0.3,1)', border: `1.5px solid ${isDone ? '#10B981' : t.status === 'progreso' ? '#3B82F6' : `${stripColor}55`}`, boxShadow: isDone ? '0 0 0 3px #10B98118' : t.status === 'progreso' ? '0 0 0 3px #3B82F618' : 'none' }}
+                                  onMouseEnter={e => { if (!isDone && t.status !== 'progreso') { e.currentTarget.style.borderColor = `${stripColor}88`; e.currentTarget.style.transform = 'scale(1.06)'; } }}
+                                  onMouseLeave={e => { if (!isDone && t.status !== 'progreso') { e.currentTarget.style.borderColor = `${stripColor}55`; e.currentTarget.style.transform = 'scale(1)'; } }}>
                                   {isDone && <Check size={14} strokeWidth={2.5} style={{ color: '#fff' }} />}
-                                  {t.status === 'progreso' && <Zap size={13} fill={stripColor} style={{ color: stripColor }} />}
-                                  {t.status === 'inicio' && <div style={{ width: 7, height: 7, borderRadius: '50%', background: stripColor, opacity: 0.5 }} />}
+                                  {t.status === 'progreso' && <div style={{ width: 12, height: 12, borderRadius: 4, background: 'rgba(255,255,255,0.92)', boxShadow: '0 0 8px rgba(255,255,255,0.35)' }} />}
                                 </div>
                                 {/* Content area — click opens detail */}
                                 <div onClick={(e) => { e.stopPropagation(); handleOpenDetail(t.id); }}
@@ -775,12 +777,11 @@ export default function Tareas() {
                           }}>
                             <div style={{
                               width: 30, height: 30, borderRadius: 7, margin: '9px',
-                              background: t.status === 'completado' ? '#10B981' : `${sc}14`, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              border: `1.5px solid ${t.status === 'completado' ? '#10B981' : `${sc}35`}`,
+                              background: t.status === 'completado' ? '#10B981' : t.status === 'progreso' ? '#3B82F6' : 'transparent', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              border: `1.5px solid ${t.status === 'completado' ? '#10B981' : t.status === 'progreso' ? '#3B82F6' : `${sc}55`}`,
                             }}>
                               {t.status === 'completado' && <Check size={13} strokeWidth={2.5} style={{ color: '#fff' }} />}
-                              {t.status === 'progreso' && <Zap size={12} fill={sc} style={{ color: sc }} />}
-                              {t.status === 'inicio' && <div style={{ width: 6, height: 6, borderRadius: '50%', background: sc, opacity: 0.5 }} />}
+                              {t.status === 'progreso' && <div style={{ width: 11, height: 11, borderRadius: 4, background: 'rgba(255,255,255,0.92)' }} />}
                             </div>
                             <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.title}</span>
                           </div>
@@ -1049,9 +1050,16 @@ export default function Tareas() {
 
               {/* Day Headers */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: '1px solid var(--border-soft)', flexShrink: 0 }}>
-                {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map((d, i) => (
-                  <div key={d} style={{ padding: '10px 0', textAlign: 'center', fontSize: 11, fontWeight: 600, color: i >= 5 ? 'color-mix(in srgb, #EF4444 35%, transparent)' : 'var(--text-secondary)', letterSpacing: '0.08em', background: 'var(--bg-surface)', textTransform: 'uppercase' }}>{d}</div>
-                ))}
+                {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map((d, i) => {
+                  const headerDay = addDays(startOfWeek(calendarDate, { weekStartsOn: 1 }), i);
+                  const isHeaderToday = isToday(headerDay);
+                  return (
+                    <div key={d} style={{ padding: '10px 0 6px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, background: 'var(--bg-surface)' }}>
+                      <span style={{ fontSize: 10, fontWeight: isHeaderToday ? 700 : 600, color: isHeaderToday ? 'var(--accent)' : (i >= 5 ? 'color-mix(in srgb, #EF4444 35%, transparent)' : 'var(--text-muted)'), letterSpacing: '0.1em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>{d}</span>
+                      <span style={{ width: isHeaderToday ? 16 : 0, height: 2.5, borderRadius: 2, background: isHeaderToday ? 'var(--accent)' : 'transparent', opacity: isHeaderToday ? 1 : 0, boxShadow: isHeaderToday ? '0 0 6px var(--accent)' : 'none' }} />
+                    </div>
+                  );
+                })}
               </div>
 
               {/* Calendar Grid — más vertical */}
@@ -1086,7 +1094,7 @@ export default function Tareas() {
                                   minHeight: calendarSubMode === 'semana' ? 260 : 110,
                                   overflow: 'hidden',
                                   position: 'relative',
-                                  borderTop: isTodayDay ? '1px solid var(--accent-soft)' : '1px solid transparent',
+                                  borderTop: isTodayDay ? '1px solid color-mix(in srgb, var(--accent) 30%, transparent)' : '1px solid transparent',
                                   borderLeft: isSel ? '1px solid var(--accent-dim)' : di === 0 ? '1px solid var(--border-soft)' : 'none',
                                   transition: 'background 150ms',
                                   outline: isOver ? '1.5px solid var(--accent)' : 'none',
@@ -1094,15 +1102,19 @@ export default function Tareas() {
                                 }}>
                                 {/* Day Number */}
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 4, flexShrink: 0 }}>
-                                  <span style={{
-                                    fontSize: calendarSubMode === 'semana' ? 13 : 11,
-                                    fontWeight: isTodayDay ? 700 : (isSel ? 700 : 400),
-                                    color: isTodayDay ? 'var(--accent)' : (isSel ? 'var(--text-primary)' : isCurrentMonth ? (isWeekend ? 'var(--text-muted)' : 'var(--text-secondary)') : 'var(--text-muted)'),
-                                    width: 26, height: 26,
-                                    borderRadius: '50%',
-                                    background: isTodayDay ? 'var(--accent-dim)' : (isSel ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : 'transparent'),
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                  }}>{format(day, 'd')}</span>
+                                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                                    <span style={{
+                                      fontSize: calendarSubMode === 'semana' ? 13 : 11,
+                                      fontWeight: isTodayDay ? 700 : (isSel ? 700 : 400),
+                                      color: isTodayDay ? '#fff' : (isSel ? 'var(--text-primary)' : isCurrentMonth ? (isWeekend ? 'var(--text-muted)' : 'var(--text-secondary)') : 'var(--text-muted)'),
+                                      width: 26, height: 26,
+                                      borderRadius: '50%',
+                                      background: isTodayDay ? `linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 70%, #fff))` : (isSel ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : 'transparent'),
+                                      boxShadow: isTodayDay ? '0 0 10px color-mix(in srgb, var(--accent) 45%, transparent), 0 2px 6px rgba(0,0,0,0.3)' : 'none',
+                                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    }}>{format(day, 'd')}</span>
+                                    <span style={{ width: 4, height: 4, borderRadius: '50%', background: isTodayDay ? 'var(--accent)' : (isSel ? 'color-mix(in srgb, var(--accent) 60%, transparent)' : 'transparent'), boxShadow: isTodayDay ? '0 0 6px var(--accent)' : 'none', transition: 'background 150ms' }} />
+                                  </div>
                                 </div>
                                 {/* Task cards */}
                                 {dayTasks.length > 0 && (
@@ -1115,7 +1127,10 @@ export default function Tareas() {
                                             <div ref={dragRef} {...attributes} {...listeners}
                                               onClick={(e) => { e.stopPropagation(); setCalendarSelectedDay(day); handleOpenDetail(task.id); }}
                                               style={{
-                                                borderRadius: 4,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: 6,
+                                                borderRadius: 5,
                                                 padding: '3px 8px',
                                                 fontSize: 11,
                                                 fontWeight: 500,
@@ -1133,7 +1148,22 @@ export default function Tareas() {
                                                 opacity: isDragging ? 0.4 : 1,
                                               }}
                                               className="hover:brightness-125">
-                                              {task.title}
+                                              {(() => {
+                                                const hasExplicitTime = task.dueDate && !task.dueDate.endsWith('T23:59');
+                                                const timeLabel = hasExplicitTime ? format(localDate(task.dueDate as string), 'HH:mm') : null;
+                                                return (
+                                                  <>
+                                                    {timeLabel && (
+                                                      <span style={{
+                                                        fontSize: 9, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace",
+                                                        color: task.status === 'completado' ? 'rgba(255,255,255,0.25)' : (isOverdueCal ? '#EF4444' : task.courseColor),
+                                                        flexShrink: 0, opacity: 0.85,
+                                                      }}>{timeLabel}</span>
+                                                    )}
+                                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{task.title}</span>
+                                                  </>
+                                                );
+                                              })()}
                                             </div>
                                           )}
                                         </DraggableCalendarTask>
@@ -1848,27 +1878,45 @@ export default function Tareas() {
                 <div style={{ flex: 1 }} />
 
                 {/* ── Estudiar CTA ── */}
-                <button onClick={() => {
-                  localStorage.setItem('owa_study_task_id', selectedTask.id);
-                  localStorage.setItem('owa_study_task_title', selectedTask.title);
-                  setSelectedTaskId(null);
-                  setNavigateTo('estudio');
-                }}
+                {(() => {
+                  const otherTaskLinked = !!activeTaskId && activeTaskId !== selectedTask.id;
+                  const blocked = !!activePlannedSessionId || otherTaskLinked;
+                  return (
+                <button
+                  onClick={() => {
+                    if (activePlannedSessionId) {
+                      addNotification('Hay una sesión de estudio vinculada al temporizador. Desvincula esa sesión primero.', 'info');
+                      return;
+                    }
+                    if (otherTaskLinked) {
+                      addNotification('Ya hay otra tarea vinculada al temporizador. Desvincula esa tarea primero.', 'info');
+                      return;
+                    }
+                    localStorage.setItem('owa_study_task_id', selectedTask.id);
+                    localStorage.setItem('owa_study_task_title', selectedTask.title);
+                    setSelectedTaskId(null);
+                    setNavigateTo('estudio');
+                  }}
+                  title={activePlannedSessionId ? 'Hay una sesión de estudio vinculada al temporizador' : (otherTaskLinked ? 'Hay otra tarea vinculada al temporizador' : 'Estudiar esta tarea')}
                   style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '11px 0', borderRadius: 9, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                    border: `1px solid ${taskColor}30`,
-                    background: `${taskColor}08`,
-                    color: taskColor,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '11px 0', borderRadius: 9, fontSize: 12, fontWeight: 600,
+                    cursor: blocked ? 'not-allowed' : 'pointer',
+                    border: `1px solid ${blocked ? 'var(--border-subtle)' : taskColor + '30'}`,
+                    background: blocked ? 'var(--bg-deep)' : `${taskColor}08`,
+                    color: blocked ? 'var(--text-muted)' : taskColor,
                     transition: 'all 200ms',
                     width: '100%',
                     fontFamily: "'Inter Tight', sans-serif",
                     letterSpacing: '0.03em',
+                    opacity: blocked ? 0.6 : 1,
                   }}
-                  onMouseEnter={e => { e.currentTarget.style.background = `${taskColor}14`; e.currentTarget.style.borderColor = `${taskColor}50`; e.currentTarget.style.transform = 'scale(1.01)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = `${taskColor}08`; e.currentTarget.style.borderColor = `${taskColor}30`; e.currentTarget.style.transform = 'scale(1)'; }}>
-                  <Play size={13} fill={taskColor} style={{ color: taskColor }} />
-                  Estudiar
+                  onMouseEnter={e => { if (!blocked) { e.currentTarget.style.background = `${taskColor}14`; e.currentTarget.style.borderColor = `${taskColor}50`; e.currentTarget.style.transform = 'scale(1.01)'; } }}
+                  onMouseLeave={e => { if (!blocked) { e.currentTarget.style.background = `${taskColor}08`; e.currentTarget.style.borderColor = `${taskColor}30`; e.currentTarget.style.transform = 'scale(1)'; } }}>
+                  <Play size={13} fill={blocked ? 'var(--text-muted)' : taskColor} style={{ color: blocked ? 'var(--text-muted)' : taskColor }} />
+                  {activePlannedSessionId ? 'Sesión vinculada activa' : (otherTaskLinked ? 'Tarea vinculada activa' : 'Estudiar')}
                 </button>
+                  );
+                })()}
 
               </div>
             </div>

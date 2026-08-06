@@ -18,9 +18,10 @@ import Ajustes from './components/views/Ajustes';
 import Cursos from './components/views/Cursos';
 import CursosHub from './components/views/CursosHub';
 import OAuthCallback from './components/OAuthCallback';
-import SupabaseCallback from './components/SupabaseCallback';
 import GlobalPlayer from './components/GlobalPlayer';
 import DownloadManager from './components/ui/DownloadManager';
+import AIBrainSidebar from './components/ui/AIBrainSidebar';
+import type { BrainAnchor } from './lib/brainDrop';
 import NowPlayingView from './components/NowPlayingView';
 import VideoPiP from './components/VideoPiP';
 import ReactPlayer from 'react-player';
@@ -33,7 +34,7 @@ interface AppContentProps {
 }
 
 function AppContent() {
-  const { settings, courses, addCourse, navigateTo, setNavigateTo, importState, updateSettings, toastMessage, deleteOldCompletedTasks, youtubeVideoUrl, isPlayingMusic, musicVolume, musicProgress, musicDuration, setMusicProgress, setIsPlayingMusic, playTrack, musicQueue, setMusicQueue, shuffleMode, repeatMode, tracks, currentTrackId, setRepeatMode, coverModalTrackId, showRestPrompt, handlePomodoroBannerClick, queueSource, pipUrl, pipTitle, setPipUrl } = useApp();
+  const { settings, courses, addCourse, navigateTo, setNavigateTo, importState, updateSettings, toastMessage, deleteOldCompletedTasks, youtubeVideoUrl, isPlayingMusic, musicVolume, musicProgress, musicDuration, setMusicProgress, setIsPlayingMusic, playTrack, musicQueue, setMusicQueue, shuffleMode, repeatMode, tracks, currentTrackId, setRepeatMode, coverModalTrackId, showRestPrompt, handlePomodoroBannerClick, queueSource, pipUrl, pipTitle, setPipUrl, courseDeepLink, setCourseDeepLink } = useApp();
   const [activeView, setActiveView] = useState<ViewId>('inicio');
 
   // Auto-clean completed tasks older than 2 months on startup
@@ -44,17 +45,17 @@ function AppContent() {
       let mappedView = navigateTo as string;
       if (mappedView === 'apuntes') mappedView = 'notas';
       if (mappedView === 'flujo') mappedView = 'planificacion';
+      if (mappedView === 'curso_detalle' && courseDeepLink) {
+        setSelectedCourseId(courseDeepLink.courseId);
+        setSelectedCourseTab('archivos' as any);
+        setActiveView('curso_detalle');
+        setNavigateTo(null);
+        return;
+      }
       setActiveView(mappedView as ViewId);
       setNavigateTo(null);
     }
-  }, [navigateTo, setNavigateTo]);
-
-  // Clean up PiP when navigating away from Cursos
-  useEffect(() => {
-    if (activeView !== 'curso_detalle' && pipUrl) {
-      setPipUrl(null);
-    }
-  }, [activeView]);
+  }, [navigateTo, setNavigateTo, courseDeepLink]);
 
   const [isCollapsed, setIsCollapsed] = useState(() => {
     try { return localStorage.getItem('owa_sidebar_collapsed') === 'true'; } catch { return false; }
@@ -67,15 +68,48 @@ function AppContent() {
     });
   }, []);
   const [isOAuthCallback, setIsOAuthCallback] = useState(false);
-  const [isSupabaseCallback, setIsSupabaseCallback] = useState(false);
+
+  // ─── Charvis: hotkey + trigger lateral ───
+  const [isBrainOpen, setIsBrainOpen] = useState(false);
+  const [brainAnchor, setBrainAnchor] = useState<BrainAnchor | null>(null);
+
+  // Cualquier vista puede "anclar" un elemento arrastrado sobre Charvis
+  // disparando el evento owa-open-brain con un { kind, id }.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<BrainAnchor>).detail;
+      if (detail && detail.id) {
+        setBrainAnchor(detail);
+        setIsBrainOpen(true);
+      }
+    };
+    window.addEventListener('owa-open-brain', handler);
+    return () => window.removeEventListener('owa-open-brain', handler);
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (document.body.dataset.capturingShortcut) return;
+      const sc = settings.owaBrainShortcut || 'Alt+KeyQ';
+      const parts = sc.split('+');
+      const code = parts[parts.length - 1];
+      const hasAlt = parts.includes('Alt');
+      const hasCtrl = parts.includes('Ctrl') || parts.includes('Control');
+      const hasShift = parts.includes('Shift');
+      const hasMeta = parts.includes('Meta');
+      if (e.code === code && !!e.altKey === hasAlt && !!e.ctrlKey === hasCtrl && !!e.shiftKey === hasShift && !!e.metaKey === hasMeta) {
+        e.preventDefault();
+        setIsBrainOpen(o => !o);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [settings.owaBrainShortcut]);
 
   useEffect(() => {
     const path = window.location.pathname;
     if (path.startsWith('/oauth/callback')) {
       setIsOAuthCallback(true);
-    }
-    if (path.startsWith('/auth/callback')) {
-      setIsSupabaseCallback(true);
     }
   }, []);
 
@@ -381,9 +415,7 @@ function AppContent() {
             <span style={{ color: '#fff', fontSize: 12.5, fontWeight: 500, fontFamily: "'Inter', sans-serif", letterSpacing: '0.01em', whiteSpace: 'nowrap' }}>Te espera un descanso</span>
           </div>
         )}
-        {isSupabaseCallback ? (
-          <SupabaseCallback />
-        ) : isOAuthCallback ? (
+        {isOAuthCallback ? (
           <OAuthCallback />
         ) : (
           <div key={activeView} className="fade-in-animation" style={{ flex: 1, overflow: 'hidden' }}>
@@ -754,6 +786,20 @@ function AppContent() {
       {/* PiP Video Player */}
       <VideoPiP url={pipUrl} title={pipTitle} onClose={() => setPipUrl(null)} />
 
+      {/* ─── Charvis: zona invisible al borde derecho; al pasar el cursor se
+              difumina un velo arcoíris sobre la lateral (sin texto) ─── */}
+      {!isBrainOpen && (
+        <div
+          className="brain-trigger-zone"
+          title="Abrir Charvis"
+          onClick={() => setIsBrainOpen(true)}
+        >
+          <div className="brain-trigger-glow" />
+        </div>
+      )}
+
+      {/* ─── Charvis sidebar ─── */}
+      <AIBrainSidebar isOpen={isBrainOpen} onClose={() => setIsBrainOpen(false)} onOpen={() => setIsBrainOpen(true)} anchor={brainAnchor} />
     </div>
   );
 }

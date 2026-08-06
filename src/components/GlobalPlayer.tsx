@@ -76,7 +76,12 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
   const seekValueRef = useRef(0);
   const [isSeeking, setIsSeeking] = useState(false);
   const [seekValue, setSeekValue] = useState(0);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(() => {
+    try { return localStorage.getItem('owa_player_expanded') === '1'; } catch { return false; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem('owa_player_expanded', expanded ? '1' : '0'); } catch { /* noop */ }
+  }, [expanded]);
   const [arrowVisible, setArrowVisible] = useState(false);
   const [playerHovered, setPlayerHovered] = useState(false);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);

@@ -1,10 +1,10 @@
 /**
- * Planificacion.tsx â€” Enterprise Academic Planner (v2 Revamp)
+ * Planificacion.tsx — Enterprise Academic Planner (v2 Revamp)
  */
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
-  ChevronLeft, ChevronRight, Plus, Calendar, Clock, X, Trash2, Check, CheckSquare, CheckCircle2
+  ChevronLeft, ChevronRight, Plus, Minus, Calendar, Clock, X, Trash2, Check, CheckSquare, CheckCircle2, Pencil
 } from 'lucide-react';
 import { useApp, fmtClock, fmtTimeRange } from '../../store/AppContext';
 import {
@@ -30,6 +30,7 @@ const H_START = 0;
 const H_END   = 23;
 const H_PX    = 64; 
 const DAY_LABELS = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+const REVIEW_LEVEL_COLORS = ['#EF4444', '#F97316', '#F59E0B', '#FBBF24', '#EAB308', '#A3E635', '#84CC16', '#4ADE80', '#22C55E', '#10B981'];
 
 type PlanView = 'week' | 'day' | 'month' | 'year';
 const VIEW_LABELS: Record<PlanView, string> = {
@@ -138,7 +139,9 @@ function getMergedClasses(classes: ScheduleClass[]) {
 }
 
 export default function Planificacion() {
-  const { tasks, courses, setNavigateTo, addNotification, settings, studySessions, plannedSessions, focusedEventId, setFocusedEventId } = useApp();
+  const { tasks, courses, setNavigateTo, addNotification, settings, studySessions, plannedSessions, addPlannedSession, updatePlannedSession, deletePlannedSession, focusedEventId, setFocusedEventId,
+    planEvents, setPlanEvents, planSyncTick, planSyncImports, syncPlanEventToGoogle, deletePlanEventFromGoogle,
+    googleConnected, calendarSyncEnabled } = useApp();
 
   const [planView, setPlanView] = useState<PlanView>(() => {
     try { return (localStorage.getItem('owa_planner_view') as PlanView) || 'week'; }
@@ -155,6 +158,40 @@ export default function Planificacion() {
   const [editingEvent, setEditingEvent]       = useState<PlanEvent | null>(null);
   
   const [selectedItem, setSelectedItem] = useState<SelectedItem | null>(null);
+
+  // Plan session modal (study blocks)
+  const [showPlanModal, setShowPlanModal] = useState(false);
+  const [planEditId, setPlanEditId] = useState<string | null>(null);
+  const [planDate, setPlanDate] = useState('');
+  const [planStartTime, setPlanStartTime] = useState('09:00');
+  const [planTitle, setPlanTitle] = useState('');
+  const [planCourseId, setPlanCourseId] = useState('');
+  const [planType, setPlanType] = useState('estudio');
+  const [planDuration, setPlanDuration] = useState(30);
+  const [planIntensity, setPlanIntensity] = useState(5);
+
+  const openNewPlanSession = (date?: string) => {
+    setPlanEditId(null);
+    setPlanDate(date || format(navDate, 'yyyy-MM-dd'));
+    setPlanStartTime('09:00');
+    setPlanTitle('');
+    setPlanCourseId(courses[0]?.id || '');
+    setPlanType('estudio');
+    setPlanDuration(30);
+    setPlanIntensity(5);
+    setShowPlanModal(true);
+  };
+  const openEditPlanSession = (ps: { id: string; date: string; startTime?: string; title: string; courseId: string; type: string; durationMinutes: number; intensity?: number }) => {
+    setPlanEditId(ps.id);
+    setPlanDate(ps.date);
+    setPlanStartTime(ps.startTime || '09:00');
+    setPlanTitle(ps.title || '');
+    setPlanCourseId(ps.courseId || courses[0]?.id || '');
+    setPlanType(ps.type || 'estudio');
+    setPlanDuration(ps.durationMinutes || 30);
+    setPlanIntensity(ps.intensity || 5);
+    setShowPlanModal(true);
+  };
 
   const [activeDragPlanId, setActiveDragPlanId] = useState<string | null>(null);
   const [dragOverSlot, setDragOverSlot] = useState<{ dayIdx: number; hour: number } | null>(null);
@@ -181,13 +218,47 @@ export default function Planificacion() {
   const dateStr = format(now, "EEEE d 'de' MMMM yyyy", { locale: es as any });
 
   useEffect(() => { const d = loadStore(); setEvents(d.events); setClasses(d.classes); }, []);
+
+  // Registra los eventos del planificador en el contexto para el sync con Google Calendar
+  useEffect(() => {
+    setPlanEvents(events.map(e => ({
+      id: e.id, title: e.title, description: e.description || '', date: e.date,
+      startTime: e.startTime || '', endTime: e.endTime || '', allDay: !!e.allDay,
+      color: e.color || 'var(--accent)', googleEventId: e.googleEventId,
+    })));
+  }, [events, setPlanEvents]);
+
+  // Aplica resultados del sync: googleEventIds nuevos + eventos creados en Google
+  useEffect(() => {
+    if (planSyncTick === 0) return;
+    setEvents(prev => {
+      let changed = false;
+      const bridgeIds = new Map(planEvents.map(p => [p.id, p.googleEventId]));
+      let next = prev.map(e => {
+        const gid = bridgeIds.get(e.id);
+        if (gid && !e.googleEventId) { changed = true; return { ...e, googleEventId: gid }; }
+        return e;
+      });
+      const known = new Set(next.map(e => e.googleEventId).filter(Boolean) as string[]);
+      const toAdd = planSyncImports.filter(imp => !!imp.googleEventId && !known.has(imp.googleEventId));
+      if (toAdd.length) {
+        changed = true;
+        next = [...next, ...toAdd.map(imp => ({
+          id: imp.id, title: imp.title, date: imp.date, allDay: !!imp.allDay,
+          startTime: imp.startTime, endTime: imp.endTime, color: imp.color,
+          description: imp.description, googleEventId: imp.googleEventId,
+          repeat: 'none' as const, attachments: [],
+        }))];
+      }
+      return changed ? next : prev;
+    });
+  }, [planSyncTick, planEvents, planSyncImports]);
+
   useEffect(() => {
     if (!focusedEventId || events.length === 0) return;
     const ev = events.find(e => e.id === focusedEventId);
     if (ev) {
-      setEditingEvent(ev);
-      setModalDefaults({ date: ev.date });
-      setShowEventModal(true);
+      setSelectedItem({ type: 'event', event: ev });
     }
     setFocusedEventId(null);
   }, [focusedEventId, events]);
@@ -296,10 +367,14 @@ export default function Planificacion() {
   };
 
   function deleteEvent(id: string) {
+    const target = events.find(e => e.id === id);
     setEvents(p => p.filter(e => e.id !== id));
     setEditingEvent(null);
     setShowEventModal(false);
     setSelectedItem(null);
+    if (googleConnected && target?.googleEventId) {
+      void deletePlanEventFromGoogle(target.googleEventId);
+    }
   }
 
   function saveEvent(ev: PlanEvent) {
@@ -311,6 +386,13 @@ export default function Planificacion() {
     setShowEventModal(false);
     setEditingEvent(null);
     setSelectedItem(null);
+    if (googleConnected && calendarSyncEnabled) {
+      void syncPlanEventToGoogle({ ...ev, description: ev.description || '' }).then(gid => {
+        if (gid && gid !== ev.googleEventId) {
+          setEvents(p => p.map(e => e.id === ev.id ? { ...e, googleEventId: gid } : e));
+        }
+      });
+    }
   }
 
   const nowH  = nowFrac();
@@ -432,6 +514,21 @@ export default function Planificacion() {
             <CheckSquare size={14} /> {showHabits ? 'Cerrar Hábitos' : 'Hábitos'}
           </button>
           <button
+            onClick={() => openNewPlanSession()}
+            style={{
+              display:'flex', alignItems:'center', gap:8,
+              height:38, borderRadius:10, padding:'0 20px',
+              fontSize:12, fontWeight:700, fontFamily:"'Outfit',sans-serif",
+              border:'1px solid #8B5CF6', cursor:'pointer',
+              background:'rgba(139,92,246,0.1)', color:'#A78BFA',
+              transition:'all 200ms',
+            }}
+            onMouseEnter={e=>e.currentTarget.style.background='rgba(139,92,246,0.2)'}
+            onMouseLeave={e=>e.currentTarget.style.background='rgba(139,92,246,0.1)'}
+          >
+            <Clock size={14}/> Sesión
+          </button>
+          <button
             onClick={() => { setModalDefaults({ date: format(new Date(), 'yyyy-MM-dd') }); setEditingEvent(null); setShowEventModal(true); }}
             style={{
               display:'flex', alignItems:'center', gap:8,
@@ -459,6 +556,10 @@ export default function Planificacion() {
                 scheduleImageUrl={scheduleImageUrl}
                 onSetScheduleImage={setScheduleImageUrl}
                 imgInputRef={imgInputRef}
+                classes={classes}
+                onAddClass={cls => setClasses(p => [...p, { ...cls, id: crypto.randomUUID() }])}
+                onUpdateClass={(id, patch) => setClasses(p => p.map(c => c.id === id ? { ...c, ...patch } : c))}
+                onDeleteClass={id => setClasses(p => p.filter(c => c.id !== id))}
               />
             </div>
           )}
@@ -604,36 +705,70 @@ export default function Planificacion() {
                           const sTop = (stH - H_START) * H_PX;
                           const sH = Math.max(durH * H_PX, 16);
                           const isChrono = s.type === 'chrono';
+                          const sColor = isChrono ? '#10B981' : '#3B82F6';
+                          const linkedTask = s.taskId ? tasks.find(t => t.id === s.taskId) : null;
+                          const linkedCourse = s.courseId ? courses.find(c => c.id === s.courseId) : null;
+                          const sLabel = linkedTask ? linkedTask.title : (linkedCourse ? linkedCourse.name : (s.type === 'pomodoro' ? 'Pomodoro' : 'Cronómetro'));
                           return (
-                            <div key={s.id} title={`Estudio: ${Math.round(s.duration/60)} min`}
+                            <div key={s.id} title={`${sLabel} — ${Math.round(s.duration/60)} min`}
                               style={{
                                 position:'absolute', top: sTop, left: '2%', width: '96%', height: sH,
                                 borderRadius: 4, zIndex: 1, pointerEvents: 'none',
                                 background: isChrono ? 'rgba(16,185,129,0.08)' : 'rgba(59,130,246,0.08)',
                                 borderLeft: `2px solid ${isChrono ? 'rgba(16,185,129,0.25)' : 'rgba(59,130,246,0.25)'}`,
-                                opacity: 0.7,
-                              }}
-                            />
+                                opacity: 0.7, display:'flex', alignItems:'center', paddingLeft:10, gap:6, overflow: 'hidden',
+                              }}>
+                              <span style={{ fontSize: 9, fontWeight: 700, color: sColor, fontFamily: "'JetBrains Mono',monospace", flexShrink: 0 }}>{Math.round(s.duration/60)}m</span>
+                              <span style={{ fontSize: 9.5, fontWeight: 600, color: sColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sLabel}</span>
+                            </div>
                           );
                         })}
                         {getPlannedSessionsForDate(iso).map(ps => {
                           const durH = ps.durationMinutes / 60;
-                          const sH = Math.max(durH * H_PX, 20);
-                          const startH = 9;
-                          const sTop = (startH - H_START) * H_PX;
+                          const sH = Math.max(durH * H_PX, 22);
                           const courseInfo = courses.find(c => c.id === ps.courseId);
+                          const pCol = courseInfo?.color || '#8B5CF6';
+                          const psInt = Math.max(0, Math.min(10, ps.intensity || 0));
+                          if (!ps.startTime) return null;
+                          const [sh, sm] = ps.startTime.split(':').map(Number);
+                          const sTop = ((sh + sm / 60) - H_START) * H_PX;
+                          if (sTop < -sH) return null;
                           return (
-                            <div key={`planned-${ps.id}`} title={`${ps.title} (${ps.durationMinutes}m — ${ps.type})`}
+                            <div key={`planned-${ps.id}`} title={`${ps.title || 'Sesión'} — ${ps.durationMinutes}m · intensidad ${psInt}/10`}
+                              onClick={e => { e.stopPropagation(); setSelectedItem({ type: 'plansession', session: ps }); }}
                               style={{
-                                position:'absolute', top: sTop, left: '4%', width: '92%', height: sH,
-                                borderRadius: 6, zIndex: 2, pointerEvents: 'none',
-                                background: `linear-gradient(135deg, rgba(139,92,246,0.06), rgba(139,92,246,0.02))`,
-                                borderLeft: `2.5px dashed rgba(139,92,246,0.35)`,
-                                display: 'flex', alignItems: 'flex-start', padding: '4px 8px',
-                              }}>
-                              <span style={{ fontSize: 9, fontWeight: 600, color: 'rgba(139,92,246,0.65)', fontFamily: "'Inter', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {ps.title} <span style={{ fontWeight: 400, opacity: 0.6 }}>· {ps.durationMinutes}m</span>
+                                position:'absolute', top: sTop, left: '3%', width: '94%', height: sH,
+                                borderRadius: 6, zIndex: 2, cursor: 'pointer',
+                                background: `linear-gradient(135deg, ${pCol}16, ${pCol}05)`,
+                                borderLeft: `3px solid ${pCol}66`,
+                                display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '5px 9px',
+                                transition: 'all 150ms',
+                              }}
+                              onMouseEnter={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${pCol}22, ${pCol}0a)`; e.currentTarget.style.boxShadow = `0 4px 14px ${pCol}33`; }}
+                              onMouseLeave={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${pCol}16, ${pCol}05)`; e.currentTarget.style.boxShadow = 'none'; }}
+                            >
+                              <span style={{ fontSize: 10.5, fontWeight: 700, color: pCol, fontFamily: "'Inter', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
+                                {ps.title || 'Sesión de estudio'}
                               </span>
+                              {sH > 30 && (
+                                <span style={{ fontSize: 8.5, fontWeight: 500, color: pCol, opacity: 0.75, fontFamily: "'JetBrains Mono',monospace", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%', marginTop: 1 }}>
+                                  {fmtTimeRange(ps.startTime, (() => { const m = Math.round(sh * 60 + sm + ps.durationMinutes); return `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; })(), settings?.timeFormat)} · {ps.durationMinutes}m
+                                </span>
+                              )}
+                              {sH > 44 && (
+                                <div style={{ display: 'flex', gap: 1.5, marginTop: 'auto', width: '100%', paddingTop: 2 }}>
+                                  {REVIEW_LEVEL_COLORS.map((col, i) => (
+                                    <div key={i} style={{ flex: 1, height: 4, borderRadius: 1, background: i < psInt ? col : 'var(--bg-deep)', opacity: i < psInt ? 0.9 : 0.5, boxShadow: i === psInt - 1 ? `0 0 6px ${col}88` : 'none' }} />
+                                  ))}
+                                </div>
+                              )}
+                              <button onClick={e => { e.stopPropagation(); openEditPlanSession(ps); }}
+                                title="Editar sesión"
+                                style={{ position:'absolute', top:4, right:5, width:18, height:18, borderRadius:5, border:'none', background:'transparent', color:pCol, opacity:0.55, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', transition:'all 150ms' }}
+                                onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = `${pCol}22`; }}
+                                onMouseLeave={e => { e.currentTarget.style.opacity = '0.55'; e.currentTarget.style.background = 'transparent'; }}>
+                                <Pencil size={9} />
+                              </button>
                             </div>
                           );
                         })}
@@ -679,11 +814,6 @@ export default function Planificacion() {
                 <div style={{ marginTop:16, display:'flex', flexWrap:'wrap', gap:8 }}>
                   {getAllDayEventsForDate(format(navDate,'yyyy-MM-dd')).map(ev => (
                     <span key={ev.id} onClick={()=>{ setSelectedItem({ type: 'event', event: ev }); }} style={{ fontSize:12, fontWeight:600, padding:'6px 16px', borderRadius:10, background:`${ev.color}15`, border:`1px solid ${ev.color}30`, color:ev.color, cursor:'pointer' }}>{ev.title}</span>
-                  ))}
-                  {getPlannedSessionsForDate(format(navDate,'yyyy-MM-dd')).map(s => (
-                    <span key={s.id} style={{ fontSize:11, fontWeight:500, padding:'4px 12px', borderRadius:8, background:'rgba(139,92,246,0.08)', border:'1px solid rgba(139,92,246,0.2)', color:'rgba(139,92,246,0.8)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                      {s.title || s.type} <span style={{ fontSize: 9, opacity: 0.6 }}>{s.durationMinutes}m</span>
-                    </span>
                   ))}
                 </div>
               </div>
@@ -747,21 +877,21 @@ export default function Planificacion() {
                       const sTop = (stH - H_START) * H_PX;
                       const sH = Math.max(durH * H_PX, 16);
                       const isChrono = s.type === 'chrono';
+                      const sColor = isChrono ? '#10B981' : '#3B82F6';
+                      const linkedTask = s.taskId ? tasks.find(t => t.id === s.taskId) : null;
+                      const linkedCourse = s.courseId ? courses.find(c => c.id === s.courseId) : null;
+                      const sLabel = linkedTask ? linkedTask.title : (linkedCourse ? linkedCourse.name : (s.type === 'pomodoro' ? 'Pomodoro' : 'Cronómetro'));
                       return (
-                        <div key={s.id} title={`Estudio: ${Math.round(s.duration/60)} min`}
+                        <div key={s.id} title={`${sLabel} — ${Math.round(s.duration/60)} min`}
                           style={{
                             position:'absolute', top: sTop, left: '2%', width: '96%', height: sH,
                             borderRadius: 4, zIndex: 1, pointerEvents: 'none',
                             background: isChrono ? 'rgba(16,185,129,0.08)' : 'rgba(59,130,246,0.08)',
                             borderLeft: `2px solid ${isChrono ? 'rgba(16,185,129,0.25)' : 'rgba(59,130,246,0.25)'}`,
-                            opacity: 0.7, display:'flex', alignItems:'center', paddingLeft:10, gap:6,
+                            opacity: 0.7, display:'flex', alignItems:'center', paddingLeft:10, gap:6, overflow:'hidden',
                           }}>
-                          <span style={{ fontSize:10, fontWeight:600, color:isChrono?'rgba(16,185,129,0.7)':'rgba(59,130,246,0.7)' }}>
-                            {((s.courseId ? courses.find(c=>c.id===s.courseId)?.name : (s.subjects?.[0] ? courses.find(c=>c.id===s.subjects![0])?.name : '')) || '').substring(0, 12)}
-                          </span>
-                          <span style={{ fontSize:9, fontWeight:400, color:'rgba(255,255,255,0.35)' }}>
-                            {Math.round(s.duration/60)}min
-                          </span>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: sColor, fontFamily: "'JetBrains Mono',monospace", flexShrink: 0 }}>{Math.round(s.duration/60)}m</span>
+                          <span style={{ fontSize: 10.5, fontWeight: 600, color: sColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sLabel}</span>
                         </div>
                       );
                     })}
@@ -770,6 +900,54 @@ export default function Planificacion() {
                         <div style={{ position:'absolute', left:-4, top:-4, width:10, height:10, borderRadius:'50%', background:'var(--accent)', boxShadow:'0 0 20px var(--accent-glow)' }}/>
                       </div>
                     )}
+                    {getPlannedSessionsForDate(format(navDate,'yyyy-MM-dd')).map(ps => {
+                      const durH = ps.durationMinutes / 60;
+                      const sH = Math.max(durH * H_PX, 22);
+                      const courseInfo = courses.find(c => c.id === ps.courseId);
+                      const pCol = courseInfo?.color || '#8B5CF6';
+                      const psInt = Math.max(0, Math.min(10, ps.intensity || 0));
+                      if (!ps.startTime) return null;
+                      const [sh, sm] = ps.startTime.split(':').map(Number);
+                      const sTop = ((sh + sm / 60) - H_START) * H_PX;
+                      return (
+                        <div key={`planned-${ps.id}`} title={`${ps.title || 'Sesión'} — ${ps.durationMinutes}m · intensidad ${psInt}/10`}
+                          onClick={e => { e.stopPropagation(); setSelectedItem({ type: 'plansession', session: ps }); }}
+                          style={{
+                            position:'absolute', top: sTop, left: '2.5%', width: '95%', height: sH,
+                            borderRadius: 6, zIndex: 2, cursor: 'pointer',
+                            background: `linear-gradient(135deg, ${pCol}18, ${pCol}06)`,
+                            borderLeft: `3px solid ${pCol}66`,
+                            display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '6px 11px',
+                            transition: 'all 150ms',
+                          }}
+                          onMouseEnter={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${pCol}26, ${pCol}0c)`; e.currentTarget.style.boxShadow = `0 4px 14px ${pCol}33`; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${pCol}18, ${pCol}06)`; e.currentTarget.style.boxShadow = 'none'; }}
+                        >
+                          <span style={{ fontSize: 12, fontWeight: 700, color: pCol, fontFamily: "'Inter',sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
+                            {ps.title || 'Sesión de estudio'}
+                          </span>
+                          {sH > 34 && (
+                            <span style={{ fontSize: 10, fontWeight: 500, color: pCol, opacity: 0.75, fontFamily: "'JetBrains Mono',monospace", marginTop: 1 }}>
+                              {fmtTimeRange(ps.startTime, (() => { const m = Math.round(sh * 60 + sm + ps.durationMinutes); return `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; })(), settings?.timeFormat)} · {ps.durationMinutes}m
+                            </span>
+                          )}
+                          {sH > 48 && (
+                            <div style={{ display: 'flex', gap: 1.5, marginTop: 'auto', width: '100%', paddingTop: 3 }}>
+                              {REVIEW_LEVEL_COLORS.map((col, i) => (
+                                <div key={i} style={{ flex: 1, height: 5, borderRadius: 1, background: i < psInt ? col : 'var(--bg-deep)', opacity: i < psInt ? 0.9 : 0.5, boxShadow: i === psInt - 1 ? `0 0 6px ${col}88` : 'none' }} />
+                              ))}
+                            </div>
+                          )}
+                          <button onClick={e => { e.stopPropagation(); openEditPlanSession(ps); }}
+                            title="Editar sesión"
+                            style={{ position:'absolute', top:4, right:5, width:18, height:18, borderRadius:5, border:'none', background:'transparent', color:pCol, opacity:0.55, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', transition:'all 150ms' }}
+                            onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = `${pCol}22`; }}
+                            onMouseLeave={e => { e.currentTarget.style.opacity = '0.55'; e.currentTarget.style.background = 'transparent'; }}>
+                            <Pencil size={9} />
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -805,13 +983,8 @@ export default function Planificacion() {
                               const evTask = (ev as PlanEvent).taskId ? tasks.find(t => t.id === (ev as PlanEvent).taskId) : null;
                               return <div key={ei} style={{ fontSize:10,padding:'4px 8px',borderRadius:6,background:`${ev.color}15`,borderLeft:`2px solid ${ev.color}`,color:ev.color,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',fontWeight:600 }}>{ev.title}{evTask ? <span style={{opacity:0.55,fontWeight:500}}> + {evTask.title}</span> : ''}</div>;
                             })}
-                            {getPlannedSessionsForDate(iso).slice(0, 2).map(s => (
-                              <div key={s.id} style={{ fontSize:9, padding:'3px 7px', borderRadius:5, background:'rgba(139,92,246,0.08)', borderLeft:'2px solid rgba(139,92,246,0.25)', color:'rgba(139,92,246,0.7)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', fontWeight:500 }}>
-                                {s.title || s.type} <span style={{opacity:0.5}}>{s.durationMinutes}m</span>
-                              </div>
-                            ))}
                             {dayTasks.slice(0,3).map((t,ti)=><div key={ti} style={{ fontSize:10,padding:'4px 8px',borderRadius:6,background:`${t.courseColor||'var(--text-muted)'}15`,borderLeft:`2px dashed ${t.courseColor||'var(--text-muted)'}`,color:t.courseColor||'var(--text-secondary)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',fontWeight:600 }}>Ent: {t.title}</div>)}
-                            {(dayEvs.length+dayTasks.length+getPlannedSessionsForDate(iso).length)>6&&<div style={{ fontSize:10,color:'var(--text-muted)',fontWeight:600, marginTop: 4 }}>+{dayEvs.length+dayTasks.length+getPlannedSessionsForDate(iso).length-6} más</div>}
+                            {(dayEvs.length+dayTasks.length)>6&&<div style={{ fontSize:10,color:'var(--text-muted)',fontWeight:600, marginTop: 4 }}>+{dayEvs.length+dayTasks.length-6} más</div>}
                           </div>
                         </div>
                       );
@@ -924,6 +1097,205 @@ export default function Planificacion() {
           onDelete={id=>{ deleteEvent(id); }}
           addNotification={addNotification}
         />
+      )}
+
+      {showPlanModal && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={e => { if (e.target === e.currentTarget) setShowPlanModal(false); }}>
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)' }} />
+          {(() => {
+            const modalDate = planDate || format(navDate, 'yyyy-MM-dd');
+            const courseColor = courses.find(c => c.id === planCourseId)?.color || '#8B5CF6';
+            const dayPlanned = (plannedSessions || []).filter(s => s.date === modalDate && s.id !== planEditId);
+            const planTypes = [
+              { id: 'estudio', label: 'Estudio', color: '#8B5CF6' },
+              { id: 'repaso', label: 'Repaso', color: '#3B82F6' },
+              { id: 'ejercicio', label: 'Ejercicio', color: '#10B981' },
+              { id: 'lectura', label: 'Lectura', color: '#F59E0B' },
+              { id: 'otro', label: 'Otro', color: '#6B7280' },
+            ];
+            return (
+              <div style={{ position: 'relative', width: 480, maxHeight: '88vh', background: 'var(--bg-surface)', borderRadius: 16, border: '1px solid var(--border-subtle)', boxShadow: '0 24px 64px rgba(0,0,0,0.5)', overflow: 'hidden', display: 'flex', flexDirection: 'column', animation: 'modalDrop 260ms cubic-bezier(0.16, 1, 0.3, 1)' }} className="bento-card">
+                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${courseColor}, ${courseColor}55, transparent)`, pointerEvents: 'none' }} />
+                <div style={{ padding: '22px 24px 14px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div>
+                      <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em' }}>{planEditId ? 'Editar sesión' : 'Nueva sesión de estudio'}</h3>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: courseColor, fontFamily: "'Inter Tight', sans-serif", textTransform: 'capitalize', letterSpacing: '-0.01em' }}>
+                        {format(new Date(modalDate + 'T12:00:00'), 'EEEE', { locale: es })}
+                        <span style={{ color: 'var(--text-tertiary)', fontWeight: 500 }}> · {format(new Date(modalDate + 'T12:00:00'), "d 'de' MMMM", { locale: es })}</span>
+                      </span>
+                    </div>
+                  </div>
+                  <button onClick={() => setShowPlanModal(false)}
+                    style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: 'var(--bg-hover)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#EF4444'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
+                    <X size={14} />
+                  </button>
+                </div>
+
+                <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: 15 }} className="no-scrollbar">
+                  <div>
+                    <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', marginBottom: 7, letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Título</label>
+                    <input value={planTitle} onChange={e => setPlanTitle(e.target.value)}
+                      placeholder="Ej: Repasar capítulo 3"
+                      autoFocus
+                      style={{ width: '100%', height: 42, borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 13px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif" }}
+                      className="input-base" />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', marginBottom: 7, letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Curso</label>
+                    <select value={planCourseId} onChange={e => setPlanCourseId(e.target.value)}
+                      style={{ width: '100%', height: 42, borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 13px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif", cursor: 'pointer' }}
+                      className="input-base">
+                      {courses.length === 0 && <option value="">Sin cursos — crea uno en Cursos</option>}
+                      {courses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 14 }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', marginBottom: 7, letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Hora de inicio</label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ position: 'relative', flex: 1 }}>
+                          <Clock size={13} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+                          <input type="time" value={planStartTime} onChange={e => setPlanStartTime(e.target.value)}
+                            style={{ width: '100%', height: 42, borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 30px 0 34px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif", fontVariantNumeric: 'tabular-nums' }}
+                            className="input-base" />
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 5, marginTop: 6, flexWrap: 'wrap' }}>
+                        {['07:00', '09:00', '12:00', '15:00', '18:00', '20:00'].map(t => (
+                          <button key={t} onClick={() => setPlanStartTime(t)}
+                            style={{ padding: '3px 8px', borderRadius: 6, fontSize: 9, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace", cursor: 'pointer', border: planStartTime === t ? `1px solid ${courseColor}50` : '1px solid var(--border-subtle)', background: planStartTime === t ? `${courseColor}12` : 'transparent', color: planStartTime === t ? courseColor : 'var(--text-muted)', transition: 'all 150ms' }}>
+                            {t}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{ width: 148 }}>
+                      <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', marginBottom: 7, letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Duración</label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <button onClick={() => setPlanDuration(Math.max(5, planDuration - 5))} title="Reducir"
+                          style={{ width: 34, height: 42, borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                          onMouseEnter={e => { e.currentTarget.style.borderColor = `${courseColor}50`; e.currentTarget.style.color = courseColor; }}
+                          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
+                          <Minus size={13} />
+                        </button>
+                        <div style={{ flex: 1, height: 42, borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                          <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'JetBrains Mono', monospace", lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{planDuration}</span>
+                          <span style={{ fontSize: 8, fontWeight: 600, color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 2 }}>min</span>
+                        </div>
+                        <button onClick={() => setPlanDuration(Math.min(240, planDuration + 5))} title="Aumentar"
+                          style={{ width: 34, height: 42, borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                          onMouseEnter={e => { e.currentTarget.style.borderColor = `${courseColor}50`; e.currentTarget.style.color = courseColor; }}
+                          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
+                          <Plus size={13} />
+                        </button>
+                      </div>
+                      <div style={{ display: 'flex', gap: 5, marginTop: 6 }}>
+                        {[15, 25, 30, 45, 60].map(m => (
+                          <button key={m} onClick={() => setPlanDuration(m)}
+                            style={{ flex: 1, padding: '3px 0', borderRadius: 6, fontSize: 8.5, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace", cursor: 'pointer', border: planDuration === m ? `1px solid ${courseColor}50` : '1px solid var(--border-subtle)', background: planDuration === m ? `${courseColor}12` : 'transparent', color: planDuration === m ? courseColor : 'var(--text-muted)', transition: 'all 150ms' }}>
+                            {m}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', marginBottom: 7, letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Tipo de sesión</label>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      {planTypes.map(tp => (
+                        <button key={tp.id} onClick={() => setPlanType(tp.id)}
+                          style={{ flex: 1, height: 34, borderRadius: 8, fontSize: 10.5, fontWeight: 700, cursor: 'pointer', border: planType === tp.id ? `1px solid ${tp.color}60` : '1px solid var(--border-subtle)', background: planType === tp.id ? `${tp.color}14` : 'transparent', color: planType === tp.id ? tp.color : 'var(--text-muted)', transition: 'all 150ms', fontFamily: "'Inter Tight', sans-serif" }}>
+                          {tp.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div style={{ borderRadius: 11, border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', padding: '13px 14px', display: 'flex', flexDirection: 'column', gap: 9 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Intensidad esperada</label>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: planIntensity > 0 ? REVIEW_LEVEL_COLORS[planIntensity - 1] : 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif" }}>
+                        {planIntensity <= 3 ? 'Suave' : planIntensity <= 6 ? 'Media' : planIntensity <= 8 ? 'Intensa' : 'Máxima'}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 3, alignItems: 'stretch' }}>
+                      {REVIEW_LEVEL_COLORS.map((col, i) => {
+                        const v = i + 1;
+                        const on = v <= planIntensity;
+                        return (
+                          <button key={v} onClick={() => setPlanIntensity(v)} title={`Intensidad ${v}`}
+                            style={{ flex: 1, height: 24, borderRadius: 4, cursor: 'pointer', border: 'none', background: on ? col : 'var(--bg-deep)', opacity: on ? 1 : 0.35, boxShadow: v === planIntensity ? `0 0 12px ${col}aa` : 'none', transition: 'all 160ms' }}
+                            onMouseEnter={e => { if (!on) e.currentTarget.style.opacity = '0.65'; }}
+                            onMouseLeave={e => { if (!on) e.currentTarget.style.opacity = '0.35'; }} />
+                        );
+                      })}
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: 8.5, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.05em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Suave</span>
+                      <span style={{ fontSize: 8.5, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.05em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Máxima</span>
+                    </div>
+                  </div>
+
+                  {dayPlanned.length > 0 && (
+                    <div>
+                      <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', marginBottom: 8, letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Ya agendado este día</label>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {dayPlanned.map(s => {
+                          const sc = courses.find(c => c.id === s.courseId)?.color || '#8B5CF6';
+                          return (
+                            <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 11px', borderRadius: 9, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderLeft: `3px solid ${sc}` }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
+                                <div style={{ width: 8, height: 8, borderRadius: '50%', background: sc, flexShrink: 0 }} />
+                                <span style={{ fontSize: 12, color: 'var(--text-primary)', fontFamily: "'Inter', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title}</span>
+                                {s.startTime && <span style={{ fontSize: 10, fontWeight: 700, color: sc, fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{s.startTime}</span>}
+                                <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: "'Inter', sans-serif", flexShrink: 0 }}>({s.durationMinutes}m)</span>
+                              </div>
+                              <button onClick={() => { deletePlannedSession(s.id); }}
+                                style={{ width: 20, height: 20, borderRadius: 5, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#EF4444'; }}
+                                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
+                                <X size={10} />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ padding: '14px 24px 20px', borderTop: '1px solid var(--border-subtle)', display: 'flex', gap: 10, justifyContent: 'flex-end', flexShrink: 0 }}>
+                  <button onClick={() => setShowPlanModal(false)}
+                    style={{ height: 38, borderRadius: 9, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '0 18px', transition: 'all 150ms' }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
+                    Cancelar
+                  </button>
+                  <button onClick={() => {
+                      if (!modalDate || !planTitle.trim()) { addNotification('Ponle un título a la sesión.', 'info'); return; }
+                      if (!planCourseId) { addNotification('Elige un curso para la sesión.', 'info'); return; }
+                      const payload = { courseId: planCourseId, date: modalDate, startTime: planStartTime || undefined, title: planTitle.trim(), durationMinutes: planDuration, type: planType, intensity: planIntensity, completed: false };
+                      if (planEditId) updatePlannedSession(planEditId, payload);
+                      else addPlannedSession(payload);
+                      setShowPlanModal(false);
+                    }}
+                    style={{ height: 38, borderRadius: 9, border: 'none', background: courseColor, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: '0 22px', transition: 'all 150ms', boxShadow: `0 4px 14px ${courseColor}2e` }}
+                    onMouseEnter={e => { e.currentTarget.style.opacity = '0.92'; }}
+                    onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
+                    {planEditId ? 'Guardar cambios' : 'Planificar'}
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
       )}
 
       <input ref={imgInputRef} type="file" accept="image/*" style={{ display:'none' }}

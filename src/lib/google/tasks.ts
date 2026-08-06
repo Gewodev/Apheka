@@ -167,13 +167,18 @@ export async function syncTasksTwoWay(appTasks: AppTaskLike[]): Promise<TasksSyn
 
   const googleById = new Map(googleTasks.map(t => [t.id, t]));
   const appById = new Map(appTasks.map(a => [a.id, a]));
+  const matchedGoogleIds = new Set<string>();
 
   // 1) App → Google
   for (const a of appTasks) {
-    const existing = a.googleTaskId ? googleById.get(a.googleTaskId) : undefined;
+    // Sin googleTaskId: se intenta emparejar con tareas ya enviadas en un sync de una sola vía (mismo título).
+    const existing = a.googleTaskId
+      ? googleById.get(a.googleTaskId)
+      : googleTasks.find(g => !matchedGoogleIds.has(g.id) && (g.title || '').trim().toLowerCase() === a.title.trim().toLowerCase());
     const due = toGoogleDue(a.dueDate);
     try {
       if (existing) {
+        matchedGoogleIds.add(existing.id);
         if (taskDirty(a, existing)) {
           await updateTaskItem(listId, existing.id, {
             title: a.title,
@@ -183,6 +188,7 @@ export async function syncTasksTwoWay(appTasks: AppTaskLike[]): Promise<TasksSyn
           });
           result.pushed++;
         }
+        if (!a.googleTaskId) result.newMappings.push({ appTaskId: a.id, googleTaskId: existing.id });
       } else {
         const created = await createTask(listId, a.title, a.notes, due);
         result.newMappings.push({ appTaskId: a.id, googleTaskId: created.id });
@@ -193,6 +199,7 @@ export async function syncTasksTwoWay(appTasks: AppTaskLike[]): Promise<TasksSyn
 
   // 2) Google → App
   for (const g of googleTasks) {
+    if (matchedGoogleIds.has(g.id)) continue;
     const appMatch = appTasks.find(a => a.googleTaskId === g.id);
     if (appMatch) {
       // La app ya la conoce: la app es fuente de verdad en la lista OWA.

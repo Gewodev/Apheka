@@ -1,7 +1,7 @@
 ﻿import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Music, CheckSquare, FileText, Flame,
-  Target, Star, Lock, Check, X
+  Target, Star, Lock, Check, X, Calendar
 } from 'lucide-react';
 import { useApp, fmtClock } from '../../store/AppContext';
 import { format, subDays, subWeeks, addDays, addWeeks, startOfWeek, parseISO, isBefore } from 'date-fns';
@@ -57,29 +57,17 @@ function LEDTime({ time, color, digitWidth = 80, digitHeight = 130, colonWidth =
 }
 
 /** Convert a UTC ISO timestamp to local YYYY-MM-DD */
-function toLocalDate(iso: string): string {
-  try { return format(new Date(iso), 'yyyy-MM-dd'); } catch { return iso.slice(0, 10); }
-}
-
 function getGoalForDay(dayStr: string, currentGoal: number, dailyGoalHistory?: Record<string, number>, initialDailyGoal?: number): number {
-  const changeDates = Object.keys(dailyGoalHistory || {}).sort();
+  const changeDates = Object.keys(dailyGoalHistory || {}).filter(k => /^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
   for (let i = changeDates.length - 1; i >= 0; i--) {
     if (changeDates[i] <= dayStr) return dailyGoalHistory![changeDates[i]];
   }
   return initialDailyGoal ?? currentGoal;
 }
 
-function calculateStreak(sessions: { startedAt: string; duration: number; isDistraction?: boolean }[], dailyGoalMin: number, dailyGoalHistory?: Record<string, number>, initialDailyGoal?: number): number {
+function calculateStreak(dailyTotals: Record<string, number>, dailyGoalMin: number, dailyGoalHistory?: Record<string, number>, initialDailyGoal?: number): number {
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const yesterdayStr = format(subDays(new Date(), 1), 'yyyy-MM-dd');
-
-  // Build daily totals from actual sessions (excluding distractions)
-  const dailyTotals: Record<string, number> = {};
-  sessions.forEach(s => {
-    if (s.isDistraction) return;
-    const day = toLocalDate(s.startedAt);
-    dailyTotals[day] = (dailyTotals[day] || 0) + s.duration;
-  });
 
   const metGoal = (dayStr: string): boolean => {
     const goalForDay = getGoalForDay(dayStr, dailyGoalMin, dailyGoalHistory, initialDailyGoal);
@@ -164,10 +152,10 @@ export default function Inicio() {
     sessionType = 'pomodoro',
     tracks = [],
     trackHistory = [],
-    studySessions = [],
     updateSettings,
     setNavigateTo,
     setFocusedEventId,
+    setFocusedTaskId,
   } = app || {};
   const [ct, setCt] = useState(new Date());
 
@@ -262,7 +250,7 @@ export default function Inicio() {
   const dateStr = format(ct, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es as any });
   const dateCap = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
 
-  const streak = useMemo(() => calculateStreak(studySessions, settings?.dailyGoal || 240, settings?.dailyGoalHistory, settings?.initialDailyGoal), [studySessions, settings?.dailyGoal, settings?.dailyGoalHistory, settings?.initialDailyGoal]);
+  const streak = useMemo(() => calculateStreak(weeklyStudyTime, settings?.dailyGoal || 240, settings?.dailyGoalHistory, settings?.initialDailyGoal), [weeklyStudyTime, settings?.dailyGoal, settings?.dailyGoalHistory, settings?.initialDailyGoal]);
   const phrase = useMemo(() => getWeeklyPhrase(), []);
   const [phraseEditing, setPhraseEditing] = useState(false);
   const [phraseDraft, setPhraseDraft] = useState('');
@@ -440,7 +428,7 @@ export default function Inicio() {
         {[
           { label: 'TAREAS', val: ts.active, sub: 'Pendientes', color: '#3B82F6', IconC: CheckSquare },
           { label: 'NOTAS', val: ts.total, sub: 'Guardadas', color: '#10B981', IconC: FileText },
-          { label: 'RACHA', val: streak, sub: 'días', color: streak > 0 ? '#F59E0B' : 'var(--text-tertiary)', IconC: Flame },
+          { label: 'RACHA', val: streak, sub: 'días', color: '#F59E0B', IconC: Flame },
         ].map((s, i) => {
           const active = i === 2 && streak > 0 && todayAchieved;
           const c = s.color;
@@ -659,7 +647,7 @@ export default function Inicio() {
               const isDone = t.status === 'completado';
               const tr = t.dueDate ? (() => { try { return format(new Date(t.dueDate + 'T12:00:00'), 'd MMM', { locale: es }); } catch { return ''; } })() : '';
               return (
-                <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', borderRadius: 8, transition: 'all 150ms', opacity: isDone ? 0.5 : 1 }} className="hover:border-borderDark/60 group">
+                <div key={t.id} onClick={() => { setFocusedTaskId?.(t.id); setNavigateTo?.('tareas'); }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', borderRadius: 8, transition: 'all 150ms', cursor: 'pointer', opacity: isDone ? 0.5 : 1 }} className="hover:border-borderDark/60 group">
                   <div style={{ width: 14, height: 14, borderRadius: 4, background: t.status === 'completado' ? '#10B981' : t.status === 'progreso' ? `${t.courseColor}50` : 'var(--bg-base)', border: `2px solid ${t.status === 'completado' ? '#10B981' : t.courseColor}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 150ms' }}>
                     {isDone && <CheckSquare size={8} strokeWidth={3} style={{ color: '#fff' }} />}
                   </div>
@@ -694,7 +682,7 @@ export default function Inicio() {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {notes.filter(n => !n.deletedAt && !n.isCoursePrivate && (n.title || n.content)).slice(0, 5).map(n => (
-              <div key={n.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', borderRadius: 8, cursor: 'pointer', transition: 'all 150ms' }} className="hover:border-borderDark/60 group">
+              <div key={n.id} onClick={() => { try { localStorage.setItem('owa_focused_note_id', n.id); } catch {} setNavigateTo?.('apuntes'); }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', borderRadius: 8, cursor: 'pointer', transition: 'all 150ms' }} className="hover:border-borderDark/60 group">
                 <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n.title || n.content?.slice(0, 40) || 'Sin titulo'}</div>
                 <span style={{ fontSize: 9, color: 'var(--text-tertiary)', flexShrink: 0 }}>{timeAgo(n.updatedAt)}</span>
               </div>
@@ -706,7 +694,7 @@ export default function Inicio() {
         </div>
 
         {/* GOAL / META PLANIFICADA */}
-        <div className="xl:col-span-4 hidden xl:block bento-card" style={{ padding: '24px', background: `linear-gradient(135deg, var(--bg-elevated) 0%, color-mix(in srgb, ${goalEvent?.color || 'var(--accent)'}04, var(--bg-base)) 100%)`, border: `1px solid ${goalEvent ? `${goalEvent.color}30` : 'var(--border-subtle)'}`, borderRadius: 14, display: 'flex', flexDirection: 'column' }}>
+        <div className="xl:col-span-4 hidden xl:block bento-card" style={{ padding: '24px', background: `linear-gradient(135deg, var(--bg-elevated) 0%, color-mix(in srgb, ${goalEvent?.color || 'var(--accent)'}06, var(--bg-elevated)) 100%)`, border: `1px solid ${goalEvent ? `${goalEvent.color}30` : 'var(--border-subtle)'}`, borderRadius: 14, display: 'flex', flexDirection: 'column', boxShadow: '0 1px 2px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04)' }}>
 
           {goalEvent ? (
             <>
@@ -774,12 +762,12 @@ export default function Inicio() {
                       return (
                         <div key={ev.id} style={{
                           display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 10,
-                          background: 'var(--bg-elevated)', border: '1px solid var(--border-soft)',
+                          background: 'transparent', border: '1px solid transparent',
                           transition: 'all 200ms ease', cursor: 'pointer',
                         }}
                           onClick={() => { setNavigateTo('flujo'); setFocusedEventId(ev.id); }}
-                          onMouseEnter={e => { e.currentTarget.style.borderColor = `${ev.color}25`; e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.background = 'var(--bg-elevated)'; }}>
+                          onMouseEnter={e => { e.currentTarget.style.borderColor = `${ev.color}30`; e.currentTarget.style.background = `${ev.color}0a`; }}
+                          onMouseLeave={e => { e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.background = 'transparent'; }}>
                           <div style={{ width: 36, height: 36, borderRadius: 10, background: `${ev.color}10`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                             <div style={{ fontSize: 8, fontWeight: 700, color: ev.color, textTransform: 'uppercase', lineHeight: 1, letterSpacing: '0.03em' }}>
                               {evDate ? format(evDate, 'MMM', { locale: es as any }) : ''}
@@ -812,7 +800,10 @@ export default function Inicio() {
           ) : (
             <>
               {/* Header */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 12, borderBottom: '1px solid var(--border-soft)' }}>
+              <div style={{ position: 'absolute', right: 8, bottom: 8, opacity: 0.07, pointerEvents: 'none', lineHeight: 0 }}>
+                <Calendar size={120} strokeWidth={1} color="var(--accent)" />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 12, borderBottom: '1px solid var(--border-soft)', position: 'relative', zIndex: 1 }}>
                 <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em' }}>PROXIMOS EVENTOS</span>
                 <span onClick={() => setNavigateTo?.('flujo')} style={{ fontSize: 10, fontWeight: 600, color: 'var(--accent)', cursor: 'pointer' }} className="hover:opacity-80">Ver todo</span>
               </div>
@@ -822,14 +813,14 @@ export default function Inicio() {
                   {upcomingEvents.map(ev => {
                     const evDate = (() => { try { return new Date(ev.date + 'T' + (ev.startTime || '12:00')); } catch { return null; } })();
                     return (
-                      <div key={ev.id} style={{
-                        display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 10,
-                        background: 'var(--bg-elevated)', border: '1px solid var(--border-soft)',
-                        transition: 'all 200ms ease', cursor: 'pointer',
-                      }}
-                        onClick={() => { setNavigateTo('flujo'); setFocusedEventId(ev.id); }}
-                        onMouseEnter={e => { e.currentTarget.style.borderColor = `${ev.color}25`; e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                        onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.background = 'var(--bg-elevated)'; }}>
+                        <div key={ev.id} style={{
+                          display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 10,
+                          background: 'transparent', border: '1px solid transparent',
+                          transition: 'all 200ms ease', cursor: 'pointer',
+                        }}
+                          onClick={() => { setNavigateTo('flujo'); setFocusedEventId(ev.id); }}
+                          onMouseEnter={e => { e.currentTarget.style.borderColor = `${ev.color}30`; e.currentTarget.style.background = `${ev.color}0a`; }}
+                          onMouseLeave={e => { e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.background = 'transparent'; }}>
                         <div style={{ width: 36, height: 36, borderRadius: 10, background: `${ev.color}10`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                           <div style={{ fontSize: 8, fontWeight: 700, color: ev.color, textTransform: 'uppercase', lineHeight: 1, letterSpacing: '0.03em' }}>
                             {evDate ? format(evDate, 'MMM', { locale: es as any }) : ''}

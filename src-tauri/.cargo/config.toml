@@ -1,0 +1,19 @@
+[build]
+# Evitar problemas con scripts de build bloqueados por Windows
+rustflags = ["-C", "target-feature=-crt-static"]
+
+[target.x86_64-pc-windows-msvc]
+# Usar linker alternativo si está disponible
+# linker = "lld"
+
+[profile.dev]
+# Optimizar para desarrollo
+opt-level = 0
+debug = true
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

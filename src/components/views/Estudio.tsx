@@ -4,7 +4,7 @@ import {
   CheckCircle, Trophy, Sparkles, Flame,
   Coffee, X, Timer, BarChart3, Plus,
   AlertTriangle, Link2, Eye, Focus, Monitor, Minimize2, Maximize2,
-  Check, Minus, Brain, Volume2, BookOpen
+  Check, Minus, Brain, Volume2, BookOpen, ArrowUpRight, Trash2
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { WebviewWindow, getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
@@ -17,30 +17,24 @@ import NotificationBell from '../ui/NotificationBell';
 import AnalyticsDrawer from '../ui/AnalyticsDrawer';
 import { DigitSVG, ColonSVG } from '../LEDDigits';
 
+const REVIEW_LEVEL_COLORS = ['#EF4444', '#F97316', '#F59E0B', '#FBBF24', '#EAB308', '#A3E635', '#84CC16', '#4ADE80', '#22C55E', '#10B981'];
+
 /** Convert a UTC ISO timestamp to local YYYY-MM-DD (avoids UTC vs local date mismatch) */
 function toLocalDate(iso: string): string {
   try { return format(new Date(iso), 'yyyy-MM-dd'); } catch { return iso.slice(0, 10); }
 }
 
 function getGoalForDay(dayStr: string, currentGoal: number, dailyGoalHistory?: Record<string, number>, initialDailyGoal?: number): number {
-  const changeDates = Object.keys(dailyGoalHistory || {}).sort();
+  const changeDates = Object.keys(dailyGoalHistory || {}).filter(k => /^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
   for (let i = changeDates.length - 1; i >= 0; i--) {
     if (changeDates[i] <= dayStr) return dailyGoalHistory![changeDates[i]];
   }
   return initialDailyGoal ?? currentGoal;
 }
 
-function calculateStreak(sessions: { startedAt: string; duration: number; isDistraction?: boolean }[], dailyGoalMin: number, dailyGoalHistory?: Record<string, number>, initialDailyGoal?: number): number {
+function calculateStreak(dailyTotals: Record<string, number>, dailyGoalMin: number, dailyGoalHistory?: Record<string, number>, initialDailyGoal?: number): number {
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const yesterdayStr = format(subDays(new Date(), 1), 'yyyy-MM-dd');
-
-  // Build daily totals from actual sessions (excluding distractions)
-  const dailyTotals: Record<string, number> = {};
-  sessions.forEach(s => {
-    if (s.isDistraction) return;
-    const day = toLocalDate(s.startedAt);
-    dailyTotals[day] = (dailyTotals[day] || 0) + s.duration;
-  });
 
   const metGoal = (dayStr: string): boolean => {
     const goalForDay = getGoalForDay(dayStr, dailyGoalMin, dailyGoalHistory, initialDailyGoal);
@@ -111,6 +105,7 @@ interface ActivityEntry {
   discomfort?: number;
   mode?: string;
   isDistraction?: boolean;
+  plannedSessionId?: string;
 }
 
 
@@ -118,12 +113,15 @@ export default function Estudio() {
   const {
     tasks, courses, addSubTask, settings, dailyStudyTime, activeTaskId, setActiveTaskId,
     pomodoroSessions, incrementPomodoroSessions, studySessions,
-    addStudySession, updateStudySession, deleteStudySession, weeklyStudyTime,
+    addStudySession, updateStudySession, weeklyStudyTime,
     dailyPerformances,
     focusPomodoroTime, focusChronoTime, breakTime, dailyBreakTime, dailyFocusPomodoro, dailyFocusChrono,
     accumulatedPauseTime, distractionCount,
     addNotification, updateTask, setAccumulatedPauseTime, setIsTimerActive,
     setDistractionCount, setShowRestPrompt,
+    plannedSessions, updatePlannedSession,
+    activePlannedSessionId, linkPlannedSessionToTimer, unlinkPlannedSessionFromTimer,
+    navigateToCourse, setNavigateTo,
   } = useApp();
 
   const {
@@ -147,10 +145,13 @@ export default function Estudio() {
   const [evalMode, setEvalMode] = useState<'rendimiento' | 'tiempo'>('rendimiento');
   const [evalSubjects, setEvalSubjects] = useState<string[]>([]);
   const [evalTaskAction, setEvalTaskAction] = useState<'progress' | 'complete' | 'not_finished' | null>(null);
+  const [evalPlanOutcome, setEvalPlanOutcome] = useState<'logrado' | 'no_logrado'>('logrado');
   const [evalStudyMode, setEvalStudyMode] = useState<'free' | 'task'>('free');
   const [evalLinkedTaskId, setEvalLinkedTaskId] = useState<string | null>(null);
   const [evalFreeText, setEvalFreeText] = useState('');
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [planBlockHover, setPlanBlockHover] = useState(false);
+  const [taskBlockHover, setTaskBlockHover] = useState(false);
   const [winW, setWinW] = useState(window.innerWidth);
   useEffect(() => {
     const h = () => setWinW(window.innerWidth);
@@ -172,8 +173,13 @@ export default function Estudio() {
   const breakNotifiedRef = useRef(false);
 
   const handleEvalAndStartRest = useCallback((saveData?: Partial<StudySession>) => {
-    if (evalSessionId && saveData) {
-      updateStudySession(evalSessionId, saveData);
+    if (saveData) {
+      if (evalSessionId) {
+        updateStudySession(evalSessionId, saveData);
+      } else if (pendingSessionRef.current) {
+        addStudySession({ ...pendingSessionRef.current, ...saveData });
+        pendingSessionRef.current = null;
+      }
     }
     setShowSessionEval(false);
     setShowFreeStudyPrompt(false);
@@ -189,7 +195,7 @@ export default function Estudio() {
       setIsTimerActive(false);
     }
     setSessionTime(0);
-  }, [evalSessionId, sessionType, isRest, updateStudySession, incrementPomodoroSessions, setIsRest, setSessionTime, setIsTimerActive, setShowRestPrompt]);
+  }, [evalSessionId, sessionType, isRest, updateStudySession, addStudySession, incrementPomodoroSessions, setIsRest, setSessionTime, setIsTimerActive, setShowRestPrompt]);
 
   // No restStartRef needed — sessionTime is always reset to 0 when rest starts
 
@@ -204,11 +210,23 @@ export default function Estudio() {
   const lastChronoRoundRef = useRef(loadChronoRound());
   const mountedRef = useRef(false);
   const lastPauseTimeRef = useRef(0);
+  const pendingSessionRef = useRef<Omit<StudySession, 'id'> | null>(null);
 
   const activeTask = tasks.find(t => t.id === activeTaskId);
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const weekAgoStr = format(subDays(new Date(), 6), 'yyyy-MM-dd');
   const monthStartStr = format(new Date(new Date().getFullYear(), new Date().getMonth(), 1), 'yyyy-MM-dd');
+
+  // Semana actual (resetea lunes) — misma lógica que todayDistractionCount/racha
+  const weekStartStr = useMemo(() => {
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+    const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    const weekStart = new Date(today);
+    weekStart.setDate(today.getDate() - mondayOffset);
+    weekStart.setHours(0, 0, 0, 0);
+    return format(weekStart, 'yyyy-MM-dd');
+  }, []);
 
   // Monthly study seconds
   const monthlyStudySecs = useMemo(() => {
@@ -222,12 +240,29 @@ export default function Estudio() {
     ? `${Math.floor(monthlyStudySecs / 3600)}h ${Math.floor((monthlyStudySecs % 3600) / 60)}m`
     : '0m';
 
+  // Estudio Puro SEMANAL (lunes→hoy) para el Resumen Operativo
+  const weeklyStudySecs = useMemo(() => {
+    let total = 0;
+    for (const [day, secs] of Object.entries(weeklyStudyTime)) {
+      if (day >= weekStartStr) total += secs;
+    }
+    return total;
+  }, [weeklyStudyTime, weekStartStr]);
+  const weeklyStudyFormatted = weeklyStudySecs > 0
+    ? `${Math.floor(weeklyStudySecs / 3600)}h ${Math.floor((weeklyStudySecs % 3600) / 60)}m`
+    : '0m';
+
+  // Sesiones de la SEMANA actual (lunes→hoy) para el Resumen Operativo
+  const weeklySessions = useMemo(() =>
+    studySessions.filter(s => toLocalDate(s.startedAt) >= weekStartStr),
+  [studySessions, weekStartStr]);
+
   // Sessiones de la ultima semana para el feed (reseteo semanal visual)
   const recentSessions = useMemo(() => 
     studySessions.filter(s => toLocalDate(s.startedAt) >= weekAgoStr),
   [studySessions, weekAgoStr]);
 
-  const streak = useMemo(() => calculateStreak(studySessions, settings?.dailyGoal || 240, settings?.dailyGoalHistory, settings?.initialDailyGoal), [studySessions, settings?.dailyGoal, settings?.dailyGoalHistory, settings?.initialDailyGoal]);
+  const streak = useMemo(() => calculateStreak(weeklyStudyTime, settings?.dailyGoal || 240, settings?.dailyGoalHistory, settings?.initialDailyGoal), [weeklyStudyTime, settings?.dailyGoal, settings?.dailyGoalHistory, settings?.initialDailyGoal]);
 
   const weekDayData = useMemo(() => {
     const dn = ['D','L','M','M','J','V','S'];
@@ -262,7 +297,7 @@ export default function Estudio() {
       setIsTimerActive(false);
       sendNativeNotification('Sesión completada', 'Buen trabajo. Evalúa tu sesión.');
       notifySessionComplete(settings.pomodoroTime / 60);
-      const sessionId = addStudySession({
+      pendingSessionRef.current = {
         type: 'pomodoro',
         startedAt: new Date(Date.now() - sessionTime * 1000).toISOString(),
         endedAt: new Date().toISOString(),
@@ -271,32 +306,40 @@ export default function Estudio() {
         courseId: undefined,
         pauseCount: distractionCount,
         pauseDuration: accumulatedPauseTime - lastPauseTimeRef.current,
-      });
-      if (sessionId) {
-        setEvalSessionId(sessionId);
-        setEvalPerception(7);
-        setEvalDiscomfort(Math.min(10, distractionCount));
-        setEvalVolmeter(Math.min(20, Math.max(1, 10 - distractionCount + 5)));
-        setEvalMode('rendimiento');
-        setEvalFreeText('');
-        if (activeTaskId) {
-          const task = tasks.find(t => t.id === activeTaskId);
-          setEvalTaskAction(task?.status === 'inicio' ? null : (task?.status === 'progreso' ? 'not_finished' : 'complete'));
-          setEvalSubjects(courses.filter(c => task?.course === c.name).map(c => c.id));
-          setShowSessionEval(true);
-        } else {
-          setEvalSubjects([]);
-          setShowFreeStudyPrompt(true);
-        }
-        // Mark previous unevaluated session as distraction
-        const prevPomodoros = studySessions
-          .filter((s: StudySession) => s.type === 'pomodoro')
-          .sort((a: StudySession, b: StudySession) => new Date(b.endedAt || b.startedAt).getTime() - new Date(a.endedAt || a.startedAt).getTime());
-        if (prevPomodoros.length > 0) {
-          const prev = prevPomodoros[0];
-          if (prev.perception === undefined && prev.volmeter === undefined && !prev.isDistraction) {
-            updateStudySession(prev.id, { isDistraction: true });
-          }
+        plannedSessionId: activePlannedSessionId || undefined,
+      };
+      setEvalSessionId(null);
+      setEvalPerception(7);
+      setEvalDiscomfort(Math.min(10, distractionCount));
+      setEvalVolmeter(0);
+      setEvalMode('rendimiento');
+      setEvalFreeText('');
+      if (activePlannedSessionId) {
+        const ps = (plannedSessions || []).find(p => p.id === activePlannedSessionId);
+        setEvalPlanOutcome(ps?.completed ? 'logrado' : 'no_logrado');
+      }
+      if (activeTaskId) {
+        const task = tasks.find(t => t.id === activeTaskId);
+        setEvalTaskAction(task?.status === 'inicio' ? null : (task?.status === 'progreso' ? 'not_finished' : 'complete'));
+        setEvalSubjects(courses.filter(c => task?.course === c.name).map(c => c.id));
+        setShowSessionEval(true);
+      } else if (activePlannedSessionId) {
+        // Sesión de estudio vinculada — mismo flujo de registro (eval con volmeter,
+        // updatePlannedSession + unlink) pero con el recuadro personalizado 1-10
+        setEvalSubjects([]);
+        setShowSessionEval(true);
+      } else {
+        setEvalSubjects([]);
+        setShowFreeStudyPrompt(true);
+      }
+      // Mark previous unevaluated session as distraction
+      const prevPomodoros = studySessions
+        .filter((s: StudySession) => s.type === 'pomodoro')
+        .sort((a: StudySession, b: StudySession) => new Date(b.endedAt || b.startedAt).getTime() - new Date(a.endedAt || a.startedAt).getTime());
+      if (prevPomodoros.length > 0) {
+        const prev = prevPomodoros[0];
+        if (prev.perception === undefined && prev.volmeter === undefined && !prev.isDistraction) {
+          updateStudySession(prev.id, { isDistraction: true });
         }
       }
       setShowRestPrompt(false);
@@ -325,9 +368,11 @@ export default function Estudio() {
     const taskId = localStorage.getItem('owa_study_task_id');
     if (taskId) {
       const found = tasks.find(t => t.id === taskId);
-      if (found) {
+      if (found && !activePlannedSessionId) {
         setActiveTaskId(taskId);
         addNotification(`Estudiando: ${found.title}`, 'success');
+      } else if (found && activePlannedSessionId) {
+        addNotification('Hay una sesión de estudio vinculada. Desvincúlala para estudiar esta tarea.', 'info');
       }
       localStorage.removeItem('owa_study_task_id');
       localStorage.removeItem('owa_study_task_title');
@@ -361,6 +406,18 @@ export default function Estudio() {
     setActiveTaskId(null); 
     addNotification('Sesion completada', 'success'); 
   };
+
+  // Linked planned session (plannedSessions + activePlannedSessionId via context)
+  const linkedPlanSession = useMemo(
+    () => (plannedSessions || []).find(s => s.id === activePlannedSessionId) || null,
+    [plannedSessions, activePlannedSessionId]
+  );
+  const linkedPlanCourse = useMemo(
+    () => (linkedPlanSession ? courses.find(c => c.id === linkedPlanSession.courseId) : null) || null,
+    [linkedPlanSession, courses]
+  );
+  const [showUnlinkPlanConfirm, setShowUnlinkPlanConfirm] = useState(false);
+  const [showUnlinkTaskConfirm, setShowUnlinkTaskConfirm] = useState(false);
 
   const handleReopenEval = (entryId: string) => {
     const session = studySessions.find(s => s.id === entryId);
@@ -404,17 +461,16 @@ export default function Estudio() {
   const studyFormatted = studyH > 0 ? `${studyH}h ${studyM}m` : `${studyM}m`;
 
   const efficiencyPct = useMemo(() => {
-    const todayStr = format(new Date(), 'yyyy-MM-dd');
-    const todaysSessions = studySessions.filter(s => toLocalDate(s.startedAt) === todayStr);
+    const weekSessions = studySessions.filter(s => toLocalDate(s.startedAt) >= weekStartStr);
     const clamp = (v: number, mn: number, mx: number) => Math.max(mn, Math.min(v, mx));
 
-    const focusSecs = todaysSessions.reduce((acc, s) => acc + s.duration, 0);
-    const pauseSecs = todaysSessions.reduce((acc, s) => acc + (s.pauseDuration || 0), 0);
-    const distractions = todaysSessions.reduce((acc, s) => acc + (s.pauseCount || 0), 0);
-    const breakSecs = studySessions.filter(s => toLocalDate(s.startedAt) === todayStr && s.type === 'break')
+    const focusSecs = weekSessions.reduce((acc, s) => acc + s.duration, 0);
+    const pauseSecs = weekSessions.reduce((acc, s) => acc + (s.pauseDuration || 0), 0);
+    const distractions = weekSessions.reduce((acc, s) => acc + (s.pauseCount || 0), 0);
+    const breakSecs = studySessions.filter(s => toLocalDate(s.startedAt) >= weekStartStr && s.type === 'break')
       .reduce((acc, s) => acc + s.duration, 0);
 
-    if (focusSecs <= 0 && todaysSessions.length === 0) return 0;
+    if (focusSecs <= 0 && weekSessions.length === 0) return 0;
 
     const dailyGoalSecs = (settings?.dailyGoal || 240) * 60;
     const focusMin = focusSecs / 60;
@@ -432,7 +488,7 @@ export default function Estudio() {
     const scoreEnfoque = clamp(eficiencia * Math.exp(-0.05 * distPerHour), 0, 1);
 
     // ScoreFlujo según duración promedio de bloques de estudio
-    const studyBlocks = todaysSessions.filter(s => s.type !== 'break');
+    const studyBlocks = weekSessions.filter(s => s.type !== 'break');
     const avgBlockMin = studyBlocks.length > 0
       ? studyBlocks.reduce((acc, s) => acc + s.duration, 0) / studyBlocks.length / 60
       : 0;
@@ -452,10 +508,10 @@ export default function Estudio() {
       ? clamp(1 - Math.abs(ratioDescanso - 0.20) / 0.25, 0.2, 1)
       : 0.5;
 
-    // ScorePercepcion — user's 1-20 self-rating blended in
-    const evaluatedSessions = todaysSessions.filter(s => s.volmeter !== undefined && s.volmeter !== null);
+    // ScorePercepcion — user's 1-20 self-rating blended in (sesiones planificadas usan 1-10)
+    const evaluatedSessions = weekSessions.filter(s => s.volmeter !== undefined && s.volmeter !== null);
     const scorePercepcion = evaluatedSessions.length > 0
-      ? evaluatedSessions.reduce((sum, s) => sum + ((s.volmeter || 10) / 20), 0) / evaluatedSessions.length
+      ? evaluatedSessions.reduce((sum, s) => sum + ((s.volmeter || 10) / (s.plannedSessionId ? 10 : 20)), 0) / evaluatedSessions.length
       : 0.5;
 
     // IRE compuesto — percepcion weighs in when user has rated sessions
@@ -468,7 +524,7 @@ export default function Estudio() {
       Math.pow(scorePercepcion, hasRating ? 0.27 : 0);
 
     return Math.max(1, Math.round(ire));
-  }, [studySessions, settings?.dailyGoal]);
+  }, [studySessions, settings?.dailyGoal, weekStartStr]);
 
   // Daily trend: compare today vs yesterday
   const yesterdayStr = format(subDays(new Date(), 1), 'yyyy-MM-dd');
@@ -538,7 +594,7 @@ export default function Estudio() {
           else if (focusMin <= 90) sf = 0.9;
           else sf = 0.7;
           const hasVol = s.volmeter !== undefined && s.volmeter !== null;
-          const sp = hasVol ? (s.volmeter || 10) / 20 : 0.5;
+          const sp = hasVol ? (s.volmeter || 10) / (s.plannedSessionId ? 10 : 20) : 0.5;
           return Math.round(100 *
             Math.pow(sm, hasVol ? 0.30 : 0.40) *
             Math.pow(se, hasVol ? 0.28 : 0.35) *
@@ -551,6 +607,7 @@ export default function Estudio() {
         discomfort: s.discomfort,
         mode: s.mode,
         isDistraction: s.isDistraction,
+        plannedSessionId: s.plannedSessionId,
       });
     }
     return entries;
@@ -753,15 +810,39 @@ export default function Estudio() {
               </div>
             )}
 
-            {/* Linked Task Indicator (small typography, below timer) */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '5px 12px', borderRadius: 6, background: activeTask ? `${activeTask.courseColor || statusColor}08` : 'transparent', border: activeTask ? `1px solid ${activeTask.courseColor || statusColor}20` : 'none', marginTop: 20 }}>
+            {/* Linked Plan Session Indicator (below timer) — pill 1 línea, sin hora, click lleva al tema/agrupación, X solo hover */}
+            {linkedPlanSession && (
+              <div
+                onClick={() => { if (linkedPlanSession.groupId || linkedPlanSession.topicId) navigateToCourse(linkedPlanSession.courseId, linkedPlanSession.groupId || undefined, linkedPlanSession.topicId || undefined); }}
+                title={linkedPlanSession.groupId || linkedPlanSession.topicId ? 'Ir al tema o agrupación' : 'Sesión de estudio vinculada'}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 18, padding: '7px 12px', borderRadius: 999, border: `1px dashed ${linkedPlanCourse?.color || statusColor}55`, background: `${linkedPlanCourse?.color || statusColor}0d`, cursor: (linkedPlanSession.groupId || linkedPlanSession.topicId) ? 'pointer' : 'default', transition: 'all 150ms' }}
+                onMouseEnter={e => { setPlanBlockHover(true); e.currentTarget.style.borderColor = `${linkedPlanCourse?.color || statusColor}88`; e.currentTarget.style.background = `${linkedPlanCourse?.color || statusColor}18`; }}
+                onMouseLeave={e => { setPlanBlockHover(false); e.currentTarget.style.borderColor = `${linkedPlanCourse?.color || statusColor}55`; e.currentTarget.style.background = `${linkedPlanCourse?.color || statusColor}0d`; }}
+              >
+                <div style={{ width: 5, height: 5, borderRadius: '50%', background: linkedPlanCourse?.color || statusColor, boxShadow: `0 0 6px ${linkedPlanCourse?.color || statusColor}80`, flexShrink: 0 }} />
+                <span style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em', color: linkedPlanCourse?.color || statusColor, fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>Sesión</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{linkedPlanSession.title || 'Sesión'}</span>
+                <button onClick={e => { e.stopPropagation(); setShowUnlinkPlanConfirm(true); }} title="Desvincular sesión"
+                  style={{ width: 22, height: 22, borderRadius: '50%', border: '1px solid transparent', background: 'transparent', color: 'var(--text-tertiary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, padding: 0, opacity: planBlockHover ? 1 : 0, transition: 'opacity 150ms, background 150ms, color 150ms, border-color 150ms' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.16)'; e.currentTarget.style.color = '#EF4444'; e.currentTarget.style.borderColor = 'rgba(239,68,68,0.45)'; e.currentTarget.style.boxShadow = '0 0 10px rgba(239,68,68,0.25)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-tertiary)'; e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.boxShadow = 'none'; }}>
+                  <X size={12} strokeWidth={2.5} />
+                </button>
+              </div>
+            )}
+
+            {/* Linked Task Indicator (small typography, below timer) — X visible en hover con confirmación */}
+            <div onMouseEnter={() => setTaskBlockHover(true)} onMouseLeave={() => setTaskBlockHover(false)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '5px 12px', borderRadius: 6, background: activeTask ? `${activeTask.courseColor || statusColor}08` : 'transparent', border: activeTask ? `1px solid ${activeTask.courseColor || statusColor}20` : 'none', marginTop: linkedPlanSession ? 8 : 20 }}>
               <div style={{ width: 4, height: 4, borderRadius: '50%', background: activeTask ? (activeTask.courseColor || statusColor) : 'var(--text-muted)', boxShadow: activeTask ? `0 0 4px ${activeTask.courseColor || statusColor}60` : 'none', flexShrink: 0 }} />
               <span style={{ fontSize: 10, fontWeight: activeTask ? 500 : 400, color: activeTask ? 'var(--text-secondary)' : 'var(--text-muted)', letterSpacing: '0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 200 }}>
-                {activeTask ? activeTask.title : 'Sin tarea vinculada'}
+                {activeTask ? activeTask.title : (linkedPlanSession ? null : 'Sin tarea vinculada')}
               </span>
               {activeTask && (
-                <button onClick={() => setActiveTaskId(null)} style={{ fontSize: 9, color: 'var(--text-tertiary)', cursor: 'pointer', background: 'none', border: 'none', textDecoration: 'underline', textUnderlineOffset: 2, padding: 0 }}>
-                  Desvincular
+                <button onClick={() => setShowUnlinkTaskConfirm(true)} title="Desvincular tarea"
+                  style={{ width: 22, height: 22, borderRadius: '50%', border: '1px solid transparent', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, padding: 0, opacity: taskBlockHover ? 1 : 0, transition: 'opacity 150ms, background 150ms, color 150ms, border-color 150ms' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.16)'; e.currentTarget.style.color = '#EF4444'; e.currentTarget.style.borderColor = 'rgba(239,68,68,0.45)'; e.currentTarget.style.boxShadow = '0 0 10px rgba(239,68,68,0.25)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.boxShadow = 'none'; }}>
+                  <X size={12} strokeWidth={2.5} />
                 </button>
               )}
             </div>
@@ -825,7 +906,7 @@ export default function Estudio() {
                   addNotification('Sesión menor al 50%, reiniciando pomodoro', 'info');
                   return;
                 }
-                const sessionId = addStudySession({
+                pendingSessionRef.current = {
                   type: sessionType,
                   startedAt: new Date(Date.now() - nowSessionTime * 1000).toISOString(),
                   endedAt: new Date().toISOString(),
@@ -834,19 +915,27 @@ export default function Estudio() {
                   courseId: undefined,
                   pauseCount: distractionCount,
                   pauseDuration: accumulatedPauseTime,
-                });
+                  plannedSessionId: activePlannedSessionId || undefined,
+                };
                 hasTriggeredRef.current = false;
                 if (sessionType === 'chrono') {
                   lastChronoRoundRef.current = chronoGoal > 0 ? Math.floor(nowSessionTime / chronoGoal) : 0;
                   saveChronoRound(lastChronoRoundRef.current);
                 }
                 lastPauseTimeRef.current = accumulatedPauseTime;
-                setEvalSessionId(sessionId || null);
-                setEvalVolmeter(Math.min(20, Math.max(1, 10 - distractionCount + 5)));
+                setEvalSessionId(null);
+                setEvalVolmeter(0);
                 setEvalFreeText('');
+                if (activePlannedSessionId) {
+                  const ps = (plannedSessions || []).find(p => p.id === activePlannedSessionId);
+                  setEvalPlanOutcome(ps?.completed ? 'logrado' : 'no_logrado');
+                }
                 if (activeTask) {
                   setEvalTaskAction(activeTask.status === 'inicio' ? null : (activeTask.status === 'progreso' ? 'not_finished' : 'complete'));
                   setEvalSubjects(courses.filter(c => activeTask.course === c.name).map(c => c.id));
+                  setShowSessionEval(true);
+                } else if (activePlannedSessionId) {
+                  setEvalSubjects([]);
                   setShowSessionEval(true);
                 } else {
                   setEvalSubjects([]);
@@ -967,20 +1056,20 @@ export default function Estudio() {
                 <div className="stat-card" style={{ background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', borderRadius: 16, padding: '20px', display: 'flex', flexDirection: 'column', gap: 8, position: 'relative', overflow: 'hidden' }}>
                   <Clock size={80} style={{ position: 'absolute', bottom: -20, right: -20, color: statusColor, opacity: 0.15 }} />
                   <span style={{ fontSize: 10, fontWeight: 300, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', zIndex: 1 }}>Estudio Puro</span>
-                  <span style={{ fontSize: 26, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", zIndex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{studyFormatted}</span>
+                  <span style={{ fontSize: 26, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", zIndex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{weeklyStudyFormatted}</span>
                 </div>
 
                 {/* Metric 2: Completed Sessions */}
                 <div className="stat-card" style={{ background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', borderRadius: 16, padding: '20px', display: 'flex', flexDirection: 'column', gap: 8, position: 'relative', overflow: 'hidden' }}>
                   <CheckCircle size={80} style={{ position: 'absolute', bottom: -20, right: -20, color: '#8B5CF6', opacity: 0.15 }} />
                   <span style={{ fontSize: 10, fontWeight: 300, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', zIndex: 1 }}>Sesiones</span>
-                  <span style={{ fontSize: 26, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", zIndex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{recentSessions.length}</span>
+                  <span style={{ fontSize: 26, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", zIndex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{weeklySessions.length}</span>
                 </div>
 
                 {/* Metric 3: Eficiencia (IRE compuesto) */}
                 <div className="stat-card" style={{ background: 'var(--bg-deep)', border: `1px solid ${efficiencyPct >= 80 ? '#10B981' : efficiencyPct >= 50 ? '#F59E0B' : '#EF4444'}30`, borderRadius: 16, padding: '20px', display: 'flex', flexDirection: 'column', gap: 8, position: 'relative', overflow: 'hidden' }}>
                   <Zap size={80} style={{ position: 'absolute', bottom: -20, right: -20, color: efficiencyPct >= 80 ? '#10B981' : efficiencyPct >= 50 ? '#F59E0B' : '#EF4444', opacity: 0.15 }} />
-                  <span style={{ fontSize: 10, fontWeight: 300, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', zIndex: 1 }}>Eficiencia</span>
+                  <span style={{ fontSize: 10, fontWeight: 300, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', zIndex: 1 }}>Rendimiento</span>
                   <span style={{ fontSize: 26, fontWeight: 300, color: efficiencyPct >= 80 ? '#10B981' : efficiencyPct >= 50 ? 'var(--text-primary)' : '#EF4444', fontFamily: "'Inter Tight', sans-serif", zIndex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{efficiencyPct}%</span>
                 </div>
 
@@ -1016,12 +1105,12 @@ export default function Estudio() {
             </div>
             
             {activityFeed.length > 0 && (
-              <div className="hidden lg:flex" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 0 8px 0', fontSize: 8, fontWeight: 500, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1px solid var(--border-subtle)', marginBottom: 4 }}>
-                <span style={{ width: 28, flexShrink: 0 }} />
+              <div className="hidden lg:flex" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 8px 8px', fontSize: 8, fontWeight: 500, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1px solid var(--border-subtle)', marginBottom: 4 }}>
+                <span style={{ width: 26, flexShrink: 0 }} />
                 <span style={{ width: 58, flexShrink: 0 }}>Tiempo</span>
                 <span style={{ flex: 1 }}>Progreso</span>
                 <span style={{ width: 32, textAlign: 'right', flexShrink: 0 }}>Rend.</span>
-                <span className="hidden xl:inline" style={{ width: 22, textAlign: 'right', flexShrink: 0 }}>1‑20</span>
+                <span style={{ width: 46, textAlign: 'right', flexShrink: 0 }}>Escala</span>
               </div>
             )}
 
@@ -1036,16 +1125,25 @@ export default function Estudio() {
                     const Icon = isPomo ? TomatoIcon : isBreakEntry ? Coffee : Timer;
                     const mins = Math.floor(entry.duration / 60);
                     const secs = entry.duration % 60;
-                    const eff = entry.sessionEff ?? 100;
-                    const effColor = eff >= 85 ? '#10B981' : eff >= 60 ? '#F59E0B' : '#EF4444';
-                    const vm = entry.volmeter ?? Math.round(eff / 5);
+                    const eff = entry.sessionIre ?? entry.sessionEff ?? 100;
+                    const effColor = eff >= 80 ? '#10B981' : eff >= 50 ? '#F59E0B' : '#EF4444';
+                    const vm = entry.volmeter != null && entry.volmeter !== undefined
+                      ? (entry.volmeter <= 10 ? entry.volmeter * 2 : entry.volmeter)
+                      : Math.round(eff / 5);
                     const isDist = entry.isDistraction;
+                    const planSess = entry.plannedSessionId ? (plannedSessions || []).find(p => p.id === entry.plannedSessionId) : null;
+                    const planCol = planSess ? (courses.find(c => c.id === planSess.courseId)?.color || null) : null;
+                    const isStudyEntry = !!planSess;
+                    const segCount = isStudyEntry ? 10 : 20;
+                    const vmNorm = isStudyEntry ? Math.max(1, Math.min(10, entry.volmeter ?? Math.round(eff / 10))) : vm;
                     return (
-                      <div key={entry.id || i}
+                        <div key={entry.id || i}
                         style={{
                           display: 'flex', alignItems: 'center', gap: 8,
-                          padding: '10px 6px', borderRadius: 8,
+                          padding: '10px 8px', borderRadius: 10,
                           opacity: isDist ? 0.45 : 1,
+                          background: isStudyEntry ? `${planCol}0a` : 'transparent',
+                          border: '1px solid transparent',
                           borderBottom: i < Math.min(activityFeed.length, 5) - 1 ? '1px solid var(--border-subtle)' : 'none',
                         }}>
                         <div style={{ width: 26, height: 26, borderRadius: 7, background: isDist ? 'rgba(245,158,11,0.08)' : `${c}12`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -1059,18 +1157,34 @@ export default function Estudio() {
                         ) : (
                           <>
                             <div style={{ display: 'flex', gap: 2, flex: 1, minWidth: 0, alignItems: 'center' }}>
-                              {Array.from({ length: 20 }, (_, j) => (
-                                <div key={j} style={{
-                                  width: 6, height: 12, borderRadius: 1.5,
-                                  background: j < vm
-                                    ? (j < 7 ? '#EF4444' : j < 14 ? '#F59E0B' : '#10B981')
-                                    : 'var(--bg-hover)',
-                                  flexShrink: 0,
-                                }} />
-                              ))}
+                              {isStudyEntry ? (
+                                REVIEW_LEVEL_COLORS.map((col, j) => (
+                                  <div key={j} style={{
+                                    flex: 1, height: 18, borderRadius: 3,
+                                    background: j < vmNorm ? col : 'var(--bg-hover)',
+                                    flexShrink: 0, opacity: j < vmNorm ? 0.95 : 1,
+                                  }} />
+                                ))
+                              ) : (
+                                Array.from({ length: 20 }, (_, j) => (
+                                  <div key={j} style={{
+                                    flex: 1, height: 18, borderRadius: 3,
+                                    background: j < vm
+                                      ? (j < 7 ? '#EF4444' : j < 14 ? '#F59E0B' : '#10B981')
+                                      : 'var(--bg-hover)',
+                                    flexShrink: 0,
+                                  }} />
+                                ))
+                              )}
                             </div>
                             <span style={{ width: 32, textAlign: 'right', fontSize: 10, fontWeight: 600, color: effColor, fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{eff}%</span>
-                            <span className="hidden xl:inline" style={{ width: 22, textAlign: 'right', fontSize: 9, fontWeight: 500, color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{vm}</span>
+                            {isStudyEntry ? (
+                              <span style={{ width: 46, display: 'flex', justifyContent: 'flex-end', flexShrink: 0 }}>
+                                <span style={{ fontSize: 9, fontWeight: 700, color: planCol || 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", background: planCol ? `${planCol}12` : 'var(--bg-hover)', border: planCol ? `1px solid ${planCol}30` : 'none', borderRadius: 6, padding: '2px 0 2px 6px', lineHeight: 1.4 }}>{vmNorm}/10</span>
+                              </span>
+                            ) : (
+                              <span style={{ width: 46, textAlign: 'right', fontSize: 9, fontWeight: 600, color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{vm}/20</span>
+                            )}
                           </>
                         )}
                       </div>
@@ -1145,13 +1259,13 @@ export default function Estudio() {
                       })()}
                     </div>
 
-                    {/* Column headers */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 0 8px 0', fontSize: 8, fontWeight: 500, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', borderBottom: '1px solid var(--border-subtle)', marginBottom: 4 }}>
-                      <span style={{ width: 28, flexShrink: 0 }} />
+                    {/* Column headers — misma estética que la vista previa */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 8px 8px', fontSize: 8, fontWeight: 500, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1px solid var(--border-subtle)', marginBottom: 4 }}>
+                      <span style={{ width: 26, flexShrink: 0 }} />
                       <span style={{ width: 58, flexShrink: 0 }}>Tiempo</span>
                       <span style={{ flex: 1 }}>Progreso</span>
                       <span style={{ width: 32, textAlign: 'right', flexShrink: 0 }}>Rend.</span>
-                      <span style={{ width: 22, textAlign: 'right', flexShrink: 0 }}>1-20</span>
+                      <span style={{ width: 46, textAlign: 'right', flexShrink: 0 }}>Escala</span>
                     </div>
 
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -1164,15 +1278,23 @@ export default function Estudio() {
                         const mins = Math.floor(entry.duration / 60);
                         const secs = entry.duration % 60;
                         const isDist = entry.isDistraction;
-                    const eff = entry.sessionIre ?? entry.sessionEff ?? 100;
-                        const effColor = eff >= 85 ? '#10B981' : eff >= 60 ? '#F59E0B' : '#EF4444';
-                        const vm = entry.volmeter ?? Math.round(eff / 5);
+                        const eff = entry.sessionIre ?? entry.sessionEff ?? 100;
+                        const effColor = eff >= 80 ? '#10B981' : eff >= 50 ? '#F59E0B' : '#EF4444';
+                        const vm = entry.volmeter != null && entry.volmeter !== undefined
+                          ? (entry.volmeter <= 10 ? entry.volmeter * 2 : entry.volmeter)
+                          : Math.round(eff / 5);
+                        const planSess = entry.plannedSessionId ? (plannedSessions || []).find(p => p.id === entry.plannedSessionId) : null;
+                        const planCol = planSess ? (courses.find(c => c.id === planSess.courseId)?.color || null) : null;
+                        const isStudyEntry = !!planSess;
+                        const vmNorm = isStudyEntry ? Math.max(1, Math.min(10, entry.volmeter ?? Math.round(eff / 10))) : vm;
                         return (
                           <div key={entry.id || i}
                             style={{
                               display: 'flex', alignItems: 'center', gap: 8,
-                              padding: '10px 4px', borderRadius: 8,
+                              padding: '10px 8px', borderRadius: 10,
                               opacity: isDist ? 0.45 : 1,
+                              background: isStudyEntry ? `${planCol}0a` : 'transparent',
+                              border: '1px solid transparent',
                               borderBottom: i < activityFeed.length - 1 ? '1px solid var(--border-subtle)' : 'none',
                             }}>
                             <div style={{ width: 26, height: 26, borderRadius: 7, background: isDist ? 'rgba(245,158,11,0.08)' : `${c}12`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -1186,18 +1308,34 @@ export default function Estudio() {
                             ) : (
                               <>
                                 <div style={{ display: 'flex', gap: 2, flex: 1, minWidth: 0, alignItems: 'center' }}>
-                                  {Array.from({ length: 20 }, (_, j) => (
-                                    <div key={j} style={{
-                                      width: 6, height: 12, borderRadius: 1.5,
-                                      background: j < vm
-                                        ? (j < 7 ? '#EF4444' : j < 14 ? '#F59E0B' : '#10B981')
-                                        : 'var(--bg-hover)',
-                                      flexShrink: 0,
-                                    }} />
-                                  ))}
+                                  {isStudyEntry ? (
+                                    REVIEW_LEVEL_COLORS.map((col, j) => (
+                                      <div key={j} style={{
+                                        flex: 1, height: 18, borderRadius: 3,
+                                        background: j < vmNorm ? col : 'var(--bg-hover)',
+                                        flexShrink: 0, opacity: j < vmNorm ? 0.95 : 1,
+                                      }} />
+                                    ))
+                                  ) : (
+                                    Array.from({ length: 20 }, (_, j) => (
+                                      <div key={j} style={{
+                                        flex: 1, height: 18, borderRadius: 3,
+                                        background: j < vm
+                                          ? (j < 7 ? '#EF4444' : j < 14 ? '#F59E0B' : '#10B981')
+                                          : 'var(--bg-hover)',
+                                        flexShrink: 0,
+                                      }} />
+                                    ))
+                                  )}
                                 </div>
                                 <span style={{ width: 32, textAlign: 'right', fontSize: 10, fontWeight: 600, color: effColor, fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{eff}%</span>
-                                <span style={{ width: 22, textAlign: 'right', fontSize: 9, fontWeight: 500, color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{vm}</span>
+                                {isStudyEntry ? (
+                                  <span style={{ width: 46, display: 'flex', justifyContent: 'flex-end', flexShrink: 0 }}>
+                                    <span style={{ fontSize: 9, fontWeight: 700, color: planCol || 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", background: planCol ? `${planCol}12` : 'var(--bg-hover)', border: planCol ? `1px solid ${planCol}30` : 'none', borderRadius: 6, padding: '2px 0 2px 6px', lineHeight: 1.4 }}>{vmNorm}/10</span>
+                                  </span>
+                                ) : (
+                                  <span style={{ width: 46, textAlign: 'right', fontSize: 9, fontWeight: 600, color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{vm}/20</span>
+                                )}
                               </>
                             )}
                           </div>
@@ -1222,6 +1360,12 @@ export default function Estudio() {
       {/* Read-only Session Detail Modal */}
       {showSessionDetail && detailSession && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(10px)' }} onClick={() => setShowSessionDetail(false)}>
+          {(() => {
+            const dVol = detailSession.volmeter;
+            const dScale = detailSession.plannedSessionId ? 10 : 20;
+            const dPct = dVol != null ? Math.round((Math.min(dVol, dScale) / dScale) * 100) : 50;
+            const dCol = dVol != null ? (dVol >= dScale * 0.7 ? '#10B981' : dVol >= dScale * 0.35 ? '#F59E0B' : '#EF4444') : focusColor;
+            return (
           <div onClick={e => e.stopPropagation()} className="bento-card"
             style={{
               background: 'var(--bg-elevated)', borderRadius: 20,
@@ -1253,18 +1397,18 @@ export default function Estudio() {
                   <svg width={80} height={80} viewBox="0 0 80 80">
                     <circle cx={40} cy={40} r={32} fill="none" stroke="var(--bg-deep)" strokeWidth={6} />
                     <circle cx={40} cy={40} r={32} fill="none" stroke={focusColor} strokeWidth={6}
-                      strokeDasharray={`${2 * Math.PI * 32 * (detailSession.volmeter ?? 50) / 100} ${2 * Math.PI * 32 * (100 - (detailSession.volmeter ?? 50)) / 100}`}
+                      strokeDasharray={`${2 * Math.PI * 32 * dPct / 100} ${2 * Math.PI * 32 * (100 - dPct) / 100}`}
                       strokeLinecap="round"
                       transform="rotate(-90 40 40)"
                       style={{ transition: 'stroke-dasharray 600ms ease', opacity: 0.85 }} />
                   </svg>
                   <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', marginTop: -4 }}>
                     {detailSession.type === 'pomodoro' ? (
-                      <CheckCircle size={20} color={detailSession.volmeter && detailSession.volmeter > 14 ? '#10B981' : detailSession.volmeter && detailSession.volmeter > 7 ? '#F59E0B' : '#EF4444'} />
+                      <CheckCircle size={20} color={dCol} />
                     ) : (
                       <Clock size={20} color={chronoColor} />
                     )}
-                    <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", marginTop: 2 }}>{detailSession.volmeter ?? '—'}<span style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-tertiary)' }}>/20</span></span>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", marginTop: 2 }}>{dVol ?? '—'}<span style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-tertiary)' }}>{'/' + dScale}</span></span>
                   </div>
                 </div>
               </div>
@@ -1306,22 +1450,21 @@ export default function Estudio() {
               )}
               {detailSession.volmeter !== undefined && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 10, background: 'var(--bg-hover)' }}>
-                  <Zap size={14} style={{ color: detailSession.volmeter > 14 ? '#10B981' : detailSession.volmeter > 7 ? '#F59E0B' : '#EF4444', flexShrink: 0 }} />
+                  <Zap size={14} style={{ color: dCol, flexShrink: 0 }} />
                   <span style={{ fontSize: 10, color: 'var(--text-tertiary)', fontWeight: 500, width: 72, flexShrink: 0 }}>Rendimiento</span>
-                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 3, justifyContent: 'flex-end' }}>
-                    {Array.from({ length: 20 }, (_, i) => {
-                      const filled = i < detailSession.volmeter!;
-                      const col = detailSession.volmeter! > 14 ? '#10B981' : detailSession.volmeter! > 7 ? '#F59E0B' : '#EF4444';
+                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 2, justifyContent: 'flex-end' }}>
+                    {Array.from({ length: dScale }, (_, i) => {
+                      const filled = i < (dVol ?? 0);
                       return (
                         <div key={i} style={{
-                          width: 8, height: 12, borderRadius: 2,
-                          background: filled ? col : 'var(--bg-deep)',
+                          flex: 1, maxWidth: 10, height: 14, borderRadius: 2,
+                          background: filled ? dCol : 'var(--bg-deep)',
                           opacity: filled ? 1 : 0.4,
                           transition: 'all 200ms',
                         }} />
                       );
                     })}
-                    <span style={{ fontSize: 13, fontWeight: 650, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em', minWidth: 30, textAlign: 'right', marginLeft: 6 }}>{detailSession.volmeter}/20</span>
+                    <span style={{ fontSize: 13, fontWeight: 650, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em', minWidth: 30, textAlign: 'right', marginLeft: 6 }}>{dPct}%</span>
                   </div>
                 </div>
               )}
@@ -1371,6 +1514,46 @@ export default function Estudio() {
               </button>
             </div>
           </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* Unlink planned session confirmation */}
+      {showUnlinkPlanConfirm && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 85, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)' }} onClick={() => setShowUnlinkPlanConfirm(false)}>
+          <div onClick={e => e.stopPropagation()} className="bento-card" style={{ width: 340, background: 'var(--bg-elevated)', borderRadius: 14, border: '1px solid var(--border-soft)', padding: '20px 22px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 30, height: 30, borderRadius: 9, background: '#EF444412', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <AlertTriangle size={15} color="#EF4444" />
+              </div>
+              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>¿Desvincular sesión?</span>
+            </div>
+            <p style={{ fontSize: 11.5, color: 'var(--text-secondary)', lineHeight: 1.5, margin: 0 }}>La sesión planificada dejará de estar conectada al temporizador. Podrás vincularla nuevamente desde Cursos.</p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+              <button onClick={() => setShowUnlinkPlanConfirm(false)} style={{ padding: '6px 16px', borderRadius: 8, border: '1px solid var(--border-soft)', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 11, fontWeight: 600, fontFamily: "'Inter Tight', sans-serif" }}>Cancelar</button>
+              <button onClick={() => { unlinkPlannedSessionFromTimer(); setShowUnlinkPlanConfirm(false); addNotification('Sesión desvinculada', 'info'); }} style={{ padding: '6px 16px', borderRadius: 8, border: 'none', background: '#EF4444', color: '#fff', cursor: 'pointer', fontSize: 11, fontWeight: 700, fontFamily: "'Inter Tight', sans-serif" }}>Desvincular</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Unlink task confirmation */}
+      {showUnlinkTaskConfirm && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 85, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)' }} onClick={() => setShowUnlinkTaskConfirm(false)}>
+          <div onClick={e => e.stopPropagation()} className="bento-card" style={{ width: 340, background: 'var(--bg-elevated)', borderRadius: 14, border: '1px solid var(--border-soft)', padding: '20px 22px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 30, height: 30, borderRadius: 9, background: '#EF444412', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <AlertTriangle size={15} color="#EF4444" />
+              </div>
+              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>¿Desvincular tarea?</span>
+            </div>
+            <p style={{ fontSize: 11.5, color: 'var(--text-secondary)', lineHeight: 1.5, margin: 0 }}>La tarea dejará de estar conectada al temporizador. Podrás vincularla nuevamente desde Tareas.</p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+              <button onClick={() => setShowUnlinkTaskConfirm(false)} style={{ padding: '6px 16px', borderRadius: 8, border: '1px solid var(--border-soft)', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 11, fontWeight: 600, fontFamily: "'Inter Tight', sans-serif" }}>Cancelar</button>
+              <button onClick={() => { setActiveTaskId(null); setShowUnlinkTaskConfirm(false); addNotification('Tarea desvinculada', 'info'); }} style={{ padding: '6px 16px', borderRadius: 8, border: 'none', background: '#EF4444', color: '#fff', cursor: 'pointer', fontSize: 11, fontWeight: 700, fontFamily: "'Inter Tight', sans-serif" }}>Desvincular</button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1407,8 +1590,8 @@ export default function Estudio() {
         </div>
       )}
 
-      {/* POST-SESSION EVALUATION — with linked task */}
-      {showSessionEval && evalSessionId && (
+      {/* POST-SESSION EVALUATION — linked task or linked study session */}
+      {showSessionEval && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }} onClick={() => { setShowSessionEval(false); setShowFreeStudyPrompt(false); setShowRestPrompt(false); }}>
           <div onClick={e => e.stopPropagation()} className="bento-card"
             style={{
@@ -1421,6 +1604,26 @@ export default function Estudio() {
               <div style={{ width: 6, height: 6, borderRadius: '50%', background: statusColor, boxShadow: `0 0 8px ${statusColor}80`, flexShrink: 0 }} />
               <span style={{ fontSize: 17, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em' }}>Evaluar sesión</span>
             </div>
+
+            {/* Linked planned session info (top priority) — estilo check de tareas: nombre arriba, curso debajo */}
+            {linkedPlanSession && (
+              <div style={{ marginBottom: 16, padding: '12px 14px', borderRadius: 14, border: `1px dashed ${(linkedPlanCourse?.color || statusColor)}45`, background: `${(linkedPlanCourse?.color || statusColor)}08`, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 26, height: 26, borderRadius: '50%', background: `${(linkedPlanCourse?.color || statusColor)}14`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: `1px solid ${(linkedPlanCourse?.color || statusColor)}30` }}>
+                    <Zap size={11} style={{ color: linkedPlanCourse?.color || statusColor }} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 8, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.12em', color: linkedPlanCourse?.color || statusColor, fontFamily: "'Inter Tight', sans-serif", marginBottom: 2 }}>Sesión de estudio</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{linkedPlanSession.title || 'Sesión'}</div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 36 }}>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: linkedPlanCourse?.color || statusColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{linkedPlanCourse?.name || 'Curso'}</span>
+                  <div style={{ width: 3, height: 3, borderRadius: '50%', background: 'var(--border-default)', flexShrink: 0 }} />
+                  <span style={{ fontSize: 9, color: 'var(--text-tertiary)', fontFamily: "'JetBrains Mono', monospace", flexShrink: 0 }}>{linkedPlanSession.durationMinutes}min</span>
+                </div>
+              </div>
+            )}
 
             {/* Linked task info */}
             {activeTask && (
@@ -1435,41 +1638,101 @@ export default function Estudio() {
               </div>
             )}
 
-            {/* Volmeter 1-20 — premium bar display */}
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.02em' }}>¿Qué tan bien lo hiciste?</span>
-                <span style={{ fontSize: 20, fontWeight: 700, color: evalVolmeter > 14 ? '#10B981' : (evalVolmeter > 7 ? '#F59E0B' : '#EF4444'), fontFamily: "'Inter Tight', sans-serif", lineHeight: 1 }}>{evalVolmeter}<span style={{ fontSize: 12, fontWeight: 500, opacity: 0.4 }}>/20</span></span>
+            {/* Velocímetro 1-10 (planned study) or 1-20 (regular) */}
+            {linkedPlanSession ? (
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.02em' }}>Rendimiento</span>
+                  <span style={{ fontSize: 18, fontWeight: 700, color: evalVolmeter > 0 ? REVIEW_LEVEL_COLORS[Math.min(9, evalVolmeter - 1)] : 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", lineHeight: 1 }}>{Math.max(0, Math.min(10, evalVolmeter))}<span style={{ fontSize: 11, fontWeight: 500, opacity: 0.4 }}>/10</span></span>
+                </div>
+                <div style={{ position: 'relative', display: 'flex', gap: 3, alignItems: 'center', padding: '8px', background: 'var(--bg-surface)', borderRadius: 10, border: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
+                  {(() => { const plannedInt = Math.max(0, Math.min(10, linkedPlanSession.intensity || 0)); return (
+                    <>
+                      {/* Intensidad programada — capa de fondo, sombra difuminada de lo planeado en Cursos */}
+                      <div style={{ position: 'absolute', inset: 0, display: 'flex', gap: 3, padding: '8px', pointerEvents: 'none' }}>
+                        {REVIEW_LEVEL_COLORS.map((col, i) => {
+                          const v = i + 1;
+                          const planned = v <= plannedInt;
+                          return <div key={`plan-${v}`} style={{ flex: 1, borderRadius: 4, background: planned ? `${col}22` : 'transparent', boxShadow: planned ? `inset 0 0 0 1px ${col}30` : 'none' }} />;
+                        })}
+                      </div>
+                      {/* Rendimiento real — capa superior 1-10 */}
+                      {REVIEW_LEVEL_COLORS.map((col, i) => {
+                        const v = i + 1;
+                        const on = v <= evalVolmeter;
+                        const planned = v <= plannedInt;
+                        return (
+                          <button key={v} onClick={() => setEvalVolmeter(v)} title={`Rendimiento ${v}/10 · programada ${planned ? 'sí' : 'no'}`}
+                            style={{ flex: 1, height: 26, borderRadius: 4, cursor: 'pointer', border: 'none', background: on ? col : 'transparent', opacity: on ? 1 : 0.4, boxShadow: on ? `0 0 10px ${col}70` : 'none', transition: 'all 180ms cubic-bezier(0.4, 0, 0.2, 1)' }} />
+                        );
+                      })}
+                    </>
+                  ); })()}
+                </div>
+                <input type="range" min="0" max="10" value={evalVolmeter} onChange={e => setEvalVolmeter(Number(e.target.value))}
+                  style={{ width: '100%', height: 3, cursor: 'pointer', WebkitAppearance: 'none', appearance: 'none', outline: 'none', borderRadius: 2, background: 'transparent', marginTop: 6 }}
+                  className="volume-slider" />
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 8.5, color: 'var(--text-muted)', marginTop: 4, fontFamily: "'Inter Tight', sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>
+                  <span>Bajo</span><span style={{ opacity: 0.7 }}>Intensidad programada: {linkedPlanSession.intensity || 0}/10</span><span>Alto</span>
+                </div>
               </div>
-              <div style={{
-                position: 'relative', height: 40, display: 'flex', alignItems: 'flex-end', gap: 3,
-                padding: '4px 0',
-                background: 'var(--bg-surface)', borderRadius: 10,
-                border: '1px solid var(--border-subtle)',
-                overflow: 'hidden',
-              }}>
-                {Array.from({ length: 20 }, (_, i) => {
-                  const isActive = i < evalVolmeter;
-                  const barColor = i < 7 ? '#EF4444' : i < 14 ? '#F59E0B' : '#10B981';
-                  const barH = isActive ? 8 + (i / 20) * 28 : 4;
-                  return (
-                    <div key={i} style={{
-                      flex: 1, height: barH, borderRadius: '3px 3px 1px 1px',
-                      background: isActive ? barColor : 'rgba(255,255,255,0.04)',
-                      transition: 'all 250ms cubic-bezier(0.16, 1, 0.3, 1)',
-                      boxShadow: isActive ? `0 0 8px ${barColor}40, inset 0 1px 0 rgba(255,255,255,0.15)` : 'none',
-                      opacity: isActive ? 1 : 0.5,
-                    }} />
-                  );
-                })}
+            ) : (
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.02em' }}>¿Qué tan bien lo hiciste?</span>
+                  <span style={{ fontSize: 20, fontWeight: 700, color: evalVolmeter > 14 ? '#10B981' : (evalVolmeter > 7 ? '#F59E0B' : '#EF4444'), fontFamily: "'Inter Tight', sans-serif", lineHeight: 1 }}>{evalVolmeter}<span style={{ fontSize: 12, fontWeight: 500, opacity: 0.4 }}>/20</span></span>
+                </div>
+                <div style={{
+                  position: 'relative', height: 40, display: 'flex', alignItems: 'flex-end', gap: 3,
+                  padding: '4px 0',
+                  background: 'var(--bg-surface)', borderRadius: 10,
+                  border: '1px solid var(--border-subtle)',
+                  overflow: 'hidden',
+                }}>
+                  {Array.from({ length: 20 }, (_, i) => {
+                    const isActive = i < evalVolmeter;
+                    const barColor = i < 7 ? '#EF4444' : i < 14 ? '#F59E0B' : '#10B981';
+                    const barH = isActive ? 8 + (i / 20) * 28 : 4;
+                    return (
+                      <div key={i} style={{
+                        flex: 1, height: barH, borderRadius: '3px 3px 1px 1px',
+                        background: isActive ? barColor : 'rgba(255,255,255,0.04)',
+                        transition: 'all 250ms cubic-bezier(0.16, 1, 0.3, 1)',
+                        boxShadow: isActive ? `0 0 8px ${barColor}40, inset 0 1px 0 rgba(255,255,255,0.15)` : 'none',
+                        opacity: isActive ? 1 : 0.5,
+                      }} />
+                    );
+                  })}
+                </div>
+                <input type="range" min="0" max="20" value={evalVolmeter} onChange={e => setEvalVolmeter(Number(e.target.value))}
+                  style={{ width: '100%', height: 3, cursor: 'pointer', WebkitAppearance: 'none', appearance: 'none', outline: 'none', borderRadius: 2, background: 'transparent', marginTop: 6 }}
+                  className="volume-slider" />
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>
+                  <span>Bajo</span><span>Alto</span>
+                </div>
               </div>
-              <input type="range" min="1" max="20" value={evalVolmeter} onChange={e => setEvalVolmeter(Number(e.target.value))}
-                style={{ width: '100%', height: 3, cursor: 'pointer', WebkitAppearance: 'none', appearance: 'none', outline: 'none', borderRadius: 2, background: 'transparent', marginTop: 6 }}
-                className="volume-slider" />
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>
-                <span>Bajo</span><span>Alto</span>
+            )}
+
+            {/* Resultado de la sesión de estudio — un solo botón que activa/desactiva */}
+            {linkedPlanSession && (
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8, letterSpacing: '0.02em' }}>Resultado</label>
+                <button onClick={() => setEvalPlanOutcome(evalPlanOutcome === 'logrado' ? 'no_logrado' : 'logrado')} style={{
+                  width: '100%', padding: '11px 14px', borderRadius: 12, fontSize: 11.5, fontWeight: 600, cursor: 'pointer', transition: 'all 180ms',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                  border: evalPlanOutcome === 'logrado' ? '1px solid #10B981' : '1px solid var(--border-soft)',
+                  background: evalPlanOutcome === 'logrado' ? 'linear-gradient(135deg, #10B9811a, #10B98108)' : 'var(--bg-deep)',
+                  color: evalPlanOutcome === 'logrado' ? '#10B981' : 'var(--text-secondary)',
+                  boxShadow: evalPlanOutcome === 'logrado' ? '0 0 16px #10B98126, inset 0 0 0 1px #10B98122' : 'none',
+                }}>
+                  {evalPlanOutcome === 'logrado' ? (
+                    <><Check size={13} />Cumplí la sesión</>
+                  ) : (
+                    <><X size={13} />Aún sigo en el proceso</>
+                  )}
+                </button>
               </div>
-            </div>
+            )}
 
             {/* Task state action */}
             {activeTask && (
@@ -1492,6 +1755,13 @@ export default function Estudio() {
                         color: evalTaskAction === 'complete' ? '#10B981' : 'var(--text-secondary)',
                         cursor: 'pointer', transition: 'all 150ms',
                       }}>Completado</button>
+                      <button onClick={() => setEvalTaskAction('not_finished')} style={{
+                        flex: 1, padding: '10px 12px', borderRadius: 10, fontSize: 11, fontWeight: 600,
+                        border: evalTaskAction === 'not_finished' ? `1px solid #6B7280` : '1px solid var(--border-soft)',
+                        background: evalTaskAction === 'not_finished' ? '#6B728012' : 'var(--bg-deep)',
+                        color: evalTaskAction === 'not_finished' ? '#9CA3AF' : 'var(--text-secondary)',
+                        cursor: 'pointer', transition: 'all 150ms',
+                      }}>No lo terminé</button>
                     </>
                   )}
                   {activeTask.status === 'progreso' && (
@@ -1523,13 +1793,12 @@ export default function Estudio() {
 
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
               <button onClick={() => {
-                if (evalSessionId) deleteStudySession(evalSessionId);
                 setShowSessionEval(false);
                 setShowFreeStudyPrompt(false);
                 setShowRestPrompt(false);
               }}
                 style={{ padding: '8px 20px', borderRadius: 10, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
-                Omitir
+                Cancelar
               </button>
               <button onClick={() => {
                 handleEvalAndStartRest({
@@ -1540,6 +1809,10 @@ export default function Estudio() {
                   volmeter: evalVolmeter,
                   evaluatedAt: new Date().toISOString(),
                 });
+                if (activePlannedSessionId) {
+                  updatePlannedSession(activePlannedSessionId, { completed: evalPlanOutcome !== 'no_logrado' });
+                  unlinkPlannedSessionFromTimer();
+                }
                 if (evalTaskAction === 'complete' && activeTaskId) {
                   updateTask(activeTaskId, { status: 'completado', completedAt: new Date().toISOString() });
                   addNotification('¡Tarea completada!', 'success');
@@ -1650,13 +1923,12 @@ export default function Estudio() {
 
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
               <button onClick={() => {
-                if (evalSessionId) deleteStudySession(evalSessionId);
                 setShowSessionEval(false);
                 setShowFreeStudyPrompt(false);
                 setShowRestPrompt(false);
               }}
                 style={{ padding: '8px 20px', borderRadius: 10, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
-                Omitir
+                Cancelar
               </button>
               <button onClick={() => {
                 handleEvalAndStartRest({
@@ -1664,6 +1936,10 @@ export default function Estudio() {
                   volmeter: evalVolmeter,
                   evaluatedAt: new Date().toISOString(),
                 });
+                if (activePlannedSessionId) {
+                  updatePlannedSession(activePlannedSessionId, { completed: evalPlanOutcome !== 'no_logrado' });
+                  unlinkPlannedSessionFromTimer();
+                }
                 addNotification(evalFreeText.trim() ? `Estudiaste: ${evalFreeText.trim()}` : 'Sesión registrada', 'success');
               }}
                 style={{ padding: '8px 24px', borderRadius: 10, border: 'none', background: `linear-gradient(135deg, ${statusColor}, ${statusColor}dd)`, color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>

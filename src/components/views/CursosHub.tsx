@@ -1,9 +1,11 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
   GraduationCap, PlusCircle, Upload, Download,
-  X, Image as ImageIcon, GripVertical,
+  X, Image as ImageIcon,
 } from 'lucide-react';
 import { useApp, Course } from '../../store/AppContext';
+import { openBrainWithAnchor, isOverBrainZone, setBrainDragState } from '../../lib/brainDrop';
 import NotificationBell from '../ui/NotificationBell';
 import toast from 'react-hot-toast';
 import { format } from "date-fns";
@@ -28,8 +30,9 @@ export default function CursosHub({ onSelectCourse, onTabSelect }: CursosHubProp
   const [timeStr, setTimeStr] = useState(() => format(new Date(), "HH:mm"));
   const [secStr, setSecStr] = useState(() => format(new Date(), "ss"));
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [overIndex, setOverIndex] = useState<number | null>(null);
   const [longPressIndex, setLongPressIndex] = useState<number | null>(null);
-  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [ghost, setGhost] = useState<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     const tick = () => { const now = new Date(); setTimeStr(format(now, "HH:mm")); setSecStr(format(now, "ss")); };
@@ -74,23 +77,135 @@ export default function CursosHub({ onSelectCourse, onTabSelect }: CursosHubProp
     } catch { toast.error('Error al exportar'); }
   };
 
-  const handleDragStart = (e: React.DragEvent, index: number) => {
-    setDragIndex(index); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", String(index));
-  };
-  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; };
-  const handleDrop = (e: React.DragEvent, dropIndex: number) => {
-    e.preventDefault();
-    if (dragIndex === null || dragIndex === dropIndex) return;
-    const ids = [...courses.map(c => c.id)];
-    const [moved] = ids.splice(dragIndex, 1);
-    ids.splice(dropIndex, 0, moved);
-    reorderCourses(ids);
+  // ─── Long-press drag & reorder (pointer-based, sin ghost recortado) ───
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pressStartRef = useRef<{ x: number; y: number; index: number } | null>(null);
+  const draggingRef = useRef(false);
+  const longPressActiveRef = useRef(false);
+  const overIndexRef = useRef<number | null>(null);
+  const ghostSizeRef = useRef<{ width: number; height: number } | null>(null);
+  const pressedElRef = useRef<HTMLElement | null>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const coursesRef = useRef(courses);
+  const onSelectRef = useRef(onSelectCourse);
+  coursesRef.current = courses;
+  onSelectRef.current = onSelectCourse;
+
+  const cleanupDrag = useCallback(() => {
+    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+    pressStartRef.current = null;
+    pressedElRef.current = null;
+    draggingRef.current = false;
+    longPressActiveRef.current = false;
+    overIndexRef.current = null;
+    ghostSizeRef.current = null;
     setDragIndex(null);
-  };
-  const handleMouseDown = (index: number) => {
-    longPressTimer.current = setTimeout(() => setLongPressIndex(index), LONG_PRESS_MS);
-  };
-  const handleMouseUp = () => { if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; } setLongPressIndex(null); };
+    setOverIndex(null);
+    setGhost(null);
+    setLongPressIndex(null);
+    setBrainDragState(false);
+    window.removeEventListener('pointermove', handleWindowMove);
+    window.removeEventListener('pointerup', handleWindowUp);
+    window.removeEventListener('pointercancel', cleanupDrag);
+  }, []);
+
+  const handleWindowMove = useCallback((e: PointerEvent) => {
+    const start = pressStartRef.current;
+    if (!start) return;
+
+    if (draggingRef.current) {
+      e.preventDefault();
+      setGhost({ x: e.clientX, y: e.clientY });
+      // Mientras se arrastra sobre la franja de Charvis, mostramos el overlay en el chat.
+      setBrainDragState(isOverBrainZone(e.clientX), 'Suelta para anclar en Charvis');
+      const tiles = gridRef.current ? Array.from(gridRef.current.querySelectorAll<HTMLElement>('[data-course-idx]')) : [];
+      let target: number | null = null;
+      for (const tile of tiles) {
+        const r = tile.getBoundingClientRect();
+        if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) {
+          target = Number(tile.dataset.courseIdx);
+          break;
+        }
+      }
+      if (target !== null) {
+        overIndexRef.current = target;
+        setOverIndex(target);
+      } else {
+        overIndexRef.current = null;
+        setOverIndex(null);
+      }
+      return;
+    }
+
+    const dist = Math.hypot(e.clientX - start.x, e.clientY - start.y);
+    if (longPressActiveRef.current && dist > 10) {
+      draggingRef.current = true;
+      setDragIndex(start.index);
+      setOverIndex(start.index);
+      overIndexRef.current = start.index;
+      setGhost({ x: e.clientX, y: e.clientY });
+    } else if (dist > 10 && longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+      pressStartRef.current = null;
+    }
+  }, []);
+
+  const handleWindowUp = useCallback((e: PointerEvent) => {
+    const start = pressStartRef.current;
+    const wasDragging = draggingRef.current;
+
+    if (wasDragging && start) {
+      // Si se suelta sobre la franja derecha (panel de Charvis), se ancla el
+      // curso en el chat en lugar de reordenar.
+      if (isOverBrainZone(e.clientX)) {
+        const course = coursesRef.current[start.index];
+        if (course) openBrainWithAnchor({ kind: 'course', id: course.id });
+        cleanupDrag();
+        return;
+      }
+      const ids = [...coursesRef.current.map(c => c.id)];
+      const [moved] = ids.splice(start.index, 1);
+      const target = overIndexRef.current === null ? start.index : Math.min(overIndexRef.current, ids.length);
+      ids.splice(target, 0, moved);
+      reorderCourses(ids);
+    }
+    cleanupDrag();
+
+    if (!wasDragging && start && start.index < coursesRef.current.length) {
+      onSelectRef.current(coursesRef.current[start.index].id);
+    }
+  }, [reorderCourses, cleanupDrag]);
+
+  const handlePointerDown = useCallback((e: React.PointerEvent, index: number) => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    pressStartRef.current = { x: e.clientX, y: e.clientY, index };
+    pressedElRef.current = e.currentTarget as HTMLElement;
+    longPressTimer.current = setTimeout(() => {
+      longPressActiveRef.current = true;
+      setLongPressIndex(index);
+      const el = pressedElRef.current;
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        ghostSizeRef.current = { width: rect.width, height: rect.height };
+      }
+    }, LONG_PRESS_MS);
+    window.addEventListener('pointermove', handleWindowMove, { passive: false });
+    window.addEventListener('pointerup', handleWindowUp);
+    window.addEventListener('pointercancel', cleanupDrag);
+  }, [handleWindowMove, handleWindowUp, cleanupDrag]);
+
+  useEffect(() => () => {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    window.removeEventListener('pointermove', handleWindowMove);
+    window.removeEventListener('pointerup', handleWindowUp);
+    window.removeEventListener('pointercancel', cleanupDrag);
+  }, [handleWindowMove, handleWindowUp, cleanupDrag]);
+
+  // Display order while dragging: the grid stays put; only on drop we reorder.
+  // The dragged card lifts in place and the target slot shows a dashed ring,
+  // so nothing overlaps or "mixes" mid-drag.
+  const ghostCourse = dragIndex !== null ? courses[dragIndex] : null;
 
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -173,57 +288,68 @@ export default function CursosHub({ onSelectCourse, onTabSelect }: CursosHubProp
             <p style={{ fontSize: 13, color: 'var(--text-tertiary)', maxWidth: 380, lineHeight: 1.6 }}>Agrega tu primer curso para empezar a organizar tus temas, tareas y recursos de estudio.</p>
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 24, paddingBottom: 24 }}>
-            {courses.map((course, idx) => {
-              const isDragging = dragIndex === idx;
-              const isLongPressed = longPressIndex === idx;
+          <>
+          <div ref={gridRef} style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 24, paddingBottom: 24, userSelect: draggingRef.current ? 'none' : undefined }}>
+            {courses.map((course) => {
+              const originalIdx = courses.findIndex(c => c.id === course.id);
+              const isDragging = dragIndex === originalIdx;
+              const isDropTarget = overIndex === originalIdx && dragIndex !== null && !isDragging;
               return (
               <div key={course.id}
-                draggable={isLongPressed}
-                onDragStart={(e) => handleDragStart(e, idx)}
-                onDragOver={handleDragOver}
-                onDrop={(e) => handleDrop(e, idx)}
-                onMouseDown={() => handleMouseDown(idx)}
-                onMouseUp={(e) => { handleMouseUp(); if (!isLongPressed) onSelectCourse(course.id); }}
+                data-course-idx={originalIdx}
+                onPointerDown={(e) => handlePointerDown(e, originalIdx)}
+                onContextMenu={(e) => { if (draggingRef.current) e.preventDefault(); }}
                 style={{
                   position: 'relative', overflow: 'hidden',
                   borderRadius: 16,
-                  border: `1.5px solid ${course.color}35`,
-                  background: course.coverUrl
-                    ? `linear-gradient(160deg, ${course.color}06, transparent 50%)`
-                    : `linear-gradient(160deg, ${course.color}14, transparent 50%)`,
-                  cursor: isLongPressed ? 'grabbing' : 'pointer',
-                  opacity: isDragging ? 0.4 : 1,
-                  outline: isLongPressed ? '2px dashed var(--accent)' : 'none',
-                  outlineOffset: 2,
-                  transition: isDragging ? "none" : `all 500ms ${EASE}`,
+                  border: isDragging
+                    ? `2px dashed ${course.color}`
+                    : isDropTarget
+                      ? `2px dashed var(--accent)`
+                      : `1.5px solid ${course.color}35`,
+                  background: isDragging
+                    ? 'color-mix(in srgb, var(--accent) 6%, var(--bg-elevated))'
+                    : isDropTarget
+                      ? 'color-mix(in srgb, var(--accent) 9%, var(--bg-elevated))'
+                      : course.coverUrl
+                        ? `linear-gradient(160deg, ${course.color}06, transparent 50%)`
+                        : `linear-gradient(160deg, ${course.color}14, transparent 50%)`,
+                  cursor: draggingRef.current ? 'grabbing' : 'pointer',
+                  outline: isDragging || isDropTarget ? '2px dashed var(--accent)' : 'none',
+                  outlineOffset: isDragging ? 0 : isDropTarget ? 4 : 2,
+                  transition: draggingRef.current ? 'border-color 150ms' : `all 500ms ${EASE}`,
                   aspectRatio: '16/10',
-                  boxShadow: `inset 0 0 40px ${course.color}06, 0 0 0 1px ${course.color}10 inset`,
+                  opacity: isDragging ? 0.45 : isDropTarget ? 0.72 : 1,
+                  zIndex: isDragging ? 5 : 1,
+                  transform: isDragging ? 'scale(0.96)' : 'none',
+                  boxShadow: isDragging
+                    ? `0 14px 40px ${course.color}2e, inset 0 0 40px ${course.color}10`
+                    : isDropTarget
+                      ? `0 0 0 3px color-mix(in srgb, var(--accent) 38%, transparent), inset 0 0 40px ${course.color}08`
+                      : `inset 0 0 40px ${course.color}06, 0 0 0 1px ${course.color}10 inset`,
+                  touchAction: 'pan-y',
                 }}
                 onMouseEnter={(e) => {
-                  if (isDragging) return;
+                  if (draggingRef.current || isDragging || isDropTarget) return;
                   e.currentTarget.style.borderColor = `${course.color}65`;
                   e.currentTarget.style.transform = 'translateY(-2px) scale(1.005)';
                   e.currentTarget.style.boxShadow = `0 8px 28px ${course.color}18, inset 0 0 40px ${course.color}08, 0 0 0 1px ${course.color}1a inset`;
                 }}
                 onMouseLeave={(e) => {
-                  handleMouseUp();
-                  if (isDragging) return;
+                  if (draggingRef.current || isDragging || isDropTarget) return;
                   e.currentTarget.style.transform = 'none';
                   e.currentTarget.style.borderColor = `${course.color}35`;
                   e.currentTarget.style.boxShadow = `inset 0 0 40px ${course.color}06, 0 0 0 1px ${course.color}10 inset`;
                 }}
               >
-
+                {(!isDragging && !isDropTarget) && (<>
                 {/* Full-bleed cover */}
                 {course.coverUrl ? (
-                  <img src={course.coverUrl} alt=""
-                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', transition: "transform 700ms " + EASE }}
-                    onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.08)'}
-                    onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                  <img src={course.coverUrl} alt="" draggable={false}
+                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', transition: "transform 700ms " + EASE, pointerEvents: 'none' }}
                   />
                 ) : (
-                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 0 }}>
+                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 0, pointerEvents: 'none' }}>
                     <GraduationCap size={44} style={{ color: course.color, opacity: 0.08 }} />
                   </div>
                 )}
@@ -240,7 +366,7 @@ export default function CursosHub({ onSelectCourse, onTabSelect }: CursosHubProp
                 {/* Course name */}
                 <div style={{
                   position: 'absolute', bottom: 0, left: 0, right: 0,
-                  padding: '16px 18px', zIndex: 2,
+                  padding: '16px 18px', zIndex: 2, pointerEvents: 'none',
                 }}>
                   <span style={{
                     fontSize: 26, fontWeight: 250,
@@ -252,16 +378,38 @@ export default function CursosHub({ onSelectCourse, onTabSelect }: CursosHubProp
                     whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                   }}>{course.name}</span>
                 </div>
-
-                {isLongPressed && (
-                  <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 5, width: 28, height: 28, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)', color: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(6px)', pointerEvents: 'none' }}>
-                    <GripVertical size={14} />
-                  </div>
-                )}
+                </>)}
               </div>
               );
             })}
           </div>
+          {ghostCourse && ghost && ghostSizeRef.current && createPortal(
+            <div style={{
+              position: 'fixed', left: 0, top: 0, zIndex: 99990, pointerEvents: 'none',
+              width: ghostSizeRef.current.width, height: ghostSizeRef.current.height,
+              transform: `translate(${ghost.x - ghostSizeRef.current.width / 2}px, ${ghost.y - ghostSizeRef.current.height / 2}px)`,
+              borderRadius: 16, overflow: 'hidden',
+              border: `1.5px solid ${ghostCourse.color}88`,
+              boxShadow: `0 24px 60px rgba(0,0,0,0.5), 0 0 0 1px ${ghostCourse.color}22 inset`,
+              opacity: 0.96,
+            }}>
+              {ghostCourse.coverUrl ? (
+                <img src={ghostCourse.coverUrl} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `linear-gradient(160deg, ${ghostCourse.color}18, var(--bg-elevated))` }}>
+                  <GraduationCap size={44} style={{ color: ghostCourse.color, opacity: 0.25 }} />
+                </div>
+              )}
+              {ghostCourse.coverUrl && (
+                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, transparent 30%, rgba(0,0,0,0.75) 100%)', pointerEvents: 'none' }} />
+              )}
+              <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '16px 18px' }}>
+                <span style={{ fontSize: 26, fontWeight: 250, color: ghostCourse.coverUrl ? '#fff' : 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.03em', lineHeight: 1.15, display: 'block', textShadow: '0 2px 16px rgba(0,0,0,0.6)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ghostCourse.name}</span>
+              </div>
+            </div>,
+            document.body
+          )}
+          </>
         )}
       </div>
 

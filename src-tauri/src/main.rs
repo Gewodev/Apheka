@@ -542,6 +542,7 @@ fn main() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_http::init())
         .manage(DownloadState {
             active: Mutex::new(HashMap::new()),
             path: Mutex::new(default_download_path),

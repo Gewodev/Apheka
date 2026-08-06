@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import { useApp, Note, NoteFolder, NoteAttachment, fmtClock } from "../../store/AppContext";
 import { openFileSmart } from '../../lib/openFileSmart';
+import { BRAIN_DROP_MIME, writeBrainAnchor } from '../../lib/brainDrop';
 import { createDownloadTask, updateDownloadTask, completeDownloadTask } from '../ui/DownloadManager';
 import {
   DndContext, closestCenter,
@@ -63,6 +64,81 @@ const SPINE_COLORS = [
   "#EC4899", "#06B6D4", "#84CC16", "#F97316", "#6366F1",
   "#14B8A6", "#D946EF", "#0EA5E9", "#22C55E", "#EAB308",
 ];
+
+const VERSION_MAX = 10;
+
+type NoteVersion = { timestamp: string; preview: string; wordCount: number; content?: string };
+
+/**
+ * Guarda una versión de una nota en localStorage SIN reventar la cuota.
+ * El bug original: `localStorage.setItem("owa_note_versions_" + id, …)` lanzaba
+ * QuotaExceededError y rompía el guardado de la nota entera. Ahora, si la cuota
+ * se excede, se poda progresivamente (se elimina el HTML de las versiones
+ * antiguas y se reduce el número de versiones) hasta que quepa; si ni así, se
+ * descarta el historial de esa nota (la nota en sí nunca se pierde).
+ */
+function saveNoteVersion(noteId: string, content: string): void {
+  try {
+    const plain = content.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\u00A0/g, " ").trim();
+    if (!plain) return;
+    const preview = plain.slice(0, 80);
+
+    let versions: NoteVersion[] = [];
+    try {
+      const parsed = JSON.parse(localStorage.getItem("owa_note_versions_" + noteId) || "[]");
+      if (Array.isArray(parsed)) versions = parsed;
+    } catch {}
+
+    if (versions.length && versions[0]?.preview === preview) return;
+
+    versions.unshift({
+      timestamp: new Date().toISOString(),
+      preview,
+      wordCount: plain.split(/\s+/).filter(Boolean).length,
+      content,
+    });
+    if (versions.length > VERSION_MAX) versions.length = VERSION_MAX;
+
+    const trySet = (arr: NoteVersion[]): boolean => {
+      try {
+        localStorage.setItem("owa_note_versions_" + noteId, JSON.stringify(arr));
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
+    if (trySet(versions)) return;
+
+    // 1) Quitar el HTML de las versiones antiguas (solo se conserva el texto).
+    const slim = versions.map((v, i) => (i === 0 ? v : { timestamp: v.timestamp, preview: v.preview, wordCount: v.wordCount }));
+    if (trySet(slim)) return;
+
+    // 2) Reducir a las 3 más recientes.
+    if (trySet(slim.slice(0, 3))) return;
+
+    // 3) Barrido global: podar el historial de TODAS las notas.
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith("owa_note_versions_")) {
+          try {
+            const arr = JSON.parse(localStorage.getItem(key) || "[]");
+            if (Array.isArray(arr)) {
+              const pruned = arr.slice(0, 3).map((v: NoteVersion, idx: number) =>
+                idx === 0 ? v : { timestamp: v.timestamp, preview: v.preview, wordCount: v.wordCount }
+              );
+              localStorage.setItem(key, JSON.stringify(pruned));
+            }
+          } catch {}
+        }
+      }
+    } catch {}
+    trySet(versions);
+  } catch {
+    // Nunca romper el guardado de la nota por culpa del historial.
+  }
+}
 
 const AVAILABLE_ICONS: { name: string; icon: React.ComponentType<{ size?: number; color?: string; style?: React.CSSProperties }>; label: string }[] = [
   { name: "FileText", icon: FileText, label: "Documento" },
@@ -1317,6 +1393,18 @@ export default function Notas() {
   const [isEditing, setIsEditing] = useState(false);
   const [showDetailsPanel, setShowDetailsPanel] = useState(true);
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "pending">("saved");
+
+  // Consume focused note from Inicio (click "Ver" on a note card) — opens it in the lateral drawer
+  useEffect(() => {
+    const focused = localStorage.getItem('owa_focused_note_id');
+    if (focused) {
+      setSelectedNoteId(focused);
+      setShowDetailsPanel(true);
+      setDrawerTab('contenido');
+      setIsEditing(false);
+      localStorage.removeItem('owa_focused_note_id');
+    }
+  }, []);
   const [slashMenuPos, setSlashMenuPos] = useState<{ x: number; y: number } | null>(null);
   const [slashFilter, setSlashFilter] = useState("");
   const slashMenuRef = useRef<HTMLDivElement>(null);
@@ -1589,13 +1677,7 @@ export default function Notas() {
     const plain = content.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\u00A0/g, " ").trim();
     if (plain !== lastContentRef.current && plain) {
       lastContentRef.current = plain;
-      const preview = plain.slice(0, 80);
-      const versions = JSON.parse(localStorage.getItem("owa_note_versions_" + selectedNote.id) || "[]");
-      if (!versions.length || versions[0].preview !== preview) {
-        versions.unshift({ timestamp: new Date().toISOString(), preview, wordCount: plain.split(/\s+/).filter(Boolean).length, content });
-        if (versions.length > 10) versions.length = 10;
-        localStorage.setItem("owa_note_versions_" + selectedNote.id, JSON.stringify(versions));
-      }
+      saveNoteVersion(selectedNote.id, content);
     }
 
     updateNote(selectedNote.id, { content, title, subtitle: plain.slice(0, 150) });
@@ -2472,7 +2554,9 @@ export default function Notas() {
   const handleDragStart = useCallback((e: React.DragEvent, index: number) => {
     dragIndexRef.current = index;
     e.dataTransfer.effectAllowed = "move";
-  }, []);
+    const note = filteredNotes[index];
+    if (note) e.dataTransfer.setData(BRAIN_DROP_MIME, writeBrainAnchor('note', note.id));
+  }, [filteredNotes]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -2536,16 +2620,7 @@ export default function Notas() {
   // Save a history entry when opening the editor
   useEffect(() => {
     if (!isEditing || !selectedNote) return;
-    const plain = selectedNote.content.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\u00A0/g, " ").trim();
-    if (plain) {
-      const preview = plain.slice(0, 80);
-      const versions = JSON.parse(localStorage.getItem("owa_note_versions_" + selectedNote.id) || "[]");
-      if (!versions.length || versions[0].preview !== preview) {
-        versions.unshift({ timestamp: new Date().toISOString(), preview, wordCount: plain.split(/\s+/).filter(Boolean).length, content: selectedNote.content });
-        if (versions.length > 10) versions.length = 10;
-        localStorage.setItem("owa_note_versions_" + selectedNote.id, JSON.stringify(versions));
-      }
-    }
+    if (selectedNote.content) saveNoteVersion(selectedNote.id, selectedNote.content);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEditing, selectedNote?.id]);
 
@@ -3662,9 +3737,9 @@ export default function Notas() {
                         {/* Drawer Toolbar */}
                         <div style={{
                           display: "flex", alignItems: "center", justifyContent: "space-between",
-                          padding: "12px 16px", borderBottom: "1px solid var(--border-default)",
+                          padding: "12px 16px", borderBottom: "1px solid var(--border-default)", gap: 10,
                         }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
                             <button onClick={() => setSelectedNoteId(null)}
                               style={{
                                 background: "none", border: "none", color: "var(--text-secondary)",
@@ -3674,12 +3749,21 @@ export default function Notas() {
                               <X size={15} />
                             </button>
 
+                            {/* Note name */}
+                            <span style={{
+                              fontSize: 13, fontWeight: 600, color: "var(--text-primary)",
+                              fontFamily: "'Inter Tight', sans-serif", overflow: "hidden",
+                              textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, maxWidth: 260,
+                            }}>
+                              {selectedNote.title || (selectedNote.content || '').slice(0, 60) || 'Nota sin título'}
+                            </span>
+
                             {/* Maximize Toggle button */}
                             <button onClick={() => setIsMaximized(!isMaximized)}
                               style={{
                                 background: "none", border: "1px solid var(--border-default)",
                                 color: "var(--text-secondary)", padding: 6, borderRadius: 6,
-                                display: "flex", cursor: "pointer",
+                                display: "flex", cursor: "pointer", flexShrink: 0,
                               }}
                               className="hover:bg-[var(--bg-hover)]"
                               title={isMaximized ? "Restaurar vista" : "Ampliar vista"}>
@@ -3687,8 +3771,25 @@ export default function Notas() {
                             </button>
                           </div>
 
-                          {/* Top quick actions — icon only */}
-                          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                          {/* Folder chip + quick actions */}
+                          <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0 }}>
+                            {(() => {
+                              const fc = folders.find(f => f.id === selectedNote.folderId);
+                              return (
+                                <span style={{
+                                  display: "inline-flex", alignItems: "center", gap: 5,
+                                  fontSize: 10, fontWeight: 600, padding: "4px 10px", borderRadius: 7,
+                                  background: fc ? fc.color + "12" : "var(--bg-hover)",
+                                  color: fc ? fc.color : "var(--text-tertiary)",
+                                  border: "1px solid " + (fc ? fc.color + "30" : "var(--border-default)"),
+                                  maxWidth: 130, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flexShrink: 0,
+                                }}>
+                                  <FolderIcon size={11} />
+                                  {fc ? fc.name : "Sin carpeta"}
+                                </span>
+                              );
+                            })()}
+
                             <button onClick={() => updateNote(selectedNote.id, { isPinned: !selectedNote.isPinned })}
                               title={selectedNote.isPinned ? "Desfijar" : "Fijar"}
                               style={{
@@ -3696,7 +3797,7 @@ export default function Notas() {
                                 border: "1px solid " + (selectedNote.isPinned ? "#F59E0B" : "var(--border-default)"),
                                 color: selectedNote.isPinned ? "#F59E0B" : "var(--text-secondary)",
                                 width: 30, height: 30, borderRadius: 6, display: "flex", cursor: "pointer",
-                                alignItems: "center", justifyContent: "center",
+                                alignItems: "center", justifyContent: "center", flexShrink: 0,
                               }}>
                               <Star size={12} fill={selectedNote.isPinned ? "#F59E0B" : "none"} />
                             </button>
@@ -3710,7 +3811,7 @@ export default function Notas() {
                                     background: "none", border: "1px solid " + (fc ? fc.color + "30" : "var(--border-default)"),
                                     color: fc ? fc.color : "var(--text-secondary)",
                                     width: 30, height: 30, borderRadius: 6,
-                                    display: "flex", cursor: "pointer", alignItems: "center", justifyContent: "center",
+                                    display: "flex", cursor: "pointer", alignItems: "center", justifyContent: "center", flexShrink: 0,
                                   }}>
                                   <FolderIcon size={12} />
                                 </button>
@@ -3986,7 +4087,11 @@ export default function Notas() {
 
                         {drawerTab === "historial" && (() => {
                           type VersionEntry = { timestamp: string; preview: string; wordCount: number; content?: string };
-                          const versions: VersionEntry[] = JSON.parse(localStorage.getItem("owa_note_versions_" + selectedNote.id) || "[]");
+                          let versions: VersionEntry[] = [];
+                          try {
+                            const parsed = JSON.parse(localStorage.getItem("owa_note_versions_" + selectedNote.id) || "[]");
+                            if (Array.isArray(parsed)) versions = parsed;
+                          } catch {}
                           return (
                             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                               <div style={{ position: "relative", paddingLeft: 22 }}>

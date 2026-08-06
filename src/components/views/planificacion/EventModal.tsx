@@ -63,6 +63,7 @@ export interface PlanEvent {
   color: string;
   description?: string;
   taskId?: string;
+  googleEventId?: string;
   repeat: 'none' | 'daily' | 'weekly' | 'custom_days';
   repeatDays?: number[]; // 0=Mon..6=Sun if custom_days
   repeatUntil?: string; // Limit for repetition

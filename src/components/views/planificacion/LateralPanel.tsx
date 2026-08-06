@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Calendar, Clock, BookOpen, FileText, ExternalLink, Trash2, CheckCircle2, Link as LinkIcon, Repeat, Plus, Star, Video, Music, Image, FileSpreadsheet, File, Globe } from 'lucide-react';
+import { X, Calendar, Clock, BookOpen, FileText, ExternalLink, Trash2, CheckCircle2, Link as LinkIcon, Repeat, Plus, Star, Video, Music, Image, FileSpreadsheet, File, Globe, Play } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { PlanEvent } from './EventModal';
@@ -7,10 +7,13 @@ import { fmtTimeRange, useApp } from '../../../store/AppContext';
 import { openFileSmart } from '../../../lib/openFileSmart';
 import { GoogleClassroomIcon, GoogleDriveIcon, GoogleDocsIcon, GoogleSheetsIcon, GoogleSlidesIcon, GoogleFormsIcon, WordIcon, ExcelIcon, PowerPointIcon } from '../../ui/GoogleIcons';
 
+const REVIEW_LEVEL_COLORS = ['#EF4444', '#F97316', '#F59E0B', '#FBBF24', '#EAB308', '#A3E635', '#84CC16', '#4ADE80', '#22C55E', '#10B981'];
+
 export type SelectedItem = 
   | { type: 'day'; date: Date; events: PlanEvent[]; tasks: any[] }
   | { type: 'event'; event: PlanEvent }
-  | { type: 'task'; task: any };
+  | { type: 'task'; task: any }
+  | { type: 'plansession'; session: any };
 
 interface LateralPanelProps {
   item: SelectedItem | null;
@@ -64,6 +67,7 @@ export default function LateralPanel({ item, onClose, onSelectEvent, onEditEvent
             {item.type === 'day' && 'Agenda del día'}
             {item.type === 'event' && 'Detalle del Evento'}
             {item.type === 'task' && 'Detalle de Tarea'}
+            {item.type === 'plansession' && 'Sesión de estudio'}
           </div>
           <button 
             onClick={onClose} 
@@ -85,6 +89,9 @@ export default function LateralPanel({ item, onClose, onSelectEvent, onEditEvent
           )}
           {item.type === 'task' && (
             <TaskDetails item={item} onViewTask={onViewTask} />
+          )}
+          {item.type === 'plansession' && (
+            <PlanSessionDetails item={item} />
           )}
         </div>
       </div>
@@ -226,7 +233,7 @@ function EventDetails({ item, onEdit, onDelete, timeFormat, tasks, onViewTask }:
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <DetailRow icon={<Calendar size={18} strokeWidth={1.5} />} label="Fecha" value={(()=>{try{return format(new Date(event.date+'T12:00:00'),"EEEE d 'de' MMMM yyyy",{locale:es})}catch{return '—'}})()} />
         <DetailRow icon={<Clock size={18} strokeWidth={1.5} />} label="Hora" value={event.allDay ? 'Todo el día' : fmtTimeRange(event.startTime, event.endTime, timeFormat)} />
-        {event.repeat !== 'none' && <DetailRow icon={<Repeat size={18} strokeWidth={1.5} />} label="Repetición" value={event.repeat === 'daily' ? 'Diaria' : event.repeat === 'weekly' ? 'Semanal' : 'Días específicos'} subValue={event.repeatUntil ? `Hasta el ${(()=>{try{return format(new Date(event.repeatUntil+'T12:00:00'),'d MMM yyyy')}catch{return '—'}})()}` : undefined} />}
+        {event.repeat !== 'none' && <DetailRow icon={<Repeat size={18} strokeWidth={1.5} />} label="Repetición" value={event.repeat === 'daily' ? 'Diaria' : event.repeat === 'weekly' ? 'Semanal' : 'Días específicos'} subValue={event.repeatUntil ? `Hasta el ${(()=>{try{return format(new Date(event.repeatUntil+'T12:00:00'),'dd/MM/yyyy')}catch{return '—'}})()}` : undefined} />}
       </div>
 
       {event.description && (
@@ -447,6 +454,116 @@ function DetailRow({ icon, label, value, subValue }: { icon: React.ReactNode, la
         <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>{label}</div>
         <div style={{ fontSize: 15, color: 'var(--text-primary)', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</div>
         {subValue && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{subValue}</div>}
+      </div>
+    </div>
+  );
+}
+
+function PlanSessionDetails({ item }: { item: Extract<SelectedItem, {type: 'plansession'}> }) {
+  const { session } = item;
+  const { settings, courses, linkPlannedSessionToTimer, setNavigateTo, navigateToCourse, activeTaskId, addNotification } = useApp();
+  const tf = settings?.timeFormat;
+  const course = courses.find(c => c.id === session.courseId);
+  const col = course?.color || '#8B5CF6';
+  const intensity = Math.max(0, Math.min(10, session.intensity || 0));
+  const durationMin = session.durationMinutes || 30;
+  const startFrac = session.startTime ? (() => {
+    const [h, m] = (session.startTime as string).split(':').map(Number);
+    return h + m / 60;
+  })() : null;
+
+  const fmtEnd = () => {
+    if (startFrac == null) return `${durationMin} min · horario flexible`;
+    const minsTotal = Math.round(startFrac * 60 + durationMin);
+    const eh = Math.floor(minsTotal / 60) % 24;
+    const em = minsTotal % 60;
+    return `${fmtTimeRange(session.startTime, `${String(eh).padStart(2, '0')}:${String(em).padStart(2, '0')}`, tf)} · ${durationMin} min`;
+  };
+
+  const start = () => {
+    if (activeTaskId) {
+      addNotification('Hay una tarea vinculada al temporizador. Desvincula esa tarea para iniciar esta sesión.', 'info');
+      return;
+    }
+    linkPlannedSessionToTimer(session.id);
+    setNavigateTo('estudio');
+  };
+
+  const TYPE_LABEL: Record<string, string> = { estudio: 'Estudio', repaso: 'Repaso', ejercicio: 'Ejercicio', lectura: 'Lectura', otro: 'Otro' };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 40, height: '100%' }}>
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+          <div style={{ width: 10, height: 10, borderRadius: '50%', background: col, boxShadow: `0 0 16px ${col}80` }} />
+          <span style={{ fontSize: 11, fontWeight: 700, color: col, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{course?.name || 'Curso'}</span>
+          <span style={{ fontSize: 9, fontWeight: 600, color: col, background: `${col}12`, border: `1px solid ${col}30`, borderRadius: 6, padding: '3px 8px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            {TYPE_LABEL[session.type] || session.type}
+          </span>
+        </div>
+        <h2 style={{ fontSize: 32, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Outfit',sans-serif", lineHeight: 1.1, letterSpacing: '-0.02em', wordBreak: 'break-word' }}>
+          {session.title || 'Sesión de estudio'}
+        </h2>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <DetailRow icon={<Calendar size={18} strokeWidth={1.5} />} label="Fecha" value={(()=>{try{return format(new Date(session.date+'T12:00:00'),"EEEE d 'de' MMMM yyyy",{locale:es})}catch{return '—'}})()} />
+        <DetailRow icon={<Clock size={18} strokeWidth={1.5} />} label="Hora" value={fmtEnd()} />
+      </div>
+
+      <div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+          Intensidad programada
+        </div>
+        <div style={{ display: 'flex', gap: 3, padding: '10px 12px', background: 'var(--surface-elevated)', border: '1px solid var(--border-soft)', borderRadius: 12 }}>
+          {REVIEW_LEVEL_COLORS.map((c, i) => (
+            <div key={i} style={{
+              flex: 1, height: 24, borderRadius: 4,
+              background: i < intensity ? c : 'var(--bg-deep)',
+              opacity: i < intensity ? 1 : 0.5,
+              boxShadow: i < intensity ? `0 0 10px ${c}66` : 'none',
+            }} />
+          ))}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 8.5, color: 'var(--text-muted)', marginTop: 6, fontFamily: "'Inter Tight',sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>
+          <span>Bajo</span><span>{intensity}/10</span><span>Alto</span>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 'auto' }}>
+        <button
+          onClick={start}
+          title={activeTaskId ? 'Hay una tarea vinculada al temporizador' : 'Vincular al temporizador y abrir Estudio'}
+          style={{
+            width: '100%', padding: '14px 20px', borderRadius: 14, fontSize: 15, fontWeight: 700, fontFamily: "'Outfit',sans-serif",
+            border: 'none', cursor: activeTaskId ? 'not-allowed' : 'pointer',
+            background: activeTaskId ? 'var(--surface-elevated)' : `linear-gradient(135deg, ${col}, ${col}b8)`,
+            color: activeTaskId ? 'var(--text-muted)' : '#fff',
+            boxShadow: activeTaskId ? 'none' : `0 4px 18px ${col}38`,
+            opacity: activeTaskId ? 0.6 : 1,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            transition: 'all 200ms',
+          }}
+          onMouseEnter={e => { if (!activeTaskId) { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = `0 6px 22px ${col}55`; } }}
+          onMouseLeave={e => { if (!activeTaskId) { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = `0 4px 18px ${col}38`; } }}
+        >
+          <Play size={15} fill="currentColor" />
+          {activeTaskId ? 'Tarea vinculada activa' : 'Empezar sesión'}
+        </button>
+        {(session.groupId || session.topicId) && course && (
+          <button
+            onClick={() => navigateToCourse(session.courseId, session.groupId || undefined, session.topicId || undefined)}
+            style={{
+              width: '100%', padding: '12px 20px', borderRadius: 14, fontSize: 14, fontWeight: 600,
+              border: `1px solid ${col}35`, background: `${col}0a`, color: col, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, transition: 'all 200ms',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = `${col}16`; e.currentTarget.style.borderColor = `${col}55`; }}
+            onMouseLeave={e => { e.currentTarget.style.background = `${col}0a`; e.currentTarget.style.borderColor = `${col}35`; }}
+          >
+            Ir al tema o agrupación <ExternalLink size={14} />
+          </button>
+        )}
       </div>
     </div>
   );

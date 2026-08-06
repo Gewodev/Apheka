@@ -9,9 +9,11 @@ import {
   Wifi, WifiOff, Image, Coffee, X, Trash2, Save,
   Monitor, Activity, Sparkles, LogOut, Eye, EyeOff, CalendarDays, Clock, ChevronDown,
   FolderOpen, Boxes, AppWindow, HardDrive, Copy, Check, RefreshCcw,
-  CheckSquare, GraduationCap, FileText, ClipboardList, MonitorPlay, ExternalLink, Loader2, CalendarPlus, ListTodo
+  CheckSquare, GraduationCap, FileText, ExternalLink, Loader2, CalendarPlus, ListTodo, Keyboard
 } from 'lucide-react';
+import { GoogleCalendarIcon, GoogleTasksIcon, GoogleClassroomIcon, GoogleDriveIcon, GoogleDocsIcon, GoogleSheetsIcon } from '../ui/GoogleIcons';
 import { useApp, fmtClock } from '../../store/AppContext';
+import CharvisProviders from '../ui/CharvisProviders';
 import { del } from 'idb-keyval';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -25,9 +27,6 @@ import {
   signIn, signOut, isSignedIn, onAuthChange, configureGoogle, restoreSession,
 } from '../../lib/google/index';
 import { isTauri } from '../../lib/tauri';
-import {
-  supabase, signInWithGoogle as supabaseSignIn, signOutSupabase, getCurrentUser, syncAllToSupabase,
-} from '../../lib/supabase';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 const GOOGLE_CLIENT_SECRET = import.meta.env.VITE_GOOGLE_CLIENT_SECRET || '';
@@ -78,15 +77,37 @@ const THEME_PRESETS = [
 
 const ACCENT_COLORS = ['#E11D48', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#06B6D4', '#EC4899', '#F97316', '#84CC16', '#D946EF', '#14B8A6', '#6366F1'];
 
-const GOOGLE_SERVICES: { id: string; name: string; desc: string; icon: typeof Calendar; color: string }[] = [
-  { id: 'calendar', name: 'Calendar', desc: 'Eventos bidireccionales con tu agenda de Google', icon: Calendar, color: '#1A73E8' },
-  { id: 'tasks', name: 'Tasks', desc: 'Tareas bidireccionales con tu lista de Google', icon: ListTodo, color: '#34A853' },
-  { id: 'classroom', name: 'Classroom', desc: 'Importa cursos y entregas pendientes', icon: GraduationCap, color: '#F9AB00' },
-  { id: 'drive', name: 'Drive', desc: 'Crea un respaldo de tus datos en la nube', icon: HardDrive, color: '#EA4335' },
-  { id: 'docs', name: 'Docs y Sheets', desc: 'Exporta tus notas y estadísticas', icon: FileText, color: '#4285F4' },
-  { id: 'forms', name: 'Forms', desc: 'Genera quizzes de repaso automáticos', icon: ClipboardList, color: '#9334E6' },
-  { id: 'youtube', name: 'YouTube', desc: 'Música y videos para tu sesión de estudio', icon: MonitorPlay, color: '#FF0000' },
-  { id: 'profile', name: 'Perfil', desc: 'Sincroniza foto, nombre y datos de la cuenta', icon: User, color: '#5F6368' },
+const CHARVIS_COLORS = [
+  { name: 'Esmeralda', value: '#34d399' },
+  { name: 'Verde LED', value: '#22c55e' },
+  { name: 'Cian', value: '#22d3ee' },
+  { name: 'Azul', value: '#3b82f6' },
+  { name: 'Violeta', value: '#a78bfa' },
+  { name: 'Rosa', value: '#f472b6' },
+  { name: 'Ámbar', value: '#f59e0b' },
+  { name: 'Rojo', value: '#ef4444' },
+];
+
+const DocsSheetsIcon = ({ size = 17 }: { size?: number }) => (
+  <span style={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+    <GoogleDocsIcon size={size} />
+    <GoogleSheetsIcon size={size} />
+  </span>
+);
+
+const GoogleProfileIcon = ({ size = 15, color = '#5F6368' }: { size?: number; color?: string }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} fill={color} style={{ flexShrink: 0, display: 'block' }}>
+    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+  </svg>
+);
+
+const GOOGLE_SERVICES: { id: string; name: string; desc: string; icon: React.ComponentType<{ size?: number; color?: string }>; color: string }[] = [
+  { id: 'calendar', name: 'Calendar', desc: 'Eventos bidireccionales con tu agenda de Google', icon: GoogleCalendarIcon, color: '#1A73E8' },
+  { id: 'tasks', name: 'Tasks', desc: 'Tareas bidireccionales con tu lista de Google', icon: GoogleTasksIcon, color: '#34A853' },
+  { id: 'classroom', name: 'Classroom', desc: 'Importa cursos y entregas pendientes', icon: GoogleClassroomIcon, color: '#0F9D58' },
+  { id: 'drive', name: 'Drive', desc: 'Crea un respaldo de tus datos en la nube', icon: GoogleDriveIcon, color: '#EA4335' },
+  { id: 'docs', name: 'Docs y Sheets', desc: 'Exporta tus notas y estadísticas', icon: DocsSheetsIcon, color: '#4285F4' },
+  { id: 'profile', name: 'Perfil', desc: 'Sincroniza foto, nombre y datos de la cuenta', icon: GoogleProfileIcon, color: '#5F6368' },
 ];
 
 function Toggle({ checked, onChange, label, desc }: { checked: boolean; onChange: (v: boolean) => void; label: string; desc: string }) {
@@ -210,7 +231,7 @@ function CopyButton({ text, size }: { text: string; size?: number }) {
 export default function Ajustes() {
   const {
     settings, updateSettings, googleConnected, setGoogleConnected,
-    setCalendarSyncEnabled, lastCalendarSync, setLastCalendarSync,
+    setCalendarSyncEnabled, lastCalendarSync, setLastCalendarSync, calendarSyncEnabled,
     triggerCalendarSync, importGoogleEvents, syncCalendarTwoWay, syncTasksTwoWay,
     triggerTasksSync, importGoogleTasks, loadGoogleProfile,
     importClassroomCourses, importClassroomAssignments,
@@ -229,24 +250,48 @@ export default function Ajustes() {
 
 
   const [googleProfile, setGoogleProfile] = useState<{ displayName: string; givenName: string; photoUrl: string; email: string } | null>(null);
-  const [supabaseConnected, setSupabaseConnected] = useState(false);
-  const [supabaseUser, setSupabaseUser] = useState<{ email?: string } | null>(null);
-  const [supabaseSyncing, setSupabaseSyncing] = useState(false);
   const [showGoogleModal, setShowGoogleModal] = useState(false);
   const [googleBusy, setGoogleBusy] = useState<string | null>(null);
   const [lastTasksSync, setLastTasksSync] = useState<string | null>(null);
   const [serviceResults, setServiceResults] = useState<Record<string, string>>({});
   const [showClearAllMusic, setShowClearAllMusic] = useState(false);
-  const [authEmail, setAuthEmail] = useState('');
-  const [authPassword, setAuthPassword] = useState('');
-  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
-  const [authLoading, setAuthLoading] = useState(false);
   const [showDrawModal, setShowDrawModal] = useState(false);
   const [clearAllMusicText, setClearAllMusicText] = useState('');
   const [appInfo, setAppInfo] = useState<{ name: string; version: string; tauriVersion: string } | null>(null);
   const [appDirs, setAppDirs] = useState<{ label: string; path: string; root?: boolean }[]>([]);
   const bgInputRef = useRef<HTMLInputElement>(null);
   const profilePhotoInputRef = useRef<HTMLInputElement>(null);
+
+  // ─── Charvis configuration state ───
+  const [capturingShortcut, setCapturingShortcut] = useState(false);
+
+  useEffect(() => {
+    if (!capturingShortcut) return;
+    document.body.dataset.capturingShortcut = '1';
+    const handler = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const mods: string[] = [];
+      if (e.altKey) mods.push('Alt');
+      if (e.ctrlKey) mods.push('Ctrl');
+      if (e.shiftKey) mods.push('Shift');
+      if (e.metaKey) mods.push('Meta');
+      if (['Alt', 'Control', 'Shift', 'Meta'].includes(e.key)) return;
+      const combo = [...mods, e.code].join('+');
+      if (!mods.length) {
+        addNotification('Añade al menos un modificador (Alt, Ctrl, Shift o Meta)', 'error');
+        return;
+      }
+      updateSettings({ owaBrainShortcut: combo });
+      setCapturingShortcut(false);
+      addNotification(`Atajo actualizado: ${combo.replace('Key', ' ').replace('+', ' + ')}`, 'success');
+    };
+    window.addEventListener('keydown', handler, true);
+    return () => {
+      delete document.body.dataset.capturingShortcut;
+      window.removeEventListener('keydown', handler, true);
+    };
+  }, [capturingShortcut, updateSettings, addNotification]);
 
   const handleProfilePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -448,13 +493,6 @@ export default function Ajustes() {
       localStorage.removeItem('owa_auth_error');
       addNotification(`Error de Autenticación: ${error}`, 'error');
     }
-    const sbSuccess = localStorage.getItem('owa_supabase_auth_success');
-    if (sbSuccess === 'true') {
-      localStorage.removeItem('owa_supabase_auth_success');
-      setSupabaseConnected(true);
-      addNotification('Supabase conectado exitosamente', 'success');
-    }
-    getCurrentUser().then(user => { setSupabaseConnected(!!user); if (user) setSupabaseUser(user as any); });
   }, [loadGoogleProfile, setGoogleConnected, updateSettings]);
 
   const handleGoogleSignIn = async () => {
@@ -475,94 +513,10 @@ export default function Ajustes() {
     }
   };
 
-  const handleSupabaseSignIn = async () => {
-    if (isTauri()) {
-      supabaseSignIn();
-      return;
-    }
-    try {
-      await supabaseSignIn();
-      setSupabaseConnected(true);
-      addNotification('Supabase conectado exitosamente', 'success');
-    } catch {
-      addNotification('No se pudo conectar con Supabase', 'error');
-    }
-  };
-
-  const handleEmailSignIn = async () => {
-    if (!authEmail || !authPassword) { addNotification('Completa email y contraseña', 'error'); return; }
-    setAuthLoading(true);
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email: authEmail, password: authPassword });
-      if (error) throw error;
-      setSupabaseConnected(true);
-      setSupabaseUser({ email: data.user?.email || undefined });
-      addNotification('Inicio de sesión exitoso', 'success');
-    } catch (e: any) {
-      addNotification(e?.message || 'Error al iniciar sesión', 'error');
-    }
-    setAuthLoading(false);
-  };
-
-  const handleEmailRegister = async () => {
-    if (!authEmail || !authPassword) { addNotification('Completa email y contraseña', 'error'); return; }
-    if (authPassword.length < 6) { addNotification('La contraseña debe tener al menos 6 caracteres', 'error'); return; }
-    setAuthLoading(true);
-    try {
-      const { data, error } = await supabase.auth.signUp({ email: authEmail, password: authPassword });
-      if (error) throw error;
-      if (data.user?.identities?.length === 0) {
-        addNotification('Este email ya está registrado. Inicia sesión.', 'info');
-      } else {
-        addNotification('Registro exitoso. Revisa tu email para confirmar.', 'success');
-        setSupabaseConnected(true);
-        setSupabaseUser({ email: data.user?.email || undefined });
-      }
-    } catch (e: any) {
-      addNotification(e?.message || 'Error al registrarse', 'error');
-    }
-    setAuthLoading(false);
-  };
-
-  const handleSupabaseSignOut = async () => {
-    await signOutSupabase();
-    setSupabaseConnected(false);
-    setSupabaseUser(null);
-    addNotification('Sesión cerrada exitosamente', 'success');
-  };
-
-  const handleSupabaseSync = async () => {
-    setSupabaseSyncing(true);
-    try {
-      await syncAllToSupabase({
-        tasks: tasks.map(t => ({ ...t, user_id: '' }) as unknown as Record<string, unknown>),
-        notes: notes.map(n => ({ ...n, user_id: '' }) as unknown as Record<string, unknown>),
-        events: events.map(e => ({ ...e, user_id: '' }) as unknown as Record<string, unknown>),
-        studySessions: [],
-      });
-      addNotification('Datos sincronizados con la nube exitosamente', 'success');
-    } catch { addNotification('Error al sincronizar con Supabase', 'error'); }
-    setSupabaseSyncing(false);
-  };
-
   const handleGoogleSignOut = () => {
     signOut(); setGoogleConnected(false); setCalendarSyncEnabled(false); setLastCalendarSync(null);
     setGoogleProfile(null);
     addNotification('Google desconectado exitosamente', 'success');
-  };
-
-  const handleSignOutAll = async () => {
-    try {
-      await signOutSupabase();
-      setSupabaseConnected(false);
-      setSupabaseUser(null);
-      signOut();
-      setGoogleConnected(false);
-      setCalendarSyncEnabled(false);
-      setLastCalendarSync(null);
-      setGoogleProfile(null);
-      addNotification('Sesión cerrada exitosamente', 'success');
-    } catch { addNotification('Error al cerrar sesión', 'error'); }
   };
 
   const handleCalendarSync = async () => {
@@ -579,6 +533,22 @@ export default function Ajustes() {
       openUrl(url).catch(() => window.open(url, '_blank'));
     } else {
       window.open(url, '_blank');
+    }
+  };
+
+  const syncAllGoogle = async () => {
+    if (googleBusy) return;
+    setGoogleBusy('all');
+    try {
+      const rc = await syncCalendarTwoWay();
+      const rt = await syncTasksTwoWay();
+      setLastTasksSync(new Date().toISOString());
+      if (rc.errors > 0 || rt.errors > 0) addNotification('Sync completado con algunos errores', 'error');
+      else addNotification(`Sync completo: Calendar ${rc.pushed} enviados, Tasks ${rt.pushed} enviadas`, 'success');
+    } catch {
+      addNotification('Error al sincronizar con Google', 'error');
+    } finally {
+      setGoogleBusy(null);
     }
   };
 
@@ -615,14 +585,6 @@ export default function Ajustes() {
         case 'docs': {
           const url = await exportNotesToGoogleDoc();
           openGoogleUrl(url);
-          break;
-        }
-        case 'forms': {
-          addNotification('Genera quizzes desde un curso en Estudio', 'info');
-          break;
-        }
-        case 'youtube': {
-          addNotification('Busca música y videos desde la sección Música', 'info');
           break;
         }
         case 'profile': {
@@ -795,18 +757,16 @@ export default function Ajustes() {
 
                 {/* Avatar + Nombre + Foto */}
                 <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 24 }}>
-                  <div style={{ position: 'relative', flexShrink: 0 }}>
+                  <div style={{ flexShrink: 0 }}>
                     {settings.profilePhoto ? (
-                      <img src={settings.profilePhoto} alt="" style={{ width: 84, height: 84, borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--accent)', boxShadow: '0 0 0 4px color-mix(in srgb, var(--accent) 15%, transparent), 0 8px 24px rgba(0,0,0,0.25)' }} />
+                      <div style={{ width: 108, height: 108, borderRadius: '50%', overflow: 'hidden', border: '2px solid var(--accent)', boxShadow: '0 0 0 4px color-mix(in srgb, var(--accent) 15%, transparent), 0 8px 24px rgba(0,0,0,0.25)', background: 'var(--bg-deep)' }}>
+                        <img src={settings.profilePhoto} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }} />
+                      </div>
                     ) : (
-                      <div style={{ width: 84, height: 84, borderRadius: '50%', background: 'var(--accent-dim)', border: '2px solid var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32, fontWeight: 300, color: 'var(--accent)', fontFamily: "'Inter Tight', sans-serif" }}>
+                      <div style={{ width: 108, height: 108, borderRadius: '50%', background: 'var(--accent-dim)', border: '2px solid var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 40, fontWeight: 300, color: 'var(--accent)', fontFamily: "'Inter Tight', sans-serif" }}>
                         {settings.userName ? settings.userName.charAt(0).toUpperCase() : 'O'}
                       </div>
                     )}
-                    <button onClick={() => profilePhotoInputRef.current?.click()} title="Cambiar foto de perfil"
-                      style={{ position: 'absolute', bottom: 0, right: 0, width: 28, height: 28, borderRadius: '50%', background: 'var(--accent)', border: '2px solid var(--bg-elevated)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.35)' }}>
-                      <Image size={13} />
-                    </button>
                     <input ref={profilePhotoInputRef} type="file" accept="image/*" onChange={handleProfilePhotoUpload} style={{ display: 'none' }} />
                   </div>
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -841,7 +801,9 @@ export default function Ajustes() {
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                         {googleConnected && googleProfile?.photoUrl ? (
-                          <img src={googleProfile.photoUrl} alt="" style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border-subtle)' }} />
+                          <div style={{ width: 22, height: 22, borderRadius: '50%', overflow: 'hidden', border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', flexShrink: 0 }}>
+                            <img src={googleProfile.photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }} />
+                          </div>
                         ) : (
                           <svg viewBox="0 0 24 24" style={{ width: 20, height: 20 }}>
                             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/>
@@ -860,60 +822,11 @@ export default function Ajustes() {
                         {googleConnected ? 'Desconectar' : 'Conectar'}
                       </button>
                     </div>
-                    {/* Supabase */}
-                    {supabaseConnected ? (
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                          <Database size={18} style={{ color: '#3DCF8E' }} />
-                          <div>
-                            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Supabase Cloud</span>
-                            <span style={{ fontSize: 10, color: supabaseConnected ? '#10B981' : 'var(--text-tertiary)', display: 'block', marginTop: 1 }}>
-                              {supabaseConnected ? `Usuario: ${supabaseUser?.email || 'Conectado'}` : 'Sincronización en la nube'}
-                            </span>
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span style={{ fontSize: 10, fontWeight: 600, color: supabaseConnected ? '#10B981' : 'var(--text-muted)' }}>{supabaseConnected ? 'Activo' : 'Inactivo'}</span>
-                          <div style={{ width: 8, height: 8, borderRadius: '50%', background: supabaseConnected ? '#10B981' : 'var(--text-muted)', boxShadow: supabaseConnected ? '0 0 8px rgba(16,185,129,0.5)' : 'none' }} />
-                        </div>
-                      </div>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '12px 14px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                          <Database size={16} style={{ color: '#3DCF8E' }} />
-                          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{authMode === 'login' ? 'Iniciar sesión' : 'Crear cuenta'}</span>
-                        </div>
-                        <input type="email" value={authEmail} onChange={e => setAuthEmail(e.target.value)} placeholder="Email" className="input-base" style={{ width: '100%', height: 36, fontSize: 12, padding: '0 10px' }} />
-                        <input type="password" value={authPassword} onChange={e => setAuthPassword(e.target.value)} placeholder="Contraseña" className="input-base" style={{ width: '100%', height: 36, fontSize: 12, padding: '0 10px' }} onKeyDown={e => { if (e.key === 'Enter') authMode === 'login' ? handleEmailSignIn() : handleEmailRegister(); }} />
-                        <div style={{ display: 'flex', gap: 8 }}>
-                          <button onClick={authMode === 'login' ? handleEmailSignIn : handleEmailRegister} disabled={authLoading} style={{ flex: 1, height: 34, borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: 'none', background: '#3DCF8E', color: '#fff', opacity: authLoading ? 0.6 : 1, transition: 'all 150ms' }}>
-                            {authLoading ? '...' : authMode === 'login' ? 'Entrar' : 'Registrarse'}
-                          </button>
-                          <button onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setAuthEmail(''); setAuthPassword(''); }} style={{ fontSize: 10, color: 'var(--text-tertiary)', cursor: 'pointer', background: 'none', border: 'none', padding: '0 8px', textDecoration: 'underline', textUnderlineOffset: 2 }}>
-                            {authMode === 'login' ? 'Registrarse' : 'Volver'}
-                          </button>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <div style={{ flex: 1, height: 1, background: 'var(--border-subtle)' }} />
-                          <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>o</span>
-                          <div style={{ flex: 1, height: 1, background: 'var(--border-subtle)' }} />
-                        </div>
-                        <button onClick={() => { setShowGoogleModal(true); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, height: 34, borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: 'none', background: '#4285F4', color: '#fff', transition: 'all 150ms' }}>
-                          <svg viewBox="0 0 24 24" style={{ width: 14, height: 14 }}>
-                            <path fill="#fff" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/>
-                            <path fill="#fff" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                            <path fill="#fff" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                            <path fill="#fff" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                          </svg>
-                          Google
-                        </button>
-                      </div>
-                    )}
                   </div>
-                  {(googleConnected || supabaseConnected) && (
+                  {googleConnected && (
                     <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border-subtle)' }}>
-                      <button onClick={handleSignOutAll} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 16px', borderRadius: 8, fontSize: 11.5, fontWeight: 600, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.22)', color: '#EF4444', cursor: 'pointer', transition: 'all 200ms', width: 'fit-content' }}>
-                        <LogOut size={14} /> Cerrar sesión de todas las cuentas
+                      <button onClick={() => { signOut(); setGoogleConnected(false); setCalendarSyncEnabled(false); setLastCalendarSync(null); setGoogleProfile(null); addNotification('Google desconectado exitosamente', 'success'); }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 16px', borderRadius: 8, fontSize: 11.5, fontWeight: 600, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.22)', color: '#EF4444', cursor: 'pointer', transition: 'all 200ms', width: 'fit-content' }}>
+                        <LogOut size={14} /> Cerrar sesión de Google
                       </button>
                     </div>
                   )}
@@ -927,17 +840,25 @@ export default function Ajustes() {
                         <h3 style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em', marginBottom: 4 }}>Servicios de Google</h3>
                         <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Cada servicio explica cómo se usa dentro de OWA</span>
                       </div>
-                      <button onClick={() => { runGoogleService('calendar'); setTimeout(() => runGoogleService('tasks'), 800); }}
+                      <button onClick={syncAllGoogle}
                         disabled={!!googleBusy}
                         style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 14px', borderRadius: 8, fontSize: 11.5, fontWeight: 600, cursor: 'pointer', background: 'color-mix(in srgb, var(--accent) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 28%, transparent)', color: 'var(--accent)', opacity: googleBusy ? 0.6 : 1, transition: 'all 150ms' }}>
                         <RefreshCcw size={13} className={googleBusy ? 'spin' : ''} /> Sincronizar todo
                       </button>
                     </div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '12px 14px', borderRadius: 10, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', marginBottom: 12, cursor: 'pointer' }} onClick={() => { setCalendarSyncEnabled(!calendarSyncEnabled); if (!calendarSyncEnabled) addNotification('Sincronización automática activada', 'success'); }}>
+                      <div>
+                        <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)', display: 'block' }}>Sincronización automática</span>
+                        <span style={{ fontSize: 10.5, color: 'var(--text-muted)', display: 'block', marginTop: 2, lineHeight: 1.4 }}>Calendar y Tasks se sincronizan al iniciar la app y cada 15 minutos</span>
+                      </div>
+                      <div style={{ position: 'relative', width: 40, height: 22, borderRadius: 11, background: calendarSyncEnabled ? 'var(--accent)' : 'var(--bg-deep)', border: '1px solid var(--border-default)', transition: 'all 200ms', flexShrink: 0, display: 'flex', alignItems: 'center', padding: 2 }}>
+                        <div style={{ width: 16, height: 16, borderRadius: '50%', background: '#fff', transform: calendarSyncEnabled ? 'translateX(18px)' : 'translateX(0)', transition: 'all 200ms', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }} />
+                      </div>
+                    </div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(235px, 1fr))', gap: 10 }}>
                       {GOOGLE_SERVICES.map(s => {
                         const Icon = s.icon;
                         const busy = googleBusy === s.id;
-                        const ok = s.id === 'calendar' ? lastCalendarSync : s.id === 'tasks' ? lastTasksSync : serviceResults[s.id];
                         const okLabel = s.id === 'calendar' ? (lastCalendarSync ? `Última: ${new Date(lastCalendarSync).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}` : null)
                           : s.id === 'tasks' ? (lastTasksSync ? `Última: ${new Date(lastTasksSync).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}` : null)
                           : serviceResults[s.id];
@@ -945,7 +866,7 @@ export default function Ajustes() {
                           <div key={s.id} style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '14px', borderRadius: 10, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', transition: 'border-color 150ms' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                               <span style={{ width: 30, height: 30, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `color-mix(in srgb, ${s.color} 14%, transparent)`, border: `1px solid color-mix(in srgb, ${s.color} 30%, transparent)`, color: s.color, flexShrink: 0 }}>
-                                <Icon size={14} />
+                                <Icon size={15} color={s.color} />
                               </span>
                               <div style={{ minWidth: 0 }}>
                                 <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)', display: 'block' }}>{s.name}</span>
@@ -956,7 +877,7 @@ export default function Ajustes() {
                             <button onClick={() => runGoogleService(s.id)} disabled={!!googleBusy}
                               style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, height: 28, borderRadius: 7, fontSize: 10.5, fontWeight: 600, cursor: 'pointer', background: `color-mix(in srgb, ${s.color} 8%, transparent)`, border: `1px solid color-mix(in srgb, ${s.color} 26%, transparent)`, color: s.color, opacity: googleBusy ? 0.6 : 1, transition: 'all 150ms' }}>
                               {busy ? <Loader2 size={12} className="spin" /> : s.id === 'drive' || s.id === 'docs' ? <ExternalLink size={12} /> : <RefreshCcw size={12} />}
-                              {busy ? 'Trabajando…' : s.id === 'calendar' ? 'Sincronizar ahora' : s.id === 'tasks' ? 'Sincronizar ahora' : s.id === 'classroom' ? 'Importar cursos' : s.id === 'drive' ? 'Crear respaldo' : s.id === 'docs' ? 'Exportar notas' : s.id === 'forms' ? 'Ver cómo' : s.id === 'youtube' ? 'Explorar' : 'Actualizar perfil'}
+                              {busy ? 'Trabajando…' : s.id === 'calendar' ? 'Sincronizar ahora' : s.id === 'tasks' ? 'Sincronizar ahora' : s.id === 'classroom' ? 'Importar cursos' : s.id === 'drive' ? 'Crear respaldo' : s.id === 'docs' ? 'Exportar notas' : 'Actualizar perfil'}
                             </button>
                           </div>
                         );
@@ -2169,6 +2090,60 @@ export default function Ajustes() {
                   </div>
                 </div>
 
+                {/* Charvis */}
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
+                  <CardHeader icon={<Brain size={14} />} title="Charvis" desc="Asistente de IA que controla tu aplicación" />
+
+                  {/* Motor siempre activo + atajo */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, padding: '13px 15px', borderRadius: 11, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
+                      <span style={{ position: 'relative', width: 13, height: 13, flexShrink: 0, display: 'inline-block' }}>
+                        <span style={{ position: 'absolute', inset: 1, borderRadius: '50%', background: '#10B981', boxShadow: '0 0 10px #10B981, 0 0 4px #10B981 inset' }} />
+                      </span>
+                      <div style={{ minWidth: 0 }}>
+                        <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)', display: 'block' }}>Motor de IA activo</span>
+                        <span style={{ fontSize: 10.5, color: 'var(--text-muted)', display: 'block', marginTop: 2, lineHeight: 1.4 }}>Chat lateral con herramientas que controlan toda la app</span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => { setCapturingShortcut(true); addNotification('Pulsa la nueva combinación de teclas…', 'info'); }}
+                      title="Cambiar atajo de teclado"
+                      style={{
+                        height: 34, borderRadius: 9, cursor: 'pointer', padding: '0 12px',
+                        background: capturingShortcut ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'var(--bg-deep)',
+                        border: `1px solid ${capturingShortcut ? 'var(--accent)' : 'var(--border-default)'}`,
+                        color: capturingShortcut ? 'var(--accent)' : 'var(--text-secondary)',
+                        fontSize: 11.5, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace",
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                        transition: 'all 150ms', flexShrink: 0,
+                      }}
+                    >
+                      {capturingShortcut ? <><Keyboard size={13} /> Pulsa la combinación…</> : <><Keyboard size={13} /> {(settings.owaBrainShortcut || 'Alt+KeyQ').replace(/Key/g, '').split('+').join(' + ')}</>}
+                    </button>
+                  </div>
+                  <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 8, lineHeight: 1.5 }}>El motor siempre está habilitado. Ábrelo con el atajo o pasando el ratón por el borde derecho.</p>
+
+                  {/* Proveedores de IA */}
+                  <CharvisProviders />
+
+                  {/* Charvis color */}
+                  <div style={{ marginTop: 18 }}>
+                    <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 8 }}>Color de Charvis</span>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(34px, 1fr))', gap: 8, marginBottom: 8 }}>
+                      {CHARVIS_COLORS.map(c => {
+                        const active = (settings.owaBrainColor || '#34d399').toLowerCase() === c.value;
+                        return (
+                          <button key={c.value} title={c.name} onClick={() => updateSettings({ owaBrainColor: c.value } as any)}
+                            style={{ height: 30, borderRadius: 9, background: c.value, border: active ? '2px solid #fff' : '1px solid var(--border-default)', cursor: 'pointer', position: 'relative', boxShadow: active ? `0 0 0 2px ${c.value}55, 0 0 14px ${c.value}66` : 'none', transition: 'all 150ms' }}>
+                            {active && <Check size={14} style={{ color: '#0b0b0f', position: 'absolute', inset: 0, margin: 'auto' }} />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.5 }}>Color unicolor del acento de Charvis (LED, burbujas y glow). El efecto arcoíris solo se activa en modo profundo.</p>
+                  </div>
+                </div>
+
                 {/* App folders */}
                 <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
                   <CardHeader icon={<FolderOpen size={14} />} title="Rutas de la aplicación" desc="Dónde guarda OWA sus datos" />
@@ -2296,7 +2271,9 @@ export default function Ajustes() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', borderRadius: 10, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
                   {googleProfile.photoUrl ? (
-                    <img src={googleProfile.photoUrl} alt="" style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover' }} />
+                    <div style={{ width: 44, height: 44, borderRadius: '50%', overflow: 'hidden', background: 'var(--bg-deep)', flexShrink: 0 }}>
+                      <img src={googleProfile.photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }} />
+                    </div>
                   ) : (
                     <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'var(--accent-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 700, color: 'var(--accent)' }}>{googleProfile.givenName?.[0]}</div>
                   )}

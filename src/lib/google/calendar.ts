@@ -49,7 +49,7 @@ export interface CalendarSyncResult {
   errors: number;
   newMappings: { appEventId: string; googleEventId: string }[];
   imported: { title: string; description: string; date: string; startTime: string; endTime: string; color: string; googleEventId: string; allDay: boolean }[];
-  updates: { id: string; changes: { title: string; description: string; date: string; startTime: string; endTime: string; color: string; allDay: boolean } }[];
+  updates: { id: string; changes: { title: string; description: string; date: string; startTime: string; endTime: string; color: string; allDay: boolean }; googleEventId?: string }[];
 }
 
 export async function listEvents(
@@ -139,8 +139,7 @@ function fromGoogleDateTime(start: { dateTime?: string; date?: string }): { date
   };
 }
 
-function toGoogleInput(a: AppEventLike) {
-  const start = a.allDay
+export function toGoogleInput(a: AppEventLike) {  const start = a.allDay
     ? { date: a.date }
     : toGoogleDateTime(a.date, a.startTime || '09:00');
   const end = a.allDay
@@ -201,13 +200,15 @@ export async function syncCalendarTwoWay(appEvents: AppEventLike[]): Promise<Cal
 
   // 1) App → Google
   for (const a of appEvents) {
-    const existing = a.googleEventId ? googleById.get(a.googleEventId) : undefined;
+    // Si el evento ya se envió en un sync de una sola vía, existe en Google con owaId.
+    const existing = a.googleEventId ? googleById.get(a.googleEventId) : googleByOwa.get(a.id);
     try {
       if (existing) {
         if (eventDirty(a, existing)) {
           await updateEvent(existing.id, { ...toGoogleInput(a), extendedProperties: { private: { owaId: a.id } } });
           result.pushed++;
         }
+        if (!a.googleEventId) result.newMappings.push({ appEventId: a.id, googleEventId: existing.id });
       } else {
         const created = await createEvent({ ...toGoogleInput(a), extendedProperties: { private: { owaId: a.id } } });
         result.newMappings.push({ appEventId: a.id, googleEventId: created.id });
@@ -246,7 +247,7 @@ export async function syncCalendarTwoWay(appEvents: AppEventLike[]): Promise<Cal
     const appMatch = appEvents.find(a => a.googleEventId === g.id);
     if (appMatch) {
       // Actualizar la app con los datos de Google (Google es fuente para eventos externos)
-      result.updates.push({ id: appMatch.id, changes: clean });
+      result.updates.push({ id: appMatch.id, changes: clean, googleEventId: g.id });
       result.updated++;
     } else {
       result.imported.push(clean);
