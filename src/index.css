@@ -2832,17 +2832,17 @@ h6,
   font-size: 13px;
   line-height: 1.7;
   word-break: break-word;
-  color: rgba(255, 255, 255, 0.88);
+  color: var(--text-primary);
 }
 .charvis-md > *:first-child { margin-top: 0; }
 .charvis-md > *:last-child { margin-bottom: 0; }
 .charvis-md p { margin: 8px 0; }
-.charvis-md strong { color: #fff; font-weight: 700; }
-.charvis-md em { color: rgba(255, 255, 255, 0.9); }
+.charvis-md strong { color: var(--text-primary); font-weight: 700; }
+.charvis-md em { color: var(--text-secondary); }
 .charvis-md u { text-decoration: underline; text-underline-offset: 3px; }
-.charvis-md s { color: rgba(255, 255, 255, 0.4); }
+.charvis-md s { color: var(--text-muted); }
 .charvis-md a {
-  color: #7dd3fc;
+  color: var(--accent);
   text-decoration: underline;
   text-underline-offset: 3px;
   word-break: break-all;
@@ -2850,7 +2850,7 @@ h6,
 .charvis-md a:hover { opacity: 0.8; }
 .charvis-md h1, .charvis-md h2, .charvis-md h3, .charvis-md h4 {
   font-family: 'Inter Tight', sans-serif;
-  color: #fff;
+  color: var(--text-primary);
   margin: 16px 0 8px;
   line-height: 1.3;
 }
@@ -2864,28 +2864,28 @@ h6,
 .charvis-md blockquote {
   margin: 10px 0;
   padding: 6px 14px;
-  border-left: 2px solid rgba(125, 211, 252, 0.4);
-  background: rgba(125, 211, 252, 0.06);
+  border-left: 2px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
   border-radius: 0 8px 8px 0;
-  color: rgba(255, 255, 255, 0.75);
+  color: var(--text-secondary);
 }
 .charvis-md hr {
   border: none;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.14), transparent);
+  background: linear-gradient(90deg, transparent, var(--border-soft), transparent);
   margin: 18px 0;
 }
 .charvis-md code {
   font-family: 'JetBrains Mono', monospace;
   font-size: 12px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-hover);
   padding: 1.5px 6px;
   border-radius: 5px;
-  color: #a5b4fc;
+  color: var(--text-secondary);
 }
 .charvis-md pre {
-  background: rgba(0, 0, 0, 0.45);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--bg-deep);
+  border: 1px solid var(--border-soft);
   border-radius: 10px;
   padding: 12px 14px;
   margin: 12px 0;
@@ -2897,7 +2897,7 @@ h6,
 .charvis-md pre code {
   background: none;
   padding: 0;
-  color: #e2e8f0;
+  color: var(--text-primary);
   font-size: 12px;
 }
 .charvis-md table {
@@ -2909,7 +2909,7 @@ h6,
 .charvis-md th, .charvis-md td {
   padding: 7px 11px;
   text-align: left;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+  border-bottom: 1px solid var(--border-soft);
 }
 .charvis-md th {
   font-family: 'Inter Tight', sans-serif;
@@ -2917,7 +2917,7 @@ h6,
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--text-tertiary);
 }
 .charvis-md img {
   max-width: 100%;

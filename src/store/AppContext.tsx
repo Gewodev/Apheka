@@ -105,6 +105,7 @@ export interface TaskFile {
   name: string;
   path: string;
   type: string; // 'pdf' | 'image' | 'doc' | 'other' | 'video' | 'link'
+  materialType?: string; // 'resource' | 'formula' | 'concept' | 'key-data' | 'meaning' | 'quiz' | 'procedure'
   size?: number;
   thumbnailUrl?: string;
 }
@@ -491,7 +492,10 @@ interface AppState {
   settings: Settings;
   // Integrations
   pipTitle: string;
-  setPipUrl: (url: string | null, title?: string) => void;
+  pipAutoplay: boolean;
+  pipPlaying: boolean;
+  setPipPlaying: (playing: boolean) => void;
+  setPipUrl: (url: string | null, title?: string, autoplay?: boolean) => void;
 }
 
 export type ViewId = 'inicio' | 'tareas' | 'apuntes' | 'estudio' | 'cursos' | 'analiticas' | 'chat' | 'ajustes' | 'musica' | 'flujo' | 'canvas';
@@ -864,11 +868,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => { coverModalTrackIdRef.current = coverModalTrackId; }, [coverModalTrackId]);
   const [youtubeVideoUrl, setYoutubeVideoUrl] = useState<string | null>(null);
   const [isPlayingMusic, setIsPlayingMusic] = useState(false);
-  const [pipUrl, setPipUrlState] = useState<string | null>(null);
-  const [pipTitle, setPipTitle] = useState('');
-  const setPipUrl = useCallback((url: string | null, title = '') => {
+  const [pipUrl, setPipUrlState] = useState<string | null>(() => {
+    try {
+      const raw = localStorage.getItem('owa_pip_v1');
+      if (!raw) return null;
+      const d = JSON.parse(raw);
+      return typeof d.url === 'string' && d.url ? d.url : null;
+    } catch { return null; }
+  });
+  const [pipTitle, setPipTitle] = useState(() => {
+    try {
+      const raw = localStorage.getItem('owa_pip_v1');
+      if (!raw) return '';
+      const d = JSON.parse(raw);
+      return typeof d.title === 'string' ? d.title : '';
+    } catch { return ''; }
+  });
+  const [pipAutoplay, setPipAutoplay] = useState(false);
+  const [pipPlaying, setPipPlaying] = useState(false);
+  const setPipUrl = useCallback((url: string | null, title = '', autoplay = true) => {
     setPipUrlState(url);
     setPipTitle(title);
+    setPipAutoplay(autoplay);
   }, []);
   const [musicVolume, setMusicVolume] = useState(0.7);
   const [musicProgress, setMusicProgress] = useState(0);
@@ -3479,7 +3500,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     activeTaskId, timerLocked, isTimerActive, roundsCompleted, showCompletion,
     showRestPrompt, setShowRestPrompt, handlePomodoroBannerClick,
     currentTrackId, coverModalTrackId, youtubeVideoUrl, isPlayingMusic, isAudioLoading, musicVolume, musicProgress, musicDuration, musicListeningTime, dailyMusicTime, weeklyMusicTime, monthlyMusicTime, shuffleMode, repeatMode,
-    pipUrl, pipTitle, setPipUrl,
+    pipUrl, pipTitle, pipAutoplay, pipPlaying, setPipPlaying, setPipUrl,
     trackHistory, playCounts, musicQueue, queueSource, downloadQueue, artists,
     googleConnected, calendarSyncEnabled, lastCalendarSync, importState,
     addTask, updateTask, deleteTask, toggleTaskStatus, clearAllTasks, deleteCompletedTasks, deleteOldCompletedTasks, reorderTasks,

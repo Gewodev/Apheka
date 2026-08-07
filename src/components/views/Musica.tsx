@@ -38,6 +38,49 @@ function getEntries(data: YouTubePlaylist | YouTubeMetadata): YouTubeMetadata[] 
   return [data as YouTubeMetadata];
 }
 
+function loadExploreState() {
+  try {
+    const raw = localStorage.getItem('owa_music_explore_v1');
+    if (!raw) return null;
+    const d = JSON.parse(raw);
+    return {
+      searchMode: d.searchMode === 'query' ? 'query' : 'link',
+      url: typeof d.url === 'string' ? d.url : '',
+      searchQuery: typeof d.searchQuery === 'string' ? d.searchQuery : '',
+      searchResults: Array.isArray(d.searchResults) ? (d.searchResults as SearchResult[]) : [],
+      searchPerformed: !!d.searchPerformed,
+      preview: (d.preview || null) as YouTubePlaylist | YouTubeMetadata | null,
+    };
+  } catch { return null; }
+}
+
+const MUSIC_TABS: TabId[] = ['biblioteca', 'artistas', 'playlists', 'favoritas', 'explorar'];
+
+function loadUiState() {
+  try {
+    const raw = localStorage.getItem('owa_music_ui_v1');
+    if (!raw) return null;
+    const d = JSON.parse(raw);
+    return {
+      activeTab: MUSIC_TABS.includes(d.activeTab) ? (d.activeTab as TabId) : undefined,
+      viewMode: d.viewMode === 'lista' || d.viewMode === 'bloques' ? d.viewMode : undefined,
+      showRightSidebar: typeof d.showRightSidebar === 'boolean' ? d.showRightSidebar : undefined,
+      selectedArtist: typeof d.selectedArtist === 'string' ? d.selectedArtist : undefined,
+      selectedPlaylistId: typeof d.selectedPlaylistId === 'string' ? d.selectedPlaylistId : undefined,
+      showAllLibrary: typeof d.showAllLibrary === 'boolean' ? d.showAllLibrary : undefined,
+      showAllRecents: typeof d.showAllRecents === 'boolean' ? d.showAllRecents : undefined,
+      showSearch: typeof d.showSearch === 'boolean' ? d.showSearch : undefined,
+      statsPeriod: d.statsPeriod === 'week' || d.statsPeriod === 'month' ? d.statsPeriod : undefined,
+      audioFormat: d.audioFormat === 'mp3' || d.audioFormat === 'm4a' ? d.audioFormat : undefined,
+      includeCover: typeof d.includeCover === 'boolean' ? d.includeCover : undefined,
+      audioQuality: typeof d.audioQuality === 'string' ? d.audioQuality : undefined,
+      artistTrackSearch: typeof d.artistTrackSearch === 'string' ? d.artistTrackSearch : undefined,
+      playlistSongSearch: typeof d.playlistSongSearch === 'string' ? d.playlistSongSearch : undefined,
+      playlistArtistFilter: typeof d.playlistArtistFilter === 'string' ? d.playlistArtistFilter : undefined,
+    };
+  } catch { return null; }
+}
+
 export default function Musica() {
   const {
     tracks, currentTrackId, isPlayingMusic, toggleMusicPlayback,
@@ -56,55 +99,55 @@ export default function Musica() {
     importLocalTracks,
     setCoverModalTrackId,
     downloadPath: persistentDownloadPath, setDownloadPathCtx,
-    setPipUrl,
+    setPipUrl, pipPlaying,
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<TabId>('biblioteca');
-  const [url, setUrl] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState<TabId>(() => loadUiState()?.activeTab || 'biblioteca');
+  const [url, setUrl] = useState(() => loadExploreState()?.url || '');
+  const [searchQuery, setSearchQuery] = useState(() => loadExploreState()?.searchQuery || '');
   const [isLoading, setIsLoading] = useState(false);
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
-  const [preview, setPreview] = useState<YouTubePlaylist | YouTubeMetadata | null>(null);
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
-  const [showAllLibrary, setShowAllLibrary] = useState(false);
-  const [showAllRecents, setShowAllRecents] = useState(false);
-  const [audioFormat, setAudioFormat] = useState<'mp3' | 'm4a'>('mp3');
-  const [includeCover, setIncludeCover] = useState(true);
-  const [audioQuality, setAudioQuality] = useState('3');
-  const [selectedArtist, setSelectedArtist] = useState<string | null>(null);
-  const [showSearch, setShowSearch] = useState(false);
+  const [preview, setPreview] = useState<YouTubePlaylist | YouTubeMetadata | null>(() => loadExploreState()?.preview || null);
+  const [searchResults, setSearchResults] = useState<SearchResult[]>(() => loadExploreState()?.searchResults || []);
+  const [showAllLibrary, setShowAllLibrary] = useState(() => loadUiState()?.showAllLibrary ?? false);
+  const [showAllRecents, setShowAllRecents] = useState(() => loadUiState()?.showAllRecents ?? false);
+  const [audioFormat, setAudioFormat] = useState<'mp3' | 'm4a'>(() => loadUiState()?.audioFormat || 'mp3');
+  const [includeCover, setIncludeCover] = useState(() => loadUiState()?.includeCover ?? true);
+  const [audioQuality, setAudioQuality] = useState(() => loadUiState()?.audioQuality || '3');
+  const [selectedArtist, setSelectedArtist] = useState<string | null>(() => loadUiState()?.selectedArtist || null);
+  const [showSearch, setShowSearch] = useState(() => loadUiState()?.showSearch ?? false);
   const [coverHover, setCoverHover] = useState(false);
-  const [searchMode, setSearchMode] = useState<'link' | 'query'>('link');
+  const [searchMode, setSearchMode] = useState<'link' | 'query'>(() => (loadExploreState()?.searchMode as 'link' | 'query' | undefined) || 'link');
   const [currentTime, setCurrentTime] = useState(new Date());
   const [confirmDelete, setConfirmDelete] = useState<{ type: 'track' | 'artist' | 'playlist'; id: string; name: string } | null>(null);
   const [showClearAllConfirm, setShowClearAllConfirm] = useState(false);
-  const [searchPerformed, setSearchPerformed] = useState(false);
-  const [statsPeriod, setStatsPeriod] = useState<'week' | 'month'>('week');
+  const [searchPerformed, setSearchPerformed] = useState(() => loadExploreState()?.searchPerformed || false);
+  const [statsPeriod, setStatsPeriod] = useState<'week' | 'month'>(() => loadUiState()?.statsPeriod || 'week');
   const [chartTooltip, setChartTooltip] = useState<{ text: string; date: string; x: number; y: number } | null>(null);
   const [editingArtistId, setEditingArtistId] = useState<string | null>(null);
   const [editArtistName, setEditArtistName] = useState('');
   const [editArtistImage, setEditArtistImage] = useState('');
   const [artistSelectedTrackIds, setArtistSelectedTrackIds] = useState<string[]>([]);
-  const [artistTrackSearch, setArtistTrackSearch] = useState('');
+  const [artistTrackSearch, setArtistTrackSearch] = useState(() => loadUiState()?.artistTrackSearch || '');
   // Playlist state
-  const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
+  const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(() => loadUiState()?.selectedPlaylistId || null);
   const [showCreatePlaylist, setShowCreatePlaylist] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState('');
   const [editingPlaylistId, setEditingPlaylistId] = useState<string | null>(null);
   const [selectedTrackIds, setSelectedTrackIds] = useState<Set<string>>(new Set());
-  const [playlistArtistFilter, setPlaylistArtistFilter] = useState<string>('');
-  const [playlistSongSearch, setPlaylistSongSearch] = useState('');
+  const [playlistArtistFilter, setPlaylistArtistFilter] = useState(() => loadUiState()?.playlistArtistFilter || '');
+  const [playlistSongSearch, setPlaylistSongSearch] = useState(() => loadUiState()?.playlistSongSearch || '');
   const [playlistStep, setPlaylistStep] = useState(0);
   const [playlistCoverData, setPlaylistCoverData] = useState<string>('');
 
-  const [viewMode, setViewMode] = useState<'lista' | 'bloques'>('lista');
+  const [viewMode, setViewMode] = useState<'lista' | 'bloques'>(() => loadUiState()?.viewMode || 'lista');
   const [editingTrackId, setEditingTrackId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editArtist, setEditArtist] = useState('');
   const [editCover, setEditCover] = useState('');
 
   const mainContainerRef = useRef<HTMLDivElement>(null);
-  const [showRightSidebar, setShowRightSidebar] = useState(true);
+  const [showRightSidebar, setShowRightSidebar] = useState(() => loadUiState()?.showRightSidebar ?? true);
   const [showSidebarArrow, setShowSidebarArrow] = useState(false);
   const [sidebarArrowPos, setSidebarArrowPos] = useState(0);
   const sidebarArrowTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -124,6 +167,30 @@ export default function Musica() {
   useEffect(() => {
     localStorage.setItem('owa_download_selection', JSON.stringify(downloadSelection));
   }, [downloadSelection]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('owa_music_explore_v1', JSON.stringify({
+        searchMode, url, searchQuery, searchResults, searchPerformed, preview,
+      }));
+    } catch { /* noop */ }
+  }, [searchMode, url, searchQuery, searchResults, searchPerformed, preview]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('owa_music_ui_v1', JSON.stringify({
+        activeTab, viewMode, showRightSidebar, selectedArtist, selectedPlaylistId,
+        showAllLibrary, showAllRecents, showSearch, statsPeriod,
+        audioFormat, includeCover, audioQuality,
+        artistTrackSearch, playlistSongSearch, playlistArtistFilter,
+      }));
+    } catch { /* noop */ }
+  }, [
+    activeTab, viewMode, showRightSidebar, selectedArtist, selectedPlaylistId,
+    showAllLibrary, showAllRecents, showSearch, statsPeriod,
+    audioFormat, includeCover, audioQuality,
+    artistTrackSearch, playlistSongSearch, playlistArtistFilter,
+  ]);
 
   const handlePlayWithTabCb = useCallback((trackOrId: string | Track, sourceTab?: TabId) => {
     const trackId = typeof trackOrId === 'string' ? trackOrId : trackOrId.id;
@@ -1567,7 +1634,7 @@ export default function Musica() {
                         onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'transparent'; const ov = e.currentTarget.querySelector('.play-ov') as HTMLElement; if (ov) ov.style.opacity = '0'; const act = e.currentTarget.querySelector('.row-act') as HTMLElement; if (act) act.style.opacity = '0.35'; }}>
                         {/* Thumbnail with play overlay */}
                         <div style={{ width: 60, height: 42, borderRadius: 8, background: 'var(--bg-deep)', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border-subtle)', position: 'relative', cursor: 'pointer' }}
-                          onClick={() => { setPipUrl(r.webpage_url, r.title); }}>
+                          onClick={() => { setPipUrl(r.id ? `https://www.youtube.com/watch?v=${r.id}` : r.webpage_url, r.title); }}>
                           {r.thumbnail ? <img src={r.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={14} color="var(--text-muted)" style={{ opacity: 0.3 }} />}
                           <div className="play-ov" style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 180ms', borderRadius: 8 }}>
                             <Play size={15} fill="white" color="white" />
@@ -1657,10 +1724,15 @@ export default function Musica() {
                     <div style={{ borderTop: '1px solid var(--border-subtle)', padding: '14px 24px', maxHeight: 360, overflowY: 'auto' }} className="no-scrollbar">
                       <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span>{preview.entries.length} canciones</span>
-                        <button onClick={() => { if (preview.entries.length > 0) { setPipUrl(preview.entries[0].webpage_url, preview.entries[0].title); } }} style={{ fontSize: 9, fontWeight: 500, color: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 15%, transparent)', padding: '2px 8px', borderRadius: 5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, transition: 'all 150ms' }}
-                          onMouseEnter={e => { e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 15%, transparent)'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 8%, transparent)'; }}>
-                          <Play size={8} fill="currentColor" /> Reproducir
+                        <button onClick={() => {
+                          if (preview.entries.length > 0) {
+                            const plUrl = preview.webpage_url?.includes('list=') ? preview.webpage_url : `https://www.youtube.com/playlist?list=${preview.id}`;
+                            setPipUrl(plUrl, preview.title);
+                          }
+                        }} style={{ fontSize: 9, fontWeight: 500, color: pipPlaying ? '#10B981' : 'var(--accent)', background: pipPlaying ? 'color-mix(in srgb, #10B981 10%, transparent)' : 'color-mix(in srgb, var(--accent) 8%, transparent)', border: `1px solid ${pipPlaying ? 'color-mix(in srgb, #10B981 30%, transparent)' : 'color-mix(in srgb, var(--accent) 15%, transparent)'}`, padding: '2px 8px', borderRadius: 5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, transition: 'all 150ms' }}
+                          onMouseEnter={e => { if (!pipPlaying) e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 15%, transparent)'; }}
+                          onMouseLeave={e => { if (!pipPlaying) e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 8%, transparent)'; }}>
+                          {pipPlaying ? <Pause size={8} fill="currentColor" /> : <Play size={8} fill="currentColor" />} {pipPlaying ? 'Reproduciendo' : 'Reproducir'}
                         </button>
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -1670,7 +1742,7 @@ export default function Musica() {
                             onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'transparent'; }}>
                             <span style={{ fontSize: 10, color: 'var(--text-muted)', width: 20, textAlign: 'right', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{i + 1}</span>
                             <div
-                              onClick={() => { setPipUrl(entry.webpage_url, entry.title); }}
+                              onClick={() => { setPipUrl(entry.id ? `https://www.youtube.com/watch?v=${entry.id}` : entry.webpage_url, entry.title); }}
                               style={{ width: 36, height: 26, borderRadius: 5, background: 'var(--bg-deep)', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', position: 'relative' }}
                             >
                               {entry.thumbnail ? <img src={entry.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={10} color="var(--text-muted)" style={{ opacity: 0.3 }} />}

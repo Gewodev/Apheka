@@ -38,7 +38,6 @@ import {
 } from "lucide-react";
 import { useApp, Note, NoteFolder, NoteAttachment, fmtClock } from "../../store/AppContext";
 import { openFileSmart } from '../../lib/openFileSmart';
-import { BRAIN_DROP_MIME, writeBrainAnchor } from '../../lib/brainDrop';
 import { createDownloadTask, updateDownloadTask, completeDownloadTask } from '../ui/DownloadManager';
 import {
   DndContext, closestCenter,
@@ -46,7 +45,7 @@ import {
 } from '@dnd-kit/core';
 import {
   SortableContext, useSortable, arrayMove,
-  verticalListSortingStrategy
+  rectSortingStrategy, verticalListSortingStrategy
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { restrictToParentElement } from '@dnd-kit/modifiers';
@@ -56,7 +55,7 @@ import toast from "react-hot-toast";
 import NotificationBell from '../ui/NotificationBell';
 
 type ViewMode = "estante" | "lista";
-type SortMode = "updated" | "created" | "title" | "course" | "visits" | "priority";
+type SortMode = "updated" | "created" | "title" | "course" | "visits" | "priority" | "manual";
 
 const EASE = "cubic-bezier(0.16, 1, 0.3, 1)";
 const SPINE_COLORS = [
@@ -405,16 +404,14 @@ interface NoteCardProps {
   onSelect: () => void;
   onOpen: () => void;
   onContextMenu: (e: React.MouseEvent, btnRect?: DOMRect) => void;
-  onDragStart: (e: React.DragEvent) => void;
-  onDragOver: (e: React.DragEvent) => void;
-  onDrop: (e: React.DragEvent) => void;
   tagColors: Record<string, string>;
 }
 
-function NoteCard({ note, isSelected, onSelect, onOpen, onContextMenu, onDragStart, onDragOver, onDrop, tagColors }: NoteCardProps) {
+function NoteCard({ note, isSelected, onSelect, onOpen, onContextMenu, tagColors }: NoteCardProps) {
   const spineColor = note.coverColor || note.courseColor || getSpineColor(note.id);
   const folderName = note.course;
   const folderColor = note.coverColor || note.courseColor || spineColor;
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: note.id });
   const preview = useMemo(() => {
     const text = note.content
       .replace(/<[^>]+>/g, "")
@@ -425,47 +422,33 @@ function NoteCard({ note, isSelected, onSelect, onOpen, onContextMenu, onDragSta
   }, [note.content]);
   const [hov, setHov] = useState(false);
   const hasTags = note.tags && note.tags.length > 0;
-  const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const dragAllowedRef = useRef(false);
-
-  const handleMouseDownCard = useCallback(() => {
-    dragAllowedRef.current = false;
-    longPressRef.current = setTimeout(() => { dragAllowedRef.current = true; }, 400);
-  }, []);
-
-  const handleMouseUpCard = useCallback(() => {
-    if (longPressRef.current) { clearTimeout(longPressRef.current); longPressRef.current = null; }
-    dragAllowedRef.current = false;
-  }, []);
-
-  const handleDragStartCard = useCallback((e: React.DragEvent) => {
-    if (!dragAllowedRef.current) { e.preventDefault(); return; }
-    onDragStart(e);
-  }, [onDragStart]);
 
   return (
     <div style={{ position: "relative", height: "100%", minWidth: 0 }}>
       <div
-        draggable
-        onDragStart={handleDragStartCard}
-        onDragOver={onDragOver}
-        onDrop={onDrop}
+        ref={setNodeRef}
+        {...attributes}
+        {...listeners}
         onClick={onSelect}
         onDoubleClick={onOpen}
         onContextMenu={onContextMenu}
         onMouseEnter={() => setHov(true)}
-        onMouseLeave={(e) => { setHov(false); handleMouseUpCard(); }}
-        onMouseDown={handleMouseDownCard}
-        onMouseUp={handleMouseUpCard}
+        onMouseLeave={() => setHov(false)}
         className="bento-card"
         style={{
           display: "flex", flexDirection: "column", gap: 0,
-          padding: "16px 16px 12px", cursor: "pointer", height: "100%",
+          padding: "16px 16px 12px", height: "100%",
+          cursor: isDragging ? "grabbing" : "pointer",
+          userSelect: "none", WebkitUserSelect: "none",
           background: "var(--bg-elevated)",
-          border: "1px solid " + (isSelected ? spineColor + "40" : hov ? "var(--border-strong)" : "var(--border-subtle)"),
+          border: isDragging
+            ? "1px dashed " + spineColor + "88"
+            : "1px solid " + (isSelected ? spineColor + "40" : hov ? "var(--border-strong)" : "var(--border-subtle)"),
           borderRadius: "var(--radius-xl)",
-          transition: "all 250ms " + EASE,
-          transform: hov ? "translateY(-2px)" : "none",
+          transition: isDragging ? "none" : transition ? transition : "all 250ms " + EASE,
+          transform: isDragging ? CSS.Transform.toString(transform) : hov ? "translateY(-2px)" : "none",
+          opacity: isDragging ? 0.72 : 1,
+          zIndex: isDragging ? 20 : 'auto',
           boxShadow: hov
             ? "0 12px 28px rgba(0,0,0,0.10), 0 4px 12px rgba(0,0,0,0.06)"
             : "0 1px 3px rgba(0,0,0,0.04)",
@@ -574,12 +557,9 @@ interface BookshelfBookProps {
   onSelect: () => void;
   onDoubleClick: () => void;
   onContextMenu: (e: React.MouseEvent, btnRect?: DOMRect) => void;
-  onDragStart: (e: React.DragEvent) => void;
-  onDragOver: (e: React.DragEvent) => void;
-  onDrop: (e: React.DragEvent) => void;
 }
 
-function BookshelfBook({ note, isSelected, folders, onSelect, onDoubleClick, onContextMenu, onDragStart, onDragOver, onDrop }: BookshelfBookProps) {
+function BookshelfBook({ note, isSelected, folders, onSelect, onDoubleClick, onContextMenu }: BookshelfBookProps) {
   const folderData = useMemo(() => folders.find(f => f.id === note.folderId), [folders, note.folderId]);
   const spineColor = note.coverColor || folderData?.color || note.courseColor || getSpineColor(note.id);
   const tagColor = (note.tags && note.tags.length > 0)
@@ -588,23 +568,7 @@ function BookshelfBook({ note, isSelected, folders, onSelect, onDoubleClick, onC
       : (DEFAULT_TAG_COLORS[note.tags[0]] || note.courseColor || getSpineColor(note.id)))
     : null;
   const [hov, setHov] = useState(false);
-  const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const dragAllowedRef = useRef(false);
-
-  const handleMouseDownBook = useCallback(() => {
-    dragAllowedRef.current = false;
-    longPressRef.current = setTimeout(() => { dragAllowedRef.current = true; }, 400);
-  }, []);
-
-  const handleMouseUpBook = useCallback(() => {
-    if (longPressRef.current) { clearTimeout(longPressRef.current); longPressRef.current = null; }
-    dragAllowedRef.current = false;
-  }, []);
-
-  const handleDragStartBook = useCallback((e: React.DragEvent) => {
-    if (!dragAllowedRef.current) { e.preventDefault(); return; }
-    onDragStart(e);
-  }, [onDragStart]);
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: note.id });
 
   const previewText = useMemo(() => {
     const text = note.content.replace(/<[^>]+>/g, "").trim();
@@ -620,26 +584,23 @@ function BookshelfBook({ note, isSelected, folders, onSelect, onDoubleClick, onC
   }, [spineColor]);
 
   return (
-    <div style={{
+    <div ref={setNodeRef} {...attributes} {...listeners} style={{
       display: "flex", flexDirection: "column", alignItems: "center",
-      position: "relative", cursor: "pointer",
-      transform: hov ? "translateY(-5px)" : "translateY(0)",
-      transition: "transform 250ms " + EASE,
+      position: "relative",
+      cursor: isDragging ? "grabbing" : "pointer",
+      userSelect: "none", WebkitUserSelect: "none",
+      transform: isDragging ? CSS.Transform.toString(transform) : hov ? "translateY(-5px)" : "translateY(0)",
+      opacity: isDragging ? 0.7 : 1,
+      transition: isDragging ? "none" : transition ? transition : "transform 250ms " + EASE + ", opacity 180ms " + EASE,
       width: 158,
       marginBottom: 0,
-      zIndex: hov ? 10 : 3,
+      zIndex: isDragging ? 30 : hov ? 10 : 3,
     }}
-      draggable
-      onDragStart={handleDragStartBook}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
       onClick={onSelect}
       onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}
       onMouseEnter={() => setHov(true)}
-      onMouseLeave={(e) => { setHov(false); handleMouseUpBook(); }}
-      onMouseDown={handleMouseDownBook}
-      onMouseUp={handleMouseUpBook}
+      onMouseLeave={() => setHov(false)}
     >
         {/* 3D Book Cover Container — plain rectangle, no V-notch */}
       <div style={{
@@ -1529,7 +1490,6 @@ export default function Notas() {
   const editorRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const dragIndexRef = useRef<number | null>(null);
 
   // Real-time clock tick
   useEffect(() => {
@@ -1594,6 +1554,11 @@ export default function Notas() {
 
     result.sort((a, b) => {
       if (activeSidebarTab === 'favs' && a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
+      if (sortMode === "manual") {
+        const allHaveSortOrder = result.length > 0 && result.every(n => n.sortOrder !== undefined);
+        if (allHaveSortOrder) return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+      }
       if (sortMode === "priority") {
         const order = { high: 0, medium: 1, low: 2, none: 3 };
         return ((order[a.priority || "none"] || 3) - (order[b.priority || "none"] || 3));
@@ -2550,28 +2515,22 @@ export default function Notas() {
     setContextMenu(null);
   }, [notes, contextMenu, selectedNoteId]);
 
-  // DRAG AND DROP HANDLERS FOR REORDERING (Libros / Bloques)
-  const handleDragStart = useCallback((e: React.DragEvent, index: number) => {
-    dragIndexRef.current = index;
-    e.dataTransfer.effectAllowed = "move";
-    const note = filteredNotes[index];
-    if (note) e.dataTransfer.setData(BRAIN_DROP_MIME, writeBrainAnchor('note', note.id));
-  }, [filteredNotes]);
+  // DRAG AND DROP HANDLERS FOR REORDERING (Libros / Bloques) — @dnd-kit
+  const noteSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { delay: 300, tolerance: 8 } })
+  );
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-  }, []);
-
-  const handleDrop = useCallback((e: React.DragEvent, dropIndex: number) => {
-    e.preventDefault();
-    const dragIndex = dragIndexRef.current;
-    if (dragIndex === null || dragIndex === dropIndex) return;
-    const ids = [...filteredNotes.map((n) => n.id)];
-    const [moved] = ids.splice(dragIndex, 1);
-    ids.splice(dropIndex, 0, moved);
-    reorderNotes(ids);
-    dragIndexRef.current = null;
-    toast.success("Orden actualizado");
+  const handleDragEndNotes = useCallback((event: any) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const ids = filteredNotes.map(n => n.id);
+      const oldIndex = ids.indexOf(active.id);
+      const newIndex = ids.indexOf(over.id);
+      const newIds = arrayMove([...ids], oldIndex, newIndex);
+      reorderNotes(newIds);
+      setSortMode("manual");
+      toast.success("Orden actualizado");
+    }
   }, [filteredNotes, reorderNotes]);
 
   // Creator advanced actions
@@ -2633,6 +2592,7 @@ export default function Notas() {
   const sortLabels: Record<SortMode, string> = {
     updated: "Recientes", created: "Creados", title: "Título",
     course: "Curso", visits: "Visitas", priority: "Prioridad",
+    manual: "Manual",
   };
 
   const relatedNotes = useMemo(() => {
@@ -3518,24 +3478,26 @@ export default function Notas() {
                   </div>
                 ) : viewMode === "lista" ? (
                   /* Upgraded Blocks View: Grid of 2 columns */
-                  <div style={{
-                    flex: 1, overflow: "auto", display: "grid",
-                    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                    gridAutoRows: "max-content",
-                    gap: 14, padding: "18px 14px 14px",
-                  }}>
-                    {filteredNotes.map((note, i) => (
-                      <NoteCard key={note.id} note={note}
-                        isSelected={selectedNoteId === note.id}
-                        onSelect={() => handleSelectNote(note.id)}
-                        onOpen={() => { handleSelectNote(note.id); handleOpenNote(); }}
-                        onContextMenu={(e, br) => handleContextMenu(e, note.id, br)}
-                        onDragStart={(e) => handleDragStart(e, i)}
-                        onDragOver={handleDragOver}
-                        onDrop={(e) => handleDrop(e, i)}
-                        tagColors={mergedTagColors} />
-                    ))}
-                  </div>
+                  <DndContext sensors={noteSensors} collisionDetection={closestCenter}
+                    onDragStart={() => {}} onDragEnd={handleDragEndNotes}>
+                    <SortableContext items={filteredNotes.map(n => n.id)} strategy={rectSortingStrategy}>
+                    <div style={{
+                      flex: 1, overflow: "auto", display: "grid",
+                      gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                      gridAutoRows: "max-content",
+                      gap: 14, padding: "18px 14px 14px",
+                    }}>
+                      {filteredNotes.map((note, i) => (
+                        <NoteCard key={note.id} note={note}
+                          isSelected={selectedNoteId === note.id}
+                          onSelect={() => handleSelectNote(note.id)}
+                          onOpen={() => { handleSelectNote(note.id); handleOpenNote(); }}
+                          onContextMenu={(e, br) => handleContextMenu(e, note.id, br)}
+                          tagColors={mergedTagColors} />
+                      ))}
+                    </div>
+                    </SortableContext>
+                  </DndContext>
                 ) : (
                   /* Bookshelf View: non-scrollable, pagination at top */
                   <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -3593,6 +3555,9 @@ export default function Notas() {
                             )}
 
                           {/* Books — non-scrollable, fills remaining space */}
+                          <DndContext sensors={noteSensors} collisionDetection={closestCenter}
+                            onDragStart={() => {}} onDragEnd={handleDragEndNotes}>
+                            <SortableContext items={pageNotesBS.map(n => n.id)} strategy={rectSortingStrategy}>
                           <div style={{
                             flex: 1, display: "flex", flexDirection: "column",
                             justifyContent: "center", gap: 8, padding: "0px 12px 0",
@@ -3604,18 +3569,14 @@ export default function Notas() {
                                   display: "flex", justifyContent: "space-evenly", alignItems: "flex-end",
                                   paddingBottom: 0, width: "100%", height: 218, gap: 4,
                                 }}>
-                                  {row.map((note, ci) => {
-                                    const noteIdx = safePageBS * PER_PAGE_BS + ri * 5 + ci;
+                                  {row.map((note) => {
                                     return (
                                       <BookshelfBook key={note.id} note={note}
                                         isSelected={selectedNoteId === note.id}
                                         folders={folders}
                                         onSelect={() => handleSelectNote(note.id)}
                                         onDoubleClick={handleOpenNote}
-                                        onContextMenu={(e, br) => handleContextMenu(e, note.id, br)}
-                                        onDragStart={(e) => handleDragStart(e, noteIdx)}
-                                        onDragOver={handleDragOver}
-                                        onDrop={(e) => handleDrop(e, noteIdx)} />
+                                        onContextMenu={(e, br) => handleContextMenu(e, note.id, br)} />
                                     );
                                   })}
                                   {row.length < 5 && Array(5 - row.length).fill(null).map((_, i) => (
@@ -3706,7 +3667,9 @@ export default function Notas() {
                                 })()}
                               </div>
                             )}
-                          </div>
+                            </div>
+                            </SortableContext>
+                          </DndContext>
                           </div>
                         </>
                       );

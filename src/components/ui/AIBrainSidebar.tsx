@@ -3,8 +3,8 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, Send, Paperclip, Mic, Square, Link2, FileText, Loader2, Brain,
-  MessageSquareText, Undo2, GripVertical, ChevronDown, ChevronRight, Check,
-  Copy, SquareX, Search, PanelRightClose
+  RotateCcw, GripVertical, ChevronDown, ChevronRight, Check,
+  Copy, SquareX, Search, MessageSquareText, Undo2
 } from 'lucide-react';
 import {
   BRAIN_DROP_MIME, readBrainAnchor, subscribeBrainDrag,
@@ -124,9 +124,16 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
   const [panelWidth, setPanelWidth] = useState<number>(() => {
     try {
       const saved = Number(localStorage.getItem('owa_brain_width'));
-      if (saved >= 380 && saved <= 1100) return saved;
+      if (saved >= 380 && saved <= Math.min(900, window.innerWidth * 0.5)) return saved;
     } catch {}
     return 420;
+  });
+  const [panelHeight, setPanelHeight] = useState<number>(() => {
+    try {
+      const saved = Number(localStorage.getItem('owa_brain_height'));
+      if (saved >= 320 && saved <= window.innerHeight) return saved;
+    } catch {}
+    return window.innerHeight;
   });
 
   const messagesWrapRef = useRef<HTMLDivElement>(null);
@@ -247,6 +254,9 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
         };
         setFloatPos(pos);
         localStorage.setItem(FLOAT_POS_KEY, JSON.stringify(pos));
+        setPanelHeight(h => Math.min(h, Math.round(window.innerHeight * 0.7)));
+      } else {
+        setPanelHeight(window.innerHeight);
       }
       try {
         if (next) localStorage.setItem(FLOAT_KEY, '1');
@@ -282,35 +292,43 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
     } catch { /* almacenamiento no disponible */ }
   }, []);
 
-  // Arrastrar el borde izquierdo del panel para estirarlo (máx. ~60% pantalla)
-  const resizeDragRef = useRef<{ startX: number; startW: number } | null>(null);
-  const handleResizeStart = useCallback((e: React.PointerEvent) => {
+  // ─── Redimensionado: bordes laterales (izq anclado / der flotante) y abajo — máx. media pantalla ───
+  const resizeDragRef = useRef<{ startX: number; startY: number; startW: number; startH: number; mode: 'w' | 'e' | 's' } | null>(null);
+  const handleResizeStart = useCallback((mode: 'w' | 'e' | 's') => (e: React.PointerEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setIsResizing(true);
-    resizeDragRef.current = { startX: e.clientX, startW: panelWidthRef.current };
+    resizeDragRef.current = { startX: e.clientX, startY: e.clientY, startW: panelWidthRef.current, startH: panelHeightRef.current, mode };
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
   }, []);
   const handleResizeMove = useCallback((e: React.PointerEvent) => {
     const d = resizeDragRef.current;
     if (!d) return;
-    // El panel está anclado a la derecha: arrastrar a la izquierda aumenta el ancho.
-    const delta = d.startX - e.clientX;
-    const maxW = Math.min(Math.round(window.innerWidth * 0.6), 900);
-    const next = Math.max(380, Math.min(maxW, d.startW + delta));
-    setPanelWidth(next);
+    const maxW = Math.max(380, Math.round(window.innerWidth * 0.5));
+    const maxH = window.innerHeight - 8;
+    if (d.mode === 'w') {
+      setPanelWidth(Math.max(380, Math.min(maxW, d.startW + (d.startX - e.clientX))));
+    } else if (d.mode === 'e') {
+      setPanelWidth(Math.max(380, Math.min(maxW, d.startW + (e.clientX - d.startX))));
+    } else if (d.mode === 's') {
+      setPanelHeight(Math.max(320, Math.min(maxH, d.startH + (e.clientY - d.startY))));
+    }
   }, []);
   const handleResizeEnd = useCallback(() => {
     setIsResizing(false);
     resizeDragRef.current = null;
     try {
       localStorage.setItem('owa_brain_width', String(panelWidthRef.current));
+      localStorage.setItem('owa_brain_height', String(panelHeightRef.current));
       localStorage.setItem('owa_brain_expanded', panelWidthRef.current > 480 ? '1' : '0');
     } catch {}
   }, []);
 
-  // Ref espejo del ancho para los handlers de resize (evita closures stale)
+  // Refs espejo para los handlers de resize (evita closures stale)
   const panelWidthRef = useRef(panelWidth);
   panelWidthRef.current = panelWidth;
+  const panelHeightRef = useRef(panelHeight);
+  panelHeightRef.current = panelHeight;
 
   useEffect(() => {
     if (isOpen) {
@@ -995,30 +1013,29 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
             top: floatMode ? floatPos.y : 0,
             left: floatMode ? floatPos.x : undefined,
             right: floatMode ? undefined : 0,
-            bottom: floatMode ? undefined : 0,
-            width: floatMode ? FLOAT_W : `${panelWidth}px`,
-            height: floatMode ? FLOAT_H : undefined,
+            width: `${panelWidth}px`,
+            height: `${panelHeight}px`,
             maxWidth: '100vw',
-            maxHeight: floatMode ? 'calc(100vh - 16px)' : undefined,
+            maxHeight: floatMode ? 'calc(100vh - 16px)' : '100vh',
             borderRadius: floatMode ? 16 : undefined,
             zIndex: 99990,
             display: 'flex',
             flexDirection: 'column',
-            background: 'rgba(8, 9, 12, 0.92)',
+            background: 'var(--bg-primary)',
             backdropFilter: 'blur(22px)',
             WebkitBackdropFilter: 'blur(22px)',
-            border: floatMode ? '1px solid rgba(255, 255, 255, 0.1)' : undefined,
-            borderLeft: floatMode ? undefined : deepMode ? '1px solid rgba(255,255,255,0.18)' : '1px solid rgba(255, 255, 255, 0.08)',
-            boxShadow: floatMode ? `0 24px 64px rgba(0, 0, 0, 0.6), 0 0 32px ${hexToRgba(brainColor, 0.14)}` : deepMode ? '0 0 40px rgba(167,77,255,0.22), -16px 0 48px rgba(0, 0, 0, 0.55)' : '-16px 0 48px rgba(0, 0, 0, 0.55)',
-            color: 'var(--text-primary, #fff)',
+            border: floatMode ? '1px solid var(--border-default)' : undefined,
+            borderLeft: floatMode ? undefined : deepMode ? '1px solid var(--border-strong)' : '1px solid var(--border-default)',
+            boxShadow: floatMode ? `0 24px 64px rgba(0, 0, 0, 0.45), 0 0 32px ${hexToRgba(brainColor, 0.14)}` : deepMode ? '0 0 40px rgba(167,77,255,0.22), -16px 0 48px rgba(0, 0, 0, 0.3)' : '-16px 0 48px rgba(0, 0, 0, 0.3)',
+            color: 'var(--text-primary)',
             fontFamily: "'JetBrains Mono', monospace",
-            transition: isResizing ? 'none' : 'width 260ms cubic-bezier(0.4, 0, 0.2, 1)',
+            transition: isResizing ? 'none' : 'width 260ms cubic-bezier(0.4, 0, 0.2, 1), height 260ms cubic-bezier(0.4, 0, 0.2, 1)',
           }}
         >
-          {/* Asa para estirar el panel desde el borde izquierdo (máx ~60% pantalla) */}
+          {/* Asas de redimensionado: lateral (izq si anclado / der si flotante) y abajo — máx. media pantalla */}
           {!floatMode && (
             <div
-              onPointerDown={handleResizeStart}
+              onPointerDown={handleResizeStart('w')}
               onPointerMove={handleResizeMove}
               onPointerUp={handleResizeEnd}
               onPointerCancel={handleResizeEnd}
@@ -1036,6 +1053,44 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
               }}
             />
           )}
+          {floatMode && (
+            <div
+              onPointerDown={handleResizeStart('e')}
+              onPointerMove={handleResizeMove}
+              onPointerUp={handleResizeEnd}
+              onPointerCancel={handleResizeEnd}
+              title="Arrastra para estirar el chat"
+              style={{
+                position: 'absolute',
+                right: -4,
+                top: 0,
+                bottom: 0,
+                width: 9,
+                cursor: 'ew-resize',
+                zIndex: 35,
+                touchAction: 'none',
+                background: 'transparent',
+              }}
+            />
+          )}
+          <div
+            onPointerDown={handleResizeStart('s')}
+            onPointerMove={handleResizeMove}
+            onPointerUp={handleResizeEnd}
+            onPointerCancel={handleResizeEnd}
+            title="Arrastra para cambiar la altura"
+            style={{
+              position: 'absolute',
+              bottom: -4,
+              left: 0,
+              right: 0,
+              height: 9,
+              cursor: 'ns-resize',
+              zIndex: 35,
+              touchAction: 'none',
+              background: 'transparent',
+            }}
+          />
 
           {deepMode && <div className="charvis-deep-aura" />}
 
@@ -1043,17 +1098,17 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
             <div style={{
               position: 'absolute', inset: 0, zIndex: 30,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: 'rgba(5, 6, 9, 0.55)',
+              background: 'color-mix(in srgb, var(--bg-base) 55%, transparent)',
               backdropFilter: 'blur(5px)',
               WebkitBackdropFilter: 'blur(5px)',
               pointerEvents: 'none',
             }}>
               <div style={{
                 padding: '14px 22px', borderRadius: 12,
-                background: 'rgba(16, 18, 24, 0.95)',
+                background: 'var(--bg-elevated)',
                 border: '1px solid rgba(167, 139, 250, 0.45)',
                 boxShadow: '0 16px 48px rgba(0,0,0,0.5), 0 0 24px rgba(167,139,250,0.18)',
-                fontSize: 12.5, color: '#e9d5ff',
+                fontSize: 12.5, color: '#a78bfa',
                 fontFamily: "'Inter Tight', sans-serif",
                 display: 'flex', alignItems: 'center', gap: 9,
                 fontWeight: 600, letterSpacing: '0.02em',
@@ -1075,7 +1130,7 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+              borderBottom: '1px solid var(--border-subtle)',
               cursor: floatMode ? 'move' : undefined,
               userSelect: floatMode ? 'none' : undefined,
               touchAction: floatMode ? 'none' : undefined,
@@ -1102,7 +1157,7 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                     fontWeight: 200,
                     letterSpacing: '0.08em',
                     lineHeight: 1,
-                    color: '#fff',
+                    color: 'var(--text-primary)',
                     textShadow: `0 0 22px ${brainColor}66`,
                     transition: 'opacity 150ms',
                   }}
@@ -1116,7 +1171,7 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                     fontFamily: "'JetBrains Mono', monospace",
                     fontSize: 8.5,
                     letterSpacing: '0.06em',
-                    color: 'rgba(255,255,255,0.32)',
+                    color: 'var(--text-tertiary)',
                     textTransform: 'none',
                   }}
                 >
@@ -1125,30 +1180,30 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
               </button>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <button onClick={() => setShowHistory(true)} title="Historial de conversaciones"
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+              <button onClick={() => setShowHistory(true)} title="Ver historial de conversaciones"
                 style={{
                   background: 'transparent',
-                  border: '1px solid rgba(255, 255, 255, 0.06)',
-                  color: 'rgba(255, 255, 255, 0.3)',
-                  padding: 6,
+                  border: '1px solid var(--border-soft)',
+                  color: 'var(--text-secondary)',
+                  padding: '8px 11px',
                   borderRadius: 8,
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   transition: 'color 150ms, background 150ms, border-color 150ms',
                 }}
-                onMouseEnter={e => { e.currentTarget.style.color = '#7dd3fc'; e.currentTarget.style.background = 'rgba(125, 211, 252, 0.1)'; e.currentTarget.style.borderColor = 'rgba(125, 211, 252, 0.3)'; }}
-                onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255, 255, 255, 0.3)'; e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.06)'; }}
+                onMouseEnter={e => { e.currentTarget.style.color = brainColor; e.currentTarget.style.background = hexToRgba(brainColor, 0.1); e.currentTarget.style.borderColor = hexToRgba(brainColor, 0.35); }}
+                onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'var(--border-soft)'; }}
               >
                 <MessageSquareText size={14} />
               </button>
-              <button onClick={() => setConfirmClear(true)} title="Reiniciar conversación"
+              <button onClick={() => setConfirmClear(true)} title="Iniciar conversación nueva"
                 style={{
                   background: 'transparent',
-                  border: '1px solid rgba(255, 255, 255, 0.06)',
-                  color: 'rgba(255, 255, 255, 0.3)',
-                  padding: '6px 7px',
+                  border: '1px solid var(--border-soft)',
+                  color: 'var(--text-secondary)',
+                  padding: '8px 11px',
                   borderRadius: 8,
                   cursor: 'pointer',
                   display: 'flex',
@@ -1156,42 +1211,23 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                   transition: 'color 150ms, background 150ms, border-color 150ms',
                 }}
                 onMouseEnter={e => { e.currentTarget.style.color = '#fbbf24'; e.currentTarget.style.background = 'rgba(251, 191, 36, 0.1)'; e.currentTarget.style.borderColor = 'rgba(251, 191, 36, 0.3)'; }}
-                onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255, 255, 255, 0.3)'; e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.06)'; }}
+                onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'var(--border-soft)'; }}
               >
-                <Undo2 size={12} />
+                <RotateCcw size={13} />
               </button>
-              {floatMode && (
-                <button onClick={toggleFloatMode} title="Anclar a la derecha"
-                  style={{
-                    background: 'transparent',
-                    border: '1px solid rgba(255, 255, 255, 0.06)',
-                    color: 'rgba(255, 255, 255, 0.3)',
-                    padding: 6,
-                    borderRadius: 8,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    transition: 'color 150ms, background 150ms, border-color 150ms',
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.color = '#a78bfa'; e.currentTarget.style.background = 'rgba(167, 139, 250, 0.1)'; e.currentTarget.style.borderColor = 'rgba(167, 139, 250, 0.3)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255, 255, 255, 0.3)'; e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.06)'; }}
-                >
-                  <PanelRightClose size={14} />
-                </button>
-              )}
               <button onClick={onClose} title="Ocultar Charvis"
                 style={{
-                  background: 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
-                  color: '#fff',
-                  padding: 6,
+                  background: 'var(--bg-hover)',
+                  border: '1px solid var(--border-soft)',
+                  color: 'var(--text-primary)',
+                  padding: 7,
                   borderRadius: 8,
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                 }}
-                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255, 255, 255, 0.12)')}
-                onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)')}
+                onMouseEnter={e => (e.currentTarget.style.background = 'var(--border-soft)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
               >
                 <X size={16} />
               </button>
@@ -1250,11 +1286,11 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                           cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'center',
-                          color: copiedId === msg.id ? brainColor : 'rgba(255,255,255,0.28)',
+                          color: copiedId === msg.id ? brainColor : 'var(--text-muted)',
                           transition: 'color 150ms',
                         }}
-                        onMouseEnter={e => (e.currentTarget.style.color = copiedId === msg.id ? brainColor : 'rgba(255,255,255,0.65)')}
-                        onMouseLeave={e => (e.currentTarget.style.color = copiedId === msg.id ? brainColor : 'rgba(255,255,255,0.28)')}
+                        onMouseEnter={e => (e.currentTarget.style.color = copiedId === msg.id ? brainColor : 'var(--text-secondary)')}
+                        onMouseLeave={e => (e.currentTarget.style.color = copiedId === msg.id ? brainColor : 'var(--text-muted)')}
                       >
                         {copiedId === msg.id ? <Check size={11} /> : <Copy size={11} />}
                       </button>
@@ -1268,8 +1304,8 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                     maxWidth: '92%',
                     padding: '11px 14px',
                     borderRadius: msg.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
-                    background: msg.role === 'user' ? hexToRgba(brainColor, 0.06) : 'rgba(255, 255, 255, 0.04)',
-                    border: msg.role === 'user' ? `1px solid ${hexToRgba(brainColor, 0.22)}` : '1px solid rgba(255, 255, 255, 0.07)',
+                    background: msg.role === 'user' ? hexToRgba(brainColor, 0.08) : 'color-mix(in srgb, var(--bg-elevated) 60%, transparent)',
+                    border: msg.role === 'user' ? `1px solid ${hexToRgba(brainColor, 0.22)}` : '1px solid var(--border-soft)',
                     boxShadow:
                       msg.role === 'user'
                         ? `0 0 0 1px ${hexToRgba(brainColor, 0.06)}, 0 0 18px ${hexToRgba(brainColor, 0.07)}`
@@ -1291,20 +1327,20 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                                 <div style={{ fontSize: 9.5, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#34d399', display: 'flex', alignItems: 'center', gap: 5, fontWeight: 700 }}>
                                   <Mic size={10} /> Audio transcripción
                                 </div>
-                                <div style={{ marginTop: 5, fontSize: 11.5, color: 'rgba(255,255,255,0.75)', lineHeight: 1.55, whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 120, overflowY: 'auto' }} className="no-scrollbar">
+                                <div style={{ marginTop: 5, fontSize: 11.5, color: 'var(--text-secondary)', lineHeight: 1.55, whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 120, overflowY: 'auto' }} className="no-scrollbar">
                                   “{a.text}”
                                 </div>
                               </div>
                             ) : a.kind === 'audio' ? (
-                              <span key={a.id} style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.5)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                              <span key={a.id} style={{ fontSize: 10.5, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 5 }}>
                                 <Mic size={11} style={{ color: '#34d399' }} /> Audio (sin transcripción)
                               </span>
                             ) : a.kind === 'anchor' ? (
-                              <span key={a.id} style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.6)', display: 'flex', alignItems: 'center', gap: 5, padding: '5px 9px', borderRadius: 7, background: 'rgba(167, 139, 250, 0.08)', border: '1px solid rgba(167, 139, 250, 0.22)' }}>
+                              <span key={a.id} style={{ fontSize: 10.5, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 5, padding: '5px 9px', borderRadius: 7, background: 'rgba(167, 139, 250, 0.08)', border: '1px solid rgba(167, 139, 250, 0.22)' }}>
                                 <GripVertical size={11} style={{ color: '#a78bfa' }} /> {a.name}
                               </span>
                             ) : (
-                              <span key={a.id} style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.5)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                              <span key={a.id} style={{ fontSize: 10.5, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 5 }}>
                                 <Paperclip size={11} /> {a.name}
                               </span>
                             )
@@ -1319,7 +1355,7 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                           style={{
                             marginBottom: 10,
                             paddingBottom: 10,
-                            borderBottom: '1px dashed rgba(255,255,255,0.08)',
+                            borderBottom: '1px dashed var(--border-subtle)',
                           }}
                         >
                           <button
@@ -1330,7 +1366,7 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                               border: 'none',
                               padding: 0,
                               cursor: 'pointer',
-                              color: 'rgba(255,255,255,0.4)',
+                              color: 'var(--text-tertiary)',
                               fontFamily: "'Inter Tight', sans-serif",
                               fontSize: 10.5,
                               letterSpacing: '0.12em',
@@ -1341,8 +1377,8 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                               fontWeight: 600,
                               transition: 'color 150ms',
                             }}
-                            onMouseEnter={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.7)')}
-                            onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.4)')}
+                            onMouseEnter={e => (e.currentTarget.style.color = 'var(--text-secondary)')}
+                            onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-tertiary)')}
                           >
                             {openThinking === msg.id ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                             Pensamiento
@@ -1353,7 +1389,7 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                                 marginTop: 8,
                                 fontSize: 11.5,
                                 lineHeight: 1.6,
-                                color: 'rgba(255,255,255,0.42)',
+                                color: 'var(--text-muted)',
                                 whiteSpace: 'pre-wrap',
                                 wordBreak: 'break-word',
                                 maxHeight: 180,
@@ -1370,7 +1406,7 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                       )}
                       <MarkdownRenderer content={msg.content} />
                       {msg.isStreaming && !msg.content && !msg.toolCalls?.some(tc => VISIBLE_SKILLS.has(tc.name)) && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: 'rgba(255,255,255,0.45)', fontSize: 11.5 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: 'var(--text-tertiary)', fontSize: 11.5 }}>
                           <Loader2 size={13} className="spin" /> procesando…
                         </div>
                       )}
@@ -1402,16 +1438,16 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                             gap: 5,
                             padding: '4px 9px',
                             borderRadius: 999,
-                            background: 'rgba(255,255,255,0.03)',
+                            background: 'var(--bg-hover)',
                             border: pending
-                              ? '1px solid rgba(255,255,255,0.14)'
+                              ? '1px solid var(--border-default)'
                               : success
-                                ? '1px solid rgba(255,255,255,0.1)'
+                                ? '1px solid var(--border-soft)'
                                 : '1px solid rgba(248, 113, 113, 0.3)',
                             color: pending
-                              ? 'rgba(255,255,255,0.6)'
+                              ? 'var(--text-secondary)'
                               : success
-                                ? 'rgba(255,255,255,0.55)'
+                                ? 'var(--text-secondary)'
                                 : '#f87171',
                             fontSize: 9.5,
                             fontFamily: "'JetBrains Mono', monospace",
@@ -1438,7 +1474,7 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                 )}
 
                 {msg.role === 'user' && (
-                  <div style={{ fontSize: 9.5, color: 'rgba(255,255,255,0.25)', marginTop: 4, padding: '0 4px', letterSpacing: '0.08em' }}>
+                  <div style={{ fontSize: 9.5, color: 'var(--text-tertiary)', marginTop: 4, padding: '0 4px', letterSpacing: '0.08em' }}>
                     {msg.timestamp}
                   </div>
                 )}
@@ -1450,8 +1486,8 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
           <div
             style={{
               padding: '10px 14px 14px',
-              background: 'rgba(10, 11, 15, 0.95)',
-              borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+              background: 'var(--bg-deep)',
+              borderTop: '1px solid var(--border-subtle)',
             }}
           >
             {attachments.length > 0 && (
@@ -1465,10 +1501,10 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                       gap: 6,
                       padding: '3px 6px 3px 4px',
                       borderRadius: 8,
-                      background: 'rgba(255,255,255,0.05)',
-                      border: '1px solid rgba(255,255,255,0.09)',
+                      background: 'var(--bg-hover)',
+                      border: '1px solid var(--border-soft)',
                       fontSize: 10.5,
-                      color: 'rgba(255,255,255,0.7)',
+                      color: 'var(--text-secondary)',
                     }}
                   >
                     {a.kind === 'image' && a.url ? (
@@ -1491,9 +1527,9 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                       <span style={{ color: '#34d399', maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>“{a.text}”</span>
                     )}
                     {a.kind === 'audio' && a.text && <span style={{ color: '#34d399' }}>transcrito</span>}
-                    {a.size ? <span style={{ color: 'rgba(255,255,255,0.3)' }}>{fmtBytes(a.size)}</span> : null}
+                    {a.size ? <span style={{ color: 'var(--text-muted)' }}>{fmtBytes(a.size)}</span> : null}
                     <button onClick={() => removeAttachment(a.id)} title="Quitar"
-                      style={{ width: 15, height: 15, borderRadius: 4, background: 'rgba(255,255,255,0.08)', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+                      style={{ width: 15, height: 15, borderRadius: 4, background: 'var(--bg-hover)', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
                       <X size={9} />
                     </button>
                   </div>
@@ -1507,8 +1543,8 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
               style={{
                 display: 'flex',
                 flexDirection: 'column',
-                background: 'rgba(255, 255, 255, 0.04)',
-                border: isRecording ? '1px solid rgba(239, 68, 68, 0.35)' : '1px solid rgba(255, 255, 255, 0.1)',
+                background: 'color-mix(in srgb, var(--bg-elevated) 65%, transparent)',
+                border: isRecording ? '1px solid rgba(239, 68, 68, 0.35)' : '1px solid var(--border-soft)',
                 borderRadius: 12,
                 padding: '8px 8px 6px 8px',
                 transition: 'border-color 200ms',
@@ -1540,7 +1576,7 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                   border: 'none',
                   outline: 'none',
                   resize: 'none',
-                  color: '#fff',
+                  color: 'var(--text-primary)',
                   fontSize: 13,
                   lineHeight: 1.5,
                   fontFamily: "'JetBrains Mono', monospace",
@@ -1557,7 +1593,7 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                   gap: 4,
                   marginTop: 5,
                   paddingTop: 6,
-                  borderTop: '1px solid rgba(255,255,255,0.07)',
+                  borderTop: '1px solid var(--border-subtle)',
                 }}
               >
                 <button
@@ -1571,8 +1607,8 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                     borderRadius: 7,
                     flexShrink: 0,
                     background: 'transparent',
-                    border: deepMode ? '1px solid rgba(255,255,255,0.22)' : 'none',
-                    color: deepMode ? '#fff' : 'rgba(255,255,255,0.35)',
+                    border: deepMode ? '1px solid var(--border-default)' : 'none',
+                    color: deepMode ? 'var(--text-primary)' : 'var(--text-muted)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -1598,7 +1634,7 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                     flexShrink: 0,
                     background: 'transparent',
                     border: 'none',
-                    color: isRecording ? '#f87171' : 'rgba(255,255,255,0.35)',
+                    color: isRecording ? '#f87171' : 'var(--text-muted)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -1606,7 +1642,7 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                     transition: 'color 150ms',
                   }}
                   onMouseEnter={e => (e.currentTarget.style.color = '#f87171')}
-                  onMouseLeave={e => (e.currentTarget.style.color = isRecording ? '#f87171' : 'rgba(255,255,255,0.35)')}
+                  onMouseLeave={e => (e.currentTarget.style.color = isRecording ? '#f87171' : 'var(--text-muted)')}
                 >
                   {isRecording ? <Square size={13} fill="#f87171" /> : <Mic size={14} />}
                 </button>
@@ -1622,7 +1658,7 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                     flexShrink: 0,
                     background: 'transparent',
                     border: 'none',
-                    color: 'rgba(255,255,255,0.35)',
+                    color: 'var(--text-muted)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -1630,7 +1666,7 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                     transition: 'color 150ms',
                   }}
                   onMouseEnter={e => (e.currentTarget.style.color = '#7dd3fc')}
-                  onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.35)')}
+                  onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
                 >
                   <Paperclip size={14} />
                 </button>
@@ -1656,9 +1692,9 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                     border: isGenerating
                       ? '1px solid rgba(239, 68, 68, 0.45)'
                       : sendDisabled
-                        ? '1px solid rgba(255,255,255,0.08)'
+                        ? '1px solid var(--border-soft)'
                         : `1px solid ${hexToRgba(brainColor, 0.35)}`,
-                    color: isGenerating ? '#f87171' : sendDisabled ? 'rgba(255,255,255,0.3)' : brainColor,
+                    color: isGenerating ? '#f87171' : sendDisabled ? 'var(--text-muted)' : brainColor,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -1682,7 +1718,7 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
               </div>
             </form>
             {isPreparingAudio && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 6, fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 6, fontSize: 10, color: 'var(--text-muted)' }}>
                 <Loader2 size={11} className="spin" /> procesando audio…
               </div>
             )}
@@ -1702,7 +1738,7 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                   <span style={{ fontSize: 10.5, color: '#f87171', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.06em' }}>
                     {recLabel}
                   </span>
-                  <span style={{ flex: 1, fontSize: 9.5, color: 'rgba(255,255,255,0.45)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                  <span style={{ flex: 1, fontSize: 9.5, color: 'var(--text-tertiary)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
                     transcribiendo en vivo
                   </span>
                   <button
@@ -1716,7 +1752,7 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                 </div>
                 <canvas ref={waveCanvasRef} width={380} height={54} className="charvis-waveform" style={{ width: '100%', height: 54, display: 'block', marginTop: 8 }} />
                 {liveTranscript && (
-                  <div style={{ marginTop: 7, fontSize: 11, lineHeight: 1.5, color: 'rgba(255,255,255,0.75)', fontStyle: 'italic', maxHeight: 48, overflowY: 'auto', wordBreak: 'break-word' }}>
+                  <div style={{ marginTop: 7, fontSize: 11, lineHeight: 1.5, color: 'var(--text-secondary)', fontStyle: 'italic', maxHeight: 48, overflowY: 'auto', wordBreak: 'break-word' }}>
                     “{liveTranscript}”
                   </div>
                 )}
@@ -1741,7 +1777,7 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                   alignItems: 'center',
                   justifyContent: 'center',
                   padding: 24,
-                  background: 'rgba(5, 6, 9, 0.55)',
+                  background: 'color-mix(in srgb, var(--bg-base) 55%, transparent)',
                   backdropFilter: 'blur(4px)',
                   WebkitBackdropFilter: 'blur(4px)',
                 }}
@@ -1756,7 +1792,7 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                     width: '100%',
                     maxWidth: 300,
                     borderRadius: 14,
-                    background: 'rgba(16, 18, 24, 0.97)',
+                    background: 'var(--bg-elevated)',
                     border: '1px solid rgba(251, 191, 36, 0.28)',
                     boxShadow: '0 24px 64px rgba(0, 0, 0, 0.6), 0 0 24px rgba(251, 191, 36, 0.1)',
                     padding: '22px 20px 18px',
@@ -1767,13 +1803,13 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                       <Undo2 size={15} />
                     </span>
                     <div>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: '#fff', fontFamily: "'Inter Tight', sans-serif" }}>¿Reiniciar conversación?</div>
-                      <div style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>Se guardará en el historial (no se pierde)</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>¿Reiniciar conversación?</div>
+                      <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 2 }}>Se guardará en el historial (no se pierde)</div>
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
                     <button onClick={() => setConfirmClear(false)} title="Cancelar"
-                      style={{ flex: 1, height: 36, borderRadius: 9, fontSize: 11.5, fontWeight: 600, cursor: 'pointer', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.7)', transition: 'background 150ms' }}>
+                      style={{ flex: 1, height: 36, borderRadius: 9, fontSize: 11.5, fontWeight: 600, cursor: 'pointer', background: 'var(--bg-hover)', border: '1px solid var(--border-soft)', color: 'var(--text-secondary)', transition: 'background 150ms' }}>
                       Cancelar
                     </button>
                     <button onClick={handleClearHistory} title="Sí, reiniciar historial"
@@ -1802,7 +1838,7 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                   alignItems: 'center',
                   justifyContent: 'center',
                   padding: 24,
-                  background: 'rgba(5, 6, 9, 0.55)',
+                  background: 'color-mix(in srgb, var(--bg-base) 55%, transparent)',
                   backdropFilter: 'blur(4px)',
                   WebkitBackdropFilter: 'blur(4px)',
                 }}
@@ -1817,7 +1853,7 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                     width: '100%',
                     maxWidth: 300,
                     borderRadius: 14,
-                    background: 'rgba(16, 18, 24, 0.97)',
+                    background: 'var(--bg-elevated)',
                     border: '1px solid rgba(239, 68, 68, 0.32)',
                     boxShadow: '0 24px 64px rgba(0, 0, 0, 0.6), 0 0 24px rgba(239, 68, 68, 0.12)',
                     padding: '22px 20px 18px',
@@ -1828,13 +1864,13 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                       <SquareX size={15} />
                     </span>
                     <div>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: '#fff', fontFamily: "'Inter Tight', sans-serif" }}>¿Detener la respuesta?</div>
-                      <div style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>Se conserva lo que Charvis ya escribió</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>¿Detener la respuesta?</div>
+                      <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 2 }}>Se conserva lo que Charvis ya escribió</div>
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
                     <button onClick={() => setShowStopConfirm(false)} title="Seguir esperando"
-                      style={{ flex: 1, height: 36, borderRadius: 9, fontSize: 11.5, fontWeight: 600, cursor: 'pointer', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.7)', transition: 'background 150ms' }}>
+                      style={{ flex: 1, height: 36, borderRadius: 9, fontSize: 11.5, fontWeight: 600, cursor: 'pointer', background: 'var(--bg-hover)', border: '1px solid var(--border-soft)', color: 'var(--text-secondary)', transition: 'background 150ms' }}>
                       Seguir
                     </button>
                     <button onClick={handleStopGeneration} title="Detener ahora"
@@ -1863,7 +1899,7 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                   alignItems: 'center',
                   justifyContent: 'center',
                   padding: 24,
-                  background: 'rgba(5, 6, 9, 0.55)',
+                  background: 'color-mix(in srgb, var(--bg-base) 55%, transparent)',
                   backdropFilter: 'blur(4px)',
                   WebkitBackdropFilter: 'blur(4px)',
                 }}
@@ -1879,7 +1915,7 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                     maxWidth: 320,
                     maxHeight: '70%',
                     borderRadius: 14,
-                    background: 'rgba(16, 18, 24, 0.97)',
+                    background: 'var(--bg-elevated)',
                     border: '1px solid rgba(167, 139, 250, 0.28)',
                     boxShadow: '0 24px 64px rgba(0, 0, 0, 0.6), 0 0 24px rgba(167, 139, 250, 0.1)',
                     padding: '20px 16px 14px',
@@ -1888,17 +1924,17 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, padding: '0 4px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: "'Inter Tight', sans-serif", color: '#fff', fontSize: 13.5, fontWeight: 600 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: "'Inter Tight', sans-serif", color: 'var(--text-primary)', fontSize: 13.5, fontWeight: 600 }}>
                       <MessageSquareText size={15} style={{ color: '#a78bfa' }} /> Historial
                     </div>
                     <button onClick={() => setShowHistory(false)} title="Cerrar"
-                      style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', padding: 4, display: 'flex' }}>
+                      style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4, display: 'flex' }}>
                       <X size={15} />
                     </button>
                   </div>
 
                   {lastSessions.length === 0 ? (
-                    <div style={{ padding: '26px 10px', textAlign: 'center', fontSize: 11.5, color: 'rgba(255,255,255,0.4)', lineHeight: 1.6 }}>
+                    <div style={{ padding: '26px 10px', textAlign: 'center', fontSize: 11.5, color: 'var(--text-muted)', lineHeight: 1.6 }}>
                       Aún no hay conversaciones archivadas.
                       <br />Usa “Reiniciar” para guardar la actual en el historial.
                     </div>
@@ -1916,7 +1952,7 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                               padding: '10px 12px', borderRadius: 10, textAlign: 'left',
                               background: 'rgba(167, 139, 250, 0.05)',
                               border: '1px solid rgba(167, 139, 250, 0.15)',
-                              cursor: 'pointer', color: '#fff',
+                              cursor: 'pointer', color: 'var(--text-primary)',
                               transition: 'all 150ms',
                               width: '100%',
                             }}
@@ -1928,11 +1964,11 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                               <span style={{ display: 'block', fontSize: 11.5, fontWeight: 600, fontFamily: "'Inter Tight', sans-serif", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                 {sessionTitle(session)}
                               </span>
-                              <span style={{ display: 'block', fontSize: 9.5, color: 'rgba(255,255,255,0.4)', marginTop: 2, letterSpacing: '0.05em' }}>
+                              <span style={{ display: 'block', fontSize: 9.5, color: 'var(--text-muted)', marginTop: 2, letterSpacing: '0.05em' }}>
                                 {sessionDate(session)} · {count} {count === 1 ? 'mensaje' : 'mensajes'}
                               </span>
                             </span>
-                            <Undo2 size={11} style={{ color: 'rgba(255,255,255,0.3)', flexShrink: 0 }} />
+                            <Undo2 size={11} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
                           </button>
                         );
                       })}

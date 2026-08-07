@@ -1109,8 +1109,8 @@ export default function Estudio() {
                 <span style={{ width: 26, flexShrink: 0 }} />
                 <span style={{ width: 58, flexShrink: 0 }}>Tiempo</span>
                 <span style={{ flex: 1 }}>Progreso</span>
-                <span style={{ width: 32, textAlign: 'right', flexShrink: 0 }}>Rend.</span>
-                <span style={{ width: 46, textAlign: 'right', flexShrink: 0 }}>Escala</span>
+                <span style={{ width: 32, textAlign: 'center', flexShrink: 0 }}>Rend.</span>
+                <span style={{ width: 46, textAlign: 'center', flexShrink: 0 }}>Escala</span>
               </div>
             )}
 
@@ -1142,7 +1142,6 @@ export default function Estudio() {
                           display: 'flex', alignItems: 'center', gap: 8,
                           padding: '10px 8px', borderRadius: 10,
                           opacity: isDist ? 0.45 : 1,
-                          background: isStudyEntry ? `${planCol}0a` : 'transparent',
                           border: '1px solid transparent',
                           borderBottom: i < Math.min(activityFeed.length, 5) - 1 ? '1px solid var(--border-subtle)' : 'none',
                         }}>
@@ -1177,13 +1176,13 @@ export default function Estudio() {
                                 ))
                               )}
                             </div>
-                            <span style={{ width: 32, textAlign: 'right', fontSize: 10, fontWeight: 600, color: effColor, fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{eff}%</span>
+                            <span style={{ width: 32, textAlign: 'center', fontSize: 10, fontWeight: 600, color: effColor, fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{eff}%</span>
                             {isStudyEntry ? (
-                              <span style={{ width: 46, display: 'flex', justifyContent: 'flex-end', flexShrink: 0 }}>
-                                <span style={{ fontSize: 9, fontWeight: 700, color: planCol || 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", background: planCol ? `${planCol}12` : 'var(--bg-hover)', border: planCol ? `1px solid ${planCol}30` : 'none', borderRadius: 6, padding: '2px 0 2px 6px', lineHeight: 1.4 }}>{vmNorm}/10</span>
+                              <span style={{ width: 46, display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
+                                <span style={{ fontSize: 9, fontWeight: 700, color: planCol || 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", borderRadius: 6, padding: '2px 6px', lineHeight: 1.4 }}>{vmNorm}/10</span>
                               </span>
                             ) : (
-                              <span style={{ width: 46, textAlign: 'right', fontSize: 9, fontWeight: 600, color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{vm}/20</span>
+                              <span style={{ width: 46, textAlign: 'center', fontSize: 9, fontWeight: 600, color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{vm}/20</span>
                             )}
                           </>
                         )}
@@ -1264,8 +1263,8 @@ export default function Estudio() {
                       <span style={{ width: 26, flexShrink: 0 }} />
                       <span style={{ width: 58, flexShrink: 0 }}>Tiempo</span>
                       <span style={{ flex: 1 }}>Progreso</span>
-                      <span style={{ width: 32, textAlign: 'right', flexShrink: 0 }}>Rend.</span>
-                      <span style={{ width: 46, textAlign: 'right', flexShrink: 0 }}>Escala</span>
+                      <span style={{ width: 32, textAlign: 'center', flexShrink: 0 }}>Rend.</span>
+                      <span style={{ width: 46, textAlign: 'center', flexShrink: 0 }}>Escala</span>
                     </div>
 
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -1293,7 +1292,6 @@ export default function Estudio() {
                               display: 'flex', alignItems: 'center', gap: 8,
                               padding: '10px 8px', borderRadius: 10,
                               opacity: isDist ? 0.45 : 1,
-                              background: isStudyEntry ? `${planCol}0a` : 'transparent',
                               border: '1px solid transparent',
                               borderBottom: i < activityFeed.length - 1 ? '1px solid var(--border-subtle)' : 'none',
                             }}>
@@ -1328,10 +1326,10 @@ export default function Estudio() {
                                     ))
                                   )}
                                 </div>
-                                <span style={{ width: 32, textAlign: 'right', fontSize: 10, fontWeight: 600, color: effColor, fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{eff}%</span>
+                                <span style={{ width: 32, textAlign: 'center', fontSize: 10, fontWeight: 600, color: effColor, fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{eff}%</span>
                                 {isStudyEntry ? (
-                                  <span style={{ width: 46, display: 'flex', justifyContent: 'flex-end', flexShrink: 0 }}>
-                                    <span style={{ fontSize: 9, fontWeight: 700, color: planCol || 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", background: planCol ? `${planCol}12` : 'var(--bg-hover)', border: planCol ? `1px solid ${planCol}30` : 'none', borderRadius: 6, padding: '2px 0 2px 6px', lineHeight: 1.4 }}>{vmNorm}/10</span>
+                                  <span style={{ width: 46, display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
+                                    <span style={{ fontSize: 9, fontWeight: 700, color: planCol || 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", borderRadius: 6, padding: '2px 6px', lineHeight: 1.4 }}>{vmNorm}/10</span>
                                   </span>
                                 ) : (
                                   <span style={{ width: 46, textAlign: 'right', fontSize: 9, fontWeight: 600, color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{vm}/20</span>
