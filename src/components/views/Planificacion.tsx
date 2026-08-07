@@ -156,6 +156,7 @@ export default function Planificacion() {
   const [showEventModal, setShowEventModal]   = useState(false);
   const [modalDefaults, setModalDefaults]     = useState<Partial<PlanEvent>>({});
   const [editingEvent, setEditingEvent]       = useState<PlanEvent | null>(null);
+  const [occurrenceDate, setOccurrenceDate]   = useState<string | null>(null);
   
   const [selectedItem, setSelectedItem] = useState<SelectedItem | null>(null);
 
@@ -170,17 +171,6 @@ export default function Planificacion() {
   const [planDuration, setPlanDuration] = useState(30);
   const [planIntensity, setPlanIntensity] = useState(5);
 
-  const openNewPlanSession = (date?: string) => {
-    setPlanEditId(null);
-    setPlanDate(date || format(navDate, 'yyyy-MM-dd'));
-    setPlanStartTime('09:00');
-    setPlanTitle('');
-    setPlanCourseId(courses[0]?.id || '');
-    setPlanType('estudio');
-    setPlanDuration(30);
-    setPlanIntensity(5);
-    setShowPlanModal(true);
-  };
   const openEditPlanSession = (ps: { id: string; date: string; startTime?: string; title: string; courseId: string; type: string; durationMinutes: number; intensity?: number }) => {
     setPlanEditId(ps.id);
     setPlanDate(ps.date);
@@ -313,6 +303,8 @@ export default function Planificacion() {
 
   function getEventsForDate(iso: string): PlanEvent[] {
     return events.filter(e => {
+      // Excluded occurrence (edited as "only this event")
+      if (e.exceptions && e.exceptions.includes(iso)) return false;
       // Check repeat bounds
       if (e.repeatUntil && isBefore(new Date(e.repeatUntil+'T23:59:59'), new Date(iso+'T00:00:00'))) return false;
 
@@ -366,6 +358,30 @@ export default function Planificacion() {
     return diff > 4;
   };
 
+  const studyBlock = (s: { id: string; type: string; startedAt: string; duration: number; title?: string; taskId?: string; courseId?: string; plannedSessionId?: string }) => {
+    const linkedPlan = s.plannedSessionId ? (plannedSessions || []).find(p => p.id === s.plannedSessionId) : null;
+    const linkedTask = s.taskId ? tasks.find(t => t.id === s.taskId) : null;
+    const linkedCourse = s.courseId ? courses.find(c => c.id === s.courseId) : null;
+    const fallback = s.type === 'pomodoro' ? 'Pomodoro' : 'Cronómetro';
+    let color: string;
+    let label: string;
+    if (linkedPlan) {
+      const psInt = Math.max(0, Math.min(10, linkedPlan.intensity || 0));
+      color = psInt > 0 ? REVIEW_LEVEL_COLORS[psInt - 1] : '#9CA3AF';
+      label = linkedPlan.title || fallback;
+    } else if (linkedTask) {
+      color = linkedTask.courseColor || '#9CA3AF';
+      label = linkedTask.title;
+    } else if (linkedCourse) {
+      color = linkedCourse.color || '#9CA3AF';
+      label = linkedCourse.name;
+    } else {
+      color = '#9CA3AF';
+      label = s.title || fallback;
+    }
+    return { color, label, mins: Math.round(s.duration / 60), isPlan: !!linkedPlan };
+  };
+
   function deleteEvent(id: string) {
     const target = events.find(e => e.id === id);
     setEvents(p => p.filter(e => e.id !== id));
@@ -392,6 +408,23 @@ export default function Planificacion() {
           setEvents(p => p.map(e => e.id === ev.id ? { ...e, googleEventId: gid } : e));
         }
       });
+    }
+  }
+
+  function saveOneEvent(ev: PlanEvent, original: PlanEvent) {
+    setEvents(p => {
+      const idx = p.findIndex(x => x.id === original.id);
+      const n = [...p];
+      if (idx >= 0) n[idx] = original;
+      else n.push(original);
+      if (!n.some(x => x.id === ev.id)) n.push(ev);
+      return n;
+    });
+    setShowEventModal(false);
+    setEditingEvent(null);
+    setSelectedItem(null);
+    if (googleConnected && calendarSyncEnabled) {
+      void syncPlanEventToGoogle({ ...ev, description: ev.description || '' });
     }
   }
 
@@ -514,22 +547,7 @@ export default function Planificacion() {
             <CheckSquare size={14} /> {showHabits ? 'Cerrar Hábitos' : 'Hábitos'}
           </button>
           <button
-            onClick={() => openNewPlanSession()}
-            style={{
-              display:'flex', alignItems:'center', gap:8,
-              height:38, borderRadius:10, padding:'0 20px',
-              fontSize:12, fontWeight:700, fontFamily:"'Outfit',sans-serif",
-              border:'1px solid #8B5CF6', cursor:'pointer',
-              background:'rgba(139,92,246,0.1)', color:'#A78BFA',
-              transition:'all 200ms',
-            }}
-            onMouseEnter={e=>e.currentTarget.style.background='rgba(139,92,246,0.2)'}
-            onMouseLeave={e=>e.currentTarget.style.background='rgba(139,92,246,0.1)'}
-          >
-            <Clock size={14}/> Sesión
-          </button>
-          <button
-            onClick={() => { setModalDefaults({ date: format(new Date(), 'yyyy-MM-dd') }); setEditingEvent(null); setShowEventModal(true); }}
+            onClick={() => { setModalDefaults({ date: format(new Date(), 'yyyy-MM-dd') }); setEditingEvent(null); setOccurrenceDate(null); setShowEventModal(true); }}
             style={{
               display:'flex', alignItems:'center', gap:8,
               height:38, borderRadius:10, padding:'0 20px',
@@ -630,7 +648,7 @@ export default function Planificacion() {
                             <DroppablePlanSlot key={h} id={slotId}>
                               {({ setNodeRef, isOver: isOverDnd }) => (
                                 <div ref={setNodeRef}
-                                  onClick={()=>{ setModalDefaults({ date:iso, startTime:fracToTime(h), endTime:fracToTime(h+1) }); setEditingEvent(null); setShowEventModal(true); }}
+                                  onClick={()=>{ setModalDefaults({ date:iso, startTime:fracToTime(h), endTime:fracToTime(h+1) }); setEditingEvent(null); setOccurrenceDate(null); setShowEventModal(true); }}
                                   style={{ height:H_PX, borderBottom:'1px dashed var(--border-soft)', background:isOver||isOverDnd?'rgba(225,29,72,0.08)':'transparent', transition:'background 100ms', cursor:'cell' }}
                                 />
                               )}
@@ -665,21 +683,21 @@ export default function Planificacion() {
                             <DraggablePlanEvent key={item.id} id={item.id}>
                               {({ attributes, listeners, setNodeRef, isDragging }) => (
                                 <div ref={setNodeRef} {...attributes} {...listeners}
-                                  onClick={e => { e.stopPropagation(); setSelectedItem({ type: 'event', event: item as PlanEvent }); }}
+                                  onClick={e => { e.stopPropagation(); setOccurrenceDate(iso); setSelectedItem({ type: 'event', event: item as PlanEvent }); }}
                                   style={{
                                     position:'absolute', top, left: `${pos.left}%`, width: `${pos.width}%`, height: hpx,
                                     borderLeft: `3px solid ${itemColor}`,
                                     borderRadius: '4px',
                                     background: `color-mix(in srgb, ${itemColor} 12%, var(--bg-base))`,
                                     boxShadow: `inset 0 1px 0 ${itemColor}10, 0 2px 8px rgba(0,0,0,0.08)`,
-                                    zIndex: 3, cursor: 'grab', display:'flex', flexDirection:'column', padding: '6px 10px', overflow: 'hidden',
+                                    zIndex: 3, cursor: 'grab', display:'flex', flexDirection:'column', padding: hpx <= 30 ? '3px 8px' : '6px 10px', overflow: 'hidden',
                                     opacity: isDragging ? 0.4 : 1,
                                     transition: 'opacity 150ms',
                                   }}
                                   onMouseEnter={e=>{ e.currentTarget.style.boxShadow = `inset 0 1px 0 ${itemColor}20, 0 6px 20px rgba(0,0,0,0.25)`; e.currentTarget.style.zIndex='4'; }}
                                   onMouseLeave={e=>{ e.currentTarget.style.boxShadow = `inset 0 1px 0 ${itemColor}10, 0 2px 8px rgba(0,0,0,0.08)`; e.currentTarget.style.zIndex='3'; }}
                                 >
-                                  <span style={{ fontSize: 11, fontWeight: 600, color: itemColor, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{item.title}</span>
+                                  <span style={{ fontSize: hpx <= 30 ? 10.5 : 11, fontWeight: 600, color: itemColor, lineHeight: 1.25, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{item.title}</span>
                                   {hpx > 40 && (item as PlanEvent).taskId && (() => { const lt = tasks.find(t => t.id === (item as PlanEvent).taskId); return lt ? (
                                     <div style={{ display:'flex', alignItems:'center', gap:3, marginTop:1 }}>
                                       <CheckCircle2 size={9} style={{ color:'var(--text-muted)', flexShrink:0 }} />
@@ -703,23 +721,29 @@ export default function Planificacion() {
                           const stH = stD.getHours() + stD.getMinutes() / 60 + stD.getSeconds() / 3600;
                           const durH = s.duration / 3600;
                           const sTop = (stH - H_START) * H_PX;
-                          const sH = Math.max(durH * H_PX, 16);
-                          const isChrono = s.type === 'chrono';
-                          const sColor = isChrono ? '#10B981' : '#3B82F6';
-                          const linkedTask = s.taskId ? tasks.find(t => t.id === s.taskId) : null;
-                          const linkedCourse = s.courseId ? courses.find(c => c.id === s.courseId) : null;
-                          const sLabel = linkedTask ? linkedTask.title : (linkedCourse ? linkedCourse.name : (s.type === 'pomodoro' ? 'Pomodoro' : 'Cronómetro'));
+                          const sH = Math.max(durH * H_PX, 26);
+                          const b = studyBlock(s);
                           return (
-                            <div key={s.id} title={`${sLabel} — ${Math.round(s.duration/60)} min`}
+                            <div key={s.id} title={`${b.label} — ${b.mins} min registrados${b.isPlan ? ' · sesión planificada' : ''}`}
                               style={{
                                 position:'absolute', top: sTop, left: '2%', width: '96%', height: sH,
-                                borderRadius: 4, zIndex: 1, pointerEvents: 'none',
-                                background: isChrono ? 'rgba(16,185,129,0.08)' : 'rgba(59,130,246,0.08)',
-                                borderLeft: `2px solid ${isChrono ? 'rgba(16,185,129,0.25)' : 'rgba(59,130,246,0.25)'}`,
-                                opacity: 0.7, display:'flex', alignItems:'center', paddingLeft:10, gap:6, overflow: 'hidden',
+                                borderRadius: 6, zIndex: 1, pointerEvents: 'none',
+                                background: `linear-gradient(135deg, ${b.color}1c, ${b.color}06)`,
+                                borderLeft: `3px ${b.isPlan ? 'dashed' : 'solid'} ${b.color}99`,
+                                boxShadow: b.isPlan ? `inset 0 0 0 1px ${b.color}33, inset 0 1px 0 rgba(255,255,255,0.04)` : 'inset 0 1px 0 rgba(255,255,255,0.04)',
+                                display:'flex', flexDirection:'column', justifyContent:'center', padding: '4px 9px 4px 10px', overflow: 'hidden',
                               }}>
-                              <span style={{ fontSize: 9, fontWeight: 700, color: sColor, fontFamily: "'JetBrains Mono',monospace", flexShrink: 0 }}>{Math.round(s.duration/60)}m</span>
-                              <span style={{ fontSize: 9.5, fontWeight: 600, color: sColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sLabel}</span>
+                              <span style={{ fontSize: 11, fontWeight: 800, color: b.color, textTransform: 'uppercase', letterSpacing: '0.03em', fontFamily: "'Inter Tight',sans-serif", lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {b.label}
+                              </span>
+                              {sH > 30 && (
+                                <span style={{ fontSize: 8.5, fontWeight: 600, color: b.color, opacity: 0.75, fontFamily: "'JetBrains Mono',monospace", marginTop: 1, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                  {b.isPlan && (
+                                    <span style={{ fontSize: 7.5, fontWeight: 800, letterSpacing: '0.08em', padding: '1px 4px', borderRadius: 4, border: `1px solid ${b.color}55`, color: b.color, opacity: 1, lineHeight: 1 }}>SESIÓN</span>
+                                  )}
+                                  <Check size={8} strokeWidth={3} style={{ flexShrink: 0 }} /> {b.mins} min registrados
+                                </span>
+                              )}
                             </div>
                           );
                         })}
@@ -813,7 +837,7 @@ export default function Planificacion() {
                 </div>
                 <div style={{ marginTop:16, display:'flex', flexWrap:'wrap', gap:8 }}>
                   {getAllDayEventsForDate(format(navDate,'yyyy-MM-dd')).map(ev => (
-                    <span key={ev.id} onClick={()=>{ setSelectedItem({ type: 'event', event: ev }); }} style={{ fontSize:12, fontWeight:600, padding:'6px 16px', borderRadius:10, background:`${ev.color}15`, border:`1px solid ${ev.color}30`, color:ev.color, cursor:'pointer' }}>{ev.title}</span>
+                    <span key={ev.id} onClick={()=>{ setOccurrenceDate(format(navDate,'yyyy-MM-dd')); setSelectedItem({ type: 'event', event: ev }); }} style={{ fontSize:12, fontWeight:600, padding:'6px 16px', borderRadius:10, background:`${ev.color}15`, border:`1px solid ${ev.color}30`, color:ev.color, cursor:'pointer' }}>{ev.title}</span>
                   ))}
                 </div>
               </div>
@@ -829,7 +853,7 @@ export default function Planificacion() {
                   <div style={{ position:'relative' }}>
                     {HOURS.map(h=>(
                       <div key={h}
-                        onClick={()=>{ setModalDefaults({ date:format(navDate,'yyyy-MM-dd'), startTime:fracToTime(h), endTime:fracToTime(h+1) }); setEditingEvent(null); setShowEventModal(true); }}
+                        onClick={()=>{ setModalDefaults({ date:format(navDate,'yyyy-MM-dd'), startTime:fracToTime(h), endTime:fracToTime(h+1) }); setEditingEvent(null); setOccurrenceDate(null); setShowEventModal(true); }}
                         style={{ height:H_PX, borderBottom:'1px dashed var(--border-soft)', cursor:'cell' }}/>
                     ))}
                     {(()=>{
@@ -842,12 +866,12 @@ export default function Planificacion() {
                         const top=eventTop(item), hpx=eventHeight(item);
                         const pos = layout.get(item.id) || { left: 0, width: 100 };
                         return (
-                          <div key={item.id} onClick={e=>{e.stopPropagation(); isClass ? null : setSelectedItem({ type: 'event', event: item as PlanEvent });}} 
+                          <div key={item.id} onClick={e=>{e.stopPropagation(); if (!isClass) { setOccurrenceDate(format(navDate,'yyyy-MM-dd')); setSelectedItem({ type: 'event', event: item as PlanEvent }); }}} 
                             style={{ 
                               position:'absolute', top, left:`${pos.left}%`, width:`${pos.width}%`, height:hpx, 
                               borderLeft: isClass ? 'none' : `3px solid ${item.color}`,
                               background: isClass ? `color-mix(in srgb, ${item.color} 3%, transparent)` : `color-mix(in srgb, ${item.color} 18%, var(--bg-base))`, 
-                              zIndex: isClass ? 0 : 3, cursor: isClass ? 'default' : 'pointer', display:'flex', flexDirection:'column', padding: isClass ? '4px 10px' : '12px 16px', overflow:'hidden',
+                              zIndex: isClass ? 0 : 3, cursor: isClass ? 'default' : 'pointer', display:'flex', flexDirection:'column', padding: isClass ? '4px 10px' : (hpx <= 34 ? '3px 10px' : '12px 16px'), overflow:'hidden',
                               opacity: isClass ? 0.5 : 1,
                               pointerEvents: isClass ? 'none' : 'auto',
                               borderRight: isClass ? 'none' : '1px solid var(--border-soft)', borderTop: isClass ? 'none' : '1px solid var(--border-soft)', borderBottom: isClass ? 'none' : '1px solid var(--border-soft)',
@@ -856,9 +880,9 @@ export default function Planificacion() {
                             onMouseEnter={e => !isClass && (e.currentTarget.style.filter = 'brightness(1.2)')}
                             onMouseLeave={e => !isClass && (e.currentTarget.style.filter = 'none')}
                           >
-                            <div style={{ fontSize: isClass ? 11 : 15, fontWeight: isClass ? 500 : 600, color: isClass ? 'var(--text-muted)' : item.color, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{item.title}</div>
-                            {!isClass && <div style={{ fontSize:12, color:'var(--text-muted)', marginTop:4 }}>{fmtTimeRange(item.startTime, item.endTime, settings?.timeFormat)}</div>}
-                            {!isClass && (item as PlanEvent).taskId && (() => { const lt = tasks.find(t => t.id === (item as PlanEvent).taskId); return lt ? (
+                            <div style={{ fontSize: isClass ? 11 : (hpx <= 34 ? 13 : 15), fontWeight: isClass ? 500 : 600, color: isClass ? 'var(--text-muted)' : item.color, lineHeight: 1.3, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{item.title}</div>
+                            {!isClass && hpx > 26 && <div style={{ fontSize:12, color:'var(--text-muted)', marginTop:hpx <= 34 ? 1 : 4 }}>{fmtTimeRange(item.startTime, item.endTime, settings?.timeFormat)}</div>}
+                            {!isClass && hpx > 40 && (item as PlanEvent).taskId && (() => { const lt = tasks.find(t => t.id === (item as PlanEvent).taskId); return lt ? (
                               <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:6, padding:'4px 8px', borderRadius:6, background:`${lt.courseColor||'var(--text-muted)'}10`, borderLeft:`2px solid ${lt.courseColor||'var(--text-muted)'}` }}>
                                 <CheckCircle2 size={10} style={{ color: lt.courseColor||'var(--text-muted)', flexShrink:0 }} />
                                 <span style={{ fontSize:11, color: lt.courseColor||'var(--text-secondary)', fontWeight:500, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{lt.title}</span>
@@ -875,23 +899,29 @@ export default function Planificacion() {
                       const stH = stD.getHours() + stD.getMinutes() / 60 + stD.getSeconds() / 3600;
                       const durH = s.duration / 3600;
                       const sTop = (stH - H_START) * H_PX;
-                      const sH = Math.max(durH * H_PX, 16);
-                      const isChrono = s.type === 'chrono';
-                      const sColor = isChrono ? '#10B981' : '#3B82F6';
-                      const linkedTask = s.taskId ? tasks.find(t => t.id === s.taskId) : null;
-                      const linkedCourse = s.courseId ? courses.find(c => c.id === s.courseId) : null;
-                      const sLabel = linkedTask ? linkedTask.title : (linkedCourse ? linkedCourse.name : (s.type === 'pomodoro' ? 'Pomodoro' : 'Cronómetro'));
+                      const sH = Math.max(durH * H_PX, 28);
+                      const b = studyBlock(s);
                       return (
-                        <div key={s.id} title={`${sLabel} — ${Math.round(s.duration/60)} min`}
+                        <div key={s.id} title={`${b.label} — ${b.mins} min registrados${b.isPlan ? ' · sesión planificada' : ''}`}
                           style={{
-                            position:'absolute', top: sTop, left: '2%', width: '96%', height: sH,
-                            borderRadius: 4, zIndex: 1, pointerEvents: 'none',
-                            background: isChrono ? 'rgba(16,185,129,0.08)' : 'rgba(59,130,246,0.08)',
-                            borderLeft: `2px solid ${isChrono ? 'rgba(16,185,129,0.25)' : 'rgba(59,130,246,0.25)'}`,
-                            opacity: 0.7, display:'flex', alignItems:'center', paddingLeft:10, gap:6, overflow:'hidden',
+                            position:'absolute', top: sTop, left: '2.5%', width: '95%', height: sH,
+                            borderRadius: 6, zIndex: 1, pointerEvents: 'none',
+                            background: `linear-gradient(135deg, ${b.color}1c, ${b.color}06)`,
+                            borderLeft: `3px ${b.isPlan ? 'dashed' : 'solid'} ${b.color}99`,
+                            boxShadow: b.isPlan ? `inset 0 0 0 1px ${b.color}33, inset 0 1px 0 rgba(255,255,255,0.04)` : 'inset 0 1px 0 rgba(255,255,255,0.04)',
+                            display:'flex', flexDirection:'column', justifyContent:'center', padding: '5px 11px', overflow:'hidden',
                           }}>
-                          <span style={{ fontSize: 10, fontWeight: 700, color: sColor, fontFamily: "'JetBrains Mono',monospace", flexShrink: 0 }}>{Math.round(s.duration/60)}m</span>
-                          <span style={{ fontSize: 10.5, fontWeight: 600, color: sColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sLabel}</span>
+                          <span style={{ fontSize: 13, fontWeight: 800, color: b.color, textTransform: 'uppercase', letterSpacing: '0.03em', fontFamily: "'Inter Tight',sans-serif", lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {b.label}
+                          </span>
+                          {sH > 32 && (
+                            <span style={{ fontSize: 9.5, fontWeight: 600, color: b.color, opacity: 0.75, fontFamily: "'JetBrains Mono',monospace", marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+                              {b.isPlan && (
+                                <span style={{ fontSize: 8, fontWeight: 800, letterSpacing: '0.08em', padding: '1px 5px', borderRadius: 4, border: `1px solid ${b.color}55`, color: b.color, opacity: 1, lineHeight: 1 }}>SESIÓN</span>
+                              )}
+                              <Check size={9} strokeWidth={3} style={{ flexShrink: 0 }} /> {b.mins} min registrados
+                            </span>
+                          )}
                         </div>
                       );
                     })}
@@ -1092,8 +1122,10 @@ export default function Planificacion() {
           defaults={modalDefaults}
           courses={courses}
           tasks={tasks}
+          occurrenceDate={occurrenceDate}
           onClose={()=>{ setShowEventModal(false); setEditingEvent(null); }}
           onSave={saveEvent}
+          onSaveOne={saveOneEvent}
           onDelete={id=>{ deleteEvent(id); }}
           addNotification={addNotification}
         />

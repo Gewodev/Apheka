@@ -101,6 +101,7 @@ interface GoalEvent {
   repeat?: string;
   repeatDays?: number[];
   repeatUntil?: string;
+  exceptions?: string[];
 }
 
 const GOAL_KEY = 'owa_planned_goal';
@@ -115,7 +116,7 @@ function loadGoalEvent(): GoalEvent | null {
     const data = JSON.parse(raw);
     const ev = (data.events || []).find((e: any) => e.id === goalId);
     if (!ev) return null;
-    return { id: ev.id, title: ev.title, date: ev.date, startTime: ev.startTime, allDay: ev.allDay, color: ev.color, repeat: ev.repeat, repeatDays: ev.repeatDays, repeatUntil: ev.repeatUntil };
+    return { id: ev.id, title: ev.title, date: ev.date, startTime: ev.startTime, allDay: ev.allDay, color: ev.color, repeat: ev.repeat, repeatDays: ev.repeatDays, repeatUntil: ev.repeatUntil, exceptions: ev.exceptions };
   } catch { return null; }
 }
 
@@ -178,7 +179,7 @@ export default function Inicio() {
         return true;
       }).map((e: any) => ({
         id: e.id, title: e.title, date: e.date, startTime: e.startTime, allDay: e.allDay, color: e.color,
-        repeat: e.repeat, repeatDays: e.repeatDays, repeatUntil: e.repeatUntil,
+        repeat: e.repeat, repeatDays: e.repeatDays, repeatUntil: e.repeatUntil, exceptions: e.exceptions,
       }));
       const today = format(new Date(), 'yyyy-MM-dd');
       const future = all.filter(e => {
@@ -189,15 +190,20 @@ export default function Inicio() {
         if (!e.repeat || e.repeat === 'none' || e.date >= today) return e;
         const base = new Date(e.date + 'T12:00:00');
         const tgt = new Date(today + 'T12:00:00');
+        const isExcepted = (d: Date) => (e.exceptions || []).includes(format(d, 'yyyy-MM-dd'));
         let next: Date | null = null;
-        if (e.repeat === 'daily') next = tgt;
-        else if (e.repeat === 'weekly') {
-          const diff = (base.getDay() - tgt.getDay() + 7) % 7;
-          next = addDays(tgt, diff);
+        if (e.repeat === 'daily') {
+          for (let i = 0; i < 7; i++) { const d = addDays(tgt, i); if (!isExcepted(d)) { next = d; break; } }
+        } else if (e.repeat === 'weekly') {
+          for (let i = 0; i < 7; i++) {
+            const d = addDays(tgt, i);
+            if (d.getDay() === base.getDay() && !isExcepted(d)) { next = d; break; }
+          }
         } else if (e.repeat === 'custom_days' && e.repeatDays?.length) {
           const jsToday = (tgt.getDay() + 6) % 7;
           for (let i = 0; i < 7; i++) {
-            if (e.repeatDays.includes((jsToday + i) % 7)) { next = addDays(tgt, i); break; }
+            const d = addDays(tgt, i);
+            if (e.repeatDays.includes((jsToday + i) % 7) && !isExcepted(d)) { next = d; break; }
           }
         }
         if (!next) next = tgt;

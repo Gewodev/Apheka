@@ -34,7 +34,7 @@ interface AppContentProps {
 }
 
 function AppContent() {
-  const { settings, courses, addCourse, navigateTo, setNavigateTo, importState, updateSettings, toastMessage, deleteOldCompletedTasks, youtubeVideoUrl, isPlayingMusic, musicVolume, musicProgress, musicDuration, setMusicProgress, setIsPlayingMusic, playTrack, musicQueue, setMusicQueue, shuffleMode, repeatMode, tracks, currentTrackId, setRepeatMode, coverModalTrackId, showRestPrompt, handlePomodoroBannerClick, queueSource, pipUrl, pipTitle, pipAutoplay, setPipUrl, courseDeepLink, setCourseDeepLink } = useApp();
+  const { settings, courses, addCourse, navigateTo, setNavigateTo, importState, updateSettings, toastMessage, deleteOldCompletedTasks, youtubeVideoUrl, isPlayingMusic, musicVolume, musicProgress, musicDuration, setMusicProgress, setIsPlayingMusic, playTrack, musicQueue, setMusicQueue, shuffleMode, repeatMode, tracks, currentTrackId, setRepeatMode, coverModalTrackId, showRestPrompt, handlePomodoroBannerClick, queueSource, pipUrl, pipTitle, pipAutoplay, setPipUrl, pipPlaying, setPipPlaying, courseDeepLink, setCourseDeepLink } = useApp();
   const [activeView, setActiveView] = useState<ViewId>('inicio');
 
   // Auto-clean completed tasks older than 2 months on startup
@@ -784,7 +784,7 @@ function AppContent() {
       )}
 
       {/* PiP Video Player */}
-      <VideoPiP url={pipUrl} title={pipTitle} autoplay={pipAutoplay} onClose={() => setPipUrl(null)} />
+      <VideoPiP url={pipUrl} title={pipTitle} autoplay={pipAutoplay} onPlayingChange={setPipPlaying} onClose={() => setPipUrl(null)} />
 
       {/* ─── Charvis: zona invisible al borde derecho; al pasar el cursor se
               difumina un velo arcoíris sobre la lateral (sin texto) ─── */}

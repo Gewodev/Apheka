@@ -2156,12 +2156,12 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     updateCourse(course.id, { studyTopics: (course.studyTopics || []).map(t => t.id === topicId ? { ...t, reviewLevel: level, status: level >= 8 ? 'done' as const : 'studying' as const } : t) });
   };
 
-  // --- Drag and Drop ---
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  // --- Drag and Drop (long-press: mantener pulsado ~300ms en TODOS los elementos) ---
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { delay: 300, tolerance: 8 } }));
   const [activeMatDragId, setActiveMatDragId] = useState<string | null>(null);
   const [activeTopicDragId, setActiveTopicDragId] = useState<string | null>(null);
   const [activeGroupDragId, setActiveGroupDragId] = useState<string | null>(null);
-  const studySensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const studySensors = useSensors(useSensor(PointerSensor, { activationConstraint: { delay: 300, tolerance: 8 } }));
 
   // Mantiene el overlay "Suelta aquí" de Charvis en síncrono con la posición del
   // puntero durante los drags de @dnd-kit (que no disparan eventos nativos de drop).
@@ -3609,6 +3609,8 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                           const courseRealInt = withVol.length > 0
                             ? withVol.reduce((sm, ss) => sm + Math.min(10, (ss.volmeter as number) / (ss.plannedSessionId ? 1 : 2)), 0) / withVol.length
                             : 0;
+                          const courseMat = parsedTopics.reduce((s, t) => s + (t.materials?.length || 0), 0);
+                          const courseMastery = parsedTopics.length > 0 ? parsedTopics.reduce((s, t) => s + Math.min(1, (t.reviewLevel || 0) / 10), 0) / parsedTopics.length : 0;
 
                           // Unified course-performance score — a weighted blend of EVERYTHING
                           // measurable. Every term comes from real, countable data:
@@ -3651,10 +3653,12 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                           };
 
                           const rawValues = axisItems.map(scoreOf);
-                          const radarCx = 230, radarCy = 205;
+                          const VIEW_W = 520, VIEW_H = 470;
+                          const radarCx = VIEW_W / 2, radarCy = VIEW_H / 2;
                           const n = Math.max(3, labels.length);
                           const manyAxes = n > 14;
-                          const radarR = Math.max(84, Math.min(150, 420 / Math.sqrt(n)));
+                          const rotated = n > 12;
+                          const radarR = Math.max(84, Math.min(165, 520 / Math.sqrt(n)));
                           const angleStep = (2 * Math.PI) / n;
                           const gridLevels = [0.33, 0.66, 1];
 
@@ -3670,9 +3674,9 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                             const svg = radarSvgRef.current?.getBoundingClientRect();
                             const TT_W = 250, TT_H = 340;
                             if (!wrap || !svg) return { left: '40%', top: '50%' };
-                            const scale = Math.min(svg.width / 460, svg.height / 420);
-                            const ox = (svg.width - 460 * scale) / 2;
-                            const oy = (svg.height - 420 * scale) / 2;
+                            const scale = Math.min(svg.width / VIEW_W, svg.height / VIEW_H);
+                            const ox = (svg.width - VIEW_W * scale) / 2;
+                            const oy = (svg.height - VIEW_H * scale) / 2;
                             const vx = svg.left + ox + pt.x * scale;
                             const vy = svg.top + oy + pt.y * scale;
                             let lx = vx - wrap.left - TT_W / 2;
@@ -3709,12 +3713,12 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                             );
                           }
 
-                          /* ── DIAGNOSTIC RADAR: 1–2 agrupaciones → se mantiene el radar geométrico
-                             pero midiendo las variables del curso (dominio, materiales, tareas, notas,
-                             sesiones, tiempo) en 6 esquinas de diagnóstico. Nunca donut. ── */
-                          if (axisItems.length <= 2) {
-                            const courseMat = parsedTopics.reduce((s, t) => s + (t.materials?.length || 0), 0);
-                            const courseMastery = parsedTopics.length > 0 ? parsedTopics.reduce((s, t) => s + Math.min(1, (t.reviewLevel || 0) / 10), 0) / parsedTopics.length : 0;
+                          /* ── DIAGNOSTIC RADAR: 1–2 agrupaciones O más de 30 → se mantiene el
+                             radar geométrico midiendo las variables del curso (dominio, materiales,
+                             tareas, notas, sesiones, tiempo, intensidad) en 7 esquinas. Nunca donut,
+                             nunca listado — siempre la telaraña geométrica conectada con todos los
+                             datos del curso. ── */
+                          if (axisItems.length <= 2 || axisItems.length > 30) {
                             const diagAxes = [
                               { label: 'Dominio', value: courseMastery, detail: courseMastery > 0 ? `${Math.round(courseMastery * 100)}% de dominio medio` : 'sin repaso todavía' },
                               { label: 'Materiales', value: Math.min(1, courseMat / 10), detail: `${courseMat} archivo${courseMat === 1 ? '' : 's'}` },
@@ -3725,7 +3729,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                               { label: 'Intensidad', value: coursePlanInt > 0 ? Math.min(1, courseRealInt / coursePlanInt) : (courseRealInt > 0 ? Math.min(1, courseRealInt / 10) : 0), detail: coursePlanInt > 0 ? `${Math.round(courseRealInt)}/10 real vs ${Math.round(coursePlanInt)}/10 programada` : (courseRealInt > 0 ? `${Math.round(courseRealInt)}/10 intensidad real` : 'sin sesiones evaluadas') },
                             ];
                             const dN = diagAxes.length;
-                            const dR = Math.max(96, Math.min(150, 420 / Math.sqrt(dN)));
+                            const dR = Math.max(96, Math.min(165, 520 / Math.sqrt(dN)));
                             const dAngleStep = (2 * Math.PI) / dN;
                             const dGetPoint = (idx: number, val: number) => {
                               const angle = dAngleStep * idx - Math.PI / 2;
@@ -3740,7 +3744,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                 {headerEl}
                                 <div style={{ flex: 1, minHeight: 0, padding: '6px 22px 14px', position: 'relative', display: 'flex', flexDirection: 'column' }}>
                                   <div ref={radarWrapRef} style={{ flex: 1, minHeight: 0, position: 'relative' }}>
-                                    <svg ref={radarSvgRef} width="100%" height="100%" viewBox="0 0 460 420" preserveAspectRatio="xMidYMid meet" style={{ maxWidth: 600, maxHeight: '100%', margin: '0 auto', display: 'block', overflow: 'visible' }}>
+                                    <svg ref={radarSvgRef} width="100%" height="100%" viewBox="0 0 520 470" preserveAspectRatio="xMidYMid meet" style={{ maxWidth: 600, maxHeight: '100%', margin: '0 auto', display: 'block', overflow: 'visible' }}>
                                       <defs>
                                         <radialGradient id="spiderFillDiag" cx="50%" cy="50%" r="60%">
                                           <stop offset="0%" stopColor={course.color} stopOpacity="0.14" />
@@ -3791,8 +3795,8 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                         const p = dGetPoint(i, 1.24);
                                         const col = dCol(i);
                                         const hover = radarHover === i;
-                                        const tx = Math.max(46, Math.min(414, p.x));
-                                        const ty = Math.max(16, Math.min(404, p.y));
+                                        const tx = Math.max(46, Math.min(VIEW_W - 46, p.x));
+                                        const ty = Math.max(20, Math.min(VIEW_H - 20, p.y));
                                         const anchor = p.x < radarCx - 30 ? 'end' : p.x > radarCx + 30 ? 'start' : 'middle';
                                         return (
                                           <g key={`dl${i}`}
@@ -3852,7 +3856,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                               {/* ── MULTI-COLOR SPIDER CHART ── */}
                               <div style={{ flex: 1, minHeight: 0, padding: '6px 22px 14px', position: 'relative', display: 'flex', flexDirection: 'column' }}>
                                 <div ref={radarWrapRef} style={{ flex: 1, minHeight: 0, position: 'relative' }}>
-                                <svg ref={radarSvgRef} width="100%" height="100%" viewBox="0 0 460 420" preserveAspectRatio="xMidYMid meet" style={{ maxWidth: 600, maxHeight: '100%', margin: '0 auto', display: 'block', overflow: 'visible' }}>
+                                <svg ref={radarSvgRef} width="100%" height="100%" viewBox="0 0 520 470" preserveAspectRatio="xMidYMid meet" style={{ maxWidth: 600, maxHeight: '100%', margin: '0 auto', display: 'block', overflow: 'visible' }}>
                                   <defs>
                                     <radialGradient id="spiderFill" cx="50%" cy="50%" r="60%">
                                       <stop offset="0%" stopColor={course.color} stopOpacity="0.13" />
@@ -3905,18 +3909,34 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                     </g>
                                   ))}
 
-                                  {/* vertex labels — skipped when crowded (≥15 ejes), hovered label shown alone */}
-                                  {(manyAxes ? labels.filter((_, i) => i === radarHover) : labels).map((lbl, i) => {
-                                    const realIdx = labels.indexOf(lbl);
-                                    const p = getPoint(realIdx, 1.24);
-                                    const col = cAxis(realIdx);
-                                    const hover = radarHover === realIdx;
-                                    const tx = Math.max(46, Math.min(414, p.x));
-                                    const ty = Math.max(16, Math.min(404, p.y));
+                                  {/* vertex labels — rotated along the spoke when crowded (>12 ejes,
+                                      así cada nombre se lee sin chocar con el vecino); ≤12 horizontales */}
+                                  {labels.map((lbl, i) => {
+                                    const p = getPoint(i, rotated ? 1.2 : 1.24);
+                                    const col = cAxis(i);
+                                    const hover = radarHover === i;
+                                    if (rotated) {
+                                      const rot = (angleStep * i - Math.PI / 2) * (180 / Math.PI);
+                                      const shown = lbl.length > 12 ? lbl.slice(0, 11) + '…' : lbl;
+                                      return (
+                                        <g key={`l${i}`}
+                                          onMouseEnter={() => setRadarHover(i)}
+                                          onMouseLeave={() => setRadarHover(null)}
+                                          style={{ cursor: 'crosshair' }}>
+                                          <text x={p.x} y={p.y} transform={`rotate(${rot} ${p.x} ${p.y})`} textAnchor="start" dominantBaseline="middle"
+                                            fill={hover ? col : 'var(--text-secondary)'}
+                                            fontSize={hover ? 10.5 : 9} fontFamily="'Inter Tight', sans-serif"
+                                            fontWeight={hover ? 800 : 600} letterSpacing="-0.01em"
+                                            style={{ transition: 'fill 200ms' }}>{shown}</text>
+                                        </g>
+                                      );
+                                    }
+                                    const tx = Math.max(46, Math.min(VIEW_W - 46, p.x));
+                                    const ty = Math.max(20, Math.min(VIEW_H - 20, p.y));
                                     const anchor = p.x < radarCx - 30 ? 'end' : p.x > radarCx + 30 ? 'start' : 'middle';
                                     return (
-                                      <g key={`l${realIdx}`}
-                                        onMouseEnter={() => setRadarHover(realIdx)}
+                                      <g key={`l${i}`}
+                                        onMouseEnter={() => setRadarHover(i)}
                                         onMouseLeave={() => setRadarHover(null)}
                                         style={{ cursor: 'crosshair' }}>
                                         <text x={tx} y={ty} textAnchor={anchor} dominantBaseline="middle"

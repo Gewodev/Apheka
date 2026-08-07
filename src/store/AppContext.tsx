@@ -343,6 +343,7 @@ export interface StudySession {
   startedAt: string;
   endedAt?: string;
   duration: number;    // seconds
+  title?: string;      // free-study label (lo que estudiaste)
   taskId?: string;
   plannedSessionId?: string; // linked planned session (Cursos cronograma)
   courseId?: string;

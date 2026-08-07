@@ -1844,7 +1844,7 @@ export default function Estudio() {
 
             {/* What did you study? */}
             <div style={{ marginBottom: 20 }}>
-              <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8, letterSpacing: '0.02em' }}>¿Qué estudiaste?</label>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8, letterSpacing: '0.02em' }}>¿Qué estudiaste? <span style={{ color: '#EF4444' }}>*</span></label>
               <input value={evalFreeText} onChange={e => setEvalFreeText(e.target.value)}
                 style={{ width: '100%', height: 42, borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 14px', fontSize: 13, outline: 'none' }}
                 placeholder="Tema, materia o concepto..." className="input-base" />
@@ -1929,7 +1929,13 @@ export default function Estudio() {
                 Cancelar
               </button>
               <button onClick={() => {
+                const freeTitle = evalFreeText.trim();
+                if (!freeTitle) {
+                  addNotification('Ponle un título a lo que estudiaste.', 'error');
+                  return;
+                }
                 handleEvalAndStartRest({
+                  title: freeTitle,
                   subjects: evalSubjects.length > 0 ? evalSubjects : undefined,
                   volmeter: evalVolmeter,
                   evaluatedAt: new Date().toISOString(),
@@ -1938,7 +1944,7 @@ export default function Estudio() {
                   updatePlannedSession(activePlannedSessionId, { completed: evalPlanOutcome !== 'no_logrado' });
                   unlinkPlannedSessionFromTimer();
                 }
-                addNotification(evalFreeText.trim() ? `Estudiaste: ${evalFreeText.trim()}` : 'Sesión registrada', 'success');
+                addNotification(`Estudiaste: ${freeTitle}`, 'success');
               }}
                 style={{ padding: '8px 24px', borderRadius: 10, border: 'none', background: `linear-gradient(135deg, ${statusColor}, ${statusColor}dd)`, color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
                 Guardar

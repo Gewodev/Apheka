@@ -67,6 +67,7 @@ export interface PlanEvent {
   repeat: 'none' | 'daily' | 'weekly' | 'custom_days';
   repeatDays?: number[]; // 0=Mon..6=Sun if custom_days
   repeatUntil?: string; // Limit for repetition
+  exceptions?: string[]; // Occurrence dates excluded from a recurring series (YYYY-MM-DD)
   attachments?: { type: 'link' | 'file'; name: string; url: string; size?: string }[];
 }
 
@@ -75,8 +76,10 @@ interface EventModalProps {
   defaults: Partial<PlanEvent>;
   courses: { id: string; name: string; color: string }[];
   tasks: { id: string; title: string; courseColor: string; dueDate?: string }[];
+  occurrenceDate?: string | null; // The specific date of the occurrence being edited
   onClose: () => void;
   onSave: (ev: PlanEvent) => void;
+  onSaveOne?: (ev: PlanEvent, original: PlanEvent, occurrenceDate: string) => void;
   onDelete: (id: string) => void;
   addNotification: (message: string, type?: 'success' | 'error' | 'info') => void;
 }
@@ -86,17 +89,21 @@ export default function EventModal({
   defaults,
   courses,
   tasks,
+  occurrenceDate,
   onClose,
   onSave,
+  onSaveOne,
   onDelete,
   addNotification
 }: EventModalProps) {
   const th = document.documentElement.getAttribute('data-theme');
   const isDarkSelect = !th || th === 'oscuro' || th === 'vibrante';
   const selectBorder = isDarkSelect ? '1px solid rgba(255,255,255,0.12)' : '1px solid rgba(0,0,0,0.12)';
+  const isRecurringEdit = !!(event && event.repeat !== 'none');
+  const [scope, setScope] = useState<'all' | 'one'>('all');
   const [title, setTitle] = useState(event?.title || defaults.title || '');
   const [allDay, setAllDay] = useState(event?.allDay ?? defaults.allDay ?? false);
-  const [date, setDate] = useState(event?.date || defaults.date || format(new Date(), 'yyyy-MM-dd'));
+  const [date, setDate] = useState(occurrenceDate || event?.date || defaults.date || format(new Date(), 'yyyy-MM-dd'));
   const [start, setStart] = useState(event?.startTime || defaults.startTime || '09:00');
   const [end, setEnd] = useState(event?.endTime || defaults.endTime || '10:00');
   const [courseId, setCourseId] = useState(event?.courseId || defaults.courseId || '');
@@ -182,6 +189,24 @@ export default function EventModal({
       taskId: taskId || undefined,
       attachments
     };
+    if (event && event.repeat !== 'none' && scope === 'one') {
+      const occDate = occurrenceDate || date;
+      const copy: PlanEvent = {
+        ...ev,
+        id: crypto.randomUUID(),
+        date,
+        repeat: 'none',
+        repeatDays: undefined,
+        repeatUntil: undefined,
+        googleEventId: undefined,
+        exceptions: undefined,
+      };
+      const original: PlanEvent = {
+        ...event,
+        exceptions: [...(event.exceptions || []), occDate],
+      };
+      if (onSaveOne) { onSaveOne(copy, original, occDate); return; }
+    }
     onSave(ev);
   }
 
@@ -544,6 +569,43 @@ export default function EventModal({
           </div>
         </div>
 
+        {isRecurringEdit && (
+          <div style={{ padding: '0 32px 24px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 9, background: 'var(--surface)', border: '1px solid var(--border-soft)', borderRadius: 12, padding: '13px 14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontFamily: "'Inter Tight',sans-serif" }}>Aplicar cambios a</label>
+                <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', fontFamily: "'JetBrains Mono',monospace" }}>
+                  {scope === 'all' ? 'toda la serie' : `solo el ${date.slice(8, 10)}/${date.slice(5, 7)}`}
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button onClick={() => setScope('all')}
+                  style={{
+                    flex: 1, height: 36, borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                    fontSize: 12, fontWeight: 700, fontFamily: "'Inter Tight',sans-serif", transition: 'all 150ms',
+                    border: scope === 'all' ? '1px solid var(--accent)' : '1px solid var(--border-soft)',
+                    background: scope === 'all' ? 'var(--accent)' : 'transparent',
+                    color: scope === 'all' ? '#fff' : 'var(--text-secondary)',
+                    boxShadow: scope === 'all' ? '0 2px 10px var(--accent-dim)' : 'none',
+                  }}>
+                  <Repeat size={13} /> Todos los eventos
+                </button>
+                <button onClick={() => setScope('one')}
+                  style={{
+                    flex: 1, height: 36, borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                    fontSize: 12, fontWeight: 700, fontFamily: "'Inter Tight',sans-serif", transition: 'all 150ms',
+                    border: scope === 'one' ? '1px solid var(--accent)' : '1px solid var(--border-soft)',
+                    background: scope === 'one' ? 'var(--accent)' : 'transparent',
+                    color: scope === 'one' ? '#fff' : 'var(--text-secondary)',
+                    boxShadow: scope === 'one' ? '0 2px 10px var(--accent-dim)' : 'none',
+                  }}>
+                  <Calendar size={13} /> Solo este evento
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Footer */}
         <div style={{ padding: '20px 32px', borderTop: '1px solid var(--border-soft)', display: 'flex', gap: 12, background: 'var(--bg-primary)', borderRadius: '0 0 16px 16px' }}>
           <button onClick={onClose} style={{ flex: 1, height: 48, borderRadius: 10, border: '1px solid var(--border-soft)', background: 'var(--surface)', color: 'var(--text-primary)', fontSize: 14, fontWeight: 600, cursor: 'pointer', transition: 'background 200ms' }} onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-hover)'} onMouseLeave={e => e.currentTarget.style.background = 'var(--surface)'}>
@@ -551,7 +613,7 @@ export default function EventModal({
           </button>
           <button onClick={handleSave} style={{ flex: 2, height: 48, borderRadius: 10, border: 'none', background: 'var(--accent)', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 4px 20px var(--accent-glow)', transition: 'transform 200ms, box-shadow 200ms' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 6px 24px var(--accent-glow)' }} onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 4px 20px var(--accent-glow)' }}>
             <Check size={16} />
-            {event ? 'Guardar Cambios' : 'Crear Evento'}
+            {event ? (scope === 'one' && isRecurringEdit ? 'Guardar solo este' : 'Guardar Cambios') : 'Crear Evento'}
           </button>
         </div>
       </div>

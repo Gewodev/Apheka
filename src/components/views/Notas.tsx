@@ -411,7 +411,7 @@ function NoteCard({ note, isSelected, onSelect, onOpen, onContextMenu, tagColors
   const spineColor = note.coverColor || note.courseColor || getSpineColor(note.id);
   const folderName = note.course;
   const folderColor = note.coverColor || note.courseColor || spineColor;
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: note.id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({ id: note.id });
   const preview = useMemo(() => {
     const text = note.content
       .replace(/<[^>]+>/g, "")
@@ -443,15 +443,19 @@ function NoteCard({ note, isSelected, onSelect, onOpen, onContextMenu, tagColors
           background: "var(--bg-elevated)",
           border: isDragging
             ? "1px dashed " + spineColor + "88"
-            : "1px solid " + (isSelected ? spineColor + "40" : hov ? "var(--border-strong)" : "var(--border-subtle)"),
+            : isOver
+              ? "1px dashed var(--accent)"
+              : "1px solid " + (isSelected ? spineColor + "40" : hov ? "var(--border-strong)" : "var(--border-subtle)"),
           borderRadius: "var(--radius-xl)",
           transition: isDragging ? "none" : transition ? transition : "all 250ms " + EASE,
-          transform: isDragging ? CSS.Transform.toString(transform) : hov ? "translateY(-2px)" : "none",
+          transform: isDragging ? CSS.Transform.toString(transform) : transform ? CSS.Transform.toString(transform) : hov ? "translateY(-2px)" : "none",
           opacity: isDragging ? 0.72 : 1,
-          zIndex: isDragging ? 20 : 'auto',
-          boxShadow: hov
-            ? "0 12px 28px rgba(0,0,0,0.10), 0 4px 12px rgba(0,0,0,0.06)"
-            : "0 1px 3px rgba(0,0,0,0.04)",
+          zIndex: isDragging ? 20 : isOver ? 15 : 'auto',
+          boxShadow: isOver && !isDragging
+            ? "0 0 0 2px var(--accent), 0 12px 28px rgba(0,0,0,0.12)"
+            : hov
+              ? "0 12px 28px rgba(0,0,0,0.10), 0 4px 12px rgba(0,0,0,0.06)"
+              : "0 1px 3px rgba(0,0,0,0.04)",
           position: "relative", overflow: "hidden",
         }}
       >
@@ -568,7 +572,7 @@ function BookshelfBook({ note, isSelected, folders, onSelect, onDoubleClick, onC
       : (DEFAULT_TAG_COLORS[note.tags[0]] || note.courseColor || getSpineColor(note.id)))
     : null;
   const [hov, setHov] = useState(false);
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: note.id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({ id: note.id });
 
   const previewText = useMemo(() => {
     const text = note.content.replace(/<[^>]+>/g, "").trim();
@@ -589,12 +593,12 @@ function BookshelfBook({ note, isSelected, folders, onSelect, onDoubleClick, onC
       position: "relative",
       cursor: isDragging ? "grabbing" : "pointer",
       userSelect: "none", WebkitUserSelect: "none",
-      transform: isDragging ? CSS.Transform.toString(transform) : hov ? "translateY(-5px)" : "translateY(0)",
+      transform: isDragging ? CSS.Transform.toString(transform) : transform ? CSS.Transform.toString(transform) : hov ? "translateY(-5px)" : "translateY(0)",
       opacity: isDragging ? 0.7 : 1,
       transition: isDragging ? "none" : transition ? transition : "transform 250ms " + EASE + ", opacity 180ms " + EASE,
       width: 158,
       marginBottom: 0,
-      zIndex: isDragging ? 30 : hov ? 10 : 3,
+      zIndex: isDragging ? 30 : isOver ? 20 : hov ? 10 : 3,
     }}
       onClick={onSelect}
       onDoubleClick={onDoubleClick}
@@ -608,11 +612,13 @@ function BookshelfBook({ note, isSelected, folders, onSelect, onDoubleClick, onC
         position: "relative", zIndex: 5,
         borderRadius: "2px 8px 8px 2px",
         background: `linear-gradient(145deg, ${spineColor}08 0%, rgba(255,255,255,0.02) 100%)`,
-        boxShadow: isSelected
-          ? `0 8px 20px rgba(0,0,0,0.35), 0 0 0 1.5px var(--accent)`
-          : hov
-            ? `0 10px 24px rgba(0,0,0,0.4)`
-            : `0 4px 10px rgba(0,0,0,0.20)`,
+        boxShadow: isOver && !isDragging
+          ? `0 0 0 2px var(--accent), 0 10px 24px rgba(0,0,0,0.4)`
+          : isSelected
+            ? `0 8px 20px rgba(0,0,0,0.35), 0 0 0 1.5px var(--accent)`
+            : hov
+              ? `0 10px 24px rgba(0,0,0,0.4)`
+              : `0 4px 10px rgba(0,0,0,0.20)`,
         border: "1px solid rgba(255,255,255,0.04)",
         transition: "box-shadow 250ms " + EASE,
         overflow: "hidden",
@@ -1333,7 +1339,13 @@ export default function Notas() {
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     try { const s = localStorage.getItem("owa_notes_view_mode"); return (s === "lista" || s === "estante") ? s : "estante"; } catch { return "estante"; }
   });
-  const [sortMode, setSortMode] = useState<SortMode>("updated");
+  const [sortMode, setSortMode] = useState<SortMode>(() => {
+    try {
+      const s = localStorage.getItem("owa_notes_sortmode_v1");
+      if (s === "updated" || s === "created" || s === "title" || s === "course" || s === "visits" || s === "priority" || s === "manual") return s;
+    } catch { /* noop */ }
+    return "updated";
+  });
   const [searchQuery, setSearchQuery] = useState("");
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; noteId: string; arrowLeft: boolean; arrowY: number; arrowTop?: boolean; arrowBottom?: boolean } | null>(null);
   
@@ -1366,6 +1378,11 @@ export default function Notas() {
       localStorage.removeItem('owa_focused_note_id');
     }
   }, []);
+  // Persist sortMode (incl. "manual") so the arranged order survives reloads
+  useEffect(() => {
+    try { localStorage.setItem("owa_notes_sortmode_v1", sortMode); } catch { /* noop */ }
+  }, [sortMode]);
+
   const [slashMenuPos, setSlashMenuPos] = useState<{ x: number; y: number } | null>(null);
   const [slashFilter, setSlashFilter] = useState("");
   const slashMenuRef = useRef<HTMLDivElement>(null);
@@ -1555,9 +1572,9 @@ export default function Notas() {
     result.sort((a, b) => {
       if (activeSidebarTab === 'favs' && a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
       if (sortMode === "manual") {
-        const allHaveSortOrder = result.length > 0 && result.every(n => n.sortOrder !== undefined);
-        if (allHaveSortOrder) return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
-        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+        const sa = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
+        const sb = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
+        return sa - sb;
       }
       if (sortMode === "priority") {
         const order = { high: 0, medium: 1, low: 2, none: 3 };

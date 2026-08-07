@@ -15,8 +15,8 @@ const DEFAULT_H = 260;
 const MIN_W = 240;
 const MIN_H = 140;
 const BAR_H = 30;
-const MINI_W = 184;
-const MINI_H = 206;
+const MINI_W = 304;
+const MINI_H = 96;
 
 let ytApiPromise: Promise<boolean> | null = null;
 function ensureYouTubeApi(): Promise<boolean> {
@@ -558,14 +558,14 @@ function VideoPiPInner({ url, title, onClose, autoplay = false, onPlayingChange 
         }}
       />
 
-      {/* Compact card (mini mode): cover on top, title, progress bar, buttons */}
+      {/* Compact bar (mini mode): horizontal — cover left, title + progress + buttons right */}
       {mini && (
         <div
           onMouseDown={handleDragDown}
           style={{
             position: 'absolute', inset: 0, zIndex: 7,
-            display: 'flex', flexDirection: 'column',
-            padding: 10,
+            display: 'flex', flexDirection: 'row', alignItems: 'stretch',
+            gap: 10, padding: 8,
             background: 'var(--bg-primary)',
             borderRadius: 14,
             cursor: 'grab',
@@ -580,7 +580,7 @@ function VideoPiPInner({ url, title, onClose, autoplay = false, onPlayingChange 
             }}
             title="Restaurar video"
             style={{
-              width: '100%', aspectRatio: '16 / 9',
+              width: 142, height: '100%',
               borderRadius: 10, overflow: 'hidden',
               position: 'relative', flexShrink: 0,
               background: '#000',
@@ -602,128 +602,133 @@ function VideoPiPInner({ url, title, onClose, autoplay = false, onPlayingChange 
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 background: 'var(--bg-elevated)',
               }}>
-                <Disc3 size={24} strokeWidth={1.5} style={{ color: 'var(--text-muted)', opacity: 0.6 }} />
+                <Disc3 size={20} strokeWidth={1.5} style={{ color: 'var(--text-muted)', opacity: 0.6 }} />
               </div>
             )}
           </div>
 
-          {/* Title */}
+          {/* Right column: title / progress / buttons */}
           <div style={{
-            marginTop: 8,
-            fontSize: 12, fontWeight: 500,
-            color: 'var(--text-primary)',
-            fontFamily: "'Inter Tight', sans-serif",
-            letterSpacing: '-0.01em',
-            lineHeight: 1.3,
-            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-          }}>{shownTitle}</div>
+            flex: 1, minWidth: 0,
+            display: 'flex', flexDirection: 'column',
+            justifyContent: 'space-between',
+            padding: '2px 0',
+          }}>
+            {/* Title */}
+            <div style={{
+              fontSize: 12, fontWeight: 500,
+              color: 'var(--text-primary)',
+              fontFamily: "'Inter Tight', sans-serif",
+              letterSpacing: '-0.01em',
+              lineHeight: 1.3,
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            }}>{shownTitle}</div>
 
-          {/* Progress bar + times (when controllable) */}
-          {canControl && (
-            <div style={{ marginTop: 8 }}>
-              <div
-                onClick={handleSeekClick}
-                title="Buscar en la canción"
-                style={{ height: 12, display: 'flex', alignItems: 'center', cursor: 'pointer' }}
-              >
-                <div style={{
-                  position: 'relative', width: '100%', height: 3, borderRadius: 2,
-                  background: 'var(--bg-hover)',
-                }}>
+            {/* Progress bar + times (when controllable) */}
+            {canControl && (
+              <div>
+                <div
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={handleSeekClick}
+                  title="Buscar en la canción"
+                  style={{ height: 10, display: 'flex', alignItems: 'center', cursor: 'pointer' }}
+                >
                   <div style={{
-                    position: 'absolute', left: 0, top: 0, height: '100%', borderRadius: 2,
-                    width: pct + '%',
-                    background: 'linear-gradient(90deg, #EF4444 0%, #B91C1C 100%)',
-                    boxShadow: '0 0 8px rgba(239,68,68,0.5)',
-                    transition: 'width 300ms linear',
-                  }} />
-                  {pct > 0 && (
+                    position: 'relative', width: '100%', height: 3, borderRadius: 2,
+                    background: 'var(--bg-hover)',
+                  }}>
                     <div style={{
-                      position: 'absolute', top: '50%',
-                      left: `calc(${pct}% - 4px)`,
-                      transform: 'translateY(-50%)',
-                      width: 7, height: 7, borderRadius: '50%',
-                      background: '#EF4444',
-                      boxShadow: '0 0 8px rgba(239,68,68,0.9), inset 0 0 0 1.5px rgba(255,255,255,0.3)',
-                      transition: 'left 300ms linear',
+                      position: 'absolute', left: 0, top: 0, height: '100%', borderRadius: 2,
+                      width: pct + '%',
+                      background: 'linear-gradient(90deg, var(--accent) 0%, color-mix(in srgb, var(--accent) 55%, #000 45%) 100%)',
+                      boxShadow: '0 0 8px color-mix(in srgb, var(--accent) 55%, transparent)',
+                      transition: 'width 300ms linear',
                     }} />
-                  )}
+                    {pct > 0 && (
+                      <div style={{
+                        position: 'absolute', top: '50%',
+                        left: `calc(${pct}% - 3px)`,
+                        transform: 'translateY(-50%)',
+                        width: 6, height: 6, borderRadius: '50%',
+                        background: 'var(--accent)',
+                        boxShadow: '0 0 8px color-mix(in srgb, var(--accent) 90%, transparent), inset 0 0 0 1px rgba(255,255,255,0.35)',
+                        transition: 'left 300ms linear',
+                      }} />
+                    )}
+                  </div>
+                </div>
+                <div style={{
+                  display: 'flex', justifyContent: 'space-between', marginTop: 1,
+                  fontSize: 8, fontFamily: "'JetBrains Mono', monospace",
+                  color: 'var(--text-tertiary)', letterSpacing: '0.02em',
+                }}>
+                  <span>{fmtTime(cur)}</span>
+                  <span>{fmtTime(dur)}</span>
                 </div>
               </div>
-              <div style={{
-                display: 'flex', justifyContent: 'space-between', marginTop: 3,
-                fontSize: 8.5, fontFamily: "'JetBrains Mono', monospace",
-                color: 'var(--text-tertiary)', letterSpacing: '0.02em',
-              }}>
-                <span>{fmtTime(cur)}</span>
-                <span>{fmtTime(dur)}</span>
-              </div>
-            </div>
-          )}
+            )}
 
-          {/* Buttons row */}
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 4,
-            marginTop: canControl ? 5 : 'auto', paddingTop: canControl ? 0 : 6,
-          }}>
-            <button
-              onMouseDown={(e) => e.stopPropagation()}
-              onClick={(e) => { e.stopPropagation(); togglePlay(); }}
-              title={playing ? 'Pausar' : 'Reproducir'}
-              disabled={!canControl}
-              style={{
-                width: 28, height: 28, borderRadius: 8,
-                border: '1px solid ' + (canControl ? 'color-mix(in srgb, var(--accent) 35%, transparent)' : 'var(--border-soft)'),
-                background: canControl ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'var(--bg-hover)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: canControl ? 'var(--accent)' : 'var(--text-tertiary)',
-                cursor: canControl ? 'pointer' : 'default',
-                flexShrink: 0, transition: 'all 150ms ease',
-                opacity: canControl ? 1 : 0.45,
-                boxShadow: canControl ? '0 1px 6px color-mix(in srgb, var(--accent) 25%, transparent)' : 'none',
-              }}
-              onMouseEnter={e => { if (canControl) { e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 18%, transparent)'; e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--accent) 60%, transparent)'; } }}
-              onMouseLeave={e => { e.currentTarget.style.background = canControl ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'var(--bg-hover)'; e.currentTarget.style.borderColor = canControl ? 'color-mix(in srgb, var(--accent) 35%, transparent)' : 'var(--border-soft)'; }}
-            >
-              {playing
-                ? <Pause size={13} strokeWidth={1.75} fill="currentColor" />
-                : <Play size={13} strokeWidth={1.75} fill="currentColor" style={{ marginLeft: 1 }} />}
-            </button>
-            <div style={{ flex: 1 }} />
-            <button
-              onMouseDown={(e) => e.stopPropagation()}
-              onClick={(e) => { e.stopPropagation(); setMini(false); }}
-              title="Expandir"
-              style={{
-                width: 26, height: 26, borderRadius: 7,
-                border: '1px solid var(--border-soft)',
-                background: 'var(--bg-hover)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: 'var(--text-secondary)',
-                cursor: 'pointer', flexShrink: 0, transition: 'all 150ms ease',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-default)'; e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--bg-hover) 70%, var(--bg-elevated))'; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.background = 'var(--bg-hover)'; }}
-            >
-              <Maximize2 size={11} strokeWidth={1.75} />
-            </button>
-            <button
-              onMouseDown={(e) => e.stopPropagation()}
-              onClick={(e) => { e.stopPropagation(); handleClose(); }}
-              title="Cerrar"
-              style={{
-                width: 26, height: 26, borderRadius: 7,
-                border: '1px solid var(--border-soft)',
-                background: 'var(--bg-hover)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: 'var(--text-secondary)',
-                cursor: 'pointer', flexShrink: 0, transition: 'all 150ms ease',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.9)'; e.currentTarget.style.borderColor = 'rgba(239,68,68,0.9)'; e.currentTarget.style.color = '#fff'; e.currentTarget.style.boxShadow = '0 2px 10px rgba(239,68,68,0.35)'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.boxShadow = 'none'; }}
-            >
-              <X size={11} strokeWidth={1.75} />
-            </button>
+            {/* Buttons row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+              <button
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => { e.stopPropagation(); togglePlay(); }}
+                title={playing ? 'Pausar' : 'Reproducir'}
+                disabled={!canControl}
+                style={{
+                  width: 24, height: 24, borderRadius: 7,
+                  border: '1px solid ' + (canControl ? 'color-mix(in srgb, var(--accent) 35%, transparent)' : 'var(--border-soft)'),
+                  background: canControl ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'var(--bg-hover)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: canControl ? 'var(--accent)' : 'var(--text-tertiary)',
+                  cursor: canControl ? 'pointer' : 'default',
+                  flexShrink: 0, transition: 'all 150ms ease',
+                  opacity: canControl ? 1 : 0.45,
+                  boxShadow: canControl ? '0 1px 6px color-mix(in srgb, var(--accent) 25%, transparent)' : 'none',
+                }}
+                onMouseEnter={e => { if (canControl) { e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 18%, transparent)'; e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--accent) 60%, transparent)'; } }}
+                onMouseLeave={e => { e.currentTarget.style.background = canControl ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'var(--bg-hover)'; e.currentTarget.style.borderColor = canControl ? 'color-mix(in srgb, var(--accent) 35%, transparent)' : 'var(--border-soft)'; }}
+              >
+                {playing
+                  ? <Pause size={12} strokeWidth={1.75} fill="currentColor" />
+                  : <Play size={12} strokeWidth={1.75} fill="currentColor" style={{ marginLeft: 1 }} />}
+              </button>
+              <div style={{ flex: 1 }} />
+              <button
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => { e.stopPropagation(); setMini(false); }}
+                title="Expandir"
+                style={{
+                  width: 21, height: 21, borderRadius: 6,
+                  border: '1px solid var(--border-soft)',
+                  background: 'var(--bg-hover)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer', flexShrink: 0, transition: 'all 150ms ease',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-default)'; e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--bg-hover) 70%, var(--bg-elevated))'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.background = 'var(--bg-hover)'; }}
+              >
+                <Maximize2 size={10} strokeWidth={1.75} />
+              </button>
+              <button
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => { e.stopPropagation(); handleClose(); }}
+                title="Cerrar"
+                style={{
+                  width: 21, height: 21, borderRadius: 6,
+                  border: '1px solid var(--border-soft)',
+                  background: 'var(--bg-hover)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer', flexShrink: 0, transition: 'all 150ms ease',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.9)'; e.currentTarget.style.borderColor = 'rgba(239,68,68,0.9)'; e.currentTarget.style.color = '#fff'; e.currentTarget.style.boxShadow = '0 2px 10px rgba(239,68,68,0.35)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.boxShadow = 'none'; }}
+              >
+                <X size={10} strokeWidth={1.75} />
+              </button>
+            </div>
           </div>
         </div>
       )}
