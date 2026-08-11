@@ -545,7 +545,6 @@ export default function Planificacion() {
   function saveOneEvent(override: Partial<PlanEvent>, originalId: string, occDate: string) {
     const baseEvent = events.find(x => x.id === originalId);
     const movedTo = override.date && override.date !== occDate ? override.date : null;
-    let baseForGoogle: PlanEvent | null = null;
     setEvents(p => p.map(e => {
       if (e.id !== originalId) return e;
       const overrides = { ...(e.occurrenceOverrides || {}) };
@@ -557,15 +556,13 @@ export default function Planificacion() {
       if (Object.keys(clean).length) overrides[occDate] = clean as Partial<PlanEvent>;
       else delete overrides[occDate];
       const exceptions = movedTo && !(e.exceptions || []).includes(occDate) ? [...(e.exceptions || []), occDate] : e.exceptions;
-      const next: PlanEvent = { ...e, exceptions, occurrenceOverrides: Object.keys(overrides).length ? overrides : undefined };
-      if (movedTo) baseForGoogle = next;
-      return next;
+      return { ...e, exceptions, occurrenceOverrides: Object.keys(overrides).length ? overrides : undefined };
     }));
     setShowEventModal(false);
     setEditingEvent(null);
     setSelectedItem(null);
-    if (googleConnected && calendarSyncEnabled && movedTo && baseForGoogle && (baseEvent?.googleEventId || baseForGoogle.googleEventId)) {
-      void syncPlanEventToGoogle({ ...baseForGoogle, description: baseForGoogle.description || '' });
+    if (googleConnected && calendarSyncEnabled && movedTo && baseEvent?.googleEventId) {
+      void syncPlanEventToGoogle({ ...baseEvent, description: baseEvent.description || '' });
     }
   }
 
