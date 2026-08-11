@@ -25,9 +25,10 @@ interface LateralPanelProps {
   onAddEvent?: (date: Date) => void;
   onAddPlanSession?: (date: Date) => void;
   onEditPlanSession?: (session: any) => void;
+  onFileMoved?: (evId: string, oldUrl: string, newPath: string) => void;
 }
 
-export default function LateralPanel({ item, onClose, onSelectEvent, onEditEvent, onDeleteEvent, onViewTask, onAddEvent, onAddPlanSession, onEditPlanSession }: LateralPanelProps) {
+export default function LateralPanel({ item, onClose, onSelectEvent, onEditEvent, onDeleteEvent, onViewTask, onAddEvent, onAddPlanSession, onEditPlanSession, onFileMoved }: LateralPanelProps) {
   const { settings, tasks, setPipUrl } = useApp();
   const tf = settings?.timeFormat;
   if (!item) return null;
@@ -87,7 +88,7 @@ export default function LateralPanel({ item, onClose, onSelectEvent, onEditEvent
             <DayDetails item={item} onSelectEvent={onSelectEvent} onViewTask={onViewTask} timeFormat={tf} onAddEvent={onAddEvent} onAddPlanSession={onAddPlanSession} />
           )}
           {item.type === 'event' && (
-            <EventDetails item={item} onEdit={onEditEvent} onDelete={onDeleteEvent} timeFormat={tf} tasks={tasks} onViewTask={onViewTask} />
+            <EventDetails item={item} onEdit={onEditEvent} onDelete={onDeleteEvent} timeFormat={tf} tasks={tasks} onViewTask={onViewTask} onFileMoved={onFileMoved} />
           )}
           {item.type === 'task' && (
             <TaskDetails item={item} onViewTask={onViewTask} />
@@ -213,7 +214,7 @@ function DayDetails({ item, onSelectEvent, onViewTask, timeFormat, onAddEvent, o
 
 const GOAL_KEY = 'owa_planned_goal';
 
-function EventDetails({ item, onEdit, onDelete, timeFormat, tasks, onViewTask }: { item: Extract<SelectedItem, {type: 'event'}>, onEdit?: (ev: PlanEvent) => void, onDelete?: (evId: string) => void, timeFormat?: '24h' | '12h', tasks?: any[], onViewTask?: (taskId: string) => void }) {
+function EventDetails({ item, onEdit, onDelete, timeFormat, tasks, onViewTask, onFileMoved }: { item: Extract<SelectedItem, {type: 'event'}>, onEdit?: (ev: PlanEvent) => void, onDelete?: (evId: string) => void, timeFormat?: '24h' | '12h', tasks?: any[], onViewTask?: (taskId: string) => void, onFileMoved?: (evId: string, oldUrl: string, newPath: string) => void }) {
   const { event } = item;
   const { setPipUrl, addNotification } = useApp();
 
@@ -338,7 +339,7 @@ function EventDetails({ item, onEdit, onDelete, timeFormat, tasks, onViewTask }:
 
               const handleCardClick = async (e: React.MouseEvent) => {
                 e.preventDefault();
-                try { await openFileSmart(file.url, file.name, { onMedia: (u, n) => setPipUrl(u, n), onError: (m) => addNotification(m, 'error') }); } catch { /* noop */ }
+                try { await openFileSmart(file.url, file.name, { onMedia: (u, n) => setPipUrl(u, n), onError: (m) => addNotification(m, 'error'), onMoved: (np) => onFileMoved?.(event.id, file.url, np) }); } catch { /* noop */ }
               };
 
               const s = (d: string, c: string) => <svg viewBox="0 0 24 24" width={17} height={17} fill={c} style={{ flexShrink: 0, display: 'block' }}><path d={d} /></svg>;

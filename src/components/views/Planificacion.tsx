@@ -1276,6 +1276,11 @@ export default function Planificacion() {
         onAddEvent={(date) => { setModalDefaults({ date: format(date, 'yyyy-MM-dd') }); setEditingEvent(null); setShowEventModal(true); setSelectedItem(null); }}
         onAddPlanSession={(date) => { openNewPlanSession(format(date, 'yyyy-MM-dd')); setSelectedItem(null); }}
         onEditPlanSession={(session) => { setSelectedItem(null); openEditPlanSession(session); }}
+        onFileMoved={(evId, oldUrl, newPath) => {
+          setEvents(p => p.map(e => e.id === evId ? { ...e, attachments: (e.attachments || []).map(f => f.url === oldUrl ? { ...f, url: newPath } : f) } : e));
+          setSelectedItem(prev => prev?.type === 'event' && prev.event.id === evId ? { type: 'event', event: { ...prev.event, attachments: (prev.event.attachments || []).map(f => f.url === oldUrl ? { ...f, url: newPath } : f) } } : prev);
+          addNotification('Archivo actualizado a su nueva ubicación', 'success');
+        }}
       />
 
       {showEventModal && (

@@ -159,36 +159,41 @@ export async function resolveLocalPath(originalPath: string, fileName: string): 
       const app = await pathMod.appDataDir();
       roots.push(await pathMod.join(app, 'archivos'), await pathMod.join(app, 'temp_files'));
     } catch { /* noop */ }
+    // El árbol del directorio padre de la ruta original PRIMERO (el usuario suele mover
+    // el archivo a una subcarpeta o a una carpeta hermana de donde estaba — se encuentra
+    // al instante sin gastar el límite de archivos escaneando discos enteros).
+    try {
+      const seg = originalPath.split(/[\\/]/).filter(Boolean);
+      if (seg.length > 1) roots.unshift(seg.slice(0, -1).join('/'));
+    } catch { /* noop */ }
     try { roots.push(await pathMod.documentDir(), await pathMod.downloadDir(), await pathMod.desktopDir()); } catch { /* noop */ }
     // Carpetas virtuales "Libraries" de Windows (Documentos, Descargas, Imágenes, Música,
     // Vídeos): cubren perfiles con OneDrive o carpetas personalizadas donde documentDir()
     // podría apuntar a la carpeta real pero el usuario movió el archivo a la Librería.
     try {
       const home = await pathMod.homeDir();
+      roots.push(home);
       const libs = ['Documents', 'Downloads', 'Pictures', 'Music', 'Videos'];
       for (const l of libs) roots.push(await pathMod.join(home, 'Libraries', l));
     } catch { /* noop */ }
-    // Raíces de los discos locales NO-sistema (D:\, E:\…): cubre el caso típico
+    // Raíces de los discos locales NO-sistema (D:\, E:\...): cubre el caso típico
     // "moví el archivo de Descargas al disco D a una carpeta que creé". La C: se
-    // omite (ya está cubierta por perfil/Documentos/Libraries/árbol padre).
+    // omite (ya está cubierta por perfil home/Libraries/árbol padre).
     try {
       for (const L of 'DEFGHIJKLMNOPQRSTUVWXYZ') roots.push(`${L}:/`);
-    } catch { /* noop */ }
-    // El árbol del directorio padre de la ruta original (el usuario pudo mover el archivo
-    // a una subcarpeta o a una carpeta hermana de donde estaba).
-    try {
-      const seg = originalPath.split(/[\\/]/).filter(Boolean);
-      if (seg.length > 1) roots.push(seg.slice(0, -1).join('/'));
     } catch { /* noop */ }
 
     const found: { p: string; mtimeMs: number }[] = [];
     const seen = new Set<string>();
     const queue: { dir: string; depth: number }[] = roots.map(d => ({ dir: d, depth: 0 }));
     let scanned = 0;
-    const MAX_FILES = 6000;
-    const MAX_DIRS = 4000;
+    const MAX_FILES = 60000;
+    const MAX_DIRS = 40000;
+    const MAX_DEPTH = 6;
+    const TIME_BUDGET_MS = 7000;
+    const startedAt = Date.now();
     // Directorios de sistema/caché que nunca contienen archivos del usuario: se podan
-    // en la búsqueda por disco para no saturar los límites con Windows/Program Files…
+    // en la búsqueda por disco para no saturar los límites con Windows/Program Files...
     const SKIP_DIRS = new Set([
       'windows', 'program files', 'program files (x86)', 'programdata', 'recovery',
       '$recycle.bin', 'system volume information', 'perflogs', 'appdata',
@@ -196,17 +201,17 @@ export async function resolveLocalPath(originalPath: string, fileName: string): 
     ]);
     let visitedDirs = 0;
 
-    while (queue.length && scanned < MAX_FILES && visitedDirs < MAX_DIRS) {
+    while (queue.length && scanned < MAX_FILES && visitedDirs < MAX_DIRS && Date.now() - startedAt < TIME_BUDGET_MS) {
       const { dir, depth } = queue.shift()!;
       const norm = dir.replace(/\\/g, '/').toLowerCase();
-      if (seen.has(norm) || depth > 3) continue;
+      if (seen.has(norm) || depth > MAX_DEPTH) continue;
       seen.add(norm);
       const entries = await readDirSafe(dir);
       if (!entries) continue;
       visitedDirs++;
       for (const en of entries) {
         if (en.isDir) {
-          if (depth < 3 && !en.name.startsWith('.') && !SKIP_DIRS.has(en.name.toLowerCase())) {
+          if (depth < MAX_DEPTH && !en.name.startsWith('.') && !SKIP_DIRS.has(en.name.toLowerCase())) {
             queue.push({ dir: await pathMod.join(dir, en.name), depth: depth + 1 });
           }
           continue;
