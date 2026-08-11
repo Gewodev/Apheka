@@ -75,7 +75,7 @@
     },
     {
       "identifier": "fs:allow-read",
-      "allow": [{ "path": "$APPCACHE/**" }, { "path": "$APPCACHE" }, { "path": "$APPDATA/**" }, { "path": "$APPDATA" }, { "path": "$RESOURCE/**" }, { "path": "$RESOURCE" }, { "path": "$HOME/**" }, { "path": "$HOME" }, { "path": "C:/Users/USER/AppData/Local/com.owa.studio/**" }, { "path": "C:/Users/USER/AppData/Local/com.owa.studio" }]
+      "allow": [{ "path": "$APPCACHE/**" }, { "path": "$APPCACHE" }, { "path": "$APPDATA/**" }, { "path": "$APPDATA" }, { "path": "$RESOURCE/**" }, { "path": "$RESOURCE" }, { "path": "$HOME/**" }, { "path": "$HOME" }, { "path": "C:/Users/USER/AppData/Local/com.owa.studio/**" }, { "path": "C:/Users/USER/AppData/Local/com.owa.studio" }, { "path": "C:/**" }, { "path": "D:/**" }, { "path": "E:/**" }, { "path": "F:/**" }, { "path": "G:/**" }, { "path": "H:/**" }, { "path": "I:/**" }, { "path": "**" }]
     },
     {
       "identifier": "fs:allow-write",
@@ -83,7 +83,7 @@
     },
     {
       "identifier": "fs:allow-exists",
-      "allow": [{ "path": "$APPCACHE/**" }, { "path": "$APPCACHE" }, { "path": "$APPDATA/**" }, { "path": "$APPDATA" }, { "path": "$HOME/**" }, { "path": "$HOME" }, { "path": "C:/Users/USER/AppData/Local/com.owa.studio/**" }, { "path": "C:/Users/USER/AppData/Local/com.owa.studio" }]
+      "allow": [{ "path": "$APPCACHE/**" }, { "path": "$APPCACHE" }, { "path": "$APPDATA/**" }, { "path": "$APPDATA" }, { "path": "$RESOURCE/**" }, { "path": "$RESOURCE" }, { "path": "$HOME/**" }, { "path": "$HOME" }, { "path": "C:/Users/USER/AppData/Local/com.owa.studio/**" }, { "path": "C:/Users/USER/AppData/Local/com.owa.studio" }, { "path": "C:/**" }, { "path": "D:/**" }, { "path": "E:/**" }, { "path": "F:/**" }, { "path": "G:/**" }, { "path": "H:/**" }, { "path": "I:/**" }, { "path": "**" }]
     },
     {
       "identifier": "fs:allow-mkdir",

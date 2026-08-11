@@ -2567,8 +2567,8 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   };
 
   const handleNoteFormat = (cmd: string, value?: string) => {
-    document.execCommand(cmd, false, value);
     editContentRef.current?.focus();
+    document.execCommand(cmd, false, value);
     scheduleNoteTrack();
   };
 
@@ -3175,7 +3175,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                                             <Star size={11} fill={isHighlighted ? '#D4A017' : 'none'} />
                                           </button>
-                                          {!overviewNoteEditMode && (
+                                          {!overviewNoteEditMode && !showCourseNotesInOverview && (
                                             <button onClick={() => { setOverviewNoteEditMode(true); }}
                                               title="Editar"
                                               style={{ width: 24, height: 24, borderRadius: 5, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
@@ -3184,13 +3184,15 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                               <Pencil size={11} />
                                             </button>
                                           )}
-                                          <button onClick={() => setConfirmDeleteNoteId(n.id)}
-                                            title="Eliminar"
-                                            style={{ width: 24, height: 24, borderRadius: 5, border: 'none', background: 'transparent', cursor: 'pointer', color: 'rgba(239,68,68,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
-                                            onMouseEnter={e => e.currentTarget.style.background = `${course.color}10`}
-                                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                                            <Trash2 size={11} />
-                                          </button>
+                                          {!showCourseNotesInOverview && (
+                                            <button onClick={() => setConfirmDeleteNoteId(n.id)}
+                                              title="Eliminar"
+                                              style={{ width: 24, height: 24, borderRadius: 5, border: 'none', background: 'transparent', cursor: 'pointer', color: 'rgba(239,68,68,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                                              onMouseEnter={e => e.currentTarget.style.background = `${course.color}10`}
+                                              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                                              <Trash2 size={11} />
+                                            </button>
+                                          )}
                                           <div style={{ width: 1, height: 18, background: 'var(--border-subtle)', margin: '0 4px' }} />
                                           <button onClick={() => { setSelectedOverviewNoteId(null); setOverviewNoteEditMode(false); setConfirmDeleteNoteId(null); }}
                                             style={{ width: 24, height: 24, borderRadius: 5, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}

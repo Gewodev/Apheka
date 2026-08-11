@@ -43,7 +43,7 @@ export function FormatToolbar({ onFormat, color, toolbarItems, activeFormats }: 
   const activeBg = color ? `${color}28` : 'var(--bg-hover)';
   const activeColor = color || 'var(--accent)';
   return (
-    <div style={{
+    <div onMouseDown={e => { const t = e.target as HTMLElement; if (e.button === 0 && t.tagName !== 'INPUT') e.preventDefault(); }} style={{
       display: 'flex', alignItems: 'center', gap: 1, padding: '6px 12px',
       background: color ? `${color}06` : 'var(--bg-surface)',
       borderBottom: '1px solid var(--border-subtle)',
@@ -56,11 +56,13 @@ export function FormatToolbar({ onFormat, color, toolbarItems, activeFormats }: 
         const isActive = stateCmd && activeFormats?.[stateCmd];
         return (
           <React.Fragment key={key}>
-            <button onClick={() => onFormat(cfg.cmd, cfg.value)} style={{
-              ...btnStyle,
-              background: isActive ? activeBg : 'transparent',
-              color: isActive ? activeColor : 'var(--text-secondary)',
-            }}
+            <button
+              onClick={() => onFormat(cfg.cmd, cfg.value)}
+              style={{
+                ...btnStyle,
+                background: isActive ? activeBg : 'transparent',
+                color: isActive ? activeColor : 'var(--text-secondary)',
+              }}
               onMouseEnter={e => { e.currentTarget.style.background = isActive ? activeBg : hoverBg; }}
               onMouseLeave={e => { e.currentTarget.style.background = isActive ? activeBg : 'transparent'; }}
               title={cfg.title}><Icon size={13} /></button>

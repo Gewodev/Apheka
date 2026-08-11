@@ -1171,7 +1171,7 @@ function EditorToolbar({ onFormat }: EditorToolbarProps) {
   }, []);
 
   return (
-    <div style={{
+    <div onMouseDown={e => { const t = e.target as HTMLElement; if (e.button === 0 && t.tagName !== 'INPUT' && t.tagName !== 'SELECT' && t.tagName !== 'TEXTAREA') e.preventDefault(); }} style={{
       display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", position: "relative",
     }}>
       {/* 1. HEADINGS — icon cuadritos */}

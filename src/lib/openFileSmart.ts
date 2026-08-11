@@ -101,6 +101,8 @@ export interface OpenFileSmartOpts {
   onMedia?: (url: string, fileName: string) => void;
   onError?: (message: string) => void;
   onMoved?: (newPath: string) => void;
+  onResolving?: () => void;
+  onResolvingDone?: () => void;
 }
 
 function tauriOpenHint(e: unknown, fileExists: boolean): string {
@@ -190,7 +192,7 @@ export async function resolveLocalPath(originalPath: string, fileName: string): 
     const MAX_FILES = 60000;
     const MAX_DIRS = 40000;
     const MAX_DEPTH = 6;
-    const TIME_BUDGET_MS = 7000;
+    const TIME_BUDGET_MS = 4000;
     const startedAt = Date.now();
     // Directorios de sistema/caché que nunca contienen archivos del usuario: se podan
     // en la búsqueda por disco para no saturar los límites con Windows/Program Files...
@@ -233,7 +235,7 @@ export async function resolveLocalPath(originalPath: string, fileName: string): 
 }
 
 export async function openFileSmart(url: string, fileName: string, opts: OpenFileSmartOpts = {}): Promise<void> {
-  const { onMedia, onError, onMoved } = opts;
+  const { onMedia, onError, onMoved, onResolving, onResolvingDone } = opts;
   const fail = (msg: string) => { try { onError?.(msg); } catch { /* noop */ } };
 
   if (!url) { fail('El archivo no tiene una ruta de apertura'); return; }
@@ -281,31 +283,51 @@ export async function openFileSmart(url: string, fileName: string, opts: OpenFil
         catch (e) { if (openInNewTab(url)) return; fail('No se pudo abrir el enlace en el navegador' + tauriOpenHint(e, false)); return; }
       }
       if (isLocal) {
-        // 1) PRIMERO abrir directo la ruta guardada (patrón WhatsApp/Claude: abrir ya).
-        //    openPath solo necesita el permiso opener y falla ÚNICAMENTE si el archivo
-        //    no existe o Windows lo rechaza — nunca concluye "movido" por stat/scope.
-        try { await openPath(url); return; }
-        catch { /* el archivo no está en esa ruta → seguir */ }
-        // 2) Si falló → quizá fue MOVIDO/renombrado → búsqueda por nombre.
-        const resolved = await resolveLocalPath(url, fileName);
-        if (resolved) {
-          try {
-            await openPath(resolved);
-            // Aviso "chip" con la NUEVA ubicación del archivo movido.
-            try { onMoved?.(resolved); } catch { /* noop */ }
-            return;
-          } catch { /* sigue */ }
+        // 1) PRIMERO verificar si el archivo EXISTE antes de pedirle a Windows que lo abra.
+        //    Si llamamos openPath sobre una ruta inexistente, el sistema lanza el diálogo
+        //    nativo "Windows no puede encontrar el archivo..." ANTES de que podamos actuar.
+        const stats = await statSafe(url);
+        if (stats && stats.isFile) {
+          try { await openPath(url); return; }
+          catch { /* archivo válido pero openPath rechazado por Windows/scope → buscarlo */ }
         }
-        // 3) Fallback webview "file://" (como en la web): PDF e imágenes se muestran
-        //    dentro de la app vía asset protocol, aunque el sistema no los asocie.
-        if (isPdf || isImg) {
+        // 2) El archivo NO existe en la ruta guardada → fue MOVIDO/renombrado → búsqueda por nombre.
+        onResolving?.();
+        try {
+          const resolved = await resolveLocalPath(url, fileName);
+          if (resolved) {
+            try {
+              await openPath(resolved);
+              try { onMoved?.(resolved); } catch { /* noop */ }
+              return;
+            } catch { /* sigue */ }
+          }
+          // 3) Fallback webview "file://" (como en la web): PDF e imágenes se muestran
+          //    dentro de la app vía asset protocol, aunque el sistema no los asocie.
+          if (isPdf || isImg) {
+            try {
+              const assetUrl = convertFileSrc(url);
+              if (openInNewTab(assetUrl)) return;
+            } catch { /* sigue */ }
+          }
+          // 4) Último recurso: abrir el diálogo nativo de selección de archivo — el usuario
+          //    elige la NUEVA ubicación y la app la guarda (onMoved) para abrir directo la próxima vez.
+          //    Es 100% confiable (sin colgadas ni búsqueda Ciega por todo el disco).
           try {
-            const assetUrl = convertFileSrc(url);
-            if (openInNewTab(assetUrl)) return;
-          } catch { /* sigue */ }
+            const { open } = await import('@tauri-apps/plugin-dialog');
+            const picked = await open({ multiple: false, title: `Re-localizar archivo: ${fileName || url.split(/[\\/]/).pop() || ''}` });
+            if (typeof picked === 'string' && picked) {
+              try { await openPath(picked); onMoved?.(picked); return; }
+              catch { /* sigue */ }
+            }
+          } catch { /* diálogo cancelado o no disponible */ }
+          fail(resolved
+            ? 'El archivo se encontró pero no pudo abrirse. Si lo moviste, vuelve a subirlo desde su nueva ubicación.'
+            : 'No se encontró el archivo en su ubicación original. Se abrió un diálogo para que lo selecciones manualmente.');
+          return;
+        } finally {
+          onResolvingDone?.();
         }
-        fail('No se pudo abrir el archivo. Si lo moviste de carpeta, vuelve a subirlo.');
-        return;
       }
       // data: → archivo temporal + abrir nativo; si no se puede escribir (binario viejo
       // sin scope fs), descarga directa desde la webview: funciona SIEMPRE sin permisos.
