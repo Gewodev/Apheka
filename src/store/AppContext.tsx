@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo, ReactNode, Dispatch, SetStateAction } from 'react';
 import { emit, listen } from '@tauri-apps/api/event';
-import { convertFileSrc } from '@tauri-apps/api/core';
+import { convertFileSrc, isTauri } from '@tauri-apps/api/core';
 import { copyFile, mkdir, exists, readFile, writeFile, BaseDirectory } from '@tauri-apps/plugin-fs';
 import { get, set, del } from 'idb-keyval';
 import { extractAudioMetadata } from '../lib/audioMetadata';
@@ -378,6 +378,11 @@ export interface PlannedSession {
   type: string;   // 'estudio' | 'repaso' | 'ejercicio' | 'lectura' | 'otro' | custom
   completed: boolean;
   intensity?: number;   // expectativa 1-10 de la sesión
+  sortOrder?: number;   // orden manual del usuario en el cronograma (persistente)
+  repeat?: 'none' | 'daily' | 'weekly' | 'custom_days';
+  repeatDays?: number[];  // 0=Mon..6=Sun si custom_days
+  repeatUntil?: string;   // límite de repetición (YYYY-MM-DD)
+  exceptions?: string[];  // fechas excluidas (editadas como "solo esta sesión")
   createdAt: string;
 }
 
@@ -623,6 +628,7 @@ interface AppContextType extends AppState {
   addPlannedSession: (session: Omit<PlannedSession, 'id' | 'createdAt'>) => void;
   updatePlannedSession: (id: string, updates: Partial<PlannedSession>) => void;
   deletePlannedSession: (id: string) => void;
+  reorderPlannedSessions: (orderedIds: string[]) => void;
   incrementSessionTime: () => void;
   incrementDailyStudyTime: () => void;
   incrementPomodoroSessions: () => void;
@@ -835,6 +841,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [studySessions, setStudySessions] = useState<StudySession[]>([]);
   const [plannedSessions, setPlannedSessions] = useState<PlannedSession[]>([]);
+  const [hydrated, setHydrated] = useState(false);
+  const lastBackupTsRef = useRef(0);
+  const lastDiskBackupTsRef = useRef(0);
+  const mirrorQuotaWarnedRef = useRef(false);
   const [settings, setSettings] = useState<Settings>(defaultSettings);
   const [sessionTime, setSessionTime] = useState(0);
   const [weeklyStudyTime, setWeeklyStudyTime] = useState<Record<string, number>>({});
@@ -1075,6 +1085,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       "does not conform to the required format",
       "forbidden path",
       "Updating a style property during rerender",
+      "Espejo local omitido",
     ];
     const shouldSuppress = (args: any[]) =>
       typeof args[0] === 'string' && FILTER_PATTERNS.some(p => args[0].includes(p));
@@ -1122,15 +1133,48 @@ export function AppProvider({ children }: { children: ReactNode }) {
     async function loadData() {
       let oldTracks: Track[] | undefined;
       let loadedData: any = null;
+      let stored: string | null | undefined = null;
+      let source = '';
       try {
-        let stored: string | null | undefined = await get(STORAGE_KEY);
-        if (!stored) {
-          stored = localStorage.getItem(STORAGE_KEY);
-          if (stored) {
-            await set(STORAGE_KEY, stored);
-            localStorage.removeItem(STORAGE_KEY);
+        const hasRealData = (raw: string | null | undefined): raw is string => {
+          if (!raw) return false;
+          try {
+            const d = JSON.parse(fixMojibake(raw));
+            if (!d || typeof d !== 'object') return false;
+            // Un estado sin NINGÚN contenido real no se acepta: un snapshot "vacío"
+            // (ej. el primer arranque del release) no debe bloquear la restauración.
+            return !!d.tasks?.length || !!d.habits?.length || !!d.notes?.length ||
+              !!d.noteFolders?.length || !!d.courses?.length || !!d.events?.length ||
+              !!d.studySessions?.length || !!d.plannedSessions?.length ||
+              !!d.artists?.length || !!d.playlists?.length || !!d.trackHistory?.length;
+          } catch { return false; }
+        };
+        let sources: { name: string; read: () => Promise<string | null> }[] = [
+          { name: 'idb', read: async () => { try { return (await get(STORAGE_KEY)) ?? null; } catch { return null; } } },
+          { name: 'local', read: async () => localStorage.getItem(STORAGE_KEY) },
+          { name: 'backup', read: async () => localStorage.getItem('owa_studio_data_backup') },
+        ];
+        if (isTauri()) {
+          sources.push({
+            name: 'disk',
+            read: async () => {
+              try {
+                const diskPath = await join(await appDataDir(), 'owa_studio_data.json');
+                const bytes = await readFile(diskPath);
+                return new TextDecoder().decode(bytes);
+              } catch { return null; }
+            },
+          });
+        }
+        for (const src of sources) {
+          const raw = await src.read();
+          if (hasRealData(raw)) {
+            stored = raw;
+            source = src.name;
+            break;
           }
         }
+        if (stored && source !== 'idb') { await set(STORAGE_KEY, stored).catch(() => { }); }
         if (stored) {
           const data = JSON.parse(fixMojibake(stored));
           loadedData = data;
@@ -1142,19 +1186,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (data.playlists) setPlaylists(data.playlists);
           if (data.shuffleMode !== undefined) _setShuffleMode(data.shuffleMode);
           if (data.repeatMode) _setRepeatMode(data.repeatMode);
+          // Sanitize: drop corrupt entries (undefined items crash renders with "reading 'id'")
+          const cleanArr = (arr: any) => (Array.isArray(arr) ? arr : []).filter((x: any) => x && typeof x === 'object');
+          ['tasks', 'notes', 'noteFolders', 'events', 'studySessions', 'plannedSessions'].forEach(k => { if (data[k] !== undefined) data[k] = cleanArr(data[k]); });
           if (data.tasks) setTasks(data.tasks);
           if (data.habits) setHabits(data.habits);
           if (data.notes) setNotes(data.notes);
           if (data.noteFolders) setNoteFolders(data.noteFolders);
           if (data.courses) {
+            // Sanitize: drop corrupt entries FIRST (null/undefined course entries crash every .find/.map)
+            const cleanArray = (arr: any) => (Array.isArray(arr) ? arr : []).filter((x: any) => x && typeof x === 'object');
+            const cleanMaterials = (mats: any) => (Array.isArray(mats) ? mats : []).filter((m: any) => m && typeof m === 'object');
+            data.courses = cleanArray(data.courses);
             // Migration: topic reviewLevel scale was 0-5, now a 0-10 speedometer
             if (!localStorage.getItem('owa_review_scale_10')) {
-              data.courses = (data.courses as any[]).map((c: any) => ({
+              data.courses = data.courses.map((c: any) => ({
                 ...c,
-                studyTopics: (c.studyTopics || []).map((t: any) => ({ ...t, reviewLevel: Math.min(10, (t.reviewLevel || 0) * 2) })),
+                studyTopics: cleanArray(c.studyTopics).map((t: any) => ({ ...t, reviewLevel: Math.min(10, (t.reviewLevel || 0) * 2) })),
               }));
               localStorage.setItem('owa_review_scale_10', '1');
             }
+            // Sanitize: drop corrupt entries (undefined topics/groups/materials crash renders)
+            data.courses = data.courses.map((c: any) => ({
+              ...c,
+              studyTopics: cleanArray(c.studyTopics).map((t: any) => ({ ...t, materials: cleanMaterials(t.materials) })),
+              groups: cleanArray(c.groups).map((g: any) => ({ ...g, materials: cleanMaterials(g.materials) })),
+            }));
             setCourses(data.courses);
           }
           if (data.events) setEvents(data.events);
@@ -1234,6 +1291,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (data.dailyPerformances) setDailyPerformances(data.dailyPerformances);
           setIsPlayingMusic(data.isPlayingMusic || false);
           if (data.downloadPath) setDownloadPathState(data.downloadPath);
+          if (source === 'local' || source === 'backup') {
+            addNotification('Se restauraron tus datos desde la copia de seguridad local.', 'info');
+          }
         }
       } catch (e) {
         console.error('Error loading data:', e);
@@ -1302,6 +1362,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setDownloadPathState(prev => prev || rustPath);
         }
       } catch { /* not in Tauri */ }
+      setHydrated(true);
     }
     loadData();
   }, []);
@@ -1626,8 +1687,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Debounced save
   useEffect(() => {
+    if (!hydrated) return;
     const t = setTimeout(() => {
-      set(STORAGE_KEY, JSON.stringify({
+      const json = JSON.stringify({
       tasks, habits, notes, noteFolders, courses, events, studySessions, plannedSessions,
         settings, sessionTime, sessionType, isRest, isTimerActive, weeklyStudyTime, dailyStudyTime, dailyStudyDate, pomodoroSessions,
         trackHistory, playCounts, musicQueue, musicVolume, shuffleMode, repeatMode, artists, playlists,
@@ -1636,7 +1698,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
         accumulatedPauseTime, pauseStartTime, distractionCount,
         focusPomodoroTime, focusChronoTime, breakTime, dailyBreakTime,
         dailyFocusPomodoro, dailyFocusChrono, dailyPerformances,
-      })).catch((e: any) => console.error("Error saving data:", e));
+      });
+      set(STORAGE_KEY, json).catch((e: any) => console.error("Error saving data:", e));
+      // Mirror + backup en localStorage (sobreviven a pérdidas de IndexedDB)
+      try {
+        if (json.length > 5_000_000) {
+          if (!mirrorQuotaWarnedRef.current) {
+            console.warn('Espejo local omitido por tamaño (los datos viven en IndexedDB)');
+            mirrorQuotaWarnedRef.current = true;
+          }
+        } else {
+          localStorage.setItem(STORAGE_KEY, json);
+          const now = Date.now();
+          if (now - lastBackupTsRef.current > 60000) {
+            localStorage.setItem('owa_studio_data_backup', json);
+            lastBackupTsRef.current = now;
+          }
+        }
+      } catch (e: any) {
+        if (!mirrorQuotaWarnedRef.current) {
+          console.warn('Espejo local omitido por cuota (los datos viven en IndexedDB)');
+          mirrorQuotaWarnedRef.current = true;
+        }
+      }
+      // Espejo en disco ($APPDATA/owa_studio_data.json): puente dev↔release y capa
+      // extra de persistencia que sobrevive a limpiezas de IndexedDB/localStorage.
+      if (isTauri()) {
+        (async () => {
+          try {
+            const nowDisk = Date.now();
+            if (nowDisk - lastDiskBackupTsRef.current > 60000) {
+              const diskPath = await join(await appDataDir(), 'owa_studio_data.json');
+              await writeFile(diskPath, new TextEncoder().encode(json));
+              lastDiskBackupTsRef.current = nowDisk;
+            }
+          } catch { }
+        })();
+      }
       set(MUSIC_STATS_KEY, JSON.stringify({
         musicListeningTime, musicListeningDate, dailyMusicTime,
       })).catch((e: any) => console.error("Error saving music stats:", e));
@@ -1644,13 +1742,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     debounceTimerRef.current = t;
     return () => { if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current); debounceTimerRef.current = null; };
   }, [
-    tasks, habits, notes, noteFolders, courses, events, studySessions, plannedSessions, settings, sessionTime,
+    tasks, habits, notes, noteFolders, courses, events, studySessions, plannedSessions, settings,
     weeklyStudyTime, dailyStudyTime, dailyStudyDate, pomodoroSessions, trackHistory, playCounts, musicQueue,
-    musicVolume, artists, playlists, currentTrackId, isPlayingMusic, musicListeningTime, musicListeningDate, dailyMusicTime,
-    musicProgress, musicDuration, downloadPath,
+    musicVolume, artists, playlists, currentTrackId, isPlayingMusic, musicListeningDate,
+    downloadPath,
     accumulatedPauseTime, pauseStartTime, distractionCount,
     focusPomodoroTime, focusChronoTime, breakTime, dailyBreakTime,
     dailyFocusPomodoro, dailyFocusChrono,
+    hydrated,
   ]);
 
   // Sync settings to floating timer window
@@ -1999,8 +2098,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // â”€â”€ COURSES â”€â”€
   const addCourse = useCallback((course: Omit<Course, 'id' | 'sortOrder'> & { id?: string }) => {
     const newId = course.id || Date.now().toString();
+    const cleanItems = (arr: any) => (Array.isArray(arr) ? arr : []).filter((x: any) => !!x && typeof x === 'object');
     setCourses(prev => {
-      const newCourse: Course = { ...course, id: newId, sortOrder: prev.length };
+      const newCourse: Course = { ...course, id: newId, sortOrder: prev.length, studyTopics: cleanItems(course.studyTopics), groups: cleanItems(course.groups) };
       // Auto-create folder
       setNoteFolders(pf => [...pf, { id: `f-${newCourse.id}`, name: course.name, color: course.color, courseId: newCourse.id, isManual: false }]);
       return [...prev, newCourse];
@@ -2009,6 +2109,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const updateCourse = useCallback((id: string, updates: Partial<Course>) => {
+    const cleanItems = (arr: any) => (Array.isArray(arr) ? arr : []).filter((x: any) => !!x && typeof x === 'object');
     setCourses(prev => {
       const old = prev.find(c => c.id === id);
       if (old && updates.name && updates.name !== old.name) {
@@ -2016,7 +2117,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setTasks(pt => pt.map(t => t.course === oldName ? { ...t, course: updates.name!, courseColor: updates.color || t.courseColor } : t));
         setNotes(pn => pn.map(n => n.course === oldName ? { ...n, course: updates.name! } : n));
       }
-      return prev.map(c => c.id === id ? { ...c, ...updates } : c);
+      return prev.map(c => c.id === id ? {
+        ...c,
+        ...updates,
+        ...(updates.studyTopics !== undefined && { studyTopics: cleanItems(updates.studyTopics) }),
+        ...(updates.groups !== undefined && { groups: cleanItems(updates.groups) }),
+      } : c);
     });
     if (updates.name || updates.color) {
       setNoteFolders(prev => prev.map(f =>
@@ -2996,6 +3102,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setPlannedSessions(prev => prev.filter(s => s.id !== id));
   }, []);
 
+  const reorderPlannedSessions = useCallback((orderedIds: string[]) => {
+    setPlannedSessions(prev => {
+      const byId = new Map(prev.map(s => [s.id, s]));
+      const reordered: PlannedSession[] = [];
+      orderedIds.forEach((id, i) => {
+        const s = byId.get(id);
+        if (s) reordered.push({ ...s, sortOrder: i });
+      });
+      const rest = prev.filter(s => !orderedIds.includes(s.id));
+      return [...reordered, ...rest];
+    });
+  }, []);
+
   const incrementSessionTime = useCallback(() => {
     setSessionTime(prev => prev + 1);
   }, []);
@@ -3543,7 +3662,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addToDownloadQueue, updateDownloadProgress, updateDownloadStatus,
     removeFromDownloadQueue, clearCompletedDownloads, downloadPath, setDownloadPathCtx: setDownloadPathCb,
     addStudySession, updateStudySession, deleteStudySession, incrementSessionTime, incrementDailyStudyTime,
-    addPlannedSession, updatePlannedSession, deletePlannedSession,
+    addPlannedSession, updatePlannedSession, deletePlannedSession, reorderPlannedSessions,
     incrementPomodoroSessions, resetPomodoroSessions, setActiveTaskId, setTimerLocked,
     linkTaskToTimer, unlinkTaskFromTimer, toggleTimer, resetTimer,
     activePlannedSessionId, setActivePlannedSessionId, linkPlannedSessionToTimer, unlinkPlannedSessionFromTimer,

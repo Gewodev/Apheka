@@ -102,6 +102,7 @@ interface GoalEvent {
   repeatDays?: number[];
   repeatUntil?: string;
   exceptions?: string[];
+  occurrenceOverrides?: Record<string, Partial<GoalEvent>>;
 }
 
 const GOAL_KEY = 'owa_planned_goal';
@@ -180,6 +181,7 @@ export default function Inicio() {
       }).map((e: any) => ({
         id: e.id, title: e.title, date: e.date, startTime: e.startTime, allDay: e.allDay, color: e.color,
         repeat: e.repeat, repeatDays: e.repeatDays, repeatUntil: e.repeatUntil, exceptions: e.exceptions,
+        occurrenceOverrides: e.occurrenceOverrides,
       }));
       const today = format(new Date(), 'yyyy-MM-dd');
       const future = all.filter(e => {
@@ -187,27 +189,36 @@ export default function Inicio() {
         if (e.repeatUntil && e.repeatUntil < today) return false;
         return true;
       }).map(e => {
-        if (!e.repeat || e.repeat === 'none' || e.date >= today) return e;
+        const applyOv = (ee: any, d: string) => {
+          const ov = ee.occurrenceOverrides?.[d];
+          if (!ov) return ee;
+          return { ...ee, ...ov, occurrenceOverrides: ee.occurrenceOverrides };
+        };
+        if (!e.repeat || e.repeat === 'none' || e.date >= today) return applyOv(e, e.date);
         const base = new Date(e.date + 'T12:00:00');
         const tgt = new Date(today + 'T12:00:00');
         const isExcepted = (d: Date) => (e.exceptions || []).includes(format(d, 'yyyy-MM-dd'));
+        const isOvMoved = (d: Date) => {
+          const ov = e.occurrenceOverrides?.[format(d, 'yyyy-MM-dd')];
+          return ov && ov.date && ov.date !== format(d, 'yyyy-MM-dd');
+        };
         let next: Date | null = null;
         if (e.repeat === 'daily') {
-          for (let i = 0; i < 7; i++) { const d = addDays(tgt, i); if (!isExcepted(d)) { next = d; break; } }
+          for (let i = 0; i < 7; i++) { const d = addDays(tgt, i); if (!isExcepted(d) && !isOvMoved(d)) { next = d; break; } }
         } else if (e.repeat === 'weekly') {
           for (let i = 0; i < 7; i++) {
             const d = addDays(tgt, i);
-            if (d.getDay() === base.getDay() && !isExcepted(d)) { next = d; break; }
+            if (d.getDay() === base.getDay() && !isExcepted(d) && !isOvMoved(d)) { next = d; break; }
           }
         } else if (e.repeat === 'custom_days' && e.repeatDays?.length) {
           const jsToday = (tgt.getDay() + 6) % 7;
           for (let i = 0; i < 7; i++) {
             const d = addDays(tgt, i);
-            if (e.repeatDays.includes((jsToday + i) % 7) && !isExcepted(d)) { next = d; break; }
+            if (e.repeatDays.includes((jsToday + i) % 7) && !isExcepted(d) && !isOvMoved(d)) { next = d; break; }
           }
         }
         if (!next) next = tgt;
-        return { ...e, date: format(next, 'yyyy-MM-dd') };
+        return applyOv({ ...e, date: format(next, 'yyyy-MM-dd') }, format(next, 'yyyy-MM-dd'));
       }).sort((a, b) => a.date.localeCompare(b.date) || (a.startTime || '').localeCompare(b.startTime || ''));
       if (!goalEvent) return future.slice(0, 4);
       const afterGoal = future.filter(e => e.id !== goalEvent.id);

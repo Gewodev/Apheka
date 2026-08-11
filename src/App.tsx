@@ -35,7 +35,18 @@ interface AppContentProps {
 
 function AppContent() {
   const { settings, courses, addCourse, navigateTo, setNavigateTo, importState, updateSettings, toastMessage, deleteOldCompletedTasks, youtubeVideoUrl, isPlayingMusic, musicVolume, musicProgress, musicDuration, setMusicProgress, setIsPlayingMusic, playTrack, musicQueue, setMusicQueue, shuffleMode, repeatMode, tracks, currentTrackId, setRepeatMode, coverModalTrackId, showRestPrompt, handlePomodoroBannerClick, queueSource, pipUrl, pipTitle, pipAutoplay, setPipUrl, pipPlaying, setPipPlaying, courseDeepLink, setCourseDeepLink } = useApp();
-  const [activeView, setActiveView] = useState<ViewId>('inicio');
+  const [activeView, setActiveView] = useState<ViewId>(() => {
+    try {
+      const saved = localStorage.getItem('owa_active_view_v1');
+      if (saved === 'inicio' || saved === 'estudio' || saved === 'tareas' || saved === 'notas' || saved === 'musica' || saved === 'planificacion' || saved === 'cursos' || saved === 'ajustes') return saved as ViewId;
+      if (saved === 'curso_detalle' && localStorage.getItem('owa_selected_course_id')) return 'curso_detalle';
+    } catch {}
+    return 'inicio';
+  });
+
+  useEffect(() => {
+    try { localStorage.setItem('owa_active_view_v1', activeView); } catch {}
+  }, [activeView]);
 
   // Auto-clean completed tasks older than 2 months on startup
   useEffect(() => { deleteOldCompletedTasks(); }, []);
@@ -131,6 +142,11 @@ function AppContent() {
     if (selectedCourseId) localStorage.setItem('owa_selected_course_id', selectedCourseId);
     else localStorage.removeItem('owa_selected_course_id');
   }, [selectedCourseId]);
+  useEffect(() => {
+    if (activeView === 'curso_detalle' && selectedCourseId && !courses.some(c => c && c.id === selectedCourseId)) {
+      setActiveView('cursos');
+    }
+  }, [activeView, selectedCourseId, courses]);
   const [showCoursesPopup, setShowCoursesPopup] = useState(false);
   const coursesPopupRef = useRef<HTMLDivElement>(null);
   const [showPopupAddModal, setShowPopupAddModal] = useState(false);
@@ -785,18 +801,6 @@ function AppContent() {
 
       {/* PiP Video Player */}
       <VideoPiP url={pipUrl} title={pipTitle} autoplay={pipAutoplay} onPlayingChange={setPipPlaying} onClose={() => setPipUrl(null)} />
-
-      {/* ─── Charvis: zona invisible al borde derecho; al pasar el cursor se
-              difumina un velo arcoíris sobre la lateral (sin texto) ─── */}
-      {!isBrainOpen && (
-        <div
-          className="brain-trigger-zone"
-          title="Abrir Charvis"
-          onClick={() => setIsBrainOpen(true)}
-        >
-          <div className="brain-trigger-glow" />
-        </div>
-      )}
 
       {/* ─── Charvis sidebar ─── */}
       <AIBrainSidebar isOpen={isBrainOpen} onClose={() => setIsBrainOpen(false)} onOpen={() => setIsBrainOpen(true)} anchor={brainAnchor} />

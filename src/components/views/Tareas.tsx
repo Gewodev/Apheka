@@ -4,7 +4,7 @@ import {
   Plus, Search, Check, Trash2,
   ChevronRight, CalendarDays,
   Clock, List as ListIcon, FileText,
-  Link, Video, File, X, Upload,
+  Link, Video, File, X, Upload, Link2,
   ExternalLink,   Eye, EyeOff, Filter,
   ClipboardList, ChevronLeft, Timer,
   Paperclip, StickyNote,
@@ -14,10 +14,12 @@ import {
   LayoutGrid, Calendar, Play, Activity,
   TrendingUp, Flame, ListTodo, Image, Music, FileSpreadsheet,
   Star, Pencil, ChevronDown, Globe,
-  BookOpen, Bookmark, Minus, Monitor,
+  BookOpen, Bookmark, Minus,
 } from 'lucide-react';
 import { useApp, Task, fmtClock } from '../../store/AppContext';
-import { openFileSmart } from '../../lib/openFileSmart';
+import { openFileSmart, pickAndPersistFile } from '../../lib/openFileSmart';
+import { useMaterialMenu } from '../ui/MaterialContextMenu';
+import { isTauri, convertFileSrc } from '@tauri-apps/api/core';
 import { BRAIN_DROP_MIME, writeBrainAnchor } from '../../lib/brainDrop';
 import { GoogleClassroomIcon, GoogleDriveIcon, GoogleDocsIcon, GoogleSheetsIcon, GoogleSlidesIcon, GoogleFormsIcon, WordIcon, ExcelIcon, PowerPointIcon } from '../ui/GoogleIcons';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, isToday, addMonths, subMonths, addWeeks, subWeeks, addDays } from 'date-fns';
@@ -124,7 +126,7 @@ function SortableCalendarTask({ task, children }: { task: Task; children: (dragP
 }
 
 export default function Tareas() {
-  const { tasks, courses, notes, addTask, updateTask, toggleTaskStatus, deleteTask, addSubTask, toggleSubTask, deleteSubTask, addTaskFile, removeTaskFile, clearAllTasks, addNotification, setNavigateTo, focusedTaskId, setFocusedTaskId, settings, addNote, updateNote, activePlannedSessionId, activeTaskId } = useApp();
+  const { tasks, courses, notes, addTask, updateTask, toggleTaskStatus, deleteTask, addSubTask, toggleSubTask, deleteSubTask, addTaskFile, removeTaskFile, clearAllTasks, addNotification, setNavigateTo, focusedTaskId, setFocusedTaskId, settings, addNote, updateNote, activePlannedSessionId, activeTaskId, setPipUrl } = useApp();
   const th = document.documentElement.getAttribute('data-theme');
   const isDarkSelect = !th || th === 'oscuro' || th === 'vibrante';
   const selectBorder = isDarkSelect ? '1px solid rgba(255,255,255,0.12)' : '1px solid rgba(0,0,0,0.12)';
@@ -344,6 +346,8 @@ export default function Tareas() {
 
   const handleDragEndList = useCallback((event: any) => {
     const { active, over } = event;
+    const d = event?.delta ?? { x: 0, y: 0 };
+    dragSuppressRef.current = Math.abs(d.x) + Math.abs(d.y) > 4;
     if (over && active.id !== over.id) {
       const ids = filteredTasks.map(t => t.id);
       const oldIndex = ids.indexOf(active.id);
@@ -484,17 +488,47 @@ export default function Tareas() {
     setShowNewModal(false);
   }, [addTask, courses, includeTime]);
 
+  const matMenu = useMaterialMenu((m) => addNotification(m, 'error'));
+
   const handleAddSubtask = useCallback(() => { if (!selectedTask || !newSubtaskTitle.trim()) return; addSubTask(selectedTask.id, newSubtaskTitle.trim()); setNewSubtaskTitle(''); }, [selectedTask, newSubtaskTitle, addSubTask]);
 
   const handleFileSelected = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
+    if (isTauri()) {
+      // En Tauri los File del input HTML no tienen ruta del sistema → diálogo nativo.
+      // Se guarda la RUTA ORIGINAL del archivo (sin copias): los cambios que el usuario
+      // haga al editarlo (Word, Excel…) quedan en su archivo.
+      let r: { path: string; name: string } | null;
+      try { r = await pickAndPersistFile(); }
+      catch { addNotification('No se pudo abrir el selector de archivos', 'error'); return; }
+      if (r) {
+        setNewMaterialPath(r.path);
+        setNewMaterialFile({ name: r.name, size: 0, type: '' } as File);
+        if (!newMaterialName.trim()) setNewMaterialName(r.name.replace(/\.[^/.]+$/, ''));
+      }
+      e.target.value = '';
+      return;
+    }
     setNewMaterialFile(file);
-    // Use file directly — no double dialog
     const reader = new FileReader();
     reader.onload = (ev) => setNewMaterialPath(ev.target?.result as string);
     reader.readAsDataURL(file);
     if (!newMaterialName.trim()) setNewMaterialName(file.name.replace(/\.[^/.]+$/, ''));
     e.target.value = '';
+  }, [newMaterialName]);
+
+  const handleAddFileBtn = useCallback(async () => {
+    if (isTauri()) {
+      let r: { path: string; name: string } | null;
+      try { r = await pickAndPersistFile(); }
+      catch { addNotification('No se pudo abrir el selector de archivos', 'error'); return; }
+      if (!r) return;
+      setNewMaterialPath(r.path);
+      setNewMaterialFile({ name: r.name, size: 0, type: '' } as File);
+      if (!newMaterialName.trim()) setNewMaterialName(r.name.replace(/\.[^/.]+$/, ''));
+      return;
+    }
+    fileInputRef.current?.click();
   }, [newMaterialName]);
 
   const fetchPageTitle = useCallback(async (url: string): Promise<string | null> => {
@@ -684,7 +718,7 @@ export default function Tareas() {
                     </div>
                   </div>
                 )) : (
-                  <DndContext sensors={listSensors} collisionDetection={closestCenter} onDragStart={e => { setActiveDragId(e.active.id as string); dragSuppressRef.current = true; }} onDragEnd={handleDragEndList} modifiers={[restrictToParentElement]}>
+                  <DndContext sensors={listSensors} collisionDetection={closestCenter} onDragStart={e => { setActiveDragId(e.active.id as string); }} onDragEnd={handleDragEndList} modifiers={[restrictToParentElement]}>
                     <SortableContext items={filteredTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
                       {filteredTasks.map(task => {
                         const t = task;
@@ -699,7 +733,7 @@ export default function Tareas() {
                         return (
                           <SortableTaskRow key={t.id} task={t}>
                             {({ isDragging: isDndDragging }) => (
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 0, padding: '0', minHeight: 50, borderBottom: '1px solid var(--border-soft)', background: selectedTaskId === t.id ? `${stripColor}06` : bgStatus, transition: 'all 120ms', opacity: isDndDragging ? 0.4 : 1 }}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 0, padding: '0', minHeight: 50, borderBottom: '1px solid var(--border-soft)', background: selectedTaskId === t.id ? `${stripColor}06` : bgStatus, transition: 'all 120ms', opacity: isDndDragging ? 0.4 : 1, userSelect: 'none', WebkitUserSelect: 'none' }}
                                 className="hover:bg-white/[0.025]">
                                 {/* Left toggle strip — cuadrado centrado */}
                                 <div
@@ -1763,17 +1797,18 @@ export default function Tareas() {
                           const isImage = f.type === 'image' || (f.type === 'other' && ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'bmp'].includes(ext));
                           const isWeb = isLink && !isYouTube && !isDrive && !isClassroom && !isGoogleDocs && !isGoogleSheets && !isGoogleSlides && !isGoogleForms;
                           const isLocal = !f.path.startsWith('http') && !f.path.startsWith('blob:') && !f.path.startsWith('data:');
-                          const localSrc = isLocal ? (window as any).__TAURI__?.convertFileSrc?.(f.path) || f.path : f.path;
-
-                          const openFile = (path: string) => {
-                            if ((window as any).__TAURI__?.shell?.open) {
-                              (window as any).__TAURI__.shell.open(path).catch(() => window.open(path, '_blank', 'noopener,noreferrer'));
-                            } else {
-                              window.open(path, '_blank', 'noopener,noreferrer');
-                            }
-                          };
+                          const localSrc = isLocal ? (isTauri() ? convertFileSrc(f.path) : f.path) : f.path;
                           const handleCardClick = async () => {
-                            try { await openFileSmart(f.path, f.name); } catch (e) { console.error('[Tareas] material open failed', e); }
+                            try {
+                              await openFileSmart(f.path, f.name, {
+                                onMedia: (u, n) => setPipUrl(u, n),
+                                onError: (m) => addNotification(m, 'error'),
+                                onMoved: (np) => {
+                                  updateTask(selectedTask.id, { files: selectedTask.files.map(x => x.id === f.id ? { ...x, path: np } : x) });
+                                  addNotification('Archivo actualizado a su nueva ubicación', 'success');
+                                },
+                              });
+                            } catch { /* noop */ }
                           };
 
                           const s = (d: string, c: string) => <svg viewBox="0 0 24 24" width={17} height={17} fill={c} style={{ flexShrink: 0, display: 'block' }}><path d={d} /></svg>;
@@ -1812,6 +1847,7 @@ export default function Tareas() {
 
                           return (
                             <div key={f.id} onClick={handleCardClick}
+                              onContextMenu={(e) => matMenu.openMenu(e, { url: f.path, name: f.name, color: badgeColor })}
                               style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 7, background: 'var(--bg-elevated)', border: '1px solid var(--border-soft)', cursor: 'pointer', transition: 'all 150ms' }}
                               onMouseEnter={e => { e.currentTarget.style.borderColor = `${badgeColor}40`; e.currentTarget.style.background = 'var(--bg-hover)'; }}
                               onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.background = 'var(--bg-elevated)'; }}>
@@ -1838,21 +1874,23 @@ export default function Tareas() {
                         })}
 
                         <div onClick={() => setShowAddMaterial(true)}
-                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '9px 0', borderRadius: 7, border: '1px dashed var(--border-soft)', cursor: 'pointer', background: 'transparent', transition: 'all 150ms' }}
-                          onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-hover)'; e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.background = 'transparent'; }}>
-                          <Plus size={13} style={{ color: 'var(--text-muted)' }} />
-                          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>Añadir material</span>
+                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, height: 36, borderRadius: 9, border: `1px dashed ${taskColor}50`, cursor: 'pointer', background: `${taskColor}08`, transition: 'all 150ms', color: 'var(--text-secondary)' }}
+                          onMouseEnter={e => { e.currentTarget.style.borderColor = taskColor; e.currentTarget.style.background = `${taskColor}14`; }}
+                          onMouseLeave={e => { e.currentTarget.style.borderColor = `${taskColor}50`; e.currentTarget.style.background = `${taskColor}08`; }}>
+                          <Plus size={13} style={{ color: taskColor }} />
+                          <span style={{ fontSize: 11, fontWeight: 600 }}>Añadir material</span>
                         </div>
                       </div>
 
                       {showAddMaterial && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '14px 14px', background: 'var(--bg-surface)', borderRadius: 10, border: `1px solid ${taskColor}25` }}>
-                          <div style={{ display: 'flex', gap: 6 }}>
+                          <div style={{ display: 'flex', gap: 8 }}>
                             {(['link', 'file'] as const).map(m => (
                               <button key={m} onClick={() => { setAddMaterialMode(m); }}
-                                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px 0', borderRadius: 9, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: addMaterialMode === m ? `1px solid ${taskColor}` : '1px solid var(--border-soft)', background: addMaterialMode === m ? `${taskColor}14` : 'var(--bg-elevated)', color: addMaterialMode === m ? taskColor : 'var(--text-secondary)', transition: 'all 150ms', boxShadow: addMaterialMode === m ? `0 0 12px ${taskColor}1a` : 'none' }}>
-                                {m === 'link' ? <Link size={13} /> : <Monitor size={13} />}
+                                style={{ flex: 1, height: 38, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: 0, border: addMaterialMode === m ? `1px solid ${taskColor}80` : `1px solid ${taskColor}40`, background: addMaterialMode === m ? `${taskColor}1a` : `${taskColor}0d`, color: addMaterialMode === m ? taskColor : 'var(--text-secondary)', transition: 'all 150ms', boxShadow: addMaterialMode === m ? `0 0 14px ${taskColor}1f` : 'none' }}
+                                onMouseEnter={e => { e.currentTarget.style.background = `${taskColor}1a`; e.currentTarget.style.borderColor = `${taskColor}80`; }}
+                                onMouseLeave={e => { e.currentTarget.style.background = addMaterialMode === m ? `${taskColor}1a` : `${taskColor}0d`; e.currentTarget.style.borderColor = addMaterialMode === m ? `${taskColor}80` : `${taskColor}40`; }}>
+                                {m === 'link' ? <Link2 size={14} style={{ color: addMaterialMode === m ? taskColor : 'var(--text-secondary)' }} /> : <Upload size={14} style={{ color: addMaterialMode === m ? taskColor : 'var(--text-secondary)' }} />}
                                 {m === 'link' ? 'Enlace' : 'Archivo'}
                               </button>
                             ))}
@@ -1879,10 +1917,10 @@ export default function Tareas() {
                               onFocus={e => { e.currentTarget.style.borderColor = taskColor; e.currentTarget.style.boxShadow = `0 0 0 2px ${taskColor}12`; }}
                               onBlur={e => { e.currentTarget.style.borderColor = 'var(--border-default)'; e.currentTarget.style.boxShadow = 'none'; }} />
                           ) : (
-                            <button onClick={() => fileInputRef.current?.click()} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px 0', borderRadius: 7, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: '1px dashed var(--border-soft)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)', transition: 'all 150ms' }}
-                              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.background = 'var(--bg-elevated)'; }}>
-                              <Upload size={12} /> {newMaterialFile ? newMaterialFile.name : 'Seleccionar archivo...'}
+                            <button onClick={handleAddFileBtn} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, height: 38, borderRadius: 9, fontSize: 11.5, fontWeight: 600, cursor: 'pointer', border: `1px dashed ${taskColor}50`, background: `${taskColor}08`, color: 'var(--text-secondary)', transition: 'all 150ms' }}
+                              onMouseEnter={e => { e.currentTarget.style.borderColor = taskColor; e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.background = `${taskColor}14`; }}
+                              onMouseLeave={e => { e.currentTarget.style.borderColor = `${taskColor}50`; e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.background = `${taskColor}08`; }}>
+                              <Upload size={12} style={{ color: taskColor }} /> {newMaterialFile ? newMaterialFile.name : 'Seleccionar archivo...'}
                             </button>
                           )}
                           <input type="file" ref={fileInputRef} onChange={handleFileSelected} style={{ display: 'none' }} />

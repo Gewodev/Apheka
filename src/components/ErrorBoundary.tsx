@@ -7,12 +7,31 @@ interface Props {
 interface State {
   hasError: boolean;
   error: Error | null;
+  stack?: string;
+}
+
+const ERROR_LOG_KEY = 'owa_error_log_v1';
+
+function persistError(error: Error, stack: string | undefined) {
+  try {
+    const entry = {
+      at: new Date().toISOString(),
+      message: error.message,
+      stack: stack || error.stack || '',
+      href: window.location.hash || '',
+    };
+    const prev = JSON.parse(localStorage.getItem(ERROR_LOG_KEY) || '[]');
+    prev.push(entry);
+    localStorage.setItem(ERROR_LOG_KEY, JSON.stringify(prev.slice(-10)));
+  } catch {
+    /* noop */
+  }
 }
 
 export class ErrorBoundary extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = { hasError: false, error: null, stack: undefined };
   }
 
   static getDerivedStateFromError(error: Error): State {
@@ -20,7 +39,10 @@ export class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    const stack = errorInfo.componentStack || undefined;
     console.error('Error capturado:', error, errorInfo);
+    persistError(error, stack);
+    if (stack) this.setState({ stack });
   }
 
   render() {
@@ -107,6 +129,25 @@ export class ErrorBoundary extends React.Component<Props, State> {
               }}>
                 {this.state.error.message}
               </p>
+              {this.state.stack && (
+                <div style={{
+                  marginTop: 10,
+                  paddingTop: 10,
+                  borderTop: '1px solid var(--border-soft)',
+                  maxHeight: 180,
+                  overflowY: 'auto'
+                }}>
+                  <p style={{
+                    fontSize: 10,
+                    color: 'var(--text-tertiary)',
+                    fontFamily: 'JetBrains Mono, monospace',
+                    whiteSpace: 'pre-wrap',
+                    lineHeight: 1.5
+                  }}>
+                    {this.state.stack}
+                  </p>
+                </div>
+              )}
             </div>
 
             <button

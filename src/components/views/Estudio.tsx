@@ -789,26 +789,25 @@ export default function Estudio() {
                 time={isBreakTime ? fmt(computedRest) : fmt(computedDisplay)} 
                 color={statusColor} 
               />
+              {/* Edge-to-edge progress dots — pomodoro only (flotantes para no agrandar la vista) */}
+              {sessionType === 'pomodoro' && !isBreakTime && (
+                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 8, display: 'flex', gap: dotStep > 1 ? 1 : 2, justifyContent: 'space-between', pointerEvents: 'none' }}>
+                  {Array.from({ length: Math.ceil(60 / dotStep) }, (_, i) => {
+                    const idx = i * dotStep;
+                    const nextIdx = Math.min(idx + dotStep - 1, 59);
+                    const filled = sessionTime >= ((settings.pomodoroTime || 1500) / 60) * (nextIdx + 1);
+                    return (
+                      <div key={i} style={{
+                        flex: 1, height: 3, borderRadius: 1.5,
+                        background: filled ? statusColor : 'var(--bg-hover)',
+                        boxShadow: filled ? `0 0 4px ${statusColor}60` : 'none',
+                        transition: 'background 200ms, box-shadow 200ms',
+                      }} />
+                    );
+                  })}
+                </div>
+              )}
             </div>
-
-            {/* Edge-to-edge progress dots — pomodoro only */}
-            {sessionType === 'pomodoro' && !isBreakTime && (
-              <div style={{ width: '100%', display: 'flex', gap: dotStep > 1 ? 1 : 2, justifyContent: 'space-between', marginTop: 10, marginBottom: 2 }}>
-                {Array.from({ length: Math.ceil(60 / dotStep) }, (_, i) => {
-                  const idx = i * dotStep;
-                  const nextIdx = Math.min(idx + dotStep - 1, 59);
-                  const filled = sessionTime >= ((settings.pomodoroTime || 1500) / 60) * (nextIdx + 1);
-                  return (
-                    <div key={i} style={{
-                      flex: 1, height: 3, borderRadius: 1.5,
-                      background: filled ? statusColor : 'var(--bg-hover)',
-                      boxShadow: filled ? `0 0 4px ${statusColor}60` : 'none',
-                      transition: 'background 200ms, box-shadow 200ms',
-                    }} />
-                  );
-                })}
-              </div>
-            )}
 
             {/* Linked Plan Session Indicator (below timer) — pill 1 línea, sin hora, click lleva al tema/agrupación, X solo hover */}
             {linkedPlanSession && (

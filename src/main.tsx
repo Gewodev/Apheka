@@ -19,6 +19,32 @@ function getWindowLabel(): string {
 const rootEl = document.getElementById("root") as HTMLElement;
 const label = getWindowLabel();
 
+try {
+  const ERROR_LOG_KEY = "owa_error_log_v1";
+  const logErr = (kind: string, message: string, stack?: string) => {
+    try {
+      const prev = JSON.parse(localStorage.getItem(ERROR_LOG_KEY) || "[]");
+      prev.push({ at: new Date().toISOString(), kind, message, stack: stack || "", href: window.location.hash || "" });
+      localStorage.setItem(ERROR_LOG_KEY, JSON.stringify(prev.slice(-10)));
+    } catch { /* noop */ }
+  };
+  window.addEventListener("error", (e) => logErr("window", e.message || String(e.error), e.error?.stack));
+  window.addEventListener("unhandledrejection", (e) => logErr("promise", String(e.reason?.message || e.reason), e.reason?.stack));
+} catch { /* noop */ }
+
+try {
+  const ERROR_LOG_KEY = "owa_error_log_v1";
+  const logErr = (kind: string, message: string, stack?: string) => {
+    try {
+      const prev = JSON.parse(localStorage.getItem(ERROR_LOG_KEY) || "[]");
+      prev.push({ at: new Date().toISOString(), kind, message, stack: stack || "", href: window.location.hash || "" });
+      localStorage.setItem(ERROR_LOG_KEY, JSON.stringify(prev.slice(-10)));
+    } catch { /* noop */ }
+  };
+  window.addEventListener("error", (e) => logErr("window", e.message || String(e.error), e.error?.stack));
+  window.addEventListener("unhandledrejection", (e) => logErr("promise", String(e.reason?.message || e.reason), e.reason?.stack));
+} catch { /* noop */ }
+
 if (label === "floating-timer") {
   ReactDOM.createRoot(rootEl).render(<FloatingTimer />);
 } else if (label === "pdf-viewer") {
