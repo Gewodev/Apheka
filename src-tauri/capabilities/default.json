@@ -30,6 +30,25 @@
     "dialog:default",
     "dialog:allow-open",
     "dialog:allow-save",
+    "opener:default",
+    {
+      "identifier": "opener:allow-open-path",
+      "allow": [
+        { "path": "$APPDATA/**" },
+        { "path": "$APPDATA" },
+        { "path": "$HOME/**" },
+        { "path": "$HOME" },
+        { "path": "$RESOURCE/**" },
+        { "path": "$RESOURCE" },
+        { "path": "C:/Users/USER/AppData/Local/com.owa.studio/**" },
+        { "path": "C:/Users/USER/AppData/Local/com.owa.studio" },
+        { "path": "C:/**" },
+        { "path": "C:" },
+        { "path": "D:/**" },
+        { "path": "D:" },
+        { "path": "**" }
+      ]
+    },
     {
       "identifier": "http:default",
       "allow": [

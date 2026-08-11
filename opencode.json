@@ -1,0 +1,50 @@
+{
+    "$schema": "https://opencode.ai/config.json",
+    "provider": {
+        "sambanova": {
+            "npm": "@ai-sdk/openai-compatible",
+            "name": "SambaNova Cloud",
+            "options": {
+                "baseURL": "https://api.sambanova.ai/v1",
+                "apiKey": "bf320e16-9d81-4eb4-8b56-fdfacb7eb060"
+            },
+            "models": {
+                "Meta-Llama-3.3-70B-Instruct": {
+                    "name": "Llama 3.3 70B (Battle Tested)",
+                    "limit": {
+                        "context": 128000,
+                        "output": 4096
+                    }
+                },
+                "DeepSeek-V3.1": {
+                    "name": "DeepSeek V3.1",
+                    "limit": {
+                        "context": 32000,
+                        "output": 4096
+                    }
+                },
+                "gpt-oss-120b": {
+                    "name": "GPT-OSS 120B",
+                    "limit": {
+                        "context": 32000,
+                        "output": 4096
+                    }
+                },
+                "gemma-4-31B-it": {
+                    "name": "Gemma 4 31B",
+                    "limit": {
+                        "context": 32000,
+                        "output": 4096
+                    }
+                },
+                "MiniMax-M2.7": {
+                    "name": "MiniMax M2.7",
+                    "limit": {
+                        "context": 32000,
+                        "output": 4096
+                    }
+                }
+            }
+        }
+    }
+}

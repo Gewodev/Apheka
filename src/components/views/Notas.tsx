@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Search, Plus, Folder as FolderIcon, Pin, Trash2, FileText, Download, X, Copy, Move,
   AlertTriangle, Check, Bold, Italic, Underline, List, Code, Link, Paperclip, StickyNote,
@@ -34,10 +35,13 @@ import {
   Umbrella, Undo, User, Users, Utensils,
   Verified, Video, Volume,
   Wallet, Wand, Waves, Webcam, Weight, Wine,
-  ZoomIn, ZoomOut
+  ZoomIn, ZoomOut, Link2
 } from "lucide-react";
 import { useApp, Note, NoteFolder, NoteAttachment, fmtClock } from "../../store/AppContext";
-import { openFileSmart } from '../../lib/openFileSmart';
+import { openFileSmart, pickAndPersistFile } from '../../lib/openFileSmart';
+import { useMaterialMenu } from '../ui/MaterialContextMenu';
+import { GoogleClassroomIcon, GoogleDriveIcon, GoogleDocsIcon, GoogleSheetsIcon, GoogleSlidesIcon, GoogleFormsIcon, WordIcon, ExcelIcon, PowerPointIcon } from '../ui/GoogleIcons';
+import { isTauri, convertFileSrc } from '@tauri-apps/api/core';
 import { createDownloadTask, updateDownloadTask, completeDownloadTask } from '../ui/DownloadManager';
 import {
   DndContext, closestCenter,
@@ -138,6 +142,67 @@ function saveNoteVersion(noteId: string, content: string): void {
     // Nunca romper el guardado de la nota por culpa del historial.
   }
 }
+
+// ¿Es un href que apunta a un adjunto local (ruta de Windows, data:, blob:, asset protocol)?
+function isLocalAttHref(href: string): boolean {
+  return href.startsWith("data:") || href.startsWith("blob:") || href.includes("asset.localhost") || /^[a-zA-Z]:[\\/]/.test(href);
+}
+
+const sBadge = (d: string, c: string) => <svg viewBox="0 0 24 24" width={16} height={16} fill={c} style={{ flexShrink: 0, display: 'block' }}><path d={d} /></svg>;
+// Iconos de adjuntos con la MISMA lógica de materiales de Cursos/Tareas/Eventos (detección por URL/extensión)
+function getNoteMatBadge(url: string, name: string) {
+  const isLink = url.startsWith('http');
+  const ext = (name || '').split('.').pop()?.toLowerCase() || '';
+  const isImg = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'bmp'].includes(ext) || url.startsWith('data:image');
+  const isPdf = ext === 'pdf';
+  const isDoc = ['doc', 'docx'].includes(ext);
+  const isXls = ['xls', 'xlsx', 'csv'].includes(ext);
+  const isPpt = ['ppt', 'pptx'].includes(ext);
+  const isAudio = ['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a'].includes(ext) || url.startsWith('data:audio');
+  const isVideo = ['mp4', 'webm', 'avi', 'mov', 'mkv'].includes(ext) || url.startsWith('data:video');
+  const isYouTube = isLink && (url.includes('youtube.com') || url.includes('youtu.be'));
+  const isClassroom = isLink && url.includes('classroom.google.com');
+  const isDrive = isLink && url.includes('drive.google.com');
+  const isGoogleDocs = isLink && url.includes('docs.google.com');
+  const isGoogleSheets = isLink && url.includes('sheets.google.com');
+  const isGoogleSlides = isLink && url.includes('slides.google.com');
+  const isGoogleForms = isLink && url.includes('forms.google.com');
+  const isWeb = isLink && !isYouTube && !isDrive && !isClassroom && !isGoogleDocs && !isGoogleSheets && !isGoogleSlides && !isGoogleForms;
+
+  let iconEl: React.ReactNode;
+  let badgeColor = '#888';
+  let subtitle = 'Archivo';
+  if (isDoc) { badgeColor = '#2563EB'; iconEl = <WordIcon />; subtitle = 'Word'; }
+  else if (isGoogleDocs) { badgeColor = '#2563EB'; iconEl = <GoogleDocsIcon />; subtitle = 'Google Docs'; }
+  else if (isXls) { badgeColor = '#10B981'; iconEl = <ExcelIcon />; subtitle = 'Excel'; }
+  else if (isGoogleSheets) { badgeColor = '#10B981'; iconEl = <GoogleSheetsIcon />; subtitle = 'Google Sheets'; }
+  else if (isPpt) { badgeColor = '#F97316'; iconEl = <PowerPointIcon />; subtitle = 'PowerPoint'; }
+  else if (isGoogleSlides) { badgeColor = '#F97316'; iconEl = <GoogleSlidesIcon />; subtitle = 'Google Slides'; }
+  else if (isPdf) { badgeColor = '#EF4444'; iconEl = sBadge('M23.63 15.3c-.71-.745-2.166-1.17-4.224-1.17-1.1 0-2.377.106-3.761.354a19.443 19.443 0 0 1-2.307-2.661c-.532-.71-.994-1.49-1.42-2.236.817-2.484 1.207-4.507 1.207-5.962 0-1.632-.603-3.336-2.342-3.336-.532 0-1.065.32-1.349.781-.78 1.384-.425 4.4.923 7.381a60.277 60.277 0 0 1-1.703 4.507c-.568 1.349-1.207 2.733-1.917 4.01C2.834 18.53.314 20.34.03 21.758c-.106.533.071 1.03.462 1.42.142.107.639.533 1.49.533 2.59 0 5.323-4.188 6.707-6.707 1.065-.355 2.13-.71 3.194-.994a34.963 34.963 0 0 1 3.407-.745c2.732 2.448 5.145 2.839 6.352 2.839 1.49 0 2.023-.604 2.2-1.1.32-.64.106-1.349-.213-1.704z', '#EF4444'); subtitle = 'PDF'; }
+  else if (isYouTube) { badgeColor = '#EF4444'; iconEl = sBadge('M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z', '#EF4444'); subtitle = 'YouTube'; }
+  else if (isClassroom) { badgeColor = '#0F9D58'; iconEl = <GoogleClassroomIcon />; subtitle = 'Classroom'; }
+  else if (isDrive) { badgeColor = '#4285F4'; iconEl = <GoogleDriveIcon />; subtitle = 'Google Drive'; }
+  else if (isGoogleForms) { badgeColor = '#7C3AED'; iconEl = <GoogleFormsIcon />; subtitle = 'Google Forms'; }
+  else if (isAudio) { badgeColor = '#8B5CF6'; iconEl = <Music size={16} />; subtitle = 'Audio'; }
+  else if (isImg) { badgeColor = '#F59E0B'; iconEl = <ImageIcon size={16} />; subtitle = 'Imagen'; }
+  else if (isVideo) { badgeColor = '#EC4899'; iconEl = <File size={16} />; subtitle = 'Video'; }
+  else if (isWeb) {
+    badgeColor = '#10B981';
+    let domain = '';
+    try { domain = new URL(url).hostname; } catch {}
+    subtitle = domain;
+    iconEl = (
+      <span style={{ position: 'relative', width: 16, height: 16, display: 'inline-flex', flexShrink: 0 }}>
+        <img src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`} alt="" style={{ width: 16, height: 16, borderRadius: 3, position: 'absolute', inset: 0 }}
+          onError={e => { e.currentTarget.style.display = 'none'; const fb = e.currentTarget.parentElement?.querySelector('.notes-link-fb') as HTMLElement; if (fb) fb.style.display = 'flex'; }} />
+        <span className="notes-link-fb" style={{ display: 'none', position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center', color: '#10B981' }}><Link2 size={12} /></span>
+      </span>
+    );
+  }
+  else iconEl = <File size={16} />;
+  return { iconEl, badgeColor, subtitle };
+}
+
 
 const AVAILABLE_ICONS: { name: string; icon: React.ComponentType<{ size?: number; color?: string; style?: React.CSSProperties }>; label: string }[] = [
   { name: "FileText", icon: FileText, label: "Documento" },
@@ -1039,10 +1104,6 @@ const HIGHLIGHT_COLORS = [
 ];
 
 function EditorToolbar({ onFormat }: EditorToolbarProps) {
-  const [showLinkInput, setShowLinkInput] = useState(false);
-  const [linkUrl, setLinkUrl] = useState("");
-  const linkInputRef = useRef<HTMLInputElement>(null);
-
   const [showColorMenu, setShowColorMenu] = useState(false);
   const [showTablePicker, setShowTablePicker] = useState(false);
   const [tableRows, setTableRows] = useState(3);
@@ -1075,10 +1136,6 @@ function EditorToolbar({ onFormat }: EditorToolbarProps) {
       clearInterval(id);
     };
   }, []);
-
-  useEffect(() => {
-    if (showLinkInput) linkInputRef.current?.focus();
-  }, [showLinkInput]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -1208,17 +1265,7 @@ function EditorToolbar({ onFormat }: EditorToolbarProps) {
         <AlignJustify size={14} />
       </button>
 
-      {/* 5. LINKS & FILES */}
-      <button onClick={() => { setShowLinkInput(true); setLinkUrl(""); }} title="Insertar enlace"
-        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
-        className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
-        <Link size={14} />
-      </button>
-      <button onClick={() => onFormat("insertFile")} title="Adjuntar archivo"
-        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
-        className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
-        <Paperclip size={14} />
-      </button>
+      {/* 5. TABLE */}
       <div ref={tablePickerRef} style={{ position: "relative" }}>
         <button onClick={() => setShowTablePicker(!showTablePicker)} title="Insertar tabla"
           style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
@@ -1269,35 +1316,6 @@ function EditorToolbar({ onFormat }: EditorToolbarProps) {
           </div>
         )}
       </div>
-
-      {showLinkInput && (
-        <div style={{
-          position: "absolute", top: "100%", left: 0, marginTop: 6, zIndex: 300,
-          display: "flex", gap: 6, alignItems: "center",
-          background: "var(--bg-elevated)", border: "1px solid var(--border-strong)",
-          borderRadius: "var(--radius-md)", padding: "8px 10px",
-          boxShadow: "var(--shadow-elevated)", animation: "fadeIn 150ms ease-out",
-        }}>
-          <input ref={linkInputRef}
-            type="url" placeholder="https://..."
-            value={linkUrl} onChange={e => setLinkUrl(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter" && linkUrl) { onFormat("createLink", linkUrl); setShowLinkInput(false); } }}
-            style={{
-              width: 200, padding: "6px 10px", fontSize: 12, borderRadius: 6,
-              border: "1px solid var(--border-default)", background: "var(--bg-base)",
-              color: "var(--text-primary)", outline: "none",
-            }} />
-          <button onClick={() => { if (linkUrl) { onFormat("createLink", linkUrl); setShowLinkInput(false); } }}
-            style={{
-              background: "var(--accent)", color: "#fff", border: "none",
-              borderRadius: 6, padding: "6px 12px", fontSize: 11, fontWeight: 600, cursor: "pointer",
-            }}>Insertar</button>
-          <button onClick={() => setShowLinkInput(false)}
-            style={{ background: "none", border: "none", color: "var(--text-tertiary)", cursor: "pointer", padding: 4 }}>
-            <X size={12} />
-          </button>
-        </div>
-      )}
     </div>
   );
 }
@@ -1327,7 +1345,9 @@ function ShelfPlank() {
 }
 
 export default function Notas() {
-  const { notes, noteFolders: folders, addNote, updateNote, updateNoteVisual, deleteNote, restoreNote, permanentlyDeleteNote, addNoteFolder, duplicateNote, reorderNotes, settings } = useApp();
+  const { notes, noteFolders: folders, addNote, updateNote, updateNoteVisual, deleteNote, restoreNote, permanentlyDeleteNote, addNoteFolder, duplicateNote, reorderNotes, settings, addNotification, setPipUrl } = useApp();
+
+  const matMenu = useMaterialMenu((m) => addNotification(m, 'error'));
 
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(() => {
@@ -1355,12 +1375,17 @@ export default function Notas() {
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [trashSelectedIds, setTrashSelectedIds] = useState<Set<string>>(new Set());
   const [switchTargetId, setSwitchTargetId] = useState<string | null>(null);
-  const [drawerTab, setDrawerTab] = useState<"contenido" | "informacion" | "historial">("contenido");
+  const [drawerTab, setDrawerTab] = useState<"contenido" | "informacion" | "materiales" | "historial">("contenido");
   const [linkPreviewUrl, setLinkPreviewUrl] = useState<string | null>(null);
   const [linkPreviewError, setLinkPreviewError] = useState(false);
   const [previewFile, setPreviewFile] = useState<{ url: string; name: string; type: string } | null>(null);
   const [lightboxImage, setLightboxImage] = useState<{ src: string; el: HTMLElement } | null>(null);
   const [pendingLink, setPendingLink] = useState<string | null>(null);
+
+  // Formulario "Añadir enlace" de la sección Materiales (lateral derecha en edición)
+  const [showMatLinkForm, setShowMatLinkForm] = useState(false);
+  const [matLinkName, setMatLinkName] = useState("");
+  const [matLinkUrl, setMatLinkUrl] = useState("");
 
   // EDIT STATE
   const [isEditing, setIsEditing] = useState(false);
@@ -1411,7 +1436,6 @@ export default function Notas() {
     ]},
     { cat: "Elementos", opts: [
       { label: "Tabla", icon: Table, cmd: "insertTable" },
-      { label: "Adjuntar archivo", icon: Paperclip, cmd: "insertFile" },
     ]}
   ], []);
 
@@ -1526,6 +1550,12 @@ export default function Notas() {
   const selectedNote = useMemo(
     () => notes.find((n) => n.id === selectedNoteId) || null,
     [notes, selectedNoteId],
+  );
+
+  // Adjuntos en VIVO del HTML de la nota (sin esperar el autoguardado)
+const noteLiveAtts = useMemo(
+    () => (selectedNote ? selectedNote.attachments || [] : []),
+    [selectedNote]
   );
 
   const currentFolder = useMemo(
@@ -1666,8 +1696,72 @@ export default function Notas() {
     setSaveStatus("saved");
   }, [selectedNote, updateNote]);
 
-  const handleSelectNote = useCallback((noteId: string) => {
-    setSelectedNoteId(noteId);
+  // Adjunta un archivo/enlace como MATERIAL: se guarda SOLO en note.attachments (estado),
+  // NUNCA se inserta en el contenido del editor. Así los archivos viven únicamente en la
+  // sección Materiales (lateral y preview), con el mismo nombre aunque se suba dos veces.
+  const addNoteAttachment = useCallback((url: string, name: string, sizeBytes?: number) => {
+    if (!selectedNote) return;
+    const lower = name.toLowerCase();
+    const type: NoteAttachment['type'] =
+      lower.match(/\.(png|jpe?g|gif|webp|svg|bmp)$/i) || url.startsWith('data:image') ? "image" :
+      lower.match(/\.pdf$/i) ? "pdf" :
+      lower.match(/\.(mp3|wav|ogg|flac|m4a|aac)$/i) || url.startsWith('data:audio') ? "audio" :
+      lower.match(/\.(mp4|webm|mov|avi|mkv)$/i) || url.startsWith('data:video') ? "video" : "file";
+    updateNote(selectedNote.id, {
+      attachments: [...(selectedNote.attachments || []), { id: Math.random().toString(36).slice(2, 10), name: name || 'adjunto', type, dataUrl: url, size: sizeBytes || 0 }],
+    });
+    setSaveStatus("pending");
+  }, [selectedNote, updateNote]);
+
+  // Añade un ENLACE web desde la lateral (Materiales)
+  const handleAddNoteLink = useCallback((name: string, url: string) => {
+    const clean = (url || "").trim();
+    if (!/^https?:\/\//i.test(clean)) {
+      addNotification('El enlace debe empezar con http:// o https://', 'error');
+      return;
+    }
+    addNoteAttachment(clean, name.trim() || clean, 0);
+    addNotification('Enlace añadido a la nota', 'success');
+  }, [addNoteAttachment, addNotification]);
+
+  // Ventana de confirmación al quitar un material de la nota
+  const [deleteAttConfirm, setDeleteAttConfirm] = useState<{ id: string; name: string } | null>(null);
+
+  // Quita un material del estado (y su copia heredada dentro del contenido si existía)
+  const removeNoteAttachment = useCallback((attId: string) => {
+    if (!selectedNote) return;
+    const att = (selectedNote.attachments || []).find(a => a.id === attId);
+    let content = selectedNote.content || '';
+    const ed = editorRef.current;
+    if (att && ed) {
+      let removed = false;
+      ed.querySelectorAll('img[src], audio[src], video[src], a[href]').forEach((el) => {
+        const s = el.getAttribute('src') || el.getAttribute('href') || '';
+        if (s === att.dataUrl) {
+          const w = el.closest('.notes-attachment');
+          if (w && w !== el) w.remove(); else el.remove();
+          removed = true;
+        }
+      });
+      if (removed) { content = ed.innerHTML; ed.focus(); }
+    }
+    updateNote(selectedNote.id, {
+      content,
+      attachments: (selectedNote.attachments || []).filter(a => a.id !== attId),
+    });
+    setSaveStatus("pending");
+  }, [selectedNote, updateNote]);
+
+  // onMoved de openFileSmart: el archivo fue hallado en OTRA carpeta → actualiza su ruta en la nota
+  const handleNoteAttMoved = useCallback((oldUrl: string, newPath: string) => {
+    if (!selectedNote) return;
+    const atts = (selectedNote.attachments || []).map(a => a.dataUrl === oldUrl ? { ...a, dataUrl: newPath } : a);
+    const content = oldUrl ? (selectedNote.content || '').split(oldUrl).join(newPath) : (selectedNote.content || '');
+    updateNote(selectedNote.id, { content, attachments: atts });
+    addNotification('Adjunto actualizado a su nueva ubicación', 'success');
+  }, [selectedNote, updateNote, addNotification]);
+
+  const handleSelectNote = useCallback((noteId: string) => {    setSelectedNoteId(noteId);
   }, []);
 
   const openFloatingNote = useCallback(async (note: Note) => {
@@ -1676,6 +1770,7 @@ export default function Notas() {
   const handleOpenNote = useCallback(() => {
     if (selectedNote) {
       setIsEditing(true);
+      setShowDetailsPanel(true);
     }
   }, [selectedNote]);
 
@@ -1830,9 +1925,6 @@ export default function Notas() {
       tbody += "</tbody>";
       const html = `<table class="notes-table" style="width:100%;border-collapse:collapse;margin:8px 0;">${thead}${tbody}</table><br>`;
       document.execCommand("insertHTML", false, html);
-    } else if (cmd === "insertFile") {
-      fileInputRef.current?.click();
-      return;
     } else if (cmd === "styledQuote") {
       const sel = window.getSelection();
       const text = sel ? sel.toString() : "";
@@ -2763,32 +2855,17 @@ export default function Notas() {
                   </div>
                 </div>
 
-                {/* Hidden file input for attachments */}
-                <input ref={fileInputRef} type="file" style={{ display: "none" }} onChange={(e) => {
+                {/* Hidden file input for attachments (solo web; en Tauri el diálogo nativo sale directo desde la lateral Materiales) */}
+                <input ref={fileInputRef} type="file" style={{ display: "none" }} onChange={async (e) => {
                   const file = e.target.files?.[0];
-                  if (file && editorRef.current) {
-                    const url = URL.createObjectURL(file);
-                    const isImg = file.type.startsWith("image/");
-                    const isAudio = file.type.startsWith("audio/");
-                    const isVideo = file.type.startsWith("video/");
-                    let html = "";
-                    if (isImg) {
-                      html = `<img src="${url}" alt="${file.name}" style="max-width:100%;border-radius:8px;margin:8px 0;" class="editable-image" />`;
-                    } else if (isAudio) {
-                      html = `<div class="notes-attachment" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--border-default);border-radius:10px;margin:8px 0;background:var(--bg-hover);"><span style="font-size:22px;">🎵</span><div style="flex:1;min-width:0"><div style="font-size:12;font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${file.name}</div><audio controls src="${url}" style="width:100%;height:36px;margin-top:4px;">${file.name}</audio></div><span style="font-size:10px;color:var(--text-tertiary);flex-shrink:0;">${(file.size / 1024).toFixed(0)} KB</span></div>`;
-                    } else if (isVideo) {
-                      html = `<div class="notes-attachment" style="display:flex;flex-direction:column;gap:6px;padding:10px 14px;border:1px solid var(--border-default);border-radius:10px;margin:8px 0;background:var(--bg-hover);"><div style="display:flex;align-items:center;gap:8px;"><span style="font-size:18px;">🎬</span><span style="font-size:12;font-weight:600;color:var(--text-primary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${file.name}</span><span style="font-size:10px;color:var(--text-tertiary);flex-shrink:0;">${(file.size / 1024).toFixed(0)} KB</span></div><video controls src="${url}" style="width:100%;max-height:400px;border-radius:6px;">${file.name}</video></div>`;
-                    } else {
-                      const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith('.pdf');
-                      if (isPdf) {
-                        html = `<div class="notes-attachment"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg><a href="${url}" target="_blank">${file.name}</a><span class="att-meta">${(file.size / 1024).toFixed(0)} KB · PDF</span></div>`;
-                      } else {
-                        html = `<div class="notes-attachment"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg><a href="${url}" target="_blank">${file.name}</a><span class="att-meta">${(file.size / 1024).toFixed(0)} KB</span></div>`;
-                      }
-                    }
-                    document.execCommand("insertHTML", false, html);
-                    setSaveStatus("pending");
-                    if (selectedNote) updateNote(selectedNote.id, { content: editorRef.current.innerHTML });
+                  if (file) {
+                    const url = await new Promise<string>((resolve, reject) => {
+                      const r = new FileReader();
+                      r.onload = () => resolve(r.result as string);
+                      r.onerror = () => reject(new Error('read failed'));
+                      r.readAsDataURL(file);
+                    });
+                    addNoteAttachment(url, file.name, file.size);
                   }
                   e.target.value = "";
                 }} />
@@ -2883,6 +2960,15 @@ export default function Notas() {
                           e.preventDefault();
                           setLinkPreviewUrl(href);
                           setLinkPreviewError(false);
+                          return;
+                        }
+                        if (href && isLocalAttHref(href)) {
+                          e.preventDefault();
+                          openFileSmart(href, (target.textContent || 'adjunto').trim(), {
+                            onMedia: (u, n) => setPipUrl(u, n),
+                            onError: (m) => addNotification(m, 'error'),
+                            onMoved: (np) => handleNoteAttMoved(href, np),
+                          }).catch(() => addNotification('No se pudo abrir el adjunto', 'error'));
                           return;
                         }
                       }
@@ -3114,56 +3200,93 @@ export default function Notas() {
                     )}
                   </div>
 
-                  {/* Acceso Rápido */}
+                  {/* Materiales — debajo de Etiquetas, misma estética (nombre + 2 botones al costado, como Cursos) */}
                   <div style={{
                     background: "var(--bg-elevated)",
                     border: "1px solid var(--border-subtle)", borderRadius: 10, padding: "14px 14px",
                   }}>
-                    <h3 style={{
-                      fontSize: 9, fontWeight: 500, color: "var(--text-tertiary)",
-                      letterSpacing: "0.14em", textTransform: "uppercase",
-                      marginBottom: 10, fontFamily: "'Inter', sans-serif",
-                      display: "flex", alignItems: "center", gap: 5,
-                    }}>
-                      <Zap size={9} /> Acciones
-                    </h3>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                      <button onClick={handleDuplicate}
-                        style={{
-                          display: "flex", alignItems: "center", gap: 7, padding: "7px 10px",
-                          borderRadius: 7, border: "1px solid var(--border-default)",
-                          background: "transparent",
-                          color: "var(--text-secondary)", fontSize: 11, cursor: "pointer",
-                          transition: "all 120ms",
-                        }}
-                        className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
-                        <Copy size={12} /> Duplicar
+                    <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 10 }}>
+                      <h3 style={{
+                        flex: 1, fontSize: 9, fontWeight: 500, color: "var(--text-tertiary)",
+                        letterSpacing: "0.14em", textTransform: "uppercase", margin: 0,
+                        fontFamily: "'Inter', sans-serif", display: "flex", alignItems: "center", gap: 5, minWidth: 0,
+                      }}>
+                        <Paperclip size={9} /> Materiales
+                      </h3>
+                      <button onClick={() => { setShowMatLinkForm(!showMatLinkForm); }}
+                        title="Añadir enlace"
+                        style={{ width: 26, height: 26, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 7, cursor: "pointer", border: "1px solid color-mix(in srgb, var(--accent) 40%, transparent)", background: "color-mix(in srgb, var(--accent) 8%, transparent)", color: "var(--accent)", transition: "all 150ms" }}
+                        className="hover:bg-[color-mix(in srgb,var(--accent)16%,transparent)] hover:border-[color-mix(in srgb,var(--accent)65%,transparent)]">
+                        <Link2 size={12} />
                       </button>
-                      <button onClick={() => handleExportPDF()}
-                        style={{
-                          display: "flex", alignItems: "center", gap: 7, padding: "7px 10px",
-                          borderRadius: 7, border: "1px solid var(--border-default)",
-                          background: "transparent",
-                          color: "var(--text-secondary)", fontSize: 11, cursor: "pointer",
-                          transition: "all 120ms",
-                        }}
-                        className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
-                        <Download size={12} /> Exportar PDF
-                      </button>
-                      <div style={{ height: 1, background: "var(--border-subtle)", margin: "2px 0" }} />
-                      <button onClick={() => setDeleteConfirmNoteId(selectedNoteId)}
-                        style={{
-                          display: "flex", alignItems: "center", gap: 7, padding: "7px 10px",
-                          borderRadius: 7, border: "1px solid transparent",
-                          background: "transparent",
-                          color: "var(--text-tertiary)", fontSize: 11, cursor: "pointer",
-                          transition: "all 120ms",
-                        }}
-                        className="hover:bg-[var(--error-dim)] hover:text-[var(--error)]">
-                        <Trash2 size={12} /> Eliminar
+                      <button onClick={() => {
+                        if (isTauri()) {
+                          pickAndPersistFile()
+                            .then(r => { if (r) addNoteAttachment(r.path, r.name, 0); })
+                            .catch(() => addNotification('No se pudo abrir el selector de archivos', 'error'));
+                        } else {
+                          fileInputRef.current?.click();
+                        }
+                      }}
+                        title="Adjuntar archivo"
+                        style={{ width: 26, height: 26, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 7, cursor: "pointer", border: "1px solid color-mix(in srgb, var(--accent) 40%, transparent)", background: "color-mix(in srgb, var(--accent) 8%, transparent)", color: "var(--accent)", transition: "all 150ms" }}
+                        className="hover:bg-[color-mix(in srgb,var(--accent)16%,transparent)] hover:border-[color-mix(in srgb,var(--accent)65%,transparent)]">
+                        <Upload size={12} />
                       </button>
                     </div>
+                    {showMatLinkForm && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10, padding: 10, background: "var(--bg-base)", borderRadius: 9, border: "1px solid var(--border-soft)" }}>
+                        <input value={matLinkName} onChange={e => setMatLinkName(e.target.value)}
+                          onKeyDown={e => { if (e.key === "Enter") handleAddNoteLink(matLinkName, matLinkUrl); }} placeholder="Nombre (opcional)"
+                          style={{ width: "100%", padding: "7px 10px", fontSize: 11.5, borderRadius: 7, border: "1px solid var(--border-default)", background: "var(--bg-elevated)", color: "var(--text-primary)", outline: "none", boxSizing: "border-box" }} />
+                        <input value={matLinkUrl} onChange={e => setMatLinkUrl(e.target.value)}
+                          onKeyDown={e => { if (e.key === "Enter") handleAddNoteLink(matLinkName, matLinkUrl); }} placeholder="https://..."
+                          style={{ width: "100%", padding: "7px 10px", fontSize: 11.5, borderRadius: 7, border: "1px solid var(--border-default)", background: "var(--bg-elevated)", color: "var(--text-primary)", outline: "none", boxSizing: "border-box" }} />
+                        <button onClick={() => handleAddNoteLink(matLinkName, matLinkUrl)}
+                          style={{ background: "var(--accent)", color: "#fff", border: "none", borderRadius: 7, padding: "7px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Añadir enlace</button>
+                      </div>
+                    )}
+                    {noteLiveAtts.length > 0 ? (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        {noteLiveAtts.map(att => {
+                          const badge = getNoteMatBadge(att.dataUrl || '', att.name);
+                          const isLink = (att.dataUrl || '').startsWith('http');
+                          return (
+                            <div key={att.id} onClick={() => { openFileSmart(att.dataUrl || '', att.name, { onMedia: (u, n) => setPipUrl(u, n), onError: (m) => addNotification(m, 'error'), onMoved: (np) => handleNoteAttMoved(att.dataUrl || '', np) }).catch(() => addNotification('No se pudo abrir el adjunto', 'error')); }}
+                              style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 9px", background: "var(--bg-base)", border: "1px solid var(--border-subtle)", borderRadius: 10, cursor: "pointer", maxWidth: "100%", transition: "border-color 150ms, transform 150ms" }}
+                              className="hover:border-[var(--accent)]" title={"Abrir: " + att.name}>
+                              <span style={{
+                                width: 30, height: 30, borderRadius: 8, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                                background: "color-mix(in srgb, " + badge.badgeColor + " 14%, transparent)",
+                                border: "1px solid color-mix(in srgb, " + badge.badgeColor + " 30%, transparent)",
+                              }}>{badge.iconEl}</span>
+                              <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 1 }}>
+                                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-primary)", fontSize: 11.5, fontWeight: 500 }}>{att.name}</span>
+                                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-tertiary)", fontSize: 9.5 }}>
+                                  {!isLink && att.size > 0 ? `${(att.size / 1024).toFixed(0)} KB · ` : ''}{badge.subtitle}
+                                </span>
+                              </span>
+                              <button onClick={(e) => { e.stopPropagation(); setDeleteAttConfirm({ id: att.id, name: att.name }); }}
+                                style={{ width: 24, height: 24, borderRadius: 7, border: "none", background: "transparent", color: "var(--text-tertiary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 150ms" }}
+                                className="hover:bg-[rgba(239,68,68,0.14)] hover:text-[#EF4444]" title="Quitar material">
+                                <X size={13} />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div style={{
+                        display: "flex", alignItems: "center", justifyContent: "center", gap: 6, height: 44,
+                        borderRadius: 9, border: "1px dashed var(--border-subtle)", background: "var(--bg-surface)",
+                        fontSize: 10.5, color: "var(--text-tertiary)",
+                      }}>
+                        Sin materiales — usa los botones de arriba
+                      </div>
+                    )}
                   </div>
+
+                  {/* Acceso Rápido (eliminado: Duplicar/Exportar PDF/Eliminar viven en el menú contextual de la nota) */}
                 </div>
                 );
               })()}
@@ -3828,7 +3951,7 @@ export default function Notas() {
                           borderBottom: "1px solid var(--border-default)", padding: "0 12px",
                           background: "var(--bg-elevated)",
                         }}>
-                          {["contenido", "informacion", "historial"].map((tab) => (
+                          {(["contenido", "informacion", ...(noteLiveAtts.length > 0 ? ["materiales"] as const : []), "historial"]).map((tab) => (
                             <button key={tab} onClick={() => setDrawerTab(tab as any)}
                               style={{
                                 padding: "10px 12px", border: "none", background: drawerTab === tab ? "var(--bg-surface)" : "none",
@@ -3839,7 +3962,7 @@ export default function Notas() {
                                 marginBottom: -1, borderBottom: "2px solid " + (drawerTab === tab ? "var(--accent)" : "transparent"),
                               }}
                               className={drawerTab !== tab ? "hover:text-[var(--text-secondary)]" : ""}>
-                              {tab === "contenido" ? "Contenido" : tab === "informacion" ? "Metadatos" : "Historial"}
+                              {tab === "contenido" ? "Contenido" : tab === "informacion" ? "Metadatos" : tab === "materiales" ? "Materiales" : "Historial"}
                             </button>
                           ))}
                         </div>
@@ -3862,10 +3985,18 @@ export default function Notas() {
                               const t = e.target as HTMLElement;
                               if (t.tagName === "A") {
                                 const href = (t as HTMLAnchorElement).getAttribute("href");
-                                if (href && (href.startsWith("http://") || href.startsWith("https://"))) {
+                                if (!href) return;
+                                if (href.startsWith("http://") || href.startsWith("https://")) {
                                   e.preventDefault();
                                   setLinkPreviewUrl(href);
                                   setLinkPreviewError(false);
+                                } else if (href && isLocalAttHref(href)) {
+                                  e.preventDefault();
+                                  openFileSmart(href, (t.textContent || 'adjunto').trim(), {
+                                    onMedia: (u, n) => setPipUrl(u, n),
+                                    onError: (m) => addNotification(m, 'error'),
+                                    onMoved: (np) => handleNoteAttMoved(href, np),
+                                  }).catch(() => addNotification('No se pudo abrir el adjunto', 'error'));
                                 }
                               }
                             }}>
@@ -3879,57 +4010,60 @@ export default function Notas() {
                                 className="notes-preview-area"
                               />
                             </div>
+                          </div>
+                        )}
 
-                            {/* Attachments */}
-                            {selectedNote.attachments && selectedNote.attachments.length > 0 && (
-                              <div style={{ marginTop: 12 }}>
-                                <h4 style={{ fontSize: 10, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Adjuntos</h4>
-                                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                                  {selectedNote.attachments.map(att => {
-                                    const isPdf = att.type === 'pdf' || att.name.toLowerCase().endsWith('.pdf');
-                                    const isImg = att.type === 'image' || att.name.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i);
-                                    const isAudio = att.type === 'audio' || att.name.match(/\.(mp3|wav|ogg|m4a|flac)$/i);
-                                    const isVideo = att.type === 'video' || att.name.match(/\.(mp4|webm|mov)$/i);
-                                    const isLink = att.dataUrl?.startsWith('http');
-                                    const isOffice = att.name.match(/\.(doc|docx|xls|xlsx|ppt|pptx)$/i);
-                                    return (
-                                      <div key={att.id} style={{
-                                        display: "flex", alignItems: "center", gap: 8, padding: "8px 10px",
+                        {drawerTab === "materiales" && (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                            {noteLiveAtts.length > 0 ? (
+                              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                                {noteLiveAtts.map(att => {
+                                  const isLink = att.dataUrl?.startsWith('http');
+                                  const badge = getNoteMatBadge(att.dataUrl || '', att.name);
+                                  return (
+                                    <div key={att.id} onClick={() => { openFileSmart(att.dataUrl || '', att.name, { onMedia: (u, n) => setPipUrl(u, n), onError: (m) => addNotification(m, 'error'), onMoved: (np) => handleNoteAttMoved(att.dataUrl || '', np) }); }}
+                                      onContextMenu={(e) => matMenu.openMenu(e, { url: att.dataUrl || '', name: att.name, color: badge.badgeColor })}
+                                      style={{
+                                        display: "flex", alignItems: "center", gap: 12, padding: "14px 16px",
                                         background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)",
-                                        borderRadius: 8, fontSize: 11.5, transition: "border-color 150ms",
-                                      }} className="hover:border-[var(--accent)]">
-                                        {isPdf ? (
-                                          <FileText size={14} style={{ color: "#EF4444", flexShrink: 0 }} />
-                                        ) : isImg ? (
-                                          <ImageIcon size={14} style={{ color: "#3B82F6", flexShrink: 0 }} />
-                                        ) : isAudio ? (
-                                          <Music size={14} style={{ color: "#10B981", flexShrink: 0 }} />
-                                        ) : isVideo ? (
-                                          <Camera size={14} style={{ color: "#8B5CF6", flexShrink: 0 }} />
-                                        ) : isLink ? (
-                                          <Link size={14} style={{ color: "var(--accent)", flexShrink: 0 }} />
-                                        ) : (
-                                          <File size={13} style={{ color: "var(--text-tertiary)", flexShrink: 0 }} />
-                                        )}
-                                        <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-primary)", fontSize: 11, fontWeight: 500 }}>{att.name}</span>
-                                        <span style={{ fontSize: 9, color: "var(--text-tertiary)", flexShrink: 0 }}>
-                                          {isLink ? '' : (att.size / 1024).toFixed(0) + ' KB'}
+                                        borderLeft: `3px solid ${badge.badgeColor}`,
+                                        borderRadius: 12, transition: "all 180ms", cursor: "pointer",
+                                      }}
+                                      className="hover:border-[color-mix(in srgb,var(--accent)55%,transparent)] hover:bg-[var(--bg-hover)]"
+                                      title={"Abrir: " + att.name}
+                                      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 6px 18px rgba(0,0,0,0.18)'; }}
+                                      onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}>
+                                      <span style={{
+                                        width: 40, height: 40, borderRadius: 10, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                                        background: "color-mix(in srgb, " + badge.badgeColor + " 14%, transparent)",
+                                        border: "1px solid color-mix(in srgb, " + badge.badgeColor + " 32%, transparent)",
+                                      }}>{badge.iconEl}</span>
+                                      <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 3 }}>
+                                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-primary)", fontSize: 13, fontWeight: 600, fontFamily: "'Inter Tight', sans-serif" }}>{att.name}</span>
+                                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-tertiary)", fontSize: 10, fontFamily: "'JetBrains Mono', monospace" }}>
+                                          {badge.subtitle}{!isLink && att.size > 0 ? ` · ${(att.size / 1024).toFixed(0)} KB` : ''}
                                         </span>
-                                        <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
-                                          {(isImg || isPdf) && (
-                                            <button onClick={(e) => { e.stopPropagation(); openFileSmart(att.dataUrl, att.name); }}
-                                              style={{ width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", color: "var(--text-tertiary)", cursor: "pointer", borderRadius: 4 }}
-                                              className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]" title="Vista previa">
-                                              <Eye size={11} />
-                                            </button>
-                                          )}
-                                          {isLink && (
-                                            <a href={att.dataUrl} target="_blank" rel="noopener noreferrer"
-                                              style={{ width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-tertiary)", borderRadius: 4 }}
-                                              className="hover:bg-[var(--bg-hover)] hover:text-[var(--accent)]" title="Abrir enlace">
-                                              <ExternalLink size={11} />
-                                            </a>
-                                          )}
+                                      </span>
+                                      <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
+                                        {att.dataUrl && (att.dataUrl.startsWith('data:') || att.dataUrl.startsWith('blob:')) && (
+                                          <button onClick={(e) => { e.stopPropagation(); openFileSmart(att.dataUrl, att.name, { onMedia: (u, n) => setPipUrl(u, n), onError: (m) => addNotification(m, 'error') }); }}
+                                            style={{ width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", color: "var(--text-tertiary)", cursor: "pointer", borderRadius: 8 }}
+                                            className="hover:bg-[var(--bg-base)] hover:text-[var(--text-primary)]" title="Vista previa">
+                                            <Eye size={13} />
+                                          </button>
+                                        )}
+                                        {isLink && (
+                                          <button onClick={(e) => {
+                                            e.stopPropagation();
+                                            setLinkPreviewUrl(att.dataUrl || '');
+                                            setLinkPreviewError(false);
+                                          }}
+                                            style={{ width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", color: "var(--text-tertiary)", cursor: "pointer", borderRadius: 8 }}
+                                            className="hover:bg-[var(--bg-base)] hover:text-[var(--accent)]" title="Vista previa del enlace">
+                                            <ExternalLink size={13} />
+                                          </button>
+                                        )}
+                                        {att.dataUrl && (att.dataUrl.startsWith('data:') || att.dataUrl.startsWith('blob:')) && (
                                           <button onClick={(e) => {
                                             e.stopPropagation();
                                             const a = document.createElement('a');
@@ -3937,15 +4071,24 @@ export default function Notas() {
                                             a.download = att.name;
                                             a.click();
                                           }}
-                                            style={{ width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", color: "var(--text-tertiary)", cursor: "pointer", borderRadius: 4 }}
-                                            className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]" title="Descargar">
-                                            <Download size={11} />
+                                            style={{ width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", color: "var(--text-tertiary)", cursor: "pointer", borderRadius: 8 }}
+                                            className="hover:bg-[var(--bg-base)] hover:text-[var(--text-primary)]" title="Descargar">
+                                            <Download size={13} />
                                           </button>
-                                        </div>
+                                        )}
                                       </div>
-                                    );
-                                  })}
-                                </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <div style={{
+                                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, height: 90,
+                                borderRadius: 10, border: "1px dashed var(--border-subtle)", background: "var(--bg-elevated)",
+                                fontSize: 11, color: "var(--text-tertiary)",
+                              }}>
+                                <Paperclip size={16} style={{ opacity: 0.5 }} />
+                                Sin materiales todavía
                               </div>
                             )}
                           </div>
@@ -4351,6 +4494,57 @@ export default function Notas() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ===== CONFIRM QUITAR MATERIAL (ventana portaleada encima de todo) ===== */}
+      {deleteAttConfirm && createPortal(
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 99996,
+          background: "rgba(0,0,0,0.55)", backdropFilter: "blur(6px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }} onClick={() => setDeleteAttConfirm(null)}>
+          <div style={{
+            background: "var(--bg-surface)",
+            border: "1px solid var(--border-default)",
+            borderRadius: 16, padding: 22, width: 340, maxWidth: "90vw",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.35)",
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              <div style={{
+                width: 38, height: 38, borderRadius: 11, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                background: "rgba(239,68,68,0.14)", border: "1px solid rgba(239,68,68,0.35)",
+              }}>
+                <Trash2 size={16} style={{ color: "#EF4444" }} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <h3 style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)", margin: 0, fontFamily: "'Inter Tight', sans-serif" }}>
+                  Quitar material
+                </h3>
+                <p style={{ fontSize: 10.5, color: "var(--text-tertiary)", margin: "2px 0 0", fontFamily: "'JetBrains Mono', monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {deleteAttConfirm.name}
+                </p>
+              </div>
+            </div>
+            <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: 0, lineHeight: 1.5 }}>
+              ¿Eliminar este material de la nota? Se quitará de Materiales. Esta acción no se puede deshacer.
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 18 }}>
+              <button onClick={() => setDeleteAttConfirm(null)}
+                style={{
+                  background: "none", border: "1px solid var(--border-default)", borderRadius: 9,
+                  padding: "8px 16px", color: "var(--text-secondary)", fontSize: 11.5, cursor: "pointer",
+                  fontFamily: "'Inter', sans-serif", fontWeight: 500,
+                }}>Cancelar</button>
+              <button onClick={() => { removeNoteAttachment(deleteAttConfirm.id); setDeleteAttConfirm(null); }}
+                style={{
+                  background: "#EF4444", color: "#fff", border: "none", borderRadius: 9,
+                  padding: "8px 16px", fontSize: 11.5, fontWeight: 600, cursor: "pointer",
+                  fontFamily: "'Inter', sans-serif", boxShadow: "0 4px 14px rgba(239,68,68,0.35)",
+                }}>Sí, eliminar</button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
 
       {/* ===== MOVE FOLDER MODAL ===== */}

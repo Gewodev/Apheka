@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Calendar, Clock, BookOpen, FileText, ExternalLink, Trash2, CheckCircle2, Link as LinkIcon, Repeat, Plus, Star, Video, Music, Image, FileSpreadsheet, File, Globe, Play } from 'lucide-react';
+import { X, Calendar, CalendarPlus, Clock, BookOpen, FileText, ExternalLink, Trash2, CheckCircle2, Repeat, Plus, Star, Video, Music, Image, FileSpreadsheet, File, Globe, Play, Pencil, Check, Folder } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { PlanEvent } from './EventModal';
@@ -23,10 +23,12 @@ interface LateralPanelProps {
   onDeleteEvent?: (evId: string) => void;
   onViewTask?: (taskId: string) => void;
   onAddEvent?: (date: Date) => void;
+  onAddPlanSession?: (date: Date) => void;
+  onEditPlanSession?: (session: any) => void;
 }
 
-export default function LateralPanel({ item, onClose, onSelectEvent, onEditEvent, onDeleteEvent, onViewTask, onAddEvent }: LateralPanelProps) {
-  const { settings, tasks } = useApp();
+export default function LateralPanel({ item, onClose, onSelectEvent, onEditEvent, onDeleteEvent, onViewTask, onAddEvent, onAddPlanSession, onEditPlanSession }: LateralPanelProps) {
+  const { settings, tasks, setPipUrl } = useApp();
   const tf = settings?.timeFormat;
   if (!item) return null;
 
@@ -80,9 +82,9 @@ export default function LateralPanel({ item, onClose, onSelectEvent, onEditEvent
         </div>
 
         {/* Content */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '36px' }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '36px 36px 120px' }}>
           {item.type === 'day' && (
-            <DayDetails item={item} onSelectEvent={onSelectEvent} onViewTask={onViewTask} timeFormat={tf} onAddEvent={onAddEvent} />
+            <DayDetails item={item} onSelectEvent={onSelectEvent} onViewTask={onViewTask} timeFormat={tf} onAddEvent={onAddEvent} onAddPlanSession={onAddPlanSession} />
           )}
           {item.type === 'event' && (
             <EventDetails item={item} onEdit={onEditEvent} onDelete={onDeleteEvent} timeFormat={tf} tasks={tasks} onViewTask={onViewTask} />
@@ -91,7 +93,7 @@ export default function LateralPanel({ item, onClose, onSelectEvent, onEditEvent
             <TaskDetails item={item} onViewTask={onViewTask} />
           )}
           {item.type === 'plansession' && (
-            <PlanSessionDetails item={item} />
+            <PlanSessionDetails item={item} onEdit={onEditPlanSession} />
           )}
         </div>
       </div>
@@ -99,7 +101,7 @@ export default function LateralPanel({ item, onClose, onSelectEvent, onEditEvent
   );
 }
 
-function DayDetails({ item, onSelectEvent, onViewTask, timeFormat, onAddEvent }: { item: Extract<SelectedItem, {type: 'day'}>, onSelectEvent?: (ev: PlanEvent) => void, onViewTask?: (taskId: string) => void, timeFormat?: '24h' | '12h', onAddEvent?: (date: Date) => void }) {
+function DayDetails({ item, onSelectEvent, onViewTask, timeFormat, onAddEvent, onAddPlanSession }: { item: Extract<SelectedItem, {type: 'day'}>, onSelectEvent?: (ev: PlanEvent) => void, onViewTask?: (taskId: string) => void, timeFormat?: '24h' | '12h', onAddEvent?: (date: Date) => void, onAddPlanSession?: (date: Date) => void }) {
   const { date, events, tasks } = item;
   const formattedDate = format(date, "EEEE d 'de' MMMM", { locale: es });
   
@@ -175,18 +177,35 @@ function DayDetails({ item, onSelectEvent, onViewTask, timeFormat, onAddEvent }:
           onClick={() => onAddEvent?.(date)}
           style={{
             display:'flex', alignItems:'center', justifyContent:'center', gap:8,
-            height:42, borderRadius:12, padding:'0 24px',
-            fontSize:13, fontWeight:700, fontFamily:"'Outfit',sans-serif",
-            border:'none', cursor:'pointer',
-            background:'var(--accent)', color:'#fff',
-            boxShadow:'0 4px 15px var(--accent-dim)',
+            height:44, borderRadius:11, padding:'0 24px',
+            fontSize:12.5, fontWeight:600, fontFamily:"'Inter Tight',sans-serif", letterSpacing:'0.01em',
+            border:'1px solid var(--border-soft)', cursor:'pointer',
+            background:'var(--bg-elevated)', color:'var(--text-primary)',
             transition:'all 200ms', marginTop:8,
           }}
-          onMouseEnter={e=>e.currentTarget.style.filter='brightness(1.15)'}
-          onMouseLeave={e=>e.currentTarget.style.filter='none'}
+          onMouseEnter={e=>{ e.currentTarget.style.background='var(--bg-hover)'; e.currentTarget.style.borderColor='color-mix(in srgb, var(--accent) 45%, transparent)'; }}
+          onMouseLeave={e=>{ e.currentTarget.style.background='var(--bg-elevated)'; e.currentTarget.style.borderColor='var(--border-soft)'; }}
         >
-          <Plus size={16}/> Agregar Evento
+          <CalendarPlus size={15} style={{ color: 'var(--accent)' }} /> Agregar Evento
         </button>
+        {onAddPlanSession && (
+          <button
+            onClick={() => onAddPlanSession(date)}
+            style={{
+              display:'flex', alignItems:'center', justifyContent:'center', gap:8,
+              height:44, borderRadius:11, padding:'0 24px',
+              fontSize:12.5, fontWeight:600, fontFamily:"'Inter Tight',sans-serif", letterSpacing:'0.01em',
+              border:'none', cursor:'pointer',
+              background:'var(--accent)', color:'#fff',
+              boxShadow:'0 4px 15px var(--accent-dim)',
+              transition:'all 200ms',
+            }}
+            onMouseEnter={e=>e.currentTarget.style.filter='brightness(1.12)'}
+            onMouseLeave={e=>e.currentTarget.style.filter='none'}
+          >
+            <Plus size={15}/> Nueva Sesión
+          </button>
+        )}
       </div>
     </div>
   );
@@ -196,6 +215,7 @@ const GOAL_KEY = 'owa_planned_goal';
 
 function EventDetails({ item, onEdit, onDelete, timeFormat, tasks, onViewTask }: { item: Extract<SelectedItem, {type: 'event'}>, onEdit?: (ev: PlanEvent) => void, onDelete?: (evId: string) => void, timeFormat?: '24h' | '12h', tasks?: any[], onViewTask?: (taskId: string) => void }) {
   const { event } = item;
+  const { setPipUrl, addNotification } = useApp();
 
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
   const [goalId, setGoalId] = React.useState(() => localStorage.getItem(GOAL_KEY) || '');
@@ -233,7 +253,7 @@ function EventDetails({ item, onEdit, onDelete, timeFormat, tasks, onViewTask }:
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <DetailRow icon={<Calendar size={18} strokeWidth={1.5} />} label="Fecha" value={(()=>{try{return format(new Date(event.date+'T12:00:00'),"EEEE d 'de' MMMM yyyy",{locale:es})}catch{return '—'}})()} />
         <DetailRow icon={<Clock size={18} strokeWidth={1.5} />} label="Hora" value={event.allDay ? 'Todo el día' : fmtTimeRange(event.startTime, event.endTime, timeFormat)} />
-        {event.repeat !== 'none' && <DetailRow icon={<Repeat size={18} strokeWidth={1.5} />} label="Repetición" value={event.repeat === 'daily' ? 'Diaria' : event.repeat === 'weekly' ? 'Semanal' : 'Días específicos'} subValue={event.repeatUntil ? `Hasta el ${(()=>{try{return format(new Date(event.repeatUntil+'T12:00:00'),'dd/MM/yyyy')}catch{return '—'}})()}` : undefined} />}
+        {event.repeat && event.repeat !== 'none' && <DetailRow icon={<Repeat size={18} strokeWidth={1.5} />} label="Repetición" value={event.repeat === 'daily' ? 'Diaria' : event.repeat === 'weekly' ? 'Semanal' : 'Días específicos'} subValue={event.repeatUntil ? `Hasta el ${(()=>{try{return format(new Date(event.repeatUntil+'T12:00:00'),'dd/MM/yyyy')}catch{return '—'}})()}` : undefined} />}
       </div>
 
       {event.description && (
@@ -316,17 +336,9 @@ function EventDetails({ item, onEdit, onDelete, timeFormat, tasks, onViewTask }:
               let domain = '';
               if (isWeb) { try { domain = new URL(file.url).hostname; } catch {} }
 
-              const openFile = (url: string) => {
-                if ((window as any).__TAURI__?.shell?.open) {
-                  (window as any).__TAURI__.shell.open(url).catch(() => window.open(url, '_blank', 'noopener,noreferrer'));
-                } else {
-                  window.open(url, '_blank', 'noopener,noreferrer');
-                }
-              };
-
               const handleCardClick = async (e: React.MouseEvent) => {
                 e.preventDefault();
-                try { await openFileSmart(file.url, file.name); } catch (e) { console.error('[LateralPanel] material open failed', e); }
+                try { await openFileSmart(file.url, file.name, { onMedia: (u, n) => setPipUrl(u, n), onError: (m) => addNotification(m, 'error') }); } catch { /* noop */ }
               };
 
               const s = (d: string, c: string) => <svg viewBox="0 0 24 24" width={17} height={17} fill={c} style={{ flexShrink: 0, display: 'block' }}><path d={d} /></svg>;
@@ -385,7 +397,7 @@ function EventDetails({ item, onEdit, onDelete, timeFormat, tasks, onViewTask }:
         </div>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 'auto' }}>
+<div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 'auto', paddingTop: 24 }}>
         <button 
           onClick={() => onEdit?.(event)}
           style={{ width: '100%', padding: '14px 20px', borderRadius: 14, fontSize: 15, fontWeight: 600, border: 'none', background: 'var(--accent)', color: '#fff', cursor: 'pointer', transition: 'all 200ms', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
@@ -459,12 +471,50 @@ function DetailRow({ icon, label, value, subValue }: { icon: React.ReactNode, la
   );
 }
 
-function PlanSessionDetails({ item }: { item: Extract<SelectedItem, {type: 'plansession'}> }) {
+function LinkRow({ icon, label, name, color, active, onClick, title }: { icon: React.ReactNode; label: string; name: string; color: string; active?: boolean; onClick: () => void; title?: string }) {
+  const [hover, setHover] = React.useState(false);
+  const lbl: React.CSSProperties = {
+    fontSize: 8.5, fontWeight: 700, color: hover ? color : 'var(--text-tertiary)',
+    fontFamily: "'Inter Tight',sans-serif", textTransform: 'uppercase', letterSpacing: '0.16em',
+    lineHeight: 1, marginBottom: 4, transition: 'color 160ms',
+  };
+  const nm: React.CSSProperties = {
+    fontSize: 13, fontWeight: active ? 600 : 500, letterSpacing: '0.01em',
+    color: hover || active ? color : 'var(--text-primary)',
+    fontFamily: "'Inter Tight',sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+    minWidth: 0, flex: 1, transition: 'color 160ms',
+  };
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 14, width: '100%', textAlign: 'left',
+        padding: '5px 6px', borderRadius: 9, cursor: 'pointer', background: 'transparent', border: 'none',
+        transition: 'all 160ms',
+      }}
+    >
+      <span style={{
+        width: 26, height: 26, borderRadius: 8, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color, background: hover ? `${color}14` : 'transparent', transition: 'background 160ms',
+      }}>{icon}</span>
+      <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
+        <span style={lbl}>{label}</span>
+        <span style={nm}>{name}</span>
+      </span>
+      {active && <Check size={14} strokeWidth={2.5} style={{ color, flexShrink: 0, opacity: hover ? 1 : 0.85 }} />}
+    </button>
+  );
+}
+
+function PlanSessionDetails({ item, onEdit }: { item: Extract<SelectedItem, {type: 'plansession'}>, onEdit?: (session:any)=>void }) {
   const { session } = item;
-  const { settings, courses, linkPlannedSessionToTimer, setNavigateTo, navigateToCourse, activeTaskId, addNotification } = useApp();
+  const { settings, courses, linkPlannedSessionToTimer, setNavigateTo, navigateToCourse, activeTaskId, addNotification, setPipUrl } = useApp();
   const tf = settings?.timeFormat;
   const course = courses.find(c => c.id === session.courseId);
-  const col = course?.color || '#8B5CF6';
+  const col = course?.color || '#9CA3AF';
   const intensity = Math.max(0, Math.min(10, session.intensity || 0));
   const durationMin = session.durationMinutes || 30;
   const startFrac = session.startTime ? (() => {
@@ -500,15 +550,37 @@ function PlanSessionDetails({ item }: { item: Extract<SelectedItem, {type: 'plan
           <span style={{ fontSize: 9, fontWeight: 600, color: col, background: `${col}12`, border: `1px solid ${col}30`, borderRadius: 6, padding: '3px 8px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
             {TYPE_LABEL[session.type] || session.type}
           </span>
+          {session.completed && (
+            <span style={{ fontSize: 9, fontWeight: 700, color: '#10B981', background: '#10B98114', border: '1px solid #10B98144', borderRadius: 6, padding: '3px 8px', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: 4 }}>
+              ✓ Completada
+            </span>
+          )}
+          {onEdit && (
+            <button
+              onClick={() => onEdit(session)}
+              title="Editar sesión"
+              style={{
+                marginLeft: 'auto', width: 36, height: 36, borderRadius: 11, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: `${col}0d`, border: `1px solid ${col}2e`, color: col,
+                transition: 'all 180ms',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = `${col}1c`; e.currentTarget.style.borderColor = `${col}55`; e.currentTarget.style.boxShadow = `0 0 14px ${col}30`; }}
+              onMouseLeave={e => { e.currentTarget.style.background = `${col}0d`; e.currentTarget.style.borderColor = `${col}2e`; e.currentTarget.style.boxShadow = 'none'; }}
+            >
+              <Pencil size={15} strokeWidth={1.75} />
+            </button>
+          )}
         </div>
         <h2 style={{ fontSize: 32, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Outfit',sans-serif", lineHeight: 1.1, letterSpacing: '-0.02em', wordBreak: 'break-word' }}>
           {session.title || 'Sesión de estudio'}
         </h2>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
         <DetailRow icon={<Calendar size={18} strokeWidth={1.5} />} label="Fecha" value={(()=>{try{return format(new Date(session.date+'T12:00:00'),"EEEE d 'de' MMMM yyyy",{locale:es})}catch{return '—'}})()} />
         <DetailRow icon={<Clock size={18} strokeWidth={1.5} />} label="Hora" value={fmtEnd()} />
+        {session.repeat && session.repeat !== 'none' && <DetailRow icon={<Repeat size={18} strokeWidth={1.5} />} label="Repetición" value={session.repeat === 'daily' ? 'Diaria' : session.repeat === 'weekly' ? 'Semanal' : 'Días específicos'} subValue={session.repeatUntil ? `Hasta el ${(()=>{try{return format(new Date(session.repeatUntil+'T12:00:00'),'dd/MM/yyyy')}catch{return '—'}})()}` : undefined} />}
       </div>
 
       <div>
@@ -530,41 +602,53 @@ function PlanSessionDetails({ item }: { item: Extract<SelectedItem, {type: 'plan
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 'auto' }}>
-        <button
-          onClick={start}
-          title={activeTaskId ? 'Hay una tarea vinculada al temporizador' : 'Vincular al temporizador y abrir Estudio'}
-          style={{
-            width: '100%', padding: '14px 20px', borderRadius: 14, fontSize: 15, fontWeight: 700, fontFamily: "'Outfit',sans-serif",
-            border: 'none', cursor: activeTaskId ? 'not-allowed' : 'pointer',
-            background: activeTaskId ? 'var(--surface-elevated)' : `linear-gradient(135deg, ${col}, ${col}b8)`,
-            color: activeTaskId ? 'var(--text-muted)' : '#fff',
-            boxShadow: activeTaskId ? 'none' : `0 4px 18px ${col}38`,
-            opacity: activeTaskId ? 0.6 : 1,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            transition: 'all 200ms',
-          }}
-          onMouseEnter={e => { if (!activeTaskId) { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = `0 6px 22px ${col}55`; } }}
-          onMouseLeave={e => { if (!activeTaskId) { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = `0 4px 18px ${col}38`; } }}
-        >
-          <Play size={15} fill="currentColor" />
-          {activeTaskId ? 'Tarea vinculada activa' : 'Empezar sesión'}
-        </button>
-        {(session.groupId || session.topicId) && course && (
+      {course && (session.groupId || session.topicId) && (() => {
+        const g = course.groups?.find(gr => gr.id === session.groupId);
+        const t = course.studyTopics?.find(tp => tp.id === session.topicId);
+
+        return (
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 18, display: 'flex', alignItems: 'center', gap: 8 }}>
+              Vinculación
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <LinkRow icon={<BookOpen size={15} strokeWidth={1.75} />} label="Curso" name={course.name} color={col} active={!session.groupId} onClick={() => navigateToCourse(course.id)} title={course.name} />
+              {g && (
+                <div style={{ marginLeft: 17, paddingLeft: 19, borderLeft: '1.5px solid var(--border-soft)', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <LinkRow icon={<Folder size={14} strokeWidth={1.75} />} label="Agrupación" name={g.name} color={col} active={!t} onClick={() => navigateToCourse(course.id, g.id)} title={g.name} />
+                  {t && (
+                    <div style={{ marginLeft: 17, paddingLeft: 19, borderLeft: '1.5px solid var(--border-soft)' }}>
+                      <LinkRow icon={<FileText size={14} strokeWidth={1.75} />} label="Tema" name={t.title} color={col} active onClick={() => navigateToCourse(course.id, g.id, t.id)} title={t.title} />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+<div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 'auto', paddingBottom: 8 }}>
           <button
-            onClick={() => navigateToCourse(session.courseId, session.groupId || undefined, session.topicId || undefined)}
+            onClick={start}
+            title={activeTaskId ? 'Hay una tarea vinculada al temporizador' : 'Vincular al temporizador y abrir Estudio'}
             style={{
-              width: '100%', padding: '12px 20px', borderRadius: 14, fontSize: 14, fontWeight: 600,
-              border: `1px solid ${col}35`, background: `${col}0a`, color: col, cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, transition: 'all 200ms',
+              width: '100%', padding: '14px 20px', borderRadius: 12, fontSize: 12, fontWeight: 400,
+              fontFamily: "'Inter Tight',sans-serif", letterSpacing: '0.14em', textTransform: 'uppercase',
+              border: 'none', cursor: activeTaskId ? 'not-allowed' : 'pointer',
+              background: activeTaskId ? 'var(--surface-elevated)' : col,
+              color: activeTaskId ? 'var(--text-muted)' : '#fff',
+              boxShadow: activeTaskId ? 'none' : `0 2px 10px ${col}2e`,
+              opacity: activeTaskId ? 0.6 : 1,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+              transition: 'all 200ms',
             }}
-            onMouseEnter={e => { e.currentTarget.style.background = `${col}16`; e.currentTarget.style.borderColor = `${col}55`; }}
-            onMouseLeave={e => { e.currentTarget.style.background = `${col}0a`; e.currentTarget.style.borderColor = `${col}35`; }}
+            onMouseEnter={e => { if (!activeTaskId) { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = `0 4px 16px ${col}40`; } }}
+            onMouseLeave={e => { if (!activeTaskId) { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = `0 2px 10px ${col}2e`; } }}
           >
-            Ir al tema o agrupación <ExternalLink size={14} />
+            <Play size={12} fill="currentColor" strokeWidth={1.5} />
+            {activeTaskId ? 'Tarea vinculada activa' : 'Empezar sesión'}
           </button>
-        )}
-      </div>
+        </div>
     </div>
   );
 }

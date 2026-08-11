@@ -1,46 +1,68 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { X, Calendar, Clock, Plus, Trash2, Repeat, Check, FileText, Link as LinkIcon, ExternalLink, Music, Video, Image, FileSpreadsheet, File, Globe } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { X, Calendar, CalendarClock, Clock, Plus, Trash2, Repeat, Check, Music, Image, File, Globe, Upload, Link2 } from 'lucide-react';
 import { format } from 'date-fns';
 
-import { GoogleClassroomIcon, GoogleDriveIcon, GoogleDocsIcon, GoogleSheetsIcon, GoogleSlidesIcon, GoogleFormsIcon } from '../../ui/GoogleIcons';
+import { GoogleClassroomIcon, GoogleDriveIcon, GoogleDocsIcon, GoogleSheetsIcon, GoogleSlidesIcon, GoogleFormsIcon, WordIcon, ExcelIcon, PowerPointIcon } from '../../ui/GoogleIcons';
+import { useApp } from '../../../store/AppContext';
+import { openFileSmart, pickAndPersistFile } from '../../../lib/openFileSmart';
+import { useMaterialMenu } from '../../ui/MaterialContextMenu';
+import { isTauri } from '@tauri-apps/api/core';
 
 const s = (d: string, c: string) => <svg viewBox="0 0 24 24" width={17} height={17} fill={c} style={{ flexShrink: 0, display: 'block' }}><path d={d} /></svg>;
 
-function getEventFileIcon(type: string, size = 14) {
-  const iconProps = { size } as any;
-  switch (type) {
-    case 'pdf': return s('M23.63 15.3c-.71-.745-2.166-1.17-4.224-1.17-1.1 0-2.377.106-3.761.354a19.443 19.443 0 0 1-2.307-2.661c-.532-.71-.994-1.49-1.42-2.236.817-2.484 1.207-4.507 1.207-5.962 0-1.632-.603-3.336-2.342-3.336-.532 0-1.065.32-1.349.781-.78 1.384-.425 4.4.923 7.381a60.277 60.277 0 0 1-1.703 4.507c-.568 1.349-1.207 2.733-1.917 4.01C2.834 18.53.314 20.34.03 21.758c-.106.533.071 1.03.462 1.42.142.107.639.533 1.49.533 2.59 0 5.323-4.188 6.707-6.707 1.065-.355 2.13-.71 3.194-.994a34.963 34.963 0 0 1 3.407-.745c2.732 2.448 5.145 2.839 6.352 2.839 1.49 0 2.023-.604 2.2-1.1.32-.64.106-1.349-.213-1.704zm-1.42 1.03c-.107.532-.64.887-1.384.887-.213 0-.39-.036-.604-.071-1.348-.32-2.626-.994-3.903-2.059a17.717 17.717 0 0 1 2.98-.248c.746 0 1.385.035 1.81.142.497.106 1.278.426 1.1 1.348zm-7.524-1.668a38.01 38.01 0 0 0-2.945.674 39.68 39.68 0 0 0-2.52.745 40.05 40.05 0 0 0 1.207-2.555c.426-.994.78-2.023 1.136-2.981.354.603.745 1.207 1.135 1.739a50.127 50.127 0 0 0 1.987 2.378zM10.038 1.46a.768.768 0 0 1 .674-.425c.745 0 .887.851.887 1.526 0 1.135-.355 2.874-.958 4.861-1.03-2.768-1.1-5.074-.603-5.962zM6.134 17.997c-1.81 2.981-3.549 4.826-4.613 4.826a.872.872 0 0 1-.532-.177c-.213-.213-.32-.461-.249-.745.213-1.065 2.271-2.555 5.394-3.904Z', '#EF4444');
-    case 'video': return s('M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z', '#8B5CF6');
-    case 'image': return <Image size={size} style={{ color: '#F59E0B' }} />;
-    case 'audio': return <Music size={size} style={{ color: '#8B5CF6' }} />;
-    case 'link': return <Globe size={size} style={{ color: '#10B981' }} />;
-    case 'classroom': return <GoogleClassroomIcon size={size} />;
-    case 'drive': return <GoogleDriveIcon size={size} />;
-    case 'doc': return <GoogleDocsIcon size={size} />;
-    case 'xls': return <GoogleSheetsIcon size={size} />;
-    case 'ppt': return <GoogleSlidesIcon size={size} />;
-    case 'forms': return <GoogleFormsIcon size={size} />;
-    default: return <File size={size} style={{ color: 'var(--text-muted)' }} />;
-  }
-}
+// ─── Iconos de materiales IDÉNTICOS a Cursos/Tareas (misma cadena de detección por URL/extensión) ───
+function getMatBadge(url: string, name: string) {
+  const isLink = url.startsWith('http');
+  const ext = (name || '').split('.').pop()?.toLowerCase() || '';
+  const isImg = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'bmp'].includes(ext) || url.startsWith('data:image');
+  const isPdf = ext === 'pdf';
+  const isDoc = ['doc', 'docx'].includes(ext);
+  const isXls = ['xls', 'xlsx', 'csv'].includes(ext);
+  const isPpt = ['ppt', 'pptx'].includes(ext);
+  const isAudio = ['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a'].includes(ext) || url.startsWith('data:audio');
+  const isVideo = ['mp4', 'webm', 'avi', 'mov', 'mkv'].includes(ext) || url.startsWith('data:video');
+  const isYouTube = isLink && (url.includes('youtube.com') || url.includes('youtu.be'));
+  const isClassroom = isLink && url.includes('classroom.google.com');
+  const isDrive = isLink && url.includes('drive.google.com');
+  const isGoogleDocs = isLink && url.includes('docs.google.com');
+  const isGoogleSheets = isLink && url.includes('sheets.google.com');
+  const isGoogleSlides = isLink && url.includes('slides.google.com');
+  const isGoogleForms = isLink && url.includes('forms.google.com');
+  const isWeb = isLink && !isYouTube && !isDrive && !isClassroom && !isGoogleDocs && !isGoogleSheets && !isGoogleSlides && !isGoogleForms;
 
-function detectEventFileType(fileName: string, path: string): string {
-  const ext = fileName.split('.').pop()?.toLowerCase() || '';
-  const typeMap: Record<string, string> = {
-    pdf: 'pdf', png: 'image', jpg: 'image', jpeg: 'image', gif: 'image', webp: 'image', svg: 'image',
-    mp4: 'video', webm: 'video', mov: 'video', avi: 'video',
-    mp3: 'audio', wav: 'audio', ogg: 'audio', flac: 'audio', m4a: 'audio',
-    doc: 'doc', docx: 'doc', xls: 'xls', xlsx: 'xls', ppt: 'ppt', pptx: 'ppt',
-  };
-  if (typeMap[ext]) return typeMap[ext];
-  if (path.includes('youtube.com') || path.includes('youtu.be')) return 'video';
-  if (path.includes('classroom.google.com')) return 'classroom';
-  if (path.includes('drive.google.com')) return 'drive';
-  if (path.includes('docs.google.com')) return 'doc';
-  if (path.includes('sheets.google.com')) return 'xls';
-  if (path.includes('slides.google.com')) return 'ppt';
-  if (path.includes('forms.google.com')) return 'forms';
-  return 'other';
+  let iconEl: React.ReactNode;
+  let badgeColor = '#888';
+  let subtitle = 'Archivo';
+  if (isDoc) { badgeColor = '#2563EB'; iconEl = <WordIcon />; subtitle = 'Word'; }
+  else if (isGoogleDocs) { badgeColor = '#2563EB'; iconEl = <GoogleDocsIcon />; subtitle = 'Google Docs'; }
+  else if (isXls) { badgeColor = '#10B981'; iconEl = <ExcelIcon />; subtitle = 'Excel'; }
+  else if (isGoogleSheets) { badgeColor = '#10B981'; iconEl = <GoogleSheetsIcon />; subtitle = 'Google Sheets'; }
+  else if (isPpt) { badgeColor = '#F97316'; iconEl = <PowerPointIcon />; subtitle = 'PowerPoint'; }
+  else if (isGoogleSlides) { badgeColor = '#F97316'; iconEl = <GoogleSlidesIcon />; subtitle = 'Google Slides'; }
+  else if (isPdf) { badgeColor = '#EF4444'; iconEl = s('M23.63 15.3c-.71-.745-2.166-1.17-4.224-1.17-1.1 0-2.377.106-3.761.354a19.443 19.443 0 0 1-2.307-2.661c-.532-.71-.994-1.49-1.42-2.236.817-2.484 1.207-4.507 1.207-5.962 0-1.632-.603-3.336-2.342-3.336-.532 0-1.065.32-1.349.781-.78 1.384-.425 4.4.923 7.381a60.277 60.277 0 0 1-1.703 4.507c-.568 1.349-1.207 2.733-1.917 4.01C2.834 18.53.314 20.34.03 21.758c-.106.533.071 1.03.462 1.42.142.107.639.533 1.49.533 2.59 0 5.323-4.188 6.707-6.707 1.065-.355 2.13-.71 3.194-.994a34.963 34.963 0 0 1 3.407-.745c2.732 2.448 5.145 2.839 6.352 2.839 1.49 0 2.023-.604 2.2-1.1.32-.64.106-1.349-.213-1.704z', '#EF4444'); subtitle = 'PDF'; }
+  else if (isYouTube) { badgeColor = '#EF4444'; iconEl = s('M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z', '#EF4444'); subtitle = 'YouTube'; }
+  else if (isClassroom) { badgeColor = '#0F9D58'; iconEl = <GoogleClassroomIcon />; subtitle = 'Classroom'; }
+  else if (isDrive) { badgeColor = '#4285F4'; iconEl = <GoogleDriveIcon />; subtitle = 'Google Drive'; }
+  else if (isGoogleForms) { badgeColor = '#7C3AED'; iconEl = <GoogleFormsIcon />; subtitle = 'Google Forms'; }
+  else if (isAudio) { badgeColor = '#8B5CF6'; iconEl = <Music size={17} />; subtitle = 'Audio'; }
+  else if (isImg) { badgeColor = '#F59E0B'; iconEl = <Image size={17} />; subtitle = 'Imagen'; }
+  else if (isVideo) { badgeColor = '#EC4899'; iconEl = <File size={17} />; subtitle = 'Video'; }
+  else if (isWeb) {
+    badgeColor = '#10B981';
+    let domain = '';
+    try { domain = new URL(url).hostname; } catch {}
+    subtitle = domain;
+    iconEl = (
+      <span style={{ position: 'relative', width: 17, height: 17, display: 'inline-flex', flexShrink: 0 }}>
+        <img src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`} alt="" style={{ width: 17, height: 17, borderRadius: 3, position: 'absolute', inset: 0 }}
+          onError={e => { e.currentTarget.style.display = 'none'; const fb = e.currentTarget.parentElement?.querySelector('.link-fb') as HTMLElement; if (fb) fb.style.display = 'flex'; }} />
+        <span className="link-fb" style={{ display: 'none', position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center', color: '#10B981' }}><Link2 size={12} /></span>
+      </span>
+    );
+  }
+  else iconEl = <File size={17} />;
+  return { iconEl, badgeColor, subtitle };
 }
 
 async function fetchEventPageTitle(url: string): Promise<string | null> {
@@ -68,6 +90,7 @@ export interface PlanEvent {
   repeatDays?: number[]; // 0=Mon..6=Sun if custom_days
   repeatUntil?: string; // Limit for repetition
   exceptions?: string[]; // Occurrence dates excluded from a recurring series (YYYY-MM-DD)
+  occurrenceOverrides?: Record<string, Partial<PlanEvent>>; // Cambios de UNA ocurrencia por fecha (no se crea otro evento)
   attachments?: { type: 'link' | 'file'; name: string; url: string; size?: string }[];
 }
 
@@ -79,7 +102,7 @@ interface EventModalProps {
   occurrenceDate?: string | null; // The specific date of the occurrence being edited
   onClose: () => void;
   onSave: (ev: PlanEvent) => void;
-  onSaveOne?: (ev: PlanEvent, original: PlanEvent, occurrenceDate: string) => void;
+  onSaveOne?: (override: Partial<PlanEvent>, originalId: string, occurrenceDate: string) => void;
   onDelete: (id: string) => void;
   addNotification: (message: string, type?: 'success' | 'error' | 'info') => void;
 }
@@ -99,8 +122,11 @@ export default function EventModal({
   const th = document.documentElement.getAttribute('data-theme');
   const isDarkSelect = !th || th === 'oscuro' || th === 'vibrante';
   const selectBorder = isDarkSelect ? '1px solid rgba(255,255,255,0.12)' : '1px solid rgba(0,0,0,0.12)';
+  const { setPipUrl } = useApp();
+  const matMenu = useMaterialMenu((m) => addNotification(m, 'error'));
   const isRecurringEdit = !!(event && event.repeat !== 'none');
-  const [scope, setScope] = useState<'all' | 'one'>('all');
+  const [showScopePrompt, setShowScopePrompt] = useState(false);
+  const [pendingEv, setPendingEv] = useState<PlanEvent | null>(null);
   const [title, setTitle] = useState(event?.title || defaults.title || '');
   const [allDay, setAllDay] = useState(event?.allDay ?? defaults.allDay ?? false);
   const [date, setDate] = useState(occurrenceDate || event?.date || defaults.date || format(new Date(), 'yyyy-MM-dd'));
@@ -168,6 +194,10 @@ export default function EventModal({
       addNotification('Selecciona al menos un día de repetición', 'error');
       return;
     }
+    if (repeat !== 'none' && !repeatUntil) {
+      addNotification('Ponle una fecha de fin a la repetición', 'error');
+      return;
+    }
     if (repeat !== 'none' && repeatUntil && repeatUntil < date) {
       addNotification('La fecha de fin de repetición no puede ser anterior a la fecha del evento', 'error');
       return;
@@ -189,25 +219,76 @@ export default function EventModal({
       taskId: taskId || undefined,
       attachments
     };
-    if (event && event.repeat !== 'none' && scope === 'one') {
-      const occDate = occurrenceDate || date;
-      const copy: PlanEvent = {
-        ...ev,
-        id: crypto.randomUUID(),
-        date,
-        repeat: 'none',
-        repeatDays: undefined,
-        repeatUntil: undefined,
-        googleEventId: undefined,
-        exceptions: undefined,
-      };
-      const original: PlanEvent = {
-        ...event,
-        exceptions: [...(event.exceptions || []), occDate],
-      };
-      if (onSaveOne) { onSaveOne(copy, original, occDate); return; }
+    if (event && event.repeat !== 'none') {
+      // Detectar si se cambiaron la repetición o el curso — esos siempre aplican a toda la serie
+      const repeatChanged = repeat !== event.repeat ||
+        JSON.stringify(repeatDays || []) !== JSON.stringify(event.repeatDays || []) ||
+        (repeatUntil || '') !== (event.repeatUntil || '');
+      const courseChanged = (courseId || '') !== (event.courseId || '');
+      const hasOtherChanges = event.title !== title.trim() ||
+        event.allDay !== allDay ||
+        (allDay ? '00:00' : start) !== event.startTime ||
+        (allDay ? '23:59' : end) !== event.endTime ||
+        event.color !== color ||
+        (event.description || '') !== desc ||
+        (event.taskId || '') !== taskId ||
+        JSON.stringify(event.attachments || []) !== JSON.stringify(attachments) ||
+        date !== (occurrenceDate || event.date);
+
+      //  - Cambios en repetición o curso → siempre a toda la serie (se limpia el override de esta ocurrencia).
+      //  - Evento que era recurrente y ahora no → también a toda la serie.
+      //  - Otros cambios en un evento recurrente → ventana de confirmación (mismo evento, override por fecha).
+      const forceAll = repeatChanged || courseChanged || (repeat as string) === 'none';
+      const occDate = occurrenceDate || event.date;
+      if (forceAll) {
+        const ovs = { ...(event.occurrenceOverrides || {}) };
+        delete ovs[occDate];
+        onSave({ ...ev, occurrenceOverrides: Object.keys(ovs).length ? ovs : undefined });
+        return;
+      }
+      if (hasOtherChanges && onSaveOne) {
+        setPendingEv(ev);
+        setShowScopePrompt(true);
+        return;
+      }
+      if (occurrenceDate) {
+        // Edición de una ocurrencia sin cambios reales → cerrar sin tocar la serie
+        addNotification('No hay cambios que guardar en esta ocurrencia', 'info');
+        return;
+      }
     }
     onSave(ev);
+  }
+
+  function executeScope(s: 'all' | 'one') {
+    if (!pendingEv || !event) return;
+    setShowScopePrompt(false);
+    const occDate = occurrenceDate || pendingEv.date;
+    if (s === 'all') {
+      // "A todos": guarda los cambios sobre la base SIEMPRE que no sea un cambio de repetición/curso
+      // (esos ya se aplican a toda la serie directamente) — se limpia el override de esta ocurrencia.
+      const ovs = { ...(event.occurrenceOverrides || {}) };
+      delete ovs[occDate];
+      const repeatDaysClean = pendingEv.repeat === 'custom_days' ? pendingEv.repeatDays : undefined;
+      const repeatUntilClean = pendingEv.repeat !== 'none' && pendingEv.repeatUntil ? pendingEv.repeatUntil : undefined;
+      onSave({ ...pendingEv, occurrenceOverrides: Object.keys(ovs).length ? ovs : undefined, repeatDays: repeatDaysClean, repeatUntil: repeatUntilClean });
+    } else {
+      // "Solo esta": diff contra la ocurrencia actual (que ya incluye overrides anteriores) → override por fecha
+      const cur = event;
+      const ov: Partial<PlanEvent> = {};
+      if (pendingEv.title !== cur.title) ov.title = pendingEv.title;
+      if (pendingEv.allDay !== cur.allDay) ov.allDay = pendingEv.allDay;
+      if ((pendingEv.allDay ? '00:00' : pendingEv.startTime) !== (cur.allDay ? '00:00' : cur.startTime)) ov.startTime = pendingEv.startTime;
+      if ((pendingEv.allDay ? '23:59' : pendingEv.endTime) !== (cur.allDay ? '23:59' : cur.endTime)) ov.endTime = pendingEv.endTime;
+      if (pendingEv.color !== cur.color) ov.color = pendingEv.color;
+      if ((pendingEv.description || '') !== (cur.description || '')) ov.description = pendingEv.description;
+      if ((pendingEv.taskId || '') !== (cur.taskId || '')) ov.taskId = pendingEv.taskId;
+      if ((pendingEv.date || '') !== occDate) ov.date = pendingEv.date;
+      if (JSON.stringify(pendingEv.attachments || []) !== JSON.stringify(cur.attachments || [])) ov.attachments = pendingEv.attachments;
+      if (onSaveOne) onSaveOne(ov, event.id, occDate);
+      else onSave(pendingEv);
+    }
+    setPendingEv(null);
   }
 
   const DAY_INITIALS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
@@ -231,21 +312,50 @@ export default function EventModal({
         else name = url.replace(/^https?:\/\//, '').slice(0, 40);
       } catch { name = url.replace(/^https?:\/\//, '').slice(0, 40); }
     }
-    const detectedType = url.includes('youtube.com') || url.includes('youtu.be') ? 'video' : url.includes('classroom.google.com') ? 'classroom' : url.includes('drive.google.com') ? 'drive' : 'link';
-    setAttachments([...attachments, { type: detectedType as any, name, url }]);
+    setAttachments([...attachments, { type: 'link', name, url }]);
     setLinkUrl('');
     setLinkName('');
     setShowLinkForm(false);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const file = e.target.files[0];
-      const url = URL.createObjectURL(file);
-      const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
-      const detectedType = detectEventFileType(file.name, url);
-      setAttachments([...attachments, { type: detectedType as any, name: file.name, url, size: `${sizeMb} MB` }]);
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setAttachments([...attachments, { type: 'file', name: file.name, url: reader.result as string, size: `${(file.size / (1024 * 1024)).toFixed(1)} MB` }]);
+    };
+    reader.readAsDataURL(file);
+    if (e.target) e.target.value = '';
+  };
+
+  const handleAddFileBtn = async () => {
+    if (isTauri()) {
+      let r: { path: string; name: string } | null;
+      try { r = await pickAndPersistFile(); }
+      catch { addNotification('No se pudo abrir el selector de archivos', 'error'); return; }
+      if (!r) return;
+      let size: string | undefined;
+      try {
+        const { stat } = await import('@tauri-apps/plugin-fs');
+        const st = await stat(r.path);
+        if (st && st.size) size = `${(st.size / (1024 * 1024)).toFixed(1)} MB`;
+      } catch {}
+      setAttachments([...attachments, { type: 'file', name: r.name, url: r.path, size }]);
+      return;
     }
+    fileInputRef.current?.click();
+  };
+
+  const openAttachment = (item: { type: 'link' | 'file'; name: string; url: string }) => {
+    openFileSmart(item.url, item.name, {
+      onMedia: (u, n) => setPipUrl(u, n),
+      onError: (m) => addNotification(m, 'error'),
+      onMoved: (np) => {
+        setAttachments(prev => prev.map(a => a.url === item.url ? { ...a, url: np } : a));
+        addNotification('Adjunto actualizado a su nueva ubicación', 'success');
+      },
+    }).catch(() => addNotification('No se pudo abrir el material', 'error'));
   };
 
   return (
@@ -391,7 +501,7 @@ export default function EventModal({
             {repeat !== 'none' && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, borderTop: '1px solid var(--border-soft)', paddingTop: 16 }}>
                 <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Termina el:</span>
-                <input type="date" value={repeatUntil} onChange={e => setRepeatUntil(e.target.value)} style={{ flex: 1, fontSize: 13, height: 32, background: 'var(--bg-secondary)', border: selectBorder, borderRadius: 6, padding: '0 12px', color: 'var(--text-primary)', outline: 'none' }} />
+                <input type="date" value={repeatUntil} onChange={e => setRepeatUntil(e.target.value)} style={{ flex: 1, fontSize: 13, height: 32, background: 'var(--bg-secondary)', border: !repeatUntil ? '1px solid #EF444480' : selectBorder, borderRadius: 6, padding: '0 12px', color: 'var(--text-primary)', outline: 'none' }} />
               </div>
             )}
           </div>
@@ -414,17 +524,21 @@ export default function EventModal({
                     {tasks.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
                   </select>
                   {taskMismatch && (
-                    <div style={{ marginTop: 10, padding: '10px 12px', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'linear-gradient(135deg, rgba(245,158,11,0.12), rgba(245,158,11,0.05))', border: '1px solid rgba(245,158,11,0.28)', borderRadius: 10 }}>
+                      <div style={{ width: 30, height: 30, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.3)', color: '#F59E0B', flexShrink: 0, boxShadow: '0 0 10px rgba(245,158,11,0.15)' }}>
+                        <CalendarClock size={14} strokeWidth={1.75} />
+                      </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: '#F59E0B', marginBottom: 2 }}>Fecha desincronizada</div>
-                        <div style={{ fontSize: 10, color: 'var(--text-tertiary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          Tarea: {taskMismatch.taskDate}{taskMismatch.taskTime ? ` ${taskMismatch.taskTime}` : ''}  ·  Evento: {date}{!allDay ? ` ${start}` : ''}
+                        <div style={{ fontSize: 10.5, fontWeight: 700, color: '#F59E0B', letterSpacing: '0.02em' }}>Fecha desincronizada</div>
+                        <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          Tarea: <span style={{ fontFamily: "'JetBrains Mono', monospace", color: '#F59E0B' }}>{taskMismatch.taskDate ? `${taskMismatch.taskDate.slice(8, 10)}/${taskMismatch.taskDate.slice(5, 7)}/${taskMismatch.taskDate.slice(0, 4)}${taskMismatch.taskTime ? ` · ${taskMismatch.taskTime}` : ''}` : '—'}</span>
+                          {'  ·  '}Evento: <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{date ? `${date.slice(8, 10)}/${date.slice(5, 7)}/${date.slice(0, 4)}${!allDay ? ` · ${start}` : ''}` : '—'}</span>
                         </div>
                       </div>
                       <button onClick={syncTaskToEvent}
-                        style={{ flexShrink: 0, padding: '5px 10px', borderRadius: 6, border: 'none', background: '#F59E0B', color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', transition: 'opacity 150ms' }}
-                        onMouseEnter={e => e.currentTarget.style.opacity = '0.8'}
-                        onMouseLeave={e => e.currentTarget.style.opacity = '1'}>
+                        style={{ flexShrink: 0, padding: '6px 12px', borderRadius: 7, border: '1px solid rgba(245,158,11,0.5)', background: '#F59E0B', color: '#2A1A05', fontSize: 10, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap', transition: 'all 150ms', boxShadow: '0 2px 8px rgba(245,158,11,0.25)' }}
+                        onMouseEnter={e => { e.currentTarget.style.background = '#FBBF24'; e.currentTarget.style.boxShadow = '0 3px 12px rgba(245,158,11,0.4)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = '#F59E0B'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(245,158,11,0.25)'; }}>
                         Sincronizar
                       </button>
                     </div>
@@ -460,61 +574,32 @@ export default function EventModal({
                 {attachments.length > 0 && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {attachments.map((item, i) => {
-                      const fileType = detectEventFileType(item.name, item.url);
-                      const isYouTube = fileType === 'video' && (item.url.includes('youtube.com') || item.url.includes('youtu.be'));
-                      const isImage = fileType === 'image';
-                      const isAudio = fileType === 'audio';
-                      const isDrive = fileType === 'drive';
-                      const isClassroom = fileType === 'classroom';
-                      const isWeb = fileType === 'link' && !isYouTube && !isDrive && !isClassroom;
-                      const isPdf = fileType === 'pdf';
-                      const isDoc = fileType === 'doc';
-                      const isXls = fileType === 'xls';
-                      const isPpt = fileType === 'ppt';
-                      const isForms = fileType === 'forms';
-                      const isVideoFile = fileType === 'video' && !isYouTube;
-                      let domain = '';
-                      if (isWeb) { try { domain = new URL(item.url).hostname.replace('www.', ''); } catch {} }
-                      const subtitleText = isYouTube ? 'YouTube' : isClassroom ? 'Classroom' : isDrive ? 'Google Drive' : isWeb ? domain : isPdf ? 'PDF' : isDoc ? 'Google Docs' : isXls ? 'Google Sheets' : isPpt ? 'Google Slides' : isForms ? 'Google Forms' : isAudio ? 'Audio' : isImage ? 'Imagen' : isVideoFile ? 'Video' : item.size || 'Archivo';
+                      const badge = getMatBadge(item.url, item.name);
+                      const isImage = item.url.startsWith('data:image') || ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'bmp'].includes(item.name.split('.').pop()?.toLowerCase() || '');
                       return (
-                      <div key={i} style={{ background: 'var(--surface)', border: '1px solid var(--border-soft)', borderRadius: 8, overflow: 'hidden' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px' }}>
-                          {isWeb ? (
-                            <span style={{ position: 'relative', width: 15, height: 15, display: 'inline-flex', flexShrink: 0 }}>
-                              <img src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`} alt="" style={{ width: 15, height: 15, borderRadius: 2, position: 'absolute', inset: 0 }}
-                                onError={e => { e.currentTarget.style.display = 'none'; const fb = e.currentTarget.parentElement?.querySelector('.link-fb') as HTMLElement; if (fb) fb.style.display = 'flex'; }} />
-                              <span className="link-fb" style={{ display: 'none', position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center', color: '#10B981' }}><LinkIcon size={10} /></span>
-                            </span>
-                          ) : getEventFileIcon(fileType, 14)}
+                      <div key={i} style={{ background: 'var(--surface)', border: '1px solid var(--border-soft)', borderRadius: 8, overflow: 'hidden', transition: 'all 150ms' }}>
+                        <div onClick={() => openAttachment(item)} title="Abrir material"
+                          onContextMenu={(e) => matMenu.openMenu(e, { url: item.url, name: item.name, color: badge.badgeColor })}
+                          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', cursor: 'pointer' }}
+                          onMouseEnter={e => { e.currentTarget.style.background = `${badge.badgeColor}0d`; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
+                          <div style={{ width: 30, height: 30, borderRadius: 7, background: `${badge.badgeColor}14`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: badge.badgeColor }}>
+                            {badge.iconEl}
+                          </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</span>
-                            <span style={{ fontSize: 8.5, color: 'var(--text-muted)', fontWeight: 500, display: 'block', marginTop: 1 }}>{subtitleText}</span>
+                            <span style={{ fontSize: 8.5, color: 'var(--text-muted)', fontWeight: 500, display: 'block', marginTop: 1 }}>{badge.subtitle}</span>
                           </div>
                           {item.size && <span style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: "'JetBrains Mono',monospace", flexShrink: 0 }}>{item.size}</span>}
-                          <button onClick={() => setAttachments(prev => prev.filter((_, idx) => idx !== i))} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 2, display: 'flex', flexShrink: 0 }}><X size={10} /></button>
+                          <button onClick={e => { e.stopPropagation(); setAttachments(prev => prev.filter((_, idx) => idx !== i)); }} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 2, display: 'flex', flexShrink: 0, borderRadius: 5, transition: 'all 150ms' }}
+                            onMouseEnter={e => { e.currentTarget.style.color = '#EF4444'; e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'transparent'; }}>
+                            <X size={11} />
+                          </button>
                         </div>
                         {isImage && (
-                          <div style={{ padding: '0 12px 8px' }}>
-                            <img src={item.url} alt={item.name} style={{ maxWidth: '100%', maxHeight: 120, borderRadius: 6, objectFit: 'contain', background: 'var(--bg-primary)' }} />
-                          </div>
-                        )}
-                        {isYouTube && (
-                          <div style={{ padding: '0 12px 8px' }}>
-                            <div style={{ padding: '6px 10px', borderRadius: 6, background: 'var(--bg-primary)', fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <Video size={12} /> YouTube · {item.name}
-                            </div>
-                          </div>
-                        )}
-                        {isAudio && (
-                          <div style={{ padding: '0 12px 8px' }}>
-                            <audio controls src={item.url} style={{ width: '100%', height: 32 }} />
-                          </div>
-                        )}
-                        {isDrive && (
-                          <div style={{ padding: '0 12px 8px' }}>
-                            <div style={{ padding: '6px 10px', borderRadius: 6, background: 'var(--bg-primary)', fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <ExternalLink size={12} /> Google Drive
-                            </div>
+                          <div style={{ padding: '0 10px 8px' }} onClick={() => openAttachment(item)}>
+                            <img src={item.url} alt={item.name} style={{ maxWidth: '100%', maxHeight: 110, borderRadius: 6, objectFit: 'contain', background: 'var(--bg-primary)', cursor: 'pointer' }} />
                           </div>
                         )}
                       </div>
@@ -552,14 +637,18 @@ export default function EventModal({
                       </div>
                     </div>
                   )}
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', gap: 8 }}>
                     {!showLinkForm && (
-                      <button onClick={() => setShowLinkForm(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', background: 'var(--surface)', padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border-soft)', cursor: 'pointer' }}>
-                        <LinkIcon size={14} /> Enlace
+                      <button onClick={() => setShowLinkForm(true)} style={{ flex: 1, height: 38, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', background: `${color}0d`, padding: 0, border: `1px solid ${color}40`, cursor: 'pointer', transition: 'all 150ms' }}
+                        onMouseEnter={e => { e.currentTarget.style.background = `${color}1a`; e.currentTarget.style.borderColor = `${color}60`; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = `${color}0d`; e.currentTarget.style.borderColor = `${color}40`; }}>
+                        <Link2 size={14} style={{ color }} /> Enlace
                       </button>
                     )}
-                    <button onClick={() => fileInputRef.current?.click()} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', background: 'var(--surface)', padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border-soft)', cursor: 'pointer' }}>
-                      <FileText size={14} /> Archivo local
+                    <button onClick={handleAddFileBtn} style={{ flex: 1, height: 38, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', background: `${color}0d`, padding: 0, border: `1px solid ${color}40`, cursor: 'pointer', transition: 'all 150ms' }}
+                      onMouseEnter={e => { e.currentTarget.style.background = `${color}1a`; e.currentTarget.style.borderColor = `${color}60`; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = `${color}0d`; e.currentTarget.style.borderColor = `${color}40`; }}>
+                      <Upload size={14} style={{ color }} /> Archivo
                     </button>
                     <input type="file" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileChange} />
                   </div>
@@ -571,39 +660,37 @@ export default function EventModal({
 
         {isRecurringEdit && (
           <div style={{ padding: '0 32px 24px' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 9, background: 'var(--surface)', border: '1px solid var(--border-soft)', borderRadius: 12, padding: '13px 14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontFamily: "'Inter Tight',sans-serif" }}>Aplicar cambios a</label>
-                <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', fontFamily: "'JetBrains Mono',monospace" }}>
-                  {scope === 'all' ? 'toda la serie' : `solo el ${date.slice(8, 10)}/${date.slice(5, 7)}`}
+            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', background: 'var(--surface)', border: '1px solid var(--border-soft)', borderRadius: 10, padding: '11px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Repeat size={13} style={{ color: 'var(--accent)' }} />
+              <span style={{ fontFamily: "'Inter', sans-serif" }}>
+                Cambios en repetición o curso se aplican a toda la serie. Para otros cambios, se te preguntará al guardar.
+              </span>
+            </div>
+          </div>
+        )}
+
+        {showScopePrompt && pendingEv && createPortal(
+          <div style={{ position: 'fixed', inset: 0, zIndex: 99996, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }} onClick={() => { setShowScopePrompt(false); setPendingEv(null); }}>
+            <div className="bento-card" onClick={e => e.stopPropagation()} style={{ padding: 26, width: 380, maxWidth: '90vw' }}>
+              <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8, fontFamily: "'Inter Tight', sans-serif", display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ width: 26, height: 26, borderRadius: 8, background: 'var(--accent)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Repeat size={13} />
                 </span>
-              </div>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <button onClick={() => setScope('all')}
-                  style={{
-                    flex: 1, height: 36, borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-                    fontSize: 12, fontWeight: 700, fontFamily: "'Inter Tight',sans-serif", transition: 'all 150ms',
-                    border: scope === 'all' ? '1px solid var(--accent)' : '1px solid var(--border-soft)',
-                    background: scope === 'all' ? 'var(--accent)' : 'transparent',
-                    color: scope === 'all' ? '#fff' : 'var(--text-secondary)',
-                    boxShadow: scope === 'all' ? '0 2px 10px var(--accent-dim)' : 'none',
-                  }}>
-                  <Repeat size={13} /> Todos los eventos
+                Aplicar cambios
+              </h3>
+              <p style={{ fontSize: 12.5, color: 'var(--text-tertiary)', marginBottom: 20, lineHeight: 1.5 }}>
+                ¿A qué eventos quieres aplicar los cambios?
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <button onClick={() => executeScope('all')} style={{ width: '100%', height: 40, borderRadius: 9, border: '1px solid var(--accent)', background: 'var(--accent)', color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 2px 10px var(--accent-dim)' }}>
+                  <Repeat size={14} /> Todos los eventos
                 </button>
-                <button onClick={() => setScope('one')}
-                  style={{
-                    flex: 1, height: 36, borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-                    fontSize: 12, fontWeight: 700, fontFamily: "'Inter Tight',sans-serif", transition: 'all 150ms',
-                    border: scope === 'one' ? '1px solid var(--accent)' : '1px solid var(--border-soft)',
-                    background: scope === 'one' ? 'var(--accent)' : 'transparent',
-                    color: scope === 'one' ? '#fff' : 'var(--text-secondary)',
-                    boxShadow: scope === 'one' ? '0 2px 10px var(--accent-dim)' : 'none',
-                  }}>
-                  <Calendar size={13} /> Solo este evento
+                <button onClick={() => executeScope('one')} style={{ width: '100%', height: 40, borderRadius: 9, border: '1px solid var(--border-soft)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                  <Calendar size={14} /> Solo este evento
                 </button>
               </div>
             </div>
-          </div>
+          </div>, document.body
         )}
 
         {/* Footer */}
@@ -613,7 +700,7 @@ export default function EventModal({
           </button>
           <button onClick={handleSave} style={{ flex: 2, height: 48, borderRadius: 10, border: 'none', background: 'var(--accent)', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 4px 20px var(--accent-glow)', transition: 'transform 200ms, box-shadow 200ms' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 6px 24px var(--accent-glow)' }} onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 4px 20px var(--accent-glow)' }}>
             <Check size={16} />
-            {event ? (scope === 'one' && isRecurringEdit ? 'Guardar solo este' : 'Guardar Cambios') : 'Crear Evento'}
+            {event ? 'Guardar Cambios' : 'Crear Evento'}
           </button>
         </div>
       </div>

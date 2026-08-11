@@ -1,7 +1,7 @@
-import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+﻿import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  GraduationCap, ChevronLeft, ChevronRight, ChevronUp, Pencil, PlusCircle, Layers, Trash2,
+  GraduationCap, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Pencil, PlusCircle, Layers, Trash2,
   Book, Upload, X, Search, Edit3, Plus, File, Sigma, Lightbulb, Key, Type, HelpCircle, ListChecks, ExternalLink,
   Check, GripVertical, StickyNote, BookOpen, ArrowUpRight, ArrowLeft, Play,
   NotebookPen, ListTodo, Bold, Italic, Underline, Heading1, Heading2, Heading3,
@@ -24,12 +24,14 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { restrictToParentElement } from '@dnd-kit/modifiers';
 import { useApp, Course, SubjectGroup, SubjectTopic, SubjectMaterial, TopicFlashcard, PlannedSession } from '../../store/AppContext';
-import { save } from '@tauri-apps/plugin-dialog';
-import { writeTextFile } from '@tauri-apps/plugin-fs';
+import { save, open } from '@tauri-apps/plugin-dialog';
+import { writeTextFile, stat } from '@tauri-apps/plugin-fs';
+import { isTauri } from '@tauri-apps/api/core';
 import { format, addDays, startOfWeek, endOfWeek } from "date-fns";
 import { es } from "date-fns/locale";
 import toast from 'react-hot-toast';
 import { openBrainWithAnchor, isOverBrainZone, getLastPointer, setBrainDragState } from '../../lib/brainDrop';
+import { useMaterialMenu } from '../ui/MaterialContextMenu';
 
 export const MATERIAL_META = {
   resource: { label: 'Recurso', icon: File },
@@ -82,6 +84,42 @@ const TOOL_DEFAULT_ORDER: ToolKey[] = ['flashcards', 'quizzes', 'blurting', 'fey
 
 const EASE = "cubic-bezier(0.16, 1, 0.3, 1)";
 const REVIEW_LEVEL_COLORS = ['#EF4444', '#F97316', '#F59E0B', '#FBBF24', '#EAB308', '#A3E635', '#84CC16', '#4ADE80', '#22C55E', '#10B981'];
+
+const safeArr = <T,>(arr: T[] | null | undefined): T[] =>
+  (Array.isArray(arr) ? arr : []).filter((x): x is T => !!x && typeof x === 'object');
+
+function expandsToDate(s: { date: string; repeat?: 'none' | 'daily' | 'weekly' | 'custom_days'; repeatDays?: number[]; repeatUntil?: string; exceptions?: string[] }, iso: string): boolean {
+  if (s.exceptions && s.exceptions.includes(iso)) return false;
+  if (s.repeatUntil && s.repeatUntil < iso) return false;
+  if (s.date === iso) return true;
+  if (iso < s.date) return false;
+  if (s.repeat === 'daily') return true;
+  if (s.repeat === 'weekly') {
+    const orig = new Date(s.date + 'T12:00:00');
+    const tgt = new Date(iso + 'T12:00:00');
+    return orig.getDay() === tgt.getDay();
+  }
+  if (s.repeat === 'custom_days' && s.repeatDays) {
+    const tgt = new Date(iso + 'T12:00:00');
+    const mappedDay = (tgt.getDay() + 6) % 7;
+    return s.repeatDays.includes(mappedDay);
+  }
+  return false;
+}
+
+// Texto legible sobre un color de fondo hex: si el color es claro → negro, si es oscuro → blanco
+function dateContrast(hex: string, th?: string | null): string {
+  const h = (hex || '#6366F1').replace('#', '');
+  const r = parseInt(h.substring(0, 2), 16) || 0;
+  const g = parseInt(h.substring(2, 4), 16) || 0;
+  const b = parseInt(h.substring(4, 6), 16) || 0;
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  if (lum > 0.72) return 'rgba(0,0,0,0.55)';
+  if (lum < 0.28) return 'rgba(255,255,255,0.55)';
+  const darkTheme = !th || th === 'oscuro' || th === 'vibrante';
+  return darkTheme ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.5)';
+}
+
 const SPINE_COLORS = [
   "#E11D48", "#3B82F6", "#10B981", "#F59E0B", "#8B5CF6",
   "#EC4899", "#06B6D4", "#84CC16", "#F97316", "#6366F1",
@@ -93,7 +131,7 @@ function formatTime(s: number) { if (!s || !isFinite(s)) return '0:00'; const m 
 // Reuse SPINE_COLORS token in case the user wants the same selection.
 // ─── Icon Picker Stuff ───
 import * as LI from 'lucide-react';
-import { openFileSmart } from '../../lib/openFileSmart';
+import { openFileSmart, pickAndPersistFile } from '../../lib/openFileSmart';
 const AVAILABLE_ICONS: { name: string; icon: React.ComponentType<{ size?: number; color?: string; style?: React.CSSProperties }>; label: string }[] = (() => {
   const NAMES = [
     "FileText","BookOpen","Code","Folder","Brain","Target","Coffee","Compass","Award",
@@ -322,13 +360,13 @@ function DroppableColumn({ id, items, children }: { id: string; items: SubjectMa
   );
 }
 
-function SortableWrapper({ id, children }: { id: string; children: (p: { attributes: any; listeners: any; isDragging: boolean }) => React.ReactNode }) {
+function SortableWrapper({ id, children, style }: { id: string; style?: React.CSSProperties; children: (p: { attributes: any; listeners: any; isDragging: boolean }) => React.ReactNode }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
-  return <div ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition, zIndex: isDragging ? 100 : 1, opacity: isDragging ? 0.5 : 1, position: 'relative' as const }}>{children({ attributes, listeners, isDragging })}</div>;
+  return <div ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition, zIndex: isDragging ? 100 : 1, opacity: isDragging ? 0.5 : 1, position: 'relative' as const, ...style }}>{children({ attributes, listeners, isDragging })}</div>;
 }
 
-function MaterialCard({ mat, dragAttributes, dragListeners, onEdit, onDelete, onOpenResource, onPractice }:
-  { mat: SubjectMaterial; dragAttributes?: any; dragListeners?: any; onEdit: (m: SubjectMaterial) => void; onDelete: (m: SubjectMaterial) => void; onOpenResource: (m: SubjectMaterial) => void; onPractice?: (m: SubjectMaterial) => void }) {
+function MaterialCard({ mat, dragAttributes, dragListeners, onEdit, onDelete, onOpenResource, onPractice, onView, clickSuppressed, onContextMenu }:
+  { mat: SubjectMaterial; dragAttributes?: any; dragListeners?: any; onEdit: (m: SubjectMaterial) => void; onDelete: (m: SubjectMaterial) => void; onOpenResource: (m: SubjectMaterial) => void; onPractice?: (m: SubjectMaterial) => void; onView?: (m: SubjectMaterial) => void; clickSuppressed?: () => boolean; onContextMenu?: (e: React.MouseEvent, m: SubjectMaterial) => void }) {
   const meta = MATERIAL_META[mat.type];
   const typeColors: Record<string, string> = { formula: '#8B5CF6', concept: '#3B82F6', 'key-data': '#F59E0B', meaning: '#10B981', quiz: '#EF4444', procedure: '#EC4899', resource: '#6366F1' };
   const toolMeta = mat.toolMode ? TOOL_CREATOR_META[mat.toolMode as ToolCreatorMode] : undefined;
@@ -340,9 +378,10 @@ function MaterialCard({ mat, dragAttributes, dragListeners, onEdit, onDelete, on
   const canOpen = !!mat.dataUrl && !practice;
   return (
     <div {...dragAttributes} {...dragListeners}
-      title={practice ? 'Arrastra para reordenar · Toca para practicar' : canOpen ? 'Arrastra para reordenar · Toca para abrir' : "Arrastra para reordenar"}
-      onClick={practice ? () => onPractice(mat) : canOpen ? () => onOpenResource(mat) : undefined}
-      style={{ display: 'flex', flexDirection: 'column', borderRadius: 14, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', overflow: 'hidden', transition: 'all 200ms ' + EASE, boxShadow: '0 1px 2px rgba(0,0,0,0.04)', minHeight: 118, touchAction: 'none', cursor: practice || canOpen ? 'pointer' : 'grab' }}
+      onContextMenu={onContextMenu ? (e) => onContextMenu(e, mat) : undefined}
+      title={practice ? 'Mantén pulsado para arrastrar · Toca para practicar' : canOpen ? 'Mantén pulsado para arrastrar · Toca para abrir' : 'Mantén pulsado para arrastrar'}
+      onClick={practice ? () => onPractice(mat) : canOpen ? () => { if (clickSuppressed && clickSuppressed()) return; onOpenResource(mat); } : () => { if (clickSuppressed && clickSuppressed()) return; onView?.(mat); }}
+      style={{ display: 'flex', flexDirection: 'column', borderRadius: 14, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', overflow: 'hidden', transition: 'all 200ms ' + EASE, boxShadow: '0 1px 2px rgba(0,0,0,0.04)', minHeight: 118, touchAction: 'none', cursor: 'pointer', userSelect: 'none', WebkitUserSelect: 'none' }}
       onMouseEnter={e => { e.currentTarget.style.borderColor = `${accent}50`; e.currentTarget.style.background = 'var(--bg-surface)'; e.currentTarget.style.boxShadow = `0 8px 24px ${accent}12`; }}
       onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.04)'; }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 14px 8px' }}>
@@ -383,7 +422,7 @@ function ToolSortableRow({ id, tool, isActive, onClick }: { id: ToolKey; tool: t
       {...attributes}
       {...listeners}
       onClick={onClick}
-      style={{ transform: CSS.Transform.toString(transform), transition, touchAction: 'none', cursor: 'grab', opacity: isDragging ? 0.45 : 1, display: 'flex', alignItems: 'center', gap: 12, padding: '12px 13px', borderRadius: 13, border: `1px solid ${isActive ? `${tool.color}4d` : 'var(--border-subtle)'}`, background: isActive ? `${tool.color}0d` : 'var(--bg-elevated)', boxShadow: isActive ? `0 0 0 1px ${tool.color}14, 0 6px 18px ${tool.color}12` : '0 1px 2px rgba(0,0,0,0.04)' }}
+      style={{ transform: CSS.Transform.toString(transform), transition, touchAction: 'none', cursor: isDragging ? 'grabbing' : 'pointer', opacity: isDragging ? 0.45 : 1, display: 'flex', alignItems: 'center', gap: 12, padding: '12px 13px', borderRadius: 13, border: `1px solid ${isActive ? `${tool.color}4d` : 'var(--border-subtle)'}`, background: isActive ? `${tool.color}0d` : 'var(--bg-elevated)', boxShadow: isActive ? `0 0 0 1px ${tool.color}14, 0 6px 18px ${tool.color}12` : '0 1px 2px rgba(0,0,0,0.04)' }}
       onMouseEnter={e => { if (!isActive) { e.currentTarget.style.borderColor = `${tool.color}4d`; e.currentTarget.style.background = `${tool.color}08`; e.currentTarget.style.boxShadow = `0 6px 18px ${tool.color}10`; } }}
       onMouseLeave={e => { if (!isActive) { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.04)'; } }}
       title={isActive ? `${tool.label} · activo` : `Crear ${tool.label} · mantén pulsado para reordenar`}>
@@ -1161,20 +1200,67 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
   );
 }
 
+// ─── Desplegable custom (agrupación / tema): siempre hacia arriba, con buscador y scroll interno acotado ───
+function PlanSelectDropdown({ value, onChange, options, noneLabel, color }: { value: string; onChange: (v: string) => void; options: { id: string; label: string }[]; noneLabel: string; color: string }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const sel = options.find(o => o.id === value);
+  const filtered = options.filter(o => !query.trim() || o.label.toLowerCase().includes(query.trim().toLowerCase()));
+  const close = () => { setOpen(false); setQuery(''); };
+  return (
+    <div ref={wrapRef} tabIndex={-1} style={{ position: 'relative', outline: 'none' }}
+      onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) close(); }}>
+      <button type="button" onClick={() => setOpen(o => !o)}
+        style={{ width: '100%', height: 42, borderRadius: 10, border: `1px solid ${open ? `${color}55` : 'var(--border-subtle)'}`, background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 38px 0 13px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif", cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, transition: 'all 150ms', textAlign: 'left' }}>
+        <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: sel ? 'var(--text-primary)' : 'var(--text-muted)' }}>{sel ? sel.label : noneLabel}</span>
+        <ChevronDown size={14} style={{ flexShrink: 0, color: open ? color : 'var(--text-muted)', transition: 'transform 180ms ease', transform: open ? 'rotate(180deg)' : 'none' }} />
+      </button>
+      {open && (
+        <div className="plan-select-popup">
+          <div className="psp-search-wrap">
+            <input autoFocus value={query} onChange={e => setQuery(e.target.value)} placeholder="Buscar…" className="psp-search" />
+          </div>
+          <div className="psp-list no-scrollbar">
+            <button type="button" className={`psp-opt${value === '' ? ' sel' : ''}`} onClick={() => { onChange(''); close(); }}
+              style={value === '' ? { background: `color-mix(in srgb, ${color} 12%, transparent)`, color, fontWeight: 600 } : undefined}>
+              <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{noneLabel}</span>
+              {value === '' && <Check size={12} style={{ color, flexShrink: 0 }} />}
+            </button>
+            {filtered.map(o => {
+              const sel2 = o.id === value;
+              return (
+                <button key={o.id} type="button" className={`psp-opt${sel2 ? ' sel' : ''}`} onClick={() => { onChange(o.id); close(); }} title={o.label}
+                  style={sel2 ? { background: `color-mix(in srgb, ${color} 12%, transparent)`, color, fontWeight: 600 } : undefined}>
+                  <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.label}</span>
+                  {sel2 && <Check size={12} style={{ color, flexShrink: 0 }} />}
+                </button>
+              );
+            })}
+            {filtered.length === 0 && (
+              <span className="psp-empty">Sin resultados</span>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Component ───
 export default function Cursos({ initialCourseId, initialTab = 'overview', onNavigate }: { initialCourseId?: string; initialTab?: 'overview' | 'tareas' | 'notas' | 'archivos'; onNavigate?: (view: string) => void }) {
-  const { courses = [], tasks = [], notes = [], noteFolders = [], updateCourse, deleteCourse, setNavigateTo, setFocusedTaskId, addTask, updateTask, deleteTask, addNote, updateNote, deleteNote, reorderNotes, plannedSessions, addPlannedSession, updatePlannedSession, deletePlannedSession, setPipUrl, studySessions, activePlannedSessionId, linkPlannedSessionToTimer, unlinkPlannedSessionFromTimer, courseDeepLink, setCourseDeepLink, navigateToCourse, activeTaskId, addNotification } = useApp();
+  const { courses = [], tasks = [], notes = [], noteFolders = [], updateCourse, deleteCourse, setNavigateTo, setFocusedTaskId, addTask, updateTask, deleteTask, addNote, updateNote, deleteNote, reorderNotes, plannedSessions, addPlannedSession, updatePlannedSession, deletePlannedSession, reorderPlannedSessions, setPipUrl, studySessions, activePlannedSessionId, linkPlannedSessionToTimer, unlinkPlannedSessionFromTimer, courseDeepLink, setCourseDeepLink, navigateToCourse, activeTaskId, addNotification } = useApp();
   const th = document.documentElement.getAttribute('data-theme');
   const isDarkSelect = !th || th === 'oscuro' || th === 'vibrante';
   const selectBorder = isDarkSelect ? '1px solid rgba(255,255,255,0.12)' : '1px solid rgba(0,0,0,0.12)';
 
   const [selectedCourseId, setSelectedCourseId] = useState<string>(initialCourseId || courses[0]?.id || '');
-  const [activeTab, setActiveTab] = useState<'overview' | 'tareas' | 'notas' | 'archivos'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'overview' | 'tareas' | 'notas' | 'archivos'>('overview');
 
   useEffect(() => {
     if (initialCourseId && initialCourseId !== selectedCourseId) {
       setSelectedCourseId(initialCourseId);
-      setActiveTab(initialTab || 'overview');
+      setActiveTab('overview');
       setSelectedOverviewNoteId(null);
       setOverviewNoteEditMode(false);
       setCurrentView('overview');
@@ -1243,6 +1329,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const [practiceMat, setPracticeMat] = useState<SubjectMaterial | null>(null);
   const openPractice = (mat: SubjectMaterial) => setPracticeMat(mat);
   const closePractice = () => setPracticeMat(null);
+  const viewMaterial = (mat: SubjectMaterial) => setViewingMat(mat);
   // Herramientas reorder (long-press drag), persisted
   const toolDragRef = useRef(false);
   const [toolOrder, setToolOrder] = useState<ToolKey[]>(() => {
@@ -1300,7 +1387,17 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [planEditId, setPlanEditId] = useState<string | null>(null);
   const [planDate, setPlanDate] = useState('');
-  const [plannerDate, setPlannerDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [plannerDate, setPlannerDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
+
+  // Persist the cronograma selected day per course — never resets to today unless the user chooses
+  useEffect(() => {
+    if (!selectedCourseId) return;
+    const saved = localStorage.getItem(`owa_estudio_planner_date_${selectedCourseId}`);
+    setPlannerDate(saved && /^\d{4}-\d{2}-\d{2}$/.test(saved) ? saved : format(new Date(), 'yyyy-MM-dd'));
+  }, [selectedCourseId]);
+  useEffect(() => {
+    if (selectedCourseId) localStorage.setItem(`owa_estudio_planner_date_${selectedCourseId}`, plannerDate);
+  }, [plannerDate, selectedCourseId]);
   const [planStartTime, setPlanStartTime] = useState('09:00');
   const [planTitle, setPlanTitle] = useState('');
   const [planGroupId, setPlanGroupId] = useState('');
@@ -1308,6 +1405,27 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const [planType, setPlanType] = useState<string>('estudio');
   const [planDuration, setPlanDuration] = useState(30);
   const [planIntensity, setPlanIntensity] = useState(5);
+  const [planTimeEdit, setPlanTimeEdit] = useState<'h' | 'm' | null>(null);
+  const [planTimeEditVal, setPlanTimeEditVal] = useState('');
+  const parsePlanTime = (t: string) => {
+    const [h, m] = (t || '09:00').split(':').map(Number);
+    return { h: Number.isFinite(h) ? h : 9, m: Number.isFinite(m) ? m : 0 };
+  };
+  const shiftPlanTime = (unit: 'h' | 'm', dir: number) => {
+    const { h, m } = parsePlanTime(planStartTime);
+    const nh = unit === 'h' ? (h + dir + 24) % 24 : h;
+    const nm = unit === 'm' ? (m + dir * 5 + 60) % 60 : m;
+    setPlanStartTime(`${String(nh).padStart(2, '0')}:${String(nm).padStart(2, '0')}`);
+  };
+  const commitPlanTimeEdit = (unit: 'h' | 'm') => {
+    setPlanTimeEdit(null);
+    const raw = planTimeEditVal.trim();
+    if (!/^\d{1,2}$/.test(raw)) return;
+    const n = parseInt(raw, 10);
+    const { h, m } = parsePlanTime(planStartTime);
+    if (unit === 'h' && n <= 23) setPlanStartTime(`${String(n).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+    if (unit === 'm' && n <= 59) setPlanStartTime(`${String(h).padStart(2, '0')}:${String(n).padStart(2, '0')}`);
+  };
 
   // Session detail horizontal panel
   const [detailSessionId, setDetailSessionId] = useState<string | null>(null);
@@ -1358,6 +1476,25 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const [radarHover, setRadarHover] = useState<number | null>(null);
   const radarWrapRef = useRef<HTMLDivElement>(null);
   const radarSvgRef = useRef<SVGSVGElement>(null);
+  const [radarDims, setRadarDims] = useState<{ w: number; h: number } | null>(null);
+  useEffect(() => {
+    let last = '';
+    const measure = () => {
+      const el = radarWrapRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const key = `${Math.round(r.width)}x${Math.round(r.height)}`;
+      if (r.width > 50 && r.height > 50 && key !== last) {
+        last = key;
+        setRadarDims({ w: Math.round(r.width), h: Math.round(r.height) });
+      }
+    };
+    const onResize = () => measure();
+    window.addEventListener('resize', onResize);
+    const t = window.setInterval(measure, 400);
+    measure();
+    return () => { window.removeEventListener('resize', onResize); window.clearInterval(t); };
+  }, []);
 
   // Task state
   const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -1431,11 +1568,11 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
       ? { ...editingFlashcard, question: fcQuestion.trim(), answer: fcAnswer.trim(), difficulty: fcDifficulty }
       : { id: Math.random().toString(), question: fcQuestion.trim(), answer: fcAnswer.trim(), difficulty: fcDifficulty, lastReviewed: now, nextReview: now };
     updateCourse(course.id, {
-      studyTopics: (course.studyTopics || []).map(t => t.id === activeTopic.id ? {
+      studyTopics: (safeArr(course.studyTopics)).map(t => t.id === activeTopic.id ? {
         ...t,
         flashcards: editingFlashcard
-          ? (t.flashcards || []).map(f => f.id === editingFlashcard.id ? newFc : f)
-          : [...(t.flashcards || []), newFc],
+          ? (safeArr(t.flashcards)).map(f => f.id === editingFlashcard.id ? newFc : f)
+          : [...(safeArr(t.flashcards)), newFc],
       } : t)
     });
     setShowFlashcardModal(false); setEditingFlashcard(null);
@@ -1445,16 +1582,16 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const handleDeleteFlashcard = (fcId: string) => {
     if (!activeTopic) return;
     updateCourse(course.id, {
-      studyTopics: (course.studyTopics || []).map(t => t.id === activeTopic.id ? {
+      studyTopics: (safeArr(course.studyTopics)).map(t => t.id === activeTopic.id ? {
         ...t,
-        flashcards: (t.flashcards || []).filter(f => f.id !== fcId),
+        flashcards: (safeArr(t.flashcards)).filter(f => f.id !== fcId),
       } : t)
     });
     toast.success('Flashcard eliminada');
   };
 
   const startReview = () => {
-    const fcs = activeTopic?.flashcards || [];
+    const fcs = safeArr(activeTopic?.flashcards);
     if (fcs.length === 0) { toast('No hay flashcards para repasar'); return; }
     const shuffled = [...fcs].sort((a, b) => a.nextReview - b.nextReview);
     setReviewDeck(shuffled); setReviewIndex(0); setReviewFlipped(false);
@@ -1491,11 +1628,11 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     if (!editingTagId) return;
     updateCourse(course.id, {
       topicTagDefs: (course.topicTagDefs || []).filter(d => d.id !== editingTagId),
-      studyTopics: (course.studyTopics || []).map(t => ({
+      studyTopics: (safeArr(course.studyTopics)).map(t => ({
         ...t,
-        materials: (t.materials || []).map(m => ({ ...m, tagIds: (m.tagIds || []).filter(x => x !== editingTagId) })),
-        flashcards: (t.flashcards || []).map(f => ({ ...f, tagIds: (f.tagIds || []).filter(x => x !== editingTagId) })),
-        recordings: (t.recordings || []).map(r => ({ ...r, tagIds: (r.tagIds || []).filter(x => x !== editingTagId) })),
+        materials: (safeArr(t.materials)).map(m => ({ ...m, tagIds: (m.tagIds || []).filter(x => x !== editingTagId) })),
+        flashcards: (safeArr(t.flashcards)).map(f => ({ ...f, tagIds: (f.tagIds || []).filter(x => x !== editingTagId) })),
+        recordings: (safeArr(t.recordings)).map(r => ({ ...r, tagIds: (r.tagIds || []).filter(x => x !== editingTagId) })),
       })),
     });
     setActiveTagFilter(af => af === editingTagId ? null : af);
@@ -1508,13 +1645,13 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
 
   const handleToggleItemTag = (kind: 'flashcard' | 'material' | 'recording', itemId: string, tagId: string) => {
     if (!activeTopic) return;
-    const idx = (course.studyTopics || []).findIndex(t => t.id === activeTopic.id);
+    const idx = (safeArr(course.studyTopics)).findIndex(t => t.id === activeTopic.id);
     if (idx === -1) return;
-    const t = { ...(course.studyTopics || [])[idx] };
-    if (kind === 'flashcard') t.flashcards = (t.flashcards || []).map(f => f.id === itemId ? { ...f, tagIds: toggleIn(f.tagIds || [], tagId) } : f);
-    if (kind === 'material') t.materials = (t.materials || []).map(m => m.id === itemId ? { ...m, tagIds: toggleIn(m.tagIds || [], tagId) } : m);
-    if (kind === 'recording') t.recordings = (t.recordings || []).map(r => r.id === itemId ? { ...r, tagIds: toggleIn(r.tagIds || [], tagId) } : r);
-    updateCourse(course.id, { studyTopics: (course.studyTopics || []).map((tp, i) => i === idx ? t : tp) });
+    const t = { ...(safeArr(course.studyTopics))[idx] };
+    if (kind === 'flashcard') t.flashcards = (safeArr(t.flashcards)).map(f => f.id === itemId ? { ...f, tagIds: toggleIn(f.tagIds || [], tagId) } : f);
+    if (kind === 'material') t.materials = (safeArr(t.materials)).map(m => m.id === itemId ? { ...m, tagIds: toggleIn(m.tagIds || [], tagId) } : m);
+    if (kind === 'recording') t.recordings = (safeArr(t.recordings)).map(r => r.id === itemId ? { ...r, tagIds: toggleIn(r.tagIds || [], tagId) } : r);
+    updateCourse(course.id, { studyTopics: (safeArr(course.studyTopics)).map((tp, i) => i === idx ? t : tp) });
   };
 
   const gradeFlashcard = (grade: 'again' | 'hard' | 'good' | 'easy') => {
@@ -1525,9 +1662,9 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     const intervals: Record<string, number> = { again: 10 * 60 * 1000, hard: DAY, good: 3 * DAY, easy: 7 * DAY };
     const updated: TopicFlashcard = { ...fc, lastReviewed: now, nextReview: now + intervals[grade], difficulty: fc.difficulty };
     updateCourse(course.id, {
-      studyTopics: (course.studyTopics || []).map(t => t.id === activeTopic.id ? {
+      studyTopics: (safeArr(course.studyTopics)).map(t => t.id === activeTopic.id ? {
         ...t,
-        flashcards: (t.flashcards || []).map(f => f.id === fc.id ? updated : f),
+        flashcards: (safeArr(t.flashcards)).map(f => f.id === fc.id ? updated : f),
       } : t)
     });
     setReviewFlipped(false);
@@ -1684,6 +1821,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const [showPdfPreview, setShowPdfPreview] = useState(false);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState('');
   const [pdfPreviewName, setPdfPreviewName] = useState('');
+  const [viewingMat, setViewingMat] = useState<SubjectMaterial | null>(null);
 
   // Inline audio player
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
@@ -1746,12 +1884,23 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const courseCoverInputRef = useRef<HTMLInputElement>(null);
   const groupCoverInputRef = useRef<HTMLInputElement>(null);
 
-  const course = useMemo(() => courses.find(c => c.id === selectedCourseId) || courses[0], [courses, selectedCourseId]);
+  const course = useMemo(() => {
+    const base = courses.find(c => c && c.id === selectedCourseId) || courses[0];
+    if (!base) return {} as Course;
+    return {
+      ...base,
+      studyTopics: (Array.isArray(base.studyTopics) ? base.studyTopics : []).filter((t: any) => !!t && typeof t === 'object').map((t: any) => ({
+        ...t,
+        materials: (Array.isArray(t.materials) ? t.materials : []).filter((m: any) => !!m && typeof m === 'object'),
+        flashcards: (Array.isArray(t.flashcards) ? t.flashcards : []).filter((f: any) => !!f && typeof f === 'object'),
+        recordings: (Array.isArray(t.recordings) ? t.recordings : []).filter((r: any) => !!r && typeof r === 'object'),
+      })),
+      groups: (Array.isArray(base.groups) ? base.groups : []).filter((g: any) => !!g && typeof g === 'object'),
+      topicTagDefs: (Array.isArray(base.topicTagDefs) ? base.topicTagDefs : []).filter((d: any) => !!d && typeof d === 'object'),
+    } as Course;
+  }, [courses, selectedCourseId]);
 
-  // Planned sessions for the selected plan date
-  const dayPlannedSessions = useMemo(() => {
-    return (plannedSessions || []).filter(s => s.courseId === course?.id && s.date === planDate && !s.completed);
-  }, [plannedSessions, course?.id, planDate]);
+  const matMenu = useMaterialMenu((m) => toast.error(m));
 
   useEffect(() => {
     if (course) {
@@ -1760,9 +1909,6 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
       setEditCourseTeacher(course.teacher || course.teacherName || '');
     }
   }, [selectedCourseId, course?.name, course?.coverUrl, course?.coverImage, course?.teacher, course?.teacherName]);
-
-  // Sync initial tab
-  useEffect(() => { setActiveTab(initialTab); }, [initialTab]);
 
   // Save last active tab per course to localStorage for hub recall
   useEffect(() => {
@@ -1810,14 +1956,14 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
 
   const activeTopic = useMemo(() => {
     if (!course || !activeTopicId) return null;
-    return (course.studyTopics || []).find(t => t.id === activeTopicId) || null;
+    return (safeArr(course.studyTopics)).find(t => t.id === activeTopicId) || null;
   }, [course, activeTopicId]);
 
   // Topic content items (flashcards + materials + recordings) for search/filter
   const topicItems = useMemo(() => {
-    const mats = activeTopic?.materials || [];
-    const fcs = activeTopic?.flashcards || [];
-    const recs = activeTopic?.recordings || [];
+    const mats = safeArr(activeTopic?.materials);
+    const fcs = safeArr(activeTopic?.flashcards);
+    const recs = safeArr(activeTopic?.recordings);
     return [
       ...fcs.map(fc => ({ id: fc.id, type: 'flashcard' as const, item: fc })),
       ...mats.map(m => ({ id: m.id, type: m.type as MaterialType, item: m })),
@@ -1837,7 +1983,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   }, [topicItems, topicSearch, activeTagFilter]);
 
   // Course tasks
-  const courseTasks = useMemo(() => tasks.filter(t => t.course === course?.name), [tasks, course]);
+  const courseTasks = useMemo(() => tasks.filter(t => !!t && typeof t === 'object' && t.course === course?.name), [tasks, course]);
   const courseTaskStats = useMemo(() => {
     const total = courseTasks.length;
     const done = courseTasks.filter(t => t.status === 'completado').length;
@@ -1848,7 +1994,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const pendingTasks = useMemo(() => courseTasks.filter(t => t.status !== 'completado'), [courseTasks]);
 
   // Course notes
-  const courseNotes = useMemo(() => notes.filter(n => n.course === course?.name && !n.deletedAt), [notes, course]);
+  const courseNotes = useMemo(() => notes.filter(n => !!n && typeof n === 'object' && n.course === course?.name && !n.deletedAt), [notes, course]);
   const filteredCourseNotes = useMemo(() => {
     return showCourseNotesInOverview ? courseNotes : courseNotes.filter(n => n.isCoursePrivate);
   }, [courseNotes, showCourseNotesInOverview]);
@@ -1922,7 +2068,13 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   // Course resources (from all topics)
   const allCourseMaterials = useMemo(() => {
     const mats: SubjectMaterial[] = [];
-    (course?.studyTopics || []).forEach(t => (t.materials || []).forEach(m => mats.push({ ...m, _topicTitle: t.title } as SubjectMaterial & { _topicTitle: string })));
+    (Array.isArray(course?.studyTopics) ? course!.studyTopics : []).forEach(t => {
+      if (!t || typeof t !== 'object') return;
+      (Array.isArray(t.materials) ? t.materials : []).forEach(m => {
+        if (!m || typeof m !== 'object') return;
+        mats.push({ ...m, _topicTitle: t.title } as SubjectMaterial & { _topicTitle: string });
+      });
+    });
     return mats.filter(m => m.type === 'resource');
   }, [course]);
 
@@ -1948,7 +2100,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   // --- Topic CRUD ---
   const handleAddTopic = () => {
     if (!topicName.trim()) return;
-    const current = course.studyTopics || [];
+    const current = safeArr(course.studyTopics);
     if (editingTopicId) {
       updateCourse(course.id, { studyTopics: current.map(t => t.id === editingTopicId ? { ...t, title: topicName.trim() } : t) });
       toast.success('Tema actualizado');
@@ -1960,7 +2112,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   };
 
   const handleDeleteTopic = (id: string) => {
-    const current = course.studyTopics || [];
+    const current = safeArr(course.studyTopics);
     updateCourse(course.id, { studyTopics: current.filter(t => t.id !== id) });
     toast.success('Tema eliminado');
   };
@@ -1968,7 +2120,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   // --- Group CRUD ---
   const handleSaveGroup = () => {
     if (!groupName.trim()) return;
-    const currentGroups = course.groups || [];
+    const currentGroups = safeArr(course.groups);
     let updatedGroups = [...currentGroups];
     if (editingGroupId) updatedGroups = updatedGroups.map(g => g.id === editingGroupId ? { ...g, name: groupName.trim(), image: groupCover } : g);
     else updatedGroups.push({ id: editingGroupId || Math.random().toString(), name: groupName.trim(), image: groupCover, createdAt: Date.now() });
@@ -1981,14 +2133,14 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     setEditingGroupId(g.id); setGroupName(g.name); setGroupCover(g.image); setShowGroupModal(true);
   };
   const handleDeleteGroup = (groupId: string) => {
-    const currentGroups = course.groups || [];
-    updateCourse(course.id, { groups: currentGroups.filter(g => g.id !== groupId), studyTopics: (course.studyTopics || []).map(t => t.groupId === groupId ? { ...t, groupId: undefined } : t) });
+    const currentGroups = safeArr(course.groups);
+    updateCourse(course.id, { groups: currentGroups.filter(g => g.id !== groupId), studyTopics: (safeArr(course.studyTopics)).map(t => t.groupId === groupId ? { ...t, groupId: undefined } : t) });
     toast.success('Agrupación eliminada');
   };
 
   // --- Materials ---
   const handleAddMaterialClick = (type: MaterialType, colIdx: number) => {
-    if (type === 'resource') { setMaterialColIndex(colIdx); resourceInputRef.current?.click(); return; }
+    if (type === 'resource') { setMaterialColIndex(colIdx); handleAddFileBtn(undefined, colIdx); return; }
     setMaterialType(type); setMaterialColIndex(colIdx); setEditingMaterial(null); resetForm(); setShowMaterialModal(true);
   };
 
@@ -2042,9 +2194,9 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     const type = TOOL_MATERIAL_TYPE[toolModal.mode];
     const meta = TOOL_CREATOR_META[toolModal.mode];
     updateCourse(course.id, {
-      studyTopics: (course.studyTopics || []).map(topic => {
+      studyTopics: (safeArr(course.studyTopics)).map(topic => {
         if (topic.id !== activeTopic.id) return topic;
-        const ms = topic.materials || [];
+        const ms = safeArr(topic.materials);
         return {
           ...topic,
           materials: toolModal.editingId
@@ -2059,27 +2211,54 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
 
   const estudioFileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, overrideTopicId?: string) => {
+  // Añade un material a un tema garantizando que SIEMPRE aterrice visible:
+  // si llega un topicId inválido/unset usa el primer tema y, si el curso NO tiene
+  // temas (caso "no aparece nada al subir"), crea el tema "Materiales" al vuelo.
+  const withMaterial = useCallback((tid: string | undefined, mat: SubjectMaterial, colIndex: number) => {
+    const ts = (safeArr(course.studyTopics)).filter(t => !!t && typeof t === 'object');
+    const target = tid ? ts.find(t => t.id === tid) : undefined;
+    if (target) return ts.map(t => t.id === target.id ? { ...t, materials: [...(safeArr(t.materials)), mat] } : t);
+    if (ts.length) return ts.map((t, i) => i === 0 ? { ...t, materials: [...(safeArr(t.materials)), mat] } : t);
+    return [{ id: Math.random().toString(), title: 'Materiales', status: 'pending' as const, createdAt: Date.now(), reviewLevel: 0, nextReview: Date.now(), materials: [mat], groupId: selectedGroupId || undefined }];
+  }, [course, selectedGroupId]);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, overrideTopicId?: string) => {
     const file = e.target.files?.[0]; if (!file) return;
     const tid = overrideTopicId || activeTopic?.id;
-    if (!tid) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const newMat: SubjectMaterial = { id: Math.random().toString(), type: 'resource', createdAt: Date.now(), columnIndex: materialColIndex, name: file.name, fileType: file.type, dataUrl: event.target?.result as string };
-      updateCourse(course.id, { studyTopics: (course.studyTopics || []).map(t => t.id === tid ? { ...t, materials: [...(t.materials || []), newMat] } : t) });
-      toast.success('Archivo subido');
-    };
-    reader.readAsDataURL(file); if (e.target) e.target.value = '';
+    const url = await new Promise<string>((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result as string);
+      r.onerror = () => reject(r.error);
+      r.readAsDataURL(file);
+    });
+    const newMat: SubjectMaterial = { id: Math.random().toString(), type: 'resource', createdAt: Date.now(), columnIndex: materialColIndex, name: file.name, fileType: file.type, dataUrl: url };
+    updateCourse(course.id, { studyTopics: withMaterial(tid, newMat, materialColIndex) });
+    toast.success('Archivo subido');
+    if (e.target) e.target.value = '';
   };
+
+  const handleAddFileBtn = useCallback(async (topicId?: string, colIndex?: number) => {
+    if (isTauri()) {
+      let r: { path: string; name: string } | null;
+      try { r = await pickAndPersistFile(); }
+      catch { toast.error('No se pudo abrir el selector de archivos'); return; }
+      if (!r) return;
+      const tid = topicId || activeTopic?.id;
+      const newMat: SubjectMaterial = { id: Math.random().toString(), type: 'resource', createdAt: Date.now(), columnIndex: colIndex ?? materialColIndex, name: r.name, dataUrl: r.path };
+      updateCourse(course.id, { studyTopics: withMaterial(tid, newMat, colIndex ?? materialColIndex) });
+      toast.success('Archivo subido');
+      return;
+    }
+    if (colIndex !== undefined) setMaterialColIndex(colIndex);
+    resourceInputRef.current?.click();
+  }, [activeTopic?.id, course, materialColIndex, updateCourse, withMaterial]);
 
   const handleAddLink = () => {
     if (!addLinkUrl.trim()) return;
-    const topic = parsedTopics[0];
-    if (!topic) return;
     const url = addLinkUrl.trim();
     const name = addLinkName.trim() || url;
     const newMat: SubjectMaterial = { id: Math.random().toString(), type: 'resource', createdAt: Date.now(), columnIndex: 0, name, dataUrl: url };
-    updateCourse(course.id, { studyTopics: (course.studyTopics || []).map(t => t.id === topic.id ? { ...t, materials: [...(t.materials || []), newMat] } : t) });
+    updateCourse(course.id, { studyTopics: withMaterial(undefined, newMat, 0) });
     setAddLinkUrl(''); setAddLinkName(''); setShowAddLinkModal(false);
     toast.success('Enlace agregado');
   };
@@ -2087,9 +2266,9 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const handleSaveEditLink = () => {
     if (!editLinkId || !editLinkUrl.trim()) return;
     updateCourse(course.id, {
-      studyTopics: (course.studyTopics || []).map(t => ({
+      studyTopics: (safeArr(course.studyTopics)).map(t => ({
         ...t,
-        materials: (t.materials || []).map(m => m.id === editLinkId ? { ...m, name: editLinkName.trim() || editLinkUrl.trim(), dataUrl: editLinkUrl.trim() } : m)
+        materials: (safeArr(t.materials)).map(m => m.id === editLinkId ? { ...m, name: editLinkName.trim() || editLinkUrl.trim(), dataUrl: editLinkUrl.trim() } : m)
       }))
     });
     setEditLinkId(null); setEditLinkUrl(''); setEditLinkName('');
@@ -2109,9 +2288,9 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
       case 'procedure': if (!title.trim() || !content.trim()) return; payload = { title: title.trim(), description: description.trim(), content: content.trim(), image }; break;
     }
     updateCourse(course.id, {
-      studyTopics: (course.studyTopics || []).map(t => {
+      studyTopics: (safeArr(course.studyTopics)).map(t => {
         if (t.id === activeTopic.id) {
-          let ms = t.materials || [];
+          let ms = safeArr(t.materials);
           if (editingMaterial) ms = ms.map(m => m.id === editingMaterial.id ? { ...m, ...payload } : m);
           else ms = [...ms, { id: Math.random().toString(), type: materialType, createdAt: Date.now(), columnIndex: materialColIndex, ...payload } as SubjectMaterial];
           return { ...t, materials: ms };
@@ -2130,14 +2309,20 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
 
   const handleDeleteMaterial = (mat: SubjectMaterial) => {
     if (!activeTopic) return;
-    updateCourse(course.id, { studyTopics: (course.studyTopics || []).map(t => t.id === activeTopic.id ? { ...t, materials: (t.materials || []).filter(m => m.id !== mat.id) } : t) });
+    updateCourse(course.id, { studyTopics: (safeArr(course.studyTopics)).map(t => t.id === activeTopic.id ? { ...t, materials: (safeArr(t.materials)).filter(m => m.id !== mat.id) } : t) });
     toast.success('Material removido');
   };
 
   const handleDeleteResourceFromOverview = (matId: string) => {
-    updateCourse(course.id, { studyTopics: (course.studyTopics || []).map(t => ({ ...t, materials: (t.materials || []).filter(m => m.id !== matId) })) });
+    updateCourse(course.id, { studyTopics: (safeArr(course.studyTopics)).map(t => ({ ...t, materials: (safeArr(t.materials)).filter(m => m.id !== matId) })) });
     toast.success('Material eliminado');
     setConfirmDeleteMatId(null);
+  };
+
+  // onMoved de openFileSmart: el archivo fue hallado en OTRA carpeta → actualiza su ruta en el material
+  const handleMatMoved = (matId: string, newPath: string) => {
+    updateCourse(course.id, { studyTopics: (safeArr(course.studyTopics)).map(t => ({ ...t, materials: (safeArr(t.materials)).map(m => m.id === matId ? { ...m, dataUrl: newPath } : m) })) });
+    toast.success('Material actualizado a su nueva ubicación');
   };
 
   const handleOpenResource = (mat: SubjectMaterial) => {
@@ -2149,19 +2334,21 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
       setShowPdfPreview(true);
       return;
     }
-    openFileSmart(mat.dataUrl, mat.name || 'Archivo').catch(() => toast.error('No se pudo abrir el recurso'));
+    openFileSmart(mat.dataUrl, mat.name || 'Archivo', { onMedia: (u, n) => setPipUrl(u, n), onError: (m) => toast.error(m), onMoved: (np) => handleMatMoved(mat.id, np) }).catch(() => toast.error('No se pudo abrir el recurso'));
   };
 
   const setTopicReviewLevel = (topicId: string, level: number) => {
-    updateCourse(course.id, { studyTopics: (course.studyTopics || []).map(t => t.id === topicId ? { ...t, reviewLevel: level, status: level >= 8 ? 'done' as const : 'studying' as const } : t) });
+    updateCourse(course.id, { studyTopics: (safeArr(course.studyTopics)).map(t => t.id === topicId ? { ...t, reviewLevel: level, status: level >= 8 ? 'done' as const : 'studying' as const } : t) });
   };
 
   // --- Drag and Drop (long-press: mantener pulsado ~300ms en TODOS los elementos) ---
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { delay: 300, tolerance: 8 } }));
   const [activeMatDragId, setActiveMatDragId] = useState<string | null>(null);
+  const matDragSuppressRef = useRef(false);
   const [activeTopicDragId, setActiveTopicDragId] = useState<string | null>(null);
   const [activeGroupDragId, setActiveGroupDragId] = useState<string | null>(null);
   const studySensors = useSensors(useSensor(PointerSensor, { activationConstraint: { delay: 300, tolerance: 8 } }));
+  const planSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { delay: 300, tolerance: 8 } }));
 
   // Mantiene el overlay "Suelta aquí" de Charvis en síncrono con la posición del
   // puntero durante los drags de @dnd-kit (que no disparan eventos nativos de drop).
@@ -2187,16 +2374,19 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     const t = activeTopic;
     if (!t) return;
     updateCourse(course.id, {
-      studyTopics: (course.studyTopics || []).map(tp => tp.id === t.id ? {
+      studyTopics: (safeArr(course.studyTopics)).map(tp => tp.id === t.id ? {
         ...tp,
-        flashcards: [...(tp.flashcards || [])].sort((a, b) => rank(a.id) - rank(b.id)),
-        materials: [...(tp.materials || [])].sort((a, b) => rank(a.id) - rank(b.id)),
-        recordings: [...(tp.recordings || [])].sort((a, b) => rank(a.id) - rank(b.id)),
+        flashcards: [...(safeArr(tp.flashcards))].sort((a, b) => rank(a.id) - rank(b.id)),
+        materials: [...(safeArr(tp.materials))].sort((a, b) => rank(a.id) - rank(b.id)),
+        recordings: [...(safeArr(tp.recordings))].sort((a, b) => rank(a.id) - rank(b.id)),
       } : tp),
     });
-  }, [topicFiltered, activeTopic, course.id, updateCourse]);
+  }, [topicFiltered, activeTopic, course?.id, updateCourse]);
 
   const handleStudyMatDragEnd = useCallback((event: DragEndEvent) => {
+    const d = event.delta ?? { x: 0, y: 0 };
+    matDragSuppressRef.current = Math.abs(d.x) + Math.abs(d.y) > 4;
+    setTimeout(() => { matDragSuppressRef.current = false; }, 200);
     clearBrainDragOverlay();
     setActiveMatDragId(null);
     const { active, over } = event;
@@ -2207,21 +2397,21 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
       return;
     }
     if (active.id === over.id) return;
-    const ids = allCourseMaterials.map(m => m.id);
+    const ids = allCourseMaterials.filter(m => !!m).map(m => m.id);
     const oldIdx = ids.indexOf(active.id as string);
     const newIdx = ids.indexOf(over.id as string);
     if (oldIdx < 0 || newIdx < 0) return;
     const newOrder = arrayMove(ids, oldIdx, newIdx);
     updateCourse(course.id, {
-      studyTopics: (course.studyTopics || []).map(t => {
-        const reordered = (t.materials || []).sort((a, b) => {
+      studyTopics: (safeArr(course.studyTopics)).map(t => {
+        const reordered = (safeArr(t.materials)).sort((a, b) => {
           const ai = newOrder.indexOf(a.id), bi = newOrder.indexOf(b.id);
           return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
         });
         return t.id === activeTopic?.id ? { ...t, materials: reordered } : t;
       })
     });
-  }, [allCourseMaterials, activeTopic, course.id, updateCourse]);
+  }, [allCourseMaterials, activeTopic, course?.id, updateCourse]);
 
   const handleGroupDragEnd = useCallback((event: DragEndEvent) => {
     clearBrainDragOverlay();
@@ -2233,7 +2423,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
       return;
     }
     if (active.id === over.id) return;
-    const currentGroups = course.groups || [];
+    const currentGroups = safeArr(course.groups);
     const ids = currentGroups.map(g => g.id);
     const oldIdx = ids.indexOf(active.id as string);
     const newIdx = ids.indexOf(over.id as string);
@@ -2244,7 +2434,29 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
       return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
     });
     updateCourse(course.id, { groups: reordered });
-  }, [course.id, course.groups, updateCourse]);
+  }, [course?.id, course?.groups, updateCourse]);
+
+  // Long-press drag & drop de los bloques de tema dentro de una agrupación
+  const handleGroupTopicDragEnd = useCallback((event: DragEndEvent) => {
+    clearBrainDragOverlay();
+    setActiveTopicDragId(null);
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const current = safeArr(course.studyTopics);
+    const ids = current.map(t => t.id);
+    const oldIdx = ids.indexOf(active.id as string);
+    const newIdx = ids.indexOf(over.id as string);
+    if (oldIdx < 0 || newIdx < 0) return;
+    const groupSet = new Set(current.filter(t => t.groupId === selectedGroupId).map(t => t.id));
+    const newOrder = arrayMove(ids, oldIdx, newIdx);
+    const reordered = [...current].sort((a, b) => {
+      const inA = groupSet.has(a.id), inB = groupSet.has(b.id);
+      if (inA !== inB) return inA ? -1 : 1;
+      if (inA) return newOrder.indexOf(a.id) - newOrder.indexOf(b.id);
+      return ids.indexOf(a.id) - ids.indexOf(b.id);
+    });
+    updateCourse(course.id, { studyTopics: reordered });
+  }, [course?.id, course?.studyTopics, selectedGroupId, updateCourse]);
 
   const handleNoteDragEnd = (event: DragEndEvent) => {
     if (notesSearch) return;
@@ -2355,7 +2567,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
 
   // --- Stats ---
   const topicMasteryStats = useMemo(() => {
-    const pt = course?.studyTopics || [];
+    const pt = safeArr(course?.studyTopics);
     const total = pt.length;
     const mastered = pt.filter(t => t.reviewLevel >= 8).length;
     const progressPct = total > 0 ? Math.round((mastered / total) * 100) : 0;
@@ -2372,52 +2584,14 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     );
   }
 
-  const parsedTopics = course.studyTopics || [];
-  const groups = course.groups || [];
+  const parsedTopics = (safeArr(course.studyTopics)).filter(t => !!t && typeof t === 'object');
+  const groups = (safeArr(course.groups)).filter(g => !!g && typeof g === 'object');
   const ungroupedTopics = parsedTopics.filter(t => !t.groupId);
   const topicTagDefs = course.topicTagDefs || [];
 
   // ─── RENDER ───
   return (
     <div className="cursos-root-view" style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg-base)', overflow: 'hidden' }}>
-      {/* Breadcrumb - only when not in overview */}
-      {activeTab !== 'overview' && (
-        <div className="bento-card" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 20px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0, background: 'var(--bg-surface)' }}>
-          <button onClick={() => setNavigateTo('cursos')} style={{ display: 'flex', alignItems: 'center', gap: 4, height: 26, padding: '0 8px', borderRadius: 6, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 11, fontWeight: 500 }}
-            onMouseEnter={e => e.currentTarget.style.color = 'var(--text-secondary)'}
-            onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
-            <ChevronLeft size={14} /> Asignaturas
-          </button>
-          <span style={{ color: 'var(--text-muted)', fontSize: 9 }}>/</span>
-          <span style={{ fontSize: 12, fontWeight: 600, color: currentView === 'topic' ? 'var(--text-muted)' : 'var(--text-primary)' }}>{course.name}</span>
-          {currentView === 'topic' && activeTopic && (
-            <><span style={{ color: 'var(--text-muted)', fontSize: 9 }}>/</span><span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{activeTopic.title}</span></>
-          )}
-        </div>
-      )}
-
-      {/* Tabs - only when not in overview */}
-      {activeTab !== 'overview' && currentView === 'overview' && (
-        <div className="bento-card" style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--border-subtle)', flexShrink: 0, background: 'var(--bg-surface)', padding: '0 20px' }}>
-          {(['overview', 'tareas', 'notas', 'archivos'] as const).map(tab => (
-            <button key={tab} onClick={() => setActiveTab(tab)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6, height: 36, padding: '0 16px',
-                border: 'none', borderBottom: `2px solid ${activeTab === tab ? course.color : 'transparent'}`,
-                background: 'transparent', cursor: 'pointer', color: activeTab === tab ? course.color : 'var(--text-muted)',
-                fontSize: 11, fontWeight: activeTab === tab ? 600 : 400, textTransform: 'uppercase', letterSpacing: '0.06em',
-                transition: 'all 200ms',
-              }}>
-              {tab === 'overview' && <BookOpen size={13} />}
-              {tab === 'tareas' && <ListTodo size={13} />}
-              {tab === 'notas' && <StickyNote size={13} />}
-              {tab === 'archivos' && <FolderOpen size={13} />}
-              {tab === 'overview' ? 'General' : tab === 'tareas' ? 'Lista' : tab === 'notas' ? 'Apuntes' : tab === 'archivos' ? 'Archivos' : ''}
-            </button>
-          ))}
-        </div>
-      )}
-
       {/* Content */}
       <div style={{ flex: 1, height: '100%', display: 'flex', flexDirection: 'column', overflowY: currentView === 'overview' ? 'hidden' : 'auto', overflowX: 'hidden' }}>
         {currentView === 'topic' && activeTopic ? (
@@ -2549,15 +2723,16 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                   <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={e => { setActiveTopicDragId(e.active.id as string); syncBrainDragOverlay(); }} onDragMove={syncBrainDragOverlay} onDragCancel={clearBrainDragOverlay} onDragEnd={handleTopicGridDragEnd}>
                     <SortableContext items={filtered.map(e => e.id)} strategy={rectSortingStrategy}>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(235px, 1fr))', gap: 14, alignItems: 'start' }}>
-                        {filtered.map(entry => {
-                          if (entry.type === 'flashcard') {
+                {filtered.map(entry => {
+                  if (!entry || !entry.item) return null;
+                  if (entry.type === 'flashcard') {
                             const fc = entry.item;
                             return (
                               <SortableWrapper key={fc.id} id={fc.id}>
                                 {({ attributes, listeners, isDragging }) => (
                                   <div {...attributes} {...listeners}
                                     title="Arrastra para reordenar · Toca para repasar"
-                                    style={{ opacity: isDragging ? 0.55 : 1, touchAction: 'none', cursor: 'grab', display: 'flex', flexDirection: 'column', borderRadius: 14, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', overflow: 'hidden', transition: 'all 200ms ' + EASE, boxShadow: '0 1px 2px rgba(0,0,0,0.04)', minHeight: 118 }}
+                                    style={{ opacity: isDragging ? 0.55 : 1, touchAction: 'none', cursor: isDragging ? 'grabbing' : 'pointer', display: 'flex', flexDirection: 'column', borderRadius: 14, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', overflow: 'hidden', transition: 'all 200ms ' + EASE, boxShadow: '0 1px 2px rgba(0,0,0,0.04)', minHeight: 118 }}
                                     onClick={startReview}
                                     onMouseEnter={e => { e.currentTarget.style.borderColor = '#8B5CF650'; e.currentTarget.style.background = 'var(--bg-surface)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(139,92,246,0.12)'; }}
                                     onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.04)'; }}>
@@ -2590,7 +2765,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                 {({ attributes, listeners, isDragging }) => (
                                   <div {...attributes} {...listeners}
                                     title="Arrastra para reordenar"
-                                    style={{ opacity: isDragging ? 0.55 : 1, touchAction: 'none', cursor: 'grab', display: 'flex', flexDirection: 'column', borderRadius: 14, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', overflow: 'hidden', transition: 'all 200ms ' + EASE, boxShadow: '0 1px 2px rgba(0,0,0,0.04)', minHeight: 118 }}
+                                    style={{ opacity: isDragging ? 0.55 : 1, touchAction: 'none', cursor: isDragging ? 'grabbing' : 'pointer', display: 'flex', flexDirection: 'column', borderRadius: 14, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', overflow: 'hidden', transition: 'all 200ms ' + EASE, boxShadow: '0 1px 2px rgba(0,0,0,0.04)', minHeight: 118 }}
                                     onMouseEnter={e => { e.currentTarget.style.borderColor = '#06B6D450'; e.currentTarget.style.background = 'var(--bg-surface)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(6,182,212,0.10)'; }}
                                     onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.04)'; }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 14px 8px' }}>
@@ -2612,7 +2787,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                             <SortableWrapper key={mat.id} id={mat.id}>
                               {({ attributes, listeners, isDragging }) => (
                                 <div style={{ opacity: isDragging ? 0.55 : 1 }}>
-                                  <MaterialCard mat={mat} dragAttributes={attributes} dragListeners={listeners} onEdit={startEditToolMaterial} onDelete={handleDeleteMaterial} onOpenResource={handleOpenResource} onPractice={openPractice} />
+                                  <MaterialCard mat={mat} dragAttributes={attributes} dragListeners={listeners} onEdit={startEditToolMaterial} onDelete={handleDeleteMaterial} onOpenResource={handleOpenResource} onPractice={openPractice} onView={viewMaterial} clickSuppressed={() => matDragSuppressRef.current} onContextMenu={(e, m) => matMenu.openMenu(e, { url: m.dataUrl || '', name: m.name || m.title || 'Material', color: course.color })} />
                                 </div>
                               )}
                             </SortableWrapper>
@@ -2914,7 +3089,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                             </>
                                           )}
                                           {showOverviewNoteDates && !overviewNoteEditMode && (
-                                            <span style={{ fontSize: 8.5, fontWeight: 600, color: 'rgba(255,255,255,0.25)', marginRight: 6, letterSpacing: '0.03em', fontFamily: "'JetBrains Mono', monospace", opacity: 0.85 }}>
+                                            <span style={{ fontSize: 8.5, fontWeight: 600, color: dateContrast(course.color, th), marginRight: 6, letterSpacing: '0.03em', fontFamily: "'JetBrains Mono', monospace", opacity: 0.85 }}>
                                               {format(new Date(n.createdAt), "dd/MM/yy · HH:mm", { locale: es })}
                                             </span>
                                           )}
@@ -2965,7 +3140,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                       <>
                                         {/* Date display */}
                                         {showOverviewNoteDates && (
-                                          <div style={{ padding: '8px 16px 0', fontSize: 9, fontWeight: 600, color: 'rgba(255,255,255,0.2)', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.03em', opacity: 0.8 }}>
+                                          <div style={{ padding: '8px 16px 0', fontSize: 9, fontWeight: 600, color: dateContrast(course.color, th), fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.03em', opacity: 0.8 }}>
                                             {format(new Date(n.createdAt), "dd/MM/yy", { locale: es })}
                            </div>
                                          )}
@@ -3013,9 +3188,11 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                             </div>
                           </div>
                         ) : (
+                          <DndContext sensors={studySensors} collisionDetection={closestCorners} onDragStart={e => { setActiveTopicDragId(e.active.id as string); syncBrainDragOverlay(); }} onDragMove={syncBrainDragOverlay} onDragCancel={clearBrainDragOverlay} onDragEnd={handleGroupTopicDragEnd}>
+                            <SortableContext items={grpTopics.map(t => t.id)} strategy={rectSortingStrategy}>
                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
                             {grpTopics.map(topic => {
-                                const mats = topic.materials || [];
+                                const mats = safeArr(topic.materials);
                                 const typeColors: Record<string, string> = { resource: '#3B82F6', concept: '#8B5CF6', 'key-data': '#10B981', formula: '#F59E0B', meaning: '#EC4899', quiz: '#EF4444', procedure: '#06B6D4' };
                                 const typeLabels: Record<string, string> = { resource: 'Recursos', concept: 'Conceptos', 'key-data': 'Datos clave', formula: 'Fórmulas', meaning: 'Significados', quiz: 'Quizzes', procedure: 'Procedimientos' };
                                 const toolNames: Record<string, { label: string; color: string }> = {
@@ -3042,11 +3219,14 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                 });
                                 const totalCreated = createdItems.reduce((s, e) => s + e.count, 0);
                                 return (
-                                  <div key={topic.id} onClick={() => { setActiveTopicId(topic.id); setCurrentView('topic'); setTopicSearch(''); setActiveTagFilter(null); }}
-                                    style={{ borderRadius: 14, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', overflow: 'hidden', cursor: 'pointer', transition: 'all 250ms cubic-bezier(0.16,1,0.3,1)', display: 'flex', flexDirection: 'column', position: 'relative' }}
+                                  <SortableWrapper key={topic.id} id={topic.id}>
+                                    {({ attributes, listeners, isDragging }) => (
+                                  <div {...attributes} {...listeners} onClick={() => { setActiveTopicId(topic.id); setCurrentView('topic'); setTopicSearch(''); setActiveTagFilter(null); }}
+                                    title="Mantén pulsado para arrastrar · Toca para abrir"
+                                    style={{ borderRadius: 14, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', overflow: 'hidden', cursor: isDragging ? 'grabbing' : 'pointer', transition: 'all 250ms cubic-bezier(0.16,1,0.3,1)', display: 'flex', flexDirection: 'column', position: 'relative', touchAction: 'none', opacity: isDragging ? 0.45 : 1, transform: isDragging ? 'scale(0.98)' : 'none', zIndex: isDragging ? 20 : 1 }}
                                     className="topic-card"
-                                    onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}40`; e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = `0 12px 36px ${course.color}14`; const a = e.currentTarget; a.querySelectorAll('.topic-actions').forEach(el => (el as HTMLElement).style.opacity = '1'); }}
-                                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; const a = e.currentTarget; a.querySelectorAll('.topic-actions').forEach(el => (el as HTMLElement).style.opacity = '0'); }}>
+                                    onMouseEnter={e => { if (!isDragging) { e.currentTarget.style.borderColor = `${course.color}40`; e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = `0 12px 36px ${course.color}14`; } const a = e.currentTarget; a.querySelectorAll('.topic-actions').forEach(el => (el as HTMLElement).style.opacity = '1'); }}
+                                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.transform = isDragging ? 'scale(0.98)' : 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; const a = e.currentTarget; a.querySelectorAll('.topic-actions').forEach(el => (el as HTMLElement).style.opacity = '0'); }}>
                                     <div style={{ padding: '22px 20px 14px', flex: 1, display: 'flex', flexDirection: 'column' }}>
                                       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
                                         <h4 style={{ fontSize: 17, fontWeight: 600, color: 'var(--text-primary)', margin: 0, fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em', lineHeight: 1.25, flex: 1, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{topic.title}</h4>
@@ -3099,6 +3279,8 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                       )}
                                     </div>
                                   </div>
+                                  )}
+                                  </SortableWrapper>
                                 );
                             })}
                             <div onClick={() => { setEditingTopicId(null); setTopicName(''); setShowTopicModal(true); }}
@@ -3112,6 +3294,8 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                               <span style={{ fontSize: 10, color: 'var(--text-muted)', opacity: 0.6 }}>Haz clic para crear</span>
                             </div>
                           </div>
+                          </SortableContext>
+                          </DndContext>
                         )}
                     </div>
                   );
@@ -3169,7 +3353,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '24px 20px 10px', flexShrink: 0 }}>
                           <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: "'Inter Tight', sans-serif" }}>Materiales</h3>
                           <div style={{ display: 'flex', gap: 6 }}>
-                            <button onClick={() => { estudioFileInputRef.current?.click(); }}
+                            <button onClick={() => { handleAddFileBtn(parsedTopics[0]?.id); }}
                               style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${course.color}30`, background: `${course.color}10`, cursor: 'pointer', color: course.color, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms ' + EASE }}
                               onMouseEnter={e => { e.currentTarget.style.background = `${course.color}22`; e.currentTarget.style.borderColor = `${course.color}50`; }}
                               onMouseLeave={e => { e.currentTarget.style.background = `${course.color}10`; e.currentTarget.style.borderColor = `${course.color}30`; }}
@@ -3194,8 +3378,8 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                             </div>
                           ) : (
                           <DndContext sensors={studySensors} collisionDetection={closestCorners} onDragStart={e => { setActiveMatDragId(e.active.id as string); syncBrainDragOverlay(); }} onDragMove={syncBrainDragOverlay} onDragCancel={clearBrainDragOverlay} onDragEnd={handleStudyMatDragEnd}>
-                          <SortableContext items={allCourseMaterials.map(m => m.id)} strategy={verticalListSortingStrategy}>
-                          {allCourseMaterials.map((mat, idx) => {
+                          <SortableContext items={allCourseMaterials.filter(m => !!m).map(m => m.id)} strategy={verticalListSortingStrategy}>
+                          {allCourseMaterials.filter(m => !!m && typeof m === 'object').map((mat, idx) => {
                             const matName = mat.name || 'Sin nombre';
                             const dataUrl = mat.dataUrl || '';
                             const isLink = dataUrl.startsWith('http');
@@ -3217,19 +3401,11 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                             const isWeb = isLink && !isYouTube && !isDrive && !isClassroom && !isGoogleDocs && !isGoogleSheets && !isGoogleSlides && !isGoogleForms;
                             const isLocal = dataUrl && !dataUrl.startsWith('http') && !dataUrl.startsWith('data:') && !dataUrl.startsWith('blob:');
 
-                            const openFile = (path: string) => {
-                              if ((window as any).__TAURI__?.shell?.open) {
-                                (window as any).__TAURI__.shell.open(path).catch(() => window.open(path, '_blank', 'noopener,noreferrer'));
-                              } else { window.open(path, '_blank', 'noopener,noreferrer'); }
-                            };
-
                             const handleMatClick = async () => {
                               setLoadingMatId(mat.id || `idx_${idx}`);
                               try {
-                                await openFileSmart(dataUrl, matName);
-                              } catch (e) {
-                                console.error('[Mat] open failed', e);
-                              }
+                                await openFileSmart(dataUrl, matName, { onMedia: (u, n) => setPipUrl(u, n), onError: (m) => toast.error(m), onMoved: (np) => handleMatMoved(mat.id, np) });
+                              } catch { /* noop */ }
                               setTimeout(() => setLoadingMatId(null), 400);
                             };
 
@@ -3266,7 +3442,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                             return (
                               <SortableWrapper key={mat.id || idx} id={String(mat.id || idx)}>
                               {({ attributes, listeners, isDragging }) => (
-                              <div {...attributes} {...listeners} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 7, background: loadingMatId === (mat.id || `idx_${idx}`) ? `${badgeColor}15` : isAudio && playingAudioId === mat.id ? `${badgeColor}08` : 'var(--bg-elevated)', border: `1px solid ${loadingMatId === (mat.id || `idx_${idx}`) ? `${badgeColor}50` : isAudio && playingAudioId === mat.id ? `${badgeColor}30` : 'var(--border-soft)'}`, cursor: loadingMatId === (mat.id || `idx_${idx}`) ? 'default' : 'grab', transition: 'all 150ms', opacity: isDragging ? 0.5 : 1 }}
+                              <div {...attributes} {...listeners} onContextMenu={(e) => matMenu.openMenu(e, { url: mat.dataUrl || '', name: mat.name || 'Material', color: badgeColor })} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 7, background: loadingMatId === (mat.id || `idx_${idx}`) ? `${badgeColor}15` : isAudio && playingAudioId === mat.id ? `${badgeColor}08` : 'var(--bg-elevated)', border: `1px solid ${loadingMatId === (mat.id || `idx_${idx}`) ? `${badgeColor}50` : isAudio && playingAudioId === mat.id ? `${badgeColor}30` : 'var(--border-soft)'}`, cursor: loadingMatId === (mat.id || `idx_${idx}`) ? 'default' : 'pointer', transition: 'all 150ms', opacity: isDragging ? 0.5 : 1 }}
                                   onMouseEnter={e => { if (loadingMatId !== (mat.id || `idx_${idx}`)) { e.currentTarget.style.borderColor = `${badgeColor}40`; e.currentTarget.style.background = 'var(--bg-hover)'; } }}
                                   onMouseLeave={e => { if (loadingMatId !== (mat.id || `idx_${idx}`)) { e.currentTarget.style.borderColor = isAudio && playingAudioId === mat.id ? `${badgeColor}30` : 'var(--border-soft)'; e.currentTarget.style.background = isAudio && playingAudioId === mat.id ? `${badgeColor}08` : 'var(--bg-elevated)'; } }}>
                                   <div onClick={() => {
@@ -3336,88 +3512,131 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
 
                       {/* ══ PLANNER SEMANAL — franja de días (solo días) + sesiones del día seleccionado ══ */}
-                      <div className="crono-block" style={{ flexShrink: 0, margin: '14px 20px 0', height: 186, borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'linear-gradient(160deg, var(--bg-elevated-alpha, var(--bg-elevated)) 0%, color-mix(in srgb, var(--bg-elevated-alpha, var(--bg-elevated)) 82%, transparent) 100%)', position: 'relative', overflow: 'hidden', boxShadow: `0 1px 0 rgba(255,255,255,0.035) inset, 0 8px 24px ${course.color}0d`, display: 'flex', flexDirection: 'column' }}>
+                      <div className="crono-block" style={{ flexShrink: 0, margin: '14px 20px 0', height: 168, borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'linear-gradient(160deg, var(--bg-elevated-alpha, var(--bg-elevated)) 0%, color-mix(in srgb, var(--bg-elevated-alpha, var(--bg-elevated)) 82%, transparent) 100%)', position: 'relative', overflow: 'hidden', boxShadow: `0 1px 0 rgba(255,255,255,0.035) inset, 0 8px 24px ${course.color}0d`, display: 'flex', flexDirection: 'column' }}>
                         {(() => {
-                          const today = new Date().toISOString().split('T')[0];
-                          const ws = startOfWeek(new Date(), { weekStartsOn: 1 });
+                          const today = format(new Date(), 'yyyy-MM-dd');
+                          const ws = startOfWeek(new Date(plannerDate + 'T12:00:00'), { weekStartsOn: 1 });
                           const weekDays = Array.from({ length: 7 }, (_, i) => {
                             const d = addDays(ws, i);
-                            return { iso: format(d, 'yyyy-MM-dd'), num: format(d, 'd'), wd: format(d, 'EEEEEE', { locale: es }) };
+                            const full = format(d, 'EEEE', { locale: es });
+                            return { iso: format(d, 'yyyy-MM-dd'), name: full.charAt(0).toUpperCase() + full.slice(1) };
                           });
-                          const daySessions = (plannedSessions || []).filter(s => s.date === plannerDate).sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
+                          const daySessionsRaw = (plannedSessions || []).filter(s => !!s && expandsToDate(s, plannerDate));
+                          const manualOrder = daySessionsRaw.some(s => typeof s.sortOrder === 'number');
+                          const daySessions = [...daySessionsRaw].sort((a, b) => {
+                            if (manualOrder) return (a.sortOrder ?? Number.MAX_SAFE_INTEGER) - (b.sortOrder ?? Number.MAX_SAFE_INTEGER);
+                            const ad = a.completed ? 1 : 0, bd = b.completed ? 1 : 0;
+                            if (ad !== bd) return ad - bd;
+                            return (a.startTime || '99:99').localeCompare(b.startTime || '99:99');
+                          });
                           const fmtTime = (s?: string) => s ? s.slice(0, 5) : '';
                           const openAddSession = () => { setPlanEditId(null); setPlanDate(plannerDate); setPlanStartTime('09:00'); setPlanTitle(''); setPlanGroupId(''); setPlanTopicId(''); setPlanType('estudio'); setPlanDuration(30); setPlanIntensity(5); setShowPlanModal(true); };
+                          const handlePlanDragEnd = (e: DragEndEvent) => {
+                            const { active, over } = e;
+                            if (!over || active.id === over.id) return;
+                            const ids = daySessions.map(s => s.id);
+                            const from = ids.indexOf(String(active.id));
+                            const to = ids.indexOf(String(over.id));
+                            if (from < 0 || to < 0) return;
+                            reorderPlannedSessions(arrayMove(ids, from, to));
+                            toast.success('Orden de sesiones actualizado');
+                          };
                           return (
                             <>
-                              {/* header: SOLO los días de la semana, tipografía fina */}
-                              <div style={{ display: 'flex', gap: 2, padding: '8px 12px 4px', flexShrink: 0 }}>
+                              {/* header: franja de días — solo el nombre del día, sin números ni flechas, con botón + */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 5, height: 38, padding: '0 12px', flexShrink: 0 }}>
                                 {weekDays.map(d => {
                                   const isToday = d.iso === today;
                                   const isSel = d.iso === plannerDate;
-                                  const hasSessions = (plannedSessions || []).some(s => s.date === d.iso);
                                   return (
                                     <button key={d.iso} onClick={() => setPlannerDate(d.iso)}
                                       title={format(new Date(d.iso + 'T12:00:00'), 'EEEE d MMMM', { locale: es })}
-                                      style={{ flex: 1, minWidth: 0, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, padding: '3px 0 2px', borderRadius: 8, fontFamily: 'inherit', background: 'transparent', border: 'none', transition: 'all 180ms ' + EASE }}>
-                                      <span style={{ fontSize: 6.5, fontWeight: 600, color: isToday ? course.color : 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.13em', fontFamily: "'Inter Tight', sans-serif", lineHeight: 1.2, opacity: isSel || isToday ? 1 : 0.82 }}>{d.wd}</span>
-                                      <span style={{ fontSize: 11.5, fontWeight: isSel ? 700 : 500, color: isSel || isToday ? 'var(--text-primary)' : 'var(--text-secondary)', fontFamily: "'Inter Tight', sans-serif", lineHeight: 1.1, fontVariantNumeric: 'tabular-nums', transition: 'color 180ms ' + EASE }}>{d.num}</span>
-                                      <span style={{ width: 14, height: 2, borderRadius: 1, background: isSel ? course.color : 'transparent', boxShadow: isSel ? `0 0 8px ${course.color}80` : 'none', marginTop: 1, transition: 'all 180ms ' + EASE, position: 'relative' }}>
-                                        {hasSessions && !isSel && <span style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%,-50%)', width: 2.5, height: 2.5, borderRadius: '50%', background: isToday ? course.color : 'var(--text-tertiary)', opacity: 0.8 }} />}
-                                      </span>
+                                      style={{ flex: 1, minWidth: 0, cursor: 'pointer', height: 26, padding: '0 3px', borderRadius: 9, border: `1px solid ${isSel ? `${course.color}40` : 'transparent'}`, background: isSel ? `${course.color}14` : 'transparent', transition: 'all 180ms ' + EASE, fontFamily: 'inherit', overflow: 'hidden' }}
+                                      onMouseEnter={e => { if (!isSel) { e.currentTarget.style.background = 'var(--bg-hover)'; } }}
+                                      onMouseLeave={e => { if (!isSel) { e.currentTarget.style.background = 'transparent'; } }}>
+                                      <span style={{ display: 'block', fontSize: 11, fontWeight: isSel ? 700 : (isToday ? 600 : 500), color: isSel || isToday ? course.color : 'var(--text-secondary)', fontFamily: "'Inter Tight', sans-serif", lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', letterSpacing: '0.02em', transition: 'color 180ms ' + EASE }}>{d.name}</span>
                                     </button>
                                   );
                                 })}
+                                <button onClick={openAddSession} title="Añadir sesión de estudio"
+                                  style={{ flex: '0 0 auto', width: 26, height: 26, boxSizing: 'border-box', marginLeft: 6, borderRadius: 9, border: `1.5px solid ${course.color}40`, background: `${course.color}08`, cursor: 'pointer', color: course.color, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, lineHeight: 0, transition: 'all 200ms ' + EASE }}
+                                  onMouseEnter={e => { e.currentTarget.style.background = `${course.color}18`; e.currentTarget.style.borderColor = `${course.color}60`; }}
+                                  onMouseLeave={e => { e.currentTarget.style.background = `${course.color}08`; e.currentTarget.style.borderColor = `${course.color}40`; }}>
+                                  <Plus size={13} strokeWidth={2.4} />
+                                </button>
                               </div>
 
                               {/* separador fino */}
                               <div style={{ margin: '0 12px', height: 1, background: 'var(--border-soft)', opacity: 0.8, flexShrink: 0 }} />
 
-                              {/* sesiones del día seleccionado */}
-                              <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '6px 12px 8px', display: 'flex', flexDirection: 'column', gap: 5 }} className="no-scrollbar">
+                              {/* sesiones del día seleccionado — SOLO 2 visibles, sin scroll */}
+                              <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '4px 14px 6px', display: 'flex', flexDirection: 'column', gap: 6 }} className="no-scrollbar">
                                 {daySessions.length === 0 ? (
-                                  <button onClick={openAddSession}
-                                    style={{ flex: 1, cursor: 'pointer', background: 'transparent', border: 'none', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10, fontFamily: 'inherit' }}>
-                                    <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, animation: 'plannerPulse 2.6s ease-in-out infinite' }}>
-                                      <span style={{ width: 26, height: 26, borderRadius: '50%', border: `1.5px dashed ${course.color}45`, color: course.color, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `${course.color}08` }}>
-                                        <Plus size={12} strokeWidth={2} />
-                                      </span>
-                                      <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-muted)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '0.02em' }}>Haz clic para añadir una sesión</span>
-                                    </span>
-                                  </button>
-                                ) : daySessions.map(sess => {
+                                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 9, padding: '0 12px' }}>
+                                    <Calendar size={30} strokeWidth={1.1} style={{ color: 'var(--text-tertiary)', opacity: 0.8 }} />
+                                    <span style={{ fontSize: 10.5, fontWeight: 500, color: 'var(--text-secondary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '0.03em' }}>Sin sesiones este día</span>
+                                    <span style={{ fontSize: 9, fontWeight: 400, color: 'var(--text-muted)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '0.02em', opacity: 0.9 }}>Programa una con el botón + de arriba</span>
+                                  </div>
+                                ) : (
+                                  <DndContext sensors={planSensors} collisionDetection={closestCorners} onDragEnd={handlePlanDragEnd}>
+                                    <SortableContext items={daySessions.map(s => s.id)} strategy={verticalListSortingStrategy}>
+                                {daySessions.map(sess => {
                                   const isDone = !!sess.completed;
                                   const intensity = Math.max(0, Math.min(10, sess.intensity || 0));
+                                  const otherCourse = sess.courseId !== course.id ? (courses || []).find(c => c.id === sess.courseId) : null;
+                                  const rowBg = isDone ? 'color-mix(in srgb, var(--bg-hover) 72%, transparent)' : 'var(--bg-elevated-alpha, var(--bg-elevated))';
                                   return (
-                                    <div key={sess.id}
+                                    <SortableWrapper key={sess.id} id={sess.id} style={{ flexGrow: 1, minHeight: 56, display: 'flex' }}>
+                                      {({ attributes, listeners, isDragging }) => (
+                                    <div {...attributes} {...listeners}
                                       onClick={() => setDetailSessionId(sess.id)}
-                                      title={isDone ? 'Sesión completada — ver detalle' : 'Ver detalle de la sesión'}
-                                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 10px', borderRadius: 10, border: '1px solid var(--border-subtle)', background: isDone ? 'color-mix(in srgb, var(--bg-hover) 72%, transparent)' : 'linear-gradient(135deg, var(--bg-elevated-alpha, var(--bg-elevated)) 0%, transparent 100%)', transition: 'all 200ms ' + EASE, cursor: 'pointer', opacity: isDone ? 0.82 : 1 }}
-                                      onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}45`; e.currentTarget.style.background = `${course.color}08`; }}
-                                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = isDone ? 'color-mix(in srgb, var(--bg-hover) 72%, transparent)' : 'linear-gradient(135deg, var(--bg-elevated-alpha, var(--bg-elevated)) 0%, transparent 100%)'; }}>
-                                      <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div style={{ fontSize: 12, fontWeight: 600, color: isDone ? 'var(--text-tertiary)' : 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.01em', textDecoration: isDone ? 'line-through' : 'none' }}>{sess.title || 'Sesión de estudio'}</div>
-                                        <div style={{ fontSize: 8.5, color: 'var(--text-secondary)', fontFamily: "'JetBrains Mono', monospace", marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
-                                          <Clock size={9} style={{ opacity: 0.7 }} />
-                                          {fmtTime(sess.startTime) || 'Flexible'} · {sess.durationMinutes} min
-                                        </div>
+                                      title={(isDone ? 'Sesión completada — ' : '') + 'Mantén pulsado para mover · Toca para ver detalle'}
+                                      style={{ touchAction: 'none', flexGrow: 1, minHeight: 56, display: 'flex', alignItems: 'center', gap: 10, padding: '16px 14px', borderRadius: 10, border: isDragging ? `1px solid ${course.color}60` : '1px solid var(--border-subtle)', background: isDragging ? `${course.color}0d` : rowBg, boxShadow: isDragging ? `0 10px 26px ${course.color}22` : 'none', transition: 'all 200ms ' + EASE, cursor: 'grab', position: 'relative', overflow: 'hidden', opacity: isDragging ? 0.85 : (isDone ? 0.85 : 1) }}
+                                      onMouseEnter={e => { if (!isDragging) { e.currentTarget.style.borderColor = `${course.color}45`; e.currentTarget.style.background = `${course.color}08`; } }}
+                                      onMouseLeave={e => { if (!isDragging) { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = rowBg; } }}>
+                                      <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+                                        <div style={{ fontSize: 15.5, fontWeight: 500, color: isDone ? 'var(--text-tertiary)' : 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.01em', lineHeight: 1.25, textDecoration: isDone ? 'line-through' : 'none' }}>{sess.title || 'Sesión de estudio'}</div>
                                       </div>
+                                      {otherCourse && (
+                                        <span title={otherCourse.name} style={{ flexShrink: 0, fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: "'Inter Tight', sans-serif", color: otherCourse.color, background: `${otherCourse.color}10`, border: `1px solid ${otherCourse.color}28`, padding: '2.5px 7px', borderRadius: 5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 80, lineHeight: 1.3 }}>{otherCourse.name}</span>
+                                      )}
                                       {intensity > 0 && (
-                                        <div style={{ display: 'flex', gap: 2, flexShrink: 0, alignItems: 'center' }} title={`Intensidad ${intensity}/10`}>
+                                        <div style={{ flex: 1, minWidth: 48, maxWidth: 140, display: 'flex', gap: 3, alignItems: 'center', flexShrink: 0 }} title={`Intensidad programada ${intensity}/10`}>
                                           {REVIEW_LEVEL_COLORS.map((col, i) => (
-                                            <div key={i} style={{ width: 3, height: 13, borderRadius: 1.5, background: i < intensity ? col : 'var(--bg-hover)', boxShadow: i === intensity - 1 ? `0 0 8px ${col}99` : 'none', transition: 'all 160ms' }} />
+                                            <div key={i} style={{ flex: 1, height: 22, borderRadius: 4, background: i < intensity ? col : 'var(--bg-hover)', boxShadow: i === intensity - 1 ? `0 0 8px ${col}99` : 'none', transition: 'all 160ms' }} />
                                           ))}
                                         </div>
                                       )}
-                                      {isDone ? (
-                                        <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#22C55E14', border: '1px solid #22C55E45', color: '#22C55E', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                          <Check size={11} strokeWidth={2.6} />
+                                      {sess.startTime && (
+                                        <div style={{ width: 38, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                          <span style={{ fontSize: 11, fontWeight: 600, color: isDone ? 'var(--text-tertiary)' : 'var(--text-secondary)', fontFamily: "'JetBrains Mono', monospace", fontVariantNumeric: 'tabular-nums', lineHeight: 1.2 }}>{fmtTime(sess.startTime)}</span>
                                         </div>
-                                      ) : (
-                                        <div style={{ width: 20, height: 20, borderRadius: '50%', border: '1px solid var(--border-soft)', background: 'transparent', flexShrink: 0 }} />
                                       )}
-                                    </div>
+                                      {isDone && (
+                                        <div style={{ position: 'absolute', inset: 0, borderRadius: 10, background: 'linear-gradient(135deg, color-mix(in srgb, var(--bg-surface) 88%, transparent) 0%, color-mix(in srgb, var(--bg-elevated) 80%, transparent) 100%)', boxShadow: 'inset 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent)', border: '1px dashed color-mix(in srgb, var(--accent) 42%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, pointerEvents: 'none', zIndex: 1 }}>
+                                          <Check size={13} strokeWidth={2.5} style={{ color: 'var(--accent)', filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.5))' }} />
+                                          <span style={{ fontSize: 8.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.18em', fontFamily: "'Inter Tight', sans-serif", color: 'var(--accent)', whiteSpace: 'nowrap', textShadow: '0 1px 5px rgba(0,0,0,0.55)' }}>Sesión de estudio lograda</span>
+                                        </div>
+                                      )}
+                                      {isDone ? (
+                                        <button onClick={e => { e.stopPropagation(); updatePlannedSession(sess.id, { completed: false }); }} title="Desmarcar como completada"
+                                          style={{ width: 22, height: 22, borderRadius: '50%', background: '#22C55E14', border: '1px solid #22C55E45', color: '#22C55E', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer', padding: 0, transition: 'all 180ms ' + EASE, position: 'relative', zIndex: 2 }}>
+                                          <Check size={11.5} strokeWidth={2.6} />
+                                        </button>
+                                      ) : (
+                                        <button onClick={e => { e.stopPropagation(); updatePlannedSession(sess.id, { completed: true }); }} title="Marcar como completada"
+                                          style={{ width: 22, height: 22, borderRadius: '50%', border: '1px solid var(--border-soft)', background: 'transparent', flexShrink: 0, cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#22C55E', transition: 'all 180ms ' + EASE, position: 'relative', zIndex: 2 }}>
+                                          <Check size={11.5} strokeWidth={2.6} style={{ opacity: 0, transition: 'opacity 180ms ' + EASE }} />
+                                        </button>
+                                      )}
+                                      </div>
+                                      )}
+                                    </SortableWrapper>
                                   );
                                 })}
+                                    </SortableContext>
+                                  </DndContext>
+                                )}
                               </div>
                             </>
                           );
@@ -3653,12 +3872,13 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                           };
 
                           const rawValues = axisItems.map(scoreOf);
-                          const VIEW_W = 520, VIEW_H = 470;
+                          const VIEW_W = Math.max(380, radarDims?.w ?? 500);
+                          const VIEW_H = Math.max(340, radarDims?.h ?? 450);
                           const radarCx = VIEW_W / 2, radarCy = VIEW_H / 2;
                           const n = Math.max(3, labels.length);
                           const manyAxes = n > 14;
                           const rotated = n > 12;
-                          const radarR = Math.max(84, Math.min(165, 520 / Math.sqrt(n)));
+                          const radarR = Math.max(84, Math.min(Math.min(VIEW_W, VIEW_H) / 2 - 70, (VIEW_W * 1.04) / Math.sqrt(n)));
                           const angleStep = (2 * Math.PI) / n;
                           const gridLevels = [0.33, 0.66, 1];
 
@@ -3729,7 +3949,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                               { label: 'Intensidad', value: coursePlanInt > 0 ? Math.min(1, courseRealInt / coursePlanInt) : (courseRealInt > 0 ? Math.min(1, courseRealInt / 10) : 0), detail: coursePlanInt > 0 ? `${Math.round(courseRealInt)}/10 real vs ${Math.round(coursePlanInt)}/10 programada` : (courseRealInt > 0 ? `${Math.round(courseRealInt)}/10 intensidad real` : 'sin sesiones evaluadas') },
                             ];
                             const dN = diagAxes.length;
-                            const dR = Math.max(96, Math.min(165, 520 / Math.sqrt(dN)));
+                            const dR = Math.max(96, Math.min(Math.min(VIEW_W, VIEW_H) / 2 - 70, (VIEW_W * 1.04) / Math.sqrt(dN)));
                             const dAngleStep = (2 * Math.PI) / dN;
                             const dGetPoint = (idx: number, val: number) => {
                               const angle = dAngleStep * idx - Math.PI / 2;
@@ -3744,7 +3964,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                 {headerEl}
                                 <div style={{ flex: 1, minHeight: 0, padding: '6px 22px 14px', position: 'relative', display: 'flex', flexDirection: 'column' }}>
                                   <div ref={radarWrapRef} style={{ flex: 1, minHeight: 0, position: 'relative' }}>
-                                    <svg ref={radarSvgRef} width="100%" height="100%" viewBox="0 0 520 470" preserveAspectRatio="xMidYMid meet" style={{ maxWidth: 600, maxHeight: '100%', margin: '0 auto', display: 'block', overflow: 'visible' }}>
+                                    <svg ref={radarSvgRef} width="100%" height="100%" viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} preserveAspectRatio="xMidYMid meet" style={{ maxHeight: '100%', margin: '0 auto', display: 'block', overflow: 'visible' }}>
                                       <defs>
                                         <radialGradient id="spiderFillDiag" cx="50%" cy="50%" r="60%">
                                           <stop offset="0%" stopColor={course.color} stopOpacity="0.14" />
@@ -3856,7 +4076,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                               {/* ── MULTI-COLOR SPIDER CHART ── */}
                               <div style={{ flex: 1, minHeight: 0, padding: '6px 22px 14px', position: 'relative', display: 'flex', flexDirection: 'column' }}>
                                 <div ref={radarWrapRef} style={{ flex: 1, minHeight: 0, position: 'relative' }}>
-                                <svg ref={radarSvgRef} width="100%" height="100%" viewBox="0 0 520 470" preserveAspectRatio="xMidYMid meet" style={{ maxWidth: 600, maxHeight: '100%', margin: '0 auto', display: 'block', overflow: 'visible' }}>
+                                <svg ref={radarSvgRef} width="100%" height="100%" viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} preserveAspectRatio="xMidYMid meet" style={{ maxHeight: '100%', margin: '0 auto', display: 'block', overflow: 'visible' }}>
                                   <defs>
                                     <radialGradient id="spiderFill" cx="50%" cy="50%" r="60%">
                                       <stop offset="0%" stopColor={course.color} stopOpacity="0.13" />
@@ -4075,7 +4295,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                           <SortableWrapper key={group.id} id={group.id}>
                           {({ attributes, listeners, isDragging }) => (
                           <div {...attributes} {...listeners}
-                            style={{ flexShrink: 0, borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated-alpha, var(--bg-elevated))', overflow: 'hidden', cursor: 'grab', transition: 'all 200ms ' + EASE, position: 'relative', opacity: isDragging ? 0.5 : 1 }}
+                            style={{ flexShrink: 0, borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated-alpha, var(--bg-elevated))', overflow: 'hidden', cursor: isDragging ? 'grabbing' : 'pointer', transition: 'all 200ms ' + EASE, position: 'relative', opacity: isDragging ? 0.5 : 1 }}
                             onMouseEnter={e => { if (!group.image) { e.currentTarget.style.borderColor = `${course.color}40`; } e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = `0 4px 14px ${course.color}12`; }}
                             onMouseLeave={e => { if (!group.image) { e.currentTarget.style.borderColor = 'var(--border-subtle)'; } e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
                             onClick={() => { setSelectedGroupId(group.id); setCurrentView('group'); }}>
@@ -4278,16 +4498,23 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                   <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                     onClick={e => { if (e.target === e.currentTarget) setShowPlanModal(false); }}>
                     <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)' }} />
-                    <div style={{ position: 'relative', width: 480, maxHeight: '88vh', background: 'var(--bg-surface)', borderRadius: 16, border: '1px solid var(--border-subtle)', boxShadow: '0 24px 64px rgba(0,0,0,0.5)', overflow: 'hidden', display: 'flex', flexDirection: 'column', animation: 'modalDrop 260ms cubic-bezier(0.16, 1, 0.3, 1)' }} className="bento-card">
+                    <div style={{ position: 'relative', width: 480, maxHeight: '88vh', background: 'var(--bg-surface)', borderRadius: 16, border: '1px solid var(--border-subtle)', boxShadow: '0 24px 64px rgba(0,0,0,0.5)', overflow: 'hidden', display: 'flex', flexDirection: 'column', animation: 'modalDrop 260ms cubic-bezier(0.16, 1, 0.3, 1)' }} className="bento-card modal-opaque">
                       <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${course.color}, ${course.color}55, transparent)`, pointerEvents: 'none' }} />
                       <div style={{ padding: '22px 24px 14px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                           <div>
                             <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em' }}>{planEditId ? 'Editar sesión' : 'Nueva sesión de estudio'}</h3>
-                            <span style={{ fontSize: 11, fontWeight: 600, color: course.color, fontFamily: "'Inter Tight', sans-serif", textTransform: 'capitalize', letterSpacing: '-0.01em' }}>
-                              {planDate ? format(new Date(planDate + 'T12:00:00'), 'EEEE', { locale: es }) : ''}
-                              <span style={{ color: 'var(--text-tertiary)', fontWeight: 500 }}> · {planDate ? format(new Date(planDate + 'T12:00:00'), "d 'de' MMMM", { locale: es }) : ''}</span>
-                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', fontFamily: "'Inter Tight', sans-serif", textTransform: 'capitalize', letterSpacing: '-0.01em' }}>
+                                {planDate ? format(new Date(planDate + 'T12:00:00'), 'EEEE', { locale: es }) : ''}
+                                <span style={{ color: 'var(--text-tertiary)', fontWeight: 500 }}> · {planDate ? format(new Date(planDate + 'T12:00:00'), "d 'de' MMMM", { locale: es }) : ''}</span>
+                              </span>
+                              <span style={{ width: 3, height: 3, borderRadius: '50%', background: 'var(--text-tertiary)', flexShrink: 0, opacity: 0.7 }} />
+                              <span title={`Vinculado al curso ${course.name}`}
+                                style={{ fontSize: 10, fontWeight: 700, color: course.color, fontFamily: "'Inter Tight', sans-serif", background: `${course.color}0c`, border: `1px solid ${course.color}26`, padding: '3px 11px', borderRadius: 999, display: 'inline-flex', alignItems: 'center', textTransform: 'uppercase', letterSpacing: '0.09em', lineHeight: 1.4, maxWidth: 240, overflow: 'hidden' }}>
+                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{course.name}</span>
+                              </span>
+                            </div>
                           </div>
                         </div>
                         <button onClick={() => setShowPlanModal(false)}
@@ -4311,47 +4538,90 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                         <div style={{ display: 'flex', gap: 14 }}>
                           <div style={{ flex: 1 }}>
                             <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', marginBottom: 7, letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Hora de inicio</label>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <div style={{ position: 'relative', flex: 1 }}>
-                                <Clock size={13} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
-                                <input type="time" value={planStartTime} onChange={e => setPlanStartTime(e.target.value)}
-                                  style={{ width: '100%', height: 42, borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 30px 0 34px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif", fontVariantNumeric: 'tabular-nums' }}
-                                  className="input-base" />
+                            <div style={{ display: 'flex', alignItems: 'stretch', borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', overflow: 'hidden' }}>
+                              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '2px 0' }}>
+                                <button onClick={() => shiftPlanTime('h', 1)} title="Subir hora (+1h)"
+                                  style={{ width: '100%', height: 16, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'color 150ms' }}
+                                  onMouseEnter={e => e.currentTarget.style.color = course.color}
+                                  onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
+                                  <ChevronUp size={14} />
+                                </button>
+                                {planTimeEdit === 'h' ? (
+                                  <input autoFocus value={planTimeEditVal}
+                                    onChange={e => setPlanTimeEditVal(e.target.value.replace(/\D/g, '').slice(0, 2))}
+                                    onBlur={() => commitPlanTimeEdit('h')}
+                                    onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                                    style={{ width: '72%', background: 'transparent', border: 'none', outline: 'none', textAlign: 'center', fontSize: 17, fontWeight: 700, color: course.color, fontFamily: "'JetBrains Mono', monospace", fontVariantNumeric: 'tabular-nums', padding: 0, height: 28 }} />
+                                ) : (
+                                  <button onClick={() => { setPlanTimeEdit('h'); setPlanTimeEditVal(String(parsePlanTime(planStartTime).h)); }} title="Editar hora (manual)"
+                                    style={{ width: '100%', height: 34, background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'JetBrains Mono', monospace", fontSize: 17, fontWeight: 700, color: course.color, fontVariantNumeric: 'tabular-nums', letterSpacing: '0.02em', padding: 0, transition: 'background 150ms' }}
+                                    onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
+                                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                                    {String(parsePlanTime(planStartTime).h).padStart(2, '0')}
+                                  </button>
+                                )}
+                                <button onClick={() => shiftPlanTime('h', -1)} title="Bajar hora (−1h)"
+                                  style={{ width: '100%', height: 16, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'color 150ms' }}
+                                  onMouseEnter={e => e.currentTarget.style.color = course.color}
+                                  onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
+                                  <ChevronDown size={14} />
+                                </button>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, flexShrink: 0, fontSize: 16, fontWeight: 700, color: 'var(--text-tertiary)', fontFamily: "'JetBrains Mono', monospace" }}>:</div>
+                              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '2px 0' }}>
+                                <button onClick={() => shiftPlanTime('m', 1)} title="Subir minutos (+5m)"
+                                  style={{ width: '100%', height: 16, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'color 150ms' }}
+                                  onMouseEnter={e => e.currentTarget.style.color = course.color}
+                                  onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
+                                  <ChevronUp size={14} />
+                                </button>
+                                {planTimeEdit === 'm' ? (
+                                  <input autoFocus value={planTimeEditVal}
+                                    onChange={e => setPlanTimeEditVal(e.target.value.replace(/\D/g, '').slice(0, 2))}
+                                    onBlur={() => commitPlanTimeEdit('m')}
+                                    onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                                    style={{ width: '72%', background: 'transparent', border: 'none', outline: 'none', textAlign: 'center', fontSize: 17, fontWeight: 700, color: course.color, fontFamily: "'JetBrains Mono', monospace", fontVariantNumeric: 'tabular-nums', padding: 0, height: 28 }} />
+                                ) : (
+                                  <button onClick={() => { setPlanTimeEdit('m'); setPlanTimeEditVal(String(parsePlanTime(planStartTime).m)); }} title="Editar minutos (manual)"
+                                    style={{ width: '100%', height: 34, background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'JetBrains Mono', monospace", fontSize: 17, fontWeight: 700, color: course.color, fontVariantNumeric: 'tabular-nums', letterSpacing: '0.02em', padding: 0, transition: 'background 150ms' }}
+                                    onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
+                                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                                    {String(parsePlanTime(planStartTime).m).padStart(2, '0')}
+                                  </button>
+                                )}
+                                <button onClick={() => shiftPlanTime('m', -1)} title="Bajar minutos (−5m)"
+                                  style={{ width: '100%', height: 16, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'color 150ms' }}
+                                  onMouseEnter={e => e.currentTarget.style.color = course.color}
+                                  onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
+                                  <ChevronDown size={14} />
+                                </button>
                               </div>
                             </div>
-                            <div style={{ display: 'flex', gap: 5, marginTop: 6, flexWrap: 'wrap' }}>
-                              {['07:00', '09:00', '12:00', '15:00', '18:00', '20:00'].map(t => (
-                                <button key={t} onClick={() => setPlanStartTime(t)}
-                                  style={{ padding: '3px 8px', borderRadius: 6, fontSize: 9, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace", cursor: 'pointer', border: planStartTime === t ? `1px solid ${course.color}50` : '1px solid var(--border-subtle)', background: planStartTime === t ? `${course.color}12` : 'transparent', color: planStartTime === t ? course.color : 'var(--text-muted)', transition: 'all 150ms' }}>
-                                  {t}
-                                </button>
-                              ))}
-                            </div>
                           </div>
-                          <div style={{ width: 148 }}>
+                          <div style={{ width: 158 }}>
                             <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', marginBottom: 7, letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Duración</label>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                               <button onClick={() => setPlanDuration(Math.max(5, planDuration - 5))} title="Reducir"
-                                style={{ width: 34, height: 42, borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                                style={{ width: 38, height: 46, borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
                                 onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}50`; e.currentTarget.style.color = course.color; }}
                                 onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
-                                <Minus size={13} />
+                                <Minus size={14} />
                               </button>
-                              <div style={{ flex: 1, height: 42, borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                                <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'JetBrains Mono', monospace", lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{planDuration}</span>
-                                <span style={{ fontSize: 8, fontWeight: 600, color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 2 }}>min</span>
+                              <div style={{ flex: 1, height: 46, borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                                <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'JetBrains Mono', monospace", lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{planDuration}</span>
+                                <span style={{ fontSize: 8.5, fontWeight: 600, color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 3 }}>min</span>
                               </div>
                               <button onClick={() => setPlanDuration(Math.min(240, planDuration + 5))} title="Aumentar"
-                                style={{ width: 34, height: 42, borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                                style={{ width: 38, height: 46, borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
                                 onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}50`; e.currentTarget.style.color = course.color; }}
                                 onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
-                                <Plus size={13} />
+                                <Plus size={14} />
                               </button>
                             </div>
-                            <div style={{ display: 'flex', gap: 5, marginTop: 6 }}>
+                            <div style={{ display: 'flex', gap: 5, marginTop: 7 }}>
                               {[15, 25, 30, 45, 60].map(m => (
                                 <button key={m} onClick={() => setPlanDuration(m)}
-                                  style={{ flex: 1, padding: '3px 0', borderRadius: 6, fontSize: 8.5, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace", cursor: 'pointer', border: planDuration === m ? `1px solid ${course.color}50` : '1px solid var(--border-subtle)', background: planDuration === m ? `${course.color}12` : 'transparent', color: planDuration === m ? course.color : 'var(--text-muted)', transition: 'all 150ms' }}>
+                                  style={{ flex: 1, padding: '4px 0', borderRadius: 7, fontSize: 9.5, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace", cursor: 'pointer', border: planDuration === m ? `1px solid ${course.color}50` : '1px solid var(--border-subtle)', background: planDuration === m ? `${course.color}12` : 'transparent', color: planDuration === m ? course.color : 'var(--text-muted)', transition: 'all 150ms' }}>
                                   {m}
                                 </button>
                               ))}
@@ -4366,15 +4636,15 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                               {planIntensity <= 3 ? 'Suave' : planIntensity <= 6 ? 'Media' : planIntensity <= 8 ? 'Intensa' : 'Máxima'}
                             </span>
                           </div>
-                          <div style={{ display: 'flex', gap: 3, alignItems: 'stretch' }}>
+                          <div style={{ display: 'flex', gap: 4, alignItems: 'stretch' }}>
                             {REVIEW_LEVEL_COLORS.map((col, i) => {
                               const v = i + 1;
                               const on = v <= planIntensity;
                               return (
                                 <button key={v} onClick={() => setPlanIntensity(v)} title={`Intensidad ${v}`}
-                                  style={{ flex: 1, height: 24, borderRadius: 4, cursor: 'pointer', border: 'none', background: on ? col : 'var(--bg-deep)', opacity: on ? 1 : 0.35, boxShadow: v === planIntensity ? `0 0 12px ${col}aa` : 'none', transition: 'all 160ms ' + EASE }}
-                                  onMouseEnter={e => { if (!on) e.currentTarget.style.opacity = '0.65'; }}
-                                  onMouseLeave={e => { if (!on) e.currentTarget.style.opacity = '0.35'; }} />
+                                  style={{ flex: 1, height: 26, borderRadius: 6, cursor: 'pointer', border: on ? 'none' : '1px solid var(--border-subtle)', background: on ? `linear-gradient(180deg, ${col}, color-mix(in srgb, ${col} 45%, #000 55%))` : 'var(--bg-deep)', opacity: on ? 1 : 0.45, boxShadow: v === planIntensity ? `0 0 16px ${col}aa, inset 0 1px 0 rgba(255,255,255,0.18)` : on ? 'inset 0 1px 0 rgba(255,255,255,0.18)' : 'none', transition: 'all 160ms ' + EASE }}
+                                  onMouseEnter={e => { if (!on) e.currentTarget.style.opacity = '0.8'; }}
+                                  onMouseLeave={e => { if (!on) e.currentTarget.style.opacity = '0.45'; }} />
                               );
                             })}
                           </div>
@@ -4384,65 +4654,44 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                           </div>
                         </div>
 
-                        <div style={{ display: 'flex', gap: 14 }}>
-                          <div style={{ flex: 1 }}>
-                            <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', marginBottom: 7, letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Agrupación</label>
-                            <select value={planGroupId} onChange={e => { setPlanGroupId(e.target.value); setPlanTopicId(''); }}
-                              style={{ width: '100%', height: 42, borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 13px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif", cursor: 'pointer' }}
-                              className="input-base">
-                              <option value="">Sin agrupación</option>
-                              {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-                            </select>
-                            {planGroupId && (() => {
-                              const grpName = groups.find(g => g.id === planGroupId)?.name;
-                              const topicCount = parsedTopics.filter(t => t.groupId === planGroupId).length;
-                              return (
-                                <span style={{ display: 'block', fontSize: 9.5, fontWeight: 600, color: course.color, marginTop: 5, fontFamily: "'Inter', sans-serif" }}>
-                                  {topicCount > 0 ? `${topicCount} tema${topicCount === 1 ? '' : 's'} en "${grpName}"` : `"${grpName}" aún no tiene temas`}
-                                </span>
-                              );
-                            })()}
-                          </div>
-                          <div style={{ flex: 1 }}>
-                            <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', marginBottom: 7, letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Tema</label>
-                            <select value={planTopicId} onChange={e => setPlanTopicId(e.target.value)}
-                              disabled={!planGroupId}
-                              style={{ width: '100%', height: 42, borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: planGroupId ? 'var(--text-primary)' : 'var(--text-muted)', padding: '0 13px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif", cursor: planGroupId ? 'pointer' : 'not-allowed', opacity: planGroupId ? 1 : 0.6 }}
-                              className="input-base">
-                              <option value="">{planGroupId ? 'Selecciona…' : 'Elige agrupación'}</option>
-                              {planGroupId && parsedTopics.filter(t => t.groupId === planGroupId).map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
-                            </select>
-                            {!planGroupId && (
-                              <span style={{ display: 'block', fontSize: 9.5, fontWeight: 600, color: 'var(--text-muted)', marginTop: 6, fontFamily: "'Inter', sans-serif" }}>
-                                Elige una agrupación para ver sus temas
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        {dayPlannedSessions.length > 0 && (
-                          <div>
-                            <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', marginBottom: 8, letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Ya agendado este día</label>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                              {dayPlannedSessions.map(s => (
-                                <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 11px', borderRadius: 9, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderLeft: `3px solid ${sessionTypeColor(s.type)}` }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
-                                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: sessionTypeColor(s.type), flexShrink: 0 }} />
-                                    <span style={{ fontSize: 12, color: 'var(--text-primary)', fontFamily: "'Inter', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title}</span>
-                                    {s.startTime && <span style={{ fontSize: 10, fontWeight: 700, color: sessionTypeColor(s.type), fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{s.startTime}</span>}
-                                    <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: "'Inter', sans-serif", flexShrink: 0 }}>({s.durationMinutes}m)</span>
-                                  </div>
-                                  <button onClick={() => deletePlannedSession(s.id)}
-                                    style={{ width: 20, height: 20, borderRadius: 5, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#EF4444'; }}
-                                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
-                                    <X size={10} />
-                                  </button>
+                        <div>
+                          <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', marginBottom: 7, letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Agrupación</label>
+                          <PlanSelectDropdown value={planGroupId}
+                            onChange={v => { setPlanGroupId(v); setPlanTopicId(''); }}
+                            options={groups.map(g => ({ id: g.id, label: g.name }))}
+                            noneLabel="Sin agrupación" color={course.color} />
+                          {planGroupId ? (() => {
+                            const grpName = groups.find(g => g.id === planGroupId)?.name || '';
+                            const topics = parsedTopics.filter(t => t.groupId === planGroupId);
+                            return (
+                              <div style={{ marginTop: 8, borderRadius: 11, border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', padding: '11px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                  <span style={{ width: 27, height: 27, borderRadius: 8, background: `${course.color}14`, border: `1px solid ${course.color}30`, color: course.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                    <FolderOpen size={13} strokeWidth={2} />
+                                  </span>
+                                  <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{grpName}</span>
+                                  <span style={{ fontSize: 9, fontWeight: 700, color: course.color, fontFamily: "'JetBrains Mono', monospace", background: `${course.color}0f`, border: `1px solid ${course.color}25`, padding: '2px 8px', borderRadius: 999, flexShrink: 0 }}>
+                                    {topics.length} {topics.length === 1 ? 'tema' : 'temas'}
+                                  </span>
                                 </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
+                                <label style={{ display: 'block', fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Tema vinculado</label>
+                                <PlanSelectDropdown value={planTopicId}
+                                  onChange={setPlanTopicId}
+                                  options={topics.map(t => ({ id: t.id, label: t.title }))}
+                                  noneLabel="Sin tema" color={course.color} />
+                                {topics.length === 0 && (
+                                  <span style={{ fontSize: 10.5, color: 'var(--text-muted)', fontFamily: "'Inter', sans-serif", lineHeight: 1.4 }}>
+                                    Esta agrupación aún no tiene temas — puedes vincularla sin tema y agregarlos después.
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })() : (
+                            <span style={{ display: 'block', fontSize: 9.5, fontWeight: 600, color: 'var(--text-muted)', marginTop: 6, fontFamily: "'Inter', sans-serif" }}>
+                              Elige una agrupación para ver sus temas
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       <div style={{ padding: '14px 24px 20px', borderTop: '1px solid var(--border-subtle)', display: 'flex', gap: 10, justifyContent: 'flex-end', flexShrink: 0 }}>
@@ -4454,8 +4703,8 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                         </button>
                         <button onClick={() => {
                             if (!planDate || !planTitle.trim()) return;
-                            const payload = { courseId: course.id, date: planDate, startTime: planStartTime || undefined, title: planTitle.trim(), groupId: planGroupId || undefined, topicId: planTopicId || undefined, durationMinutes: planDuration, type: planType, intensity: planIntensity, completed: false };
-                            if (planEditId) updatePlannedSession(planEditId, payload);
+                            const payload: Omit<PlannedSession, 'id' | 'createdAt'> = { courseId: course.id, date: planDate, startTime: planStartTime || undefined, title: planTitle.trim(), groupId: planGroupId || undefined, topicId: planTopicId || undefined, durationMinutes: planDuration, type: planType, intensity: planIntensity, completed: false };
+                            if (planEditId) { const { completed: _c, ...rest } = payload; updatePlannedSession(planEditId, rest); }
                             else addPlannedSession(payload);
                             setShowPlanModal(false);
                             setDetailSessionId(null);
@@ -4478,6 +4727,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                     <div style={{ position: 'relative', width: 540, maxHeight: '78vh', background: 'var(--bg-surface)', borderRadius: 16, border: '1px solid var(--border-subtle)', boxShadow: '0 24px 64px rgba(0,0,0,0.5)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }} className="bento-card">
                       {(() => {
                         const daySessions = (plannedSessions || [])
+                          .filter(s => !!s)
                           .filter(s => s.courseId === course.id && s.date === dayDetailDate)
                           .sort((a, b) => (a.startTime || '99:99').localeCompare(b.startTime || '99:99'))
                           .sort((a, b) => Number(a.completed) - Number(b.completed));
@@ -4867,7 +5117,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                             </button>
                             <button onClick={() => {
                               if (inlineGroupName.trim()) {
-                                const currentGroups = course.groups || [];
+                                const currentGroups = safeArr(course.groups);
                                 updateCourse(course.id, { groups: currentGroups.map(g => g.id === inlineEditGroupId ? { ...g, name: inlineGroupName.trim(), image: inlineGroupCover } : g) });
                                 toast.success('Agrupacion actualizada');
                               }
@@ -5115,7 +5365,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                               <div {...attributes} {...listeners} style={{
                                 position: 'absolute', top: 6, right: 6, width: 22, height: 22,
                                 borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                color: 'var(--text-muted)', cursor: 'grab', opacity: 0,
+                                color: 'var(--text-muted)', cursor: isDragging ? 'grabbing' : 'default', opacity: 0,
                                 transition: 'opacity 150ms', zIndex: 5,
                               }}
                                 onMouseEnter={e => e.currentTarget.style.opacity = '0.6'}
@@ -5190,10 +5440,10 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
           /* ─── ARCHIVOS TAB ─── */
           <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px 24px 60px' }}>
             <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 16, fontFamily: "'Inter Tight', sans-serif" }}>Archivos de {course.name}</h2>
-            {allCourseMaterials.filter(m => m.type === 'resource').length > 0 ? (
+            {allCourseMaterials.filter(m => !!m && m.type === 'resource').length > 0 ? (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
-                {allCourseMaterials.filter(m => m.type === 'resource').map(mat => (
-                  <div key={mat.id} style={{ padding: '12px 14px', borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', display: 'flex', alignItems: 'center', gap: 10 }}>
+                {allCourseMaterials.filter(m => !!m && m.type === 'resource').map(mat => (
+                  <div key={mat.id} onContextMenu={(e) => matMenu.openMenu(e, { url: mat.dataUrl || '', name: mat.name || 'Archivo', color: course.color })} style={{ padding: '12px 14px', borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', display: 'flex', alignItems: 'center', gap: 10, cursor: 'context-menu' }}>
                     <div style={{ width: 36, height: 36, borderRadius: 8, background: `${course.color}12`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                       <File size={16} style={{ color: course.color }} />
                     </div>
@@ -5609,7 +5859,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                             try {
                               const dest = await save({ filters: [{ name: 'JSON', extensions: ['json'] }], defaultPath: `${currentGrp.name.replace(/[^a-zA-Z0-9]/g, '_')}_export.json`, title: 'Exportar temas' });
                               if (!dest) return;
-                              const exportData = { group: { name: currentGrp.name, image: currentGrp.image }, topics: selectedTopics.map(t => ({ title: t.title, status: t.status, reviewLevel: t.reviewLevel, materials: (t.materials || []).map(m => ({ ...m, dataUrl: m.dataUrl && m.dataUrl.startsWith('data:') ? '[BASE64_DATA]' : m.dataUrl })) })) };
+                              const exportData = { group: { name: currentGrp.name, image: currentGrp.image }, topics: selectedTopics.map(t => ({ title: t.title, status: t.status, reviewLevel: t.reviewLevel, materials: (safeArr(t.materials)).map(m => ({ ...m, dataUrl: m.dataUrl && m.dataUrl.startsWith('data:') ? '[BASE64_DATA]' : m.dataUrl })) })) };
                               await writeTextFile(dest, JSON.stringify(exportData, null, 2));
                               toast.success(`${selectedTopics.length} tema${selectedTopics.length !== 1 ? 's' : ''} exportado${selectedTopics.length !== 1 ? 's' : ''}`);
                               setShowAgrupacionImportExport(false);
@@ -5661,7 +5911,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                 if (!dest) return;
                                 const exportData = selected.map(g => {
                                   const gTopics = parsedTopics.filter(t => t.groupId === g.id);
-                                  return { group: { name: g.name, image: g.image }, topics: gTopics.map(t => ({ title: t.title, status: t.status, reviewLevel: t.reviewLevel, materials: (t.materials || []).map(m => ({ ...m, dataUrl: m.dataUrl && m.dataUrl.startsWith('data:') ? '[BASE64_DATA]' : m.dataUrl })) })) };
+                                  return { group: { name: g.name, image: g.image }, topics: gTopics.map(t => ({ title: t.title, status: t.status, reviewLevel: t.reviewLevel, materials: (safeArr(t.materials)).map(m => ({ ...m, dataUrl: m.dataUrl && m.dataUrl.startsWith('data:') ? '[BASE64_DATA]' : m.dataUrl })) })) };
                                 });
                                 await writeTextFile(dest, JSON.stringify(exportData.length === 1 ? exportData[0] : exportData, null, 2));
                                 toast.success(`${selected.length} agrupacion${selected.length !== 1 ? 'es' : ''} exportada${selected.length !== 1 ? 's' : ''}`);
@@ -5739,8 +5989,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
       )}
       {/* PDF Preview Modal */}
       {showPdfPreview && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(12px)' }} onClick={() => setShowPdfPreview(false)}>
-          <div className="bento-card" style={{ width: '90vw', height: '90vh', borderRadius: 12, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0 }} onClick={e => e.stopPropagation()}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(12px)' }} onClick={() => setShowPdfPreview(false)}>          <div className="bento-card" style={{ width: '90vw', height: '90vh', borderRadius: 12, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0 }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }}>
               <File size={14} style={{ color: course?.color }} />
               <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pdfPreviewName}</span>
@@ -5760,6 +6009,52 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                 <iframe src={pdfPreviewUrl} title={pdfPreviewName} style={{ width: '100%', height: '100%', border: 'none' }} />
               )}
             </div>
+          </div>
+        </div>
+      )}
+      {viewingMat && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }} onClick={() => setViewingMat(null)}>
+          <div className="bento-card" style={{ width: 480, maxWidth: '92vw', maxHeight: '82vh', overflowY: 'auto', padding: 0, borderRadius: 14, background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }} onClick={e => e.stopPropagation()}>
+            {(() => {
+              const vm = viewingMat;
+              const vMeta = MATERIAL_META[vm.type];
+              const VIcon = vMeta?.icon || File;
+              const vColor: Record<string, string> = { formula: '#8B5CF6', concept: '#3B82F6', 'key-data': '#F59E0B', meaning: '#10B981', quiz: '#EF4444', procedure: '#EC4899', resource: '#6366F1' };
+              const vAccent = vColor[vm.type] || 'var(--accent)';
+              const vTitle = vm.name || vm.title || vm.word || vm.question || 'Sin título';
+              const vBody = vm.content || vm.meaning || vm.answer || vm.clarification || vm.description || '';
+              const vBodyLabel = vm.type === 'concept' || vm.type === 'key-data' ? 'Contenido' : vm.type === 'formula' ? 'Clarificación' : vm.type === 'meaning' ? 'Definición' : vm.type === 'quiz' ? 'Respuesta' : vm.type === 'procedure' ? 'Descripción' : 'Contenido';
+              return (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }}>
+                    <div style={{ width: 34, height: 34, borderRadius: 10, background: `${vAccent}10`, border: `1px solid ${vAccent}26`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <VIcon size={15} style={{ color: vAccent }} />
+                    </div>
+                    <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: vAccent, fontFamily: "'Inter Tight', sans-serif" }}>{vMeta?.label || 'Material'}</span>
+                    <span style={{ flex: 1 }} />
+                    <button onClick={() => setViewingMat(null)} title="Cerrar"
+                      style={{ width: 26, height: 26, borderRadius: 8, border: '1px solid var(--border-soft)', background: 'var(--bg-surface)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={13} /></button>
+                  </div>
+                  <div style={{ padding: '18px 20px' }}>
+                    <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--text-primary)', lineHeight: 1.4, fontFamily: "'Inter Tight', sans-serif" }}>{vTitle}</div>
+                    {vBody && (
+                      <div style={{ marginTop: 14 }}>
+                        <div style={{ fontSize: 8.5, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: vAccent, fontFamily: "'Inter Tight', sans-serif", marginBottom: 6 }}>{vBodyLabel}</div>
+                        <div style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap' }}>{vBody}</div>
+                      </div>
+                    )}
+                    {vm.type === 'quiz' && vm.answer && (
+                      <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 10, border: `1px dashed ${vAccent}45`, background: `${vAccent}0a`, fontSize: 12.5, lineHeight: 1.55, color: 'var(--text-secondary)' }}>
+                        <span style={{ fontWeight: 700, color: vAccent, fontFamily: "'Inter Tight', sans-serif" }}>Respuesta: </span>{vm.answer}
+                      </div>
+                    )}
+                    {vm.image && (
+                      <img src={vm.image} alt={vTitle} style={{ marginTop: 14, maxWidth: '100%', maxHeight: 300, borderRadius: 10, objectFit: 'contain', display: 'block', border: '1px solid var(--border-soft)' }} />
+                    )}
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </div>
       )}
@@ -5973,7 +6268,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
       )}
 
       {/* ===== TOOL PRACTICE MODAL (review per tool) ===== */}
-      {practiceMat && <ToolPracticeModal key={practiceMat.id} mat={practiceMat} topicMaterials={activeTopic?.materials || []} onClose={closePractice} />}
+      {practiceMat && <ToolPracticeModal key={practiceMat.id} mat={practiceMat} topicMaterials={safeArr(activeTopic?.materials)} onClose={closePractice} />}
 
       {/* ===== IMAGE PREVIEW (zoom + pan + delete) ===== */}
       {showImagePreview && previewImageSrc && (
@@ -6141,8 +6436,9 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
               )}
             </div>
           </div>
-        </div>
+      </div>
       )}
-    </div>
-  );
-}
+      </div>
+    );
+  }
+
