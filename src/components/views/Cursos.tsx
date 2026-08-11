@@ -950,19 +950,36 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
   };
 
   const trackFormats = () => {
-    const block = document.queryCommandValue('formatBlock')?.replace(/[<>]/g, '')?.toLowerCase() || '';
-    setActiveFormats({
-      bold: document.queryCommandState('bold'),
-      italic: document.queryCommandState('italic'),
-      underline: document.queryCommandState('underline'),
-      strikeThrough: document.queryCommandState('strikeThrough'),
-      insertUnorderedList: document.queryCommandState('insertUnorderedList'),
-      insertOrderedList: document.queryCommandState('insertOrderedList'),
-      heading1: block === 'h1',
-      heading2: block === 'h2',
-      heading3: block === 'h3',
-      blockquote: block === 'blockquote',
-    });
+    const sel = window.getSelection();
+    let bold = false, italic = false, underline = false, strikeThrough = false;
+    let insertUnorderedList = false, insertOrderedList = false;
+    let heading1 = false, heading2 = false, heading3 = false, blockquote = false;
+    if (sel && sel.rangeCount > 0 && editorRef.current && editorRef.current.contains(sel.anchorNode)) {
+      let node: Node | null = sel.anchorNode;
+      if (node && node.nodeType === Node.TEXT_NODE) node = node.parentElement;
+      let el = node as HTMLElement | null;
+      while (el && el !== editorRef.current) {
+        const tag = el.tagName;
+        if (tag === 'B' || tag === 'STRONG') bold = true;
+        else if (tag === 'I' || tag === 'EM') italic = true;
+        else if (tag === 'U') underline = true;
+        else if (tag === 'S' || tag === 'STRIKE' || tag === 'DEL') strikeThrough = true;
+        else if (tag === 'UL') insertUnorderedList = true;
+        else if (tag === 'OL') insertOrderedList = true;
+        else if (tag === 'H1') heading1 = true;
+        else if (tag === 'H2') heading2 = true;
+        else if (tag === 'H3') heading3 = true;
+        else if (tag === 'BLOCKQUOTE') blockquote = true;
+        el = el.parentElement;
+      }
+      bold = bold || document.queryCommandState('bold');
+      italic = italic || document.queryCommandState('italic');
+      underline = underline || document.queryCommandState('underline');
+      strikeThrough = strikeThrough || document.queryCommandState('strikeThrough');
+      insertUnorderedList = insertUnorderedList || document.queryCommandState('insertUnorderedList');
+      insertOrderedList = insertOrderedList || document.queryCommandState('insertOrderedList');
+    }
+    setActiveFormats({ bold, italic, underline, strikeThrough, insertUnorderedList, insertOrderedList, heading1, heading2, heading3, blockquote });
   };
 
   const scheduleTrack = () => {
@@ -1510,6 +1527,8 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
   const editContentRef = useRef<HTMLDivElement>(null);
+  const [noteActiveFormats, setNoteActiveFormats] = useState<Record<string, boolean>>({});
+  const noteTrackTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [notesSearch, setNotesSearch] = useState('');
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Note context menu
@@ -2550,7 +2569,62 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const handleNoteFormat = (cmd: string, value?: string) => {
     document.execCommand(cmd, false, value);
     editContentRef.current?.focus();
+    scheduleNoteTrack();
   };
+
+  const trackNoteFormats = () => {
+    const sel = window.getSelection();
+    const ed = editContentRef.current;
+    if (!ed) return;
+    let bold = false, italic = false, underline = false, strikeThrough = false;
+    let insertUnorderedList = false, insertOrderedList = false;
+    let heading1 = false, heading2 = false, heading3 = false, blockquote = false;
+    if (sel && sel.rangeCount > 0 && ed.contains(sel.anchorNode)) {
+      let node: Node | null = sel.anchorNode;
+      if (node && node.nodeType === Node.TEXT_NODE) node = node.parentElement;
+      let el = node as HTMLElement | null;
+      while (el && el !== ed) {
+        const tag = el.tagName;
+        if (tag === 'B' || tag === 'STRONG') bold = true;
+        else if (tag === 'I' || tag === 'EM') italic = true;
+        else if (tag === 'U') underline = true;
+        else if (tag === 'S' || tag === 'STRIKE' || tag === 'DEL') strikeThrough = true;
+        else if (tag === 'UL') insertUnorderedList = true;
+        else if (tag === 'OL') insertOrderedList = true;
+        else if (tag === 'H1') heading1 = true;
+        else if (tag === 'H2') heading2 = true;
+        else if (tag === 'H3') heading3 = true;
+        else if (tag === 'BLOCKQUOTE') blockquote = true;
+        el = el.parentElement;
+      }
+      bold = bold || document.queryCommandState('bold');
+      italic = italic || document.queryCommandState('italic');
+      underline = underline || document.queryCommandState('underline');
+      strikeThrough = strikeThrough || document.queryCommandState('strikeThrough');
+      insertUnorderedList = insertUnorderedList || document.queryCommandState('insertUnorderedList');
+      insertOrderedList = insertOrderedList || document.queryCommandState('insertOrderedList');
+    }
+    setNoteActiveFormats({ bold, italic, underline, strikeThrough, insertUnorderedList, insertOrderedList, heading1, heading2, heading3, blockquote });
+  };
+
+  const scheduleNoteTrack = () => {
+    if (noteTrackTimeout.current) clearTimeout(noteTrackTimeout.current);
+    noteTrackTimeout.current = setTimeout(trackNoteFormats, 0);
+  };
+
+  useEffect(() => {
+    if (!editingNoteId) return;
+    const onSel = () => scheduleNoteTrack();
+    document.addEventListener('selectionchange', onSel);
+    document.addEventListener('keyup', onSel);
+    document.addEventListener('mouseup', onSel);
+    return () => {
+      document.removeEventListener('selectionchange', onSel);
+      document.removeEventListener('keyup', onSel);
+      document.removeEventListener('mouseup', onSel);
+      if (noteTrackTimeout.current) clearTimeout(noteTrackTimeout.current);
+    };
+  }, [editingNoteId]);
 
   const handleOverviewDeleteNote = (id: string) => {
     deleteNote(id);
@@ -5381,13 +5455,15 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                               ) : (
                                 /* ── EDITING ── */
                                 <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                  <FormatToolbar onFormat={handleNoteFormat} color={course.color} />
+                                  <FormatToolbar onFormat={handleNoteFormat} color={course.color} activeFormats={noteActiveFormats} />
                                   <div ref={editContentRef}
                                     contentEditable
                                     suppressContentEditableWarning
                                     dangerouslySetInnerHTML={{ __html: editContent }}
-                                    onInput={(e: React.FormEvent<HTMLDivElement>) => { const html = (e.target as HTMLDivElement).innerHTML; setEditContent(html); if (saveTimerRef.current) clearTimeout(saveTimerRef.current); saveTimerRef.current = setTimeout(() => updateNote(n.id, { content: html }), 800); }}
+                                    onInput={(e: React.FormEvent<HTMLDivElement>) => { const html = (e.target as HTMLDivElement).innerHTML; setEditContent(html); scheduleNoteTrack(); if (saveTimerRef.current) clearTimeout(saveTimerRef.current); saveTimerRef.current = setTimeout(() => updateNote(n.id, { content: html }), 800); }}
                                     onBlur={() => { updateNote(n.id, { content: editContent }); }}
+                                    onKeyUp={scheduleNoteTrack}
+                                    onMouseUp={scheduleNoteTrack}
                                     style={{ padding: '16px 20px 12px', minHeight: 80, maxHeight: 'calc(100vh - 240px)', overflowY: 'auto', fontSize: 15, lineHeight: 1.9, color: 'var(--text-primary)', background: 'transparent', outline: 'none', fontFamily: "'Atkinson Hyperlegible', system-ui, serif", wordBreak: 'break-word' }} />
                                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 14px 10px', borderTop: '1px solid var(--border-subtle)', background: `${course.color}04` }}>
                                     <button onClick={() => handleTogglePinNote(n.id)}

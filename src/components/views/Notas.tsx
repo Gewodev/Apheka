@@ -1119,6 +1119,24 @@ function EditorToolbar({ onFormat }: EditorToolbarProps) {
       try {
         const state: Record<string, boolean> = {};
         trackCmds.forEach(cmd => { state[cmd] = document.queryCommandState(cmd); });
+        const active = document.activeElement as HTMLElement | null;
+        const editorEl = active && active.isContentEditable ? active : null;
+        const sel = window.getSelection();
+        if (editorEl && sel && sel.rangeCount > 0 && editorEl.contains(sel.anchorNode)) {
+          let node: Node | null = sel.anchorNode;
+          if (node && node.nodeType === Node.TEXT_NODE) node = node.parentElement;
+          let el = node as HTMLElement | null;
+          while (el && el !== editorEl) {
+            const tag = el.tagName;
+            if (tag === 'B' || tag === 'STRONG') state.bold = true;
+            else if (tag === 'I' || tag === 'EM') state.italic = true;
+            else if (tag === 'U') state.underline = true;
+            else if (tag === 'S' || tag === 'STRIKE' || tag === 'DEL') state.strikeThrough = true;
+            else if (tag === 'UL') state.insertUnorderedList = true;
+            else if (tag === 'OL') state.insertOrderedList = true;
+            el = el.parentElement;
+          }
+        }
         setActiveFormats(state);
         const block = document.queryCommandValue("formatBlock") || "p";
         setActiveHeading(block.replace(/[<>]/g, "").toLowerCase());
