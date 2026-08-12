@@ -3,6 +3,40 @@
 
 # Summary
 
+## Sesión actual (build validado 33.89s + tsc OK) — Panel lateral de Tareas terminado: iconos de fondo (watermark) en las 4 tarjetas, materiales con SOLO 2 botones (Enlace/Archivo), secciones con tipografía fina; la lógica de materiales de Cursos verificada en los 5 puntos de carga
+- **Rediseño del panel lateral de Tareas (portaleado) COMPLETADO**: las 4 tarjetas del grid 2×2 (Curso/Prioridad/Fecha/Tiempo) comparten ahora el MISMO estilo premium — padding `14px 14px`, radius 12, gap 10, hairline superior con gradiente del color, hover con `boxShadow` tintado, y **icono marca de agua de fondo** (`size={72} strokeWidth={1}`, `opacity 0.07`, abajo-derecha): Curso → `BookOpen` (color del curso), Prioridad → `Bookmark` (color de prioridad), **Fecha → `CalendarDays`** (color según `getTimeRemaining`: rojo atrasada / ámbar urgente / text-secondary) y **Tiempo → `Clock`** (color del progreso). Labels unificados: uppercase 8px `letterSpacing 0.1em` en el color correspondiente (antes cada tarjeta tenía su propio layout con tiles de icono de 24px — eliminados).
+- **Materiales del panel lateral — SOLO 2 botones de añadir (petición explícita "que para agregar solo esos iconos de cargar enlace y el icono de archivo")**: eliminado el botón dashed "Añadir material" (que abría el form con toggle Enlace/Archivo interno). Ahora el form se abre desde **2 botones tintados** (`flex:1 height:38`, bg `${taskColor}0d` + borde `${taskColor}40`, hover `1a`/`60` — mismo patrón que EventModal :642 y Cursos :3280): **`Link2` "Enlace"** (abre el form directo en modo link) y **`Upload` "Archivo"** (abre el form en modo file + dispara automáticamente `handleAddFileBtn()` tras 50ms → en Tauri el diálogo nativo aparece al instante, en web abre el picker). El form interno ya NO tiene el toggle de modos (se muestra según el botón pulsado) — los inputs de nombre/URL y el botón "Seleccionar archivo..." se conservan idénticos.
+- **Subtareas más finas**: filas con hover al color de la tarea (`borderColor ${taskColor}40` + bg `${taskColor}06` — antes hover genérico `--border-hover`/`--bg-hover`); labels de sección (Subtareas/Materiales/Apuntes) de `fontSize 9.5 fontWeight 700 letterSpacing 0.03em` → **`fontSize 10 fontWeight 600 letterSpacing 0.08em`** (letra fina elegante).
+- **Lógica de materiales de Cursos VERIFICADA en los 5 puntos de carga (ya estaba aplicada, no se tocó)**: Cursos (`MaterialCard` + tile 30px + badges), Tareas panel lateral (:1773-1866 tile 30px `badgeColor14` + subtítulo tipo/dominio + favicon por dominio + menú contextual), Notas (`getNoteMatBadge` :3270-3294), EventModal (`getMatBadge` :15-65, botones Link2/Upload :642/:648), LateralPanel EventDetails (:300-390 mismo patrón de iconos + `onMoved`). Todos con `openFileSmart` + `onMedia` (PiP) + `onError` visible + `onMoved` actualizando la ruta guardada.
+- **Validación**: `pnpm exec tsc --noEmit` OK; `pnpm run build` OK (33.89s, warnings preexistentes de chunks >500 kB).
+
+## Sesión actual (build validado 32.48s + tsc OK + cargo build OK) — Solución definitiva a los 3 problemas reportados: alerta de Windows eliminada al mover archivos (validación previa con `statSafe` + diálogo de re-localización), barras de formato con `preventDefault` para preservar foco y coloreado, y modo solo lectura en "Mi conocimiento" de Cursos
+- **Problema 1 — Alerta nativa de Windows "Windows no puede encontrar el archivo..." al mover un archivo**:
+  - **Causa raíz**: `openFileSmart` llamaba `openPath(url)` directamente sobre la ruta guardada sin verificar si el archivo existía en disco. Al no existir, Tauri/ShellExecute invocaba a Windows y Windows desplegaba su pop-up de error nativo ANTES de que `resolveLocalPath` pudiera intentar buscarlo. Además, las capacidades de Tauri (`default.json`) en `fs:allow-read` y `fs:allow-exists` no incluían `D:/**` ni otros discos (solo `$APPDATA` y `$HOME`), por lo que `statSafe` y `readDirSafe` fallaban por scope al escanear unidades secundarias como D:\.
+  - **Solución**:
+    1. En `openFileSmart.ts`, se ejecuta `statSafe(url)` ANTES de llamar `openPath(url)`. Si el archivo no existe, NUNCA se invoca `openPath` sobre la ruta inexistente, evitando la alerta nativa de Windows.
+    2. Si no existe, arranca `resolveLocalPath` (con presupuesto ágil de 4s y escaneo del árbol padre primero).
+    3. Si la búsqueda no lo localiza de inmediato, en lugar de colgarse o fallar en blanco, salta automáticamente al **diálogo nativo de selección (`plugin-dialog open`) "Re-localizar archivo: [Nombre]"**, permitiendo al usuario seleccionar la nueva ruta de forma 100% confiable. `onMoved` actualiza la ruta guardada en la app para futuros accesos directos.
+    4. Se agregaron `C:/**`, `D:/**`, `E:/**`, ..., `**` a los permisos de `fs:allow-read` y `fs:allow-exists` en `capabilities/default.json`.
+    5. Binario debug Rust recompilado exitosamente (`cargo build` en 1.66s) para aplicar los nuevos permisos de sistema de archivos.
+
+- **Problema 2 — Al hacer click en texto con formato (negrita/cursiva), no se coloreaban los botones del toolbar o se seleccionaba el bloque impidiendo escribir**:
+  - **Causa raíz**: Los botones `<button>` de `FormatToolbar.tsx` y `EditorToolbar` (Notas) no prevenían el evento `onMouseDown` por defecto. Al hacer click en ellos, el foco cambiaba del elemento `contentEditable` al `<button>`, colapsando o distorsionando la selección del texto antes de ejecutar `execCommand`.
+  - **Solución**:
+    1. Se agregó `onMouseDown={e => { const t = e.target as HTMLElement; if (e.button === 0 && t.tagName !== 'INPUT' && t.tagName !== 'SELECT' && t.tagName !== 'TEXTAREA') e.preventDefault(); }}` en las barras de formato (`FormatToolbar` y `EditorToolbar`). Esto evita que los clics roben el foco del editor y preserva el caret y la selección intacta.
+    2. En `Cursos.tsx`, en `handleNoteFormat`, se modificó para enfocar el editor (`editContentRef.current?.focus()`) ANTES de llamar `document.execCommand(cmd)`.
+
+- **Problema 3 — En Cursos (modo overview "Tareas+Notas"), en el bloque "Mi conocimiento", las notas deben verse pero NO editarse ni eliminarse**:
+  - **Causa raíz**: Al alternar a "Mi conocimiento" (`showCourseNotesInOverview === true`), los botones de Editar (`Pencil`) y Eliminar (`Trash2`) seguían mostrándose en el encabezado de las notas expandidas.
+  - **Solución**:
+    1. En `Cursos.tsx` (~línea 3178), se envolvieron los botones `Pencil` y `Trash2` con la condición `!showCourseNotesInOverview`.
+    2. Al hacer click en una nota en "Mi conocimiento", se abre en vista de solo lectura (`overviewNoteEditMode = false`), permitiendo leerla y cerrarla sin botones de edición ni borrado.
+
+- **Validación**:
+  - `pnpm exec tsc --noEmit` OK (sin ningún error).
+  - `pnpm run build` OK (completado en 32.48s).
+  - `cargo build` OK (completado en 1.66s).
+
 ## Sesión actual (build validado 30.32s + tsc OK) — Seguimiento de archivos MOVIDOS arreglado: búsqueda por nombre con límites reales + árbol padre primero + homeDir; onMoved añadido al LateralPanel del Planificador (era el ÚNICO punto sin actualización de ruta)
 - **Problema reportado**: "muevo un archivo con el gestor de Windows y al abrirlo desde la app me dice 'No se pudo abrir el archivo. Si lo moviste de carpeta, vuelve a subirlo' — porque no actualiza la ruta".
 - **Causas raíz (2)**:

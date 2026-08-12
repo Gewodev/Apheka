@@ -809,38 +809,48 @@ export default function Estudio() {
               )}
             </div>
 
-            {/* Linked Plan Session Indicator (below timer) — pill 1 línea, sin hora, click lleva al tema/agrupación, X solo hover */}
+            {/* Linked Plan Session Indicator (below timer) — pill 1 línea, sin hora, click lleva al tema/agrupación, X fuera del recuadro */}
             {linkedPlanSession && (
-              <div
-                onClick={() => { if (linkedPlanSession.groupId || linkedPlanSession.topicId) navigateToCourse(linkedPlanSession.courseId, linkedPlanSession.groupId || undefined, linkedPlanSession.topicId || undefined); }}
-                title={linkedPlanSession.groupId || linkedPlanSession.topicId ? 'Ir al tema o agrupación' : 'Sesión de estudio vinculada'}
-                style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 18, padding: '7px 12px', borderRadius: 999, border: `1px dashed ${linkedPlanCourse?.color || statusColor}55`, background: `${linkedPlanCourse?.color || statusColor}0d`, cursor: (linkedPlanSession.groupId || linkedPlanSession.topicId) ? 'pointer' : 'default', transition: 'all 150ms' }}
-                onMouseEnter={e => { setPlanBlockHover(true); e.currentTarget.style.borderColor = `${linkedPlanCourse?.color || statusColor}88`; e.currentTarget.style.background = `${linkedPlanCourse?.color || statusColor}18`; }}
-                onMouseLeave={e => { setPlanBlockHover(false); e.currentTarget.style.borderColor = `${linkedPlanCourse?.color || statusColor}55`; e.currentTarget.style.background = `${linkedPlanCourse?.color || statusColor}0d`; }}
-              >
-                <div style={{ width: 5, height: 5, borderRadius: '50%', background: linkedPlanCourse?.color || statusColor, boxShadow: `0 0 6px ${linkedPlanCourse?.color || statusColor}80`, flexShrink: 0 }} />
-                <span style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em', color: linkedPlanCourse?.color || statusColor, fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>Sesión</span>
-                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{linkedPlanSession.title || 'Sesión'}</span>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 18 }}
+                onMouseEnter={() => setPlanBlockHover(true)} onMouseLeave={() => setPlanBlockHover(false)}>
+                <div
+                  onClick={() => { if (linkedPlanSession.groupId || linkedPlanSession.topicId) navigateToCourse(linkedPlanSession.courseId, linkedPlanSession.groupId || undefined, linkedPlanSession.topicId || undefined); }}
+                  title={linkedPlanSession.groupId || linkedPlanSession.topicId ? 'Ir al tema o agrupación' : 'Sesión de estudio vinculada'}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, maxWidth: 260, padding: '7px 12px', borderRadius: 999, border: `1px dashed ${linkedPlanCourse?.color || statusColor}55`, background: `${linkedPlanCourse?.color || statusColor}0d`, cursor: (linkedPlanSession.groupId || linkedPlanSession.topicId) ? 'pointer' : 'default', transition: 'all 150ms' }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = `${linkedPlanCourse?.color || statusColor}88`; e.currentTarget.style.background = `${linkedPlanCourse?.color || statusColor}18`; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = `${linkedPlanCourse?.color || statusColor}55`; e.currentTarget.style.background = `${linkedPlanCourse?.color || statusColor}0d`; }}
+                >
+                  <div style={{ width: 5, height: 5, borderRadius: '50%', background: linkedPlanCourse?.color || statusColor, boxShadow: `0 0 6px ${linkedPlanCourse?.color || statusColor}80`, flexShrink: 0 }} />
+                  <span style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em', color: linkedPlanCourse?.color || statusColor, fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>Sesión</span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{linkedPlanSession.title || 'Sesión'}</span>
+                </div>
                 <button onClick={e => { e.stopPropagation(); setShowUnlinkPlanConfirm(true); }} title="Desvincular sesión"
-                  style={{ width: 22, height: 22, borderRadius: '50%', border: '1px solid transparent', background: 'transparent', color: 'var(--text-tertiary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, padding: 0, opacity: planBlockHover ? 1 : 0, transition: 'opacity 150ms, background 150ms, color 150ms, border-color 150ms' }}
+                  style={{ width: 26, height: 26, borderRadius: '50%', border: '1px solid var(--border-soft)', background: 'var(--bg-elevated)', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, padding: 0, opacity: planBlockHover ? 1 : 0, transition: 'opacity 150ms, background 150ms, color 150ms, border-color 150ms' }}
                   onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.16)'; e.currentTarget.style.color = '#EF4444'; e.currentTarget.style.borderColor = 'rgba(239,68,68,0.45)'; e.currentTarget.style.boxShadow = '0 0 10px rgba(239,68,68,0.25)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-tertiary)'; e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.boxShadow = 'none'; }}>
+                  onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.boxShadow = 'none'; }}>
                   <X size={12} strokeWidth={2.5} />
                 </button>
               </div>
             )}
 
-            {/* Linked Task Indicator (small typography, below timer) — X visible en hover con confirmación */}
-            <div onMouseEnter={() => setTaskBlockHover(true)} onMouseLeave={() => setTaskBlockHover(false)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '5px 12px', borderRadius: 6, background: activeTask ? `${activeTask.courseColor || statusColor}08` : 'transparent', border: activeTask ? `1px solid ${activeTask.courseColor || statusColor}20` : 'none', marginTop: linkedPlanSession ? 8 : 20 }}>
-              <div style={{ width: 4, height: 4, borderRadius: '50%', background: activeTask ? (activeTask.courseColor || statusColor) : 'var(--text-muted)', boxShadow: activeTask ? `0 0 4px ${activeTask.courseColor || statusColor}60` : 'none', flexShrink: 0 }} />
-              <span style={{ fontSize: 10, fontWeight: activeTask ? 500 : 400, color: activeTask ? 'var(--text-secondary)' : 'var(--text-muted)', letterSpacing: '0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 200 }}>
-                {activeTask ? activeTask.title : (linkedPlanSession ? null : 'Sin tarea vinculada')}
-              </span>
+            {/* Linked Task Indicator (small typography, below timer) — X fuera del recuadro */}
+            <div onMouseEnter={() => setTaskBlockHover(true)} onMouseLeave={() => setTaskBlockHover(false)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: linkedPlanSession ? 8 : 20 }}>
+              {activeTask && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px', borderRadius: 999, background: `${activeTask.courseColor || statusColor}08`, border: `1px solid ${activeTask.courseColor || statusColor}20`, maxWidth: 260 }}>
+                  <div style={{ width: 4, height: 4, borderRadius: '50%', background: activeTask.courseColor || statusColor, boxShadow: `0 0 4px ${activeTask.courseColor || statusColor}60`, flexShrink: 0 }} />
+                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-secondary)', letterSpacing: '0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }}>
+                    {activeTask.title}
+                  </span>
+                </div>
+              )}
+              {!activeTask && !linkedPlanSession && (
+                <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-muted)', letterSpacing: '0.02em' }}>Sin tarea vinculada</span>
+              )}
               {activeTask && (
                 <button onClick={() => setShowUnlinkTaskConfirm(true)} title="Desvincular tarea"
-                  style={{ width: 22, height: 22, borderRadius: '50%', border: '1px solid transparent', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, padding: 0, opacity: taskBlockHover ? 1 : 0, transition: 'opacity 150ms, background 150ms, color 150ms, border-color 150ms' }}
+                  style={{ width: 26, height: 26, borderRadius: '50%', border: '1px solid var(--border-soft)', background: 'var(--bg-elevated)', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, padding: 0, opacity: taskBlockHover ? 1 : 0, transition: 'opacity 150ms, background 150ms, color 150ms, border-color 150ms' }}
                   onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.16)'; e.currentTarget.style.color = '#EF4444'; e.currentTarget.style.borderColor = 'rgba(239,68,68,0.45)'; e.currentTarget.style.boxShadow = '0 0 10px rgba(239,68,68,0.25)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.boxShadow = 'none'; }}>
+                  onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.boxShadow = 'none'; }}>
                   <X size={12} strokeWidth={2.5} />
                 </button>
               )}

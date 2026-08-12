@@ -139,13 +139,50 @@ async function readDirSafe(dir: string): Promise<{ name: string; isDir: boolean 
   } catch { return null; }
 }
 
-// Resuelve la ruta local real de un archivo:
-// 1) Si la ruta original aún existe → la devuelve.
-// 2) Si fue MOVIDO/renombrado → lo busca por nombre en las carpetas gestionadas por la app
-//    ($APPDATA/archivos, $APPDATA/temp_files), en Documentos/Descargas/Escritorio/Descargas
-//    y en el árbol del directorio padre original (3 niveles, máx. 6000 entradas),
-//    devolviendo el archivo más reciente.
-// 3) No encontrado → null (fue eliminado o movido fuera de esas carpetas).
+// ─── Caché de rutas resueltas ─────────────────────────────────────────────
+// Cuando la búsqueda (o el diálogo de re-localización) encuentra un archivo movido,
+// recordamos `nombre → ruta` en localStorage. La siguiente apertura del MISMO archivo
+// se resuelve con UN solo `stat` (sin escanear discos): el segundo click es instantáneo.
+const PATH_CACHE_KEY = 'owa_path_cache_v1';
+const PATH_CACHE_MAX = 300;
+
+function loadPathCache(): Map<string, string> {
+  try {
+    const raw = localStorage.getItem(PATH_CACHE_KEY);
+    if (!raw) return new Map();
+    const obj = JSON.parse(raw);
+    const m = new Map<string, string>();
+    for (const [k, v] of Object.entries(obj)) {
+      if (k && typeof v === 'string' && v) m.set(k, v);
+    }
+    return m;
+  } catch { return new Map(); }
+}
+
+function rememberPath(rawName: string, path: string) {
+  try {
+    const key = (rawName || '').replace(/^vw_\d+_/, '').trim().toLowerCase();
+    if (!key || !path) return;
+    const m = loadPathCache();
+    m.set(key, path);
+    while (m.size > PATH_CACHE_MAX) {
+      const first = m.keys().next().value;
+      if (first === undefined) break;
+      m.delete(first);
+    }
+    localStorage.setItem(PATH_CACHE_KEY, JSON.stringify(Object.fromEntries(m)));
+  } catch { /* noop */ }
+}
+
+// Resuelve la ruta local real de un archivo, POR ETAPAS EN ORDEN DE PROBABILIDAD:
+// 1) Si la ruta original aún existe → la devuelve (sin escanear nada).
+// 2) Caché de rutas ya resueltas → 1 solo stat (segundo click instantáneo).
+// 3) Búsqueda por nombre en etapas priorizadas, DETENIÉNDOSE EN CUANTO ENCUENTRA:
+//    árbol padre de la ruta original → carpetas de la app → Documentos/Descargas/
+//    Escritorio → home + Libraries → discos D:-Z:. Cada etapa devuelve el archivo
+//    más reciente de esa etapa; si la etapa padre encuentra el archivo, los discos
+//    NO se escanean (el caso típico resuelve en milisegundos con pocos readDir).
+// 4) No encontrado → null (eliminado o movido fuera de esas carpetas).
 export async function resolveLocalPath(originalPath: string, fileName: string): Promise<string | null> {
   try {
     const existing = await statSafe(originalPath);
@@ -156,79 +193,95 @@ export async function resolveLocalPath(originalPath: string, fileName: string): 
     const want = clean(fileName || originalPath.split(/[\\/]/).pop() || '').toLowerCase();
     if (!want) return null;
 
+    // Etapa 2: caché de rutas resueltas (aperturas previas) — 1 solo stat, sin escanear.
+    const cached = loadPathCache().get(want);
+    if (cached) {
+      const st = await statSafe(cached);
+      if (st && st.isFile) { rememberPath(fileName || originalPath, cached); return cached; }
+    }
+
+    // Etapas de búsqueda en orden de probabilidad. La primera que encuentre un
+    // archivo con el nombre buscado GANA y la búsqueda se detiene ahí.
     const roots: string[] = [];
+    // 3a) El árbol del directorio padre de la ruta original PRIMERO (el usuario suele
+    //     mover el archivo a una subcarpeta o a una carpeta hermana de donde estaba —
+    //     se encuentra al instante, con pocos readDir y SIN tocar los discos).
+    try {
+      const seg = originalPath.split(/[\\/]/).filter(Boolean);
+      if (seg.length > 1) roots.push(seg.slice(0, -1).join('/'));
+    } catch { /* noop */ }
+    // 3b) Carpetas gestionadas por la app.
     try {
       const app = await pathMod.appDataDir();
       roots.push(await pathMod.join(app, 'archivos'), await pathMod.join(app, 'temp_files'));
     } catch { /* noop */ }
-    // El árbol del directorio padre de la ruta original PRIMERO (el usuario suele mover
-    // el archivo a una subcarpeta o a una carpeta hermana de donde estaba — se encuentra
-    // al instante sin gastar el límite de archivos escaneando discos enteros).
-    try {
-      const seg = originalPath.split(/[\\/]/).filter(Boolean);
-      if (seg.length > 1) roots.unshift(seg.slice(0, -1).join('/'));
-    } catch { /* noop */ }
+    // 3c) Carpetas de usuario estándar.
     try { roots.push(await pathMod.documentDir(), await pathMod.downloadDir(), await pathMod.desktopDir()); } catch { /* noop */ }
-    // Carpetas virtuales "Libraries" de Windows (Documentos, Descargas, Imágenes, Música,
-    // Vídeos): cubren perfiles con OneDrive o carpetas personalizadas donde documentDir()
-    // podría apuntar a la carpeta real pero el usuario movió el archivo a la Librería.
+    // 3d) home completo + carpetas virtuales "Libraries" de Windows (Documentos,
+    //     Descargas, Imágenes, Música, Vídeos): cubre perfiles con OneDrive o
+    //     carpetas personalizadas.
     try {
       const home = await pathMod.homeDir();
       roots.push(home);
       const libs = ['Documents', 'Downloads', 'Pictures', 'Music', 'Videos'];
       for (const l of libs) roots.push(await pathMod.join(home, 'Libraries', l));
     } catch { /* noop */ }
-    // Raíces de los discos locales NO-sistema (D:\, E:\...): cubre el caso típico
-    // "moví el archivo de Descargas al disco D a una carpeta que creé". La C: se
-    // omite (ya está cubierta por perfil home/Libraries/árbol padre).
+    // 3e) Raíces de los discos locales NO-sistema (D:\, E:\...): ÚLTIMO recurso —
+    //     solo se alcanzan si ninguna etapa anterior encontró el archivo.
     try {
       for (const L of 'DEFGHIJKLMNOPQRSTUVWXYZ') roots.push(`${L}:/`);
     } catch { /* noop */ }
 
-    const found: { p: string; mtimeMs: number }[] = [];
-    const seen = new Set<string>();
-    const queue: { dir: string; depth: number }[] = roots.map(d => ({ dir: d, depth: 0 }));
-    let scanned = 0;
-    const MAX_FILES = 60000;
-    const MAX_DIRS = 40000;
-    const MAX_DEPTH = 6;
-    const TIME_BUDGET_MS = 4000;
+    const MAX_DIRS = 8000;
+    const MAX_DEPTH = 5;
+    const MAX_FILES_PER_DIR = 20000;
+    const TIME_BUDGET_MS = 2500;
     const startedAt = Date.now();
     // Directorios de sistema/caché que nunca contienen archivos del usuario: se podan
     // en la búsqueda por disco para no saturar los límites con Windows/Program Files...
     const SKIP_DIRS = new Set([
       'windows', 'program files', 'program files (x86)', 'programdata', 'recovery',
-      '$recycle.bin', 'system volume information', 'perflogs', 'appdata',
-      'node_modules', '.git', 'intel', 'msocache',
+      '$recycle.bin', 'system volume information', 'perflogs', 'appdata', 'windows.old',
+      '$windows.~bt', '$windows.~ws', 'node_modules', '.git', 'intel', 'msocache',
+      'temp', 'tmp', '.cache', 'cookies', 'datareader', 'logs', 'common files',
     ]);
-    let visitedDirs = 0;
 
-    while (queue.length && scanned < MAX_FILES && visitedDirs < MAX_DIRS && Date.now() - startedAt < TIME_BUDGET_MS) {
-      const { dir, depth } = queue.shift()!;
-      const norm = dir.replace(/\\/g, '/').toLowerCase();
-      if (seen.has(norm) || depth > MAX_DEPTH) continue;
-      seen.add(norm);
-      const entries = await readDirSafe(dir);
-      if (!entries) continue;
-      visitedDirs++;
-      for (const en of entries) {
-        if (en.isDir) {
-          if (depth < MAX_DEPTH && !en.name.startsWith('.') && !SKIP_DIRS.has(en.name.toLowerCase())) {
-            queue.push({ dir: await pathMod.join(dir, en.name), depth: depth + 1 });
+    for (const root of roots) {
+      const found: { p: string; mtimeMs: number }[] = [];
+      const seen = new Set<string>();
+      const queue: { dir: string; depth: number }[] = [{ dir: root, depth: 0 }];
+      let visitedDirs = 0;
+      while (queue.length && visitedDirs < MAX_DIRS && Date.now() - startedAt < TIME_BUDGET_MS) {
+        const { dir, depth } = queue.shift()!;
+        const norm = dir.replace(/\\/g, '/').toLowerCase();
+        if (seen.has(norm) || depth > MAX_DEPTH) continue;
+        seen.add(norm);
+        const entries = await readDirSafe(dir);
+        if (!entries) continue;
+        visitedDirs++;
+        let scanned = 0;
+        for (const en of entries) {
+          if (en.isDir) {
+            if (depth < MAX_DEPTH && !en.name.startsWith('.') && !SKIP_DIRS.has(en.name.toLowerCase())) {
+              queue.push({ dir: await pathMod.join(dir, en.name), depth: depth + 1 });
+            }
+            continue;
           }
-          continue;
+          if (++scanned > MAX_FILES_PER_DIR) break;
+          if (clean(en.name).toLowerCase() !== want) continue;
+          const full = await pathMod.join(dir, en.name);
+          const st = await statSafe(full);
+          if (st && st.isFile) found.push({ p: full, mtimeMs: st.mtimeMs });
         }
-        if (++scanned > MAX_FILES) break;
-        if (clean(en.name).toLowerCase() !== want) continue;
-        const full = await pathMod.join(dir, en.name);
-        const st = await statSafe(full);
-        if (st && st.isFile) found.push({ p: full, mtimeMs: st.mtimeMs });
       }
-    }
-
-    if (found.length) {
-      found.sort((a, b) => b.mtimeMs - a.mtimeMs);
-      return found[0].p;
+      if (found.length) {
+        found.sort((a, b) => b.mtimeMs - a.mtimeMs);
+        const best = found[0].p;
+        rememberPath(fileName || originalPath, best);
+        return best;
+      }
+      // Si una etapa se comió el presupuesto de tiempo, no seguir escaneando discos.
+      if (Date.now() - startedAt >= TIME_BUDGET_MS) break;
     }
     return null;
   } catch { return null; }
@@ -317,7 +370,7 @@ export async function openFileSmart(url: string, fileName: string, opts: OpenFil
             const { open } = await import('@tauri-apps/plugin-dialog');
             const picked = await open({ multiple: false, title: `Re-localizar archivo: ${fileName || url.split(/[\\/]/).pop() || ''}` });
             if (typeof picked === 'string' && picked) {
-              try { await openPath(picked); onMoved?.(picked); return; }
+              try { await openPath(picked); rememberPath(fileName || url, picked); onMoved?.(picked); return; }
               catch { /* sigue */ }
             }
           } catch { /* diálogo cancelado o no disponible */ }
