@@ -24,6 +24,7 @@ import AIBrainSidebar from './components/ui/AIBrainSidebar';
 import type { BrainAnchor } from './lib/brainDrop';
 import NowPlayingView from './components/NowPlayingView';
 import VideoPiP from './components/VideoPiP';
+import ImageContextMenu from './components/ui/ImageContextMenu';
 import ReactPlayer from 'react-player';
 const Player = ReactPlayer as any;
 
@@ -348,7 +349,7 @@ function AppContent() {
                     setShowCoursesPopup(false);
                   }
                 }}
-                className={`sidebar-nav-btn ${activeView === item.id ? 'active' : ''}`}
+                className={`sidebar-nav-btn ${activeView === item.id || (item.id === 'cursos' && activeView === 'curso_detalle') ? 'active' : ''}`}
                 title={isCollapsed ? item.label : undefined}
               >
                 <item.icon size={20} strokeWidth={1.5} />
@@ -801,6 +802,9 @@ function AppContent() {
 
       {/* PiP Video Player */}
       <VideoPiP url={pipUrl} title={pipTitle} autoplay={pipAutoplay} onPlayingChange={setPipPlaying} onClose={() => setPipUrl(null)} />
+
+      {/* Menú contextual global de imágenes (copiar/descargar) */}
+      <ImageContextMenu />
 
       {/* ─── Charvis sidebar ─── */}
       <AIBrainSidebar isOpen={isBrainOpen} onClose={() => setIsBrainOpen(false)} onOpen={() => setIsBrainOpen(true)} anchor={brainAnchor} />

@@ -174,39 +174,41 @@ function DayDetails({ item, onSelectEvent, onViewTask, timeFormat, onAddEvent, o
           </div>
         )}
 
-        <button
-          onClick={() => onAddEvent?.(date)}
-          style={{
-            display:'flex', alignItems:'center', justifyContent:'center', gap:8,
-            height:44, borderRadius:11, padding:'0 24px',
-            fontSize:12.5, fontWeight:600, fontFamily:"'Inter Tight',sans-serif", letterSpacing:'0.01em',
-            border:'1px solid var(--border-soft)', cursor:'pointer',
-            background:'var(--bg-elevated)', color:'var(--text-primary)',
-            transition:'all 200ms', marginTop:8,
-          }}
-          onMouseEnter={e=>{ e.currentTarget.style.background='var(--bg-hover)'; e.currentTarget.style.borderColor='color-mix(in srgb, var(--accent) 45%, transparent)'; }}
-          onMouseLeave={e=>{ e.currentTarget.style.background='var(--bg-elevated)'; e.currentTarget.style.borderColor='var(--border-soft)'; }}
-        >
-          <CalendarPlus size={15} style={{ color: 'var(--accent)' }} /> Agregar Evento
-        </button>
-        {onAddPlanSession && (
+        <div style={{ display:'flex', flexDirection:'column', gap:12, marginTop:36 }}>
           <button
-            onClick={() => onAddPlanSession(date)}
+            onClick={() => onAddEvent?.(date)}
             style={{
               display:'flex', alignItems:'center', justifyContent:'center', gap:8,
               height:44, borderRadius:11, padding:'0 24px',
               fontSize:12.5, fontWeight:600, fontFamily:"'Inter Tight',sans-serif", letterSpacing:'0.01em',
-              border:'none', cursor:'pointer',
-              background:'var(--accent)', color:'#fff',
-              boxShadow:'0 4px 15px var(--accent-dim)',
+              border:'1px solid var(--border-soft)', cursor:'pointer',
+              background:'var(--bg-elevated)', color:'var(--text-primary)',
               transition:'all 200ms',
             }}
-            onMouseEnter={e=>e.currentTarget.style.filter='brightness(1.12)'}
-            onMouseLeave={e=>e.currentTarget.style.filter='none'}
+            onMouseEnter={e=>{ e.currentTarget.style.background='var(--bg-hover)'; e.currentTarget.style.borderColor='color-mix(in srgb, var(--accent) 45%, transparent)'; }}
+            onMouseLeave={e=>{ e.currentTarget.style.background='var(--bg-elevated)'; e.currentTarget.style.borderColor='var(--border-soft)'; }}
           >
-            <Plus size={15}/> Nueva Sesión
+            <CalendarPlus size={15} style={{ color: 'var(--accent)' }} /> Agregar Evento
           </button>
-        )}
+          {onAddPlanSession && (
+            <button
+              onClick={() => onAddPlanSession(date)}
+              style={{
+                display:'flex', alignItems:'center', justifyContent:'center', gap:8,
+                height:44, borderRadius:11, padding:'0 24px',
+                fontSize:12.5, fontWeight:600, fontFamily:"'Inter Tight',sans-serif", letterSpacing:'0.01em',
+                border:'none', cursor:'pointer',
+                background:'var(--accent)', color:'#fff',
+                boxShadow:'0 4px 15px var(--accent-dim)',
+                transition:'all 200ms',
+              }}
+              onMouseEnter={e=>e.currentTarget.style.filter='brightness(1.12)'}
+              onMouseLeave={e=>e.currentTarget.style.filter='none'}
+            >
+              <Plus size={15}/> Nueva Sesión
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -283,7 +285,7 @@ function EventDetails({ item, onEdit, onDelete, timeFormat, tasks, onViewTask, o
               </div>
               <div style={{ flex:1, minWidth:0 }}>
                 <div style={{ fontSize:15, color:'var(--text-primary)', fontWeight:500, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{linkedTask.title}</div>
-                {linkedTask.dueDate && <div style={{ fontSize:12, color:'var(--text-muted)', marginTop:2 }}>Vence: {(() => { try { return format(new Date(linkedTask.dueDate+'T12:00:00'), "d 'de' MMM", { locale: es }); } catch { return '—'; } })()}</div>}
+                {linkedTask.dueDate && <div style={{ fontSize:12, color:'var(--text-muted)', marginTop:2 }}>Vence: {(() => { try { const hasTime = linkedTask.dueDate.includes('T'); return format(hasTime ? new Date(linkedTask.dueDate) : new Date(linkedTask.dueDate + 'T12:00:00'), "d 'de' MMM", { locale: es }); } catch { return '—'; } })()}</div>}
               </div>
               <ExternalLink size={16} style={{ color:'var(--text-muted)', flexShrink:0 }} />
             </div>

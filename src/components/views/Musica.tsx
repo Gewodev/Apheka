@@ -8,7 +8,7 @@ import {
   ExternalLink, FolderOpen, Plus,
   Disc3, Activity, Heart, Copy, Clock,
   User, Wifi, Sliders, Repeat, Shuffle, BarChart2,
-  Edit2, Grid, List, Image,
+  Edit2, Grid, List, Image, ListPlus, ListX,
 } from 'lucide-react';
 import { useApp, type Track } from '../../store/AppContext';
 import { open, save } from '@tauri-apps/plugin-dialog';
@@ -154,6 +154,27 @@ export default function Musica() {
 
   const urlInputRef = useRef<HTMLInputElement>(null);
   const searchRequestId = useRef(0);
+
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; trackId: string } | null>(null);
+
+  const openTrackMenu = useCallback((e: React.MouseEvent, trackId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (trackId === currentTrackId && !musicQueue.includes(trackId)) return;
+    setCtxMenu({ x: e.clientX, y: e.clientY, trackId });
+  }, [currentTrackId, musicQueue]);
+
+  const ctxPlayNext = useCallback((trackId: string) => {
+    setMusicQueue([trackId, ...musicQueue.filter(id => id !== trackId)]);
+    setCtxMenu(null);
+    addNotification('Se reproducirá después de la canción actual', 'success');
+  }, [musicQueue, setMusicQueue, addNotification]);
+
+  const ctxRemoveFromQueue = useCallback((trackId: string) => {
+    setMusicQueue(musicQueue.filter(id => id !== trackId));
+    setCtxMenu(null);
+    addNotification('Canción quitada de la cola', 'success');
+  }, [musicQueue, setMusicQueue, addNotification]);
   const [colocarTrackId, setColocarTrackId] = useState<string | null>(null);
 
 
@@ -824,7 +845,7 @@ export default function Musica() {
                           {artistTracks.map((t, idx) => {
                             const isPlaying = currentTrackId === t.id && isPlayingMusic;
                             return (
-                              <div key={t.id} onClick={() => { const pool = artistTracks.map(x => x.id); setQueueSource({ pool, name: selectedArtist || undefined }); handlePlayWithTabCb(t.id); }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, cursor: 'pointer', background: isPlaying ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : 'transparent', transition: 'all 150ms', border: '1px solid transparent' }}
+                              <div key={t.id} onClick={() => { const pool = artistTracks.map(x => x.id); setQueueSource({ pool, name: selectedArtist || undefined }); handlePlayWithTabCb(t.id); }} onContextMenu={(e) => openTrackMenu(e, t.id)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, cursor: 'pointer', background: isPlaying ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : 'transparent', transition: 'all 150ms', border: '1px solid transparent' }}
                                 onMouseEnter={e => { if (!isPlaying) { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.borderColor = 'var(--border-subtle)'; } }}
                                 onMouseLeave={e => { if (!isPlaying) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'transparent'; } }}>
                                 <span style={{ fontSize: 11, fontWeight: 500, color: isPlaying ? 'var(--accent)' : 'var(--text-tertiary)', width: 22, textAlign: 'center', fontFamily: "'JetBrains Mono',monospace" }}>{isPlaying ? <Play size={9} fill="var(--accent)" style={{ color: 'var(--accent)' }} /> : idx + 1}</span>
@@ -964,6 +985,7 @@ export default function Musica() {
                             return (
                               <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 10, cursor: 'pointer', background: isPlaying ? 'var(--accent-dim)' : 'transparent', transition: 'background 150ms' }}
                                 onClick={() => { const pool = plTracks.map(x => x.id); setQueueSource({ pool, name: pl.name }); handlePlayWithTabCb(t.id); }}
+                                onContextMenu={(e) => openTrackMenu(e, t.id)}
                                 onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-surface)'}
                                 onMouseLeave={e => e.currentTarget.style.background = isPlaying ? 'var(--accent-dim)' : 'transparent'}>
                                 <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-tertiary)', width: 24, textAlign: 'center' }}>{isPlaying ? <Play size={10} fill="var(--accent)" style={{ color: 'var(--accent)' }} /> : idx + 1}</span>
@@ -1313,6 +1335,7 @@ export default function Musica() {
                         <div
                           key={track.id}
                           onClick={() => handlePlayWithTabCb(track.id)}
+                          onContextMenu={(e) => openTrackMenu(e, track.id)}
                           style={{
                             display: 'grid', gridTemplateColumns: '40px 3.5fr 1.5fr 80px 130px', padding: '10px 12px',
                             borderRadius: 8, alignItems: 'center', cursor: 'pointer', transition: 'all 150ms',
@@ -1390,6 +1413,7 @@ export default function Musica() {
                       <div
                         key={track.id}
                         onClick={() => handlePlayWithTabCb(track.id)}
+                        onContextMenu={(e) => openTrackMenu(e, track.id)}
                         style={{
                           padding: '10px 10px 12px', display: 'flex', flexDirection: 'column', gap: 10, cursor: 'pointer',
                           borderRadius: 12,
@@ -1932,7 +1956,7 @@ export default function Musica() {
                     const t = tracks.find(tr => tr.id === trackId);
                     if (!t) return null;
                     return (
-                      <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', padding: '4px 0', borderRadius: 6 }} onClick={() => handlePlayWithTabCb(t.id)} className="hover-lift">
+                      <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', padding: '4px 0', borderRadius: 6 }} onClick={() => handlePlayWithTabCb(t.id)} onContextMenu={(e) => openTrackMenu(e, t.id)} className="hover-lift">
                         <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', width: 16, textAlign: 'center' }}>{i + 1}</span>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</div>
@@ -2482,6 +2506,27 @@ export default function Musica() {
         </div>, document.body
       )}
 
+      {ctxMenu && createPortal(
+        <div style={{ position: 'fixed', inset: 0, zIndex: 99998 }} onClick={() => setCtxMenu(null)} onContextMenu={(e) => { e.preventDefault(); setCtxMenu(null); }}>
+          <div style={{ position: 'fixed', left: Math.min(ctxMenu.x, window.innerWidth - 230), top: Math.min(ctxMenu.y, window.innerHeight - 150), zIndex: 99999, background: 'var(--bg-elevated)', border: '1px solid var(--border-soft)', borderRadius: 10, boxShadow: '0 14px 44px rgba(0,0,0,0.38)', padding: 6, width: 220 }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-tertiary)', padding: '5px 10px 8px', borderBottom: '1px solid var(--border-subtle)', marginBottom: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {tracks.find(t => t.id === ctxMenu.trackId)?.title || 'Canción'}
+            </div>
+            {musicQueue.includes(ctxMenu.trackId) ? (
+              <button onClick={() => ctxRemoveFromQueue(ctxMenu.trackId)} style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: '8px 10px', borderRadius: 7, border: 'none', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, cursor: 'pointer', textAlign: 'left' }}>
+                <ListX size={14} style={{ color: 'var(--error)', flexShrink: 0 }} />
+                Quitar de la cola
+              </button>
+            ) : (
+              <button onClick={() => ctxPlayNext(ctxMenu.trackId)} style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: '8px 10px', borderRadius: 7, border: 'none', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, cursor: 'pointer', textAlign: 'left' }}>
+                <ListPlus size={14} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                Reproducir después de esta canción
+              </button>
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
 
 
     </div>

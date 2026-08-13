@@ -44,7 +44,7 @@ import { GoogleClassroomIcon, GoogleDriveIcon, GoogleDocsIcon, GoogleSheetsIcon,
 import { isTauri, convertFileSrc } from '@tauri-apps/api/core';
 import { createDownloadTask, updateDownloadTask, completeDownloadTask } from '../ui/DownloadManager';
 import {
-  DndContext, closestCenter,
+  DndContext, closestCenter, DragOverlay,
   PointerSensor, useSensor, useSensors,
 } from '@dnd-kit/core';
 import {
@@ -52,7 +52,7 @@ import {
   rectSortingStrategy, verticalListSortingStrategy
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { restrictToParentElement } from '@dnd-kit/modifiers';
+import { restrictToParentElement, snapCenterToCursor } from '@dnd-kit/modifiers';
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import toast from "react-hot-toast";
@@ -513,14 +513,16 @@ function NoteCard({ note, isSelected, onSelect, onOpen, onContextMenu, tagColors
               : "1px solid " + (isSelected ? spineColor + "40" : hov ? "var(--border-strong)" : "var(--border-subtle)"),
           borderRadius: "var(--radius-xl)",
           transition: isDragging ? "none" : transition ? transition : "all 250ms " + EASE,
-          transform: isDragging ? CSS.Transform.toString(transform) : transform ? CSS.Transform.toString(transform) : hov ? "translateY(-2px)" : "none",
-          opacity: isDragging ? 0.72 : 1,
+          transform: transform ? CSS.Transform.toString(transform) : hov ? "translateY(-2px)" : "none",
+          opacity: isDragging ? 0.8 : 1,
           zIndex: isDragging ? 20 : isOver ? 15 : 'auto',
-          boxShadow: isOver && !isDragging
-            ? "0 0 0 2px var(--accent), 0 12px 28px rgba(0,0,0,0.12)"
-            : hov
-              ? "0 12px 28px rgba(0,0,0,0.10), 0 4px 12px rgba(0,0,0,0.06)"
-              : "0 1px 3px rgba(0,0,0,0.04)",
+          boxShadow: isDragging
+            ? "0 16px 34px rgba(0,0,0,0.35)"
+            : isOver && !isDragging
+              ? "0 0 0 2px var(--accent), 0 12px 28px rgba(0,0,0,0.12)"
+              : hov
+                ? "0 12px 28px rgba(0,0,0,0.10), 0 4px 12px rgba(0,0,0,0.06)"
+                : "0 1px 3px rgba(0,0,0,0.04)",
           position: "relative", overflow: "hidden",
         }}
       >
@@ -618,6 +620,74 @@ function NoteCard({ note, isSelected, onSelect, onOpen, onContextMenu, tagColors
   );
 }
 
+/* ====== NOTE DRAG GHOST (DragOverlay) ====== */
+function NoteDragGhost({ note }: { note: Note }) {
+  const spineColor = note.coverColor || note.courseColor || getSpineColor(note.id);
+  const text = (note.content || "")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ')
+    .trim();
+  return (
+    <div style={{
+      width: 250, display: "flex", flexDirection: "column", gap: 10,
+      padding: "16px 16px 12px", borderRadius: "var(--radius-xl)",
+      background: "var(--bg-elevated)", border: "1px dashed " + spineColor + "88",
+      boxShadow: "0 18px 40px rgba(0,0,0,0.35)",
+      userSelect: "none", pointerEvents: "none",
+    }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", minWidth: 0 }}>
+        <div style={{
+          width: 34, height: 34, borderRadius: 10, flexShrink: 0,
+          background: spineColor + "14", display: "flex", alignItems: "center", justifyContent: "center",
+          border: "1px solid " + spineColor + "24",
+        }}>
+          <NoteIconRenderer iconName={note.coverImage} color={spineColor} size={15} />
+        </div>
+        <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+          {note.title || "Sin título"}
+        </span>
+      </div>
+      <div style={{
+        fontSize: 11.5, color: "var(--text-secondary)", lineHeight: 1.5, opacity: 0.6,
+        display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden",
+      }}>
+        {text || "Sin contenido adicional en este cuaderno."}
+      </div>
+    </div>
+  );
+}
+
+/* ====== BOOKSHELF BOOK DRAG GHOST (DragOverlay, estante view) ====== */
+function BookDragGhost({ note }: { note: Note }) {
+  const spineColor = note.coverColor || note.courseColor || getSpineColor(note.id);
+  return (
+    <div style={{
+      width: 150, height: 218, position: "relative", overflow: "hidden",
+      borderRadius: "2px 8px 8px 2px",
+      background: `linear-gradient(145deg, ${spineColor}0d 0%, rgba(255,255,255,0.02) 100%)`,
+      boxShadow: "0 18px 40px rgba(0,0,0,0.45)",
+      border: "1px dashed " + spineColor + "88",
+      userSelect: "none", pointerEvents: "none",
+    }}>
+      <div style={{
+        position: "absolute", left: 0, top: 0, bottom: 0, width: 14,
+        background: `linear-gradient(90deg, ${spineColor} 0%, color-mix(in srgb, ${spineColor} 70%, #000 30%) 80%, rgba(0,0,0,0.3) 100%)`,
+      }} />
+      <div style={{ position: "absolute", left: 14, top: 0, bottom: 0, width: 1, background: "rgba(255,255,255,0.05)" }} />
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 44, background: `linear-gradient(180deg, ${spineColor}2e, transparent)` }} />
+      <div style={{
+        position: "absolute", top: 54, left: 24, right: 12,
+        fontSize: 13, fontWeight: 700, fontFamily: "'Inter Tight', sans-serif",
+        color: "var(--text-primary)", lineHeight: 1.35, textAlign: "center",
+        textTransform: "uppercase", letterSpacing: "0.02em",
+        display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden",
+      }}>
+        {note.title || "Sin título"}
+      </div>
+    </div>
+  );
+}
+
 /* ====== BOOKSHELF BOOK (estante view) ====== */
 interface BookshelfBookProps {
   note: Note;
@@ -658,8 +728,8 @@ function BookshelfBook({ note, isSelected, folders, onSelect, onDoubleClick, onC
       position: "relative",
       cursor: isDragging ? "grabbing" : "pointer",
       userSelect: "none", WebkitUserSelect: "none",
-      transform: isDragging ? CSS.Transform.toString(transform) : transform ? CSS.Transform.toString(transform) : hov ? "translateY(-5px)" : "translateY(0)",
-      opacity: isDragging ? 0.7 : 1,
+      transform: transform ? CSS.Transform.toString(transform) : hov ? "translateY(-5px)" : "translateY(0)",
+      opacity: isDragging ? 0.8 : 1,
       transition: isDragging ? "none" : transition ? transition : "transform 250ms " + EASE + ", opacity 180ms " + EASE,
       width: 158,
       marginBottom: 0,
@@ -2646,18 +2716,22 @@ const noteLiveAtts = useMemo(
   const noteSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { delay: 300, tolerance: 8 } })
   );
+  const [activeNoteDragId, setActiveNoteDragId] = useState<string | null>(null);
 
-  const handleDragEndNotes = useCallback((event: any) => {
+  const handleDragEndNotes = useCallback((event: any, targetIds?: string[]) => {
     const { active, over } = event;
-    if (over && active.id !== over.id) {
-      const ids = filteredNotes.map(n => n.id);
-      const oldIndex = ids.indexOf(active.id);
-      const newIndex = ids.indexOf(over.id);
-      const newIds = arrayMove([...ids], oldIndex, newIndex);
-      reorderNotes(newIds);
-      setSortMode("manual");
-      toast.success("Orden actualizado");
+    const ids = (targetIds && targetIds.length ? targetIds : filteredNotes.map(n => n.id));
+    const oldIndex = ids.indexOf(active.id);
+    if (oldIndex >= 0) {
+      let newIndex = over ? ids.indexOf(over.id) : ids.length - 1;
+      if (newIndex >= 0 && oldIndex !== newIndex && active.id !== over?.id) {
+        const newIds = arrayMove([...ids], oldIndex, newIndex);
+        reorderNotes(newIds);
+        setSortMode("manual");
+        toast.success("Orden actualizado");
+      }
     }
+    setActiveNoteDragId(null);
   }, [filteredNotes, reorderNotes]);
 
   // Creator advanced actions
@@ -3637,7 +3711,7 @@ const noteLiveAtts = useMemo(
                 ) : viewMode === "lista" ? (
                   /* Upgraded Blocks View: Grid of 2 columns */
                   <DndContext sensors={noteSensors} collisionDetection={closestCenter}
-                    onDragStart={() => {}} onDragEnd={handleDragEndNotes}>
+                    onDragStart={(e) => setActiveNoteDragId(e.active.id as string)} onDragCancel={() => setActiveNoteDragId(null)} onDragEnd={handleDragEndNotes}>
                     <SortableContext items={filteredNotes.map(n => n.id)} strategy={rectSortingStrategy}>
                     <div style={{
                       flex: 1, overflow: "auto", display: "grid",
@@ -3655,6 +3729,9 @@ const noteLiveAtts = useMemo(
                       ))}
                     </div>
                     </SortableContext>
+                    <DragOverlay dropAnimation={null} modifiers={[snapCenterToCursor]}>
+                      {(() => { const n = filteredNotes.find(x => x.id === activeNoteDragId); return n ? <NoteDragGhost note={n} /> : null; })()}
+                    </DragOverlay>
                   </DndContext>
                 ) : (
                   /* Bookshelf View: non-scrollable, pagination at top */
@@ -3714,7 +3791,7 @@ const noteLiveAtts = useMemo(
 
                           {/* Books — non-scrollable, fills remaining space */}
                           <DndContext sensors={noteSensors} collisionDetection={closestCenter}
-                            onDragStart={() => {}} onDragEnd={handleDragEndNotes}>
+                            onDragStart={(e) => setActiveNoteDragId(e.active.id as string)} onDragCancel={() => setActiveNoteDragId(null)} onDragEnd={(e) => handleDragEndNotes(e, pageNotesBS.map(n => n.id))}>
                             <SortableContext items={pageNotesBS.map(n => n.id)} strategy={rectSortingStrategy}>
                           <div style={{
                             flex: 1, display: "flex", flexDirection: "column",
@@ -3827,6 +3904,9 @@ const noteLiveAtts = useMemo(
                             )}
                             </div>
                             </SortableContext>
+                            <DragOverlay dropAnimation={null} modifiers={[snapCenterToCursor]}>
+                              {(() => { const n = pageNotesBS.find(x => x.id === activeNoteDragId); return n ? <BookDragGhost note={n} /> : null; })()}
+                            </DragOverlay>
                           </DndContext>
                           </div>
                         </>
@@ -4883,13 +4963,13 @@ const noteLiveAtts = useMemo(
 function SortableFolderRow({ f, children }: { f: NoteFolder; children: (props: { attributes: any; listeners: any; setNodeRef: any; style: any; isDragging: boolean }) => React.ReactNode }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: f.id });
   const style = { transform: CSS.Translate.toString(transform), transition, zIndex: isDragging ? 10 : 'auto', opacity: isDragging ? 0.4 : 1 };
-  return <div ref={setNodeRef} style={style}>{children({ attributes, listeners, setNodeRef, style, isDragging })}</div>;
+  return <div ref={setNodeRef} style={style}>{children({ attributes, listeners, setNodeRef: () => {}, style: {}, isDragging })}</div>;
 }
 
 function SortableTagRow({ tag, children }: { tag: string; children: (props: { attributes: any; listeners: any; setNodeRef: any; style: any; isDragging: boolean }) => React.ReactNode }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: tag });
   const style = { transform: CSS.Translate.toString(transform), transition, zIndex: isDragging ? 10 : 'auto', opacity: isDragging ? 0.4 : 1 };
-  return <div ref={setNodeRef} style={style}>{children({ attributes, listeners, setNodeRef, style, isDragging })}</div>;
+  return <div ref={setNodeRef} style={style}>{children({ attributes, listeners, setNodeRef: () => {}, style: {}, isDragging })}</div>;
 }
 
 interface LibrarySidebarProps {
@@ -4945,29 +5025,40 @@ function LibrarySidebar({
     try { return JSON.parse(localStorage.getItem("owa_tag_order") || "[]"); } catch { return []; }
   });
   const folderSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+    useSensor(PointerSensor, { activationConstraint: { delay: 300, tolerance: 8 } })
   );
   const tagSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+    useSensor(PointerSensor, { activationConstraint: { delay: 300, tolerance: 8 } })
   );
   const handleFolderDragEnd = useCallback((event: any) => {
     const { active, over } = event;
-    if (over && active.id !== over.id) {
-      const ids = folders.map(f => f.id);
-      const oldIndex = ids.indexOf(active.id);
-      const newIndex = ids.indexOf(over.id);
-      const newIds = arrayMove([...ids], oldIndex, newIndex);
-      reorderFolders(newIds);
+    const ids = folders.map(f => f.id);
+    const oldIndex = ids.indexOf(active.id);
+    if (oldIndex !== -1) {
+      if (over && active.id !== over.id) {
+        const newIndex = ids.indexOf(over.id);
+        if (newIndex !== -1) reorderFolders(arrayMove([...ids], oldIndex, newIndex));
+      } else if (!over) {
+        reorderFolders(arrayMove([...ids], oldIndex, ids.length - 1));
+      }
     }
     setActiveFolderDragId(null);
   }, [folders, reorderFolders]);
 
   const handleTagDragEnd = useCallback((event: any) => {
     const { active, over } = event;
-    if (over && active.id !== over.id) {
-      const oldIndex = localTagOrder.indexOf(active.id);
-      const newIndex = localTagOrder.indexOf(over.id);
-      const newOrder = arrayMove([...localTagOrder], oldIndex, newIndex);
+    const oldIndex = localTagOrder.indexOf(active.id);
+    if (oldIndex !== -1) {
+      let newOrder: string[];
+      if (over && active.id !== over.id) {
+        const newIndex = localTagOrder.indexOf(over.id);
+        if (newIndex === -1) { setActiveTagDragId(null); return; }
+        newOrder = arrayMove([...localTagOrder], oldIndex, newIndex);
+      } else if (!over) {
+        newOrder = arrayMove([...localTagOrder], oldIndex, localTagOrder.length - 1);
+      } else {
+        setActiveTagDragId(null); return;
+      }
       setLocalTagOrder(newOrder);
       localStorage.setItem("owa_tag_order", JSON.stringify(newOrder));
       onTagReorder(newOrder);
@@ -5051,11 +5142,10 @@ const trashCount = notes.filter(n => n.deletedAt).length;
                 {folders.filter(f => !deletedFolderIds.has(f.id)).map((f) => {
                   const count = notes.filter((n) => n.folderId === f.id && !n.deletedAt).length;
                   const isSel = selectedFolderId === f.id;
-                  const isDragging = activeFolderDragId === f.id;
                   return (
                     <SortableFolderRow key={f.id} f={f}>
-                      {({ attributes, listeners, setNodeRef, style: dndStyle }) => (
-                        <div ref={setNodeRef} className="folder-sidebar-item hover:bg-[var(--bg-hover)]" style={{ ...dndStyle, display: "flex", alignItems: "center", gap: 10, width: "100%",
+                      {({ attributes, listeners }) => (
+                        <div className="folder-sidebar-item hover:bg-[var(--bg-hover)]" style={{ display: "flex", alignItems: "center", gap: 10, width: "100%",
                           padding: "10px 14px 10px 6px",
                           background: isSel ? "var(--bg-hover)" : "transparent",
                           border: isSel ? "1px solid var(--border-soft)" : "1px solid transparent",
@@ -5063,7 +5153,7 @@ const trashCount = notes.filter(n => n.deletedAt).length;
                           borderRadius: "var(--radius-md)",
                           cursor: "pointer", fontSize: 13.5, fontWeight: 500,
                           textAlign: "left", transition: "all 200ms " + EASE,
-                          color: isSel ? f.color : "var(--text-secondary)", opacity: isDragging ? 0.4 : 1,
+                          color: isSel ? f.color : "var(--text-secondary)",
                         }}
                           {...attributes} {...listeners}
                           onClick={() => { setActiveSidebarTab("folder_" + f.id); onSelectFolder(selectedFolderId === f.id ? null : f.id); onSelectTag(null); }}>
@@ -5154,13 +5244,11 @@ const trashCount = notes.filter(n => n.deletedAt).length;
                       const count = notes.filter((n) => n.tags?.includes(tag)).length;
                       const dotColor = mergedTagColors[tag] || "var(--accent)";
                       const isSel = selectedTag === tag;
-                      const isDragging = activeTagDragId === tag;
                       return (
                         <SortableTagRow key={tag} tag={tag}>
-                          {({ attributes, listeners, setNodeRef, style: dndStyle }) => (
-                            <div ref={setNodeRef}
+                          {({ attributes, listeners }) => (
+                            <div
                               style={{
-                                ...dndStyle,
                                 display: "flex", alignItems: "center", gap: 8, width: "100%",
                                 padding: "9px 14px 9px 4px",
                                 background: isSel ? "var(--bg-hover)" : "transparent",
@@ -5170,7 +5258,6 @@ const trashCount = notes.filter(n => n.deletedAt).length;
                                 cursor: "pointer", fontSize: 13.5, fontWeight: 500,
                                 textAlign: "left", transition: "all 200ms " + EASE,
                                 color: isSel ? dotColor : "var(--text-secondary)",
-                                opacity: isDragging ? 0.4 : 1,
                               }}
                               {...attributes} {...listeners}
                               className="hover:bg-[var(--bg-hover)]"

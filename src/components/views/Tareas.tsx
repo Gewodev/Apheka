@@ -57,6 +57,8 @@ const statusConfig: Record<string, { label: string; color: string; next: string 
   completado: { label: 'Completada', color: '#10B981', next: 'inicio' },
 };
 
+const TASK_TYPE_MAP: Record<string, string> = { pdf: 'pdf', png: 'image', jpg: 'image', jpeg: 'image', gif: 'image', webp: 'image', svg: 'image', bmp: 'image', mp4: 'video', webm: 'video', avi: 'video', mov: 'video', mkv: 'video', mp3: 'audio', wav: 'audio', ogg: 'audio', flac: 'audio', aac: 'audio', wma: 'audio', doc: 'doc', docx: 'doc', xls: 'xls', xlsx: 'xls', ppt: 'ppt', pptx: 'ppt', txt: 'text', csv: 'csv', json: 'text', md: 'text', xml: 'text', zip: 'zip', rar: 'zip', '7z': 'zip', tar: 'zip', gz: 'zip' };
+
 function localDate(d: string): Date {
   if (d.includes('T')) {
     const [datePart, timePart] = d.split('T');
@@ -105,7 +107,7 @@ function getFileIcon(type: string, size = 14) {
 
 function SortableTaskRow({ task, children }: { task: Task; children: (dragProps: { isDragging: boolean }) => React.ReactNode }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
-  const style = { transform: CSS.Translate.toString(transform), transition, zIndex: isDragging ? 10 : 'auto' };
+  const style = { transform: isDragging ? 'none' : CSS.Translate.toString(transform), transition };
   return <div ref={setNodeRef} style={style} {...attributes} {...listeners}>{children({ isDragging })}</div>;
 }
 
@@ -177,7 +179,6 @@ export default function Tareas() {
   const [showAddMaterial, setShowAddMaterial] = useState(false);
   const [newMaterialName, setNewMaterialName] = useState('');
   const [newMaterialPath, setNewMaterialPath] = useState('');
-  const [newMaterialFile, setNewMaterialFile] = useState<File | null>(null);
   const [googleConnected, setGoogleConnected] = useState(isSignedIn());
   const [syncing, setSyncing] = useState<'classroom' | 'tasks' | null>(null);
 
@@ -220,7 +221,6 @@ export default function Tareas() {
   }, [tasks]);
   const [showNotesModal, setShowNotesModal] = useState(false);
   const [showSubtasksModal, setShowSubtasksModal] = useState(false);
-  const [addMaterialMode, setAddMaterialMode] = useState<'link' | 'file'>('file');
   const [confirmDeleteMaterial, setConfirmDeleteMaterial] = useState<{ taskId: string; fileId: string } | null>(null);
   const [confirmDeleteTask, setConfirmDeleteTask] = useState<string | null>(null);
   const [expandedCourses, setExpandedCourses] = useState(false);
@@ -348,12 +348,14 @@ export default function Tareas() {
     const { active, over } = event;
     const d = event?.delta ?? { x: 0, y: 0 };
     dragSuppressRef.current = Math.abs(d.x) + Math.abs(d.y) > 4;
-    if (over && active.id !== over.id) {
-      const ids = filteredTasks.map(t => t.id);
-      const oldIndex = ids.indexOf(active.id);
-      const newIndex = ids.indexOf(over.id);
-      const newIds = arrayMove([...ids], oldIndex, newIndex);
-      reorderTasks(newIds);
+    const ids = filteredTasks.map(t => t.id);
+    const oldIndex = ids.indexOf(active.id);
+    if (oldIndex >= 0) {
+      let newIndex = over ? ids.indexOf(over.id) : ids.length - 1;
+      if (newIndex >= 0 && oldIndex !== newIndex && active.id !== over?.id) {
+        const newIds = arrayMove([...ids], oldIndex, newIndex);
+        reorderTasks(newIds);
+      }
     }
     setActiveDragId(null);
     setTimeout(() => { dragSuppressRef.current = false; }, 250);
@@ -490,42 +492,32 @@ export default function Tareas() {
 
   const handleFileSelected = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
-    if (isTauri()) {
-      // En Tauri los File del input HTML no tienen ruta del sistema → diálogo nativo.
-      // Se guarda la RUTA ORIGINAL del archivo (sin copias): los cambios que el usuario
-      // haga al editarlo (Word, Excel…) quedan en su archivo.
-      let r: { path: string; name: string } | null;
-      try { r = await pickAndPersistFile(); }
-      catch { addNotification('No se pudo abrir el selector de archivos', 'error'); return; }
-      if (r) {
-        setNewMaterialPath(r.path);
-        setNewMaterialFile({ name: r.name, size: 0, type: '' } as File);
-        if (!newMaterialName.trim()) setNewMaterialName(r.name.replace(/\.[^/.]+$/, ''));
-      }
-      e.target.value = '';
-      return;
-    }
-    setNewMaterialFile(file);
-    const reader = new FileReader();
-    reader.onload = (ev) => setNewMaterialPath(ev.target?.result as string);
-    reader.readAsDataURL(file);
-    if (!newMaterialName.trim()) setNewMaterialName(file.name.replace(/\.[^/.]+$/, ''));
     e.target.value = '';
-  }, [newMaterialName]);
+    if (!selectedTask) return;
+    if (isTauri()) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const ext = file.name.split('.').pop()?.toLowerCase() || '';
+      addTaskFile(selectedTask.id, { name: file.name, path: ev.target?.result as string, type: TASK_TYPE_MAP[ext] || 'other', size: file.size });
+      addNotification('Archivo subido', 'success');
+    };
+    reader.readAsDataURL(file);
+  }, [selectedTask, addTaskFile]);
 
   const handleAddFileBtn = useCallback(async () => {
+    if (!selectedTask) return;
     if (isTauri()) {
       let r: { path: string; name: string } | null;
       try { r = await pickAndPersistFile(); }
       catch { addNotification('No se pudo abrir el selector de archivos', 'error'); return; }
       if (!r) return;
-      setNewMaterialPath(r.path);
-      setNewMaterialFile({ name: r.name, size: 0, type: '' } as File);
-      if (!newMaterialName.trim()) setNewMaterialName(r.name.replace(/\.[^/.]+$/, ''));
+      const ext = r.name.split('.').pop()?.toLowerCase() || '';
+      addTaskFile(selectedTask.id, { name: r.name, path: r.path, type: TASK_TYPE_MAP[ext] || 'other', size: 0 });
+      addNotification('Archivo subido', 'success');
       return;
     }
     fileInputRef.current?.click();
-  }, [newMaterialName]);
+  }, [selectedTask, addTaskFile]);
 
   const fetchPageTitle = useCallback(async (url: string): Promise<string | null> => {
     try {
@@ -538,28 +530,24 @@ export default function Tareas() {
 
   const handleAddMaterial = useCallback(async () => {
     if (!selectedTask) return;
-    const path = addMaterialMode === 'link' ? newMaterialPath.trim() : newMaterialPath;
-    if (!path) { addNotification('Ingresa la URL o selecciona un archivo', 'error'); return; }
+    const path = newMaterialPath.trim();
+    if (!path) { addNotification('Ingresa la URL', 'error'); return; }
     let name = newMaterialName.trim();
-    if (!name && addMaterialMode === 'link') {
+    if (!name) {
       const fetched = await fetchPageTitle(path);
       if (fetched) name = fetched;
     }
     if (!name) { addNotification('Ingresa el nombre del material', 'error'); return; }
-    const ext = newMaterialFile?.name.split('.').pop()?.toLowerCase() || '';
-    const typeMap: Record<string, string> = { pdf: 'pdf', png: 'image', jpg: 'image', jpeg: 'image', gif: 'image', webp: 'image', svg: 'image', bmp: 'image', mp4: 'video', webm: 'video', avi: 'video', mov: 'video', mkv: 'video', mp3: 'audio', wav: 'audio', ogg: 'audio', flac: 'audio', aac: 'audio', wma: 'audio', doc: 'doc', docx: 'doc', xls: 'xls', xlsx: 'xls', ppt: 'ppt', pptx: 'ppt', txt: 'text', csv: 'csv', json: 'text', md: 'text', xml: 'text', zip: 'zip', rar: 'zip', '7z': 'zip', tar: 'zip', gz: 'zip' };
-    let detectedType = addMaterialMode === 'file' ? (typeMap[ext] || 'other') : 'link';
-    if (addMaterialMode === 'link') {
-      if (path.includes('youtube.com') || path.includes('youtu.be')) detectedType = 'video';
-      else if (path.includes('classroom.google.com')) detectedType = 'classroom';
-      else if (path.includes('drive.google.com')) detectedType = 'drive';
-      else if (path.includes('docs.google.com')) detectedType = 'doc';
-      else if (path.includes('sheets.google.com')) detectedType = 'xls';
-      else if (path.includes('slides.google.com')) detectedType = 'ppt';
-    }
-    addTaskFile(selectedTask.id, { name, path, type: detectedType, size: newMaterialFile?.size });
-    setNewMaterialName(''); setNewMaterialPath(''); setNewMaterialFile(null); setShowAddMaterial(false); setAddMaterialMode('file');
-  }, [selectedTask, newMaterialName, newMaterialPath, newMaterialFile, addMaterialMode, addTaskFile, fetchPageTitle]);
+    let detectedType = 'link';
+    if (path.includes('youtube.com') || path.includes('youtu.be')) detectedType = 'video';
+    else if (path.includes('classroom.google.com')) detectedType = 'classroom';
+    else if (path.includes('drive.google.com')) detectedType = 'drive';
+    else if (path.includes('docs.google.com')) detectedType = 'doc';
+    else if (path.includes('sheets.google.com')) detectedType = 'xls';
+    else if (path.includes('slides.google.com')) detectedType = 'ppt';
+    addTaskFile(selectedTask.id, { name, path, type: detectedType, size: 0 });
+    setNewMaterialName(''); setNewMaterialPath(''); setShowAddMaterial(false);
+  }, [selectedTask, newMaterialName, newMaterialPath, addTaskFile, fetchPageTitle]);
 
   const monthStart = startOfMonth(calendarDate);
   const monthEnd = endOfMonth(monthStart);
@@ -714,7 +702,7 @@ export default function Tareas() {
                     </div>
                   </div>
                 )) : (
-                  <DndContext sensors={listSensors} collisionDetection={closestCenter} onDragStart={e => { setActiveDragId(e.active.id as string); }} onDragEnd={handleDragEndList} modifiers={[restrictToParentElement]}>
+                  <DndContext sensors={listSensors} collisionDetection={pointerWithin} onDragStart={e => { setActiveDragId(e.active.id as string); }} onDragEnd={handleDragEndList} modifiers={[restrictToParentElement]}>
                     <SortableContext items={filteredTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
                       {filteredTasks.map(task => {
                         const t = task;
@@ -1444,43 +1432,44 @@ export default function Tareas() {
             <div className="bento-card" style={{ position: 'fixed', right: 0, top: 0, bottom: 0, width: 520, maxWidth: '94vw', padding: 0, display: 'flex', flexDirection: 'column', background: 'var(--bg-primary)', overflow: 'hidden', border: 'none', borderLeft: '1px solid var(--border-default)', boxShadow: '-20px 0 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.03) inset' }} onClick={e => e.stopPropagation()}>
 
               {/* ── Panel Header ── */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0, gap: 10 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0, gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
                   <button onClick={() => setSelectedTaskId(null)}
-                    style={{ width: 28, height: 28, borderRadius: 8, background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms', flexShrink: 0 }}
-                    onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}
-                    title="Cerrar">
-                    <ChevronRight size={15} />
+                    title="Cerrar"
+                    style={{ width: 30, height: 30, borderRadius: 9, background: 'var(--bg-hover)', border: '1px solid var(--border-soft)', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms', flexShrink: 0 }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.borderColor = 'var(--border-hover)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'var(--border-soft)'; }}>
+                    <X size={14} />
                   </button>
                   <div style={{ width: 38, height: 38, borderRadius: 11, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `linear-gradient(135deg, ${taskColor}1c, ${taskColor}08)`, border: `1px solid ${taskColor}30`, boxShadow: `0 0 16px ${taskColor}12` }}>
                     <ClipboardList size={16} style={{ color: taskColor }} />
                   </div>
                   <div style={{ minWidth: 0 }}>
-                    <span style={{ fontSize: 8.5, fontWeight: 700, color: taskColor, textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: "'Inter Tight', sans-serif", display: 'block' }}>Tarea</span>
-                    <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 230 }}>{selectedTask.title}</span>
+                    <span style={{ fontSize: 8.5, fontWeight: 700, color: taskColor, textTransform: 'uppercase', letterSpacing: '0.12em', fontFamily: "'Inter Tight', sans-serif", display: 'block' }}>Tarea</span>
+                    <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 190 }}>{selectedTask.title}</span>
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                   <span onClick={() => toggleTaskStatus(selectedTask.id)}
-                    style={{ cursor: 'pointer', fontSize: 9.5, fontWeight: 600, color: taskColor, letterSpacing: '0.05em', fontFamily: "'Inter Tight', sans-serif", padding: '5px 12px', borderRadius: 999, background: `${taskColor}10`, display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', transition: 'all 150ms', border: `1px solid ${taskColor}18` }}
+                    title="Cambiar estado"
+                    style={{ cursor: 'pointer', fontSize: 9, fontWeight: 600, color: taskColor, letterSpacing: '0.06em', fontFamily: "'Inter Tight', sans-serif", padding: '5px 11px', borderRadius: 999, background: `${taskColor}10`, display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', transition: 'all 150ms', border: `1px solid ${taskColor}18` }}
                     onMouseEnter={e => e.currentTarget.style.background = `${taskColor}18`}
                     onMouseLeave={e => e.currentTarget.style.background = `${taskColor}10`}>
                     <span style={{ width: 5, height: 5, borderRadius: '50%', background: taskColor, flexShrink: 0, boxShadow: `0 0 6px ${taskColor}80` }} />
                     {statusConfig[selectedTask.status]?.label}
                   </span>
                   <button onClick={() => setConfirmDeleteTask(selectedTask.id)}
-                    style={{ width: 28, height: 28, borderRadius: 8, background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms', opacity: 0.5, flexShrink: 0 }}
-                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'; e.currentTarget.style.color = '#EF4444'; e.currentTarget.style.opacity = '1'; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.opacity = '0.5'; }}
-                    title="Eliminar tarea">
-                    <Trash2 size={13} />
+                    title="Eliminar tarea"
+                    style={{ width: 30, height: 30, borderRadius: 9, background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms', opacity: 0.6, flexShrink: 0 }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.12)'; e.currentTarget.style.color = '#EF4444'; e.currentTarget.style.opacity = '1'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.opacity = '0.6'; }}>
+                    <Trash2 size={14} />
                   </button>
                 </div>
               </div>
 
               {/* ── Scrollable Content ── */}
-              <div style={{ flex: 1, overflowY: 'auto', padding: '20px 22px 56px', display: 'flex', flexDirection: 'column', gap: 16 }} className="no-scrollbar">
+              <div style={{ flex: 1, overflowY: 'auto', padding: '20px 22px 24px', display: 'flex', flexDirection: 'column', gap: 16 }} className="no-scrollbar">
 
                 {/* ── Title ── */}
                 <div style={{ padding: '4px 4px 12px' }}>
@@ -1638,10 +1627,10 @@ export default function Tareas() {
                     <div style={{ transform: `rotate(${sectionCollapsed.subtareas ? -90 : 0}deg)`, transition: 'transform 200ms', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
                       <ChevronDown size={13} style={{ color: taskColor }} />
                     </div>
-                    <div style={{ width: 26, height: 26, borderRadius: 8, background: `${taskColor}12`, border: `1px solid ${taskColor}24`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <div style={{ width: 26, height: 26, borderRadius: 8, background: `${taskColor}10`, border: `1px solid ${taskColor}1a`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                       <CheckSquare size={12} style={{ color: taskColor }} />
                     </div>
-                    <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.08em', fontFamily: "'Inter Tight', sans-serif", flex: 1 }}>Subtareas</span>
+                    <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-primary)', letterSpacing: '0.1em', fontFamily: "'Inter Tight', sans-serif", flex: 1 }}>Subtareas</span>
                     {totalSubtasks > 0 && (
                       <>
                         <span style={{ fontSize: 8.5, fontWeight: 600, color: '#10B981', background: 'rgba(16,185,129,0.1)', padding: '1px 9px', borderRadius: 4, border: '1px solid rgba(16,185,129,0.15)' }}>
@@ -1736,10 +1725,26 @@ export default function Tareas() {
                     <div style={{ transform: `rotate(${sectionCollapsed.materiales ? -90 : 0}deg)`, transition: 'transform 200ms', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
                       <ChevronDown size={13} style={{ color: taskColor }} />
                     </div>
-                    <div style={{ width: 26, height: 26, borderRadius: 8, background: `${taskColor}12`, border: `1px solid ${taskColor}24`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <div style={{ width: 26, height: 26, borderRadius: 8, background: `${taskColor}10`, border: `1px solid ${taskColor}1a`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                       <Paperclip size={12} style={{ color: taskColor }} />
                     </div>
-                    <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.08em', fontFamily: "'Inter Tight', sans-serif", flex: 1 }}>Materiales</span>
+                    <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-primary)', letterSpacing: '0.1em', fontFamily: "'Inter Tight', sans-serif", flex: 1 }}>Materiales</span>
+                    <div onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                      <button onClick={() => { setShowAddMaterial(true); }}
+                        title="Añadir enlace"
+                        style={{ width: 30, height: 26, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `${taskColor}0d`, border: `1px solid ${taskColor}40`, color: taskColor, cursor: 'pointer', padding: 0, transition: 'all 150ms' }}
+                        onMouseEnter={e => { e.currentTarget.style.background = `${taskColor}1a`; e.currentTarget.style.borderColor = `${taskColor}60`; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = `${taskColor}0d`; e.currentTarget.style.borderColor = `${taskColor}40`; }}>
+                        <Link2 size={12} />
+                      </button>
+                      <button onClick={handleAddFileBtn}
+                        title="Subir archivo"
+                        style={{ width: 30, height: 26, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `${taskColor}0d`, border: `1px solid ${taskColor}40`, color: taskColor, cursor: 'pointer', padding: 0, transition: 'all 150ms' }}
+                        onMouseEnter={e => { e.currentTarget.style.background = `${taskColor}1a`; e.currentTarget.style.borderColor = `${taskColor}60`; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = `${taskColor}0d`; e.currentTarget.style.borderColor = `${taskColor}40`; }}>
+                        <Upload size={12} />
+                      </button>
+                    </div>
                     {selectedTask.files.length > 0 && (
                       <span style={{ fontSize: 8.5, color: 'var(--text-secondary)', fontWeight: 600, background: 'var(--bg-hover)', padding: '1px 9px', borderRadius: 4 }}>{selectedTask.files.length} archivos</span>
                     )}
@@ -1849,55 +1854,30 @@ export default function Tareas() {
                             </div>
                           );
                         })}
-
-                        <div style={{ display: 'flex', gap: 8 }}>
-                          <button onClick={() => { setAddMaterialMode('link'); setShowAddMaterial(true); }}
-                            title="Añadir enlace"
-                            style={{ width: 38, height: 34, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `${taskColor}0d`, border: `1px solid ${taskColor}40`, color: taskColor, cursor: 'pointer', padding: 0, transition: 'all 150ms' }}
-                            onMouseEnter={e => { e.currentTarget.style.background = `${taskColor}1a`; e.currentTarget.style.borderColor = `${taskColor}60`; }}
-                            onMouseLeave={e => { e.currentTarget.style.background = `${taskColor}0d`; e.currentTarget.style.borderColor = `${taskColor}40`; }}>
-                            <Link2 size={14} />
-                          </button>
-                          <button onClick={() => { setAddMaterialMode('file'); setShowAddMaterial(true); setTimeout(() => handleAddFileBtn(), 50); }}
-                            title="Subir archivo"
-                            style={{ width: 38, height: 34, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `${taskColor}0d`, border: `1px solid ${taskColor}40`, color: taskColor, cursor: 'pointer', padding: 0, transition: 'all 150ms' }}
-                            onMouseEnter={e => { e.currentTarget.style.background = `${taskColor}1a`; e.currentTarget.style.borderColor = `${taskColor}60`; }}
-                            onMouseLeave={e => { e.currentTarget.style.background = `${taskColor}0d`; e.currentTarget.style.borderColor = `${taskColor}40`; }}>
-                            <Upload size={14} />
-                          </button>
-                        </div>
                       </div>
 
                       {showAddMaterial && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '14px 14px', background: 'var(--bg-surface)', borderRadius: 10, border: `1px solid ${taskColor}25` }}>
                           <div style={{ display: 'flex', gap: 7 }}>
                             <input value={newMaterialName} onChange={e => setNewMaterialName(e.target.value)} placeholder="Nombre del material..."
-                              onKeyDown={e => { if (e.key === 'Enter' && newMaterialName.trim() && (addMaterialMode === 'file' || newMaterialPath.trim())) handleAddMaterial(); }}
+                              onKeyDown={e => { if (e.key === 'Enter' && newMaterialName.trim() && newMaterialPath.trim()) handleAddMaterial(); }}
                               style={{ flex: 1, padding: '9px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 7, fontSize: 12, color: 'var(--text-primary)', outline: 'none', transition: 'all 150ms' }}
                               onFocus={e => { e.currentTarget.style.borderColor = taskColor; e.currentTarget.style.boxShadow = `0 0 0 2px ${taskColor}12`; }}
                               onBlur={e => { e.currentTarget.style.borderColor = 'var(--border-default)'; e.currentTarget.style.boxShadow = 'none'; }} />
-                            <button onClick={handleAddMaterial} disabled={!newMaterialName.trim()}
-                              style={{ padding: '9px 18px', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: 'none', background: taskColor, color: '#fff', opacity: newMaterialName.trim() ? 1 : 0.3, transition: 'all 150ms', whiteSpace: 'nowrap' }}>
+                            <button onClick={handleAddMaterial} disabled={!newMaterialName.trim() || !newMaterialPath.trim()}
+                              style={{ padding: '9px 18px', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: 'none', background: taskColor, color: '#fff', opacity: newMaterialName.trim() && newMaterialPath.trim() ? 1 : 0.3, transition: 'all 150ms', whiteSpace: 'nowrap' }}>
                               Añadir
                             </button>
-                            <button onClick={() => { setShowAddMaterial(false); setNewMaterialName(''); setNewMaterialPath(''); setNewMaterialFile(null); setAddMaterialMode('file'); }}
+                            <button onClick={() => { setShowAddMaterial(false); setNewMaterialName(''); setNewMaterialPath(''); }}
                               style={{ width: 32, height: 32, borderRadius: 7, cursor: 'pointer', border: '1px solid var(--border-default)', background: 'transparent', color: 'var(--text-muted)', transition: 'all 150ms', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                               <X size={12} />
                             </button>
                           </div>
-                          {addMaterialMode === 'link' ? (
-                            <input value={newMaterialPath} onChange={e => setNewMaterialPath(e.target.value)} placeholder="URL (YouTube, Drive, web...)"
-                              onKeyDown={e => { if (e.key === 'Enter' && newMaterialName.trim() && newMaterialPath.trim()) handleAddMaterial(); }}
-                              style={{ width: '100%', padding: '9px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 7, fontSize: 12, color: 'var(--text-primary)', outline: 'none', transition: 'all 150ms' }}
-                              onFocus={e => { e.currentTarget.style.borderColor = taskColor; e.currentTarget.style.boxShadow = `0 0 0 2px ${taskColor}12`; }}
-                              onBlur={e => { e.currentTarget.style.borderColor = 'var(--border-default)'; e.currentTarget.style.boxShadow = 'none'; }} />
-                          ) : (
-                            <button onClick={handleAddFileBtn} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, height: 38, borderRadius: 9, fontSize: 11.5, fontWeight: 600, cursor: 'pointer', border: `1px dashed ${taskColor}50`, background: `${taskColor}08`, color: 'var(--text-secondary)', transition: 'all 150ms' }}
-                              onMouseEnter={e => { e.currentTarget.style.borderColor = taskColor; e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.background = `${taskColor}14`; }}
-                              onMouseLeave={e => { e.currentTarget.style.borderColor = `${taskColor}50`; e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.background = `${taskColor}08`; }}>
-                              <Upload size={12} style={{ color: taskColor }} /> {newMaterialFile ? newMaterialFile.name : 'Seleccionar archivo...'}
-                            </button>
-                          )}
+                          <input value={newMaterialPath} onChange={e => setNewMaterialPath(e.target.value)} placeholder="URL (YouTube, Drive, web...)"
+                            onKeyDown={e => { if (e.key === 'Enter' && newMaterialName.trim() && newMaterialPath.trim()) handleAddMaterial(); }}
+                            style={{ width: '100%', padding: '9px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 7, fontSize: 12, color: 'var(--text-primary)', outline: 'none', transition: 'all 150ms' }}
+                            onFocus={e => { e.currentTarget.style.borderColor = taskColor; e.currentTarget.style.boxShadow = `0 0 0 2px ${taskColor}12`; }}
+                            onBlur={e => { e.currentTarget.style.borderColor = 'var(--border-default)'; e.currentTarget.style.boxShadow = 'none'; }} />
                           <input type="file" ref={fileInputRef} onChange={handleFileSelected} style={{ display: 'none' }} />
                         </div>
                       )}
@@ -1914,10 +1894,10 @@ export default function Tareas() {
                     <div style={{ transform: `rotate(${sectionCollapsed.apuntes ? -90 : 0}deg)`, transition: 'transform 200ms', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
                       <ChevronDown size={13} style={{ color: taskColor }} />
                     </div>
-                    <div style={{ width: 26, height: 26, borderRadius: 8, background: `${taskColor}12`, border: `1px solid ${taskColor}24`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <div style={{ width: 26, height: 26, borderRadius: 8, background: `${taskColor}10`, border: `1px solid ${taskColor}1a`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                       <StickyNote size={12} style={{ color: taskColor }} />
                     </div>
-                    <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.08em', fontFamily: "'Inter Tight', sans-serif", flex: 1 }}>Apuntes</span>
+                    <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-primary)', letterSpacing: '0.1em', fontFamily: "'Inter Tight', sans-serif", flex: 1 }}>Apuntes</span>
                     {selectedTask.apuntes && selectedTask.apuntes.trim().length > 0 && (
                       <span style={{ fontSize: 8.5, color: 'var(--text-secondary)', fontWeight: 600, background: 'var(--bg-hover)', padding: '1px 9px', borderRadius: 4 }}>{selectedTask.apuntes.split(/\s+/).filter(Boolean).length} palabras</span>
                     )}
@@ -1952,10 +1932,10 @@ export default function Tareas() {
                   )}
                 </div>
 
-                {/* Spacer */}
-                <div style={{ flex: 1 }} />
+              </div>
 
-                {/* ── Estudiar CTA ── */}
+              {/* ── Footer: Estudiar CTA (fijo, siempre visible) ── */}
+              <div style={{ flexShrink: 0, padding: '14px 22px 18px', borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-primary)', display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {(() => {
                   const otherTaskLinked = !!activeTaskId && activeTaskId !== selectedTask.id;
                   const blocked = !!activePlannedSessionId || otherTaskLinked;
@@ -1977,7 +1957,7 @@ export default function Tareas() {
                   }}
                   title={activePlannedSessionId ? 'Hay una sesión de estudio vinculada al temporizador' : (otherTaskLinked ? 'Hay otra tarea vinculada al temporizador' : 'Estudiar esta tarea')}
                   style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '11px 0', borderRadius: 9, fontSize: 11.5, fontWeight: 500,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px 0', borderRadius: 9, fontSize: 11.5, fontWeight: 500,
                     cursor: blocked ? 'not-allowed' : 'pointer',
                     border: `1px solid ${blocked ? 'var(--border-subtle)' : taskColor + '26'}`,
                     background: blocked ? 'var(--bg-deep)' : `${taskColor}06`,
@@ -1996,9 +1976,8 @@ export default function Tareas() {
                 </button>
                   );
                 })()}
-
               </div>
-            </div>
+          </div>
           </div>,
           document.body
         );

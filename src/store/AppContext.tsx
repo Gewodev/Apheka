@@ -851,9 +851,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [dailyStudyTime, setDailyStudyTime] = useState(0);
   const [dailyStudyDate, setDailyStudyDate] = useState('');
   const [pomodoroSessions, setPomodoroSessions] = useState(0);
-  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
-  const [activePlannedSessionId, setActivePlannedSessionId] = useState<string | null>(null);
-  const [timerLocked, setTimerLocked] = useState(false);
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(() => {
+    try {
+      const raw = localStorage.getItem('owa_timer_link_v1');
+      if (!raw) return null;
+      const d = JSON.parse(raw);
+      return typeof d.activeTaskId === 'string' && d.activeTaskId ? d.activeTaskId : null;
+    } catch { return null; }
+  });
+  const [activePlannedSessionId, setActivePlannedSessionId] = useState<string | null>(() => {
+    try {
+      const raw = localStorage.getItem('owa_timer_link_v1');
+      if (!raw) return null;
+      const d = JSON.parse(raw);
+      return typeof d.activePlannedSessionId === 'string' && d.activePlannedSessionId ? d.activePlannedSessionId : null;
+    } catch { return null; }
+  });
+  const [timerLocked, setTimerLocked] = useState(() => {
+    try {
+      const raw = localStorage.getItem('owa_timer_link_v1');
+      if (!raw) return false;
+      const d = JSON.parse(raw);
+      return (typeof d.activeTaskId === 'string' && d.activeTaskId) || (typeof d.activePlannedSessionId === 'string' && d.activePlannedSessionId);
+    } catch { return false; }
+  });
   const [isTimerActive, setIsTimerActive] = useState(false);
   const [isRest, setIsRest] = useState(false);
   const [sessionType, setSessionType] = useState<'pomodoro' | 'chrono'>('pomodoro');
@@ -1116,6 +1137,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [tracks]);
 
    const [navigateTo, setNavigateTo] = useState<ViewId | null>(null);
+  const navigateToRef = useRef<ViewId | null>(null);
+  useEffect(() => { navigateToRef.current = navigateTo; }, [navigateTo]);
   const [courseDeepLink, setCourseDeepLink] = useState<{ courseId: string; groupId?: string; topicId?: string } | null>(null);
   const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null);
   const [focusedEventId, setFocusedEventId] = useState<string | null>(null);
@@ -1373,6 +1396,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const activePlannedSessionIdRef = useRef(activePlannedSessionId);
   activePlannedSessionIdRef.current = activePlannedSessionId;
 
+  // Persist task/session → timer links (only removed manually)
+  useEffect(() => {
+    try {
+      localStorage.setItem('owa_timer_link_v1', JSON.stringify({ activeTaskId, activePlannedSessionId }));
+    } catch { /* storage full — noop */ }
+  }, [activeTaskId, activePlannedSessionId]);
+
   // Midnight reset (local time): auto-reset dailyStudyTime when date changes
   useEffect(() => {
     const checkDay = () => {
@@ -1597,7 +1627,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (isTimerActive && !isRest && sessionType === 'pomodoro' && sessionTime >= settings.pomodoroTime && !pomodoroCompletedRef.current) {
       pomodoroCompletedRef.current = true;
       completionSessionTimeRef.current = sessionTimeRef.current;
-      setShowRestPrompt(true);
+      if (navigateToRef.current !== 'estudio') setShowRestPrompt(true);
     }
     if (sessionTime < settings.pomodoroTime) {
       pomodoroCompletedRef.current = false;

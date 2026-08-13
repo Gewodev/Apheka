@@ -1110,6 +1110,41 @@ body {
   }
 }
 
+/* Cursos — panel de sesión de estudio: los dos puntos de la hora (reloj digital)
+   parpadean suavemente como un reloj real. */
+@keyframes clockColonBlink {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.22;
+  }
+}
+
+/* Cursos — CTA "Iniciar sesión de estudio": respiración suave (elevación +
+   brillo) sin depender de colores, para que combine con cualquier curso. */
+@keyframes sessionCtaBreath {
+  0%, 100% {
+    transform: translateY(0);
+    filter: brightness(1);
+  }
+  50% {
+    transform: translateY(-1px);
+    filter: brightness(1.14);
+  }
+}
+
+/* Cursos — barra de duración del panel de sesión: brillo deslizante que recorre
+   el relleno como una línea de vida. */
+@keyframes sessionSheen {
+  0% {
+    transform: translateX(-100%);
+  }
+  60%, 100% {
+    transform: translateX(320%);
+  }
+}
+
 /* Cursos — estado vacío del cronograma semanal: respiración suave del botón
    "haz clic para añadir sesión" (anillo punteado + icono). */
 @keyframes plannerPulse {

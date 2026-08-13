@@ -11,6 +11,7 @@ import {
   Download, ArrowDownToLine, ArrowUpFromLine, Package, PackageOpen, FileDown, FileUp, Mic,
   ScrollText, Shuffle, Workflow, Puzzle, Clock, Minus,
   TreePine, Map as MapIcon, Split, Tag,
+  Zap, DollarSign, CalendarDays,
   Library, Files, ClipboardList, Trophy,
 } from 'lucide-react';
 import { FormatToolbar } from '../ui/FormatToolbar';
@@ -1287,6 +1288,29 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     }
   }, [initialCourseId]);
 
+  // Per-course route persistence — each course remembers the tab/view/topic/group it was left open in
+  const routeRestoredForRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!selectedCourseId || routeRestoredForRef.current === selectedCourseId) return;
+    routeRestoredForRef.current = selectedCourseId;
+    try {
+      const raw = localStorage.getItem(`owa_course_route_${selectedCourseId}`);
+      if (!raw) return;
+      const r = JSON.parse(raw);
+      if (!r || typeof r !== 'object') return;
+      if ((r.tab === 'tareas' || r.tab === 'notas' || r.tab === 'archivos' || r.tab === 'overview')) setActiveTab(r.tab);
+      if (r.view === 'topic' && r.topicId && parsedTopics.some(t => t.id === r.topicId)) {
+        setActiveTopicId(r.topicId);
+        setCurrentView('topic');
+      } else if (r.view === 'group' && r.groupId && groups.some(g => g.id === r.groupId)) {
+        setSelectedGroupId(r.groupId);
+        setCurrentView('group');
+      }
+      setTopicSearch('');
+      setActiveTagFilter(null);
+    } catch { /* ignore */ }
+  }, [selectedCourseId]);
+
   // Topic view state
   const [currentView, setCurrentView] = useState<'overview' | 'topic' | 'group'>('overview');
   const [activeTopicId, setActiveTopicId] = useState<string | null>(null);
@@ -1406,11 +1430,12 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const [planDate, setPlanDate] = useState('');
   const [plannerDate, setPlannerDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
 
-  // Persist the cronograma selected day per course — never resets to today unless the user chooses
+  // Persist the cronograma selected day per course — only restore it if it still belongs to the current week (the chart must always show the live week)
   useEffect(() => {
     if (!selectedCourseId) return;
     const saved = localStorage.getItem(`owa_estudio_planner_date_${selectedCourseId}`);
-    setPlannerDate(saved && /^\d{4}-\d{2}-\d{2}$/.test(saved) ? saved : format(new Date(), 'yyyy-MM-dd'));
+    const weekStartStr = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+    setPlannerDate(saved && /^\d{4}-\d{2}-\d{2}$/.test(saved) && saved >= weekStartStr ? saved : format(new Date(), 'yyyy-MM-dd'));
   }, [selectedCourseId]);
   useEffect(() => {
     if (selectedCourseId) localStorage.setItem(`owa_estudio_planner_date_${selectedCourseId}`, plannerDate);
@@ -1446,6 +1471,22 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
 
   // Session detail horizontal panel
   const [detailSessionId, setDetailSessionId] = useState<string | null>(null);
+  const [confirmDeleteSession, setConfirmDeleteSession] = useState<PlannedSession | null>(null);
+  const [changeCourseFor, setChangeCourseFor] = useState<PlannedSession | null>(null);
+  const [ccSelId, setCcSelId] = useState('');
+
+  // Track the latest topics visited per course (the session preview shows them as "Últimos ingresos a temas")
+  useEffect(() => {
+    if (!selectedCourseId || !activeTopicId || currentView !== 'topic') return;
+    try {
+      const key = `owa_recent_topics_${selectedCourseId}`;
+      const raw = localStorage.getItem(key);
+      let arr: { id: string; at: number }[] = [];
+      try { const p = raw ? JSON.parse(raw) : []; if (Array.isArray(p)) arr = p; } catch { /* ignore */ }
+      arr = [{ id: activeTopicId, at: Date.now() }, ...arr.filter(x => x && typeof x.id === 'string' && x.id !== activeTopicId)].slice(0, 6);
+      localStorage.setItem(key, JSON.stringify(arr));
+    } catch { /* ignore */ }
+  }, [selectedCourseId, activeTopicId, currentView]);
 
   // Custom session types (persisted)
   const [customTypes, setCustomTypes] = useState<{ id: string; label: string; color: string }[]>(() => {
@@ -1719,6 +1760,14 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
       }
     }
   }, [selectedGroupId, selectedCourseId]);
+
+  // Persist per-course route (tab/view/topic/group) so each course reopens where it was left
+  useEffect(() => {
+    if (!selectedCourseId) return;
+    try {
+      localStorage.setItem(`owa_course_route_${selectedCourseId}`, JSON.stringify({ tab: activeTab, view: currentView, topicId: activeTopicId, groupId: selectedGroupId }));
+    } catch { /* ignore */ }
+  }, [selectedCourseId, activeTab, currentView, activeTopicId, selectedGroupId]);
 
   // Persist study view state per course
   useEffect(() => {
@@ -2381,12 +2430,12 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     clearBrainDragOverlay();
     setActiveTopicDragId(null);
     const { active, over } = event;
-    if (!over || active.id === over.id) return;
+    if (active.id === over?.id) return;
     const visible = topicFiltered;
     const ids = visible.map(e => e.id);
     const oldIdx = ids.indexOf(active.id as string);
-    const newIdx = ids.indexOf(over.id as string);
-    if (oldIdx < 0 || newIdx < 0) return;
+    let newIdx = over ? ids.indexOf(over.id as string) : ids.length - 1;
+    if (oldIdx < 0 || newIdx < 0 || oldIdx === newIdx) return;
     const newOrder = arrayMove(ids, oldIdx, newIdx);
     const orderMap = new Map<string, number>(newOrder.map((id, i) => [id, i]));
     const rank = (id?: string) => (id && orderMap.has(id) ? orderMap.get(id)! : 999);
@@ -2410,9 +2459,22 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     setActiveMatDragId(null);
     const { active, over } = event;
     if (!over) {
-      // Soltado fuera de cualquier destino: si fue sobre Charvis, se ancla.
+      // Soltado fuera de cualquier destino: si fue sobre Charvis, se ancla; si no, al final de la lista.
       const p = getLastPointer();
-      if (isOverBrainZone(p.x)) openBrainWithAnchor({ kind: 'material', id: active.id as string });
+      if (isOverBrainZone(p.x)) { openBrainWithAnchor({ kind: 'material', id: active.id as string }); return; }
+      const matIds = allCourseMaterials.filter(m => !!m).map(m => m.id);
+      const oldIdx = matIds.indexOf(active.id as string);
+      if (oldIdx < 0 || oldIdx === matIds.length - 1) return;
+      const endOrder = [...matIds.filter(id => id !== active.id), active.id];
+      updateCourse(course.id, {
+        studyTopics: (safeArr(course.studyTopics)).map(t => {
+          const reordered = (safeArr(t.materials)).sort((a, b) => {
+            const ai = endOrder.indexOf(a.id), bi = endOrder.indexOf(b.id);
+            return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+          });
+          return t.id === activeTopic?.id ? { ...t, materials: reordered } : t;
+        })
+      });
       return;
     }
     if (active.id === over.id) return;
@@ -2438,7 +2500,17 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     const { active, over } = event;
     if (!over) {
       const p = getLastPointer();
-      if (isOverBrainZone(p.x)) openBrainWithAnchor({ kind: 'group', id: active.id as string });
+      if (isOverBrainZone(p.x)) { openBrainWithAnchor({ kind: 'group', id: active.id as string }); return; }
+      const currentGroups = safeArr(course.groups);
+      const ids = currentGroups.map(g => g.id);
+      const oldIdx = ids.indexOf(active.id as string);
+      if (oldIdx < 0 || oldIdx === ids.length - 1) return;
+      const newOrder = [...ids.filter(id => id !== active.id), active.id];
+      const reordered = [...currentGroups].sort((a, b) => {
+        const ai = newOrder.indexOf(a.id), bi = newOrder.indexOf(b.id);
+        return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+      });
+      updateCourse(course.id, { groups: reordered });
       return;
     }
     if (active.id === over.id) return;
@@ -2460,13 +2532,31 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     clearBrainDragOverlay();
     setActiveTopicDragId(null);
     const { active, over } = event;
-    if (!over || active.id === over.id) return;
+    if (active.id === over?.id) return;
     const current = safeArr(course.studyTopics);
     const ids = current.map(t => t.id);
     const oldIdx = ids.indexOf(active.id as string);
-    const newIdx = ids.indexOf(over.id as string);
-    if (oldIdx < 0 || newIdx < 0) return;
     const groupSet = new Set(current.filter(t => t.groupId === selectedGroupId).map(t => t.id));
+    let newIdx: number;
+    if (over) {
+      newIdx = ids.indexOf(over.id as string);
+    } else {
+      if (oldIdx < 0 || !groupSet.has(active.id as string)) return;
+      const groupIds = current.filter(t => groupSet.has(t.id)).map(t => t.id);
+      if (active.id === groupIds[groupIds.length - 1]) return;
+      const newOrderEnd = [...ids.filter(id => id !== active.id)];
+      const lastGroupId = groupIds[groupIds.length - 1];
+      newOrderEnd.splice(newOrderEnd.indexOf(lastGroupId) + 1, 0, active.id as string);
+      const reorderedEnd = [...current].sort((a, b) => {
+        const inA = groupSet.has(a.id), inB = groupSet.has(b.id);
+        if (inA !== inB) return inA ? -1 : 1;
+        if (inA) return newOrderEnd.indexOf(a.id) - newOrderEnd.indexOf(b.id);
+        return ids.indexOf(a.id) - ids.indexOf(b.id);
+      });
+      updateCourse(course.id, { studyTopics: reorderedEnd });
+      return;
+    }
+    if (oldIdx < 0 || newIdx < 0) return;
     const newOrder = arrayMove(ids, oldIdx, newIdx);
     const reordered = [...current].sort((a, b) => {
       const inA = groupSet.has(a.id), inB = groupSet.has(b.id);
@@ -2480,11 +2570,11 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const handleNoteDragEnd = (event: DragEndEvent) => {
     if (notesSearch) return;
     const { active, over } = event;
-    if (!over || active.id === over.id) return;
+    if (active.id === over?.id) return;
     const ids = sortedNotes.map(n => n.id);
     const oldIdx = ids.indexOf(active.id as string);
-    const newIdx = ids.indexOf(over.id as string);
-    if (oldIdx < 0 || newIdx < 0) return;
+    let newIdx = over ? ids.indexOf(over.id as string) : ids.length - 1;
+    if (oldIdx < 0 || newIdx < 0 || oldIdx === newIdx) return;
     const newIds = [...ids];
     const [moved] = newIds.splice(oldIdx, 1);
     newIds.splice(newIdx, 0, moved);
@@ -2493,7 +2583,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
 
   const handleOverviewNoteDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
-    if (!over || active.id === over.id) return;
+    if (active.id === over?.id) return;
     const sorted = [...courseNotes].sort((a, b) => {
       if (a.isPinned && !b.isPinned) return -1;
       if (!a.isPinned && b.isPinned) return 1;
@@ -2503,8 +2593,8 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     });
     const ids = sorted.map(n => n.id);
     const oldIdx = ids.indexOf(active.id as string);
-    const newIdx = ids.indexOf(over.id as string);
-    if (oldIdx < 0 || newIdx < 0) return;
+    let newIdx = over ? ids.indexOf(over.id as string) : ids.length - 1;
+    if (oldIdx < 0 || newIdx < 0 || oldIdx === newIdx) return;
     const newIds = [...ids];
     const [moved] = newIds.splice(oldIdx, 1);
     newIds.splice(newIdx, 0, moved);
@@ -3622,15 +3712,15 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                               {/* header: franja de días — solo el nombre del día, sin números ni flechas, con botón + */}
                               <div style={{ display: 'flex', alignItems: 'center', gap: 5, height: 38, padding: '0 12px', flexShrink: 0 }}>
                                 {weekDays.map(d => {
-                                  const isToday = d.iso === today;
+                                  const isTodayDay = d.iso === today;
                                   const isSel = d.iso === plannerDate;
                                   return (
                                     <button key={d.iso} onClick={() => setPlannerDate(d.iso)}
                                       title={format(new Date(d.iso + 'T12:00:00'), 'EEEE d MMMM', { locale: es })}
-                                      style={{ flex: 1, minWidth: 0, cursor: 'pointer', height: 26, padding: '0 3px', borderRadius: 9, border: `1px solid ${isSel ? `${course.color}40` : 'transparent'}`, background: isSel ? `${course.color}14` : 'transparent', transition: 'all 180ms ' + EASE, fontFamily: 'inherit', overflow: 'hidden' }}
+                                      style={{ flex: 1, minWidth: 0, cursor: 'pointer', height: 26, padding: '0 3px', borderRadius: 9, border: `1px solid ${isSel ? `${course.color}66` : 'transparent'}`, background: isSel ? `linear-gradient(135deg, ${course.color}, color-mix(in srgb, ${course.color} 70%, #fff))` : 'transparent', boxShadow: isSel ? `0 0 10px ${course.color}45, 0 2px 6px rgba(0,0,0,0.3)` : 'none', transition: 'all 180ms ' + EASE, fontFamily: 'inherit', overflow: 'hidden' }}
                                       onMouseEnter={e => { if (!isSel) { e.currentTarget.style.background = 'var(--bg-hover)'; } }}
                                       onMouseLeave={e => { if (!isSel) { e.currentTarget.style.background = 'transparent'; } }}>
-                                      <span style={{ display: 'block', fontSize: 11, fontWeight: isSel ? 700 : (isToday ? 600 : 500), color: isSel || isToday ? course.color : 'var(--text-secondary)', fontFamily: "'Inter Tight', sans-serif", lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', letterSpacing: '0.02em', transition: 'color 180ms ' + EASE }}>{d.name}</span>
+                                      <span style={{ display: 'block', fontSize: 11, fontWeight: isSel ? 700 : (isTodayDay ? 600 : 500), color: isSel ? '#fff' : (isTodayDay ? 'var(--text-primary)' : 'var(--text-secondary)'), fontFamily: "'Inter Tight', sans-serif", lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', letterSpacing: '0.02em', transition: 'color 180ms ' + EASE, textShadow: isSel ? '0 1px 2px rgba(0,0,0,0.25)' : 'none' }}>{d.name}</span>
                                     </button>
                                   );
                                 })}
@@ -3719,75 +3809,103 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                         })()}
                       </div>
 
-                      {/* ══ PANEL DE DETALLE DE SESIÓN — overlay rectangular horizontal ══ */}
+                      {/* ══ PANEL DE DETALLE DE SESIÓN — overlay rectangular horizontal (estética bloques de temas) ══ */}
                       {detailSessionId && (() => {
                         const ds = (plannedSessions || []).find(s => s.id === detailSessionId);
                         if (!ds) return null;
                         const dInt = Math.max(0, Math.min(10, ds.intensity || 0));
-                        const dGroup = groups.find(g => g.id === ds.groupId);
-                        const dTopic = parsedTopics.find(t => t.id === ds.topicId);
+                        const dGroup = courses.flatMap(c => (c.groups || [])).find(g => g.id === ds.groupId);
+                        const dTopic = courses.flatMap(c => (c.studyTopics || [])).find(t => t.id === ds.topicId);
                         const dDone = !!ds.completed;
+                        const dOtherCourse = courses.find(c => c.id === ds.courseId && c.id !== course.id);
+                        const dLinkCol = dOtherCourse ? dOtherCourse.color : course.color;
+                        const dTimeStr = (ds.startTime || '').slice(0, 5);
+                        const dHh = dTimeStr ? dTimeStr.slice(0, 2) : '';
+                        const dMm = dTimeStr ? dTimeStr.slice(3, 5) : '';
+                        const dStartMin = dTimeStr ? parseInt(dTimeStr.slice(0, 2), 10) * 60 + parseInt(dTimeStr.slice(3, 5), 10) : -1;
+                        const dEndMin = dStartMin >= 0 ? dStartMin + (ds.durationMinutes || 30) : -1;
+                        const dEndStr = dEndMin >= 0 ? `${String(Math.floor(dEndMin / 60) % 24).padStart(2, '0')}:${String(dEndMin % 60).padStart(2, '0')}` : '';
+                        const dDurPct = Math.min(100, Math.max(9, Math.round(((ds.durationMinutes || 30) / 120) * 100)));
+                        const linkRowStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 8, border: `1px solid ${course.color}22`, background: `${course.color}06`, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", fontSize: 11.5, cursor: 'pointer', transition: 'all 150ms ' + EASE, width: '100%', textAlign: 'left' };
+                        const linkRowHover = (e: React.MouseEvent<HTMLButtonElement>, on: boolean) => {
+                          e.currentTarget.style.borderColor = on ? `${course.color}55` : `${course.color}22`;
+                          e.currentTarget.style.background = on ? `${course.color}12` : `${course.color}06`;
+                        };
                         const startStudy = () => {
                           if (activeTaskId) { addNotification('Hay una tarea vinculada al temporizador. Desvincula esa tarea para iniciar esta sesión.', 'info'); return; }
                           linkPlannedSessionToTimer(ds.id); setNavigateTo('estudio');
                         };
-                        const goTopic = () => { navigateToCourse(course.id, ds.groupId || undefined, ds.topicId || undefined); };
-                        const editSession = () => {
-                          setPlanEditId(ds.id);
-                          setPlanDate(ds.date);
-                          setPlanStartTime(ds.startTime || '09:00');
-                          setPlanTitle(ds.title || '');
-                          setPlanGroupId(ds.groupId || '');
-                          setPlanTopicId(ds.topicId || '');
-                          setPlanType(ds.type || 'estudio');
-                          setPlanDuration(ds.durationMinutes || 30);
-                          setPlanIntensity(ds.intensity || 5);
-                          setShowPlanModal(true);
-                        };
-                        return (
-                          <div onClick={() => setDetailSessionId(null)} style={{ position: 'absolute', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.32)', backdropFilter: 'blur(3px)', animation: 'fadeIn 200ms ' + EASE }}>
-                            <div onClick={e => e.stopPropagation()} className="bento-card" style={{ position: 'relative', width: 540, maxWidth: 'calc(100% - 48px)', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderTop: `1px solid ${course.color}55`, borderRadius: 14, boxShadow: `0 24px 60px rgba(0,0,0,0.45), 0 1px 0 rgba(255,255,255,0.06) inset`, padding: '18px 20px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-                              {/* header: título + acciones */}
-                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                        const goTopic = () => { const tc = dOtherCourse || course; navigateToCourse(tc.id, ds.groupId || undefined, ds.topicId || undefined); };
+                        const closePanel = () => { setDetailSessionId(null); setConfirmDeleteSession(null); setChangeCourseFor(null); };
+                        const recentTopicsList = (() => {
+                          try {
+                            const raw = localStorage.getItem(`owa_recent_topics_${course.id}`);
+                            const arr = raw ? JSON.parse(raw) : [];
+                            if (!Array.isArray(arr)) return [];
+                            return arr
+                              .filter((x: any) => x && typeof x.id === 'string' && x.id !== (ds.topicId || '') && parsedTopics.some(t => t.id === x.id))
+                              .sort((a: any, b: any) => (b.at || 0) - (a.at || 0))
+                              .slice(0, 3)
+                              .map((x: any) => parsedTopics.find(t => t.id === x.id))
+                              .filter(Boolean) as SubjectTopic[];
+                          } catch { return []; }
+                        })();
+                        return createPortal(
+                          <div onClick={closePanel} style={{ position: 'fixed', inset: 0, zIndex: 99995, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.32)', backdropFilter: 'blur(3px)', animation: 'fadeIn 200ms ' + EASE }}>
+                            <div onClick={e => e.stopPropagation()} className="bento-card" style={{ position: 'relative', width: 800, maxWidth: 'calc(100% - 48px)', background: 'linear-gradient(160deg, var(--bg-elevated-alpha, var(--bg-elevated)) 0%, color-mix(in srgb, var(--bg-elevated-alpha, var(--bg-elevated)) 86%, transparent) 100%)', border: '1px solid var(--border-soft)', borderRadius: 16, boxShadow: '0 24px 60px rgba(0,0,0,0.45)', padding: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                              <div style={{ padding: '24px 30px 22px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+                              {/* header: título grande en el color del curso + "sesión de estudio" pequeño abajo */}
+                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
                                 <div style={{ flex: 1, minWidth: 0 }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-                                    <span style={{ fontSize: 8.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: course.color, fontFamily: "'Inter Tight', sans-serif", background: `${course.color}10`, border: `1px solid ${course.color}25`, padding: '2px 8px', borderRadius: 6 }}>Sesión de estudio</span>
-                                    {dDone && <span style={{ fontSize: 8.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#22C55E', fontFamily: "'Inter Tight', sans-serif", background: '#22C55E10', border: '1px solid #22C55E30', padding: '2px 8px', borderRadius: 6 }}>Completada</span>}
-                                  </div>
-                                  <div style={{ fontSize: 17, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em', lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ds.title || 'Sesión de estudio'}</div>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap', fontSize: 9.5, color: 'var(--text-secondary)', fontFamily: "'JetBrains Mono', monospace" }}>
-                                    <span>{format(new Date(ds.date + 'T12:00:00'), 'EEEE d MMMM', { locale: es })}</span>
+                                  <div style={{ fontSize: 30, fontWeight: 300, letterSpacing: '-0.015em', color: course.color, fontFamily: "'Inter Tight', sans-serif", lineHeight: 1.15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textShadow: `0 0 24px ${course.color}22` }}>{ds.title || 'Sesión de estudio'}</div>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 7, flexWrap: 'wrap', fontSize: 10, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif" }}>
+                                    <span>Sesión de estudio</span>
                                     <span style={{ opacity: 0.5 }}>·</span>
-                                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Clock size={9} />{ds.startTime ? ds.startTime.slice(0, 5) : 'Flexible'}</span>
-                                    <span style={{ opacity: 0.5 }}>·</span>
-                                    <span>{ds.durationMinutes} min</span>
+                                    <span style={{ textTransform: 'none', letterSpacing: '0.02em', fontSize: 10.5 }}>{format(new Date(ds.date + 'T12:00:00'), 'EEEE d MMMM', { locale: es })}</span>
                                   </div>
                                 </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                                  <button onClick={editSession} title="Editar sesión" style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid var(--border-soft)', background: 'var(--bg-hover)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 180ms ' + EASE }}
-                                    onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}50`; e.currentTarget.style.color = course.color; }}
-                                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
-                                    <Pencil size={12} />
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, marginTop: 2 }}>
+                                  <button onClick={() => updatePlannedSession(ds.id, { completed: !dDone })} title={dDone ? 'Desmarcar como completada' : 'Marcar como completada'}
+                                    style={{ width: 32, height: 32, borderRadius: '50%', border: dDone ? 'none' : `1.5px solid ${course.color}66`, background: dDone ? '#22C55E' : `${course.color}0d`, color: dDone ? '#fff' : course.color, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms ' + EASE, padding: 0, boxShadow: dDone ? '0 0 16px rgba(34,197,94,0.5)' : `0 0 10px ${course.color}1a` }}
+                                    onMouseEnter={e => { if (!dDone) { e.currentTarget.style.background = `${course.color}18`; e.currentTarget.style.boxShadow = `0 0 14px ${course.color}33`; } }}
+                                    onMouseLeave={e => { if (!dDone) { e.currentTarget.style.background = `${course.color}0d`; e.currentTarget.style.boxShadow = `0 0 10px ${course.color}1a`; } }}>
+                                    {dDone ? <Check size={15} strokeWidth={2.8} /> : <Check size={15} strokeWidth={2} style={{ opacity: 0.7 }} />}
                                   </button>
-                                  <button onClick={() => { deletePlannedSession(ds.id); setDetailSessionId(null); }} title="Eliminar sesión" style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid var(--border-soft)', background: 'var(--bg-hover)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 180ms ' + EASE }}
-                                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#EF444450'; e.currentTarget.style.color = '#EF4444'; }}
-                                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
-                                    <Trash2 size={12} />
+                                  <button onClick={() => setConfirmDeleteSession(ds)} title="Eliminar sesión" style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid var(--border-soft)', background: 'var(--bg-elevated)', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 180ms ' + EASE, padding: 0 }}
+                                    onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(239,68,68,0.45)'; e.currentTarget.style.color = '#EF4444'; e.currentTarget.style.background = 'rgba(239,68,68,0.12)'; e.currentTarget.style.boxShadow = '0 0 10px rgba(239,68,68,0.22)'; }}
+                                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.boxShadow = 'none'; }}>
+                                    <Trash2 size={12} strokeWidth={2.2} />
                                   </button>
-                                  <button onClick={() => setDetailSessionId(null)} title="Cerrar" style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid var(--border-soft)', background: 'var(--bg-hover)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 180ms ' + EASE }}
-                                    onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
-                                    onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-secondary)'; }}>
-                                    <X size={12} />
+                                  <button onClick={closePanel} title="Cerrar" style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid var(--border-soft)', background: 'var(--bg-elevated)', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 180ms ' + EASE, padding: 0 }}
+                                    onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.borderColor = 'var(--border-default)'; }}
+                                    onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'var(--border-soft)'; }}>
+                                    <X size={12.5} strokeWidth={2.2} />
                                   </button>
                                 </div>
                               </div>
 
-                              {/* cuerpo: velocímetro grande + datos + acciones */}
-                              <div style={{ display: 'flex', flexDirection: 'row', gap: 18, alignItems: 'stretch' }}>
-                                {/* velocímetro grande */}
-                                <div style={{ flex: 1, minWidth: 0, border: '1px solid var(--border-subtle)', borderRadius: 12, padding: '12px 14px', background: 'linear-gradient(160deg, var(--bg-elevated-alpha, var(--bg-elevated)) 0%, transparent 100%)', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 8 }}>
-                                  <div style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif" }}>Intensidad</div>
-                                  <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
+                              {/* sesión de otro curso: se ve el curso y al hacer click se puede cambiar */}
+                              {dOtherCourse && (
+                                <div onClick={() => { setCcSelId(ds.courseId || ''); setChangeCourseFor(ds); }} title="Mover esta sesión a otro curso"
+                                  style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '9px 13px', borderRadius: 10, border: `1px solid ${dOtherCourse.color}30`, background: `${dOtherCourse.color}0a`, cursor: 'pointer', transition: 'all 150ms ' + EASE, width: '100%' }}
+                                  onMouseEnter={e => { e.currentTarget.style.borderColor = `${dOtherCourse.color}55`; e.currentTarget.style.background = `${dOtherCourse.color}14`; }}
+                                  onMouseLeave={e => { e.currentTarget.style.borderColor = `${dOtherCourse.color}30`; e.currentTarget.style.background = `${dOtherCourse.color}0a`; }}>
+                                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: dOtherCourse.color, boxShadow: `0 0 8px ${dOtherCourse.color}88`, flexShrink: 0 }} />
+                                  <span style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', color: dOtherCourse.color, fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>Curso</span>
+                                  <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left' }}>{dOtherCourse.name}</span>
+                                  <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 9, color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>Cambiar <ArrowLeftRight size={11} style={{ color: dOtherCourse.color }} /></span>
+                                </div>
+                              )}
+
+                              {/* fila central: intensidad + horario + duración — 3 columnas que llenan el ancho */}
+                              <div style={{ display: 'flex', flexDirection: 'row', gap: 12, alignItems: 'stretch' }}>
+                                <div style={{ flex: 1, minWidth: 0, border: '1px solid var(--border-soft)', borderRadius: 12, padding: '12px 16px', background: 'linear-gradient(160deg, var(--bg-elevated-alpha, var(--bg-elevated)) 0%, transparent 100%)', display: 'flex', flexDirection: 'column', gap: 9 }}>
+                                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+                                    <span style={{ fontSize: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif" }}>Intensidad esperada</span>
+                                    <span style={{ fontSize: 30, fontWeight: 300, letterSpacing: '-0.02em', fontFamily: "'Inter Tight', sans-serif", color: dInt > 0 ? REVIEW_LEVEL_COLORS[dInt - 1] : 'var(--text-tertiary)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{dInt}<span style={{ fontSize: 13, fontWeight: 400, color: 'var(--text-muted)', fontFamily: "'JetBrains Mono', monospace", marginLeft: 4 }}>/10</span></span>
+                                  </div>
+                                  <div style={{ display: 'flex', gap: 3, alignItems: 'center', marginTop: 'auto' }}>
                                     {REVIEW_LEVEL_COLORS.map((col, i) => (
                                       <div key={i} style={{ flex: 1, height: 20, borderRadius: 4, background: i < dInt ? col : 'var(--bg-hover)', boxShadow: i === dInt - 1 ? `0 0 12px ${col}aa` : 'none', transition: 'all 180ms ' + EASE, cursor: 'pointer' }}
                                         onClick={() => updatePlannedSession(ds.id, { intensity: i + 1 })}
@@ -3796,60 +3914,136 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                         onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }} />
                                     ))}
                                   </div>
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: 'var(--text-tertiary)', fontFamily: "'JetBrains Mono', monospace" }}>
-                                    <span>1</span><span style={{ color: dInt > 0 ? REVIEW_LEVEL_COLORS[dInt - 1] : 'var(--text-tertiary)', fontWeight: 700 }}>{dInt}/10</span><span>10</span>
-                                  </div>
                                 </div>
 
-                                {/* datos */}
-                                <div style={{ width: 210, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 7 }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, fontSize: 10, color: 'var(--text-muted)' }}>
-                                    <span style={{ fontWeight: 500 }}>Agrupación</span>
-                                    <span style={{ fontWeight: 600, color: dGroup ? 'var(--text-primary)' : 'var(--text-tertiary)', fontFamily: "'JetBrains Mono', monospace", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 130 }}>{dGroup ? dGroup.name : '—'}</span>
+                                <div style={{ width: 270, flexShrink: 0, border: '1px solid var(--border-soft)', borderRadius: 12, padding: '12px 16px', background: 'linear-gradient(160deg, var(--bg-elevated-alpha, var(--bg-elevated)) 0%, transparent 100%)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                  <span style={{ fontSize: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif" }}>Horario</span>
+                                  {dTimeStr ? (
+                                    <>
+                                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: 'auto' }}>
+                                        <span style={{ fontSize: 40, fontWeight: 200, letterSpacing: '0.01em', fontFamily: "'JetBrains Mono', monospace", color: 'var(--text-primary)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{dHh}<span style={{ animation: 'clockColonBlink 1.2s ' + EASE + ' infinite', display: 'inline-block' }}>:</span>{dMm}</span>
+                                        <span style={{ fontSize: 22, fontWeight: 300, color: course.color, fontFamily: "'JetBrains Mono', monospace", lineHeight: 1 }}>→</span>
+                                        <span style={{ fontSize: 24, fontWeight: 300, fontFamily: "'JetBrains Mono', monospace", color: 'var(--text-secondary)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{dEndStr}</span>
+                                      </div>
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 8, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif" }}>
+                                        <span>Inicio</span><span>Fin</span>
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 'auto', color: 'var(--text-tertiary)' }}>
+                                      <Clock size={16} strokeWidth={1.6} />
+                                      <span style={{ fontSize: 17, fontWeight: 300, fontFamily: "'Inter Tight', sans-serif" }}>Flexible</span>
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div style={{ width: 270, flexShrink: 0, border: '1px solid var(--border-soft)', borderRadius: 12, padding: '12px 16px', background: 'linear-gradient(160deg, var(--bg-elevated-alpha, var(--bg-elevated)) 0%, transparent 100%)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                  <span style={{ fontSize: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif" }}>Duración</span>
+                                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 6, marginTop: 'auto' }}>
+                                    <span style={{ fontSize: 40, fontWeight: 300, fontFamily: "'JetBrains Mono', monospace", color: course.color, lineHeight: 1, fontVariantNumeric: 'tabular-nums', textShadow: `0 0 20px ${course.color}33` }}>{ds.durationMinutes || 30}</span>
+                                    <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif" }}>min</span>
                                   </div>
-                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, fontSize: 10, color: 'var(--text-muted)' }}>
-                                    <span style={{ fontWeight: 500 }}>Tema</span>
-                                    <span style={{ fontWeight: 600, color: dTopic ? 'var(--text-primary)' : 'var(--text-tertiary)', fontFamily: "'JetBrains Mono', monospace", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 130 }}>{dTopic ? dTopic.title : '—'}</span>
+                                  <div style={{ position: 'relative', height: 8, borderRadius: 999, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
+                                    <div style={{ position: 'absolute', inset: 0, borderRadius: 999, background: `linear-gradient(90deg, ${course.color}, ${course.color}88)`, width: `${dDurPct}%`, boxShadow: `0 0 10px ${course.color}55`, transition: 'width 500ms cubic-bezier(0.16,1,0.3,1)' }}>
+                                      <div style={{ position: 'absolute', top: 0, bottom: 0, width: '40%', background: 'linear-gradient(105deg, transparent, rgba(255,255,255,0.4), transparent)', animation: 'sessionSheen 2.8s ' + EASE + ' infinite' }} />
+                                    </div>
                                   </div>
-                                  <div style={{ height: 1, background: 'var(--border-subtle)', opacity: 0.7 }} />
-                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, fontSize: 10, color: 'var(--text-muted)' }}>
-                                    <span style={{ fontWeight: 500 }}>Duración</span><span style={{ fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'JetBrains Mono', monospace" }}>{ds.durationMinutes} min</span>
-                                  </div>
-                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, fontSize: 10, color: 'var(--text-muted)' }}>
-                                    <span style={{ fontWeight: 500 }}>Hora</span><span style={{ fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'JetBrains Mono', monospace" }}>{ds.startTime ? ds.startTime.slice(0, 5) : 'Flexible'}</span>
-                                  </div>
-                                  <div style={{ height: 1, background: 'var(--border-subtle)', opacity: 0.7 }} />
-                                  <button onClick={() => updatePlannedSession(ds.id, { completed: !dDone })}
-                                    style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 9px', borderRadius: 8, fontSize: 10, fontWeight: 600, fontFamily: "'Inter Tight', sans-serif", cursor: 'pointer', border: `1px solid ${dDone ? '#22C55E40' : 'var(--border-soft)'}`, background: dDone ? '#22C55E12' : 'var(--bg-hover)', color: dDone ? '#22C55E' : 'var(--text-secondary)', transition: 'all 180ms ' + EASE }}>
-                                    {dDone ? <Check size={11} /> : <Check size={11} style={{ opacity: 0.4 }} />}
-                                    {dDone ? 'Completada' : 'Marcar como completada'}
-                                  </button>
                                 </div>
                               </div>
 
-                              {/* acciones inferiores */}
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 2 }}>
-                                <button onClick={startStudy} title={activeTaskId ? 'Hay una tarea vinculada al temporizador' : 'Vincular al temporizador y abrir Estudio'}
-                                  style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '9px 12px', borderRadius: 10, fontSize: 11.5, fontWeight: 700, fontFamily: "'Inter Tight', sans-serif", color: activeTaskId ? 'var(--text-muted)' : '#fff', background: activeTaskId ? 'var(--bg-deep)' : `linear-gradient(135deg, ${course.color}, ${course.color}b8)`, border: `1px solid ${activeTaskId ? 'var(--border-subtle)' : 'transparent'}`, cursor: activeTaskId ? 'not-allowed' : 'pointer', boxShadow: activeTaskId ? 'none' : `0 4px 18px ${course.color}38`, transition: 'all 200ms ' + EASE, opacity: activeTaskId ? 0.65 : 1 }}
-                                  onMouseEnter={e => { if (!activeTaskId) { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = `0 6px 22px ${course.color}55`; } }}
-                                  onMouseLeave={e => { if (!activeTaskId) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = `0 4px 18px ${course.color}38`; } }}>
-                                  <Play size={13} fill="currentColor" />
-                                  {activeTaskId ? 'Tarea vinculada activa' : 'Iniciar sesión de estudio'}
-                                </button>
-                                {(dGroup || dTopic) && (
-                                  <button onClick={goTopic} title="Ir al tema o agrupación en la vista de archivos"
-                                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 12px', borderRadius: 10, fontSize: 11, fontWeight: 600, fontFamily: "'Inter Tight', sans-serif", color: course.color, border: `1px solid ${course.color}35`, background: `${course.color}0a`, cursor: 'pointer', transition: 'all 180ms ' + EASE }}
-                                    onMouseEnter={e => { e.currentTarget.style.background = `${course.color}16`; e.currentTarget.style.borderColor = `${course.color}55`; }}
-                                    onMouseLeave={e => { e.currentTarget.style.background = `${course.color}0a`; e.currentTarget.style.borderColor = `${course.color}35`; }}>
-                                    <ArrowUpRight size={12} />
-                                    Ir al tema
-                                  </button>
+                              {/* fila inferior: vínculo (izq) + últimos ingresos a temas (der) */}
+                              <div style={{ display: 'flex', flexDirection: 'row', gap: 14, alignItems: 'stretch' }}>
+                                <div style={{ flex: 1, minWidth: 0, border: '1px solid var(--border-soft)', borderRadius: 12, padding: '10px 12px', background: 'linear-gradient(160deg, var(--bg-elevated-alpha, var(--bg-elevated)) 0%, transparent 100%)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                  <div style={{ fontSize: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif" }}>Vinculado a</div>
+                                  {(dGroup || dTopic) ? (
+                                    <>
+                                      {dGroup && (
+                                        <button onClick={goTopic} style={linkRowStyle} title="Abrir agrupación" onMouseEnter={e => linkRowHover(e, true)} onMouseLeave={e => linkRowHover(e, false)}>
+                                          <span style={{ width: 34, height: 34, borderRadius: 9, background: `${course.color}12`, border: `1px solid ${course.color}28`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 150ms ' + EASE }}>
+                                            <FolderOpen size={14} style={{ color: course.color }} />
+                                          </span>
+                                          <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left', fontSize: 12 }}>{dGroup.name}</span>
+                                          <span style={{ fontSize: 8, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", flexShrink: 0, padding: '2px 7px', borderRadius: 999, background: 'var(--bg-hover)', border: '1px solid var(--border-soft)' }}>Agrupación</span>
+                                        </button>
+                                      )}
+                                      {dTopic && (
+                                        <button onClick={goTopic} style={linkRowStyle} title="Abrir tema" onMouseEnter={e => linkRowHover(e, true)} onMouseLeave={e => linkRowHover(e, false)}>
+                                          <span style={{ width: 34, height: 34, borderRadius: 9, background: `${course.color}12`, border: `1px solid ${course.color}28`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 150ms ' + EASE }}>
+                                            <BookOpen size={14} style={{ color: course.color }} />
+                                          </span>
+                                          <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left', fontSize: 12 }}>{dTopic.title}</span>
+                                          <span style={{ fontSize: 8, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", flexShrink: 0, padding: '2px 7px', borderRadius: 999, background: 'var(--bg-hover)', border: '1px solid var(--border-soft)' }}>Tema</span>
+                                        </button>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <span style={{ fontSize: 10.5, color: 'var(--text-muted)', fontStyle: 'italic' }}>Sin tema o agrupación vinculada</span>
+                                  )}
+                                </div>
+
+                                {recentTopicsList.length > 0 && (
+                                  <div style={{ width: 280, flexShrink: 0, border: '1px solid var(--border-soft)', borderRadius: 12, padding: '10px 12px', background: 'linear-gradient(160deg, var(--bg-elevated-alpha, var(--bg-elevated)) 0%, transparent 100%)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                    <div style={{ fontSize: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", marginBottom: 2 }}>Últimos ingresos a temas</div>
+                                    {recentTopicsList.map(rt => (
+                                      <button key={rt.id} onClick={() => navigateToCourse(course.id, rt.groupId || undefined, rt.id)} title={rt.title}
+                                        style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 8px', borderRadius: 8, border: '1px solid transparent', background: 'transparent', color: 'var(--text-secondary)', fontFamily: "'Inter Tight', sans-serif", fontSize: 11, cursor: 'pointer', transition: 'all 150ms ' + EASE, width: '100%', textAlign: 'left' }}
+                                        onMouseEnter={e => { e.currentTarget.style.background = `${course.color}0a`; e.currentTarget.style.borderColor = `${course.color}30`; }}
+                                        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'transparent'; }}>
+                                        <span style={{ width: 5, height: 5, borderRadius: '50%', background: course.color, flexShrink: 0, boxShadow: `0 0 5px ${course.color}88` }} />
+                                        <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{rt.title}</span>
+                                      </button>
+                                    ))}
+                                  </div>
                                 )}
                               </div>
+
+                              {/* CTA principal */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 2 }}>
+                                <button onClick={startStudy} title={activeTaskId ? 'Hay una tarea vinculada al temporizador' : 'Vincular al temporizador y abrir Estudio'}
+                                  style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '12px 12px', borderRadius: 10, fontSize: 11, fontWeight: 500, letterSpacing: '0.14em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif", color: activeTaskId ? 'var(--text-muted)' : '#fff', background: activeTaskId ? 'var(--bg-deep)' : `linear-gradient(135deg, ${course.color}, ${course.color}b8)`, border: `1px solid ${activeTaskId ? 'var(--border-subtle)' : 'transparent'}`, cursor: activeTaskId ? 'not-allowed' : 'pointer', boxShadow: activeTaskId ? 'none' : `0 4px 18px ${course.color}38`, transition: 'all 200ms ' + EASE, opacity: activeTaskId ? 0.65 : 1, animation: activeTaskId ? 'none' : `sessionCtaBreath 2.6s ${EASE} infinite` }}
+                                  onMouseEnter={e => { if (!activeTaskId) { e.currentTarget.style.boxShadow = `0 6px 24px ${course.color}55`; } }}
+                                  onMouseLeave={e => { if (!activeTaskId) { e.currentTarget.style.boxShadow = `0 4px 18px ${course.color}38`; } }}>
+                                  {activeTaskId ? 'Tarea vinculada activa' : 'Iniciar sesión de estudio'}
+                                </button>
+                              </div>
+                              </div>
                             </div>
-                          </div>
+                          </div>,
+                          document.body
                         );
                       })()}
+
+                      {/* ══ VENTANA DE CONFIRMACIÓN — eliminar sesión (evita borrados accidentales) ══ */}
+                      {detailSessionId && confirmDeleteSession && createPortal(
+                        <div onClick={() => setConfirmDeleteSession(null)} style={{ position: 'fixed', inset: 0, zIndex: 99996, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)', animation: 'fadeIn 180ms ' + EASE }}>
+                          <div onClick={e => e.stopPropagation()} className="bento-card" style={{ width: 400, maxWidth: 'calc(100% - 48px)', background: 'var(--bg-surface)', border: '1px solid var(--border-soft)', borderRadius: 16, boxShadow: '0 24px 60px rgba(0,0,0,0.5)', padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <div style={{ width: 26, height: 26, borderRadius: 8, background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                <Trash2 size={13} style={{ color: '#EF4444' }} />
+                              </div>
+                              <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>Eliminar sesión</span>
+                            </div>
+                            <span style={{ fontSize: 11.5, color: 'var(--text-secondary)', fontFamily: "'Inter', sans-serif", lineHeight: 1.55 }}>
+                              ¿Eliminar <b style={{ color: 'var(--text-primary)', fontWeight: 600 }}>“{confirmDeleteSession.title || 'Sesión de estudio'}”</b>? Se quitará del cronograma y no se puede deshacer.
+                            </span>
+                            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 2 }}>
+                              <button onClick={() => setConfirmDeleteSession(null)}
+                                style={{ padding: '8px 14px', borderRadius: 9, fontSize: 10.5, fontWeight: 600, fontFamily: "'Inter Tight', sans-serif", border: '1px solid var(--border-soft)', background: 'var(--bg-hover)', color: 'var(--text-secondary)', cursor: 'pointer', transition: 'all 150ms ' + EASE }}
+                                onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-elevated)'; }}
+                                onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}>
+                                Cancelar
+                              </button>
+                              <button onClick={() => { deletePlannedSession(confirmDeleteSession.id); setConfirmDeleteSession(null); setDetailSessionId(null); }}
+                                style={{ padding: '8px 14px', borderRadius: 9, fontSize: 10.5, fontWeight: 600, fontFamily: "'Inter Tight', sans-serif", border: '1px solid rgba(239,68,68,0.4)', background: '#EF4444', color: '#fff', cursor: 'pointer', boxShadow: '0 4px 14px rgba(239,68,68,0.35)', transition: 'all 150ms ' + EASE }}
+                                onMouseEnter={e => { e.currentTarget.style.background = '#DC2626'; e.currentTarget.style.boxShadow = '0 5px 18px rgba(239,68,68,0.5)'; }}
+                                onMouseLeave={e => { e.currentTarget.style.background = '#EF4444'; e.currentTarget.style.boxShadow = '0 4px 14px rgba(239,68,68,0.35)'; }}>
+                                Sí, eliminar
+                              </button>
+                            </div>
+                          </div>
+                        </div>,
+                        document.body
+                      )}
 
                       {/* ══ RADAR DE RENDIMIENTO — centro inferior ══ */}
                       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -4718,7 +4912,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                               const on = v <= planIntensity;
                               return (
                                 <button key={v} onClick={() => setPlanIntensity(v)} title={`Intensidad ${v}`}
-                                  style={{ flex: 1, height: 26, borderRadius: 6, cursor: 'pointer', border: on ? 'none' : '1px solid var(--border-subtle)', background: on ? `linear-gradient(180deg, ${col}, color-mix(in srgb, ${col} 45%, #000 55%))` : 'var(--bg-deep)', opacity: on ? 1 : 0.45, boxShadow: v === planIntensity ? `0 0 16px ${col}aa, inset 0 1px 0 rgba(255,255,255,0.18)` : on ? 'inset 0 1px 0 rgba(255,255,255,0.18)' : 'none', transition: 'all 160ms ' + EASE }}
+                                  style={{ flex: 1, height: 26, borderRadius: 6, cursor: 'pointer', border: on ? 'none' : '1px solid var(--border-subtle)', background: on ? `linear-gradient(180deg, ${col}, color-mix(in srgb, ${col} 45%, #000 55%))` : 'var(--bg-deep)', opacity: on ? 1 : 0.45, boxShadow: v === planIntensity ? 'inset 0 1px 0 rgba(255,255,255,0.22), inset 0 0 12px rgba(255,255,255,0.16)' : on ? 'inset 0 1px 0 rgba(255,255,255,0.18)' : 'none', transition: 'all 160ms ' + EASE }}
                                   onMouseEnter={e => { if (!on) e.currentTarget.style.opacity = '0.8'; }}
                                   onMouseLeave={e => { if (!on) e.currentTarget.style.opacity = '0.45'; }} />
                               );
@@ -4944,7 +5138,8 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                             </div>
                                           </div>
                                           {/* Delete */}
-                                          <button onClick={(e) => { e.stopPropagation(); deletePlannedSession(s.id); }}
+                                          <button onClick={(e) => { e.stopPropagation(); setConfirmDeleteSession(s); }}
+                                            title="Eliminar sesión"
                                             style={{ width: 26, height: 26, borderRadius: 6, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms', flexShrink: 0, opacity: 0.5 }}
                                             onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#EF4444'; e.currentTarget.style.opacity = '1'; }}
                                             onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.opacity = '0.5'; }}>

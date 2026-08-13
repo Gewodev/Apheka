@@ -471,6 +471,41 @@ export default function Planificacion() {
     });
   }
 
+  /* Distribuye bloques de tiempo (sesiones registradas + planificadas) en
+     carriles SIN superposición: dos bloques que se pisan en el horario se
+     muestran lado a lado en vez de apilarse uno encima del otro. Se agrupan
+     por componentes conexas de solape para que un bloque aislado conserve su
+     ancho completo. */
+  function layoutTimeLanes<T extends { id: string; start: number; end: number }>(blocks: T[]): Map<string, { col: number; cols: number }> {
+    const sorted = [...blocks].sort((a, b) => a.start - b.start || b.end - a.end);
+    const res = new Map<string, { col: number; cols: number }>();
+    let i = 0;
+    while (i < sorted.length) {
+      let j = i;
+      let gEnd = sorted[i].end;
+      while (j + 1 < sorted.length && sorted[j + 1].start < gEnd) {
+        j++;
+        gEnd = Math.max(gEnd, sorted[j].end);
+      }
+      const colEnd: number[] = [];
+      let maxCols = 1;
+      for (let k = i; k <= j; k++) {
+        const b = sorted[k];
+        let c = 0;
+        while (colEnd[c] !== undefined && colEnd[c] > b.start) c++;
+        colEnd[c] = b.end;
+        maxCols = Math.max(maxCols, c + 1);
+        res.set(b.id, { col: c, cols: 0 });
+      }
+      for (let k = i; k <= j; k++) {
+        const a = res.get(sorted[k].id);
+        if (a) res.set(sorted[k].id, { ...a, cols: maxCols });
+      }
+      i = j + 1;
+    }
+    return res;
+  }
+
   const isOld = (dateStr: string) => {
     const diff = (new Date().getTime() - new Date(dateStr + 'T12:00:00').getTime()) / 86400000;
     return diff > 4;
@@ -704,7 +739,7 @@ export default function Planificacion() {
             onClick={() => openNewPlanSession()}
             style={{
               display:'flex', alignItems:'center', gap:7,
-              height:38, borderRadius:10, padding:'0 18px',
+              height:38, borderRadius:10, padding:'0 20px',
               fontSize:11, fontWeight:600, fontFamily:"'Inter Tight',sans-serif", letterSpacing:'0.02em',
               border:'none', cursor:'pointer',
               background:'var(--accent)', color:'#fff',
@@ -750,7 +785,7 @@ export default function Planificacion() {
                   const tod = isToday(d);
                   return (
                     <div key={i}
-                      onClick={() => { const dIso = format(d, 'yyyy-MM-dd'); const dEvs = getEventsForDate(dIso); const dLinkedIds = new Set(dEvs.map(ev => (ev as PlanEvent).taskId).filter(Boolean)); setSelectedItem({ type: 'day', date: d, events: dEvs, tasks: tasks.filter(t => { if (!t.dueDate || t.status === 'completado') return false; if (dLinkedIds.has(t.id)) return false; return t.dueDate === dIso; }) }); }}
+                      onClick={() => { const dIso = format(d, 'yyyy-MM-dd'); const dEvs = getEventsForDate(dIso); const dLinkedIds = new Set(dEvs.map(ev => (ev as PlanEvent).taskId).filter(Boolean)); setSelectedItem({ type: 'day', date: d, events: dEvs, tasks: tasks.filter(t => { if (!t.dueDate || t.status === 'completado') return false; if (dLinkedIds.has(t.id)) return false; return (t.dueDate || '').slice(0, 10) === dIso; }) }); }}
                       style={{ padding:'12px 0', textAlign:'center', cursor:'pointer', borderLeft: i > 0 ? '1px solid var(--border-soft)' : 'none', background:tod?'rgba(225,29,72,0.05)':'transparent', position:'relative', transition:'background 200ms' }}
                       onMouseEnter={e=>!tod && (e.currentTarget.style.outline='1px solid var(--border-strong)')}
                       onMouseLeave={e=>!tod && (e.currentTarget.style.outline='none')}
@@ -874,82 +909,96 @@ export default function Planificacion() {
                             </DraggablePlanEvent>
                           );
                         })}
-                        {getStudySessionsForDate(iso).map(s => {
-                          if (!isValidDateStr(s.startedAt)) return null;
-                          const stD = new Date(s.startedAt);
-                          const stH = stD.getHours() + stD.getMinutes() / 60 + stD.getSeconds() / 3600;
-                          const durH = s.duration / 3600;
-                          const sTop = (stH - H_START) * H_PX;
-                          const sH = Math.max(durH * H_PX, 26);
-                          const b = studyBlock(s);
+                        {(() => {
+                          const dayStudy = getStudySessionsForDate(iso).filter(s => isValidDateStr(s.startedAt)).map(s => {
+                            const stD = new Date(s.startedAt);
+                            const stH = stD.getHours() + stD.getMinutes() / 60 + stD.getSeconds() / 3600;
+                            return { id: s.id, kind: 'study' as const, start: stH, end: stH + s.duration / 3600, sTop: (stH - H_START) * H_PX, sH: Math.max((s.duration / 3600) * H_PX, 26), s };
+                          });
+                          const dayPlanned = getPlannedSessionsForDate(iso).filter(ps => !!ps.startTime && !dayStudy.some(x => x.s.plannedSessionId === ps.id)).map(ps => {
+                            const [sh, sm] = (ps.startTime as string).split(':').map(Number);
+                            const stH = sh + sm / 60;
+                            const sH = Math.max((ps.durationMinutes / 60) * H_PX, 22);
+                            const sTop = (stH - H_START) * H_PX;
+                            if (sTop < -sH) return null;
+                            return { id: `planned-${ps.id}`, kind: 'planned' as const, start: stH, end: stH + ps.durationMinutes / 60, sTop, sH, ps };
+                          }).filter((x): x is NonNullable<typeof x> => !!x);
+                          const lanes = layoutTimeLanes([...dayStudy, ...dayPlanned]);
                           return (
-                            <div key={s.id} title={`${b.label} — ${b.mins} min registrados${b.isPlan ? ' · sesión planificada' : ''}`}
-                              style={{
-                                position:'absolute', top: sTop, left: '2%', width: '96%', height: sH,
-                                borderRadius: 6, zIndex: 1, pointerEvents: 'none',
-                                background: `linear-gradient(135deg, ${b.color}1c, ${b.color}06)`,
-                                borderLeft: `3px ${b.isPlan ? 'dashed' : 'solid'} ${b.color}99`,
-                                boxShadow: b.isPlan ? `inset 0 0 0 1px ${b.color}33, inset 0 1px 0 rgba(255,255,255,0.04)` : 'inset 0 1px 0 rgba(255,255,255,0.04)',
-                                display:'flex', flexDirection:'column', justifyContent:'center', padding: '4px 9px 4px 10px', overflow: 'hidden',
-                              }}>
-                              <span style={{ fontSize: 11, fontWeight: 800, color: b.color, textTransform: 'uppercase', letterSpacing: '0.03em', fontFamily: "'Inter Tight',sans-serif", lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {b.label}
-                              </span>
-                              {sH > 30 && (
-                                <span style={{ fontSize: 8.5, fontWeight: 600, color: b.color, opacity: 0.75, fontFamily: "'JetBrains Mono',monospace", marginTop: 1, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                  {b.isPlan && (
-                                    <span style={{ fontSize: 7.5, fontWeight: 800, letterSpacing: '0.08em', padding: '1px 4px', borderRadius: 4, border: `1px solid ${b.color}55`, color: b.color, opacity: 1, lineHeight: 1 }}>SESIÓN</span>
-                                  )}
-                                  <Check size={8} strokeWidth={3} style={{ flexShrink: 0 }} /> {b.mins} min registrados
-                                </span>
-                              )}
-                            </div>
+                            <>
+                              {dayStudy.map(x => {
+                                const b = studyBlock(x.s);
+                                const ln = lanes.get(x.id) || { col: 0, cols: 1 };
+                                const wPct = 96 / ln.cols;
+                                return (
+                                  <div key={x.id} title={`${b.label} — ${b.mins} min registrados${b.isPlan ? ' · sesión planificada' : ''}`}
+                                    style={{
+                                      position:'absolute', top: x.sTop, left: `${2 + ln.col * wPct}%`, width: `${wPct}%`, height: x.sH,
+                                      borderRadius: 6, zIndex: 1, pointerEvents: 'none',
+                                      background: `linear-gradient(135deg, ${b.color}1c, ${b.color}06)`,
+                                      borderLeft: `3px ${b.isPlan ? 'dashed' : 'solid'} ${b.color}99`,
+                                      boxShadow: b.isPlan ? `inset 0 0 0 1px ${b.color}33, inset 0 1px 0 rgba(255,255,255,0.04)` : 'inset 0 1px 0 rgba(255,255,255,0.04)',
+                                      display:'flex', flexDirection:'column', justifyContent:'center', padding: '4px 9px 4px 10px', overflow: 'hidden',
+                                    }}>
+                                    <span style={{ fontSize: 11, fontWeight: 800, color: b.color, textTransform: 'uppercase', letterSpacing: '0.03em', fontFamily: "'Inter Tight',sans-serif", lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      {b.label}
+                                    </span>
+                                    {x.sH > 30 && (
+                                      <span style={{ fontSize: 8.5, fontWeight: 600, color: b.color, opacity: 0.75, fontFamily: "'JetBrains Mono',monospace", marginTop: 1, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                        {b.isPlan && (
+                                          <span style={{ fontSize: 7.5, fontWeight: 800, letterSpacing: '0.08em', padding: '1px 4px', borderRadius: 4, border: `1px solid ${b.color}55`, color: b.color, opacity: 1, lineHeight: 1 }}>SESIÓN</span>
+                                        )}
+                                        <Check size={8} strokeWidth={3} style={{ flexShrink: 0 }} /> {b.mins} min registrados
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                              {dayPlanned.map(x => {
+                                const ps = x.ps;
+                                const ln = lanes.get(x.id) || { col: 0, cols: 1 };
+                                const wPct = 96 / ln.cols;
+                                const courseInfo = courses.find(c => c.id === ps.courseId);
+                                const pCol = courseInfo?.color || '#9CA3AF';
+                                const psInt = Math.max(0, Math.min(10, ps.intensity || 0));
+                                const done = !!ps.completed;
+                                const [sh, sm] = (ps.startTime as string).split(':').map(Number);
+                                return (
+                                  <div key={`planned-${ps.id}`} title={`${ps.title || 'Sesión'} — ${ps.durationMinutes}m · intensidad ${psInt}/10${done ? ' · completada' : ''}`}
+                                    onClick={e => { e.stopPropagation(); setPlanOccurrenceDate(iso); setSelectedItem({ type: 'plansession', session: ps }); }}
+                                    style={{
+                                      position:'absolute', top: x.sTop, left: `${2 + ln.col * wPct}%`, width: `${wPct}%`, height: x.sH,
+                                      borderRadius: 6, zIndex: 2, cursor: 'pointer',
+                                      background: `linear-gradient(135deg, ${pCol}16, ${pCol}05)`,
+                                      borderLeft: `3px solid ${pCol}66`,
+                                      display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '5px 9px',
+                                      transition: 'all 150ms', opacity: done ? 0.72 : 1,
+                                    }}
+                                    onMouseEnter={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${pCol}22, ${pCol}0a)`; e.currentTarget.style.boxShadow = `0 4px 14px ${pCol}33`; }}
+                                    onMouseLeave={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${pCol}16, ${pCol}05)`; e.currentTarget.style.boxShadow = 'none'; }}
+                                  >
+                                    <span style={{ fontSize: 10.5, fontWeight: 700, color: pCol, fontFamily: "'Inter', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
+                                      {done && <span style={{ color: '#10B981', fontWeight: 800, marginRight: 4 }}>✓</span>}
+                                      {ps.title || 'Sesión de estudio'}
+                                    </span>
+                                    {x.sH > 30 && (
+                                      <span style={{ fontSize: 8.5, fontWeight: 500, color: pCol, opacity: 0.75, fontFamily: "'JetBrains Mono',monospace", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%', marginTop: 1 }}>
+                                        {fmtTimeRange(ps.startTime!, (() => { const m = Math.round(sh * 60 + sm + ps.durationMinutes); return `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; })(), settings?.timeFormat)} · {ps.durationMinutes}m
+                                      </span>
+                                    )}
+                                    {x.sH > 44 && (
+                                      <div style={{ display: 'flex', gap: 1.5, marginTop: 'auto', width: '100%', paddingTop: 2 }}>
+                                        {REVIEW_LEVEL_COLORS.map((col, i) => (
+                                          <div key={i} style={{ flex: 1, height: 4, borderRadius: 1, background: i < psInt ? col : 'var(--bg-deep)', opacity: i < psInt ? 0.9 : 0.5, boxShadow: i === psInt - 1 ? `0 0 6px ${col}88` : 'none' }} />
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </>
                           );
-                        })}
-                        {getPlannedSessionsForDate(iso).map(ps => {
-                          const durH = ps.durationMinutes / 60;
-                          const sH = Math.max(durH * H_PX, 22);
-                          const courseInfo = courses.find(c => c.id === ps.courseId);
-                          const pCol = courseInfo?.color || '#9CA3AF';
-                          const psInt = Math.max(0, Math.min(10, ps.intensity || 0));
-                          const done = !!ps.completed;
-                          if (!ps.startTime) return null;
-                          const [sh, sm] = ps.startTime.split(':').map(Number);
-                          const sTop = ((sh + sm / 60) - H_START) * H_PX;
-                          if (sTop < -sH) return null;
-                          return (
-                            <div key={`planned-${ps.id}`} title={`${ps.title || 'Sesión'} — ${ps.durationMinutes}m · intensidad ${psInt}/10${done ? ' · completada' : ''}`}
-                          onClick={e => { e.stopPropagation(); setPlanOccurrenceDate(iso); setSelectedItem({ type: 'plansession', session: ps }); }}
-                              style={{
-                                position:'absolute', top: sTop, left: '3%', width: '94%', height: sH,
-                                borderRadius: 6, zIndex: 2, cursor: 'pointer',
-                                background: `linear-gradient(135deg, ${pCol}16, ${pCol}05)`,
-                                borderLeft: `3px solid ${pCol}66`,
-                                display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '5px 9px',
-                                transition: 'all 150ms', opacity: done ? 0.72 : 1,
-                              }}
-                              onMouseEnter={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${pCol}22, ${pCol}0a)`; e.currentTarget.style.boxShadow = `0 4px 14px ${pCol}33`; }}
-                              onMouseLeave={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${pCol}16, ${pCol}05)`; e.currentTarget.style.boxShadow = 'none'; }}
-                            >
-                              <span style={{ fontSize: 10.5, fontWeight: 700, color: pCol, fontFamily: "'Inter', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
-                                {done && <span style={{ color: '#10B981', fontWeight: 800, marginRight: 4 }}>✓</span>}
-                                {ps.title || 'Sesión de estudio'}
-                              </span>
-                              {sH > 30 && (
-                                <span style={{ fontSize: 8.5, fontWeight: 500, color: pCol, opacity: 0.75, fontFamily: "'JetBrains Mono',monospace", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%', marginTop: 1 }}>
-                                  {fmtTimeRange(ps.startTime, (() => { const m = Math.round(sh * 60 + sm + ps.durationMinutes); return `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; })(), settings?.timeFormat)} · {ps.durationMinutes}m
-                                </span>
-                              )}
-                               {sH > 44 && (
-                                 <div style={{ display: 'flex', gap: 1.5, marginTop: 'auto', width: '100%', paddingTop: 2 }}>
-                                   {REVIEW_LEVEL_COLORS.map((col, i) => (
-                                     <div key={i} style={{ flex: 1, height: 4, borderRadius: 1, background: i < psInt ? col : 'var(--bg-deep)', opacity: i < psInt ? 0.9 : 0.5, boxShadow: i === psInt - 1 ? `0 0 6px ${col}88` : 'none' }} />
-                                   ))}
-                                 </div>
-                               )}
-                             </div>
-                           );
-                        })}
+                        })()}
                         {tod && nowH>=H_START && nowH<=H_END && (
                           <div style={{ position:'absolute', top:nowPx, left:0, right:0, height:2, background:'var(--accent)', zIndex:10, pointerEvents:'none', boxShadow:'0 0 12px var(--accent-glow)' }}>
                             <div style={{ position:'absolute', left:-4, top:-4, width:10, height:10, borderRadius:'50%', background:'var(--accent)', boxShadow:'0 0 16px var(--accent-glow)' }}/>
@@ -1058,86 +1107,103 @@ export default function Planificacion() {
                         );
                       });
                     })()}
-                    {getStudySessionsForDate(format(navDate,'yyyy-MM-dd')).map(s => {
-                      if (!isValidDateStr(s.startedAt)) return null;
-                      const stD = new Date(s.startedAt);
-                      const stH = stD.getHours() + stD.getMinutes() / 60 + stD.getSeconds() / 3600;
-                      const durH = s.duration / 3600;
-                      const sTop = (stH - H_START) * H_PX;
-                      const sH = Math.max(durH * H_PX, 28);
-                      const b = studyBlock(s);
+                    {(() => {
+                      const isoD = format(navDate, 'yyyy-MM-dd');
+                      const dayStudy = getStudySessionsForDate(isoD).filter(s => isValidDateStr(s.startedAt)).map(s => {
+                        const stD = new Date(s.startedAt);
+                        const stH = stD.getHours() + stD.getMinutes() / 60 + stD.getSeconds() / 3600;
+                        return { id: s.id, kind: 'study' as const, start: stH, end: stH + s.duration / 3600, sTop: (stH - H_START) * H_PX, sH: Math.max((s.duration / 3600) * H_PX, 28), s };
+                      });
+                      const dayPlanned = getPlannedSessionsForDate(isoD).filter(ps => !!ps.startTime && !dayStudy.some(x => x.s.plannedSessionId === ps.id)).map(ps => {
+                        const [sh, sm] = (ps.startTime as string).split(':').map(Number);
+                        const stH = sh + sm / 60;
+                        const sH = Math.max((ps.durationMinutes / 60) * H_PX, 22);
+                        const sTop = (stH - H_START) * H_PX;
+                        if (sTop < -sH) return null;
+                        return { id: `planned-${ps.id}`, kind: 'planned' as const, start: stH, end: stH + ps.durationMinutes / 60, sTop, sH, ps };
+                      }).filter((x): x is NonNullable<typeof x> => !!x);
+                      const lanes = layoutTimeLanes([...dayStudy, ...dayPlanned]);
                       return (
-                        <div key={s.id} title={`${b.label} — ${b.mins} min registrados${b.isPlan ? ' · sesión planificada' : ''}`}
-                          style={{
-                            position:'absolute', top: sTop, left: '2.5%', width: '95%', height: sH,
-                            borderRadius: 6, zIndex: 1, pointerEvents: 'none',
-                            background: `linear-gradient(135deg, ${b.color}1c, ${b.color}06)`,
-                            borderLeft: `3px ${b.isPlan ? 'dashed' : 'solid'} ${b.color}99`,
-                            boxShadow: b.isPlan ? `inset 0 0 0 1px ${b.color}33, inset 0 1px 0 rgba(255,255,255,0.04)` : 'inset 0 1px 0 rgba(255,255,255,0.04)',
-                            display:'flex', flexDirection:'column', justifyContent:'center', padding: '5px 11px', overflow:'hidden',
-                          }}>
-                          <span style={{ fontSize: 13, fontWeight: 800, color: b.color, textTransform: 'uppercase', letterSpacing: '0.03em', fontFamily: "'Inter Tight',sans-serif", lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {b.label}
-                          </span>
-                          {sH > 32 && (
-                            <span style={{ fontSize: 9.5, fontWeight: 600, color: b.color, opacity: 0.75, fontFamily: "'JetBrains Mono',monospace", marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
-                              {b.isPlan && (
-                                <span style={{ fontSize: 8, fontWeight: 800, letterSpacing: '0.08em', padding: '1px 5px', borderRadius: 4, border: `1px solid ${b.color}55`, color: b.color, opacity: 1, lineHeight: 1 }}>SESIÓN</span>
-                              )}
-                              <Check size={9} strokeWidth={3} style={{ flexShrink: 0 }} /> {b.mins} min registrados
+                        <>
+                      {dayStudy.map(x => {
+                        const b = studyBlock(x.s);
+                        const ln = lanes.get(x.id) || { col: 0, cols: 1 };
+                        const wPct = 95 / ln.cols;
+                        return (
+                          <div key={x.id} title={`${b.label} — ${b.mins} min registrados${b.isPlan ? ' · sesión planificada' : ''}`}
+                            style={{
+                              position:'absolute', top: x.sTop, left: `${2.5 + ln.col * wPct}%`, width: `${wPct}%`, height: x.sH,
+                              borderRadius: 6, zIndex: 1, pointerEvents: 'none',
+                              background: `linear-gradient(135deg, ${b.color}1c, ${b.color}06)`,
+                              borderLeft: `3px ${b.isPlan ? 'dashed' : 'solid'} ${b.color}99`,
+                              boxShadow: b.isPlan ? `inset 0 0 0 1px ${b.color}33, inset 0 1px 0 rgba(255,255,255,0.04)` : 'inset 0 1px 0 rgba(255,255,255,0.04)',
+                              display:'flex', flexDirection:'column', justifyContent:'center', padding: '5px 11px', overflow:'hidden',
+                            }}>
+                            <span style={{ fontSize: 13, fontWeight: 800, color: b.color, textTransform: 'uppercase', letterSpacing: '0.03em', fontFamily: "'Inter Tight',sans-serif", lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {b.label}
                             </span>
-                          )}
-                        </div>
-                      );
-                    })}
+                            {x.sH > 32 && (
+                              <span style={{ fontSize: 9.5, fontWeight: 600, color: b.color, opacity: 0.75, fontFamily: "'JetBrains Mono',monospace", marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                {b.isPlan && (
+                                  <span style={{ fontSize: 8, fontWeight: 800, letterSpacing: '0.08em', padding: '1px 5px', borderRadius: 4, border: `1px solid ${b.color}55`, color: b.color, opacity: 1, lineHeight: 1 }}>SESIÓN</span>
+                                )}
+                                <Check size={9} strokeWidth={3} style={{ flexShrink: 0 }} /> {b.mins} min registrados
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                      {dayPlanned.map(x => {
+                        const ps = x.ps;
+                        const ln = lanes.get(x.id) || { col: 0, cols: 1 };
+                        const wPct = 95 / ln.cols;
+                        const courseInfo = courses.find(c => c.id === ps.courseId);
+                        const pCol = courseInfo?.color || '#9CA3AF';
+                        const psInt = Math.max(0, Math.min(10, ps.intensity || 0));
+                        const done = !!ps.completed;
+                        const [sh, sm] = (ps.startTime as string).split(':').map(Number);
+                        return (
+                          <div key={`planned-${ps.id}`} title={`${ps.title || 'Sesión'} — ${ps.durationMinutes}m · intensidad ${psInt}/10${done ? ' · completada' : ''}`}
+                            onClick={e => { e.stopPropagation(); setPlanOccurrenceDate(isoD); setSelectedItem({ type: 'plansession', session: ps }); }}
+                            style={{
+                              position:'absolute', top: x.sTop, left: `${2.5 + ln.col * wPct}%`, width: `${wPct}%`, height: x.sH,
+                              borderRadius: 6, zIndex: 2, cursor: 'pointer',
+                              background: `linear-gradient(135deg, ${pCol}18, ${pCol}06)`,
+                              borderLeft: `3px solid ${pCol}66`,
+                              display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '6px 11px',
+                              transition: 'all 150ms', opacity: done ? 0.72 : 1,
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${pCol}26, ${pCol}0c)`; e.currentTarget.style.boxShadow = `0 4px 14px ${pCol}33`; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${pCol}18, ${pCol}06)`; e.currentTarget.style.boxShadow = 'none'; }}
+                          >
+                            <span style={{ fontSize: 12, fontWeight: 700, color: pCol, fontFamily: "'Inter',sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
+                              {done && <span style={{ color: '#10B981', fontWeight: 800, marginRight: 4 }}>✓</span>}
+                              {ps.title || 'Sesión de estudio'}
+                            </span>
+                            {x.sH > 34 && (
+                              <span style={{ fontSize: 10, fontWeight: 500, color: pCol, opacity: 0.75, fontFamily: "'JetBrains Mono',monospace", marginTop: 1 }}>
+                                {fmtTimeRange(ps.startTime!, (() => { const m = Math.round(sh * 60 + sm + ps.durationMinutes); return `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; })(), settings?.timeFormat)} · {ps.durationMinutes}m
+                              </span>
+                            )}
+                            {x.sH > 48 && (
+                              <div style={{ display: 'flex', gap: 1.5, marginTop: 'auto', width: '100%', paddingTop: 3 }}>
+                                {REVIEW_LEVEL_COLORS.map((col, i) => (
+                                  <div key={i} style={{ flex: 1, height: 5, borderRadius: 1, background: i < psInt ? col : 'var(--bg-deep)', opacity: i < psInt ? 0.9 : 0.5, boxShadow: i === psInt - 1 ? `0 0 6px ${col}88` : 'none' }} />
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     {isToday(navDate) && nowH>=H_START && nowH<=H_END && (
                       <div style={{ position:'absolute', top:nowPx, left:0, right:0, height:2, background:'var(--accent)', zIndex:10, pointerEvents:'none', boxShadow:'0 0 16px var(--accent-glow)' }}>
                         <div style={{ position:'absolute', left:-4, top:-4, width:10, height:10, borderRadius:'50%', background:'var(--accent)', boxShadow:'0 0 20px var(--accent-glow)' }}/>
                       </div>
                     )}
-                    {getPlannedSessionsForDate(format(navDate,'yyyy-MM-dd')).map(ps => {
-                      const durH = ps.durationMinutes / 60;
-                      const sH = Math.max(durH * H_PX, 22);
-                      const courseInfo = courses.find(c => c.id === ps.courseId);
-                      const pCol = courseInfo?.color || '#9CA3AF';
-                      const psInt = Math.max(0, Math.min(10, ps.intensity || 0));
-                      const done = !!ps.completed;
-                      if (!ps.startTime) return null;
-                      const [sh, sm] = ps.startTime.split(':').map(Number);
-                      const sTop = ((sh + sm / 60) - H_START) * H_PX;
-                      return (
-                        <div key={`planned-${ps.id}`} title={`${ps.title || 'Sesión'} — ${ps.durationMinutes}m · intensidad ${psInt}/10${done ? ' · completada' : ''}`}
-                          onClick={e => { e.stopPropagation(); setPlanOccurrenceDate(format(navDate, 'yyyy-MM-dd')); setSelectedItem({ type: 'plansession', session: ps }); }}
-                          style={{
-                            position:'absolute', top: sTop, left: '2.5%', width: '95%', height: sH,
-                            borderRadius: 6, zIndex: 2, cursor: 'pointer',
-                            background: `linear-gradient(135deg, ${pCol}18, ${pCol}06)`,
-                            borderLeft: `3px solid ${pCol}66`,
-                            display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '6px 11px',
-                            transition: 'all 150ms', opacity: done ? 0.72 : 1,
-                          }}
-                          onMouseEnter={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${pCol}26, ${pCol}0c)`; e.currentTarget.style.boxShadow = `0 4px 14px ${pCol}33`; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${pCol}18, ${pCol}06)`; e.currentTarget.style.boxShadow = 'none'; }}
-                        >
-                          <span style={{ fontSize: 12, fontWeight: 700, color: pCol, fontFamily: "'Inter',sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
-                            {done && <span style={{ color: '#10B981', fontWeight: 800, marginRight: 4 }}>✓</span>}
-                            {ps.title || 'Sesión de estudio'}
-                          </span>
-                          {sH > 34 && (
-                            <span style={{ fontSize: 10, fontWeight: 500, color: pCol, opacity: 0.75, fontFamily: "'JetBrains Mono',monospace", marginTop: 1 }}>
-                              {fmtTimeRange(ps.startTime, (() => { const m = Math.round(sh * 60 + sm + ps.durationMinutes); return `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; })(), settings?.timeFormat)} · {ps.durationMinutes}m
-                            </span>
-                          )}
-                           {sH > 48 && (
-                             <div style={{ display: 'flex', gap: 1.5, marginTop: 'auto', width: '100%', paddingTop: 3 }}>
-                               {REVIEW_LEVEL_COLORS.map((col, i) => (
-                                 <div key={i} style={{ flex: 1, height: 5, borderRadius: 1, background: i < psInt ? col : 'var(--bg-deep)', opacity: i < psInt ? 0.9 : 0.5, boxShadow: i === psInt - 1 ? `0 0 6px ${col}88` : 'none' }} />
-                               ))}
-                             </div>
-                           )}
-                         </div>
-                       );
-                     })}
+                        </>
+                      );
+                    })()}
+
                   </div>
                 </div>
               </div>
@@ -1158,7 +1224,7 @@ export default function Planificacion() {
                       const iso=format(day,'yyyy-MM-dd');
                       const dayEvs=[...getAllDayEventsForDate(iso), ...getTimedEventsForDate(iso)];
                       const linkedTaskIds = new Set(dayEvs.map(ev => (ev as PlanEvent).taskId).filter(Boolean));
-                      const dayTasks=tasks.filter(t=>{if(!t.dueDate||t.status==='completado')return false;if(linkedTaskIds.has(t.id))return false;try{return format(new Date(t.dueDate+'T12:00:00'),'yyyy-MM-dd')===iso}catch{return false}});
+                      const dayTasks=tasks.filter(t=>{if(!t.dueDate||t.status==='completado')return false;if(linkedTaskIds.has(t.id))return false;return (t.dueDate||'').slice(0,10)===iso});
                       const opacity = isOld(iso) && !tod ? 0.35 : (inc ? 1 : 0.25);
                       return (
                         <div key={di}
@@ -1233,7 +1299,7 @@ export default function Planificacion() {
                             const hasEvent = getEventsForDate(iso).length > 0;
                             const dayEvs2 = getEventsForDate(iso);
                             const dayLinkedIds2 = new Set(dayEvs2.map(ev => (ev as PlanEvent).taskId).filter(Boolean));
-                            const dayTasks2 = tasks.filter(t => { if(!t.dueDate || t.status === 'completado') return false; if(dayLinkedIds2.has(t.id)) return false; try { return format(new Date(t.dueDate+'T12:00:00'),'yyyy-MM-dd')===iso } catch { return false } });
+                            const dayTasks2 = tasks.filter(t => { if(!t.dueDate || t.status === 'completado') return false; if(dayLinkedIds2.has(t.id)) return false; return (t.dueDate||'').slice(0,10)===iso });
                             return (
                               <div key={di}
                                 onClick={(e) => { e.stopPropagation(); if (inc) setSelectedItem({ type: 'day', date: day, events: dayEvs2, tasks: dayTasks2 }); }}
@@ -1461,7 +1527,7 @@ export default function Planificacion() {
                         const on = v <= planIntensity;
                         return (
                           <button key={v} onClick={() => setPlanIntensity(v)} title={`Intensidad ${v}`}
-                            style={{ flex: 1, height: 26, borderRadius: 6, cursor: 'pointer', border: on ? 'none' : '1px solid var(--border-subtle)', background: on ? `linear-gradient(180deg, ${col}, color-mix(in srgb, ${col} 45%, #000 55%))` : 'var(--bg-hover)', opacity: on ? 1 : 0.55, boxShadow: v === planIntensity ? `0 0 16px ${col}aa, inset 0 1px 0 rgba(255,255,255,0.18)` : on ? 'inset 0 1px 0 rgba(255,255,255,0.18)' : 'none', transition: 'all 160ms' }}
+                            style={{ flex: 1, height: 26, borderRadius: 6, cursor: 'pointer', border: on ? 'none' : '1px solid var(--border-subtle)', background: on ? `linear-gradient(180deg, ${col}, color-mix(in srgb, ${col} 45%, #000 55%))` : 'var(--bg-hover)', opacity: on ? 1 : 0.55, boxShadow: v === planIntensity ? 'inset 0 1px 0 rgba(255,255,255,0.22), inset 0 0 12px rgba(255,255,255,0.16)' : on ? 'inset 0 1px 0 rgba(255,255,255,0.18)' : 'none', transition: 'all 160ms' }}
                             onMouseEnter={e => { if (!on) e.currentTarget.style.opacity = '0.85'; }}
                             onMouseLeave={e => { if (!on) e.currentTarget.style.opacity = '0.55'; }} />
                         );

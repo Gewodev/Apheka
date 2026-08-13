@@ -1818,7 +1818,6 @@ export default function Estudio() {
                 });
                 if (activePlannedSessionId) {
                   updatePlannedSession(activePlannedSessionId, { completed: evalPlanOutcome !== 'no_logrado' });
-                  unlinkPlannedSessionFromTimer();
                 }
                 if (evalTaskAction === 'complete' && activeTaskId) {
                   updateTask(activeTaskId, { status: 'completado', completedAt: new Date().toISOString() });
@@ -1826,7 +1825,6 @@ export default function Estudio() {
                 } else if (evalTaskAction === 'progress' && activeTaskId) {
                   updateTask(activeTaskId, { status: 'progreso' });
                 }
-                if (activeTaskId) setActiveTaskId(null);
               }}
                 style={{ padding: '8px 24px', borderRadius: 10, border: 'none', background: `linear-gradient(135deg, ${statusColor}, ${statusColor}dd)`, color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
                 Guardar
@@ -1951,7 +1949,6 @@ export default function Estudio() {
                 });
                 if (activePlannedSessionId) {
                   updatePlannedSession(activePlannedSessionId, { completed: evalPlanOutcome !== 'no_logrado' });
-                  unlinkPlannedSessionFromTimer();
                 }
                 addNotification(`Estudiaste: ${freeTitle}`, 'success');
               }}

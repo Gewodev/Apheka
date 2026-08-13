@@ -662,7 +662,7 @@ export default function Inicio() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {tasks.filter(t => t.status !== 'completado').slice(0, 4).map(t => {
               const isDone = t.status === 'completado';
-              const tr = t.dueDate ? (() => { try { return format(new Date(t.dueDate + 'T12:00:00'), 'd MMM', { locale: es }); } catch { return ''; } })() : '';
+              const tr = t.dueDate ? (() => { try { const dd = t.dueDate!.includes('T') ? new Date(t.dueDate!) : new Date(t.dueDate! + 'T12:00:00'); return format(dd, 'd MMM', { locale: es }); } catch { return ''; } })() : '';
               return (
                 <div key={t.id} onClick={() => { setFocusedTaskId?.(t.id); setNavigateTo?.('tareas'); }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', borderRadius: 8, transition: 'all 150ms', cursor: 'pointer', opacity: isDone ? 0.5 : 1 }} className="hover:border-borderDark/60 group">
                   <div style={{ width: 14, height: 14, borderRadius: 4, background: t.status === 'completado' ? '#10B981' : t.status === 'progreso' ? `${t.courseColor}50` : 'var(--bg-base)', border: `2px solid ${t.status === 'completado' ? '#10B981' : t.courseColor}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 150ms' }}>
