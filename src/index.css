@@ -1145,6 +1145,17 @@ body {
   }
 }
 
+/* Cursos — cronograma semanal: pulso del brillo del día seleccionado (glow
+   respirable con el color del curso vía var(--sel-glow)). */
+@keyframes plannerSelGlow {
+  0%, 100% {
+    box-shadow: 0 0 3px var(--sel-glow, transparent), 0 0 1px var(--sel-glow, transparent);
+  }
+  50% {
+    box-shadow: 0 0 10px var(--sel-glow, transparent), 0 0 3px var(--sel-glow, transparent);
+  }
+}
+
 /* Cursos — estado vacío del cronograma semanal: respiración suave del botón
    "haz clic para añadir sesión" (anillo punteado + icono). */
 @keyframes plannerPulse {

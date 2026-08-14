@@ -8,8 +8,12 @@ import {
   ExternalLink, FolderOpen, Plus,
   Disc3, Activity, Heart, Copy, Clock,
   User, Wifi, Sliders, Repeat, Shuffle, BarChart2,
-  Edit2, Grid, List, Image, ListPlus, ListX,
+  Edit2, Grid, List, Image, ListPlus, ListX, CornerDownRight,
 } from 'lucide-react';
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
+import { restrictToParentElement } from '@dnd-kit/modifiers';
+import { CSS } from '@dnd-kit/utilities';
 import { useApp, type Track } from '../../store/AppContext';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { readFile } from '@tauri-apps/plugin-fs';
@@ -79,6 +83,103 @@ function loadUiState() {
       playlistArtistFilter: typeof d.playlistArtistFilter === 'string' ? d.playlistArtistFilter : undefined,
     };
   } catch { return null; }
+}
+
+function SortableQueueRow({ track, index, onSelect, onMenu, formatTime }: { track: Track; index: number; onSelect: () => void; onMenu: (e: React.MouseEvent, trackId: string) => void; formatTime: (secs: number) => string }) {
+  const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({ id: track.id });
+  return (
+    <div
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      onClick={onSelect}
+      onContextMenu={(e) => onMenu(e, track.id)}
+      className="hover-lift"
+      style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', padding: '4px 0', borderRadius: 6, transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1, zIndex: isDragging ? 20 : undefined, position: 'relative', touchAction: 'none' }}
+    >
+      <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', width: 16, textAlign: 'center' }}>{index + 1}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{track.title}</div>
+        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{track.artist}</div>
+      </div>
+      <span style={{ fontSize: 10, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{formatTime(track.duration)}</span>
+    </div>
+  );
+}
+
+function SortableLibraryRow({ track, index, isPlaying, isOnline, formatTime, onSelect, onMenu, onToggleFav, onEdit, onDelete }: {
+  track: Track; index: number; isPlaying: boolean; isOnline: boolean;
+  formatTime: (secs: number) => string;
+  onSelect: () => void; onMenu: (e: React.MouseEvent, trackId: string) => void;
+  onToggleFav: () => void; onEdit: () => void; onDelete: () => void;
+}) {
+  const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({ id: track.id });
+  const cloudOffline = !isOnline && track.source !== 'local';
+  const cloudBorder = track.source !== 'local'
+    ? '1px solid color-mix(in srgb, var(--accent) 34%, var(--border-subtle))'
+    : '1px solid transparent';
+  return (
+    <div
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      onClick={onSelect}
+      onContextMenu={(e) => onMenu(e, track.id)}
+      style={{
+        display: 'grid', gridTemplateColumns: '40px 3.5fr 1.5fr 80px 130px', padding: '10px 12px',
+        borderRadius: 8, alignItems: 'center', cursor: 'pointer', transition: 'all 150ms',
+        background: isPlaying ? 'var(--accent-dim)' : 'transparent',
+        border: isPlaying ? '1px solid var(--accent-glow)' : cloudBorder,
+        opacity: cloudOffline ? 0.45 : 1,
+        pointerEvents: cloudOffline ? 'none' : undefined,
+        position: 'relative',
+        transform: CSS.Transform.toString(transform),
+        touchAction: 'none',
+      }}
+      onMouseEnter={e => { if (!isPlaying) e.currentTarget.style.background = 'var(--bg-hover)'; }}
+      onMouseLeave={e => { if (!isPlaying) e.currentTarget.style.background = 'transparent'; }}
+    >
+      {cloudOffline && (
+        <div style={{ position: 'absolute', top: -1, left: 12, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--error)', background: 'var(--bg-surface)', border: '1px solid color-mix(in srgb, var(--error) 40%, transparent)', borderRadius: 999, padding: '2px 8px', zIndex: 2 }}>
+          No hay conexión a internet
+        </div>
+      )}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {isPlaying ? (
+          <div style={{ width: 24, height: 24, borderRadius: 6, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
+            <Pause size={12} fill="#fff" />
+          </div>
+        ) : (
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)', width: 24, textAlign: 'center' }}>{index + 1}</span>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+        <div style={{ width: 36, height: 36, borderRadius: 6, flexShrink: 0, overflow: 'hidden', position: 'relative' }}>
+          {track.coverImage ? <img src={track.coverImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={14} style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', color: 'var(--text-muted)', opacity: 0.3 }} />}
+        </div>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: isPlaying ? 600 : 500, color: isPlaying ? 'var(--accent)' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{track.title}</div>
+        </div>
+      </div>
+
+      <div style={{ fontSize: 12, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{track.artist}</div>
+
+      <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)', whiteSpace: 'nowrap', textAlign: 'left' }}>{formatTime(track.duration)}</div>
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
+        <button onClick={(e) => { e.stopPropagation(); onToggleFav(); }} className="btn-ghost" style={{ padding: 6, color: track.isFavorite ? 'var(--accent)' : 'var(--text-tertiary)' }} title={track.isFavorite ? 'Quitar de favoritos' : 'Añadir a favoritos'}>
+          <Heart size={16} style={{ fill: track.isFavorite ? 'var(--accent)' : 'transparent' }} />
+        </button>
+        <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="btn-ghost" style={{ padding: 6, color: 'var(--text-tertiary)' }} title="Editar canción">
+          <Edit2 size={14} />
+        </button>
+        <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="btn-ghost" style={{ padding: 6, color: 'var(--text-tertiary)' }} title="Eliminar canción">
+          <Trash2 size={14} />
+        </button>
+      </div>
+    </div>
+  );
 }
 
 export default function Musica() {
@@ -160,9 +261,8 @@ export default function Musica() {
   const openTrackMenu = useCallback((e: React.MouseEvent, trackId: string) => {
     e.preventDefault();
     e.stopPropagation();
-    if (trackId === currentTrackId && !musicQueue.includes(trackId)) return;
     setCtxMenu({ x: e.clientX, y: e.clientY, trackId });
-  }, [currentTrackId, musicQueue]);
+  }, []);
 
   const ctxPlayNext = useCallback((trackId: string) => {
     setMusicQueue([trackId, ...musicQueue.filter(id => id !== trackId)]);
@@ -175,7 +275,76 @@ export default function Musica() {
     setCtxMenu(null);
     addNotification('Canción quitada de la cola', 'success');
   }, [musicQueue, setMusicQueue, addNotification]);
+
+  const ctxAddToQueue = useCallback((trackId: string) => {
+    setMusicQueue([...musicQueue.filter(id => id !== trackId), trackId]);
+    setCtxMenu(null);
+    addNotification('Agregada a la cola de reproducción', 'success');
+  }, [musicQueue, setMusicQueue, addNotification]);
+
+  const queueSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { delay: 300, tolerance: 8 } }));
+  const librarySensors = useSensors(useSensor(PointerSensor, { activationConstraint: { delay: 300, tolerance: 8 } }));
+  const queueDragEndedRef = useRef(false);
+  const handleQueueDragEnd = useCallback((e: DragEndEvent) => {
+    const { active, over } = e;
+    if (over && active.id !== over.id) {
+      const oldIndex = musicQueue.indexOf(active.id as string);
+      const newIndex = musicQueue.indexOf(over.id as string);
+      if (oldIndex >= 0 && newIndex >= 0) setMusicQueue(arrayMove(musicQueue, oldIndex, newIndex));
+    }
+    queueDragEndedRef.current = true;
+    setTimeout(() => { queueDragEndedRef.current = false; }, 250);
+  }, [musicQueue, setMusicQueue]);
   const [colocarTrackId, setColocarTrackId] = useState<string | null>(null);
+
+  const [manualOrder, setManualOrder] = useState<string[] | null>(() => {
+    try {
+      const raw = localStorage.getItem('owa_library_order_v1');
+      if (!raw) return null;
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr.filter((x: any) => typeof x === 'string') : null;
+    } catch { return null; }
+  });
+
+  const buildCloudTrack = useCallback((r: SearchResult): Omit<Track, 'id'> => ({
+    title: r.title,
+    artist: r.channel || 'YouTube',
+    duration: r.duration || 0,
+    source: 'youtube',
+    url: r.id ? `https://www.youtube.com/watch?v=${r.id}` : r.webpage_url,
+    coverUrl: r.thumbnail,
+    isFavorite: false,
+    listenedTime: 0,
+  }), []);
+
+  const addCloudTrack = useCallback((r: SearchResult): string | null => {
+    const url = r.id ? `https://www.youtube.com/watch?v=${r.id}` : r.webpage_url;
+    if (!url) return null;
+    const existing = tracks.find(t => t.url === url);
+    if (existing) return existing.id;
+    return addTrack(buildCloudTrack(r));
+  }, [tracks, addTrack, buildCloudTrack]);
+
+  const [ctxSearchMenu, setCtxSearchMenu] = useState<{ x: number; y: number; result: SearchResult } | null>(null);
+  const openSearchMenu = useCallback((e: React.MouseEvent, result: SearchResult) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setCtxSearchMenu({ x: e.clientX, y: e.clientY, result });
+  }, []);
+
+  const ctxSearchAddToLibrary = useCallback((r: SearchResult) => {
+    const id = addCloudTrack(r);
+    setCtxSearchMenu(null);
+    if (id) addNotification('Agregada a tu biblioteca', 'success');
+  }, [addCloudTrack, addNotification]);
+
+  const ctxSearchPlayNext = useCallback((r: SearchResult) => {
+    const id = addCloudTrack(r);
+    setCtxSearchMenu(null);
+    if (!id) return;
+    setMusicQueue([id, ...musicQueue.filter(x => x !== id)]);
+    addNotification('Se reproducirá después de la canción actual', 'success');
+  }, [addCloudTrack, setMusicQueue, musicQueue, addNotification]);
 
 
   const [downloadSelection, setDownloadSelection] = useState<{ url: string; title: string; channel?: string; thumbnail?: string; duration?: number }[]>(() => {
@@ -222,8 +391,9 @@ export default function Musica() {
       setActiveTab(tab);
       if (tab === 'artistas' && track.artist) setSelectedArtist(track.artist);
     }
+    if (track.source !== 'local' && track.url) setPipUrl(track.url, track.title);
     playTrack(trackId);
-  }, [activeTab, playTrack]);
+  }, [activeTab, playTrack, setPipUrl]);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -540,6 +710,10 @@ export default function Musica() {
 
   const libraryTracks = useMemo(() => {
     let filtered = dailyShuffledTracks;
+    if (manualOrder && manualOrder.length > 0) {
+      const orderMap = new Map(manualOrder.map((id, idx) => [id, idx]));
+      filtered = [...filtered].sort((a, b) => (orderMap.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (orderMap.get(b.id) ?? Number.MAX_SAFE_INTEGER));
+    }
     if (selectedArtist) {
       filtered = filtered.filter(t => t.artist === selectedArtist);
     }
@@ -548,11 +722,25 @@ export default function Musica() {
       filtered = filtered.filter(t => t.title.toLowerCase().includes(q) || t.artist.toLowerCase().includes(q));
     }
     return filtered;
-  }, [dailyShuffledTracks, selectedArtist, searchQuery]);
+  }, [dailyShuffledTracks, selectedArtist, searchQuery, manualOrder]);
 
   const displayTracks = activeTab === 'favoritas'
     ? tracks.filter(t => t.isFavorite)
     : (showAllLibrary ? libraryTracks : libraryTracks.slice(0, 25));
+
+  const handleLibraryDragEnd = useCallback((e: DragEndEvent) => {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    const oldIndex = displayTracks.findIndex(t => t.id === active.id);
+    const newIndex = displayTracks.findIndex(t => t.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+    const moved = arrayMove(displayTracks, oldIndex, newIndex);
+    const movedIds = new Set(moved.map(t => t.id));
+    const rest = libraryTracks.filter(t => !movedIds.has(t.id));
+    const full = [...moved, ...rest].map(t => t.id);
+    setManualOrder(full);
+    try { localStorage.setItem('owa_library_order_v1', JSON.stringify(full)); } catch { }
+  }, [displayTracks, libraryTracks]);
 
   const weeklyListeningTime = useMemo(() => {
     const today = new Date();
@@ -1329,69 +1517,30 @@ export default function Musica() {
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    {displayTracks.length > 0 ? displayTracks.map((track, i) => {
-                      const isPlaying = currentTrackId === track.id && isPlayingMusic;
-                      return (
-                        <div
-                          key={track.id}
-                          onClick={() => handlePlayWithTabCb(track.id)}
-                          onContextMenu={(e) => openTrackMenu(e, track.id)}
-                          style={{
-                            display: 'grid', gridTemplateColumns: '40px 3.5fr 1.5fr 80px 130px', padding: '10px 12px',
-                            borderRadius: 8, alignItems: 'center', cursor: 'pointer', transition: 'all 150ms',
-                            background: isPlaying ? 'var(--accent-dim)' : 'transparent',
-                            border: isPlaying ? '1px solid var(--accent-glow)' : '1px solid transparent',
-                          }}
-                          onMouseEnter={e => { if (!isPlaying) e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                          onMouseLeave={e => { if (!isPlaying) e.currentTarget.style.background = 'transparent'; }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            {isPlaying ? (
-                              <div style={{ width: 24, height: 24, borderRadius: 6, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
-                                <Pause size={12} fill="#fff" />
-                              </div>
-                            ) : (
-                              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-tertiary)', width: 24, textAlign: 'center' }}>{i + 1}</span>
-                            )}
-                          </div>
-
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-                            <div style={{ width: 36, height: 36, borderRadius: 6, flexShrink: 0, overflow: 'hidden', position: 'relative' }}>
-                              {track.coverImage ? <img src={track.coverImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={14} style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', color: 'var(--text-muted)', opacity: 0.3 }} />}
-                            </div>
-                            <div style={{ minWidth: 0 }}>
-                              <div style={{ fontSize: 13, fontWeight: isPlaying ? 600 : 500, color: isPlaying ? 'var(--accent)' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{track.title}</div>
-                            </div>
-                          </div>
-
-                          <div style={{ fontSize: 12, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{track.artist}</div>
-
-                          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)', whiteSpace: 'nowrap', textAlign: 'left' }}>{formatTime(track.duration)}</div>
-
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
-                            <button onClick={(e) => { e.stopPropagation(); toggleTrackFavorite(track.id); }} className="btn-ghost" style={{ padding: 6, color: track.isFavorite ? 'var(--accent)' : 'var(--text-tertiary)' }} title={track.isFavorite ? 'Quitar de favoritos' : 'Añadir a favoritos'}>
-                              <Heart size={16} style={{ fill: track.isFavorite ? 'var(--accent)' : 'transparent' }} />
-                            </button>
-
-                            <button onClick={(e) => {
-                              e.stopPropagation();
-                              setEditingTrackId(track.id);
-                              setEditTitle(track.title);
-                              setEditArtist(track.artist);
-                              setEditCover(track.coverImage || '');
-                            }} className="btn-ghost" style={{ padding: 6, color: 'var(--text-tertiary)' }} title="Editar canción">
-                              <Edit2 size={14} />
-                            </button>
-                            <button onClick={(e) => {
-                              e.stopPropagation();
-                              setConfirmDelete({ type: 'track', id: track.id, name: track.title });
-                            }} className="btn-ghost" style={{ padding: 6, color: 'var(--text-tertiary)' }} title="Eliminar canción">
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </div>
-                      )
-                    }                    ) : (
+                    {displayTracks.length > 0 ? (
+                      <DndContext sensors={librarySensors} collisionDetection={closestCenter} onDragEnd={handleLibraryDragEnd} modifiers={[restrictToParentElement]}>
+                        <SortableContext items={displayTracks.map(t => t.id)} strategy={verticalListSortingStrategy}>
+                          {displayTracks.map((track, i) => {
+                            const isPlaying = currentTrackId === track.id && isPlayingMusic;
+                            return (
+                              <SortableLibraryRow
+                                key={track.id}
+                                track={track}
+                                index={i}
+                                isPlaying={isPlaying}
+                                isOnline={isOnline}
+                                formatTime={formatTime}
+                                onSelect={() => handlePlayWithTabCb(track.id)}
+                                onMenu={(e) => openTrackMenu(e, track.id)}
+                                onToggleFav={() => toggleTrackFavorite(track.id)}
+                                onEdit={() => { setEditingTrackId(track.id); setEditTitle(track.title); setEditArtist(track.artist); setEditCover(track.coverImage || ''); }}
+                                onDelete={() => setConfirmDelete({ type: 'track', id: track.id, name: track.title })}
+                              />
+                            );
+                          })}
+                        </SortableContext>
+                      </DndContext>
+                    ) : (
                       <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
                         <Music size={32} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
                         <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)' }}>No hay canciones</div>
@@ -1951,8 +2100,40 @@ export default function Musica() {
                   const queueItems = musicQueue.length > 0
                     ? musicQueue.slice(0, 5)
                     : pool.slice(currentIdx + 1, currentIdx + 6);
+                  const draggable = musicQueue.length > 0;
 
-                  return queueItems.length > 0 ? queueItems.map((trackId, i) => {
+                  if (queueItems.length === 0) {
+                    return (
+                      <div style={{ padding: '20px 0', textAlign: 'center', fontSize: 12, color: 'var(--text-tertiary)' }}>
+                        Fin de la lista
+                      </div>
+                    );
+                  }
+
+                  if (draggable) {
+                    return (
+                      <DndContext sensors={queueSensors} collisionDetection={closestCenter} onDragEnd={handleQueueDragEnd} modifiers={[restrictToParentElement]}>
+                        <SortableContext items={queueItems} strategy={verticalListSortingStrategy}>
+                          {queueItems.map((trackId, i) => {
+                            const t = tracks.find(tr => tr.id === trackId);
+                            if (!t) return null;
+                            return (
+                              <SortableQueueRow
+                                key={t.id}
+                                track={t}
+                                index={i}
+                                formatTime={formatTime}
+                                onSelect={() => { if (queueDragEndedRef.current) return; handlePlayWithTabCb(t.id); }}
+                                onMenu={(e) => openTrackMenu(e, t.id)}
+                              />
+                            );
+                          })}
+                        </SortableContext>
+                      </DndContext>
+                    );
+                  }
+
+                  return queueItems.map((trackId, i) => {
                     const t = tracks.find(tr => tr.id === trackId);
                     if (!t) return null;
                     return (
@@ -1965,11 +2146,7 @@ export default function Musica() {
                         <span style={{ fontSize: 10, color: 'var(--text-tertiary)', fontFamily: 'var(--font-mono)' }}>{formatTime(t.duration)}</span>
                       </div>
                     );
-                  }) : (
-                    <div style={{ padding: '20px 0', textAlign: 'center', fontSize: 12, color: 'var(--text-tertiary)' }}>
-                      Fin de la lista
-                    </div>
-                  );
+                  });
                 })()}
               </div>
             )}
@@ -2518,11 +2695,15 @@ export default function Musica() {
                 Quitar de la cola
               </button>
             ) : (
-              <button onClick={() => ctxPlayNext(ctxMenu.trackId)} style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: '8px 10px', borderRadius: 7, border: 'none', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, cursor: 'pointer', textAlign: 'left' }}>
+              <button onClick={() => ctxAddToQueue(ctxMenu.trackId)} style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: '8px 10px', borderRadius: 7, border: 'none', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, cursor: 'pointer', textAlign: 'left' }}>
                 <ListPlus size={14} style={{ color: 'var(--accent)', flexShrink: 0 }} />
-                Reproducir después de esta canción
+                Agregar a la cola
               </button>
             )}
+            <button onClick={() => ctxPlayNext(ctxMenu.trackId)} style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: '8px 10px', borderRadius: 7, border: 'none', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, cursor: 'pointer', textAlign: 'left' }}>
+              <CornerDownRight size={14} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
+              Reproducir a continuación
+            </button>
           </div>
         </div>,
         document.body

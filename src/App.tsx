@@ -326,6 +326,32 @@ function AppContent() {
     setActiveView('curso_detalle');
   };
 
+  const activeCourse = courses.find(c => c && c.id === selectedCourseId) || null;
+
+  // Collapsed sidebar: short click → last course; long-press → popup with all courses
+  const coursesPressTimer = useRef<number | null>(null);
+  const coursesLongPressFired = useRef(false);
+  const handleCoursesPointerDown = () => {
+    if (coursesPressTimer.current) window.clearTimeout(coursesPressTimer.current);
+    coursesLongPressFired.current = false;
+    coursesPressTimer.current = window.setTimeout(() => {
+      coursesPressTimer.current = null;
+      coursesLongPressFired.current = true;
+      setShowCoursesPopup(true);
+    }, 450);
+  };
+  const handleCoursesPointerEnd = () => {
+    if (coursesPressTimer.current) { window.clearTimeout(coursesPressTimer.current); coursesPressTimer.current = null; }
+  };
+  const handleCollapsedCoursesClick = () => {
+    if (coursesLongPressFired.current) { coursesLongPressFired.current = false; return; }
+    if (selectedCourseId && courses.some(c => c && c.id === selectedCourseId)) {
+      setActiveView('curso_detalle');
+    } else {
+      setShowCoursesPopup(prev => !prev);
+    }
+  };
+
   return (
     <div className="app-layout">
       <aside className={`sidebar ${isCollapsed ? 'collapsed' : ''}${coverModalTrackId ? ' cover-tinted' : ''}`}>
@@ -340,21 +366,40 @@ function AppContent() {
         <nav className="sidebar-nav">
           {NAV_ITEMS.map(item => (
             <div key={item.id} style={{ position: 'relative' }}>
-              <button
-                onClick={() => {
-                  if (item.id === 'cursos' && isCollapsed) {
-                    setShowCoursesPopup(prev => !prev);
-                  } else {
-                    setActiveView(item.id as ViewId);
-                    setShowCoursesPopup(false);
-                  }
-                }}
-                className={`sidebar-nav-btn ${activeView === item.id || (item.id === 'cursos' && activeView === 'curso_detalle') ? 'active' : ''}`}
-                title={isCollapsed ? item.label : undefined}
-              >
-                <item.icon size={20} strokeWidth={1.5} />
-                {!isCollapsed && <span className="sidebar-nav-label">{item.label}</span>}
-              </button>
+              {item.id === 'cursos' && isCollapsed ? (
+                <button
+                  onPointerDown={handleCoursesPointerDown}
+                  onPointerUp={handleCoursesPointerEnd}
+                  onPointerLeave={handleCoursesPointerEnd}
+                  onClick={handleCollapsedCoursesClick}
+                  className={`sidebar-nav-btn ${activeView === 'cursos' || activeView === 'curso_detalle' ? 'active' : ''}`}
+                  title={item.label}
+                  style={activeView === 'curso_detalle' && activeCourse ? {
+                    boxShadow: `inset 0 0 0 1px ${activeCourse.color}`,
+                    background: `linear-gradient(135deg, color-mix(in srgb, ${activeCourse.color} 16%, transparent), color-mix(in srgb, ${activeCourse.color} 7%, transparent))`,
+                    color: activeCourse.color,
+                  } : undefined}
+                >
+                  <item.icon size={20} strokeWidth={1.5} />
+                </button>
+              ) : (
+                <button
+                  onClick={() => {
+                    if (item.id === 'cursos') {
+                      setShowCoursesPopup(false);
+                      setActiveView('cursos');
+                    } else {
+                      setActiveView(item.id as ViewId);
+                      setShowCoursesPopup(false);
+                    }
+                  }}
+                  className={`sidebar-nav-btn ${activeView === item.id ? 'active' : ''}`}
+                  title={item.id === 'cursos' ? item.label : undefined}
+                >
+                  <item.icon size={20} strokeWidth={1.5} />
+                  {!isCollapsed && <span className="sidebar-nav-label">{item.label}</span>}
+                </button>
+              )}
               {/* Collapsed sidebar: cursos popup */}
               {item.id === 'cursos' && isCollapsed && showCoursesPopup && (
                 <div ref={coursesPopupRef}

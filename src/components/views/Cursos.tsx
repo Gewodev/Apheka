@@ -6,7 +6,7 @@ import {
   Check, GripVertical, StickyNote, BookOpen, ArrowUpRight, ArrowLeft, Play,
   NotebookPen, ListTodo, Bold, Italic, Underline, Heading1, Heading2, Heading3,
   List, ListOrdered, Highlighter, Paperclip, MoreHorizontal, Eye, FolderOpen,
-  ArrowLeftRight, BarChart3, Calendar, Flag, ArrowUpDown, Star, EyeOff, Strikethrough, AlignLeft, AlignCenter, AlertTriangle,
+  ArrowLeftRight, BarChart3, Calendar, Flag, ArrowUpDown, Star, EyeOff, Strikethrough, AlignLeft, AlignCenter, AlertTriangle, ArrowRight,
   Users, MoreVertical, FileText, CheckCircle, FileSpreadsheet, Image as ImageIcon, Music, Link2, Lock,
   Download, ArrowDownToLine, ArrowUpFromLine, Package, PackageOpen, FileDown, FileUp, Mic,
   ScrollText, Shuffle, Workflow, Puzzle, Clock, Minus,
@@ -1440,6 +1440,27 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   useEffect(() => {
     if (selectedCourseId) localStorage.setItem(`owa_estudio_planner_date_${selectedCourseId}`, plannerDate);
   }, [plannerDate, selectedCourseId]);
+  // Deep-link para editar una sesión desde otro curso: el panel escribe owa_course_edit_session antes de navegar
+  useEffect(() => {
+    if (!selectedCourseId) return;
+    try {
+      const pending = localStorage.getItem('owa_course_edit_session');
+      if (!pending) return;
+      localStorage.removeItem('owa_course_edit_session');
+      const target = (plannedSessions || []).find(s => s && s.id === pending && s.courseId === selectedCourseId);
+      if (!target) return;
+      setPlanEditId(target.id);
+      setPlanDate(target.date);
+      setPlanStartTime(target.startTime || '09:00');
+      setPlanTitle(target.title || '');
+      setPlanGroupId(target.groupId || '');
+      setPlanTopicId(target.topicId || '');
+      setPlanType(target.type || 'estudio');
+      setPlanDuration(target.durationMinutes || 30);
+      setPlanIntensity(target.intensity || 5);
+      setShowPlanModal(true);
+    } catch { /* noop */ }
+  }, [selectedCourseId, plannedSessions]);
   const [planStartTime, setPlanStartTime] = useState('09:00');
   const [planTitle, setPlanTitle] = useState('');
   const [planGroupId, setPlanGroupId] = useState('');
@@ -3717,10 +3738,10 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                   return (
                                     <button key={d.iso} onClick={() => setPlannerDate(d.iso)}
                                       title={format(new Date(d.iso + 'T12:00:00'), 'EEEE d MMMM', { locale: es })}
-                                      style={{ flex: 1, minWidth: 0, cursor: 'pointer', height: 26, padding: '0 3px', borderRadius: 9, border: `1px solid ${isSel ? `${course.color}66` : 'transparent'}`, background: isSel ? `linear-gradient(135deg, ${course.color}, color-mix(in srgb, ${course.color} 70%, #fff))` : 'transparent', boxShadow: isSel ? `0 0 10px ${course.color}45, 0 2px 6px rgba(0,0,0,0.3)` : 'none', transition: 'all 180ms ' + EASE, fontFamily: 'inherit', overflow: 'hidden' }}
-                                      onMouseEnter={e => { if (!isSel) { e.currentTarget.style.background = 'var(--bg-hover)'; } }}
-                                      onMouseLeave={e => { if (!isSel) { e.currentTarget.style.background = 'transparent'; } }}>
-                                      <span style={{ display: 'block', fontSize: 11, fontWeight: isSel ? 700 : (isTodayDay ? 600 : 500), color: isSel ? '#fff' : (isTodayDay ? 'var(--text-primary)' : 'var(--text-secondary)'), fontFamily: "'Inter Tight', sans-serif", lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', letterSpacing: '0.02em', transition: 'color 180ms ' + EASE, textShadow: isSel ? '0 1px 2px rgba(0,0,0,0.25)' : 'none' }}>{d.name}</span>
+                                      style={{ flex: 1, minWidth: 0, cursor: 'pointer', height: 26, padding: '0 3px', borderRadius: 9, border: `1px solid ${isTodayDay ? `${course.color}66` : (isSel ? `${course.color}40` : 'transparent')}`, background: isTodayDay ? `linear-gradient(135deg, ${course.color}, color-mix(in srgb, ${course.color} 70%, #fff))` : (isSel ? `${course.color}14` : 'transparent'), boxShadow: isTodayDay ? `0 0 10px ${course.color}45, 0 2px 6px rgba(0,0,0,0.3)` : 'none', transition: 'all 180ms ' + EASE, fontFamily: 'inherit', overflow: 'hidden' }}
+                                      onMouseEnter={e => { if (!isTodayDay && !isSel) { e.currentTarget.style.background = 'var(--bg-hover)'; } }}
+                                      onMouseLeave={e => { if (!isTodayDay && !isSel) { e.currentTarget.style.background = 'transparent'; } }}>
+                                      <span style={{ display: 'block', fontSize: 11, fontWeight: isTodayDay ? 700 : (isSel ? 600 : 500), color: isTodayDay ? '#fff' : (isSel ? 'var(--text-primary)' : 'var(--text-secondary)'), fontFamily: "'Inter Tight', sans-serif", lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', letterSpacing: '0.02em', transition: 'color 180ms ' + EASE, textShadow: isTodayDay ? '0 1px 2px rgba(0,0,0,0.25)' : 'none' }}>{d.name}</span>
                                     </button>
                                   );
                                 })}
@@ -3767,9 +3788,9 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                         <span title={otherCourse.name} style={{ flexShrink: 0, fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: "'Inter Tight', sans-serif", color: otherCourse.color, background: `${otherCourse.color}10`, border: `1px solid ${otherCourse.color}28`, padding: '2.5px 7px', borderRadius: 5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 80, lineHeight: 1.3 }}>{otherCourse.name}</span>
                                       )}
                                       {intensity > 0 && (
-                                        <div style={{ flex: 1, minWidth: 48, maxWidth: 140, display: 'flex', gap: 3, alignItems: 'center', flexShrink: 0 }} title={`Intensidad programada ${intensity}/10`}>
+                                        <div style={{ flex: 1, minWidth: 96, maxWidth: 210, display: 'flex', gap: 3, alignItems: 'center', flexShrink: 0 }} title={`Intensidad programada ${intensity}/10`}>
                                           {REVIEW_LEVEL_COLORS.map((col, i) => (
-                                            <div key={i} style={{ flex: 1, height: 22, borderRadius: 4, background: i < intensity ? col : 'var(--bg-hover)', boxShadow: i === intensity - 1 ? `0 0 8px ${col}99` : 'none', transition: 'all 160ms' }} />
+                                            <div key={i} style={{ flex: 1, height: 18, borderRadius: 2, background: i < intensity ? col : 'var(--bg-hover)', boxShadow: i === intensity - 1 ? `0 0 8px ${col}99` : 'none', transition: 'all 160ms' }} />
                                           ))}
                                         </div>
                                       )}
@@ -3826,6 +3847,9 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                         const dEndMin = dStartMin >= 0 ? dStartMin + (ds.durationMinutes || 30) : -1;
                         const dEndStr = dEndMin >= 0 ? `${String(Math.floor(dEndMin / 60) % 24).padStart(2, '0')}:${String(dEndMin % 60).padStart(2, '0')}` : '';
                         const dDurPct = Math.min(100, Math.max(9, Math.round(((ds.durationMinutes || 30) / 120) * 100)));
+                        const dLinked = (studySessions || []).find(s => s.plannedSessionId === ds.id && s.type !== 'break');
+                        const dLinkedMin = dLinked ? Math.max(1, Math.round((dLinked.duration || 0) / 60)) : 0;
+                        const dRealPct = dLinked ? Math.min(100, Math.max(5, Math.round((dLinkedMin / Math.max(1, ds.durationMinutes || 30)) * 100))) : dDurPct;
                         const linkRowStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 8, border: `1px solid ${course.color}22`, background: `${course.color}06`, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", fontSize: 11.5, cursor: 'pointer', transition: 'all 150ms ' + EASE, width: '100%', textAlign: 'left' };
                         const linkRowHover = (e: React.MouseEvent<HTMLButtonElement>, on: boolean) => {
                           e.currentTarget.style.borderColor = on ? `${course.color}55` : `${course.color}22`;
@@ -3837,6 +3861,28 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                         };
                         const goTopic = () => { const tc = dOtherCourse || course; navigateToCourse(tc.id, ds.groupId || undefined, ds.topicId || undefined); };
                         const closePanel = () => { setDetailSessionId(null); setConfirmDeleteSession(null); setChangeCourseFor(null); };
+                        const openEditFromSession = (ps: PlannedSession) => {
+                          setPlanEditId(ps.id);
+                          setPlanDate(ps.date);
+                          setPlanStartTime(ps.startTime || '09:00');
+                          setPlanTitle(ps.title || '');
+                          setPlanGroupId(ps.groupId || '');
+                          setPlanTopicId(ps.topicId || '');
+                          setPlanType(ps.type || 'estudio');
+                          setPlanDuration(ps.durationMinutes || 30);
+                          setPlanIntensity(ps.intensity || 5);
+                          setShowPlanModal(true);
+                          setDetailSessionId(null);
+                          setConfirmDeleteSession(null);
+                        };
+                        const editSession = () => {
+                          if (dOtherCourse) {
+                            try { localStorage.setItem('owa_course_edit_session', ds.id); } catch { /* noop */ }
+                            navigateToCourse(ds.courseId);
+                            return;
+                          }
+                          openEditFromSession(ds);
+                        };
                         const recentTopicsList = (() => {
                           try {
                             const raw = localStorage.getItem(`owa_recent_topics_${course.id}`);
@@ -3863,6 +3909,11 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                     <span>Sesión de estudio</span>
                                     <span style={{ opacity: 0.5 }}>·</span>
                                     <span style={{ textTransform: 'none', letterSpacing: '0.02em', fontSize: 10.5 }}>{format(new Date(ds.date + 'T12:00:00'), 'EEEE d MMMM', { locale: es })}</span>
+                                    <span style={{ opacity: 0.5 }}>·</span>
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2.5px 9px', borderRadius: 999, background: `${dLinkCol}0d`, border: `1px solid ${dLinkCol}26`, textTransform: 'none', letterSpacing: '0.02em', fontSize: 10, color: dLinkCol, maxWidth: 210, overflow: 'hidden', flexShrink: 0 }}>
+                                      <span style={{ width: 5, height: 5, borderRadius: '50%', background: dLinkCol, boxShadow: `0 0 6px ${dLinkCol}88`, flexShrink: 0 }} />
+                                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{dOtherCourse ? dOtherCourse.name : course.name}</span>
+                                    </span>
                                   </div>
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, marginTop: 2 }}>
@@ -3871,6 +3922,11 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                     onMouseEnter={e => { if (!dDone) { e.currentTarget.style.background = `${course.color}18`; e.currentTarget.style.boxShadow = `0 0 14px ${course.color}33`; } }}
                                     onMouseLeave={e => { if (!dDone) { e.currentTarget.style.background = `${course.color}0d`; e.currentTarget.style.boxShadow = `0 0 10px ${course.color}1a`; } }}>
                                     {dDone ? <Check size={15} strokeWidth={2.8} /> : <Check size={15} strokeWidth={2} style={{ opacity: 0.7 }} />}
+                                  </button>
+                                  <button onClick={editSession} title="Editar sesión" style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid var(--border-soft)', background: 'var(--bg-elevated)', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 180ms ' + EASE, padding: 0 }}
+                                    onMouseEnter={e => { e.currentTarget.style.color = course.color; e.currentTarget.style.borderColor = `${course.color}45`; e.currentTarget.style.background = `${course.color}0f`; }}
+                                    onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.background = 'var(--bg-elevated)'; }}>
+                                    <Pencil size={11.5} strokeWidth={2.2} />
                                   </button>
                                   <button onClick={() => setConfirmDeleteSession(ds)} title="Eliminar sesión" style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid var(--border-soft)', background: 'var(--bg-elevated)', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 180ms ' + EASE, padding: 0 }}
                                     onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(239,68,68,0.45)'; e.currentTarget.style.color = '#EF4444'; e.currentTarget.style.background = 'rgba(239,68,68,0.12)'; e.currentTarget.style.boxShadow = '0 0 10px rgba(239,68,68,0.22)'; }}
@@ -3885,19 +3941,6 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                 </div>
                               </div>
 
-                              {/* sesión de otro curso: se ve el curso y al hacer click se puede cambiar */}
-                              {dOtherCourse && (
-                                <div onClick={() => { setCcSelId(ds.courseId || ''); setChangeCourseFor(ds); }} title="Mover esta sesión a otro curso"
-                                  style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '9px 13px', borderRadius: 10, border: `1px solid ${dOtherCourse.color}30`, background: `${dOtherCourse.color}0a`, cursor: 'pointer', transition: 'all 150ms ' + EASE, width: '100%' }}
-                                  onMouseEnter={e => { e.currentTarget.style.borderColor = `${dOtherCourse.color}55`; e.currentTarget.style.background = `${dOtherCourse.color}14`; }}
-                                  onMouseLeave={e => { e.currentTarget.style.borderColor = `${dOtherCourse.color}30`; e.currentTarget.style.background = `${dOtherCourse.color}0a`; }}>
-                                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: dOtherCourse.color, boxShadow: `0 0 8px ${dOtherCourse.color}88`, flexShrink: 0 }} />
-                                  <span style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', color: dOtherCourse.color, fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>Curso</span>
-                                  <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left' }}>{dOtherCourse.name}</span>
-                                  <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 9, color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>Cambiar <ArrowLeftRight size={11} style={{ color: dOtherCourse.color }} /></span>
-                                </div>
-                              )}
-
                               {/* fila central: intensidad + horario + duración — 3 columnas que llenan el ancho */}
                               <div style={{ display: 'flex', flexDirection: 'row', gap: 12, alignItems: 'stretch' }}>
                                 <div style={{ flex: 1, minWidth: 0, border: '1px solid var(--border-soft)', borderRadius: 12, padding: '12px 16px', background: 'linear-gradient(160deg, var(--bg-elevated-alpha, var(--bg-elevated)) 0%, transparent 100%)', display: 'flex', flexDirection: 'column', gap: 9 }}>
@@ -3907,11 +3950,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                   </div>
                                   <div style={{ display: 'flex', gap: 3, alignItems: 'center', marginTop: 'auto' }}>
                                     {REVIEW_LEVEL_COLORS.map((col, i) => (
-                                      <div key={i} style={{ flex: 1, height: 20, borderRadius: 4, background: i < dInt ? col : 'var(--bg-hover)', boxShadow: i === dInt - 1 ? `0 0 12px ${col}aa` : 'none', transition: 'all 180ms ' + EASE, cursor: 'pointer' }}
-                                        onClick={() => updatePlannedSession(ds.id, { intensity: i + 1 })}
-                                        title={`Intensidad ${i + 1}/10`}
-                                        onMouseEnter={e => { if (i >= dInt) e.currentTarget.style.opacity = '0.6'; }}
-                                        onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }} />
+                                      <div key={i} style={{ flex: 1, height: 20, borderRadius: 4, background: i < dInt ? col : 'var(--bg-hover)', boxShadow: i === dInt - 1 ? `0 0 12px ${col}aa` : 'none', transition: 'all 180ms ' + EASE }} />
                                     ))}
                                   </div>
                                 </div>
@@ -3920,10 +3959,10 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                   <span style={{ fontSize: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif" }}>Horario</span>
                                   {dTimeStr ? (
                                     <>
-                                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: 'auto' }}>
-                                        <span style={{ fontSize: 40, fontWeight: 200, letterSpacing: '0.01em', fontFamily: "'JetBrains Mono', monospace", color: 'var(--text-primary)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{dHh}<span style={{ animation: 'clockColonBlink 1.2s ' + EASE + ' infinite', display: 'inline-block' }}>:</span>{dMm}</span>
-                                        <span style={{ fontSize: 22, fontWeight: 300, color: course.color, fontFamily: "'JetBrains Mono', monospace", lineHeight: 1 }}>→</span>
-                                        <span style={{ fontSize: 24, fontWeight: 300, fontFamily: "'JetBrains Mono', monospace", color: 'var(--text-secondary)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{dEndStr}</span>
+                                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginTop: 'auto' }}>
+                                        <span style={{ fontSize: 28, fontWeight: 200, letterSpacing: '0.01em', fontFamily: "'JetBrains Mono', monospace", color: 'var(--text-primary)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{dHh}<span style={{ animation: 'clockColonBlink 1.2s ' + EASE + ' infinite', display: 'inline-block' }}>:</span>{dMm}</span>
+                                        <span style={{ fontSize: 19, fontWeight: 300, color: course.color, fontFamily: "'JetBrains Mono', monospace", lineHeight: 1 }}>→</span>
+                                        <span style={{ fontSize: 17, fontWeight: 300, fontFamily: "'JetBrains Mono', monospace", color: 'var(--text-secondary)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{dEndStr}</span>
                                       </div>
                                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 8, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif" }}>
                                         <span>Inicio</span><span>Fin</span>
@@ -3937,14 +3976,14 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                   )}
                                 </div>
 
-                                <div style={{ width: 270, flexShrink: 0, border: '1px solid var(--border-soft)', borderRadius: 12, padding: '12px 16px', background: 'linear-gradient(160deg, var(--bg-elevated-alpha, var(--bg-elevated)) 0%, transparent 100%)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                <div style={{ width: 160, flexShrink: 0, border: '1px solid var(--border-soft)', borderRadius: 12, padding: '12px 14px', background: 'linear-gradient(160deg, var(--bg-elevated-alpha, var(--bg-elevated)) 0%, transparent 100%)', display: 'flex', flexDirection: 'column', gap: 8 }}>
                                   <span style={{ fontSize: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif" }}>Duración</span>
-                                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 6, marginTop: 'auto' }}>
-                                    <span style={{ fontSize: 40, fontWeight: 300, fontFamily: "'JetBrains Mono', monospace", color: course.color, lineHeight: 1, fontVariantNumeric: 'tabular-nums', textShadow: `0 0 20px ${course.color}33` }}>{ds.durationMinutes || 30}</span>
-                                    <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif" }}>min</span>
+                                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 5, marginTop: 'auto' }}>
+                                    <span title={dLinked ? `${dLinkedMin} min estudiados (vinculado a esta sesión)` : 'Duración planificada'} style={{ fontSize: 30, fontWeight: 300, fontFamily: "'JetBrains Mono', monospace", color: dLinked ? (dDone ? '#22C55E' : course.color) : course.color, lineHeight: 1, fontVariantNumeric: 'tabular-nums', textShadow: dLinked ? `0 0 18px ${dDone ? 'rgba(34,197,94,0.4)' : `${course.color}30`}` : `0 0 18px ${course.color}30` }}>{dLinked ? dLinkedMin : (ds.durationMinutes || 30)}</span>
+                                    <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif" }}>min</span>
                                   </div>
                                   <div style={{ position: 'relative', height: 8, borderRadius: 999, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
-                                    <div style={{ position: 'absolute', inset: 0, borderRadius: 999, background: `linear-gradient(90deg, ${course.color}, ${course.color}88)`, width: `${dDurPct}%`, boxShadow: `0 0 10px ${course.color}55`, transition: 'width 500ms cubic-bezier(0.16,1,0.3,1)' }}>
+                                    <div style={{ position: 'absolute', inset: 0, borderRadius: 999, background: `linear-gradient(90deg, ${dLinked ? (dDone ? '#22C55E' : course.color) : course.color}, ${dLinked && dDone ? '#22C55E88' : `${course.color}88`})`, width: `${dRealPct}%`, boxShadow: dLinked ? (dDone ? '0 0 10px rgba(34,197,94,0.5)' : `0 0 10px ${course.color}55`) : `0 0 10px ${course.color}55`, transition: 'width 500ms cubic-bezier(0.16,1,0.3,1)' }}>
                                       <div style={{ position: 'absolute', top: 0, bottom: 0, width: '40%', background: 'linear-gradient(105deg, transparent, rgba(255,255,255,0.4), transparent)', animation: 'sessionSheen 2.8s ' + EASE + ' infinite' }} />
                                     </div>
                                   </div>
@@ -3955,30 +3994,16 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                               <div style={{ display: 'flex', flexDirection: 'row', gap: 14, alignItems: 'stretch' }}>
                                 <div style={{ flex: 1, minWidth: 0, border: '1px solid var(--border-soft)', borderRadius: 12, padding: '10px 12px', background: 'linear-gradient(160deg, var(--bg-elevated-alpha, var(--bg-elevated)) 0%, transparent 100%)', display: 'flex', flexDirection: 'column', gap: 6 }}>
                                   <div style={{ fontSize: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif" }}>Vinculado a</div>
-                                  {(dGroup || dTopic) ? (
-                                    <>
-                                      {dGroup && (
-                                        <button onClick={goTopic} style={linkRowStyle} title="Abrir agrupación" onMouseEnter={e => linkRowHover(e, true)} onMouseLeave={e => linkRowHover(e, false)}>
-                                          <span style={{ width: 34, height: 34, borderRadius: 9, background: `${course.color}12`, border: `1px solid ${course.color}28`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 150ms ' + EASE }}>
-                                            <FolderOpen size={14} style={{ color: course.color }} />
-                                          </span>
-                                          <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left', fontSize: 12 }}>{dGroup.name}</span>
-                                          <span style={{ fontSize: 8, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", flexShrink: 0, padding: '2px 7px', borderRadius: 999, background: 'var(--bg-hover)', border: '1px solid var(--border-soft)' }}>Agrupación</span>
-                                        </button>
-                                      )}
-                                      {dTopic && (
-                                        <button onClick={goTopic} style={linkRowStyle} title="Abrir tema" onMouseEnter={e => linkRowHover(e, true)} onMouseLeave={e => linkRowHover(e, false)}>
-                                          <span style={{ width: 34, height: 34, borderRadius: 9, background: `${course.color}12`, border: `1px solid ${course.color}28`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 150ms ' + EASE }}>
-                                            <BookOpen size={14} style={{ color: course.color }} />
-                                          </span>
-                                          <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left', fontSize: 12 }}>{dTopic.title}</span>
-                                          <span style={{ fontSize: 8, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", flexShrink: 0, padding: '2px 7px', borderRadius: 999, background: 'var(--bg-hover)', border: '1px solid var(--border-soft)' }}>Tema</span>
-                                        </button>
-                                      )}
-                                    </>
-                                  ) : (
-                                    <span style={{ fontSize: 10.5, color: 'var(--text-muted)', fontStyle: 'italic' }}>Sin tema o agrupación vinculada</span>
-                                  )}
+                                  <div style={{ height: 6 }} />
+                                  <PlanSelectDropdown value={ds.groupId || ''}
+                                    onChange={v => updatePlannedSession(ds.id, { groupId: v || undefined, topicId: v ? (ds.topicId && parsedTopics.find(t => t.id === ds.topicId)?.groupId === v ? ds.topicId : undefined) : undefined })}
+                                    options={groups.map(g => ({ id: g.id, label: g.name }))}
+                                    noneLabel="Sin agrupación" color={course.color} />
+                                  <div style={{ height: 8 }} />
+                                  <PlanSelectDropdown value={ds.topicId || ''}
+                                    onChange={v => updatePlannedSession(ds.id, { topicId: v || undefined })}
+                                    options={ds.groupId ? parsedTopics.filter(t => t.groupId === ds.groupId).map(t => ({ id: t.id, label: t.title })) : []}
+                                    noneLabel={ds.groupId ? 'Sin tema' : 'Elige agrupación'} color={course.color} />
                                 </div>
 
                                 {recentTopicsList.length > 0 && (
@@ -4924,47 +4949,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                           </div>
                         </div>
 
-                        <div>
-                          <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', marginBottom: 7, letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Agrupación</label>
-                          <PlanSelectDropdown value={planGroupId}
-                            onChange={v => { setPlanGroupId(v); setPlanTopicId(''); }}
-                            options={groups.map(g => ({ id: g.id, label: g.name }))}
-                            noneLabel="Sin agrupación" color={course.color} />
-                          {planGroupId ? (() => {
-                            const grpName = groups.find(g => g.id === planGroupId)?.name || '';
-                            const topics = parsedTopics.filter(t => t.groupId === planGroupId);
-                            return (
-                              <div style={{ marginTop: 8, borderRadius: 11, border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', padding: '11px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                  <span style={{ width: 27, height: 27, borderRadius: 8, background: `${course.color}14`, border: `1px solid ${course.color}30`, color: course.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                    <FolderOpen size={13} strokeWidth={2} />
-                                  </span>
-                                  <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{grpName}</span>
-                                  <span style={{ fontSize: 9, fontWeight: 700, color: course.color, fontFamily: "'JetBrains Mono', monospace", background: `${course.color}0f`, border: `1px solid ${course.color}25`, padding: '2px 8px', borderRadius: 999, flexShrink: 0 }}>
-                                    {topics.length} {topics.length === 1 ? 'tema' : 'temas'}
-                                  </span>
-                                </div>
-                                <label style={{ display: 'block', fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Tema vinculado</label>
-                                <PlanSelectDropdown value={planTopicId}
-                                  onChange={setPlanTopicId}
-                                  options={topics.map(t => ({ id: t.id, label: t.title }))}
-                                  noneLabel="Sin tema" color={course.color} />
-                                {topics.length === 0 && (
-                                  <span style={{ fontSize: 10.5, color: 'var(--text-muted)', fontFamily: "'Inter', sans-serif", lineHeight: 1.4 }}>
-                                    Esta agrupación aún no tiene temas — puedes vincularla sin tema y agregarlos después.
-                                  </span>
-                                )}
-                              </div>
-                            );
-                          })() : (
-                            <span style={{ display: 'block', fontSize: 9.5, fontWeight: 600, color: 'var(--text-muted)', marginTop: 6, fontFamily: "'Inter', sans-serif" }}>
-                              Elige una agrupación para ver sus temas
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div style={{ padding: '14px 24px 20px', borderTop: '1px solid var(--border-subtle)', display: 'flex', gap: 10, justifyContent: 'flex-end', flexShrink: 0 }}>
+                        <div style={{ padding: '14px 24px 20px', borderTop: '1px solid var(--border-subtle)', display: 'flex', gap: 10, justifyContent: 'flex-end', flexShrink: 0 }}>
                         <button onClick={() => setShowPlanModal(false)}
                           style={{ height: 38, borderRadius: 9, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '0 18px', transition: 'all 150ms' }}
                           onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
@@ -4987,6 +4972,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                       </div>
                     </div>
                   </div>
+                </div>
                 )}
 
                 {/* ══ DAY DETAIL MODAL ══ */}

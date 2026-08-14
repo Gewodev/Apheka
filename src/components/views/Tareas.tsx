@@ -521,23 +521,28 @@ export default function Tareas() {
 
   const fetchPageTitle = useCallback(async (url: string): Promise<string | null> => {
     try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+      const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
       const html = await res.text();
       const match = html.match(/<title[^>]*>([^<]+)<\/title>/i);
       return match ? match[1].trim() : null;
     } catch { return null; }
   }, []);
 
-  const handleAddMaterial = useCallback(async () => {
+  const deriveLinkName = useCallback((url: string): string => {
+    try {
+      const u = new URL(url);
+      let name = u.hostname.replace(/^www\./, '');
+      const seg = decodeURIComponent(u.pathname.split('/').filter(Boolean).pop() || '').replace(/[-_]+/g, ' ').trim();
+      if (seg && seg.toLowerCase() !== name.toLowerCase()) name = `${name} — ${seg}`;
+      return name;
+    } catch { return url.length > 42 ? url.slice(0, 42) + '…' : url; }
+  }, []);
+
+  const handleAddMaterial = useCallback(() => {
     if (!selectedTask) return;
     const path = newMaterialPath.trim();
-    if (!path) { addNotification('Ingresa la URL', 'error'); return; }
-    let name = newMaterialName.trim();
-    if (!name) {
-      const fetched = await fetchPageTitle(path);
-      if (fetched) name = fetched;
-    }
-    if (!name) { addNotification('Ingresa el nombre del material', 'error'); return; }
+    if (!path) { addNotification('Ingresa la URL del enlace', 'error'); return; }
+    const typedName = newMaterialName.trim();
     let detectedType = 'link';
     if (path.includes('youtube.com') || path.includes('youtu.be')) detectedType = 'video';
     else if (path.includes('classroom.google.com')) detectedType = 'classroom';
@@ -545,9 +550,17 @@ export default function Tareas() {
     else if (path.includes('docs.google.com')) detectedType = 'doc';
     else if (path.includes('sheets.google.com')) detectedType = 'xls';
     else if (path.includes('slides.google.com')) detectedType = 'ppt';
+    const name = typedName || deriveLinkName(path);
     addTaskFile(selectedTask.id, { name, path, type: detectedType, size: 0 });
+    addNotification('Enlace agregado', 'success');
+    if (!typedName) {
+      fetchPageTitle(path).then(fetched => {
+        if (!fetched || !selectedTask) return;
+        updateTask(selectedTask.id, { files: (tasks.find(t => t.id === selectedTask.id)?.files || []).map(x => x.path === path ? { ...x, name: fetched } : x) });
+      }).catch(() => {});
+    }
     setNewMaterialName(''); setNewMaterialPath(''); setShowAddMaterial(false);
-  }, [selectedTask, newMaterialName, newMaterialPath, addTaskFile, fetchPageTitle]);
+  }, [selectedTask, newMaterialName, newMaterialPath, addTaskFile, fetchPageTitle, deriveLinkName, updateTask, tasks]);
 
   const monthStart = startOfMonth(calendarDate);
   const monthEnd = endOfMonth(monthStart);
@@ -1730,14 +1743,14 @@ export default function Tareas() {
                     </div>
                     <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-primary)', letterSpacing: '0.1em', fontFamily: "'Inter Tight', sans-serif", flex: 1 }}>Materiales</span>
                     <div onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                      <button onClick={() => { setShowAddMaterial(true); }}
+                      <button onClick={() => { setShowAddMaterial(true); setSectionCollapsed(prev => ({ ...prev, materiales: false })); }}
                         title="Añadir enlace"
                         style={{ width: 30, height: 26, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `${taskColor}0d`, border: `1px solid ${taskColor}40`, color: taskColor, cursor: 'pointer', padding: 0, transition: 'all 150ms' }}
                         onMouseEnter={e => { e.currentTarget.style.background = `${taskColor}1a`; e.currentTarget.style.borderColor = `${taskColor}60`; }}
                         onMouseLeave={e => { e.currentTarget.style.background = `${taskColor}0d`; e.currentTarget.style.borderColor = `${taskColor}40`; }}>
                         <Link2 size={12} />
                       </button>
-                      <button onClick={handleAddFileBtn}
+                      <button onClick={() => { setSectionCollapsed(prev => ({ ...prev, materiales: false })); handleAddFileBtn(); }}
                         title="Subir archivo"
                         style={{ width: 30, height: 26, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `${taskColor}0d`, border: `1px solid ${taskColor}40`, color: taskColor, cursor: 'pointer', padding: 0, transition: 'all 150ms' }}
                         onMouseEnter={e => { e.currentTarget.style.background = `${taskColor}1a`; e.currentTarget.style.borderColor = `${taskColor}60`; }}
@@ -1754,7 +1767,7 @@ export default function Tareas() {
                     <div style={{ padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }}>
 
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 5, paddingTop: 10 }}>
-                        {selectedTask.files.length === 0 && (
+                        {selectedTask.files.length === 0 && !showAddMaterial && (
                           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 60, borderRadius: 7, border: '1px dashed var(--border-soft)', background: 'var(--bg-surface)', color: 'var(--text-muted)', fontSize: 10.5, fontWeight: 500, gap: 2 }}>
                             <Paperclip size={14} style={{ opacity: 0.15 }} />
                             <span style={{ opacity: 0.3 }}>Añade recursos de estudio</span>
@@ -1857,27 +1870,36 @@ export default function Tareas() {
                       </div>
 
                       {showAddMaterial && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '14px 14px', background: 'var(--bg-surface)', borderRadius: 10, border: `1px solid ${taskColor}25` }}>
-                          <div style={{ display: 'flex', gap: 7 }}>
-                            <input value={newMaterialName} onChange={e => setNewMaterialName(e.target.value)} placeholder="Nombre del material..."
-                              onKeyDown={e => { if (e.key === 'Enter' && newMaterialName.trim() && newMaterialPath.trim()) handleAddMaterial(); }}
-                              style={{ flex: 1, padding: '9px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 7, fontSize: 12, color: 'var(--text-primary)', outline: 'none', transition: 'all 150ms' }}
-                              onFocus={e => { e.currentTarget.style.borderColor = taskColor; e.currentTarget.style.boxShadow = `0 0 0 2px ${taskColor}12`; }}
-                              onBlur={e => { e.currentTarget.style.borderColor = 'var(--border-default)'; e.currentTarget.style.boxShadow = 'none'; }} />
-                            <button onClick={handleAddMaterial} disabled={!newMaterialName.trim() || !newMaterialPath.trim()}
-                              style={{ padding: '9px 18px', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: 'none', background: taskColor, color: '#fff', opacity: newMaterialName.trim() && newMaterialPath.trim() ? 1 : 0.3, transition: 'all 150ms', whiteSpace: 'nowrap' }}>
-                              Añadir
-                            </button>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '13px 14px', background: `linear-gradient(160deg, ${taskColor}08, transparent)`, borderRadius: 10, border: `1px solid ${taskColor}30`, boxShadow: `0 0 0 3px ${taskColor}0a` }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ width: 24, height: 24, borderRadius: 7, background: `${taskColor}12`, border: `1px solid ${taskColor}28`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                              <Link2 size={12} style={{ color: taskColor }} />
+                            </span>
+                            <span style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-secondary)', fontFamily: "'Inter Tight', sans-serif", flex: 1 }}>Nuevo enlace</span>
                             <button onClick={() => { setShowAddMaterial(false); setNewMaterialName(''); setNewMaterialPath(''); }}
-                              style={{ width: 32, height: 32, borderRadius: 7, cursor: 'pointer', border: '1px solid var(--border-default)', background: 'transparent', color: 'var(--text-muted)', transition: 'all 150ms', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                              style={{ width: 26, height: 26, borderRadius: 7, cursor: 'pointer', border: '1px solid var(--border-default)', background: 'transparent', color: 'var(--text-muted)', transition: 'all 150ms', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                              onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+                              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
                               <X size={12} />
                             </button>
                           </div>
-                          <input value={newMaterialPath} onChange={e => setNewMaterialPath(e.target.value)} placeholder="URL (YouTube, Drive, web...)"
-                            onKeyDown={e => { if (e.key === 'Enter' && newMaterialName.trim() && newMaterialPath.trim()) handleAddMaterial(); }}
-                            style={{ width: '100%', padding: '9px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 7, fontSize: 12, color: 'var(--text-primary)', outline: 'none', transition: 'all 150ms' }}
+                          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                            <Link2 size={12} style={{ position: 'absolute', left: 12, color: taskColor, opacity: 0.8, pointerEvents: 'none' }} />
+                            <input value={newMaterialPath} onChange={e => setNewMaterialPath(e.target.value)} placeholder="URL (YouTube, Drive, Classroom...)"
+                              onKeyDown={e => { if (e.key === 'Enter' && newMaterialPath.trim()) handleAddMaterial(); }}
+                              style={{ width: '100%', padding: '10px 12px 10px 30px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12, color: 'var(--text-primary)', outline: 'none', transition: 'all 150ms' }}
+                              onFocus={e => { e.currentTarget.style.borderColor = taskColor; e.currentTarget.style.boxShadow = `0 0 0 2px ${taskColor}12`; }}
+                              onBlur={e => { e.currentTarget.style.borderColor = 'var(--border-default)'; e.currentTarget.style.boxShadow = 'none'; }} />
+                          </div>
+                          <input value={newMaterialName} onChange={e => setNewMaterialName(e.target.value)} placeholder="Nombre (opcional — se toma de la URL)"
+                            onKeyDown={e => { if (e.key === 'Enter' && newMaterialPath.trim()) handleAddMaterial(); }}
+                            style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12, color: 'var(--text-primary)', outline: 'none', transition: 'all 150ms' }}
                             onFocus={e => { e.currentTarget.style.borderColor = taskColor; e.currentTarget.style.boxShadow = `0 0 0 2px ${taskColor}12`; }}
                             onBlur={e => { e.currentTarget.style.borderColor = 'var(--border-default)'; e.currentTarget.style.boxShadow = 'none'; }} />
+                          <button onClick={handleAddMaterial} disabled={!newMaterialPath.trim()}
+                            style={{ height: 34, borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: 'none', background: taskColor, color: '#fff', opacity: newMaterialPath.trim() ? 1 : 0.35, transition: 'all 150ms', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                            <Link2 size={12} /> Añadir enlace
+                          </button>
                           <input type="file" ref={fileInputRef} onChange={handleFileSelected} style={{ display: 'none' }} />
                         </div>
                       )}

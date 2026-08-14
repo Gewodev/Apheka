@@ -1539,43 +1539,7 @@ export default function Planificacion() {
                     </div>
                   </div>
 
-                  <div>
-                    <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', marginBottom: 7, letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Agrupación</label>
-                    <PlanSelectDropdown value={planGroupId}
-                      onChange={v => { setPlanGroupId(v); setPlanTopicId(''); }}
-                      options={selGroups.map(g => ({ id: g.id, label: g.name }))}
-                      noneLabel="Sin agrupación" color={courseColor} />
-                    {planGroupId ? (() => {
-                      const grpName = selGroups.find(g => g.id === planGroupId)?.name || '';
-                      return (
-                        <div style={{ marginTop: 8, borderRadius: 11, border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', padding: '11px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span style={{ width: 27, height: 27, borderRadius: 8, background: 'color-mix(in srgb, ' + courseColor + ' 10%, transparent)', border: '1px solid color-mix(in srgb, ' + courseColor + ' 25%, transparent)', color: courseColor, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                              <FolderOpen size={13} strokeWidth={2} />
-                            </span>
-                            <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{grpName}</span>
-                            <span style={{ fontSize: 9, fontWeight: 700, color: courseColor, fontFamily: "'JetBrains Mono', monospace", background: 'color-mix(in srgb, ' + courseColor + ' 7%, transparent)', border: '1px solid color-mix(in srgb, ' + courseColor + ' 20%, transparent)', padding: '2px 8px', borderRadius: 999, flexShrink: 0 }}>
-                              {selTopics.length} {selTopics.length === 1 ? 'tema' : 'temas'}
-                            </span>
-                          </div>
-                          <label style={{ display: 'block', fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Tema vinculado</label>
-                          <PlanSelectDropdown value={planTopicId}
-                            onChange={setPlanTopicId}
-                            options={selTopics.map(t => ({ id: t.id, label: t.title }))}
-                            noneLabel="Sin tema" color={courseColor} />
-                          {selTopics.length === 0 && (
-                            <span style={{ fontSize: 10.5, color: 'var(--text-muted)', fontFamily: "'Inter', sans-serif", lineHeight: 1.4 }}>
-                              Esta agrupación aún no tiene temas — puedes vincularla sin tema y agregarlos después.
-                            </span>
-                          )}
-                        </div>
-                      );
-                    })() : (
-                      <span style={{ display: 'block', fontSize: 9.5, fontWeight: 600, color: 'var(--text-muted)', marginTop: 6, fontFamily: "'Inter', sans-serif" }}>
-                        {planCourseId ? 'Elige una agrupación para ver sus temas' : 'Elige un curso para vincular agrupación y tema'}
-                      </span>
-                    )}
-                  </div>
+                  
                 </div>
 
                 <div style={{ padding: '14px 24px 20px', borderTop: '1px solid var(--border-subtle)', display: 'flex', gap: 10, justifyContent: 'flex-end', alignItems: 'center', flexShrink: 0 }}>
@@ -1661,8 +1625,8 @@ function DroppablePlanSlot({ id, children }: { id: string; children: (props: { s
   return <>{children({ setNodeRef, isOver })}</>;
 }
 
-function AllDayBar({ events, plannedSessions }: { events: PlanEvent[]; plannedSessions?: { id: string; title: string; durationMinutes: number; type: string; courseId?: string }[] }) {
-  const ps = plannedSessions || [];
+function AllDayBar({ events, plannedSessions }: { events: PlanEvent[]; plannedSessions?: { id: string; title: string; durationMinutes: number; type: string; courseId?: string; startTime?: string }[] }) {
+  const ps = (plannedSessions || []).filter(s => !s.startTime);
   if (!events.length && !ps.length) return <div style={{ minHeight:8 }}/>;
   return (
     <div style={{ display:'flex', flexWrap:'wrap', gap:4, padding:'4px 8px', justifyContent:'center', flexDirection: 'column', alignItems: 'center' }}>

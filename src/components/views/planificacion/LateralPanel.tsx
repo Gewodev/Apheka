@@ -175,21 +175,6 @@ function DayDetails({ item, onSelectEvent, onViewTask, timeFormat, onAddEvent, o
         )}
 
         <div style={{ display:'flex', flexDirection:'column', gap:12, marginTop:36 }}>
-          <button
-            onClick={() => onAddEvent?.(date)}
-            style={{
-              display:'flex', alignItems:'center', justifyContent:'center', gap:8,
-              height:44, borderRadius:11, padding:'0 24px',
-              fontSize:12.5, fontWeight:600, fontFamily:"'Inter Tight',sans-serif", letterSpacing:'0.01em',
-              border:'1px solid var(--border-soft)', cursor:'pointer',
-              background:'var(--bg-elevated)', color:'var(--text-primary)',
-              transition:'all 200ms',
-            }}
-            onMouseEnter={e=>{ e.currentTarget.style.background='var(--bg-hover)'; e.currentTarget.style.borderColor='color-mix(in srgb, var(--accent) 45%, transparent)'; }}
-            onMouseLeave={e=>{ e.currentTarget.style.background='var(--bg-elevated)'; e.currentTarget.style.borderColor='var(--border-soft)'; }}
-          >
-            <CalendarPlus size={15} style={{ color: 'var(--accent)' }} /> Agregar Evento
-          </button>
           {onAddPlanSession && (
             <button
               onClick={() => onAddPlanSession(date)}
@@ -197,17 +182,32 @@ function DayDetails({ item, onSelectEvent, onViewTask, timeFormat, onAddEvent, o
                 display:'flex', alignItems:'center', justifyContent:'center', gap:8,
                 height:44, borderRadius:11, padding:'0 24px',
                 fontSize:12.5, fontWeight:600, fontFamily:"'Inter Tight',sans-serif", letterSpacing:'0.01em',
-                border:'none', cursor:'pointer',
-                background:'var(--accent)', color:'#fff',
-                boxShadow:'0 4px 15px var(--accent-dim)',
+                border:'1px solid var(--border-soft)', cursor:'pointer',
+                background:'var(--bg-elevated)', color:'var(--text-primary)',
                 transition:'all 200ms',
               }}
-              onMouseEnter={e=>e.currentTarget.style.filter='brightness(1.12)'}
-              onMouseLeave={e=>e.currentTarget.style.filter='none'}
+              onMouseEnter={e=>{ e.currentTarget.style.background='var(--bg-hover)'; e.currentTarget.style.borderColor='color-mix(in srgb, var(--accent) 45%, transparent)'; }}
+              onMouseLeave={e=>{ e.currentTarget.style.background='var(--bg-elevated)'; e.currentTarget.style.borderColor='var(--border-soft)'; }}
             >
-              <Plus size={15}/> Nueva Sesión
+              <Plus size={15} style={{ color: 'var(--accent)' }} /> Nueva Sesión
             </button>
           )}
+          <button
+            onClick={() => onAddEvent?.(date)}
+            style={{
+              display:'flex', alignItems:'center', justifyContent:'center', gap:8,
+              height:44, borderRadius:11, padding:'0 24px',
+              fontSize:12.5, fontWeight:600, fontFamily:"'Inter Tight',sans-serif", letterSpacing:'0.01em',
+              border:'none', cursor:'pointer',
+              background:'var(--accent)', color:'#fff',
+              boxShadow:'0 4px 15px var(--accent-dim)',
+              transition:'all 200ms',
+            }}
+            onMouseEnter={e=>e.currentTarget.style.filter='brightness(1.12)'}
+            onMouseLeave={e=>e.currentTarget.style.filter='none'}
+          >
+            <CalendarPlus size={15}/> Agregar Evento
+          </button>
         </div>
       </div>
     </div>
