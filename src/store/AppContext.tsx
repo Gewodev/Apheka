@@ -7,6 +7,7 @@ import { extractAudioMetadata } from '../lib/audioMetadata';
 import { format, parseISO, subDays, addDays } from 'date-fns';
 import { appDataDir, appCacheDir, join, extname } from '@tauri-apps/api/path';
 import { saveAllTracks, loadAllTracks, copyAudioToStorage, removeAudioFromStorage, clearAllAudioFiles, exportMusicLibrary as exportMusicToDir, importMusicLibrary as importMusicFromDir, saveTrackMetadata, getAllTracksMetadata, deleteTrackMetadata, clearAllTracksMetadata, addTrackFileToDB, getTrackFileFromDB, deleteTrackFileFromDB, clearAllTrackFiles, storeTrackFileInDB } from '../lib/musicDb';
+import { generalYtControl } from '../lib/ytEngine';
 
 export const globalAudio = new Audio();
 globalAudio.volume = 0.7;
@@ -502,6 +503,9 @@ interface AppState {
   pipPlaying: boolean;
   setPipPlaying: (playing: boolean) => void;
   setPipUrl: (url: string | null, title?: string, autoplay?: boolean) => void;
+  pipAfterQueue: { url: string; title: string }[];
+  setPipAfterQueue: (q: { url: string; title: string }[]) => void;
+  queuePipAfter: (url: string, title?: string) => void;
 }
 
 export type ViewId = 'inicio' | 'tareas' | 'apuntes' | 'estudio' | 'cursos' | 'analiticas' | 'chat' | 'ajustes' | 'musica' | 'flujo' | 'canvas';
@@ -559,6 +563,8 @@ interface AppContextType extends AppState {
   musicVolume: number;
   musicProgress: number;
   musicDuration: number;
+  setMusicDuration: (d: number) => void;
+  setMusicProgressRaw: (p: number) => void;
   musicListeningTime: number;
   dailyMusicTime: Record<string, number>;
   weeklyMusicTime: number;
@@ -923,6 +929,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setPipTitle(title);
     setPipAutoplay(autoplay);
   }, []);
+  const [pipAfterQueue, setPipAfterQueue] = useState<{ url: string; title: string }[]>([]);
+  const pipAfterQueueRef = useRef<{ url: string; title: string }[]>([]);
+  useEffect(() => { pipAfterQueueRef.current = pipAfterQueue; }, [pipAfterQueue]);
+  const queuePipAfter = useCallback((url: string, title = '') => {
+    setPipAfterQueue(prev => [...prev, { url, title }]);
+  }, []);
   const [musicVolume, setMusicVolume] = useState(0.7);
   const [musicProgress, setMusicProgress] = useState(0);
   const [musicDuration, setMusicDuration] = useState(0);
@@ -1189,13 +1201,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
             },
           });
         }
+        // Puntuación de frescura: la fecha ISO más reciente de cualquier dato del
+        // snapshot. La capa MÁS FRESCA gana: si IDB quedó viejo (cuota excedida en
+        // un guardado silencioso) o la app se cerró antes del debounce, las sesiones
+        // recientes se restauran desde localStorage/backup/disco en vez de perderse.
+        const freshScore = (raw: string): number => {
+          try {
+            const d = JSON.parse(fixMojibake(raw));
+            if (!d || typeof d !== 'object') return 0;
+            let best = 0;
+            const walk = (v: any) => {
+              if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v)) {
+                const t = Date.parse(v);
+                if (!isNaN(t) && t > best) best = t;
+              } else if (Array.isArray(v)) {
+                v.forEach((item: any) => { if (item && typeof item === 'object') Object.values(item).forEach(walk); });
+              }
+            };
+            Object.values(d).forEach(walk);
+            return best;
+          } catch { return 0; }
+        };
+        const candidates: { name: string; raw: string; score: number }[] = [];
         for (const src of sources) {
           const raw = await src.read();
           if (hasRealData(raw)) {
-            stored = raw;
-            source = src.name;
-            break;
+            const r = raw as string;
+            candidates.push({ name: src.name, raw: r, score: freshScore(r) });
           }
+        }
+        candidates.sort((a, b) => b.score - a.score);
+        const winner = candidates[0];
+        if (winner) {
+          stored = winner.raw;
+          source = winner.name;
         }
         if (stored && source !== 'idb') { await set(STORAGE_KEY, stored).catch(() => { }); }
         if (stored) {
@@ -1277,6 +1316,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (data.pomodoroSessions) setPomodoroSessions(data.pomodoroSessions);
           if (data.musicVolume !== undefined) setMusicVolume(data.musicVolume);
           if (data.currentTrackId) setCurrentTrackId(data.currentTrackId);
+          if (data.youtubeVideoUrl) setYoutubeVideoUrl(data.youtubeVideoUrl);
           if (data.musicProgress !== undefined) {
             setMusicProgress(data.musicProgress);
             if (data.currentTrackId) restoreSeekRef.current = data.musicProgress;
@@ -1724,11 +1764,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         settings, sessionTime, sessionType, isRest, isTimerActive, weeklyStudyTime, dailyStudyTime, dailyStudyDate, pomodoroSessions,
         trackHistory, playCounts, musicQueue, musicVolume, shuffleMode, repeatMode, artists, playlists,
         currentTrackId, isPlayingMusic: isPlayingMusic && !globalAudio.paused, musicListeningTime, musicListeningDate, dailyMusicTime,
-        musicProgress, musicDuration, downloadPath,
+        musicProgress, musicDuration, downloadPath, youtubeVideoUrl,
         accumulatedPauseTime, pauseStartTime, distractionCount,
         focusPomodoroTime, focusChronoTime, breakTime, dailyBreakTime,
         dailyFocusPomodoro, dailyFocusChrono, dailyPerformances,
       });
+      latestJsonRef.current = json;
       set(STORAGE_KEY, json).catch((e: any) => console.error("Error saving data:", e));
       // Mirror + backup en localStorage (sobreviven a pérdidas de IndexedDB)
       try {
@@ -1775,7 +1816,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     tasks, habits, notes, noteFolders, courses, events, studySessions, plannedSessions, settings,
     weeklyStudyTime, dailyStudyTime, dailyStudyDate, pomodoroSessions, trackHistory, playCounts, musicQueue,
     musicVolume, artists, playlists, currentTrackId, isPlayingMusic, musicListeningDate,
-    downloadPath,
+    downloadPath, youtubeVideoUrl,
     accumulatedPauseTime, pauseStartTime, distractionCount,
     focusPomodoroTime, focusChronoTime, breakTime, dailyBreakTime,
     dailyFocusPomodoro, dailyFocusChrono,
@@ -1887,6 +1928,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const saveBeforeUnloadRef = useRef<((overrideIsPlaying?: boolean) => void) | null>(null);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestJsonRef = useRef<string | null>(null);
+  // Flush síncrono al cerrar/ocultar: si la app se cierra antes del debounce de 300ms
+  // (o IDB falla por cuota), el localStorage queda con el ÚLTIMO estado y la carga
+  // por "frescura" lo restaura — así las sesiones de estudio nunca se pierden.
+  useEffect(() => {
+    const flush = () => {
+      if (latestJsonRef.current) {
+        try { localStorage.setItem(STORAGE_KEY, latestJsonRef.current); } catch { /* noop */ }
+      }
+    };
+    window.addEventListener('beforeunload', flush);
+    document.addEventListener('pagehide', flush);
+    return () => {
+      window.removeEventListener('beforeunload', flush);
+      document.removeEventListener('pagehide', flush);
+    };
+  }, []);
   saveBeforeUnloadRef.current = (overrideIsPlaying?: boolean) => {
     // Compute live audio progress directly from the audio element
     const liveProgress = globalAudio.duration && isFinite(globalAudio.duration) && globalAudio.duration > 0
@@ -2549,6 +2607,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     // YouTube â†’ ReactPlayer
     if (track.url.includes('youtube.com/') || track.url.includes('youtu.be/')) {
+      if (!globalAudio.paused) globalAudio.pause();
       setYoutubeVideoUrl(track.url);
       if (resumeStayPausedRef.current) {
         resumeStayPausedRef.current = false;
@@ -2808,10 +2867,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const setMusicProgressCb = useCallback((progress: number) => {
     setMusicProgress(progress);
+    // Si la pista actual es de la NUBE (YouTube), el seek va al iframe del
+    // reproductor general (motor YT imperativo), NUNCA al <audio> local.
+    if (youtubeVideoUrl) {
+      if (generalYtControl.seekTo) generalYtControl.seekTo(progress);
+      return;
+    }
     if (globalAudio.duration && isFinite(progress)) {
       globalAudio.currentTime = progress * globalAudio.duration;
     }
-  }, []);
+  }, [youtubeVideoUrl]);
 
   const clearCurrentTrack = useCallback(() => {
     setCurrentTrackId(null);
@@ -2849,6 +2914,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
     const onEnded = () => {
       if (currentTrackIdRef.current && tracksRef.current.length > 0) {
+        // Canción programada "después de la actual" → se pausa el reproductor general y arranca el emergente
+        if (pipAfterQueueRef.current.length > 0) {
+          const [next, ...rest] = pipAfterQueueRef.current;
+          pipAfterQueueRef.current = rest;
+          setPipAfterQueue(rest);
+          setPipUrl(next.url, next.title, true);
+          return;
+        }
         // REPEAT ALL = loop same track forever
         if (repeatModeRef.current === 'all') {
           globalAudio.currentTime = 0;
@@ -3649,8 +3722,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     settings, sessionTime, sessionType, weeklyStudyTime, dailyStudyTime, pomodoroSessions,
     activeTaskId, timerLocked, isTimerActive, roundsCompleted, showCompletion,
     showRestPrompt, setShowRestPrompt, handlePomodoroBannerClick,
-    currentTrackId, coverModalTrackId, youtubeVideoUrl, isPlayingMusic, isAudioLoading, musicVolume, musicProgress, musicDuration, musicListeningTime, dailyMusicTime, weeklyMusicTime, monthlyMusicTime, shuffleMode, repeatMode,
+    currentTrackId, coverModalTrackId, youtubeVideoUrl, isPlayingMusic, isAudioLoading, musicVolume, musicProgress, musicDuration, setMusicDuration, musicListeningTime, dailyMusicTime, weeklyMusicTime, monthlyMusicTime, shuffleMode, repeatMode,
     pipUrl, pipTitle, pipAutoplay, pipPlaying, setPipPlaying, setPipUrl,
+    pipAfterQueue, setPipAfterQueue, queuePipAfter,
     trackHistory, playCounts, musicQueue, queueSource, downloadQueue, artists,
     googleConnected, calendarSyncEnabled, lastCalendarSync, importState,
     addTask, updateTask, deleteTask, toggleTaskStatus, clearAllTasks, deleteCompletedTasks, deleteOldCompletedTasks, reorderTasks,
@@ -3660,7 +3734,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addEvent, updateEvent, deleteEvent,
     addHabit, updateHabit, deleteHabit, setHabits,
     addTrack, updateTrack, deleteTrack, toggleTrackFavorite, importLocalTracks,
-    playTrack, toggleMusicPlayback, setIsPlayingMusic, clearCurrentTrack, setMusicVolume: setMusicVolumeCb, setMusicProgress: setMusicProgressCb,
+    playTrack, toggleMusicPlayback, setIsPlayingMusic, clearCurrentTrack, setMusicVolume: setMusicVolumeCb, setMusicProgress: setMusicProgressCb, setMusicProgressRaw: setMusicProgress,
     setShuffleMode, setRepeatMode, setMusicQueue, setQueueSource, clearAllMusicData,
     exportMusicLibrary, importMusicLibrary,
     setCoverModalTrackId,

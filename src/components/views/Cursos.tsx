@@ -3731,17 +3731,18 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                           return (
                             <>
                               {/* header: franja de días — solo el nombre del día, sin números ni flechas, con botón + */}
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 5, height: 38, padding: '0 12px', flexShrink: 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 5, height: 40, padding: '0 12px', flexShrink: 0 }}>
                                 {weekDays.map(d => {
                                   const isTodayDay = d.iso === today;
                                   const isSel = d.iso === plannerDate;
                                   return (
                                     <button key={d.iso} onClick={() => setPlannerDate(d.iso)}
                                       title={format(new Date(d.iso + 'T12:00:00'), 'EEEE d MMMM', { locale: es })}
-                                      style={{ flex: 1, minWidth: 0, cursor: 'pointer', height: 26, padding: '0 3px', borderRadius: 9, border: `1px solid ${isTodayDay ? `${course.color}66` : (isSel ? `${course.color}40` : 'transparent')}`, background: isTodayDay ? `linear-gradient(135deg, ${course.color}, color-mix(in srgb, ${course.color} 70%, #fff))` : (isSel ? `${course.color}14` : 'transparent'), boxShadow: isTodayDay ? `0 0 10px ${course.color}45, 0 2px 6px rgba(0,0,0,0.3)` : 'none', transition: 'all 180ms ' + EASE, fontFamily: 'inherit', overflow: 'hidden' }}
+                                      style={{ flex: 1, minWidth: 0, cursor: 'pointer', height: 28, padding: '0 4px', borderRadius: 8, border: isSel && !isTodayDay ? `1px solid ${course.color}` : '1px solid transparent', background: 'transparent', position: 'relative', transition: 'all 180ms ' + EASE, fontFamily: 'inherit', overflow: 'visible' }}
                                       onMouseEnter={e => { if (!isTodayDay && !isSel) { e.currentTarget.style.background = 'var(--bg-hover)'; } }}
                                       onMouseLeave={e => { if (!isTodayDay && !isSel) { e.currentTarget.style.background = 'transparent'; } }}>
-                                      <span style={{ display: 'block', fontSize: 11, fontWeight: isTodayDay ? 700 : (isSel ? 600 : 500), color: isTodayDay ? '#fff' : (isSel ? 'var(--text-primary)' : 'var(--text-secondary)'), fontFamily: "'Inter Tight', sans-serif", lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', letterSpacing: '0.02em', transition: 'color 180ms ' + EASE, textShadow: isTodayDay ? '0 1px 2px rgba(0,0,0,0.25)' : 'none' }}>{d.name}</span>
+                                      <span style={{ display: 'block', fontSize: 11.5, fontWeight: isTodayDay ? 700 : (isSel ? 600 : 500), color: isTodayDay ? course.color : (isSel ? 'var(--text-primary)' : 'var(--text-secondary)'), fontFamily: "'Inter Tight', sans-serif", lineHeight: '28px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', letterSpacing: '0.02em', transition: 'color 180ms ' + EASE, textShadow: 'none' }}>{d.name}</span>
+                                      {isTodayDay && <span style={{ position: 'absolute', bottom: 3, left: '50%', transform: 'translateX(-50%)', width: '46%', height: 3, borderRadius: 2, background: course.color, boxShadow: `0 0 8px ${course.color}66` }} />}
                                     </button>
                                   );
                                 })}

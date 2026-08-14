@@ -4,6 +4,7 @@ import {
   Shuffle, Repeat2, Disc3, Heart
 } from 'lucide-react';
 import { useApp, Track } from '../store/AppContext';
+import { extractYouTubeId } from '../lib/ytEngine';
 
 function formatTime(secs: number) {
   if (!secs || !isFinite(secs)) return '0:00';

@@ -8,7 +8,7 @@ import {
   ExternalLink, FolderOpen, Plus,
   Disc3, Activity, Heart, Copy, Clock,
   User, Wifi, Sliders, Repeat, Shuffle, BarChart2,
-  Edit2, Grid, List, Image, ListPlus, ListX, CornerDownRight,
+  Edit2, Grid, List, Image, ListPlus, ListX, CornerDownRight, Cloud,
 } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
@@ -200,7 +200,7 @@ export default function Musica() {
     importLocalTracks,
     setCoverModalTrackId,
     downloadPath: persistentDownloadPath, setDownloadPathCtx,
-    setPipUrl, pipPlaying,
+    setPipUrl, pipPlaying, pipUrl, queuePipAfter,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<TabId>(() => loadUiState()?.activeTab || 'biblioteca');
@@ -339,12 +339,12 @@ export default function Musica() {
   }, [addCloudTrack, addNotification]);
 
   const ctxSearchPlayNext = useCallback((r: SearchResult) => {
-    const id = addCloudTrack(r);
     setCtxSearchMenu(null);
-    if (!id) return;
-    setMusicQueue([id, ...musicQueue.filter(x => x !== id)]);
-    addNotification('Se reproducirá después de la canción actual', 'success');
-  }, [addCloudTrack, setMusicQueue, musicQueue, addNotification]);
+    const url = r.id ? `https://www.youtube.com/watch?v=${r.id}` : r.webpage_url;
+    if (!url) return;
+    queuePipAfter(url, r.title || 'Canción');
+    addNotification('Se reproducirá en el emergente cuando termine la canción actual', 'success');
+  }, [queuePipAfter, addNotification]);
 
 
   const [downloadSelection, setDownloadSelection] = useState<{ url: string; title: string; channel?: string; thumbnail?: string; duration?: number }[]>(() => {
@@ -391,9 +391,13 @@ export default function Musica() {
       setActiveTab(tab);
       if (tab === 'artistas' && track.artist) setSelectedArtist(track.artist);
     }
-    if (track.source !== 'local' && track.url) setPipUrl(track.url, track.title);
+    // Reproducir en el reproductor general cierra el emergente (uno u otro, sin doble audio)
+    if (pipUrl) setPipUrl(null);
+    // Las canciones de la nube se reproducen en el reproductor general (playTrack
+    // las enruta a YouTube → ReactPlayer); el emergente solo se usa cuando se
+    // reproduce desde la búsqueda o se programa "después de la actual".
     playTrack(trackId);
-  }, [activeTab, playTrack, setPipUrl]);
+  }, [activeTab, playTrack, pipUrl, setPipUrl]);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -1558,6 +1562,10 @@ export default function Musica() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
                   {displayTracks.length > 0 ? displayTracks.map((track, i) => {
                     const isPlaying = currentTrackId === track.id && isPlayingMusic;
+                    const cloudOffline = !isOnline && track.source !== 'local';
+                    const cloudBorder = track.source !== 'local' && !isPlaying
+                      ? '1px solid color-mix(in srgb, var(--accent) 38%, var(--border-subtle))'
+                      : '1px solid var(--border-subtle)';
                     return (
                       <div
                         key={track.id}
@@ -1567,13 +1575,21 @@ export default function Musica() {
                           padding: '10px 10px 12px', display: 'flex', flexDirection: 'column', gap: 10, cursor: 'pointer',
                           borderRadius: 12,
                           background: isPlaying ? 'var(--accent-dim)' : 'var(--bg-deep)',
-                          border: isPlaying ? '1px solid var(--accent-glow)' : '1px solid var(--border-subtle)',
+                          border: isPlaying ? '1px solid var(--accent-glow)' : cloudBorder,
                           transition: 'transform 200ms ease, box-shadow 250ms ease, border-color 200ms',
                           boxShadow: isPlaying ? '0 4px 16px rgba(0,0,0,0.12)' : '0 1px 3px rgba(0,0,0,0.04)',
+                          opacity: cloudOffline ? 0.45 : 1,
+                          pointerEvents: cloudOffline ? 'none' : undefined,
+                          position: 'relative',
                         }}
                         onMouseEnter={e => { if (!isPlaying) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.10)'; e.currentTarget.style.borderColor = 'var(--accent-glow)'; } }}
                         onMouseLeave={e => { if (!isPlaying) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.04)'; e.currentTarget.style.borderColor = 'var(--border-subtle)'; } }}
                       >
+                        {cloudOffline && (
+                          <div style={{ position: 'absolute', top: 8, left: 8, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--error)', background: 'var(--bg-surface)', border: '1px solid color-mix(in srgb, var(--error) 40%, transparent)', borderRadius: 999, padding: '2px 8px', zIndex: 2 }}>
+                            No hay conexión a internet
+                          </div>
+                        )}
                         <div style={{ position: 'relative', width: '100%', aspectRatio: '1', borderRadius: 8, overflow: 'hidden', background: 'var(--bg-surface)' }}>
                           {track.coverImage ? <img src={track.coverImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} /> : <Music size={28} style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', color: 'var(--text-muted)', opacity: 0.25 }} />}
                           <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.25) 0%, transparent 60%)', opacity: 0, transition: 'opacity 180ms', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 10 }}
@@ -1802,12 +1818,13 @@ export default function Musica() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                     {searchResults.map((r, i) => (
                       <div key={i}
+                        onContextMenu={(e) => openSearchMenu(e, r)}
                         style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 8px', borderRadius: 10, border: '1px solid transparent', transition: 'all 180ms ease' }}
                         onMouseEnter={e => { e.currentTarget.style.background = 'color-mix(in srgb, var(--bg-elevated) 60%, var(--bg-hover))'; e.currentTarget.style.borderColor = 'var(--border-subtle)'; const ov = e.currentTarget.querySelector('.play-ov') as HTMLElement; if (ov) ov.style.opacity = '1'; const act = e.currentTarget.querySelector('.row-act') as HTMLElement; if (act) act.style.opacity = '1'; }}
                         onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'transparent'; const ov = e.currentTarget.querySelector('.play-ov') as HTMLElement; if (ov) ov.style.opacity = '0'; const act = e.currentTarget.querySelector('.row-act') as HTMLElement; if (act) act.style.opacity = '0.35'; }}>
                         {/* Thumbnail with play overlay */}
                         <div style={{ width: 60, height: 42, borderRadius: 8, background: 'var(--bg-deep)', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border-subtle)', position: 'relative', cursor: 'pointer' }}
-                          onClick={() => { setPipUrl(r.id ? `https://www.youtube.com/watch?v=${r.id}` : r.webpage_url, r.title); }}>
+                          onClick={() => { if (isPlayingMusic) toggleMusicPlayback(); setPipUrl(r.id ? `https://www.youtube.com/watch?v=${r.id}` : r.webpage_url, r.title); }}>
                           {r.thumbnail ? <img src={r.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={14} color="var(--text-muted)" style={{ opacity: 0.3 }} />}
                           <div className="play-ov" style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 180ms', borderRadius: 8 }}>
                             <Play size={15} fill="white" color="white" />
@@ -1900,6 +1917,7 @@ export default function Musica() {
                         <button onClick={() => {
                           if (preview.entries.length > 0) {
                             const plUrl = preview.webpage_url?.includes('list=') ? preview.webpage_url : `https://www.youtube.com/playlist?list=${preview.id}`;
+                            if (isPlayingMusic) toggleMusicPlayback();
                             setPipUrl(plUrl, preview.title);
                           }
                         }} style={{ fontSize: 9, fontWeight: 500, color: pipPlaying ? '#10B981' : 'var(--accent)', background: pipPlaying ? 'color-mix(in srgb, #10B981 10%, transparent)' : 'color-mix(in srgb, var(--accent) 8%, transparent)', border: `1px solid ${pipPlaying ? 'color-mix(in srgb, #10B981 30%, transparent)' : 'color-mix(in srgb, var(--accent) 15%, transparent)'}`, padding: '2px 8px', borderRadius: 5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, transition: 'all 150ms' }}
@@ -1915,7 +1933,7 @@ export default function Musica() {
                             onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'transparent'; }}>
                             <span style={{ fontSize: 10, color: 'var(--text-muted)', width: 20, textAlign: 'right', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{i + 1}</span>
                             <div
-                              onClick={() => { setPipUrl(entry.id ? `https://www.youtube.com/watch?v=${entry.id}` : entry.webpage_url, entry.title); }}
+                              onClick={() => { if (isPlayingMusic) toggleMusicPlayback(); setPipUrl(entry.id ? `https://www.youtube.com/watch?v=${entry.id}` : entry.webpage_url, entry.title); }}
                               style={{ width: 36, height: 26, borderRadius: 5, background: 'var(--bg-deep)', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', position: 'relative' }}
                             >
                               {entry.thumbnail ? <img src={entry.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={10} color="var(--text-muted)" style={{ opacity: 0.3 }} />}
@@ -1946,13 +1964,18 @@ export default function Musica() {
 
           {/* REPRODUCIENDO CARD */}
           {currentTrack ? (
-            <div className="bento-card" style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', border: isPlayingMusic ? '1px solid var(--accent)' : '1px solid var(--border-default)', transition: 'all 300ms' }}>
+            <div className="bento-card" style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', border: isPlayingMusic ? '1px solid var(--accent)' : (currentTrack.source !== 'local' ? '1px solid color-mix(in srgb, var(--accent) 42%, var(--border-soft))' : '1px solid var(--border-default)'), boxShadow: (isPlayingMusic && currentTrack.source !== 'local') ? '0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent), 0 10px 34px rgba(0,0,0,0.22)' : undefined, transition: 'all 300ms' }}>
               <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <div style={{ width: 6, height: 6, borderRadius: '50%', background: isPlayingMusic ? 'var(--accent)' : 'var(--text-muted)' }} />
                   <span className="section-header" style={{ marginBottom: 0, fontSize: 12, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                     {isPlayingMusic ? 'Reproduciendo' : 'Pausado'}
                   </span>
+                  {currentTrack.source !== 'local' && (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--accent)', border: '1px solid color-mix(in srgb, var(--accent) 45%, transparent)', borderRadius: 999, padding: '2px 7px', background: 'color-mix(in srgb, var(--accent) 10%, transparent)' }}>
+                      <Cloud size={10} style={{ flexShrink: 0 }} />
+                    </span>
+                  )}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <Heart size={16} style={{ color: currentTrack.isFavorite ? 'var(--accent)' : 'var(--text-muted)', fill: currentTrack.isFavorite ? 'var(--accent)' : 'none', cursor: 'pointer' }} onClick={() => toggleTrackFavorite(currentTrack.id)} />
@@ -2703,6 +2726,30 @@ export default function Musica() {
             <button onClick={() => ctxPlayNext(ctxMenu.trackId)} style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: '8px 10px', borderRadius: 7, border: 'none', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, cursor: 'pointer', textAlign: 'left' }}>
               <CornerDownRight size={14} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
               Reproducir a continuación
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {ctxSearchMenu && createPortal(
+        <div style={{ position: 'fixed', inset: 0, zIndex: 99998 }} onClick={() => setCtxSearchMenu(null)} onContextMenu={(e) => { e.preventDefault(); setCtxSearchMenu(null); }}>
+          <div style={{ position: 'fixed', left: Math.min(ctxSearchMenu.x, window.innerWidth - 230), top: Math.min(ctxSearchMenu.y, window.innerHeight - 180), zIndex: 99999, background: 'var(--bg-elevated)', border: '1px solid var(--border-soft)', borderRadius: 10, boxShadow: '0 14px 44px rgba(0,0,0,0.38)', padding: 6, width: 220 }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-tertiary)', padding: '5px 10px 8px', borderBottom: '1px solid var(--border-subtle)', marginBottom: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {ctxSearchMenu.result.title || 'Canción'}
+            </div>
+            <button onClick={() => ctxSearchAddToLibrary(ctxSearchMenu.result)} style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: '8px 10px', borderRadius: 7, border: 'none', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, cursor: 'pointer', textAlign: 'left' }}>
+              <ListPlus size={14} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+              Agregar a lista de música
+            </button>
+            <button
+              onClick={() => ctxSearchPlayNext(ctxSearchMenu.result)}
+              disabled={!currentTrackId}
+              style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: '8px 10px', borderRadius: 7, border: 'none', background: 'transparent', color: currentTrackId ? 'var(--text-secondary)' : 'var(--text-muted)', fontSize: 12, cursor: currentTrackId ? 'pointer' : 'not-allowed', textAlign: 'left', opacity: currentTrackId ? 1 : 0.5 }}
+              title={currentTrackId ? undefined : 'No hay ninguna canción reproduciéndose en este momento'}
+            >
+              <CornerDownRight size={14} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
+              Reproducir después de la actual
             </button>
           </div>
         </div>,

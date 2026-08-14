@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Minimize2, Maximize2, Play, Pause, Disc3 } from 'lucide-react';
+import { ensureYouTubeApi, extractYouTubeId, extractPlaylistId } from '../lib/ytEngine';
 
 export interface VideoPiPProps {
   url: string | null;
@@ -8,6 +9,9 @@ export interface VideoPiPProps {
   onClose: () => void;
   autoplay?: boolean;
   onPlayingChange?: (playing: boolean) => void;
+  pipAfterQueue?: { url: string; title: string }[];
+  setPipAfterQueue?: (q: { url: string; title: string }[]) => void;
+  onPipPlayNext?: (url: string, title?: string) => void;
 }
 
 const DEFAULT_W = 420;
@@ -17,48 +21,6 @@ const MIN_H = 140;
 const BAR_H = 30;
 const MINI_W = 304;
 const MINI_H = 96;
-
-let ytApiPromise: Promise<boolean> | null = null;
-function ensureYouTubeApi(): Promise<boolean> {
-  if (!ytApiPromise) {
-    ytApiPromise = new Promise((resolve) => {
-      try {
-        const w = window as any;
-        if (w.YT && w.YT.Player) { resolve(true); return; }
-        const prev = w.onYouTubeIframeAPIReady;
-        w.onYouTubeIframeAPIReady = () => { if (prev) prev(); resolve(true); };
-        const s = document.createElement('script');
-        s.src = 'https://www.youtube.com/iframe_api';
-        s.async = true;
-        s.onerror = () => resolve(false);
-        document.head.appendChild(s);
-      } catch { resolve(false); }
-    });
-  }
-  return ytApiPromise;
-}
-
-function extractYouTubeId(raw: string): string | null {
-  try {
-    const u = new URL(raw);
-    const v = u.searchParams.get('v');
-    if (v) return v;
-    const host = u.hostname.replace('www.', '');
-    if (host === 'youtu.be') return u.pathname.slice(1).split('/')[0] || null;
-    if (u.pathname.includes('/embed/')) return u.pathname.split('/embed/')[1]?.split('?')[0] || null;
-  } catch {
-    const m = raw.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=))([\w-]{11})/);
-    if (m) return m[1];
-  }
-  return null;
-}
-
-function extractPlaylistId(raw: string): string | null {
-  try {
-    const list = new URL(raw).searchParams.get('list');
-    return list || null;
-  } catch { return null; }
-}
 
 function isDirectVideo(url: string): boolean {
   if (url.startsWith('data:video/')) return true;
@@ -90,7 +52,7 @@ function loadPipStorage() {
   } catch { return null; }
 }
 
-function VideoPiPInner({ url, title, onClose, autoplay = false, onPlayingChange }: VideoPiPProps) {
+function VideoPiPInner({ url, title, onClose, autoplay = false, onPlayingChange, pipAfterQueue, setPipAfterQueue, onPipPlayNext }: VideoPiPProps) {
   const [hovered, setHovered] = useState(false);
   const [mini, setMini] = useState<boolean>(() => {
     const d = loadPipStorage();
@@ -312,12 +274,22 @@ function VideoPiPInner({ url, title, onClose, autoplay = false, onPlayingChange 
                 const d = ytPlayerRef.current?.getDuration?.() || 0;
                 if (d) setDur(d);
               }
-              if (e.data === 0 && !ytList) {
-                // Video suelto ENDED → loop hasta que pause o cambie
-                try {
-                  const p = ytPlayerRef.current;
-                  if (p) { p.seekTo?.(0, true); p.playVideo?.(); }
-                } catch { /* noop */ }
+              if (e.data === 0) {
+                // ¿Hay una canción programada "después de la actual"? → consumirla
+                const pq = pipAfterQueue ?? [];
+                if (pq.length > 0) {
+                  const [next, ...rest] = pq;
+                  setPipAfterQueue?.(rest);
+                  onPipPlayNext?.(next.url, next.title);
+                  return;
+                }
+                if (!ytList) {
+                  // Video suelto ENDED → loop hasta que pause o cambie
+                  try {
+                    const p = ytPlayerRef.current;
+                    if (p) { p.seekTo?.(0, true); p.playVideo?.(); }
+                  } catch { /* noop */ }
+                }
               }
             },
           },
@@ -530,7 +502,16 @@ function VideoPiPInner({ url, title, onClose, autoplay = false, onPlayingChange 
             onLoadedMetadata={(e) => setDur(e.currentTarget.duration)}
             onPlay={() => { setPlaying(true); onPlayingChange?.(true); }}
             onPause={() => { setPlaying(false); onPlayingChange?.(false); }}
-            onEnded={(e) => { e.currentTarget.currentTime = 0; e.currentTarget.play().catch(() => { /* noop */ }); }}
+            onEnded={(e) => {
+              const pq = pipAfterQueue ?? [];
+              if (pq.length > 0) {
+                const [next, ...rest] = pq;
+                setPipAfterQueue?.(rest);
+                onPipPlayNext?.(next.url, next.title);
+                return;
+              }
+              e.currentTarget.currentTime = 0; e.currentTarget.play().catch(() => { /* noop */ });
+            }}
             style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }}
           />
         ) : (

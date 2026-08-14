@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Home, NotebookPen, Clock, ListTodo, Settings,
   Music,
@@ -7,6 +7,7 @@ import {
 import { AppProvider, useApp } from './store/AppContext';
 import toast from 'react-hot-toast';
 import ErrorBoundary from './components/ErrorBoundary';
+import { ensureYouTubeApi, extractYouTubeId, extractPlaylistId, generalYtControl } from './lib/ytEngine';
 
 import Inicio from './components/views/Inicio';
 import Estudio from './components/views/Estudio';
@@ -25,8 +26,6 @@ import type { BrainAnchor } from './lib/brainDrop';
 import NowPlayingView from './components/NowPlayingView';
 import VideoPiP from './components/VideoPiP';
 import ImageContextMenu from './components/ui/ImageContextMenu';
-import ReactPlayer from 'react-player';
-const Player = ReactPlayer as any;
 
 type ViewId = 'inicio' | 'estudio' | 'tareas' | 'notas' | 'musica' | 'planificacion' | 'cursos' | 'ajustes' | 'curso_detalle';
 
@@ -35,7 +34,7 @@ interface AppContentProps {
 }
 
 function AppContent() {
-  const { settings, courses, addCourse, navigateTo, setNavigateTo, importState, updateSettings, toastMessage, deleteOldCompletedTasks, youtubeVideoUrl, isPlayingMusic, musicVolume, musicProgress, musicDuration, setMusicProgress, setIsPlayingMusic, playTrack, musicQueue, setMusicQueue, shuffleMode, repeatMode, tracks, currentTrackId, setRepeatMode, coverModalTrackId, showRestPrompt, handlePomodoroBannerClick, queueSource, pipUrl, pipTitle, pipAutoplay, setPipUrl, pipPlaying, setPipPlaying, courseDeepLink, setCourseDeepLink } = useApp();
+  const { settings, courses, addCourse, navigateTo, setNavigateTo, importState, updateSettings, toastMessage, deleteOldCompletedTasks, youtubeVideoUrl, isPlayingMusic, musicVolume, musicProgress, musicDuration, setMusicDuration, setMusicProgressRaw, setIsPlayingMusic, playTrack, musicQueue, setMusicQueue, shuffleMode, repeatMode, tracks, currentTrackId, setRepeatMode, coverModalTrackId, showRestPrompt, handlePomodoroBannerClick, queueSource, pipUrl, pipTitle, pipAutoplay, setPipUrl, pipPlaying, setPipPlaying, pipAfterQueue, setPipAfterQueue, courseDeepLink, setCourseDeepLink } = useApp();
   const [activeView, setActiveView] = useState<ViewId>(() => {
     try {
       const saved = localStorage.getItem('owa_active_view_v1');
@@ -51,6 +50,194 @@ function AppContent() {
 
   // Auto-clean completed tasks older than 2 months on startup
   useEffect(() => { deleteOldCompletedTasks(); }, []);
+
+  // ══ Motor YouTube del reproductor GENERAL — MISMA lógica que el emergente
+  // (VideoPiP): IFrame API imperativa, video oculto detrás con tamaño real.
+  const ytHolderRef = useRef<HTMLDivElement>(null);
+  const ytPlayerRef = useRef<any>(null);
+  const pendingLoadRef = useRef<string | null>(null);
+  const [ytMode, setYtMode] = useState<'api' | 'fallback'>('api');
+  const isPlayingMusicRef = useRef(isPlayingMusic);
+  isPlayingMusicRef.current = isPlayingMusic;
+
+  // Precarga el API de YouTube al montar → el primer play arranca sin esperar el script
+  useEffect(() => { ensureYouTubeApi(); }, []);
+  const ytFallbackSrc = useMemo(() => {
+    if (!youtubeVideoUrl || ytMode !== 'fallback') return null;
+    const ytId = extractYouTubeId(youtubeVideoUrl);
+    const ytList = extractPlaylistId(youtubeVideoUrl);
+    if (ytList) return `https://www.youtube.com/embed/videoseries?list=${ytList}&autoplay=1&loop=1&rel=0&modestbranding=1&controls=1`;
+    if (ytId) return `https://www.youtube.com/embed/${ytId}?autoplay=1&loop=1&playlist=${ytId}&rel=0&modestbranding=1&controls=1`;
+    return null;
+  }, [youtubeVideoUrl, ytMode]);
+
+  const handleYtEnded = useCallback(() => {
+    if (pipAfterQueue.length > 0) {
+      const [next, ...rest] = pipAfterQueue;
+      setPipAfterQueue(rest);
+      setPipUrl(next.url, next.title, true);
+      return;
+    }
+    if (tracks.length > 0 && currentTrackId) {
+      if (repeatMode === 'one') {
+        playTrack(currentTrackId);
+        setRepeatMode('none');
+        return;
+      }
+      let nextId: string | null = null;
+      const q = musicQueue;
+      if (q.length > 0) {
+        setMusicQueue(q.slice(1));
+        nextId = q[0];
+      } else if (shuffleMode || repeatMode === 'all') {
+        const sourcePool = queueSource?.pool ?? tracks.map(t => t.id);
+        const restPool = sourcePool.filter(tid => tid !== currentTrackId);
+        const refilled = shuffleMode ? [...restPool].sort(() => Math.random() - 0.5) : restPool;
+        if (refilled.length > 0) { setMusicQueue(refilled.slice(1)); nextId = refilled[0]; }
+      }
+      if (nextId) playTrack(nextId);
+      else setIsPlayingMusic(false);
+    }
+  }, [pipAfterQueue, setPipAfterQueue, setPipUrl, tracks, currentTrackId, repeatMode, playTrack, musicQueue, setMusicQueue, shuffleMode, queueSource, setIsPlayingMusic]);
+  const handleYtEndedRef = useRef(handleYtEnded);
+  handleYtEndedRef.current = handleYtEnded;
+
+  useEffect(() => {
+    const url = youtubeVideoUrl;
+    const wrap = ytHolderRef.current;
+    if (!url || !wrap) {
+      pendingLoadRef.current = null;
+      try { ytPlayerRef.current?.destroy?.(); } catch { /* noop */ }
+      ytPlayerRef.current = null;
+      generalYtControl.seekTo = undefined;
+      return;
+    }
+    // CAMBIO DE CANCIÓN RÁPIDO: si el player ya está listo, REUTILIZAR el iframe
+    // (loadVideoById) en vez de destruirlo y crearlo de nuevo (tarda muchísimo).
+    const existing = ytPlayerRef.current;
+    if (existing && typeof existing.loadVideoById === 'function') {
+      pendingLoadRef.current = null;
+      const ytId = extractYouTubeId(url);
+      const ytList = extractPlaylistId(url);
+      try {
+        if (ytList && typeof existing.loadPlaylist === 'function') existing.loadPlaylist({ list: ytList, listType: 'playlist' });
+        else if (ytId) existing.loadVideoById(ytId);
+        if (isPlayingMusicRef.current) existing.playVideo();
+      } catch { /* noop */ }
+      return;
+    }
+    // Sin player todavía → crearlo (la creación pendiente guarda el URL por si cambia antes del ready)
+    pendingLoadRef.current = url;
+    setYtMode('api');
+    let cancelled = false;
+    ensureYouTubeApi().then((ok) => {
+      if (cancelled) return;
+      if (!ok || !wrap) { setYtMode('fallback'); return; }
+      if (cancelled) return;
+      try {
+        const w = window as any;
+        wrap.innerHTML = '';
+        const holder = document.createElement('div');
+        holder.style.width = '640px';
+        holder.style.height = '360px';
+        wrap.appendChild(holder);
+        const ytId = extractYouTubeId(url);
+        const ytList = extractPlaylistId(url);
+        const cfg: any = {
+          width: '640px', height: '360px',
+          playerVars: { autoplay: isPlayingMusicRef.current ? 1 : 0, loop: 1, rel: 0, modestbranding: 1, controls: 0, playsinline: 1 },
+          events: {
+            onReady: (e: any) => {
+              if (cancelled) return;
+              ytPlayerRef.current = e.target;
+              const d = e.target.getDuration?.() || 0;
+              if (d) setMusicDuration(d);
+              // La barra de progreso del reproductor general busca DENTRO del iframe
+              generalYtControl.seekTo = (ratio: number) => {
+                const p = ytPlayerRef.current;
+                const dur = p?.getDuration?.() || 0;
+                if (p && dur > 0) {
+                  try { p.seekTo(ratio * dur, true); } catch { /* noop */ }
+                }
+                setMusicProgressRaw(ratio);
+              };
+              // Si el usuario cambió de canción mientras se cargaba el player, cargar la última
+              const pending = pendingLoadRef.current;
+              if (pending && pending !== url) {
+                pendingLoadRef.current = null;
+                const pid = extractYouTubeId(pending);
+                const plist = extractPlaylistId(pending);
+                try {
+                  if (plist && typeof e.target.loadPlaylist === 'function') e.target.loadPlaylist({ list: plist, listType: 'playlist' });
+                  else if (pid) e.target.loadVideoById(pid);
+                } catch { /* noop */ }
+              } else {
+                pendingLoadRef.current = null;
+              }
+              if (isPlayingMusicRef.current) {
+                try { e.target.playVideo?.(); } catch { /* noop */ }
+              }
+            },
+            onStateChange: (e: any) => {
+              if (cancelled) return;
+              if (e.data === 1) {
+                const d = ytPlayerRef.current?.getDuration?.() || 0;
+                if (d) setMusicDuration(d);
+              }
+              if (e.data === 0) {
+                // ENDED → cola / "después de la actual" / loop — misma lógica del general
+                handleYtEndedRef.current();
+              }
+            },
+          },
+        };
+        if (ytId) cfg.videoId = ytId;
+        if (ytList) {
+          cfg.playerVars.listType = 'playlist';
+          cfg.playerVars.list = ytList;
+        } else if (ytId) {
+          cfg.playerVars.playlist = ytId;
+        }
+        const player = new w.YT.Player(holder, cfg);
+        if (player && player.getIframe) ytPlayerRef.current = player;
+      } catch { if (!cancelled) setYtMode('fallback'); }
+    });
+    return () => {
+      cancelled = true;
+      try { ytPlayerRef.current?.destroy?.(); } catch { /* noop */ }
+      ytPlayerRef.current = null;
+      generalYtControl.seekTo = undefined;
+    };
+  }, [youtubeVideoUrl, setMusicDuration, setMusicProgressRaw]);
+
+  // Play/Pausa del botón del reproductor general → playVideo/pauseVideo del iframe
+  useEffect(() => {
+    const p = ytPlayerRef.current;
+    if (!p || !youtubeVideoUrl) return;
+    try {
+      if (isPlayingMusic) {
+        if (typeof p.playVideo === 'function' && p.getPlayerState?.() !== 1) p.playVideo();
+      } else if (typeof p.pauseVideo === 'function') {
+        p.pauseVideo();
+      }
+    } catch { /* noop */ }
+  }, [isPlayingMusic, youtubeVideoUrl]);
+
+  // Progreso de la barra del reproductor general (polling 400ms como el emergente)
+  useEffect(() => {
+    if (!youtubeVideoUrl || !isPlayingMusic) return;
+    const t = window.setInterval(() => {
+      const p = ytPlayerRef.current;
+      if (!p || typeof p.getCurrentTime !== 'function') return;
+      const cur = p.getCurrentTime() || 0;
+      const d = p.getDuration?.() || 0;
+      if (d > 0) {
+        setMusicProgressRaw(Math.min(1, cur / d));
+        setMusicDuration(d);
+      }
+    }, 400);
+    return () => window.clearInterval(t);
+  }, [youtubeVideoUrl, isPlayingMusic, setMusicProgressRaw, setMusicDuration]);
 
   useEffect(() => {
     if (navigateTo) {
@@ -492,33 +679,11 @@ function AppContent() {
           {activeView === 'curso_detalle' && <Cursos initialCourseId={selectedCourseId || undefined} initialTab={selectedCourseTab as any} onNavigate={(v) => setActiveView(v as ViewId)} />}
           </div>
         )}
-        {youtubeVideoUrl && <div style={{ display: 'none' }}>
-          <Player url={youtubeVideoUrl} playing={isPlayingMusic} volume={musicVolume} controls={false} width={0} height={0}
-            onProgress={(state: any) => { if (musicDuration > 0) setMusicProgress(state.playedSeconds / musicDuration); }}
-            onEnded={() => {
-              if (tracks.length > 0 && currentTrackId) {
-                if (repeatMode === 'one') { 
-                  playTrack(currentTrackId);
-                  setRepeatMode('none');
-                  return; 
-                }
-                let nextId: string | null = null;
-                const q = musicQueue;
-                if (q.length > 0) {
-                  setMusicQueue(q.slice(1));
-                  nextId = q[0];
-                } else if (shuffleMode || repeatMode === 'all') {
-                  const sourcePool = queueSource?.pool ?? tracks.map(t => t.id);
-                  const rest = sourcePool.filter(tid => tid !== currentTrackId);
-                  const refilled = shuffleMode ? [...rest].sort(() => Math.random() - 0.5) : rest;
-                  if (refilled.length > 0) { setMusicQueue(refilled.slice(1)); nextId = refilled[0]; }
-                }
-                if (nextId) playTrack(nextId);
-                else { setIsPlayingMusic(false); }
-              }
-            }}
-          />
-        </div>}
+        {youtubeVideoUrl && <div ref={ytHolderRef} style={{ position: 'fixed', top: 0, left: -10000, width: 640, height: 360, zIndex: -1, opacity: 0.01, pointerEvents: 'none' }} />}
+        {ytFallbackSrc && (
+          <iframe src={ytFallbackSrc} title="YouTube" allow="autoplay; encrypted-media"
+            style={{ position: 'fixed', top: 0, left: -10000, width: 640, height: 360, border: 0, zIndex: -1, opacity: 0.01, pointerEvents: 'none' }} />
+        )}
         <GlobalPlayer sidebarCollapsed={isCollapsed} />
         <NowPlayingView sidebarCollapsed={isCollapsed} activeView={activeView} />
       </main>
@@ -846,7 +1011,7 @@ function AppContent() {
       )}
 
       {/* PiP Video Player */}
-      <VideoPiP url={pipUrl} title={pipTitle} autoplay={pipAutoplay} onPlayingChange={setPipPlaying} onClose={() => setPipUrl(null)} />
+      <VideoPiP url={pipUrl} title={pipTitle} autoplay={pipAutoplay} onPlayingChange={setPipPlaying} onClose={() => setPipUrl(null)} pipAfterQueue={pipAfterQueue} setPipAfterQueue={setPipAfterQueue} onPipPlayNext={(u, t) => setPipUrl(u, t, true)} />
 
       {/* Menú contextual global de imágenes (copiar/descargar) */}
       <ImageContextMenu />
