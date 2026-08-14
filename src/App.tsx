@@ -117,6 +117,9 @@ function AppContent() {
     const existing = ytPlayerRef.current;
     if (existing && typeof existing.loadVideoById === 'function') {
       pendingLoadRef.current = null;
+      // Resetear la barra ya: la duración/progreso anteriores son de la canción vieja
+      setMusicProgressRaw(0);
+      setMusicDuration(0);
       const ytId = extractYouTubeId(url);
       const ytList = extractPlaylistId(url);
       try {
@@ -129,6 +132,8 @@ function AppContent() {
     // Sin player todavía → crearlo (la creación pendiente guarda el URL por si cambia antes del ready)
     pendingLoadRef.current = url;
     setYtMode('api');
+    setMusicProgressRaw(0);
+    setMusicDuration(0);
     let cancelled = false;
     ensureYouTubeApi().then((ok) => {
       if (cancelled) return;
@@ -161,6 +166,18 @@ function AppContent() {
                 }
                 setMusicProgressRaw(ratio);
               };
+              // Play/Pausa INSTANTÁNEOS: el botón del general los llama de forma
+              // síncrona (AppContext) sin esperar el ciclo de render de React
+              generalYtControl.playVideo = () => {
+                const p = ytPlayerRef.current;
+                if (!p) return;
+                try { if (p.getPlayerState?.() !== 1) p.playVideo(); } catch { /* noop */ }
+              };
+              generalYtControl.pauseVideo = () => {
+                const p = ytPlayerRef.current;
+                if (!p) return;
+                try { p.pauseVideo(); } catch { /* noop */ }
+              };
               // Si el usuario cambió de canción mientras se cargaba el player, cargar la última
               const pending = pendingLoadRef.current;
               if (pending && pending !== url) {
@@ -183,6 +200,12 @@ function AppContent() {
               if (e.data === 1) {
                 const d = ytPlayerRef.current?.getDuration?.() || 0;
                 if (d) setMusicDuration(d);
+              }
+              // GUARDIA ANTI-DESYNC: si el usuario quería PAUSADO (pausó durante
+              // buffering/carga, cuando pauseVideo aún se traga el comando) y el
+              // video igualmente arranca (o empieza a buffering), cortar al INSTANTE.
+              if ((e.data === 1 || e.data === 3) && !isPlayingMusicRef.current) {
+                try { e.target.pauseVideo?.(); } catch { /* noop */ }
               }
               if (e.data === 0) {
                 // ENDED → cola / "después de la actual" / loop — misma lógica del general
@@ -223,7 +246,7 @@ function AppContent() {
     } catch { /* noop */ }
   }, [isPlayingMusic, youtubeVideoUrl]);
 
-  // Progreso de la barra del reproductor general (polling 400ms como el emergente)
+  // Progreso de la barra del reproductor general (polling 250ms como el emergente)
   useEffect(() => {
     if (!youtubeVideoUrl || !isPlayingMusic) return;
     const t = window.setInterval(() => {
@@ -235,7 +258,7 @@ function AppContent() {
         setMusicProgressRaw(Math.min(1, cur / d));
         setMusicDuration(d);
       }
-    }, 400);
+    }, 250);
     return () => window.clearInterval(t);
   }, [youtubeVideoUrl, isPlayingMusic, setMusicProgressRaw, setMusicDuration]);
 

@@ -67,6 +67,7 @@ function VideoPiPInner({ url, title, onClose, autoplay = false, onPlayingChange,
 
   const ytPlayerRef = useRef<any>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const wantPlayRef = useRef(autoplay);
   const [playing, setPlaying] = useState(false);
   const [cur, setCur] = useState(0);
   const [dur, setDur] = useState(0);
@@ -217,6 +218,24 @@ function VideoPiPInner({ url, title, onClose, autoplay = false, onPlayingChange,
       return;
     }
     let cancelled = false;
+    wantPlayRef.current = autoplay;
+    // CAMBIO DE CANCIÓN RÁPIDO: si el player ya está listo, REUTILIZARLO
+    // (loadVideoById) en vez de destruirlo y recrearlo (tarda muchísimo)
+    const existing = ytPlayerRef.current;
+    if (existing && typeof existing.loadVideoById === 'function') {
+      setYtMode('api');
+      setTrackTitle(null);
+      setThumbId(null);
+      const ytId2 = extractYouTubeId(url);
+      const ytList2 = extractPlaylistId(url);
+      try {
+        if (ytList2 && typeof existing.loadPlaylist === 'function') existing.loadPlaylist({ list: ytList2, listType: 'playlist' });
+        else if (ytId2) existing.loadVideoById(ytId2);
+        if (wantPlayRef.current) existing.playVideo();
+        else existing.pauseVideo();
+      } catch { /* noop */ }
+      return;
+    }
     ensureYouTubeApi().then((ok) => {
       if (cancelled) return;
       const wrap = ytHolderRef.current;
@@ -251,6 +270,9 @@ function VideoPiPInner({ url, title, onClose, autoplay = false, onPlayingChange,
               if (d) setDur(d);
               if (autoplay) {
                 try { e.target.playVideo?.(); } catch { /* noop */ }
+              } else {
+                // Restaurado/autoplay off: NUNCA arrancar solo
+                try { e.target.pauseVideo?.(); } catch { /* noop */ }
               }
             },
             onStateChange: (e: any) => {
@@ -258,6 +280,11 @@ function VideoPiPInner({ url, title, onClose, autoplay = false, onPlayingChange,
               const playingNow = e.data === 1;
               setPlaying(playingNow);
               onPlayingChange?.(playingNow);
+              // GUARDIA ANTI-DESYNC: si el usuario pausó (o el modo era pausado) pero
+              // el video arranca/bufferea igual, cortar al instante — sin esperar el estado
+              if ((e.data === 1 || e.data === 3) && !wantPlayRef.current) {
+                try { e.target.pauseVideo?.(); } catch { /* noop */ }
+              }
               if (playingNow || e.data === 5) {
                 // Seguir la canción actual de la playlist: título + thumb real
                 try {
@@ -311,9 +338,8 @@ function VideoPiPInner({ url, title, onClose, autoplay = false, onPlayingChange,
     });
     return () => {
       cancelled = true;
-      // destroy() es SEGURO aquí: el holder es imperativo, React no lo elimina
-      try { ytPlayerRef.current?.destroy?.(); } catch { /* noop */ }
-      ytPlayerRef.current = null;
+      // El destroy se maneja en la rama de creación o cuando url es null;
+      // aquí NO se destruye para permitir la reutilización en el cambio de canción
       setPlaying(false);
       setCur(0);
       setDur(0);
@@ -332,13 +358,14 @@ function VideoPiPInner({ url, title, onClose, autoplay = false, onPlayingChange,
       setCur(p.getCurrentTime() || 0);
       const d = p.getDuration?.();
       if (typeof d === 'number' && d > 0) setDur(d);
-    }, 400);
+    }, 250);
     return () => window.clearInterval(t);
   }, [playing, ytMode, url]);
 
   const togglePlay = useCallback(() => {
     const p = ytPlayerRef.current;
     if (p && typeof p.pauseVideo === 'function') {
+      wantPlayRef.current = !playing;
       if (playing) p.pauseVideo();
       else p.playVideo();
       return;

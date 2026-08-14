@@ -1539,6 +1539,18 @@ export default function Planificacion() {
                     </div>
                   </div>
 
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+                    <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Vincular a (opcional)</label>
+                    <PlanSelectDropdown value={planGroupId}
+                      onChange={v => { setPlanGroupId(v); setPlanTopicId(''); }}
+                      options={selGroups.map(g => ({ id: g.id, label: g.name }))}
+                      noneLabel="Sin agrupación" color={courseColor} />
+                    <PlanSelectDropdown value={planTopicId}
+                      onChange={setPlanTopicId}
+                      options={planGroupId ? selTopics.map(t => ({ id: t.id, label: t.title })) : []}
+                      noneLabel={planGroupId ? 'Sin tema' : 'Elige agrupación'} color={courseColor} />
+                  </div>
+
                   
                 </div>
 

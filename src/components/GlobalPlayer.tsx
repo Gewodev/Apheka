@@ -88,6 +88,15 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const proximityRef = useRef(false);
   const currentTrack = useMemo(() => tracks.find(t => t.id === currentTrackId), [tracks, currentTrackId]);
+  const ytCover = useMemo(() => {
+    const t = currentTrack;
+    if (!t || t.coverUrl || t.coverImage) return null;
+    if (t.url && (t.url.includes('youtube.com/') || t.url.includes('youtu.be/'))) {
+      const id = extractYouTubeId(t.url);
+      return id ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : null;
+    }
+    return null;
+  }, [currentTrack]);
   const hasTrack = !!currentTrack;
   const sidebarWidth = sidebarCollapsed ? 64 : 220;
   const hasTracks = tracks.length > 0;
@@ -297,8 +306,8 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                   boxShadow: '0 2px 10px rgba(0,0,0,0.3)',
                   cursor: 'pointer', position: 'relative',
                 }} onClick={() => currentTrackId && setCoverModalTrackId(currentTrackId)}>
-                  {currentTrack?.coverUrl || currentTrack?.coverImage ? (
-                    <img src={currentTrack.coverUrl || currentTrack.coverImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                  {currentTrack?.coverUrl || currentTrack?.coverImage || ytCover ? (
+                    <img src={currentTrack?.coverUrl || currentTrack?.coverImage || ytCover || ''} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                   ) : (
                     <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: `color-mix(in srgb, ${acC} 12%, transparent)` }}>
                       <Disc3 size={20} style={{ color: acC }} />

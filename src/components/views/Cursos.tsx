@@ -3738,11 +3738,10 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                   return (
                                     <button key={d.iso} onClick={() => setPlannerDate(d.iso)}
                                       title={format(new Date(d.iso + 'T12:00:00'), 'EEEE d MMMM', { locale: es })}
-                                      style={{ flex: 1, minWidth: 0, cursor: 'pointer', height: 28, padding: '0 4px', borderRadius: 8, border: isSel && !isTodayDay ? `1px solid ${course.color}` : '1px solid transparent', background: 'transparent', position: 'relative', transition: 'all 180ms ' + EASE, fontFamily: 'inherit', overflow: 'visible' }}
+                                      style={{ flex: 1, minWidth: 0, cursor: 'pointer', height: 28, padding: '0 4px', borderRadius: 8, border: isSel ? `1px solid ${course.color}` : '1px solid transparent', background: 'transparent', transition: 'all 180ms ' + EASE, fontFamily: 'inherit' }}
                                       onMouseEnter={e => { if (!isTodayDay && !isSel) { e.currentTarget.style.background = 'var(--bg-hover)'; } }}
                                       onMouseLeave={e => { if (!isTodayDay && !isSel) { e.currentTarget.style.background = 'transparent'; } }}>
-                                      <span style={{ display: 'block', fontSize: 11.5, fontWeight: isTodayDay ? 700 : (isSel ? 600 : 500), color: isTodayDay ? course.color : (isSel ? 'var(--text-primary)' : 'var(--text-secondary)'), fontFamily: "'Inter Tight', sans-serif", lineHeight: '28px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', letterSpacing: '0.02em', transition: 'color 180ms ' + EASE, textShadow: 'none' }}>{d.name}</span>
-                                      {isTodayDay && <span style={{ position: 'absolute', bottom: 3, left: '50%', transform: 'translateX(-50%)', width: '46%', height: 3, borderRadius: 2, background: course.color, boxShadow: `0 0 8px ${course.color}66` }} />}
+                                      <span style={{ display: 'block', fontSize: 11.5, fontWeight: isTodayDay ? 700 : 500, color: isTodayDay ? course.color : 'var(--text-secondary)', fontFamily: "'Inter Tight', sans-serif", lineHeight: '28px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', letterSpacing: '0.02em', transition: 'color 180ms ' + EASE }}>{d.name}</span>
                                     </button>
                                   );
                                 })}
@@ -3991,20 +3990,25 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                 </div>
                               </div>
 
-                              {/* fila inferior: vínculo (izq) + últimos ingresos a temas (der) */}
+                              {/* fila inferior: vínculo compacto con flecha (izq) + últimos ingresos a temas (der) */}
                               <div style={{ display: 'flex', flexDirection: 'row', gap: 14, alignItems: 'stretch' }}>
-                                <div style={{ flex: 1, minWidth: 0, border: '1px solid var(--border-soft)', borderRadius: 12, padding: '10px 12px', background: 'linear-gradient(160deg, var(--bg-elevated-alpha, var(--bg-elevated)) 0%, transparent 100%)', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                  <div style={{ fontSize: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif" }}>Vinculado a</div>
-                                  <div style={{ height: 6 }} />
-                                  <PlanSelectDropdown value={ds.groupId || ''}
-                                    onChange={v => updatePlannedSession(ds.id, { groupId: v || undefined, topicId: v ? (ds.topicId && parsedTopics.find(t => t.id === ds.topicId)?.groupId === v ? ds.topicId : undefined) : undefined })}
-                                    options={groups.map(g => ({ id: g.id, label: g.name }))}
-                                    noneLabel="Sin agrupación" color={course.color} />
-                                  <div style={{ height: 8 }} />
-                                  <PlanSelectDropdown value={ds.topicId || ''}
-                                    onChange={v => updatePlannedSession(ds.id, { topicId: v || undefined })}
-                                    options={ds.groupId ? parsedTopics.filter(t => t.groupId === ds.groupId).map(t => ({ id: t.id, label: t.title })) : []}
-                                    noneLabel={ds.groupId ? 'Sin tema' : 'Elige agrupación'} color={course.color} />
+                                <div style={{ flex: 1, minWidth: 0, border: '1px solid var(--border-soft)', borderRadius: 12, padding: '12px 14px 14px', background: 'linear-gradient(160deg, var(--bg-elevated-alpha, var(--bg-elevated)) 0%, transparent 100%)', display: 'flex', flexDirection: 'column' }}>
+                                  <div style={{ fontSize: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", lineHeight: 1.6 }}>Vinculado a</div>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                      <PlanSelectDropdown value={ds.groupId || ''}
+                                        onChange={v => updatePlannedSession(ds.id, { groupId: v || undefined, topicId: v ? (ds.topicId && parsedTopics.find(t => t.id === ds.topicId)?.groupId === v ? ds.topicId : undefined) : undefined })}
+                                        options={groups.map(g => ({ id: g.id, label: g.name }))}
+                                        noneLabel="Sin agrupación" color={course.color} />
+                                    </div>
+                                    <span style={{ fontSize: 13, fontWeight: 600, color: course.color, flexShrink: 0, lineHeight: 1, fontFamily: "'Inter Tight', sans-serif" }}>→</span>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                      <PlanSelectDropdown value={ds.topicId || ''}
+                                        onChange={v => updatePlannedSession(ds.id, { topicId: v || undefined })}
+                                        options={ds.groupId ? parsedTopics.filter(t => t.groupId === ds.groupId).map(t => ({ id: t.id, label: t.title })) : []}
+                                        noneLabel={ds.groupId ? 'Sin tema' : 'Elige agrupación'} color={course.color} />
+                                    </div>
+                                  </div>
                                 </div>
 
                                 {recentTopicsList.length > 0 && (
@@ -4948,6 +4952,18 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                             <span style={{ fontSize: 8.5, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.05em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Suave</span>
                             <span style={{ fontSize: 8.5, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.05em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Máxima</span>
                           </div>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+                          <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Vincular a (opcional)</label>
+                          <PlanSelectDropdown value={planGroupId}
+                            onChange={v => { setPlanGroupId(v); setPlanTopicId(''); }}
+                            options={groups.map(g => ({ id: g.id, label: g.name }))}
+                            noneLabel="Sin agrupación" color={course.color} />
+                          <PlanSelectDropdown value={planTopicId}
+                            onChange={setPlanTopicId}
+                            options={planGroupId ? parsedTopics.filter(t => t.groupId === planGroupId).map(t => ({ id: t.id, label: t.title })) : []}
+                            noneLabel={planGroupId ? 'Sin tema' : 'Elige agrupación'} color={course.color} />
                         </div>
 
                         <div style={{ padding: '14px 24px 20px', borderTop: '1px solid var(--border-subtle)', display: 'flex', gap: 10, justifyContent: 'flex-end', flexShrink: 0 }}>

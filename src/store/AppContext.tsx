@@ -2619,6 +2619,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setPlayCounts(prev => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
       loadedTrackIdRef.current = id;
       loadingTrackIdRef.current = null;
+      if (resumeStayPausedRef.current) {
+        resumeStayPausedRef.current = false;
+      } else {
+        // Play síncrono: si el iframe ya está listo, arrancar sin esperar el re-render
+        try { generalYtControl.playVideo?.(); } catch { /* noop */ }
+      }
       return;
     }
     setYoutubeVideoUrl(null);
@@ -2783,7 +2789,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const isYT = track.url?.includes('youtube.com/') || track.url?.includes('youtu.be/');
     if (isYT) {
       if (!youtubeVideoUrl) setYoutubeVideoUrl(track.url!);
-      setIsPlayingMusic(prev => !prev);
+      const togglingTo = !isPlayingMusicRef.current;
+      setIsPlayingMusic(togglingTo);
+      // Play/Pausa SÍNCRONOS sobre el iframe: sin esperar el re-render de React,
+      // la pausa/reanudación es instantánea incluso pulsando varias veces seguidas
+      try {
+        if (togglingTo) generalYtControl.playVideo?.();
+        else generalYtControl.pauseVideo?.();
+      } catch { /* noop */ }
       return;
     }
 

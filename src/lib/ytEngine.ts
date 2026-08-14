@@ -45,7 +45,8 @@ export function extractPlaylistId(raw: string): string | null {
   } catch { return null; }
 }
 
-// Control de seek del reproductor general (lo registra App.tsx; lo consume
-// AppContext.setMusicProgressCb para que la barra de progreso del GENERAL
-// busque dentro del iframe de YouTube en vez del <audio> local).
-export const generalYtControl: { seekTo?: (ratio: number) => void } = {};
+// Control del reproductor general (los registra App.tsx; los consume
+// AppContext.setMusicProgressCb para que la barra busque DENTRO del iframe
+// y toggleMusicPlayback para pausar/reproducir AL INSTANTE, sin esperar el
+// re-render de React — máxima fluidez de pausa y reproducción consecutiva).
+export const generalYtControl: { seekTo?: (ratio: number) => void; playVideo?: () => void; pauseVideo?: () => void } = {};
