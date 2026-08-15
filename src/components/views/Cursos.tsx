@@ -1012,21 +1012,49 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
         return;
       }
     }
-    const text = e.clipboardData.getData('text/plain');
     const html = e.clipboardData.getData('text/html');
     if (html) {
-      const cleaned = html.replace(/<style[^>]*>.*?<\/style>/gi, '')
+      const temp = document.createElement('div');
+      temp.innerHTML = html;
+      const all = temp.querySelectorAll('*');
+      for (const el of all) {
+        const st = (el as HTMLElement).style;
+        st.removeProperty('background-color'); st.removeProperty('background');
+        st.removeProperty('color'); st.removeProperty('font-family'); st.removeProperty('font-size');
+        st.removeProperty('font-weight'); st.removeProperty('font-style'); st.removeProperty('line-height');
+        st.removeProperty('letter-spacing'); st.removeProperty('text-align'); st.removeProperty('text-decoration');
+        st.removeProperty('text-transform'); st.removeProperty('text-indent'); st.removeProperty('margin');
+        st.removeProperty('padding'); st.removeProperty('border'); st.removeProperty('border-color');
+        st.removeProperty('border-style'); st.removeProperty('border-width'); st.removeProperty('box-shadow');
+        st.removeProperty('width'); st.removeProperty('height'); st.removeProperty('max-width');
+        st.removeProperty('max-height'); st.removeProperty('min-width'); st.removeProperty('min-height');
+        st.removeProperty('position'); st.removeProperty('top'); st.removeProperty('left'); st.removeProperty('right');
+        st.removeProperty('bottom'); st.removeProperty('float'); st.removeProperty('clear');
+        st.removeProperty('display'); st.removeProperty('vertical-align'); st.removeProperty('white-space');
+        st.removeProperty('word-spacing'); st.removeProperty('opacity');
+        el.removeAttribute('bgcolor');
+        el.removeAttribute('face');
+        el.removeAttribute('class');
+        el.removeAttribute('id');
+        el.removeAttribute('style');
+      }
+      const cleaned = temp.innerHTML
         .replace(/<meta[^>]*>/gi, '')
+        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
         .replace(/<link[^>]*>/gi, '')
-        .replace(/class="[^"]*"/gi, '')
-        .replace(/id="[^"]*"/gi, '')
-        .replace(/background(?:-color)?:\s*[^;"]+;?/gi, '')
-        .replace(/color:\s*[^;"]+;?/gi, '')
-        .replace(/font-family:\s*[^;"]+;?/gi, '')
-        .replace(/font-size:\s*[^;"]+;?/gi, '');
+        .replace(/<!--[\s\S]*?-->/g, '')
+        .replace(/<o:p[^>]*>[\s\S]*?<\/o:p>/gi, '')
+        .replace(/<xml[^>]*>[\s\S]*?<\/xml>/gi, '')
+        .replace(/<head[^>]*>[\s\S]*?<\/head>/gi, '')
+        .replace(/<title[^>]*>[\s\S]*?<\/title>/gi, '')
+        .replace(/<span[^>]*>/gi, '<span>')
+        .replace(/<div([^>]*)>/gi, '<p$1>')
+        .replace(/<\/div>/gi, '</p>');
       document.execCommand('insertHTML', false, cleaned);
     } else {
-      document.execCommand('insertHTML', false, text);
+      const text = e.clipboardData.getData('text/plain');
+      const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\r\n/g, '\n');
+      document.execCommand('insertHTML', false, escaped.split('\n').map(l => l.trim() === '' ? '<p><br></p>' : `<p>${l}</p>`).join(''));
     }
     markDirty();
     scheduleTrack();
@@ -2657,7 +2685,10 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     updateCourse(course.id, { studyTopics: reordered });
   }, [course?.id, course?.studyTopics, selectedGroupId, updateCourse]);
 
+  const notesDragRef = useRef(false);
+
   const handleNoteDragEnd = (event: DragEndEvent) => {
+    setTimeout(() => { notesDragRef.current = false; }, 80);
     if (notesSearch) return;
     const { active, over } = event;
     if (active.id === over?.id) return;
@@ -2672,6 +2703,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   };
 
   const handleOverviewNoteDragEnd = (event: DragEndEvent) => {
+    setTimeout(() => { notesDragRef.current = false; }, 80);
     const { active, over } = event;
     if (active.id === over?.id) return;
     const sorted = [...courseNotes].sort((a, b) => {
@@ -2705,6 +2737,15 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     if (!task) return;
     const nextStatus = task.status === 'inicio' ? 'progreso' as const : task.status === 'progreso' ? 'completado' as const : 'inicio' as const;
     updateTask(taskId, { status: nextStatus, completedAt: nextStatus === 'completado' ? new Date().toISOString() : undefined });
+  };
+
+  const handleBackTaskStatus = (taskId: string) => {
+    const task = courseTasks.find(t => t.id === taskId);
+    if (!task) return;
+    const backStatus = task.status === 'completado' ? 'progreso' as const : task.status === 'progreso' ? 'inicio' as const : null;
+    if (!backStatus) return;
+    updateTask(taskId, { status: backStatus, completedAt: undefined });
+    toast.success(backStatus === 'progreso' ? 'Estado retrocedido a Progreso' : 'Estado retrocedido a Inicio');
   };
 
   const handleSaveTaskTitle = () => {
@@ -3211,7 +3252,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                         })
                       : pendingTasks;
                     return tasksToShow.length > 0 ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      <div className="course-tasks-scroll" style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 232, overflowY: 'auto', paddingRight: 4 }}>
                         {tasksToShow.map(task => {
                           const descPreview = (task.notes || '').replace(/<[^>]+>/g, '').trim().slice(0, 45);
                           let dueDisplay = '';
@@ -3227,42 +3268,54 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                             isOverdue = Math.ceil((due.getTime() - today.getTime()) / (1000*60*60*24)) < 0;
                           }
                           const isDone = task.status === 'completado';
+                          const isProgress = task.status === 'progreso';
+                          const prioColors: Record<string, string> = { high: '#EF4444', medium: '#F59E0B', low: '#10B981' };
+                          const prioLevel = task.priority === 'high' ? 3 : task.priority === 'medium' ? 2 : task.priority === 'low' ? 1 : 0;
+                          const pCol = prioLevel > 0 ? (prioColors[task.priority] || '#EF4444') : '';
+                          const pct = prioLevel === 3 ? '100%' : prioLevel === 2 ? '66.67%' : prioLevel === 1 ? '33.33%' : '0%';
                           return (
-                            <div key={task.id} className={isDone ? '' : 'item-card'} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '18px 24px', borderRadius: 12, border: '1px solid var(--border-subtle)', background: isDone ? 'var(--bg-surface-alpha, var(--bg-surface))' : 'var(--bg-elevated-alpha, var(--bg-elevated))', transition: 'all 200ms ' + EASE, opacity: isDone ? 0.7 : 1 }}
-                              onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}30`; }}
-                              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; }}>
+                            <div key={task.id} className={isDone ? '' : 'item-card'} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated-alpha, var(--bg-elevated))', overflow: 'hidden', flexShrink: 0, transition: 'border-color 200ms ' + EASE, opacity: isDone ? 0.65 : 1, cursor: isDone ? 'default' : 'context-menu' }}
+                              onMouseEnter={e => { if (!isDone) e.currentTarget.style.borderColor = `${course.color}45`; }}
+                              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; }}
+                              onContextMenu={e => { e.preventDefault(); handleBackTaskStatus(task.id); }}>
+                              {prioLevel > 0 && (
+                                <>
+                                  <div style={{ position: 'absolute', top: 0, bottom: 0, right: 16, display: 'flex', alignItems: 'center', zIndex: 0, pointerEvents: 'none' }}>
+                                    <span style={{ fontSize: 34, fontWeight: 800, fontStyle: 'normal', letterSpacing: '0.24em', color: pCol, opacity: 0.12, fontFamily: "'Inter Tight', sans-serif", textTransform: 'uppercase', userSelect: 'none' }}>{prioLevel === 3 ? 'A L T O' : prioLevel === 2 ? 'M E D I O' : 'B A J O'}</span>
+                                  </div>
+                                  {[0, 1, 2].map(seg => (
+                                    <div key={seg} style={{ position: 'absolute', left: `${seg * 33.3333}%`, top: 0, bottom: 0, width: '33.3333%', background: seg < prioLevel ? `linear-gradient(180deg, ${pCol}1f 0%, ${pCol}0a 100%)` : 'transparent', zIndex: 1, pointerEvents: 'none' }} />
+                                  ))}
+                                  <div style={{ position: 'absolute', left: '33.3333%', top: 0, bottom: 0, borderLeft: '1px dashed var(--border-default)', zIndex: 1, pointerEvents: 'none' }} />
+                                  <div style={{ position: 'absolute', left: '66.6666%', top: 0, bottom: 0, borderLeft: '1px dashed var(--border-default)', zIndex: 1, pointerEvents: 'none' }} />
+                                  <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 1.5, background: `linear-gradient(90deg, ${pCol} 0%, ${pCol} ${pct}, transparent ${pct})`, zIndex: 1, pointerEvents: 'none' }} />
+                                </>
+                              )}
                               <div onClick={() => handleToggleTask(task.id)}
-                                style={{ width: 26, height: 26, borderRadius: 7, flexShrink: 0, cursor: 'pointer',
-                                  border: `1.5px solid ${isDone ? '#10B981' : task.status === 'progreso' ? '#3B82F6' : `${course.color}40`}`,
-                                  background: isDone ? '#10B981' : task.status === 'progreso' ? '#3B82F6' : `${course.color}08`,
+                                style={{ position: 'relative', zIndex: 2, width: 32, height: 32, borderRadius: 9, flexShrink: 0, cursor: 'pointer',
+                                  border: `1.5px solid ${isDone ? course.color : isProgress ? `${course.color}80` : `${course.color}4d`}`,
+                                  background: isDone ? course.color : isProgress ? `linear-gradient(180deg, ${course.color}75 0%, ${course.color}2e 100%)` : 'transparent',
                                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                  transition: 'all 200ms ' + EASE,
-                                  boxShadow: isDone ? '0 0 0 3px #10B98118' : task.status === 'progreso' ? '0 0 0 3px #3B82F618' : 'none' }}
-                                onMouseEnter={e => { if (!isDone && task.status === 'inicio') { e.currentTarget.style.background = `${course.color}15`; e.currentTarget.style.borderColor = `${course.color}60`; e.currentTarget.style.transform = 'scale(1.08)'; } }}
-                                onMouseLeave={e => { if (!isDone && task.status === 'inicio') { e.currentTarget.style.background = `${course.color}08`; e.currentTarget.style.borderColor = `${course.color}40`; e.currentTarget.style.transform = 'scale(1)'; } }}>
-                                {isDone ? <Check size={14} strokeWidth={2.5} color="#fff" /> : task.status === 'progreso' && <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#fff' }} />}
-                                {!isDone && task.status === 'inicio' && <div style={{ width: 7, height: 7, borderRadius: '50%', background: course.color, opacity: 0.4 }} />}
+                                  transition: 'all 200ms ' + EASE }}
+                                onMouseEnter={e => { if (!isDone && !isProgress) { e.currentTarget.style.background = `${course.color}12`; e.currentTarget.style.borderColor = `${course.color}88`; } }}
+                                onMouseLeave={e => { if (!isDone && !isProgress) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = `${course.color}4d`; } }}>
+                                {isDone && <Check size={17} strokeWidth={2.5} color="#fff" />}
                               </div>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: 14, fontWeight: 500, color: isDone ? 'var(--text-tertiary)' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: "'Inter', sans-serif", textDecoration: isDone ? 'line-through' : 'none' }}>{task.title}</div>
-                                {descPreview && <div style={{ fontSize: 10, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 1 }}>{descPreview}</div>}
+                              <div style={{ position: 'relative', zIndex: 2, flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 15.5, fontWeight: 600, color: isDone ? 'var(--text-tertiary)' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: "'Inter Tight', sans-serif", textDecoration: isDone ? 'line-through' : 'none', letterSpacing: '-0.01em' }}>{task.title}</div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                                  <LI.Calendar size={11} style={{ opacity: 0.55, flexShrink: 0, color: isOverdue && dueDisplay ? '#EF4444' : 'var(--text-tertiary)' }} />
+                                  <span style={{ fontSize: 11.5, fontWeight: 500, fontFamily: "'JetBrains Mono', monospace", color: !dueDisplay ? 'var(--text-tertiary)' : isDone ? 'var(--text-tertiary)' : isOverdue ? '#EF4444' : 'var(--text-secondary)', letterSpacing: '0.02em' }}>
+                                    {dueDisplay ? `Entrega: ${dueDisplay}` : 'Sin fecha de entrega'}
+                                  </span>
+                                  {descPreview && <span style={{ fontSize: 10.5, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginLeft: 6, flex: 1, minWidth: 0 }}>{descPreview}</span>}
+                                </div>
                               </div>
-                              {task.priority !== 'none' && task.priority && (
-                                <span style={{ fontSize: 8, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: task.priority === 'high' ? '#EF444420' : task.priority === 'medium' ? '#F59E0B20' : '#10B98120', color: task.priority === 'high' ? '#EF4444' : task.priority === 'medium' ? '#F59E0B' : '#10B981', textTransform: 'uppercase', letterSpacing: '0.03em', fontFamily: "'Inter Tight', sans-serif", whiteSpace: 'nowrap', flexShrink: 0 }}>
-                                  {task.priority === 'high' ? 'Alta' : task.priority === 'medium' ? 'Media' : 'Baja'}
-                                </span>
-                              )}
-                              {dueDisplay && (
-                                <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 500, color: isDone ? 'var(--text-tertiary)' : isOverdue ? '#EF4444' : 'var(--text-secondary)', fontFamily: "'Inter Tight', sans-serif", whiteSpace: 'nowrap', flexShrink: 0 }}>
-                                  <LI.Calendar size={12} style={{ opacity: 0.5, flexShrink: 0 }} />
-                                  {dueDisplay}
-                                </span>
-                              )}
                               <button onClick={(e) => { e.stopPropagation(); setFocusedTaskId(task.id); setNavigateTo('tareas'); }} title="Ir a Tareas"
-                                style={{ width: 26, height: 26, borderRadius: 6, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, opacity: 0, transition: 'all 150ms ' + EASE }}
+                                style={{ position: 'relative', zIndex: 2, width: 28, height: 28, borderRadius: 7, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, opacity: 0, transition: 'all 150ms ' + EASE }}
                                 onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = `${course.color}10`; e.currentTarget.style.color = course.color; }}
                                 onMouseLeave={e => { e.currentTarget.style.opacity = '0'; e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
-                                <ArrowUpRight size={13} />
+                                <ArrowUpRight size={14} />
                               </button>
                             </div>
                           );
@@ -3306,7 +3359,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
 
                   {/* Note Blocks — always collapsed */}
                   {filteredCourseNotes.length > 0 ? (
-                    <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleOverviewNoteDragEnd}>
+                    <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={() => { notesDragRef.current = true; }} onDragEnd={handleOverviewNoteDragEnd}>
                       <SortableContext items={sortedIds} strategy={rectSortingStrategy}>
                         <div ref={overviewNoteContainerRef} style={{ display: 'flex', flexDirection: 'column', gap: 14, position: 'relative', zIndex: 2, padding: '0 12px' }}>
                           {expandedFirst.map(n => {
@@ -3327,7 +3380,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                     opacity: isDragging ? 0.4 : 1,
                                   }}
                                     {...(!isExpanded ? { ...attributes, ...listeners } : {})}
-                                    onClick={() => { if (!isExpanded) { setSelectedOverviewNoteId(n.id); setOverviewNoteEditMode(false); } }}
+                                    onClick={() => { if (!isExpanded && !notesDragRef.current) { setSelectedOverviewNoteId(n.id); setOverviewNoteEditMode(false); } }}
                                     onMouseEnter={e => { if (!isExpanded) { e.currentTarget.style.background = isHighlighted ? 'rgba(212,160,23,0.09)' : isCourseNote ? `linear-gradient(135deg, var(--bg-surface), ${course.color}06)` : 'var(--bg-surface)'; } }}
                                     onMouseLeave={e => { if (!isExpanded) { e.currentTarget.style.background = isHighlighted ? `linear-gradient(135deg, rgba(212,160,23,0.06), rgba(212,160,23,0.015))` : isCourseNote ? `linear-gradient(135deg, var(--bg-elevated), ${course.color}03)` : 'var(--bg-elevated)'; } }}
                                   >
@@ -5725,7 +5778,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
               </div>
             </div>
             {(notesSearch ? filteredNotes : sortedNotes).length > 0 ? (
-              <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleNoteDragEnd}>
+              <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={() => { notesDragRef.current = true; }} onDragEnd={handleNoteDragEnd}>
                 <SortableContext items={(notesSearch ? filteredNotes : sortedNotes).map(n => n.id)} strategy={rectSortingStrategy}>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14 }}>
                     {(notesSearch ? filteredNotes : sortedNotes).map(n => {
@@ -5745,22 +5798,12 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                           {({ attributes, listeners, isDragging }) => (
                             <div style={{
                               borderRadius: 16, border: `1px solid ${isEditing ? `${course.color}40` : 'var(--border-subtle)'}`, background: 'var(--bg-elevated-alpha, var(--bg-elevated))', transition: 'all 200ms ' + EASE, cursor: !isEditing && !editingNoteId ? 'pointer' : 'default', boxShadow: isEditing ? `0 4px 24px ${course.color}14` : 'none', minHeight: isEditing ? 'auto' : 140,
-                              position: 'relative', opacity: isDragging ? 0.4 : 1,
+                              position: 'relative', opacity: isDragging ? 0.4 : 1, touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none',
                             }}
-                              onClick={() => { if (!isEditing && !editingNoteId) handleStartEdit(); }}
+                              {...(!isEditing ? { ...attributes, ...listeners } : {})}
+                              onClick={() => { if (!isEditing && !editingNoteId && !notesDragRef.current) handleStartEdit(); }}
                               onMouseEnter={e => { if (!isEditing && !editingNoteId) { e.currentTarget.style.borderColor = `${course.color}28`; e.currentTarget.style.background = `${course.color}03`; } }}
                               onMouseLeave={e => { if (!isEditing && !editingNoteId) { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = 'var(--bg-elevated-alpha, var(--bg-elevated))'; } }}>
-                              {/* Drag handle */}
-                              <div {...attributes} {...listeners} style={{
-                                position: 'absolute', top: 6, right: 6, width: 22, height: 22,
-                                borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                color: 'var(--text-muted)', cursor: isDragging ? 'grabbing' : 'default', opacity: 0,
-                                transition: 'opacity 150ms', zIndex: 5,
-                              }}
-                                onMouseEnter={e => e.currentTarget.style.opacity = '0.6'}
-                                onMouseLeave={e => e.currentTarget.style.opacity = '0'}>
-                                <GripVertical size={11} />
-                              </div>
                               {/* ── NOT EDITING ── */}
                               {!isEditing ? (
                                 <div style={{ padding: '28px' }}>

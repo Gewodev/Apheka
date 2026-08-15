@@ -34,7 +34,7 @@ interface AppContentProps {
 }
 
 function AppContent() {
-  const { settings, courses, addCourse, navigateTo, setNavigateTo, importState, updateSettings, toastMessage, deleteOldCompletedTasks, youtubeVideoUrl, isPlayingMusic, musicVolume, musicProgress, musicDuration, setMusicDuration, setMusicProgressRaw, setIsPlayingMusic, playTrack, musicQueue, setMusicQueue, shuffleMode, repeatMode, tracks, currentTrackId, setRepeatMode, coverModalTrackId, showRestPrompt, handlePomodoroBannerClick, queueSource, pipUrl, pipTitle, pipAutoplay, setPipUrl, pipPlaying, setPipPlaying, pipAfterQueue, setPipAfterQueue, courseDeepLink, setCourseDeepLink } = useApp();
+  const { settings, courses, addCourse, navigateTo, setNavigateTo, importState, updateSettings, toastMessage, deleteOldCompletedTasks, youtubeVideoUrl, setYoutubeVideoUrl, isPlayingMusic, musicVolume, musicProgress, musicDuration, setMusicDuration, setMusicProgressRaw, setIsPlayingMusic, playTrack, musicQueue, setMusicQueue, shuffleMode, repeatMode, tracks, currentTrackId, setRepeatMode, coverModalTrackId, showRestPrompt, handlePomodoroBannerClick, queueSource, pipUrl, pipTitle, pipAutoplay, setPipUrl, pipPlaying, setPipPlaying, pipAfterQueue, setPipAfterQueue, courseDeepLink, setCourseDeepLink } = useApp();
   const [activeView, setActiveView] = useState<ViewId>(() => {
     try {
       const saved = localStorage.getItem('owa_active_view_v1');
@@ -82,7 +82,12 @@ function AppContent() {
     // un track local. Bucle de una canción la recarga; la cola avanza a la
     // siguiente; aleatorio o bucle de todo rellenan desde el pool del contexto.
     if (youtubeVideoUrl) {
-      if (repeatMode === 'one') { setYoutubeVideoUrl(youtubeVideoUrl); return; }
+      if (repeatMode === 'one') {
+        const u = youtubeVideoUrl;
+        setYoutubeVideoUrl(null);
+        setTimeout(() => setYoutubeVideoUrl(u), 30);
+        return;
+      }
       const q = musicQueue;
       if (q.length > 0) {
         setMusicQueue(q.slice(1));

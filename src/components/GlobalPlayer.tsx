@@ -381,7 +381,12 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                   </button>
                   <button onClick={() => {
                     // Canción online activa: es el inicio de la sesión, "anterior" la reinicia
-                    if (youtubeVideoUrl) { setYoutubeVideoUrl(youtubeVideoUrl); return; }
+                    if (youtubeVideoUrl) {
+                      const u = youtubeVideoUrl;
+                      setYoutubeVideoUrl(null);
+                      setTimeout(() => setYoutubeVideoUrl(u), 30);
+                      return;
+                    }
                     const pool = queueSource?.pool ?? tracks.map(t => t.id);
                     const idx = pool.indexOf(currentTrackId);
                     if (idx > 0) playTrack(pool[idx - 1]);
@@ -421,7 +426,9 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                       } else if (pool.length > 0) {
                         playTrack(pool[0]);
                       } else if (repeatMode === 'one') {
-                        setYoutubeVideoUrl(youtubeVideoUrl);
+                        const u = youtubeVideoUrl;
+                        setYoutubeVideoUrl(null);
+                        setTimeout(() => setYoutubeVideoUrl(u), 30);
                       }
                       return;
                     }

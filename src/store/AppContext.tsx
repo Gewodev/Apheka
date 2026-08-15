@@ -559,6 +559,7 @@ interface AppContextType extends AppState {
   currentTrackId: string | null;
   coverModalTrackId: string | null;
   youtubeVideoUrl: string | null;
+  setYoutubeVideoUrl: (url: string | null) => void;
   isPlayingMusic: boolean;
   musicVolume: number;
   musicProgress: number;
@@ -3785,7 +3786,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     settings, sessionTime, sessionType, weeklyStudyTime, dailyStudyTime, pomodoroSessions,
     activeTaskId, timerLocked, isTimerActive, roundsCompleted, showCompletion,
     showRestPrompt, setShowRestPrompt, handlePomodoroBannerClick,
-    currentTrackId, coverModalTrackId, youtubeVideoUrl, isPlayingMusic, isAudioLoading, musicVolume, musicProgress, musicDuration, setMusicDuration, musicListeningTime, dailyMusicTime, weeklyMusicTime, monthlyMusicTime, shuffleMode, repeatMode,
+    currentTrackId, coverModalTrackId, youtubeVideoUrl, setYoutubeVideoUrl, isPlayingMusic, isAudioLoading, musicVolume, musicProgress, musicDuration, setMusicDuration, musicListeningTime, dailyMusicTime, weeklyMusicTime, monthlyMusicTime, shuffleMode, repeatMode,
     pipUrl, pipTitle, pipAutoplay, pipPlaying, setPipPlaying, setPipUrl,
     pipAfterQueue, setPipAfterQueue, queuePipAfter,
     trackHistory, playCounts, musicQueue, queueSource, downloadQueue, artists,

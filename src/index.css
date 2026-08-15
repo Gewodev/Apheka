@@ -3008,3 +3008,10 @@ h6,
   color: var(--text-muted);
   font-family: 'Inter', sans-serif;
 }
+.course-tasks-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-default) transparent;
+}
+.course-tasks-scroll::-webkit-scrollbar { width: 6px; }
+.course-tasks-scroll::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: 3px; }
+.course-tasks-scroll::-webkit-scrollbar-track { background: transparent; }

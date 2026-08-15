@@ -40,7 +40,7 @@ const SEP_AFTER: ToolbarItem[] = ['strikethrough', 'orderedList'];
 export function FormatToolbar({ onFormat, color, toolbarItems, activeFormats }: FormatToolbarProps) {
   const items = toolbarItems || ALL;
   const hoverBg = color ? `${color}18` : 'var(--bg-hover)';
-  const activeBg = color ? `${color}28` : 'var(--bg-hover)';
+  const activeBg = color ? `${color}30` : 'var(--bg-hover)';
   const activeColor = color || 'var(--accent)';
   return (
     <div onMouseDown={e => { const t = e.target as HTMLElement; if (e.button === 0 && t.tagName !== 'INPUT') e.preventDefault(); }} style={{
@@ -60,8 +60,10 @@ export function FormatToolbar({ onFormat, color, toolbarItems, activeFormats }: 
               onClick={() => onFormat(cfg.cmd, cfg.value)}
               style={{
                 ...btnStyle,
+                border: isActive ? `1px solid ${activeColor}70` : '1px solid transparent',
                 background: isActive ? activeBg : 'transparent',
                 color: isActive ? activeColor : 'var(--text-secondary)',
+                boxShadow: isActive ? `0 0 10px ${activeColor}33` : 'none',
               }}
               onMouseEnter={e => { e.currentTarget.style.background = isActive ? activeBg : hoverBg; }}
               onMouseLeave={e => { e.currentTarget.style.background = isActive ? activeBg : 'transparent'; }}
