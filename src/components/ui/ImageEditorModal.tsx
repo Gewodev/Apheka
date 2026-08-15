@@ -71,13 +71,6 @@ export default function ImageEditorModal({ src, title = 'Editar imagen', onConfi
     return () => el.removeEventListener('wheel', onWheel);
   }, []);
 
-  const changeAspect = (r: number) => {
-    setAspect(r);
-    setZoom(1);
-    setPanX(0);
-    setPanY(0);
-  };
-
   const handleApply = () => {
     if (!imgDims || busy) return;
     setBusy(true);
@@ -163,21 +156,6 @@ export default function ImageEditorModal({ src, title = 'Editar imagen', onConfi
           <button onClick={() => setZoom(z => clampZoom(z + 0.25))} title="Acercar" style={iconBtn}><ZoomIn size={15} /></button>
           <button onClick={() => { setZoom(1); setPanX(0); setPanY(0); }} title="Ajustar al encuadre" style={iconBtn}><Maximize2 size={15} /></button>
           <span style={{ fontSize: 11, fontFamily: "'JetBrains Mono', monospace", color: 'var(--text-tertiary)', minWidth: 42, textAlign: 'center' }}>{Math.round(zoom * 100)}%</span>
-        </div>
-
-        {/* Proporción */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 12, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginRight: 4 }}>Proporción</span>
-          {ASPECTS.map(a => (
-            <button key={a.label} onClick={() => changeAspect(a.ratio)}
-              style={{
-                height: 30, padding: '0 13px', borderRadius: 8, cursor: 'pointer',
-                border: aspect === a.ratio ? '1px solid var(--accent)' : '1px solid var(--border-subtle)',
-                background: aspect === a.ratio ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : 'var(--bg-deep)',
-                color: aspect === a.ratio ? 'var(--accent)' : 'var(--text-secondary)',
-                fontSize: 10.5, fontWeight: 600, fontFamily: "'Inter Tight', sans-serif", transition: 'all 150ms',
-              }}>{a.label}</button>
-          ))}
         </div>
 
         {/* Footer */}

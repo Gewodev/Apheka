@@ -799,7 +799,7 @@ export default function Planificacion() {
                   const tod = isToday(d);
                   return (
                     <div key={i}
-                      onClick={() => { const dIso = format(d, 'yyyy-MM-dd'); const dEvs = getEventsForDate(dIso); const dLinkedIds = new Set(dEvs.map(ev => (ev as PlanEvent).taskId).filter(Boolean)); setSelectedItem({ type: 'day', date: d, events: dEvs, tasks: tasks.filter(t => { if (!t.dueDate || t.status === 'completado') return false; if (dLinkedIds.has(t.id)) return false; return (t.dueDate || '').slice(0, 10) === dIso; }) }); }}
+                      onClick={() => { const dIso = format(d, 'yyyy-MM-dd'); const dEvs = getEventsForDate(dIso); const dLinkedIds = new Set(dEvs.map(ev => (ev as PlanEvent).taskId).filter(Boolean)); setSelectedItem({ type: 'day', date: d, events: dEvs, tasks: tasks.filter(t => { if (!t.dueDate) return false; if (dLinkedIds.has(t.id)) return false; return (t.dueDate || '').slice(0, 10) === dIso; }) }); }}
                       style={{ padding:'12px 0', textAlign:'center', cursor:'pointer', borderLeft: i > 0 ? '1px solid var(--border-soft)' : 'none', background:tod?'rgba(225,29,72,0.05)':'transparent', position:'relative', transition:'background 200ms' }}
                       onMouseEnter={e=>!tod && (e.currentTarget.style.outline='1px solid var(--border-strong)')}
                       onMouseLeave={e=>!tod && (e.currentTarget.style.outline='none')}
@@ -1238,7 +1238,7 @@ export default function Planificacion() {
                       const iso=format(day,'yyyy-MM-dd');
                       const dayEvs=[...getAllDayEventsForDate(iso), ...getTimedEventsForDate(iso)];
                       const linkedTaskIds = new Set(dayEvs.map(ev => (ev as PlanEvent).taskId).filter(Boolean));
-                      const dayTasks=tasks.filter(t=>{if(!t.dueDate||t.status==='completado')return false;if(linkedTaskIds.has(t.id))return false;return (t.dueDate||'').slice(0,10)===iso});
+                      const dayTasks=tasks.filter(t=>{if(!t.dueDate)return false;if(linkedTaskIds.has(t.id))return false;return (t.dueDate||'').slice(0,10)===iso});
                       const opacity = isOld(iso) && !tod ? 0.35 : (inc ? 1 : 0.25);
                       return (
                         <div key={di}
@@ -1253,7 +1253,7 @@ export default function Planificacion() {
                               const evTask = (ev as PlanEvent).taskId ? tasks.find(t => t.id === (ev as PlanEvent).taskId) : null;
                               return <div key={ei} style={{ fontSize:10,padding:'4px 8px',borderRadius:6,background:`${ev.color}15`,borderLeft:`2px solid ${ev.color}`,color:ev.color,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',fontWeight:600 }}>{ev.title}{evTask ? <span style={{opacity:0.55,fontWeight:500}}> + {evTask.title}</span> : ''}</div>;
                             })}
-                            {dayTasks.slice(0,3).map((t,ti)=><div key={ti} style={{ fontSize:10,padding:'4px 8px',borderRadius:6,background:`${t.courseColor||'var(--text-muted)'}15`,borderLeft:`2px dashed ${t.courseColor||'var(--text-muted)'}`,color:t.courseColor||'var(--text-secondary)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',fontWeight:600 }}>Ent: {t.title}</div>)}
+                            {dayTasks.slice(0,3).map((t,ti)=><div key={ti} style={{ fontSize:10,padding:'4px 8px',borderRadius:6,background:`${t.courseColor||'var(--text-muted)'}15`,borderLeft:`2px dashed ${t.courseColor||'var(--text-muted)'}`,color:t.courseColor||'var(--text-secondary)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',fontWeight:600,opacity:t.status==='completado'?0.5:1,textDecoration:t.status==='completado'?'line-through':'none' }}>{t.status==='completado'?'✓ ':''}{t.title}</div>)}
                             {(dayEvs.length+dayTasks.length)>6&&<div style={{ fontSize:10,color:'var(--text-muted)',fontWeight:600, marginTop: 4 }}>+{dayEvs.length+dayTasks.length-6} más</div>}
                           </div>
                         </div>
@@ -1312,7 +1312,7 @@ export default function Planificacion() {
                             const iso = format(day, 'yyyy-MM-dd');
                             const dayEvs2 = getEventsForDate(iso);
                             const dayLinkedIds2 = new Set(dayEvs2.map(ev => (ev as PlanEvent).taskId).filter(Boolean));
-                            const dayTasks2 = tasks.filter(t => { if(!t.dueDate || t.status === 'completado') return false; if(dayLinkedIds2.has(t.id)) return false; return (t.dueDate||'').slice(0,10)===iso });
+                            const dayTasks2 = tasks.filter(t => { if(!t.dueDate) return false; if(dayLinkedIds2.has(t.id)) return false; return (t.dueDate||'').slice(0,10)===iso });
                             return (
                               <div key={di}
                                 onClick={(e) => { e.stopPropagation(); if (inc) setSelectedItem({ type: 'day', date: day, events: dayEvs2, tasks: dayTasks2 }); }}
