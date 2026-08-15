@@ -826,11 +826,23 @@ export const AI_TOOL_DEFINITIONS: AIToolDefinition[] = [
     type: 'function',
     function: {
       name: 'webSearch',
-      description: 'Busca en TODO internet (DuckDuckGo, Bing, Wikipedia y más) y devuelve un listado largo de resultados numerados (título + enlace + fragmento), como un buscador real, para responder con datos actuales de cualquier tema, noticias, tutoriales, etc.',
+      description: 'Busca en TODO internet con investigación profunda en vivo (DuckDuckGo, Bing, Wikipedia y extracción de contenido de artículos) y devuelve resultados detallados y páginas analizadas para responder con datos actuales, noticias, tutoriales y fuentes oficiales.',
       parameters: {
         type: 'object',
         properties: { query: { type: 'string', description: 'Concepto o pregunta a buscar' } },
         required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'readWebPage',
+      description: 'Lee y extrae el texto completo y limpio de cualquier página web o artículo a partir de su URL. Ideal para profundizar en fuentes, noticias o enlaces.',
+      parameters: {
+        type: 'object',
+        properties: { url: { type: 'string', description: 'URL de la página web a leer' } },
+        required: ['url'],
       },
     },
   },

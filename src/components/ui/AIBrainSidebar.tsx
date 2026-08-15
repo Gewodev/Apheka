@@ -4,18 +4,280 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, Send, Paperclip, Mic, Square, Link2, FileText, Loader2, Brain,
   RotateCcw, GripVertical, ChevronDown, ChevronRight, Check,
-  Copy, SquareX, Search, MessageSquareText, Undo2
+  Copy, SquareX, Search, MessageSquareText, Undo2,
+  Globe, CheckCircle2, XCircle, ExternalLink, Sparkles, Music,
+  CheckSquare, Clock, Calendar, BookOpen
 } from 'lucide-react';
 import {
   BRAIN_DROP_MIME, readBrainAnchor, subscribeBrainDrag,
   type BrainAnchor, type BrainAnchorKind,
 } from '../../lib/brainDrop';
 import { useApp } from '../../store/AppContext';
-import { streamChat, DEFAULT_MODEL, type AIMessage, type AIContentPart, type AIToolCall } from '../../lib/ai/aiProvider';
+import { streamChat, type AIMessage, type AIContentPart, type AIToolCall } from '../../lib/ai/aiProvider';
+import { getProvider, DEFAULT_PROVIDER_ID } from '../../lib/ai/aiProviders';
 import { buildContextSnapshot } from '../../lib/ai/aiContext';
 import { composeSystemPrompt } from '../../lib/ai/aiPrompts';
 import { AI_TOOL_DEFINITIONS, executeToolCall, type AppContextActions } from '../../lib/ai/aiTools';
 import MarkdownRenderer from './MarkdownRenderer';
+
+/**
+ * Algoritmo avanzado de refinamiento y estructuración para transcripciones de voz.
+ * Detecta preguntas, entonaciones, restaura puntuación, mayúsculas iniciales
+ * y limpia repeticiones para una gramática coherente.
+ */
+function formatSpeechTranscription(raw: string): string {
+  let text = raw.trim();
+  if (!text) return '';
+
+  text = text.replace(/\s+/g, ' ');
+
+  const spanishQuestionStarters = /^(cómo|como|qué|que|cuándo|cuando|dónde|donde|por qué|porque|quién|quien|cuál|cual|cuánto|cuanto|puedes|podrías|podrias|me puedes|sabes|crees|habrá|habria|acaso)\b/i;
+  const englishQuestionStarters = /^(what|how|why|when|where|who|which|can you|could you|is there|do you|would you)\b/i;
+
+  const sentences = text.split(/(?<=[.?!])\s+/);
+  const formatted = sentences.map(sentence => {
+    let s = sentence.trim();
+    if (!s) return '';
+
+    s = s.charAt(0).toUpperCase() + s.slice(1);
+
+    if (spanishQuestionStarters.test(s) && !s.startsWith('¿') && !s.endsWith('?')) {
+      s = `¿${s}?`;
+    } else if (englishQuestionStarters.test(s) && !s.endsWith('?')) {
+      s = `${s}?`;
+    } else if (!/[.?!]$/.test(s)) {
+      if (s.split(' ').length > 2) {
+        s = `${s}.`;
+      }
+    }
+
+    return s;
+  });
+
+  return formatted.join(' ');
+}
+
+/**
+ * Tarjeta interactiva y detallada de ejecución de herramientas estilo Claude/Perplexity.
+ */
+function ToolExecutionCard({ tc, index }: { tc: { name: string; args: string; result?: string; status: 'pending' | 'success' | 'error' }; index: number }) {
+  const [expanded, setExpanded] = useState(true);
+
+  let parsedArgs: Record<string, any> = {};
+  try { parsedArgs = JSON.parse(tc.args || '{}'); } catch {}
+
+  let parsedResult: any = null;
+  let resultData: any = null;
+  let resultMsg = tc.result || '';
+  if (tc.result) {
+    try {
+      parsedResult = JSON.parse(tc.result);
+      if (parsedResult && typeof parsedResult === 'object') {
+        resultData = parsedResult.data || null;
+        resultMsg = parsedResult.message || tc.result;
+      }
+    } catch {}
+  }
+
+  const isWebSearch = tc.name === 'webSearch';
+  const isMusic = tc.name.toLowerCase().includes('music') || tc.name.toLowerCase().includes('track') || tc.name.toLowerCase().includes('playlist');
+  const isTask = tc.name.toLowerCase().includes('task');
+  const isTimer = tc.name.toLowerCase().includes('timer');
+  const isEvent = tc.name.toLowerCase().includes('event') || tc.name.toLowerCase().includes('agenda');
+  const isNote = tc.name.toLowerCase().includes('note');
+
+  let title = `${index + 1}) ${tc.name}`;
+  let subtitle = 'Se ejecutó en la app';
+  if (isWebSearch) {
+    title = `${index + 1}) web_search — motor de búsqueda (snippets en vivo)`;
+    subtitle = 'Se buscó en la web';
+  } else if (isTask) {
+    title = `${index + 1}) ${tc.name} — gestión de tareas`;
+    subtitle = 'Acción en Tareas de Owa';
+  } else if (isMusic) {
+    title = `${index + 1}) ${tc.name} — reproductor musical`;
+    subtitle = 'Control de audio de Owa';
+  } else if (isTimer) {
+    title = `${index + 1}) ${tc.name} — temporizador de estudio`;
+    subtitle = 'Control de enfoque';
+  } else if (isEvent) {
+    title = `${index + 1}) ${tc.name} — agenda y planificador`;
+    subtitle = 'Planificador de Owa';
+  } else if (isNote) {
+    title = `${index + 1}) ${tc.name} — notas y apuntes`;
+    subtitle = 'Base de conocimientos';
+  }
+
+  const searchResults: Array<{ title: string; url: string; snippet?: string; source?: string }> =
+    resultData?.results || [];
+
+  return (
+    <div style={{ marginTop: 8, marginBottom: 4 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+        <span>{title}</span>
+      </div>
+      <div style={{ fontSize: 9.5, color: 'var(--text-tertiary)', marginBottom: 6 }}>
+        {subtitle}
+      </div>
+
+      <div
+        style={{
+          background: 'rgba(255, 255, 255, 0.03)',
+          border: '1px solid var(--border-soft)',
+          borderRadius: 12,
+          padding: '10px 12px',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
+        }}
+      >
+        <div
+          onClick={() => setExpanded(e => !e)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 8,
+            cursor: 'pointer',
+            userSelect: 'none',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+            {isWebSearch ? (
+              <Globe size={14} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+            ) : isTask ? (
+              <CheckSquare size={14} style={{ color: '#3b82f6', flexShrink: 0 }} />
+            ) : isMusic ? (
+              <Music size={14} style={{ color: '#ec4899', flexShrink: 0 }} />
+            ) : isTimer ? (
+              <Clock size={14} style={{ color: '#f59e0b', flexShrink: 0 }} />
+            ) : isEvent ? (
+              <Calendar size={14} style={{ color: '#8b5cf6', flexShrink: 0 }} />
+            ) : isNote ? (
+              <BookOpen size={14} style={{ color: '#10b981', flexShrink: 0 }} />
+            ) : (
+              <Sparkles size={14} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
+            )}
+            <span
+              style={{
+                fontSize: 12,
+                fontWeight: 500,
+                color: 'var(--text-primary)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {parsedArgs.query || parsedArgs.title || parsedArgs.trackName || parsedArgs.name || tc.name}
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+            {isWebSearch && searchResults.length > 0 && (
+              <span
+                style={{
+                  fontSize: 9.5,
+                  fontWeight: 600,
+                  padding: '2px 7px',
+                  borderRadius: 6,
+                  background: 'rgba(255, 255, 255, 0.06)',
+                  color: 'var(--text-tertiary)',
+                  fontFamily: "'JetBrains Mono', monospace",
+                }}
+              >
+                {searchResults.length} resultados
+              </span>
+            )}
+            <ChevronDown
+              size={13}
+              style={{
+                color: 'var(--text-tertiary)',
+                transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                transition: 'transform 180ms ease',
+              }}
+            />
+          </div>
+        </div>
+
+        {expanded && (
+          <div style={{ marginTop: 9 }}>
+            {isWebSearch && searchResults.length > 0 ? (
+              <div
+                className="no-scrollbar"
+                style={{
+                  maxHeight: 190,
+                  overflowY: 'auto',
+                  borderRadius: 8,
+                  background: 'rgba(0,0,0,0.3)',
+                  border: '1px solid var(--border-subtle)',
+                  padding: '4px 0',
+                }}
+              >
+                {searchResults.map((r, i) => {
+                  let hostname = '';
+                  try { hostname = new URL(r.url).hostname.replace(/^www\./, ''); } catch { hostname = r.url; }
+                  return (
+                    <a
+                      key={i}
+                      href={r.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 10,
+                        padding: '6px 10px',
+                        textDecoration: 'none',
+                        color: 'var(--text-primary)',
+                        fontSize: 11,
+                        borderBottom: i < searchResults.length - 1 ? '1px solid rgba(255,255,255,0.03)' : 'none',
+                        transition: 'background 120ms',
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0, flex: 1 }}>
+                        <Globe size={11} style={{ opacity: 0.6, flexShrink: 0 }} />
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 400 }}>
+                          {r.title}
+                        </span>
+                      </div>
+                      <span style={{ fontSize: 9.5, color: 'var(--text-tertiary)', fontFamily: "'JetBrains Mono', monospace", flexShrink: 0 }}>
+                        {hostname}
+                      </span>
+                    </a>
+                  );
+                })}
+              </div>
+            ) : (
+              <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5, background: 'rgba(0,0,0,0.2)', padding: '7px 10px', borderRadius: 8, fontFamily: "'JetBrains Mono', monospace", whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 110, overflowY: 'auto' }}>
+                {resultMsg || 'Ejecutando acción…'}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, paddingTop: 7, borderTop: '1px solid rgba(255,255,255,0.04)', fontSize: 10 }}>
+          {tc.status === 'pending' ? (
+            <>
+              <Loader2 size={12} className="spin" style={{ color: 'var(--text-tertiary)' }} />
+              <span style={{ color: 'var(--text-tertiary)', fontWeight: 500 }}>Ejecutando…</span>
+            </>
+          ) : tc.status === 'success' ? (
+            <>
+              <CheckCircle2 size={12} style={{ color: '#34d399' }} />
+              <span style={{ color: '#34d399', fontWeight: 600 }}>Listo</span>
+            </>
+          ) : (
+            <>
+              <XCircle size={12} style={{ color: '#f87171' }} />
+              <span style={{ color: '#f87171', fontWeight: 600 }}>Error</span>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 interface AIBrainSidebarProps {
   isOpen: boolean;
@@ -157,6 +419,16 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
   // Scroll libre: si el usuario sube para leer mientras Charvis escribe, no
   // forzamos el scroll abajo otra vez (solo cuando está pegado al final).
   const stickToBottomRef = useRef(true);
+
+  // Auto-resize inteligente del textarea al escribir o transcribir audio (hasta 220px)
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      const scrollH = textareaRef.current.scrollHeight;
+      const newHeight = Math.min(Math.max(scrollH, 28), 220);
+      textareaRef.current.style.height = `${newHeight}px`;
+    }
+  }, [input]);
 
   const [messages, setMessages] = useState<ChatItem[]>(() => {
     try {
@@ -427,20 +699,20 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
     const { kind, id } = a;
     let name = '';
     if (kind === 'course') {
-      name = appCtx.courses.find(c => c.id === id)?.name || '';
+      name = appCtx.courses.find((c: any) => c.id === id)?.name || '';
     } else if (kind === 'task') {
-      name = appCtx.tasks.find(t => t.id === id)?.title || '';
+      name = appCtx.tasks.find((t: any) => t.id === id)?.title || '';
     } else if (kind === 'note') {
-      name = appCtx.notes.find(n => n.id === id)?.title || '';
+      name = appCtx.notes.find((n: any) => n.id === id)?.title || '';
     } else if (kind === 'group') {
       for (const c of appCtx.courses) {
-        const g = (c.groups || []).find(gr => gr.id === id);
+        const g = (c.groups || []).find((gr: any) => gr.id === id);
         if (g) { name = g.name; break; }
       }
     } else if (kind === 'material') {
       for (const c of appCtx.courses) {
         for (const t of (c.studyTopics || [])) {
-          const m = (t.materials || []).find(mat => mat.id === id);
+          const m = (t.materials || []).find((mat: any) => mat.id === id);
           if (m) { name = m.name || m.title || ''; break; }
         }
         if (name) break;
@@ -572,10 +844,11 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
         { role: 'user', content: buildUserContent(userText, attachments) },
       ];
 
+      const providerId = settings.owaBrainProvider || DEFAULT_PROVIDER_ID;
+      const provider = getProvider(providerId);
       const apiKey = (settings.owaBrainApiKey || '').trim();
-      const baseUrl = settings.owaBrainBaseUrl || 'https://opencode.ai/zen/v1';
-      // Sin API key el único modelo que responde es el gratuito big-pickle.
-      const model = apiKey ? settings.owaBrainModel || DEFAULT_MODEL : DEFAULT_MODEL;
+      const baseUrl = (settings.owaBrainBaseUrl || provider.baseUrl).replace(/\/+$/, '');
+      const model = settings.owaBrainModel || provider.defaultModel;
 
       let accumulatedContent = '';
       let accumulatedReasoning = '';
@@ -914,19 +1187,24 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
         stream.getTracks().forEach(t => t.stop());
         streamRef.current = null;
         stopWaveform();
-        const text = transcriptRef.current.trim();
-        // El audio NUNCA se sube: solo se adjunta la transcripción como grupo
-        // de texto etiquetado "Audio transcripción".
-        if (text) {
+        const raw = transcriptRef.current.trim();
+        if (raw) {
+          const formatted = formatSpeechTranscription(raw);
+          // Escribir la transcripción formateada directamente en el input del chat
+          setInput(prev => {
+            const trimmed = prev.trim();
+            return trimmed ? `${trimmed} ${formatted}` : formatted;
+          });
           setAttachments(prev => [...prev, {
             id: `trs_${Date.now()}`,
             kind: 'transcript',
             name: 'Audio transcripción',
-            text,
+            text: formatted,
           }]);
         }
         setLiveTranscript('');
         setIsPreparingAudio(false);
+        setTimeout(() => textareaRef.current?.focus(), 50);
       };
       mr.start();
       setIsRecording(true);
@@ -937,9 +1215,8 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
       if (SR) {
         try {
           const rec = new SR();
-          // '' = idioma por defecto del navegador/sistema → detecta el idioma
-          // del usuario automáticamente en lugar de forzar español.
-          rec.lang = '';
+          // Detectar idioma del navegador o sistema de forma automática y continua
+          rec.lang = navigator.language || 'es-ES';
           rec.continuous = true;
           rec.interimResults = true;
           rec.maxAlternatives = 1;
@@ -951,12 +1228,11 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
               if (res.isFinal) finalText += res[0].transcript + ' ';
               else interim += res[0].transcript;
             }
-            transcriptRef.current = (finalText + interim).trim();
-            setLiveTranscript(transcriptRef.current);
+            const current = (finalText + interim).trim();
+            transcriptRef.current = current;
+            setLiveTranscript(formatSpeechTranscription(current));
           };
           rec.onerror = () => {};
-          // La reconocimiento continuo puede detenerse solo: si seguimos
-          // grabando, lo reiniciamos para no perder el dictado.
           rec.onend = () => {
             if (isRecordingRef.current && recognitionRef.current === rec) {
               try { rec.start(); } catch {}
@@ -1174,7 +1450,7 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                     textTransform: 'none',
                   }}
                 >
-                  {settings.owaBrainModel || 'big-pickle'}
+                  {settings.owaBrainModel || getProvider(settings.owaBrainProvider || DEFAULT_PROVIDER_ID).defaultModel}
                 </span>
               </button>
             </div>
@@ -1404,7 +1680,7 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                         </div>
                       )}
                       <MarkdownRenderer content={msg.content} />
-                      {msg.isStreaming && !msg.content && !msg.toolCalls?.some(tc => VISIBLE_SKILLS.has(tc.name)) && (
+                      {msg.isStreaming && !msg.content && (!msg.toolCalls || msg.toolCalls.length === 0) && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: 'var(--text-tertiary)', fontSize: 11.5 }}>
                           <Loader2 size={13} className="spin" /> procesando…
                         </div>
@@ -1413,62 +1689,11 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                   )}
                 </div>
 
-                {msg.role !== 'user' && msg.toolCalls && msg.toolCalls.some(tc => VISIBLE_SKILLS.has(tc.name)) && (
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexWrap: 'wrap',
-                      gap: 5,
-                      marginTop: 7,
-                      paddingLeft: 2,
-                    }}
-                  >
-                    {msg.toolCalls.filter(tc => VISIBLE_SKILLS.has(tc.name)).map((tc, idx) => {
-                      const success = tc.status === 'success';
-                      const pending = tc.status === 'pending';
-                      const label = tc.name === 'webSearch' ? 'Búsqueda web' : tc.name === 'searchYouTubeMusic' ? 'YouTube' : tc.name;
-                      return (
-                        <div
-                          key={idx}
-                          title={pending ? 'Buscando…' : success ? 'Skill completada' : 'Falló la skill'}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 5,
-                            padding: '4px 9px',
-                            borderRadius: 999,
-                            background: 'var(--bg-hover)',
-                            border: pending
-                              ? '1px solid var(--border-default)'
-                              : success
-                                ? '1px solid var(--border-soft)'
-                                : '1px solid rgba(248, 113, 113, 0.3)',
-                            color: pending
-                              ? 'var(--text-secondary)'
-                              : success
-                                ? 'var(--text-secondary)'
-                                : '#f87171',
-                            fontSize: 9.5,
-                            fontFamily: "'JetBrains Mono', monospace",
-                            letterSpacing: '0.05em',
-                            textTransform: 'uppercase',
-                            transition: 'color 150ms, border-color 150ms',
-                          }}
-                        >
-                          {pending ? (
-                            <Loader2 size={9} className="spin" />
-                          ) : (
-                            <Search size={9} style={{ opacity: 0.75 }} />
-                          )}
-                          <span style={{ fontWeight: 600 }}>{label}</span>
-                          {!success && tc.result && (
-                            <span style={{ color: '#f87171', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textTransform: 'none', letterSpacing: '0' }}>
-                              — {tc.result}
-                            </span>
-                          )}
-                        </div>
-                      );
-                    })}
+                {msg.role !== 'user' && msg.toolCalls && msg.toolCalls.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+                    {msg.toolCalls.map((tc, idx) => (
+                      <ToolExecutionCard key={idx} tc={tc} index={idx} />
+                    ))}
                   </div>
                 )}
 
@@ -1552,11 +1777,7 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
               <textarea
                 ref={textareaRef}
                 value={input}
-                onChange={e => {
-                  setInput(e.target.value);
-                  e.currentTarget.style.height = 'auto';
-                  e.currentTarget.style.height = Math.min(e.currentTarget.scrollHeight, 96) + 'px';
-                }}
+                onChange={e => setInput(e.target.value)}
                 onKeyDown={e => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
@@ -1567,8 +1788,9 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                   }
                 }}
                 onPaste={handlePaste}
-                placeholder="escribe algo"
+                placeholder="Escribe algo o dicta con el micrófono…"
                 rows={1}
+                className="no-scrollbar"
                 style={{
                   width: '100%',
                   background: 'transparent',
@@ -1580,8 +1802,9 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                   lineHeight: 1.5,
                   fontFamily: "'JetBrains Mono', monospace",
                   padding: '4px 4px 2px 4px',
-                  minHeight: 26,
-                  maxHeight: 96,
+                  minHeight: 28,
+                  maxHeight: 220,
+                  overflowY: 'auto',
                 }}
               />
 

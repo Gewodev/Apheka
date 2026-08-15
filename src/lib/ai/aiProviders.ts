@@ -2,7 +2,8 @@
 //  CHARVIS — Catálogo de proveedores de IA
 // ═══════════════════════════════════════════════════
 // Cada proveedor es un endpoint OpenAI-compatible (`POST /chat/completions` y
-// `GET /models`). La app solo guarda la clave en localStorage (nunca se sube).
+// `GET /models`) o nativo de Anthropic (`POST /messages` y `GET /models`).
+// La app solo guarda la clave en localStorage (nunca se sube a ningún servidor).
 
 import { getFetch } from './aiProvider';
 
@@ -15,7 +16,7 @@ export interface CharvisProvider {
   defaultModel: string;
   /** Modelos exactos conocidos (fallback si el endpoint /models no responde). */
   defaultModels: string[];
-  /** URL base OpenAI-compatible. */
+  /** URL base oficial. */
   baseUrl: string;
   /** URL de documentación oficial. */
   docsUrl: string;
@@ -49,47 +50,68 @@ export const CHARVIS_PROVIDERS: CharvisProvider[] = [
     ],
     baseUrl: 'https://opencode.ai/zen/v1',
     docsUrl: 'https://opencode.ai',
-    keyHint: 'Clave gratuita en opencode.ai/auth. Crea tu clave y pégala aquí.',
+    keyHint: 'Clave en opencode.ai/auth. Cada cuenta tiene su propia API key privada.',
   },
   {
     id: 'openai',
     name: 'OpenAI',
     brandColor: '#10a37f',
     defaultModel: 'gpt-4o',
-    defaultModels: ['gpt-5', 'gpt-5-mini', 'gpt-4.1', 'gpt-4.1-mini', 'gpt-4o', 'gpt-4o-mini', 'o3', 'o4-mini'],
+    defaultModels: [
+      'gpt-5.6',
+      'gpt-5.6-mini',
+      'gpt-5',
+      'gpt-4o',
+      'gpt-4o-mini',
+      'o3',
+      'o4-mini',
+    ],
     baseUrl: 'https://api.openai.com/v1',
     docsUrl: 'https://platform.openai.com/api-keys',
-    keyHint: 'Crea tu clave en platform.openai.com/api-keys. Los modelos GPT requieren crédito en tu cuenta.',
+    keyHint: 'Crea tu clave en platform.openai.com/api-keys. Requiere créditos en tu cuenta de OpenAI.',
   },
   {
     id: 'gemini',
     name: 'Google Gemini',
     brandColor: '#4285F4',
-    defaultModel: 'gemini-3.6-flash',
-    defaultModels: ['gemini-3.6-flash', 'gemini-3.1-pro', 'gemini-3-flash', 'gemini-2.5-pro', 'gemini-2.5-flash'],
+    defaultModel: 'gemini-3.7-flash',
+    defaultModels: [
+      'gemini-3.7-flash',
+      'gemini-3.6-flash',
+      'gemini-3.1-pro',
+      'gemini-2.5-pro',
+      'gemini-2.5-flash',
+    ],
     baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
     docsUrl: 'https://aistudio.google.com/apikey',
-    keyHint: 'Clave gratuita en aistudio.google.com/apikey. Endpoint OpenAI-compatible de Google.',
+    keyHint: 'Clave gratuita en aistudio.google.com/apikey. Endpoint OpenAI-compatible oficial de Google.',
   },
   {
     id: 'anthropic',
     name: 'Anthropic Claude',
     brandColor: '#D97757',
     defaultModel: 'claude-sonnet-4-6',
-    defaultModels: ['claude-sonnet-4-6', 'claude-opus-4-7', 'claude-haiku-4-5', 'claude-3-7-sonnet-latest'],
+    defaultModels: [
+      'claude-sonnet-5',
+      'claude-opus-5',
+      'claude-sonnet-4-6',
+      'claude-opus-4-7',
+      'claude-haiku-4-5',
+      'claude-3-7-sonnet-latest',
+    ],
     baseUrl: 'https://api.anthropic.com/v1',
     docsUrl: 'https://console.anthropic.com/settings/keys',
-    keyHint: 'Clave en console.anthropic.com/settings/keys. Capa OpenAI-compatible oficial (no expone /models).',
+    keyHint: 'Clave en console.anthropic.com/settings/keys. Conexión nativa con Claude API.',
   },
   {
     id: 'deepseek',
     name: 'DeepSeek',
     brandColor: '#4D6BFE',
     defaultModel: 'deepseek-v4-pro',
-    defaultModels: ['deepseek-v4-pro', 'deepseek-v4-flash'],
+    defaultModels: ['deepseek-v4-pro', 'deepseek-v4-flash', 'deepseek-chat', 'deepseek-reasoner'],
     baseUrl: 'https://api.deepseek.com',
     docsUrl: 'https://api-docs.deepseek.com',
-    keyHint: 'Clave en platform.deepseek.com. La URL base no lleva /v1 (lo añade el SDK).',
+    keyHint: 'Clave en platform.deepseek.com/api_keys. La URL base oficial es https://api.deepseek.com.',
   },
   {
     id: 'kimi',
@@ -106,7 +128,13 @@ export const CHARVIS_PROVIDERS: CharvisProvider[] = [
     name: 'Mistral',
     brandColor: '#FA520F',
     defaultModel: 'mistral-large-latest',
-    defaultModels: ['mistral-large-latest', 'mistral-medium-latest', 'mistral-small-latest', 'codestral-latest', 'pixtral-large-latest'],
+    defaultModels: [
+      'mistral-large-latest',
+      'mistral-medium-latest',
+      'mistral-small-latest',
+      'codestral-latest',
+      'pixtral-large-latest',
+    ],
     baseUrl: 'https://api.mistral.ai/v1',
     docsUrl: 'https://console.mistral.ai/api-keys',
     keyHint: 'Clave en console.mistral.ai/api-keys. Los alias -latest apuntan a la versión estable.',
@@ -128,17 +156,17 @@ export const CHARVIS_PROVIDERS: CharvisProvider[] = [
     ],
     baseUrl: 'https://api.groq.com/openai/v1',
     docsUrl: 'https://console.groq.com/keys',
-    keyHint: 'Clave gratuita en console.groq.com/keys. Inferencia ultrarrápida con GPT-OSS, Groq Compound y Llama.',
+    keyHint: 'Clave gratuita en console.groq.com/keys. Inferencia ultra veloz en LPU.',
   },
   {
     id: 'xai',
     name: 'xAI Grok',
     brandColor: '#a1a1aa',
     defaultModel: 'grok-4',
-    defaultModels: ['grok-4', 'grok-4-fast', 'grok-4-mini', 'grok-3', 'grok-3-mini'],
+    defaultModels: ['grok-4.6', 'grok-4', 'grok-4-fast', 'grok-4-mini', 'grok-3', 'grok-3-mini'],
     baseUrl: 'https://api.x.ai/v1',
     docsUrl: 'https://console.x.ai',
-    keyHint: 'Clave en console.x.ai. Grok-4 con 2M de contexto.',
+    keyHint: 'Clave en console.x.ai. Modelos Grok de xAI con gran contexto.',
   },
 ];
 
@@ -182,16 +210,25 @@ export function providerState(states: Record<string, CharvisProviderState>, p: C
 
 /**
  * Consulta el listado de modelos exacto del proveedor (`GET {baseUrl}/models`).
- * Lanza un error si el endpoint no existe o rechaza la clave.
+ * Maneja tanto endpoints OpenAI-compatible como la API nativa de Anthropic.
  */
 export async function fetchProviderModels(baseUrl: string, apiKey: string): Promise<string[]> {
   const f = await getFetch();
-  const url = `${baseUrl.replace(/\/+$/, '')}/models`;
+  const cleanBase = baseUrl.replace(/\/+$/, '');
+  const url = `${cleanBase}/models`;
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+
+  if (cleanBase.includes('anthropic.com')) {
+    if (apiKey) headers['x-api-key'] = apiKey;
+    headers['anthropic-version'] = '2023-06-01';
+  } else {
+    if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+  }
+
   const res = await f(url, { method: 'GET', headers });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();
   const arr = Array.isArray(data?.data) ? data.data : Array.isArray(data?.models) ? data.models : [];
   return arr.map((m: any) => (typeof m === 'string' ? m : m?.id)).filter(Boolean).filter((x: unknown) => typeof x === 'string') as string[];
 }
+

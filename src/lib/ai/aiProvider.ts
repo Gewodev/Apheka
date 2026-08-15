@@ -1,5 +1,6 @@
 // ═══════════════════════════════════════════════════
-//  CHARVIS — AI Provider Layer (OpenCode Zen)
+//  CHARVIS — AI Provider Layer
+//  Soporte universal para OpenAI-compatible y Anthropic nativo
 // ═══════════════════════════════════════════════════
 
 export interface AIContentPart {
@@ -57,6 +58,7 @@ export interface AIProviderConfig {
 
 export const DEFAULT_BASE_URL = 'https://opencode.ai/zen/v1';
 export const ZEN_HOST = 'opencode.ai';
+export const DEFAULT_MODEL = 'big-pickle';
 const DEFAULT_MAX_TOKENS = 4096;
 const DEFAULT_TEMPERATURE = 0.7;
 
@@ -70,9 +72,7 @@ let tauriFetch: ((input: any, init?: any) => Promise<Response>) | null | undefin
 /**
  * Devuelve el fetch a usar. Dentro de Tauri usamos @tauri-apps/plugin-http (HTTP
  * nativo de Rust, sin CORS), que es el único transporte capaz de llegar a
- * https://opencode.ai/zen/v1 desde el webview: el navegador/bloquea la respuesta
- * porque OpenCode Zen no envía el header Access-Control-Allow-Origin. Fuera de
- * Tauri (navegador de desarrollo) se usa window.fetch normal.
+ * endpoints externos desde el webview sin bloqueo de CORS.
  */
 export async function getFetch(): Promise<typeof fetch> {
   if (isTauri()) {
@@ -89,68 +89,46 @@ export async function getFetch(): Promise<typeof fetch> {
   return window.fetch.bind(window);
 }
 
-/** True si la URL base apunta al servicio de OpenCode Zen (donde vive la key). */
+/** True si la URL base apunta al servicio de OpenCode Zen. */
 export function isOpenCodeZenUrl(baseUrl?: string): boolean {
   if (!baseUrl) return true;
   return baseUrl.includes(ZEN_HOST);
 }
 
+/** True si la URL base apunta a la API oficial de Anthropic Claude. */
+export function isAnthropicUrl(baseUrl?: string): boolean {
+  if (!baseUrl) return false;
+  return baseUrl.includes('anthropic.com');
+}
+
 /**
  * Normaliza la configuración: limpia la API key y la URL base.
- *
- * La clave se depura eliminando TODO el espacio en blanco (espacios, tabs y
- * saltos de línea que se cuelan al pegar una clave multilínea) y las comillas
- * externas accidentales. Una clave con "\n" o espacios internos se envía como
- * "Bearer sk-xxx\nxxx" y el servidor responde 401/Invalid API key, de ahí que
- * un usuario con una clave válida vea "Tu API key es inválida". Las claves de
- * OpenCode Zen son alfanuméricas (sk-…), por lo que quitar el whitespace es
- * seguro. La URL base se normaliza sin barras finales para no generar
- * "…/v1//chat/completions".
  */
 function normalizeConfig(config: AIProviderConfig): AIProviderConfig {
   const apiKey = (config.apiKey || '')
     .replace(/\s+/g, '')
     .replace(/^["']+|["']+$/g, '');
   const baseUrl = (config.baseUrl || DEFAULT_BASE_URL).replace(/\/+$/, '');
-  return { ...config, apiKey, baseUrl };
-}
-
-/** Modelos gratuitos sin visión (no aceptan imágenes → HTTP 500). */
-function isVisionlessModel(model: string): boolean {
-  return model === DEFAULT_MODEL;
+  const model = config.model || DEFAULT_MODEL;
+  return { ...config, apiKey, baseUrl, model };
 }
 
 /**
- * Sin API key solo funcionan los modelos gratuitos (keyless). Si el usuario
- * seleccionó un modelo de pago sin clave, lo degradamos al modelo gratuito
- * por defecto para evitar el error "Missing API key / Missing Authentication".
+ * Construye el payload para OpenAI-compatible `/chat/completions`.
  */
-function resolveModel(config: AIProviderConfig): string {
-  if (!config.apiKey && config.model && config.model !== DEFAULT_MODEL) {
-    return DEFAULT_MODEL;
-  }
-  return config.model || DEFAULT_MODEL;
-}
-
-/**
- * Builds the request payload for chat completions.
- */
-function buildBody(
+function buildOpenAIBody(
   config: AIProviderConfig,
   messages: AIMessage[],
   tools: AIToolDefinition[] | undefined,
   stream: boolean,
 ): Record<string, unknown> {
   const body: Record<string, unknown> = {
-    model: resolveModel(config),
+    model: config.model,
     messages: messages.map(m => {
       const msg: Record<string, unknown> = { role: m.role, content: m.content };
       if (m.tool_calls) msg.tool_calls = m.tool_calls;
       if (m.tool_call_id) msg.tool_call_id = m.tool_call_id;
       if (m.name) msg.name = m.name;
-      // reasoning_content es un campo específico de modelos de razonamiento
-      // (Zen/DeepSeek). Otros proveedores OpenAI-compat pueden rechazar campos
-      // desconocidos, así que solo se reenvía hacia endpoints de OpenCode Zen.
       if (m.reasoning_content && isOpenCodeZenUrl(config.baseUrl)) msg.reasoning_content = m.reasoning_content;
       return msg;
     }),
@@ -168,8 +146,66 @@ function buildBody(
 }
 
 /**
- * Executes a chat completion request. Returns the parsed body plus the raw
- * response so callers can inspect status codes.
+ * Construye el payload para Anthropic Messages API (`/v1/messages`).
+ */
+function buildAnthropicBody(
+  config: AIProviderConfig,
+  messages: AIMessage[],
+  stream: boolean,
+): Record<string, unknown> {
+  let systemPrompt = '';
+  const anthropicMessages: Array<{ role: 'user' | 'assistant'; content: any }> = [];
+
+  for (const m of messages) {
+    if (m.role === 'system') {
+      const text = typeof m.content === 'string' ? m.content : Array.isArray(m.content) ? m.content.map(p => p.text || '').join('\n') : '';
+      systemPrompt = systemPrompt ? `${systemPrompt}\n\n${text}` : text;
+    } else if (m.role === 'user' || m.role === 'assistant') {
+      let content: any = m.content;
+      if (Array.isArray(m.content)) {
+        content = m.content.map(part => {
+          if (part.type === 'text') return { type: 'text', text: part.text || '' };
+          if (part.type === 'image_url' && part.image_url?.url) {
+            const url = part.image_url.url;
+            if (url.startsWith('data:')) {
+              const match = url.match(/^data:([^;]+);base64,(.+)$/);
+              if (match) {
+                return {
+                  type: 'image',
+                  source: {
+                    type: 'base64',
+                    media_type: match[1],
+                    data: match[2],
+                  },
+                };
+              }
+            }
+            return { type: 'text', text: `[Imagen adjunta: ${url}]` };
+          }
+          return { type: 'text', text: '' };
+        });
+      }
+      anthropicMessages.push({ role: m.role, content });
+    }
+  }
+
+  const body: Record<string, unknown> = {
+    model: config.model || 'claude-sonnet-4-6',
+    max_tokens: config.maxTokens || DEFAULT_MAX_TOKENS,
+    temperature: config.temperature ?? DEFAULT_TEMPERATURE,
+    messages: anthropicMessages.length ? anthropicMessages : [{ role: 'user', content: 'Hola' }],
+    stream,
+  };
+
+  if (systemPrompt) {
+    body.system = systemPrompt;
+  }
+
+  return body;
+}
+
+/**
+ * Ejecuta una petición de chat (OpenAI-compatible o Anthropic nativo).
  */
 async function requestChat(
   config: AIProviderConfig,
@@ -178,30 +214,34 @@ async function requestChat(
   stream: boolean,
 ): Promise<{ response: Response; data: any }> {
   const baseUrl = config.baseUrl || DEFAULT_BASE_URL;
-  const url = `${baseUrl}/chat/completions`;
+  const isAnthropic = isAnthropicUrl(baseUrl);
+  const url = isAnthropic ? `${baseUrl}/messages` : `${baseUrl}/chat/completions`;
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'HTTP-Referer': 'https://owa-studio.app',
     'X-Title': 'OWA Studio',
   };
-  // Solo se envía autenticación si hay una clave configurada. OpenCode Zen
-  // sirve el modelo por defecto sin clave (modelo libre / stealth).
-  if (config.apiKey) headers['Authorization'] = `Bearer ${config.apiKey}`;
 
-  const response = await (await getFetch())(url, {
+  if (isAnthropic) {
+    if (config.apiKey) headers['x-api-key'] = config.apiKey;
+    headers['anthropic-version'] = '2023-06-01';
+  } else {
+    if (config.apiKey) headers['Authorization'] = `Bearer ${config.apiKey}`;
+  }
+
+  const bodyObj = isAnthropic
+    ? buildAnthropicBody(config, messages, stream)
+    : buildOpenAIBody(config, messages, tools, stream);
+
+  const fetchFn = await getFetch();
+  const response = await fetchFn(url, {
     method: 'POST',
     headers,
-    body: JSON.stringify(buildBody(config, messages, tools, stream)),
+    body: JSON.stringify(bodyObj),
     signal: config.signal,
   });
 
-  // Para streaming NO se debe tocar el body aquí: `response.json()` (o cualquier
-  // lectura) consume y lockea el ReadableStream del plugin HTTP, y además falla
-  // porque el body SSE ("data: {...}") no es JSON. El consumidor (streamChat)
-  // hace `getReader()` sobre ese body; si está locked/leído lanza
-  // "ReadableStreamDefaultReader constructor can only accept readable streams
-  // that are not yet locked to a reader". Solo en no-streaming se lee el JSON.
   let data: any = null;
   if (!stream) {
     try {
@@ -212,17 +252,16 @@ async function requestChat(
   return { response, data };
 }
 
-/**
- * Detección de fallo de autenticación PRECISA.
- *
- * Antes esto matcheaba cualquier mensaje que contuviera "api key" o "bearer",
- * lo que producía falsos positivos: un 500 por streaming+tools con un mensaje
- * como "The provided API key does not grant access…" se clasificaba como clave
- * inválida y la UI mostraba "Tu API key es inválida" aunque la clave fuera válida.
- *
- * Ahora solo se considera fallo de auth cuando el STATUS HTTP es 401/403, o cuando
- * el texto coincide con frases inequívocas de autenticación.
- */
+function rawError(response: Response, data: any): string {
+  const raw =
+    data?.error?.message ||
+    data?.error?.detail ||
+    data?.message ||
+    data?.error ||
+    `API error ${response.status}`;
+  return typeof raw === 'string' ? raw : JSON.stringify(raw);
+}
+
 function isAuthFailure(msg: string): boolean {
   const lower = msg.toLowerCase();
   return (
@@ -242,151 +281,53 @@ function isAuthFailure(msg: string): boolean {
   );
 }
 
-function rawError(response: Response, data: any): string {
-  const raw =
-    data?.error?.message ||
-    data?.error?.detail ||
-    data?.message ||
-    data?.error ||
-    `API error ${response.status}`;
-  return typeof raw === 'string' ? raw : JSON.stringify(raw);
-}
-
-/**
- * Clasifica el error final con un mensaje honesto y en español.
- *
- * La clave solo se acusa de inválida si el servidor respondió 401/403 a una
- * petición que LA LLEVABA (status de auth), nunca por heurísticas de texto.
- * Cualquier otro fallo muestra el mensaje crudo del proveedor sin culpar a la key.
- *
- * `hadKey` = si la petición que falló llevaba la clave. `keyConfigured` = si el
- * usuario tiene una clave guardada (aunque el intento que falló fuera keyless),
- * para no sugerirle que "añada una clave" cuando ya tiene una.
- */
 function classifyError(
   response: Response,
   data: any,
   hadKey: boolean,
-  keyConfigured = hadKey,
-  baseUrl?: string,
 ): string {
   const status = response.status || 0;
   const rawMsg = rawError(response, data);
-
-  // Sin créditos/método de pago (GLM, DeepSeek…): la cuenta no da acceso al modelo
-  // aunque la key sea válida. big-pickle es gratis con la clave de OpenCode.
   const lower = String(rawMsg).toLowerCase();
+
   const creditsIssue =
     lower.includes('no payment method') ||
     lower.includes('payment method') ||
     lower.includes('creditserror') ||
     lower.includes('insufficient credits') ||
     lower.includes('not enough credits') ||
-    lower.includes('billing');
+    lower.includes('billing') ||
+    lower.includes('insufficient_quota');
   if (creditsIssue) {
-    return `El modelo seleccionado requiere créditos o un método de pago en tu cuenta. Big Pickle (OpenCode) es gratis con tu clave y no necesita tarjeta.`;
+    return `Tu cuenta no tiene créditos o saldo disponible para este modelo (${rawMsg}).`;
   }
 
   if (status === 401 || status === 403 || isAuthFailure(rawMsg)) {
     if (hadKey) {
-      return `Tu API key de Charvis es inválida o ha expirado. Revísala en Ajustes → Sistema → Charvis (o vacíala para usar el modelo gratuito big-pickle).`;
+      return `Tu API key fue rechazada (${status}): ${rawMsg}. Revísala en Ajustes → Proveedor de IA.`;
     }
-    if (keyConfigured) {
-      return `El servicio de IA no respondió con la clave configurada ni sin ella. Revisa tu conexión o la URL base en Ajustes → Sistema → Charvis.`;
-    }
-    return `El modelo seleccionado requiere una API key. Añade tu clave en Ajustes → Sistema → Charvis (o usa el modelo gratuito big-pickle).`;
+    return `El modelo seleccionado requiere una API key configurada en Ajustes → Proveedor de IA.`;
+  }
+
+  if (status === 404) {
+    return `El endpoint o modelo no fue encontrado (HTTP 404: ${rawMsg}). Revisa la URL base y el modelo en Ajustes.`;
   }
 
   if (status === 429) {
-    return 'El servicio de IA está saturado (límite de peticiones). Espera unos segundos y vuelve a intentarlo.';
+    return 'Límite de peticiones alcanzado (HTTP 429). Espera unos segundos y vuelve a intentarlo.';
   }
 
   if (status === 0) {
-    return 'No se pudo conectar con el servicio de IA. Revisa tu conexión a internet o la URL base en Ajustes → Sistema → Charvis.';
+    return 'No se pudo conectar con el servicio de IA. Revisa tu conexión a internet o la URL del proveedor.';
   }
 
-  const msg = rawMsg;
-  return msg && !msg.startsWith('API error')
-    ? msg
-    : `El servicio de IA no está disponible (HTTP ${status}). Inténtalo de nuevo en unos segundos.`;
-}
-
-/** True si algún mensaje incluye partes de imagen. */
-function hasImages(messages: AIMessage[]): boolean {
-  return messages.some(m => Array.isArray(m.content) && m.content.some(p => p.type === 'image_url'));
-}
-
-/**
- * Reduce los mensajes a lo esencial para los fallbacks keyless/gratuito:
- * quita los mensajes `tool`, las `tool_calls` y el `reasoning_content` de los
- * assistant (el modelo gratuito los rechaza en modo no-streaming) y conserva
- * solo system/user/assistant con contenido de texto. Aplica también stripImages
- * porque big-pickle no tiene visión.
- */
-function sanitizeForFallback(messages: AIMessage[]): AIMessage[] {
-  return stripImages(
-    messages
-      .filter(m => m.role === 'system' || m.role === 'user' || m.role === 'assistant')
-      .map(m => {
-        if (m.role === 'assistant') {
-          const { tool_calls, reasoning_content, tool_call_id, name, ...rest } = m;
-          void tool_calls; void reasoning_content; void tool_call_id; void name;
-          return rest;
-        }
-        return m;
-      })
-      .filter(m => m.content !== null && m.content !== '')
-      .map(m => {
-        if (Array.isArray(m.content)) {
-          const parts = m.content.filter(p => p.type === 'text' && p.text);
-          return parts.length ? { ...m, content: parts } : null;
-        }
-        return m;
-      })
-      .filter((m): m is AIMessage => m !== null),
-  );
-}
-
-/**
- * Reemplaza las imágenes por una nota de texto. El modelo gratuito (big-pickle)
- * no soporta visión y el proveedor responde 500; al degradar evitamos el error
- * y Charvis igualmente sabe que se adjuntó una imagen.
- */
-function stripImages(messages: AIMessage[]): AIMessage[] {
-  return messages.map(m => {
-    if (!Array.isArray(m.content)) return m;
-    const parts: AIContentPart[] = [];
-    let noted = false;
-    for (const p of m.content) {
-      if (p.type === 'image_url') {
-        if (!noted) {
-          parts.push({ type: 'text', text: '[Imagen adjunta: el modelo gratuito no procesa imágenes; añade una API key para que Charvis pueda analizarla]' });
-          noted = true;
-        }
-      } else {
-        parts.push(p);
-      }
-    }
-    return { ...m, content: parts };
-  });
+  return rawMsg && !rawMsg.startsWith('API error')
+    ? `Error (${status}): ${rawMsg}`
+    : `El servicio de IA no respondió correctamente (HTTP ${status}).`;
 }
 
 /**
  * Send a message to the AI provider and get a response stream.
- *
- * Estrategia resiliente (nunca deja al usuario sin respuesta):
- *  1. Normaliza la clave (trim) y resuelve el modelo real (keyless → big-pickle).
- *  2. Intenta streaming con herramientas.
- *  3. Si falla por autenticación (401/403 o mensaje de auth), reintenta keyless
- *     con big-pickle (self-healing) en modo no-streaming sin tools.
- *  4. Si falla por HTTP 500 u otro error, reintenta no-streaming sin tools
- *     conservando la clave; si sigue fallando y hay imágenes, las degrada a
- *     texto (los modelos sin visión responden 500 con imágenes).
- *  5. Como último recurso, si la clave configurada no da acceso al modelo,
- *     reintenta big-pickle con clave y, si eso falla, keyless.
- *  6. Los errores siempre son mensajes limpios en español, nunca texto crudo.
- *
- * Yields chunks as they arrive (text deltas, tool calls, done, or error).
  */
 export async function* streamChat(
   config: AIProviderConfig,
@@ -396,6 +337,7 @@ export async function* streamChat(
   const cfg = normalizeConfig(config);
   const signal = cfg.signal;
   const aborted = () => !!signal?.aborted;
+  const isAnthropic = isAnthropicUrl(cfg.baseUrl);
 
   async function tryRequest(
     c: AIProviderConfig,
@@ -408,112 +350,30 @@ export async function* streamChat(
     } catch (err) {
       return {
         response: { ok: false, status: 0 } as Response,
-        data: { error: { message: `Network error: ${err instanceof Error ? err.message : String(err)}` } },
+        data: { error: { message: `Error de red: ${err instanceof Error ? err.message : String(err)}` } },
       };
     }
   }
 
-  // Escalones de fallback en orden de fiabilidad. Cada uno se prueba SIEMPRE
-  // cuando el anterior falla, sin depender de heurísticas de texto que puedan
-  // clasificar mal el error. Así, con una clave válida cualquier modelo responde
-  // (escalón A/B), y sin clave siempre se cae al modelo gratuito big-pickle.
-  // `attemptHadKey` refleja si el intento que ESTÁ en `attempt` llevaba clave,
-  // para que el error final no culpe a la key del usuario si falló uno keyless.
-  const escalones: (() => Promise<boolean>)[] = [];
-
-  // Escalón A: no-streaming CONSERVANDO herramientas, misma clave y modelo.
-  // streaming+tools es la parte frágil de Zen; en modo no-streaming responde y
-  // además puede llamar tools. Antes se descartaban las tools aquí y Charvis
-  // respondía en texto sin tocar la app → las acciones SÍ se ejecutan ahora.
-  escalones.push(async () => {
-    if (!cfg.apiKey) return false;
-    let ok = false;
-    attempt = await tryRequest(cfg, messages, tools, false);
-    attemptHadKey = !!cfg.apiKey;
-    if (!attempt.response.ok && hasImages(messages)) {
-      attempt = await tryRequest(cfg, stripImages(messages), tools, false);
-      attemptHadKey = !!cfg.apiKey;
-    }
-    ok = attempt.response.ok;
-    return ok;
-  });
-
-  // Escalón B: keyless big-pickle (self-healing — el modelo gratuito responde
-  // sin clave; se sanean los mensajes porque no soporta tools ni imágenes).
-  escalones.push(async () => {
-    const keyless = { ...cfg, apiKey: '', model: DEFAULT_MODEL };
-    const msgs = sanitizeForFallback(messages);
-    attempt = await tryRequest(keyless, msgs, undefined, false);
-    attemptHadKey = false;
-    if (!attempt.response.ok && hasImages(msgs)) {
-      attempt = await tryRequest(keyless, stripImages(msgs), undefined, false);
-      attemptHadKey = false;
-    }
-    return attempt.response.ok;
-  });
-
-  // Escalón C: la clave no da acceso al modelo seleccionado → big-pickle con clave.
-  escalones.push(async () => {
-    if (!cfg.apiKey || cfg.model === DEFAULT_MODEL) return false;
-    const withFree = { ...cfg, model: DEFAULT_MODEL };
-    const msgs = sanitizeForFallback(messages);
-    attempt = await tryRequest(withFree, msgs, undefined, false);
-    attemptHadKey = !!cfg.apiKey;
-    if (!attempt.response.ok && hasImages(msgs)) {
-      attempt = await tryRequest(withFree, stripImages(msgs), undefined, false);
-      attemptHadKey = !!cfg.apiKey;
-    }
-    return attempt.response.ok;
-  });
-
-  // Escalón D: último recurso — big-pickle keyless con SOLO el último mensaje
-  // del usuario y un system mínimo. Si un historial complejo o un contenido
-  // demasiado grande provoca el HTTP 500, este escalón mínimo casi siempre
-  // responde y el turno nunca muere con un error visible.
-  escalones.push(async () => {
-    const lastUser = [...messages].reverse().find(m => m.role === 'user');
-    if (!lastUser) return false;
-    const lastText = Array.isArray(lastUser.content)
-      ? lastUser.content.filter(p => p.type === 'text').map(p => p.text).join(' ').slice(0, 4000)
-      : String(lastUser.content || '').slice(0, 4000);
-    if (!lastText.trim()) return false;
-    const keyless = { ...cfg, apiKey: '', model: DEFAULT_MODEL };
-    const minimal: AIMessage[] = [
-      { role: 'system', content: 'Eres Charvis, el asistente de OWA Studio. Responde en español, de forma útil y directa, sin decir que vas a hacer nada: hazlo.' },
-      { role: 'user', content: lastText },
-    ];
-    attempt = await tryRequest(keyless, minimal, undefined, false);
-    attemptHadKey = false;
-    return attempt.response.ok;
-  });
-
   let attempt = await tryRequest(cfg, messages, tools, true);
-  let attemptHadKey = !!cfg.apiKey;
 
   if (aborted()) {
     yield { type: 'aborted' };
     return;
   }
 
+  // Si streaming falló, intentar en modo no-streaming con la misma clave y modelo
   if (!attempt.response.ok) {
-    if (isOpenCodeZenUrl(cfg.baseUrl)) {
-      // Zen tiene sus propias particularidades (keyless, big-pickle, HTTP 500
-      // con streaming+tools…): se prueban los escalones de autocomprobación.
-      for (const es of escalones) {
-        if (attempt.response.ok) break;
-        await es();
-        if (aborted()) {
-          yield { type: 'aborted' };
-          return;
-        }
-      }
-    } else {
-      // Proveedor externo OpenAI-compatible (OpenAI, Gemini, Groq, Mistral…):
-      // el fallo del streaming NO es de los fallbacks de Zen. Se reintenta en
-      // no-streaming sin tools para capturar el mensaje de error REAL del
-      // proveedor (con status + cuerpo) y mostrarlo tal cual.
-      attempt = await tryRequest(cfg, sanitizeForFallback(messages), undefined, false);
-      attemptHadKey = !!cfg.apiKey;
+    attempt = await tryRequest(cfg, messages, tools, false);
+    if (aborted()) {
+      yield { type: 'aborted' };
+      return;
+    }
+
+    // Si aún falla y el proveedor es OpenCode Zen sin clave, probar keyless big-pickle
+    if (!attempt.response.ok && !cfg.apiKey && isOpenCodeZenUrl(cfg.baseUrl)) {
+      const keyless = { ...cfg, apiKey: '', model: DEFAULT_MODEL };
+      attempt = await tryRequest(keyless, messages, undefined, false);
       if (aborted()) {
         yield { type: 'aborted' };
         return;
@@ -521,36 +381,40 @@ export async function* streamChat(
     }
 
     if (!attempt.response.ok) {
-      yield { type: 'error', error: classifyError(attempt.response, attempt.data, attemptHadKey, !!cfg.apiKey, cfg.baseUrl) };
+      yield { type: 'error', error: classifyError(attempt.response, attempt.data, !!cfg.apiKey) };
       return;
     }
 
-    const choice = attempt.data?.choices?.[0]?.message || attempt.data?.message;
-    // Una respuesta no-streaming también puede contener tool_calls: emitirlas
-    // (antes se descartaban → Charvis "respondía" sin ejecutar ninguna acción).
-    const tcs = choice?.tool_calls;
-    if (Array.isArray(tcs) && tcs.length) {
-      for (const tc of tcs) {
-        yield { type: 'tool_call', toolCall: tc };
+    // Procesar respuesta no-streaming
+    if (isAnthropic) {
+      const textParts = attempt.data?.content?.filter((c: any) => c.type === 'text').map((c: any) => c.text).join('') || '';
+      if (textParts) yield { type: 'text', text: textParts };
+      yield { type: 'done' };
+      return;
+    } else {
+      const choice = attempt.data?.choices?.[0]?.message || attempt.data?.message;
+      const tcs = choice?.tool_calls;
+      if (Array.isArray(tcs) && tcs.length) {
+        for (const tc of tcs) {
+          yield { type: 'tool_call', toolCall: tc };
+        }
       }
+      const content: string = choice?.content || choice?.reasoning_content || '';
+      if (content) yield { type: 'text', text: content };
+      yield { type: 'done', reasoning: choice?.reasoning_content || undefined };
+      return;
     }
-    const content: string = choice?.content || choice?.reasoning_content || '';
-    if (content) yield { type: 'text', text: content };
-    yield { type: 'done', reasoning: choice?.reasoning_content || undefined };
-    return;
   }
 
   const reader = attempt.response.body?.getReader();
   if (!reader) {
-    yield { type: 'error', error: 'No response body' };
+    yield { type: 'error', error: 'No se pudo leer la respuesta del servidor' };
     return;
   }
 
   const decoder = new TextDecoder();
   let buffer = '';
-  // Accumulate tool calls across chunks
   const pendingToolCalls: Record<string, { id: string; name: string; args: string }> = {};
-  // Accumulate reasoning/thinking content (debe reenviarse en la 2ª pasada)
   let accumulatedReasoning = '';
 
   try {
@@ -559,8 +423,6 @@ export async function* streamChat(
       try {
         readResult = await reader.read();
       } catch (readErr) {
-        // Si la cancelación aborta el fetch a mitad de lectura, reader.read()
-        // rechaza con AbortError en lugar de resolver. Tratarlo como stop.
         if (aborted()) {
           yield { type: 'aborted' };
           return;
@@ -568,7 +430,6 @@ export async function* streamChat(
         throw readErr;
       }
       if (aborted()) {
-        // No emitimos error: es una cancelación del usuario, no un fallo.
         yield { type: 'aborted' };
         return;
       }
@@ -581,10 +442,29 @@ export async function* streamChat(
 
       for (const line of lines) {
         const trimmed = line.trim();
-        if (!trimmed || !trimmed.startsWith('data: ')) continue;
+        if (!trimmed) continue;
+
+        if (isAnthropic) {
+          // Anthropic SSE: data: {"type": "content_block_delta", "delta": {"type": "text_delta", "text": "..."}}
+          if (trimmed.startsWith('data: ')) {
+            const dataStr = trimmed.slice(6);
+            try {
+              const parsed = JSON.parse(dataStr);
+              if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
+                yield { type: 'text', text: parsed.delta.text };
+              } else if (parsed.type === 'message_stop') {
+                yield { type: 'done' };
+                return;
+              }
+            } catch {}
+          }
+          continue;
+        }
+
+        // OpenAI-compatible SSE
+        if (!trimmed.startsWith('data: ')) continue;
         const data = trimmed.slice(6);
         if (data === '[DONE]') {
-          // Emit any pending tool calls
           for (const tc of Object.values(pendingToolCalls)) {
             yield {
               type: 'tool_call',
@@ -609,17 +489,14 @@ export async function* streamChat(
         const delta = parsed?.choices?.[0]?.delta;
         if (!delta) continue;
 
-        // Text content
         if (delta.content) {
           yield { type: 'text', text: delta.content };
         }
 
-        // Reasoning content (modelos de razonamiento)
         if (delta.reasoning_content) {
           accumulatedReasoning += delta.reasoning_content;
         }
 
-        // Tool calls (streamed incrementally)
         if (delta.tool_calls) {
           for (const tc of delta.tool_calls) {
             const idx = String(tc.index ?? 0);
@@ -641,7 +518,6 @@ export async function* streamChat(
     reader.releaseLock();
   }
 
-  // Emit remaining tool calls if stream ended without [DONE]
   for (const tc of Object.values(pendingToolCalls)) {
     yield {
       type: 'tool_call',
@@ -656,7 +532,7 @@ export async function* streamChat(
 }
 
 /**
- * Non-streaming chat (for simpler use cases or fallback).
+ * Non-streaming chat.
  */
 export async function sendChat(
   config: AIProviderConfig,
@@ -664,46 +540,28 @@ export async function sendChat(
   tools?: AIToolDefinition[],
 ): Promise<{ content: string | null; toolCalls: AIToolCall[] }> {
   const cfg = normalizeConfig(config);
-  let attempt = await (async () => {
-    try {
-      return await requestChat(cfg, messages, tools, false);
-    } catch (err) {
-      return {
-        response: { ok: false, status: 0 } as Response,
-        data: { error: { message: `Network error: ${err instanceof Error ? err.message : String(err)}` } },
-      };
-    }
-  })();
+  const isAnthropic = isAnthropicUrl(cfg.baseUrl);
+
+  let attempt: { response: Response; data: any };
+  try {
+    attempt = await requestChat(cfg, messages, tools, false);
+  } catch (err) {
+    attempt = {
+      response: { ok: false, status: 0 } as Response,
+      data: { error: { message: `Error de red: ${err instanceof Error ? err.message : String(err)}` } },
+    };
+  }
 
   if (!attempt.response.ok) {
-    // Self-healing: si la petición configurada falla, reintenta con el modelo
-    // gratuito sin clave (big-pickle) antes de rendirse. Así "Probar conexión"
-    // responde incluso si el modelo de pago no está disponible con la clave.
-    const originalAttempt = attempt;
-    const keyless = { ...cfg, apiKey: '', model: DEFAULT_MODEL };
-    const msgs = sanitizeForFallback(messages);
-    const fb = await requestChat(keyless, msgs, undefined, false).catch(() => attempt);
-    if (fb.response.ok) {
-      attempt = fb;
-    } else {
-      // El fallback keyless también falló. Si el intento original (con clave)
-      // fue un fallo de autenticación REAL, ese es el diagnóstico útil; si no,
-      // el problema es de red/servicio y no hay que culpar a la clave.
-      const originalWasAuth =
-        originalAttempt.response.status === 401 ||
-        originalAttempt.response.status === 403 ||
-        isAuthFailure(rawError(originalAttempt.response, originalAttempt.data));
-      const useOriginal = !!cfg.apiKey && originalWasAuth;
-      throw new Error(
-        classifyError(
-          useOriginal ? originalAttempt.response : fb.response,
-          useOriginal ? originalAttempt.data : fb.data,
-          useOriginal ? !!cfg.apiKey : false,
-          !!cfg.apiKey,
-          cfg.baseUrl,
-        ),
-      );
-    }
+    throw new Error(classifyError(attempt.response, attempt.data, !!cfg.apiKey));
+  }
+
+  if (isAnthropic) {
+    const textParts = attempt.data?.content?.filter((c: any) => c.type === 'text').map((c: any) => c.text).join('') || null;
+    return {
+      content: textParts,
+      toolCalls: [],
+    };
   }
 
   const choice = attempt.data?.choices?.[0]?.message || attempt.data?.message;
@@ -714,10 +572,7 @@ export async function sendChat(
 }
 
 /**
- * Prueba la conexión con UNA petición directa (sin fallbacks self-healing) y
- * reporta el código HTTP real. La usa "Probar conexión" para que el usuario vea
- * la causa exacta: 401/403 = clave rechazada, 500 = servicio de inferencia caído,
- * 404 = URL base incorrecta, 0 = error de red/CORS.
+ * Prueba la conexión con UNA petición directa al proveedor.
  */
 export async function probeProvider(
   config: AIProviderConfig,
@@ -750,12 +605,12 @@ export async function probeProvider(
   return {
     ok: false,
     status: attempt.response.status,
-    message: classifyError(attempt.response, attempt.data, !!cfg.apiKey, !!cfg.apiKey, cfg.baseUrl),
+    message: classifyError(attempt.response, attempt.data, !!cfg.apiKey),
     latencyMs,
   };
 }
 
-/** Popular models for UI selector (OpenCode Zen OpenAI-compatible models) */
+/** Modelos de OpenCode Zen para selector rápido */
 export const AI_MODELS = [
   { id: 'big-pickle', name: 'Big Pickle (OpenCode)', provider: 'OpenCode Zen', tier: 'balanced', free: true },
   { id: 'glm-5.2', name: 'GLM 5.2', provider: 'GLM', tier: 'advanced' },
@@ -767,7 +622,4 @@ export const AI_MODELS = [
   { id: 'glm-5', name: 'GLM 5', provider: 'GLM', tier: 'balanced' },
 ] as const;
 
-/** Modelos que funcionan sin API key (gratuitos / keyless) */
 export const FREE_MODELS = AI_MODELS.filter(m => (m as any).free).map(m => m.id);
-
-export const DEFAULT_MODEL = 'big-pickle';
