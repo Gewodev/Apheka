@@ -374,18 +374,6 @@ export const AI_TOOL_DEFINITIONS: AIToolDefinition[] = [
   {
     type: 'function',
     function: {
-      name: 'deletePlannedSession',
-      description: 'Elimina una sesión planificada por su ID.',
-      parameters: {
-        type: 'object',
-        properties: { sessionId: { type: 'string', description: 'ID de la sesión' } },
-        required: ['sessionId'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
       name: 'completePlannedSession',
       description: 'Marca una sesión planificada como completada (o la desmarca).',
       parameters: {
@@ -1154,7 +1142,6 @@ export interface AppContextActions {
   plannedSessions: any[];
   addPlannedSession: (session: any) => void;
   updatePlannedSession: (id: string, updates: any) => void;
-  deletePlannedSession: (id: string) => void;
   // Timer
   isTimerActive: boolean;
   sessionType: string;
@@ -1639,14 +1626,6 @@ export async function executeToolCall(
         if (args.completed !== undefined) updates.completed = args.completed;
         ctx.updatePlannedSession(s.id, updates);
         return { success: true, message: `Sesión "${s.title}" actualizada` };
-      }
-
-      case 'deletePlannedSession': {
-        const s = ctx.plannedSessions.find(x => x.id === args.sessionId);
-        if (!s) return { success: false, message: `Sesión no encontrada: ${args.sessionId}` };
-        ctx.deletePlannedSession(s.id);
-        ctx.addNotification?.(`Sesión eliminada: ${s.title}`, 'info');
-        return { success: true, message: `Sesión "${s.title}" eliminada` };
       }
 
       case 'completePlannedSession': {

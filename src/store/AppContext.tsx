@@ -1960,11 +1960,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       : musicProgress;
     const savedPlaying = overrideIsPlaying !== undefined ? overrideIsPlaying : isPlayingMusic;
     set(STORAGE_KEY, JSON.stringify({
-      tasks, habits, notes, noteFolders, courses, events, studySessions,
+      tasks, habits, notes, noteFolders, courses, events, studySessions, plannedSessions,
       settings, sessionTime, sessionType, isRest, isTimerActive: false, weeklyStudyTime, dailyStudyTime, dailyStudyDate, pomodoroSessions,
       trackHistory, playCounts, musicQueue, musicVolume, shuffleMode, repeatMode, artists, playlists,
       currentTrackId, isPlayingMusic: savedPlaying, musicListeningTime, musicListeningDate, dailyMusicTime,
-      musicProgress: liveProgress, musicDuration, downloadPath,
+      musicProgress: liveProgress, musicDuration, downloadPath, youtubeVideoUrl,
       accumulatedPauseTime, pauseStartTime, distractionCount,
       focusPomodoroTime, focusChronoTime, breakTime, dailyBreakTime,
       dailyFocusPomodoro, dailyFocusChrono,
@@ -2617,6 +2617,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (track.url.includes('youtube.com/') || track.url.includes('youtu.be/')) {
       if (!globalAudio.paused) globalAudio.pause();
       setYoutubeVideoUrl(track.url);
+      // La canción online también participa de la lógica de cola: si no hay
+      // cola se construye una con el contexto actual (barajada si el modo
+      // aleatorio está activo) para que las flechas anterior/siguiente y el
+      // fin de canción naveguen por el resto de canciones.
+      setMusicQueue(prev => {
+        if (prev.length > 0) return prev;
+        const pool = queueSourceRef.current?.pool ?? tracksRef.current.map(t => t.id);
+        if (pool.length === 0) return prev;
+        return shuffleModeRef.current ? weightedShuffle([...pool], playCountsRef.current) : [...pool];
+      });
       if (resumeStayPausedRef.current) {
         resumeStayPausedRef.current = false;
         setIsPlayingMusic(false);
@@ -3212,19 +3222,51 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setTimeout(() => recalcDailyPerformance(new Date().toISOString().slice(0, 10)), 0);
   }, []);
 
+  // Auditoría ligera de cambios en sesiones planificadas: permite diagnosticar
+  // cualquier borrado/ocultación "misteriosa" (owa_session_audit_v1, máx 100).
+  const auditPlannedSession = useCallback((action: string, s: PlannedSession | { id: string; date?: string; courseId?: string; title?: string }) => {
+    try {
+      const key = 'owa_session_audit_v1';
+      const raw = localStorage.getItem(key);
+      const arr = raw ? JSON.parse(raw) : [];
+      const list = (Array.isArray(arr) ? arr : []).slice(-99);
+      list.push({ at: new Date().toISOString(), action, id: s.id, date: s.date, courseId: s.courseId, title: s.title });
+      localStorage.setItem(key, JSON.stringify(list));
+    } catch { /* noop */ }
+  }, []);
+
   const addPlannedSession = useCallback((session: Omit<PlannedSession, 'id' | 'createdAt'>) => {
     const id = `planned_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const newSession: PlannedSession = { ...session, id, createdAt: new Date().toISOString() };
     setPlannedSessions(prev => [...prev, newSession]);
-  }, []);
+    // Marca la última sesión creada/editada para que el cronograma de Cursos
+    // salte a su día (la sesión recién creada se ve SIEMPRE al instante).
+    try { localStorage.setItem('owa_last_planned_session', JSON.stringify({ id, date: newSession.date, courseId: newSession.courseId })); } catch { /* noop */ }
+    auditPlannedSession('add', newSession);
+  }, [auditPlannedSession]);
 
   const updatePlannedSession = useCallback((id: string, updates: Partial<PlannedSession>) => {
-    setPlannedSessions(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
-  }, []);
+    setPlannedSessions(prev => {
+      const target = prev.find(s => s.id === id);
+      if (target) {
+        const next = { ...target, ...updates };
+        if (updates.date || updates.courseId || updates.title) {
+          try { localStorage.setItem('owa_last_planned_session', JSON.stringify({ id, date: next.date, courseId: next.courseId })); } catch { /* noop */ }
+        }
+        auditPlannedSession('update', next);
+        return prev.map(s => s.id === id ? next : s);
+      }
+      return prev;
+    });
+  }, [auditPlannedSession]);
 
   const deletePlannedSession = useCallback((id: string) => {
-    setPlannedSessions(prev => prev.filter(s => s.id !== id));
-  }, []);
+    setPlannedSessions(prev => {
+      const target = prev.find(s => s.id === id);
+      if (target) auditPlannedSession('delete', target);
+      return prev.filter(s => s.id !== id);
+    });
+  }, [auditPlannedSession]);
 
   const reorderPlannedSessions = useCallback((orderedIds: string[]) => {
     setPlannedSessions(prev => {

@@ -71,6 +71,7 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
     tracks, musicVolume, setMusicVolume, setMusicProgress, musicProgress,
     musicDuration, shuffleMode, setShuffleMode, setRepeatMode, repeatMode, musicQueue, setMusicQueue, queueSource,
     playTrack, settings, setCoverModalTrackId, toggleTrackFavorite,
+    youtubeVideoUrl, setYoutubeVideoUrl,
   } = useApp();
 
   const progressRef = useRef<HTMLDivElement>(null);
@@ -379,6 +380,8 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                     <Shuffle size={17} />
                   </button>
                   <button onClick={() => {
+                    // Canción online activa: es el inicio de la sesión, "anterior" la reinicia
+                    if (youtubeVideoUrl) { setYoutubeVideoUrl(youtubeVideoUrl); return; }
                     const pool = queueSource?.pool ?? tracks.map(t => t.id);
                     const idx = pool.indexOf(currentTrackId);
                     if (idx > 0) playTrack(pool[idx - 1]);
@@ -407,6 +410,21 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
                     {isPlayingMusic ? <Pause size={21} fill="currentColor" /> : <Play size={21} fill="currentColor" style={{ marginLeft: 1 }} />}
                   </button>
                   <button onClick={() => {
+                    // Canción online activa: navega por la cola / el pool de la sesión
+                    if (youtubeVideoUrl) {
+                      if (musicQueue.length > 0) { setMusicQueue(musicQueue.slice(1)); playTrack(musicQueue[0]); return; }
+                      const pool = queueSource?.pool ?? tracks.map(t => t.id);
+                      if (shuffleMode) {
+                        const rest = pool.filter(tid => tid !== currentTrackId);
+                        if (rest.length > 0) { const pick = rest[Math.floor(Math.random() * rest.length)]; playTrack(pick); }
+                        else if (pool.length > 0) playTrack(pool[0]);
+                      } else if (pool.length > 0) {
+                        playTrack(pool[0]);
+                      } else if (repeatMode === 'one') {
+                        setYoutubeVideoUrl(youtubeVideoUrl);
+                      }
+                      return;
+                    }
                     if (musicQueue.length > 0) { setMusicQueue(musicQueue.slice(1)); playTrack(musicQueue[0]); return; }
                     const pool = queueSource?.pool ?? tracks.map(t => t.id);
                     if (shuffleMode) {

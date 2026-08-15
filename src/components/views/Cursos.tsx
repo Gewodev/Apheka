@@ -1429,33 +1429,63 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const [planEditId, setPlanEditId] = useState<string | null>(null);
   const [planDate, setPlanDate] = useState('');
   const [plannerDate, setPlannerDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
+  const plannerManualRef = useRef(false);
+  const lastPlannerDayRef = useRef(format(new Date(), 'yyyy-MM-dd'));
+  const [todayTick, setTodayTick] = useState(0);
 
-  // Persist the cronograma selected day per course — but ONLY if it still falls
-  // within the current week (the strip shows one week). If the saved day belongs
-  // to another week, open the current-week day that has the course's most recent
-  // session (if any), otherwise today: so no session ever looks "deleted" after
-  // reopening the app days later.
+  // A medianoche el cronograma vuelve a HOY automáticamente. La selección manual
+  // (click en un día de la franja) se respeta mientras dure el mismo día natural;
+  // al cambiar la fecha (medianoche) se reinicia a HOY.
+  useEffect(() => {
+    const t = setInterval(() => {
+      const cur = format(new Date(), 'yyyy-MM-dd');
+      if (cur === lastPlannerDayRef.current) return;
+      lastPlannerDayRef.current = cur;
+      plannerManualRef.current = false;
+      if (selectedCourseId) { try { localStorage.setItem(`owa_estudio_planner_manual_${selectedCourseId}`, '0'); } catch { /* noop */ } }
+      setTodayTick(x => x + 1);
+    }, 30000);
+    return () => clearInterval(t);
+  }, [selectedCourseId]);
   useEffect(() => {
     if (!selectedCourseId) return;
-    const saved = localStorage.getItem(`owa_estudio_planner_date_${selectedCourseId}`);
+    setPlannerDate(format(new Date(), 'yyyy-MM-dd'));
+  }, [todayTick, selectedCourseId]);
+
+  // Restauración del día del cronograma al abrir el curso. La selección MANUAL
+  // (click en un día de la franja) se respeta mientras ese día siga en la semana
+  // actual; sin selección manual se abre el día de la semana con la sesión más
+  // reciente del curso (ninguna sesión parece borrada) o HOY si no hay sesiones.
+  useEffect(() => {
+    if (!selectedCourseId) return;
+    // Salto inmediato al día de la sesión recién creada/editada (marcada por
+    // AppContext en owa_last_planned_session): la sesión nueva se ve SIEMPRE,
+    // incluso si el usuario había seleccionado manualmente otro día.
+    try {
+      const lastRaw = localStorage.getItem('owa_last_planned_session');
+      if (lastRaw) {
+        localStorage.removeItem('owa_last_planned_session');
+        const last = JSON.parse(lastRaw);
+        if (last && last.courseId === selectedCourseId && typeof last.date === 'string') {
+          setPlannerDate(last.date);
+          return;
+        }
+      }
+    } catch { /* noop */ }
     const now = new Date();
     const todayStr = format(now, 'yyyy-MM-dd');
     const ws = startOfWeek(now, { weekStartsOn: 1 });
     const we = addDays(ws, 6);
-    let next = todayStr;
-    let savedInWeek = false;
-    if (saved && /^\d{4}-\d{2}-\d{2}$/.test(saved)) {
-      const d = new Date(saved + 'T12:00:00');
-      savedInWeek = d >= ws && d <= we;
-      if (savedInWeek) next = saved;
-    }
-    if (!savedInWeek) {
-      const weekDays = Array.from({ length: 7 }, (_, i) => format(addDays(ws, i), 'yyyy-MM-dd'));
-      const weekSessions = (plannedSessions || []).filter(s => !!s && s.courseId === selectedCourseId && weekDays.includes(s.date));
-      const latest = weekSessions.sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0];
-      if (latest) next = latest.date;
-    }
-    setPlannerDate(next);
+    const saved = localStorage.getItem(`owa_estudio_planner_date_${selectedCourseId}`);
+    const savedOk = saved && /^\d{4}-\d{2}-\d{2}$/.test(saved) ? saved : null;
+    const savedInWeek = savedOk ? (() => { const d = new Date(savedOk + 'T12:00:00'); return d >= ws && d <= we; })() : false;
+    const manual = localStorage.getItem(`owa_estudio_planner_manual_${selectedCourseId}`) === '1';
+    plannerManualRef.current = manual && savedInWeek;
+    if (plannerManualRef.current && savedOk) { setPlannerDate(savedOk); return; }
+    const weekDays = Array.from({ length: 7 }, (_, i) => format(addDays(ws, i), 'yyyy-MM-dd'));
+    const weekSessions = (plannedSessions || []).filter(s => !!s && s.courseId === selectedCourseId && weekDays.includes(s.date));
+    const latest = weekSessions.sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0];
+    setPlannerDate(latest ? latest.date : todayStr);
   }, [selectedCourseId, plannedSessions]);
   useEffect(() => {
     if (selectedCourseId) localStorage.setItem(`owa_estudio_planner_date_${selectedCourseId}`, plannerDate);
@@ -3775,7 +3805,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                   const isTodayDay = d.iso === today;
                                   const isSel = d.iso === plannerDate;
                                   return (
-                                    <button key={d.iso} onClick={() => setPlannerDate(d.iso)}
+                                    <button key={d.iso} onClick={() => { plannerManualRef.current = true; try { localStorage.setItem(`owa_estudio_planner_manual_${selectedCourseId}`, '1'); } catch { /* noop */ } setPlannerDate(d.iso); }}
                                       title={format(new Date(d.iso + 'T12:00:00'), 'EEEE d MMMM', { locale: es })}
                                       style={{ flex: 1, minWidth: 0, cursor: 'pointer', height: 28, padding: '0 4px', borderRadius: 8, border: isSel ? `1px solid ${course.color}` : '1px solid transparent', background: 'transparent', transition: 'all 180ms ' + EASE, fontFamily: 'inherit' }}
                                       onMouseEnter={e => { if (!isTodayDay && !isSel) { e.currentTarget.style.background = 'var(--bg-hover)'; } }}
@@ -3950,8 +3980,8 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                         };
                         return createPortal(
                           <div onClick={closePanel} style={{ position: 'fixed', inset: 0, zIndex: 99995, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.32)', backdropFilter: 'blur(3px)', animation: 'fadeIn 200ms ' + EASE }}>
-                            <div onClick={e => e.stopPropagation()} className="bento-card" style={{ position: 'relative', width: 920, maxWidth: 'calc(100% - 48px)', background: 'linear-gradient(160deg, var(--bg-elevated-alpha, var(--bg-elevated)) 0%, color-mix(in srgb, var(--bg-elevated-alpha, var(--bg-elevated)) 86%, transparent) 100%)', border: '1px solid var(--border-soft)', borderRadius: 16, boxShadow: '0 24px 60px rgba(0,0,0,0.45)', padding: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                              <div style={{ padding: '28px 36px 26px', display: 'flex', flexDirection: 'column', gap: 24 }}>
+                            <div onClick={e => e.stopPropagation()} className="bento-card" style={{ position: 'relative', width: 980, maxWidth: 'calc(100% - 48px)', background: 'linear-gradient(160deg, var(--bg-elevated-alpha, var(--bg-elevated)) 0%, color-mix(in srgb, var(--bg-elevated-alpha, var(--bg-elevated)) 86%, transparent) 100%)', border: '1px solid var(--border-soft)', borderRadius: 16, boxShadow: '0 24px 60px rgba(0,0,0,0.45)', padding: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                              <div style={{ padding: '30px 40px 28px', display: 'flex', flexDirection: 'column', gap: 28 }}>
 
                               {/* header: título grande en el color del curso + "sesión de estudio" pequeño abajo */}
                               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
@@ -3963,7 +3993,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                                       <span style={{ opacity: 0.5 }}>·</span>
                                       <span style={{ textTransform: 'none', letterSpacing: '0.02em', fontSize: 10.5 }}>{format(new Date(ds.date + 'T12:00:00'), 'EEEE d MMMM', { locale: es })}</span>
                                     </div>
-                                    <span title={dOtherCourse ? dOtherCourse.name : course.name} style={{ color: dLinkCol, fontWeight: 600, textTransform: 'none', letterSpacing: '0.02em', fontSize: 10.5, maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0, textAlign: 'right' }}>{dOtherCourse ? dOtherCourse.name : course.name}</span>
+                                    <span title={dOtherCourse ? dOtherCourse.name : course.name} style={{ color: dLinkCol, fontWeight: 600, textTransform: 'none', letterSpacing: '0.02em', fontSize: 10.5, maxWidth: 340, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 1, textAlign: 'right', marginLeft: 'auto' }}>{dOtherCourse ? dOtherCourse.name : course.name}</span>
                                   </div>
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, marginTop: 2 }}>

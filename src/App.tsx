@@ -78,6 +78,25 @@ function AppContent() {
       setPipUrl(next.url, next.title, true);
       return;
     }
+    // Canción online (YouTube) activa: participa de la misma lógica de cola que
+    // un track local. Bucle de una canción la recarga; la cola avanza a la
+    // siguiente; aleatorio o bucle de todo rellenan desde el pool del contexto.
+    if (youtubeVideoUrl) {
+      if (repeatMode === 'one') { setYoutubeVideoUrl(youtubeVideoUrl); return; }
+      const q = musicQueue;
+      if (q.length > 0) {
+        setMusicQueue(q.slice(1));
+        playTrack(q[0]);
+        return;
+      }
+      if (shuffleMode || repeatMode === 'all') {
+        const sourcePool = queueSource?.pool ?? tracks.map(t => t.id);
+        const restPool = sourcePool.filter(tid => tid !== currentTrackId);
+        const refilled = shuffleMode ? [...restPool].sort(() => Math.random() - 0.5) : restPool;
+        if (refilled.length > 0) { setMusicQueue(refilled.slice(1)); playTrack(refilled[0]); return; }
+      }
+      return; // sin cola ni pool: el loop del iframe repite la misma canción
+    }
     if (tracks.length > 0 && currentTrackId) {
       if (repeatMode === 'one') {
         playTrack(currentTrackId);
@@ -98,7 +117,7 @@ function AppContent() {
       if (nextId) playTrack(nextId);
       else setIsPlayingMusic(false);
     }
-  }, [pipAfterQueue, setPipAfterQueue, setPipUrl, tracks, currentTrackId, repeatMode, playTrack, musicQueue, setMusicQueue, shuffleMode, queueSource, setIsPlayingMusic]);
+  }, [pipAfterQueue, setPipAfterQueue, setPipUrl, tracks, currentTrackId, repeatMode, playTrack, musicQueue, setMusicQueue, shuffleMode, queueSource, setIsPlayingMusic, youtubeVideoUrl, setYoutubeVideoUrl]);
   const handleYtEndedRef = useRef(handleYtEnded);
   handleYtEndedRef.current = handleYtEnded;
 
@@ -354,7 +373,10 @@ function AppContent() {
     else localStorage.removeItem('owa_selected_course_id');
   }, [selectedCourseId]);
   useEffect(() => {
-    if (activeView === 'curso_detalle' && selectedCourseId && !courses.some(c => c && c.id === selectedCourseId)) {
+    // Solo expulsar de la vista del curso cuando la carga de datos ya terminó
+    // (courses.length > 0): durante el arranque courses llega vacío y sin esta
+    // guarda la vista del curso restaurada saltaría a la lista de cursos.
+    if (courses.length > 0 && activeView === 'curso_detalle' && selectedCourseId && !courses.some(c => c && c.id === selectedCourseId)) {
       setActiveView('cursos');
     }
   }, [activeView, selectedCourseId, courses]);

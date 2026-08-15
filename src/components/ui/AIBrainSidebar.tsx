@@ -395,7 +395,6 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
     plannedSessions: appCtx.plannedSessions,
     addPlannedSession: appCtx.addPlannedSession,
     updatePlannedSession: appCtx.updatePlannedSession,
-    deletePlannedSession: appCtx.deletePlannedSession,
     isTimerActive: appCtx.isTimerActive,
     sessionType: appCtx.sessionType,
     sessionTime: appCtx.sessionTime,

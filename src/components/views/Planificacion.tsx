@@ -248,7 +248,21 @@ export default function Planificacion() {
 
   const openNewPlanSession = (date?: string) => {
     setPlanEditId(null);
-    setPlanDate(date || format(new Date(), 'yyyy-MM-dd'));
+    const fallbackDate = (() => {
+      if (date) return date;
+      // Sin fecha explícita: HOY si cae dentro de la semana visible (semana/día);
+      // si el usuario navegó a otra semana, el día visible actual. Así la sesión
+      // nueva SIEMPRE cae en una fecha que la vista actual muestra.
+      if (planView === 'week' || planView === 'day') {
+        const todayStr = format(new Date(), 'yyyy-MM-dd');
+        const ws = startOfWeek(navDate, { weekStartsOn: 1 });
+        const we = addDays(ws, 6);
+        if (todayStr >= format(ws, 'yyyy-MM-dd') && todayStr <= format(we, 'yyyy-MM-dd')) return todayStr;
+        return format(navDate, 'yyyy-MM-dd');
+      }
+      return format(new Date(), 'yyyy-MM-dd');
+    })();
+    setPlanDate(fallbackDate);
     setPlanStartTime('09:00');
     setPlanTitle('');
     setPlanCourseId('');
@@ -1590,6 +1604,12 @@ export default function Planificacion() {
                         const repeatPatch = orig?.repeat && orig.repeat !== 'none' ? { repeat: orig.repeat, repeatDays: orig.repeatDays, repeatUntil: orig.repeatUntil } : {};
                         updatePlannedSession(planEditId, { ...payload, ...repeatPatch, exceptions: orig?.exceptions });
                       } else addPlannedSession(payload);
+                      // La sesión guardada debe verse AL INSTANTE: si la vista no la
+                      // muestra (mes/año no renderizan sesiones), saltar a la semana
+                      // de la fecha de la sesión recién creada/editada.
+                      const targetDate = new Date(modalDate + 'T12:00:00');
+                      if (planView !== 'week') setPlanView('week');
+                      setNavDate(startOfWeek(targetDate, { weekStartsOn: 1 }));
                       setShowPlanModal(false);
                     }}
                     style={{ height: 38, borderRadius: 9, border: 'none', background: courseColor, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: '0 22px', transition: 'all 150ms', boxShadow: selCourse ? `0 4px 14px ${selCourse.color}2e` : '0 4px 14px var(--accent-dim)' }}
