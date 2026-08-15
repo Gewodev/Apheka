@@ -5,7 +5,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  ChevronLeft, ChevronRight, ChevronUp, ChevronDown, FolderOpen, Plus, Minus, Calendar, Clock, X, Trash2, Check, CheckSquare, CheckCircle2, Pencil
+  ChevronLeft, ChevronRight, ChevronUp, ChevronDown, FolderOpen, Plus, Minus, Calendar, Clock, X, Trash2, Check, CheckSquare, CheckCircle2, Pencil, BookOpen
 } from 'lucide-react';
 import { useApp, fmtClock, fmtTimeRange } from '../../store/AppContext';
 import {
@@ -1229,7 +1229,7 @@ export default function Planificacion() {
                       return (
                         <div key={di}
                           onClick={()=>{ setSelectedItem({ type: 'day', date: day, events: dayEvs, tasks: dayTasks }); }}
-                          style={{ height:130, padding:'10px 12px', cursor:'pointer', overflow:'hidden', borderRight:di<6?'1px solid var(--border-soft)':'none', background:tod?'rgba(225,29,72,0.05)':'transparent', opacity, transition:'background 200ms', position:'relative' }}
+                          style={{ height:130, padding:'10px 12px', cursor:'pointer', overflow:'hidden', borderRight:di<6?'1px solid var(--border-soft)':'none', background:'transparent', opacity, transition:'background 200ms', position:'relative' }}
                           onMouseEnter={e=>!tod && (e.currentTarget.style.outline='1px solid var(--border-strong)')}
                           onMouseLeave={e=>!tod && (e.currentTarget.style.outline='none')}
                         >
@@ -1296,7 +1296,6 @@ export default function Planificacion() {
                             const inc = isSameMonth(day, monthDate);
                             const tod = isToday(day);
                             const iso = format(day, 'yyyy-MM-dd');
-                            const hasEvent = getEventsForDate(iso).length > 0;
                             const dayEvs2 = getEventsForDate(iso);
                             const dayLinkedIds2 = new Set(dayEvs2.map(ev => (ev as PlanEvent).taskId).filter(Boolean));
                             const dayTasks2 = tasks.filter(t => { if(!t.dueDate || t.status === 'completado') return false; if(dayLinkedIds2.has(t.id)) return false; return (t.dueDate||'').slice(0,10)===iso });
@@ -1309,7 +1308,7 @@ export default function Planificacion() {
                                   fontSize: inc ? 10 : 8,
                                   fontWeight: tod ? 800 : (inc ? 500 : 300),
                                   color: tod ? '#fff' : (inc ? 'var(--text-primary)' : 'var(--text-muted)'),
-                                  background: tod ? 'var(--accent)' : (hasEvent ? 'rgba(225,29,72,0.08)' : 'transparent'),
+                                  background: tod ? 'var(--accent)' : 'transparent',
                                   opacity: inc ? 1 : 0.3,
                                   cursor: inc ? 'pointer' : 'default',
                                   transition:'background 150ms',
@@ -1545,10 +1544,24 @@ export default function Planificacion() {
                       onChange={v => { setPlanGroupId(v); setPlanTopicId(''); }}
                       options={selGroups.map(g => ({ id: g.id, label: g.name }))}
                       noneLabel="Sin agrupación" color={courseColor} />
-                    <PlanSelectDropdown value={planTopicId}
-                      onChange={setPlanTopicId}
-                      options={planGroupId ? selTopics.map(t => ({ id: t.id, label: t.title })) : []}
-                      noneLabel={planGroupId ? 'Sin tema' : 'Elige agrupación'} color={courseColor} />
+                    {planGroupId ? (
+                      selTopics.length > 0 ? (
+                        <div style={{ animation: 'fadeIn 200ms ease' }}>
+                          <PlanSelectDropdown value={planTopicId}
+                            onChange={setPlanTopicId}
+                            options={selTopics.map(t => ({ id: t.id, label: t.title }))}
+                            noneLabel="Sin tema" color={courseColor} />
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 42, borderRadius: 10, border: '1px dashed var(--border-subtle)', background: 'var(--bg-deep)', padding: '0 13px', animation: 'fadeIn 200ms ease' }}>
+                          <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)', fontFamily: "'Inter', sans-serif" }}>Esta agrupación no tiene temas</span>
+                        </div>
+                      )
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 42, borderRadius: 10, border: '1px dashed var(--border-subtle)', background: 'var(--bg-deep)', padding: '0 13px' }}>
+                        <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)', fontFamily: "'Inter', sans-serif" }}>Elige una agrupación para vincular un tema</span>
+                      </div>
+                    )}
                   </div>
 
                   

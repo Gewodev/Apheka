@@ -1758,8 +1758,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Debounced save
   useEffect(() => {
     if (!hydrated) return;
-    const t = setTimeout(() => {
-      const json = JSON.stringify({
+    const json = JSON.stringify({
       tasks, habits, notes, noteFolders, courses, events, studySessions, plannedSessions,
         settings, sessionTime, sessionType, isRest, isTimerActive, weeklyStudyTime, dailyStudyTime, dailyStudyDate, pomodoroSessions,
         trackHistory, playCounts, musicQueue, musicVolume, shuffleMode, repeatMode, artists, playlists,
@@ -1768,30 +1767,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
         accumulatedPauseTime, pauseStartTime, distractionCount,
         focusPomodoroTime, focusChronoTime, breakTime, dailyBreakTime,
         dailyFocusPomodoro, dailyFocusChrono, dailyPerformances,
-      });
-      latestJsonRef.current = json;
+    });
+    // El último estado queda disponible AL INSTANTE para el flush síncrono de cierre
+    // (beforeunload/pagehide). Antes se asignaba DENTRO del debounce de 300ms: si la
+    // app se cerraba antes, el flush no tenía nada que escribir y la sesión recién
+    // creada se perdía al reiniciar.
+    latestJsonRef.current = json;
+    // Espejo síncrono en localStorage: el dato sobrevive a un cierre instantáneo
+    // (IDB y backup/disco siguen en el debounce, como capas secundarias).
+    try {
+      if (json.length <= 5_000_000) {
+        localStorage.setItem(STORAGE_KEY, json);
+      } else if (!mirrorQuotaWarnedRef.current) {
+        console.warn('Espejo local omitido por tamaño (los datos viven en IndexedDB)');
+        mirrorQuotaWarnedRef.current = true;
+      }
+    } catch (e: any) {
+      if (!mirrorQuotaWarnedRef.current) {
+        console.warn('Espejo local omitido por cuota (los datos viven en IndexedDB)');
+        mirrorQuotaWarnedRef.current = true;
+      }
+    }
+    const t = setTimeout(() => {
       set(STORAGE_KEY, json).catch((e: any) => console.error("Error saving data:", e));
-      // Mirror + backup en localStorage (sobreviven a pérdidas de IndexedDB)
+      // Backup throttled en localStorage (copia de seguridad adicional)
       try {
-        if (json.length > 5_000_000) {
-          if (!mirrorQuotaWarnedRef.current) {
-            console.warn('Espejo local omitido por tamaño (los datos viven en IndexedDB)');
-            mirrorQuotaWarnedRef.current = true;
-          }
-        } else {
-          localStorage.setItem(STORAGE_KEY, json);
+        if (json.length <= 5_000_000) {
           const now = Date.now();
           if (now - lastBackupTsRef.current > 60000) {
             localStorage.setItem('owa_studio_data_backup', json);
             lastBackupTsRef.current = now;
           }
         }
-      } catch (e: any) {
-        if (!mirrorQuotaWarnedRef.current) {
-          console.warn('Espejo local omitido por cuota (los datos viven en IndexedDB)');
-          mirrorQuotaWarnedRef.current = true;
-        }
-      }
+      } catch { /* noop */ }
       // Espejo en disco ($APPDATA/owa_studio_data.json): puente dev↔release y capa
       // extra de persistencia que sobrevive a limpiezas de IndexedDB/localStorage.
       if (isTauri()) {

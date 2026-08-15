@@ -246,7 +246,7 @@ function AppContent() {
     } catch { /* noop */ }
   }, [isPlayingMusic, youtubeVideoUrl]);
 
-  // Progreso de la barra del reproductor general (polling 250ms como el emergente)
+  // Progreso de la barra del reproductor general (polling 200ms, más fluido en la nube)
   useEffect(() => {
     if (!youtubeVideoUrl || !isPlayingMusic) return;
     const t = window.setInterval(() => {
@@ -258,7 +258,7 @@ function AppContent() {
         setMusicProgressRaw(Math.min(1, cur / d));
         setMusicDuration(d);
       }
-    }, 250);
+    }, 200);
     return () => window.clearInterval(t);
   }, [youtubeVideoUrl, isPlayingMusic, setMusicProgressRaw, setMusicDuration]);
 

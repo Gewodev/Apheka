@@ -1430,13 +1430,33 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const [planDate, setPlanDate] = useState('');
   const [plannerDate, setPlannerDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
 
-  // Persist the cronograma selected day per course — only restore it if it still belongs to the current week (the chart must always show the live week)
+  // Persist the cronograma selected day per course — but ONLY if it still falls
+  // within the current week (the strip shows one week). If the saved day belongs
+  // to another week, open the current-week day that has the course's most recent
+  // session (if any), otherwise today: so no session ever looks "deleted" after
+  // reopening the app days later.
   useEffect(() => {
     if (!selectedCourseId) return;
     const saved = localStorage.getItem(`owa_estudio_planner_date_${selectedCourseId}`);
-    const weekStartStr = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
-    setPlannerDate(saved && /^\d{4}-\d{2}-\d{2}$/.test(saved) && saved >= weekStartStr ? saved : format(new Date(), 'yyyy-MM-dd'));
-  }, [selectedCourseId]);
+    const now = new Date();
+    const todayStr = format(now, 'yyyy-MM-dd');
+    const ws = startOfWeek(now, { weekStartsOn: 1 });
+    const we = addDays(ws, 6);
+    let next = todayStr;
+    let savedInWeek = false;
+    if (saved && /^\d{4}-\d{2}-\d{2}$/.test(saved)) {
+      const d = new Date(saved + 'T12:00:00');
+      savedInWeek = d >= ws && d <= we;
+      if (savedInWeek) next = saved;
+    }
+    if (!savedInWeek) {
+      const weekDays = Array.from({ length: 7 }, (_, i) => format(addDays(ws, i), 'yyyy-MM-dd'));
+      const weekSessions = (plannedSessions || []).filter(s => !!s && s.courseId === selectedCourseId && weekDays.includes(s.date));
+      const latest = weekSessions.sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0];
+      if (latest) next = latest.date;
+    }
+    setPlannerDate(next);
+  }, [selectedCourseId, plannedSessions]);
   useEffect(() => {
     if (selectedCourseId) localStorage.setItem(`owa_estudio_planner_date_${selectedCourseId}`, plannerDate);
   }, [plannerDate, selectedCourseId]);
@@ -1495,6 +1515,25 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const [confirmDeleteSession, setConfirmDeleteSession] = useState<PlannedSession | null>(null);
   const [changeCourseFor, setChangeCourseFor] = useState<PlannedSession | null>(null);
   const [ccSelId, setCcSelId] = useState('');
+
+  // The session preview stays open after navigating away and back: persist the open session id
+  useEffect(() => {
+    try {
+      if (detailSessionId) localStorage.setItem('owa_session_detail_v1', detailSessionId);
+      else localStorage.removeItem('owa_session_detail_v1');
+    } catch { /* noop */ }
+  }, [detailSessionId]);
+  useEffect(() => {
+    if (!selectedCourseId) return;
+    try {
+      if (localStorage.getItem('owa_course_edit_session')) return;
+      const saved = localStorage.getItem('owa_session_detail_v1');
+      if (!saved) return;
+      const target = (plannedSessions || []).find(s => s && s.id === saved && s.courseId === selectedCourseId);
+      if (target) setDetailSessionId(saved);
+    } catch { /* noop */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCourseId]);
 
   // Track the latest topics visited per course (the session preview shows them as "Últimos ingresos a temas")
   useEffect(() => {
@@ -3850,15 +3889,16 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                         const dLinked = (studySessions || []).find(s => s.plannedSessionId === ds.id && s.type !== 'break');
                         const dLinkedMin = dLinked ? Math.max(1, Math.round((dLinked.duration || 0) / 60)) : 0;
                         const dRealPct = dLinked ? Math.min(100, Math.max(5, Math.round((dLinkedMin / Math.max(1, ds.durationMinutes || 30)) * 100))) : dDurPct;
-                        const linkRowStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 8, border: `1px solid ${course.color}22`, background: `${course.color}06`, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", fontSize: 11.5, cursor: 'pointer', transition: 'all 150ms ' + EASE, width: '100%', textAlign: 'left' };
-                        const linkRowHover = (e: React.MouseEvent<HTMLButtonElement>, on: boolean) => {
-                          e.currentTarget.style.borderColor = on ? `${course.color}55` : `${course.color}22`;
-                          e.currentTarget.style.background = on ? `${course.color}12` : `${course.color}06`;
+const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 7, padding: '5px 8px', borderRadius: 9, border: 'none', background: 'transparent', color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", fontSize: 11.5, fontWeight: 500, cursor: 'pointer', transition: 'all 160ms ' + EASE, maxWidth: '100%', textAlign: 'left', minWidth: 0 };
+                        const treeHover = (e: any, on: boolean) => {
+                          e.currentTarget.style.background = on ? `${dLinkCol}0d` : 'transparent';
                         };
+                        const treeBranch = (w: number) => <div style={{ width: w, height: 1.5, borderRadius: 1, background: `${dLinkCol}77`, flexShrink: 0 }} />;
                         const startStudy = () => {
                           if (activeTaskId) { addNotification('Hay una tarea vinculada al temporizador. Desvincula esa tarea para iniciar esta sesión.', 'info'); return; }
                           linkPlannedSessionToTimer(ds.id); setNavigateTo('estudio');
                         };
+                        const goGroup = () => { const tc = dOtherCourse || course; navigateToCourse(tc.id, ds.groupId || undefined); };
                         const goTopic = () => { const tc = dOtherCourse || course; navigateToCourse(tc.id, ds.groupId || undefined, ds.topicId || undefined); };
                         const closePanel = () => { setDetailSessionId(null); setConfirmDeleteSession(null); setChangeCourseFor(null); };
                         const openEditFromSession = (ps: PlannedSession) => {
@@ -3876,6 +3916,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                           setConfirmDeleteSession(null);
                         };
                         const editSession = () => {
+                          setDetailSessionId(null);
                           if (dOtherCourse) {
                             try { localStorage.setItem('owa_course_edit_session', ds.id); } catch { /* noop */ }
                             navigateToCourse(ds.courseId);
@@ -3896,27 +3937,44 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                               .filter(Boolean) as SubjectTopic[];
                           } catch { return []; }
                         })();
+                        const dMats = Array.isArray((dTopic as any)?.materials) ? ((dTopic as any).materials as any[]).filter((m: any) => m && typeof m === 'object') : [];
+                        const dMatMeta = (m: any) => {
+                          const u = String(m?.url || '').toLowerCase();
+                          if (/\.(pdf)($|\?)/.test(u)) return { I: FileText, c: '#EF4444' };
+                          if (/\.(xlsx?|ods|csv)($|\?)/.test(u)) return { I: FileSpreadsheet, c: '#10B981' };
+                          if (/\.(png|jpe?g|gif|webp|svg)($|\?)/.test(u)) return { I: ImageIcon, c: '#F59E0B' };
+                          if (/\.(mp3|wav|ogg|m4a|flac)($|\?)/.test(u)) return { I: Music, c: '#8B5CF6' };
+                          if (/\.(mp4|webm|mov|mkv)($|\?)/.test(u)) return { I: Play, c: '#EC4899' };
+                          if (/\.(docx?|odt|pptx?|txt)($|\?)/.test(u)) return { I: FileText, c: '#3B82F6' };
+                          return { I: File, c: 'var(--text-muted)' };
+                        };
                         return createPortal(
                           <div onClick={closePanel} style={{ position: 'fixed', inset: 0, zIndex: 99995, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.32)', backdropFilter: 'blur(3px)', animation: 'fadeIn 200ms ' + EASE }}>
-                            <div onClick={e => e.stopPropagation()} className="bento-card" style={{ position: 'relative', width: 800, maxWidth: 'calc(100% - 48px)', background: 'linear-gradient(160deg, var(--bg-elevated-alpha, var(--bg-elevated)) 0%, color-mix(in srgb, var(--bg-elevated-alpha, var(--bg-elevated)) 86%, transparent) 100%)', border: '1px solid var(--border-soft)', borderRadius: 16, boxShadow: '0 24px 60px rgba(0,0,0,0.45)', padding: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                              <div style={{ padding: '24px 30px 22px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                            <div onClick={e => e.stopPropagation()} className="bento-card" style={{ position: 'relative', width: 920, maxWidth: 'calc(100% - 48px)', background: 'linear-gradient(160deg, var(--bg-elevated-alpha, var(--bg-elevated)) 0%, color-mix(in srgb, var(--bg-elevated-alpha, var(--bg-elevated)) 86%, transparent) 100%)', border: '1px solid var(--border-soft)', borderRadius: 16, boxShadow: '0 24px 60px rgba(0,0,0,0.45)', padding: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                              <div style={{ padding: '28px 36px 26px', display: 'flex', flexDirection: 'column', gap: 24 }}>
 
                               {/* header: título grande en el color del curso + "sesión de estudio" pequeño abajo */}
                               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                   <div style={{ fontSize: 30, fontWeight: 300, letterSpacing: '-0.015em', color: course.color, fontFamily: "'Inter Tight', sans-serif", lineHeight: 1.15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textShadow: `0 0 24px ${course.color}22` }}>{ds.title || 'Sesión de estudio'}</div>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 7, flexWrap: 'wrap', fontSize: 10, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif" }}>
-                                    <span>Sesión de estudio</span>
-                                    <span style={{ opacity: 0.5 }}>·</span>
-                                    <span style={{ textTransform: 'none', letterSpacing: '0.02em', fontSize: 10.5 }}>{format(new Date(ds.date + 'T12:00:00'), 'EEEE d MMMM', { locale: es })}</span>
-                                    <span style={{ opacity: 0.5 }}>·</span>
-                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2.5px 9px', borderRadius: 999, background: `${dLinkCol}0d`, border: `1px solid ${dLinkCol}26`, textTransform: 'none', letterSpacing: '0.02em', fontSize: 10, color: dLinkCol, maxWidth: 210, overflow: 'hidden', flexShrink: 0 }}>
-                                      <span style={{ width: 5, height: 5, borderRadius: '50%', background: dLinkCol, boxShadow: `0 0 6px ${dLinkCol}88`, flexShrink: 0 }} />
-                                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{dOtherCourse ? dOtherCourse.name : course.name}</span>
-                                    </span>
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, marginTop: 10, fontSize: 10, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif" }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', minWidth: 0 }}>
+                                      <span>Sesión de estudio</span>
+                                      <span style={{ opacity: 0.5 }}>·</span>
+                                      <span style={{ textTransform: 'none', letterSpacing: '0.02em', fontSize: 10.5 }}>{format(new Date(ds.date + 'T12:00:00'), 'EEEE d MMMM', { locale: es })}</span>
+                                    </div>
+                                    <span title={dOtherCourse ? dOtherCourse.name : course.name} style={{ color: dLinkCol, fontWeight: 600, textTransform: 'none', letterSpacing: '0.02em', fontSize: 10.5, maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0, textAlign: 'right' }}>{dOtherCourse ? dOtherCourse.name : course.name}</span>
                                   </div>
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, marginTop: 2 }}>
+                                  {dOtherCourse && (
+                                    <button onClick={() => { setDetailSessionId(null); navigateToCourse(dOtherCourse.id); }} title={`Ir al curso: ${dOtherCourse.name}`}
+                                      style={{ width: 28, height: 28, borderRadius: '50%', border: `1px solid ${dLinkCol}45`, background: `${dLinkCol}0f`, color: dLinkCol, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 180ms ' + EASE, padding: 0 }}
+                                      onMouseEnter={e => { e.currentTarget.style.background = `${dLinkCol}1c`; e.currentTarget.style.boxShadow = `0 0 12px ${dLinkCol}33`; }}
+                                      onMouseLeave={e => { e.currentTarget.style.background = `${dLinkCol}0f`; e.currentTarget.style.boxShadow = 'none'; }}>
+                                      <GraduationCap size={12.5} strokeWidth={2.2} />
+                                    </button>
+                                  )}
                                   <button onClick={() => updatePlannedSession(ds.id, { completed: !dDone })} title={dDone ? 'Desmarcar como completada' : 'Marcar como completada'}
                                     style={{ width: 32, height: 32, borderRadius: '50%', border: dDone ? 'none' : `1.5px solid ${course.color}66`, background: dDone ? '#22C55E' : `${course.color}0d`, color: dDone ? '#fff' : course.color, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms ' + EASE, padding: 0, boxShadow: dDone ? '0 0 16px rgba(34,197,94,0.5)' : `0 0 10px ${course.color}1a` }}
                                     onMouseEnter={e => { if (!dDone) { e.currentTarget.style.background = `${course.color}18`; e.currentTarget.style.boxShadow = `0 0 14px ${course.color}33`; } }}
@@ -3955,7 +4013,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                   </div>
                                 </div>
 
-                                <div style={{ width: 270, flexShrink: 0, border: '1px solid var(--border-soft)', borderRadius: 12, padding: '12px 16px', background: 'linear-gradient(160deg, var(--bg-elevated-alpha, var(--bg-elevated)) 0%, transparent 100%)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                <div style={{ width: 300, flexShrink: 0, border: '1px solid var(--border-soft)', borderRadius: 12, padding: '14px 16px', background: 'linear-gradient(160deg, var(--bg-elevated-alpha, var(--bg-elevated)) 0%, transparent 100%)', display: 'flex', flexDirection: 'column', gap: 8 }}>
                                   <span style={{ fontSize: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif" }}>Horario</span>
                                   {dTimeStr ? (
                                     <>
@@ -3975,55 +4033,81 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                     </div>
                                   )}
                                 </div>
-
-                                <div style={{ width: 160, flexShrink: 0, border: '1px solid var(--border-soft)', borderRadius: 12, padding: '12px 14px', background: 'linear-gradient(160deg, var(--bg-elevated-alpha, var(--bg-elevated)) 0%, transparent 100%)', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                  <span style={{ fontSize: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif" }}>Duración</span>
-                                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 5, marginTop: 'auto' }}>
-                                    <span title={dLinked ? `${dLinkedMin} min estudiados (vinculado a esta sesión)` : 'Duración planificada'} style={{ fontSize: 30, fontWeight: 300, fontFamily: "'JetBrains Mono', monospace", color: dLinked ? (dDone ? '#22C55E' : course.color) : course.color, lineHeight: 1, fontVariantNumeric: 'tabular-nums', textShadow: dLinked ? `0 0 18px ${dDone ? 'rgba(34,197,94,0.4)' : `${course.color}30`}` : `0 0 18px ${course.color}30` }}>{dLinked ? dLinkedMin : (ds.durationMinutes || 30)}</span>
-                                    <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif" }}>min</span>
-                                  </div>
-                                  <div style={{ position: 'relative', height: 8, borderRadius: 999, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
-                                    <div style={{ position: 'absolute', inset: 0, borderRadius: 999, background: `linear-gradient(90deg, ${dLinked ? (dDone ? '#22C55E' : course.color) : course.color}, ${dLinked && dDone ? '#22C55E88' : `${course.color}88`})`, width: `${dRealPct}%`, boxShadow: dLinked ? (dDone ? '0 0 10px rgba(34,197,94,0.5)' : `0 0 10px ${course.color}55`) : `0 0 10px ${course.color}55`, transition: 'width 500ms cubic-bezier(0.16,1,0.3,1)' }}>
-                                      <div style={{ position: 'absolute', top: 0, bottom: 0, width: '40%', background: 'linear-gradient(105deg, transparent, rgba(255,255,255,0.4), transparent)', animation: 'sessionSheen 2.8s ' + EASE + ' infinite' }} />
-                                    </div>
-                                  </div>
-                                </div>
                               </div>
 
-                              {/* fila inferior: vínculo compacto con flecha (izq) + últimos ingresos a temas (der) */}
-                              <div style={{ display: 'flex', flexDirection: 'row', gap: 14, alignItems: 'stretch' }}>
-                                <div style={{ flex: 1, minWidth: 0, border: '1px solid var(--border-soft)', borderRadius: 12, padding: '12px 14px 14px', background: 'linear-gradient(160deg, var(--bg-elevated-alpha, var(--bg-elevated)) 0%, transparent 100%)', display: 'flex', flexDirection: 'column' }}>
-                                  <div style={{ fontSize: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", lineHeight: 1.6 }}>Vinculado a</div>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                      <PlanSelectDropdown value={ds.groupId || ''}
-                                        onChange={v => updatePlannedSession(ds.id, { groupId: v || undefined, topicId: v ? (ds.topicId && parsedTopics.find(t => t.id === ds.topicId)?.groupId === v ? ds.topicId : undefined) : undefined })}
-                                        options={groups.map(g => ({ id: g.id, label: g.name }))}
-                                        noneLabel="Sin agrupación" color={course.color} />
-                                    </div>
-                                    <span style={{ fontSize: 13, fontWeight: 600, color: course.color, flexShrink: 0, lineHeight: 1, fontFamily: "'Inter Tight', sans-serif" }}>→</span>
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                      <PlanSelectDropdown value={ds.topicId || ''}
-                                        onChange={v => updatePlannedSession(ds.id, { topicId: v || undefined })}
-                                        options={ds.groupId ? parsedTopics.filter(t => t.groupId === ds.groupId).map(t => ({ id: t.id, label: t.title })) : []}
-                                        noneLabel={ds.groupId ? 'Sin tema' : 'Elige agrupación'} color={course.color} />
-                                    </div>
+                              {/* fila inferior: carpeta grande + línea + tema con sus materiales (izq) + últimos ingresos (der) */}
+                              <div style={{ display: 'flex', flexDirection: 'row', gap: 16, alignItems: 'stretch', padding: '0 2px' }}>
+                                {(dGroup || dTopic) ? (
+                                  <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                    {dOtherCourse && (
+                                      <button onClick={() => navigateToCourse(dOtherCourse.id)} title="Ir al curso" style={treeNode}
+                                        onMouseEnter={e => treeHover(e, true)} onMouseLeave={e => treeHover(e, false)}>
+                                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: dLinkCol, boxShadow: `0 0 8px ${dLinkCol}99`, flexShrink: 0 }} />
+                                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600, minWidth: 0, fontSize: 10.5 }}>{dOtherCourse.name}</span>
+                                      </button>
+                                    )}
+                                    {/* carpeta grande, de frente arriba */}
+                                    <button onClick={dGroup ? goGroup : goTopic} title={dGroup ? `Ir a ${dGroup.name}` : `Ir a ${dTopic?.title || ''}`} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 0, border: 'none', background: 'transparent', cursor: 'pointer', width: '100%', textAlign: 'left', borderRadius: 10, transition: 'all 160ms ' + EASE }}
+                                      onMouseEnter={e => { e.currentTarget.style.background = `${dLinkCol}0a`; }}
+                                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
+                                      <span style={{ width: 34, height: 34, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `${dLinkCol}12`, border: `1px solid ${dLinkCol}30`, flexShrink: 0 }}>
+                                        <FolderOpen size={17} style={{ color: dLinkCol }} />
+                                      </span>
+                                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", minWidth: 0 }}>{dGroup ? dGroup.name : (dTopic?.title || '')}</span>
+                                    </button>
+                                    {dGroup && dTopic && (
+                                      <>
+                                        <div style={{ width: 2, height: 15, background: `${dLinkCol}55`, marginLeft: 16, flexShrink: 0, borderRadius: 1 }} />
+                                        <button onClick={goTopic} title={`Ir a ${dTopic.title}`} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: 0, border: 'none', background: 'transparent', cursor: 'pointer', width: '100%', textAlign: 'left', borderRadius: 10, transition: 'all 160ms ' + EASE }}
+                                          onMouseEnter={e => { e.currentTarget.style.background = `${dLinkCol}0a`; }}
+                                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
+                                          <span style={{ width: 26, height: 26, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `${dLinkCol}12`, border: `1px solid ${dLinkCol}30`, flexShrink: 0 }}>
+                                            <BookOpen size={13} style={{ color: dLinkCol }} />
+                                          </span>
+                                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13.5, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", minWidth: 0 }}>{dTopic.title}</span>
+                                        </button>
+                                      </>
+                                    )}
+                                    {dMats.length > 0 && (
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 2, minWidth: 0 }}>
+                                        <div style={{ fontSize: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", lineHeight: 1.6 }}>Materiales dentro</div>
+                                        {dMats.slice(0, 3).map((m: any) => {
+                                          const meta = dMatMeta(m);
+                                          const MI = meta.I;
+                                          return (
+                                            <div key={m.id || m.url || m.name} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 8px', borderRadius: 7, color: 'var(--text-secondary)', fontFamily: "'Inter Tight', sans-serif", fontSize: 11 }}>
+                                              <MI size={11} style={{ color: meta.c, flexShrink: 0 }} />
+                                              <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name || 'Archivo'}</span>
+                                            </div>
+                                          );
+                                        })}
+                                        {dMats.length > 3 && (
+                                          <div style={{ padding: '2px 8px', fontSize: 10.5, color: 'var(--text-muted)', fontFamily: "'Inter Tight', sans-serif" }}>+{dMats.length - 3} más</div>
+                                        )}
+                                      </div>
+                                    )}
                                   </div>
-                                </div>
+                                ) : null}
 
                                 {recentTopicsList.length > 0 && (
-                                  <div style={{ width: 280, flexShrink: 0, border: '1px solid var(--border-soft)', borderRadius: 12, padding: '10px 12px', background: 'linear-gradient(160deg, var(--bg-elevated-alpha, var(--bg-elevated)) 0%, transparent 100%)', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                    <div style={{ fontSize: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", marginBottom: 2 }}>Últimos ingresos a temas</div>
-                                    {recentTopicsList.map(rt => (
-                                      <button key={rt.id} onClick={() => navigateToCourse(course.id, rt.groupId || undefined, rt.id)} title={rt.title}
-                                        style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 8px', borderRadius: 8, border: '1px solid transparent', background: 'transparent', color: 'var(--text-secondary)', fontFamily: "'Inter Tight', sans-serif", fontSize: 11, cursor: 'pointer', transition: 'all 150ms ' + EASE, width: '100%', textAlign: 'left' }}
-                                        onMouseEnter={e => { e.currentTarget.style.background = `${course.color}0a`; e.currentTarget.style.borderColor = `${course.color}30`; }}
-                                        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'transparent'; }}>
-                                        <span style={{ width: 5, height: 5, borderRadius: '50%', background: course.color, flexShrink: 0, boxShadow: `0 0 5px ${course.color}88` }} />
-                                        <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{rt.title}</span>
-                                      </button>
-                                    ))}
-                                  </div>
+                                  <>
+                                    {(dGroup || dTopic) && <div style={{ width: 1, background: 'var(--border-subtle)', flexShrink: 0, margin: '2px 0' }} />}
+                                    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                                      <div style={{ fontSize: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", marginBottom: 2 }}>Últimos ingresos a temas</div>
+                                      {recentTopicsList.map(rt => (
+                                        <button key={rt.id} onClick={() => navigateToCourse(course.id, rt.groupId || undefined, rt.id)} title={rt.title}
+                                          style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 8, background: 'transparent', border: 'none', color: 'var(--text-secondary)', fontFamily: "'Inter Tight', sans-serif", fontSize: 11, cursor: 'pointer', transition: 'all 150ms ' + EASE, width: '100%', textAlign: 'left' }}
+                                          onMouseEnter={e => { e.currentTarget.style.background = `${course.color}0a`; e.currentTarget.style.color = 'var(--text-primary)'; }}
+                                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
+                                          <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{rt.title}</span>
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </>
+                                )}
+
+                                {!(dGroup || dTopic) && recentTopicsList.length === 0 && (
+                                  <div style={{ flex: 1, fontSize: 11.5, fontStyle: 'italic', color: 'var(--text-muted)', fontFamily: "'Inter', sans-serif" }}>Sin tema o agrupación vinculada</div>
                                 )}
                               </div>
 
@@ -4219,25 +4303,12 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                             </div>
                           );
 
-                          if (axisItems.length === 0) {
-                            return (
-                              <>
-                                {headerEl}
-                                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 20px 40px' }}>
-                                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, color: 'var(--text-muted)' }}>
-                                    <BarChart3 size={28} style={{ opacity: 0.5 }} />
-                                    <p style={{ fontSize: 12, margin: 0, fontFamily: "'Inter Tight', sans-serif" }}>Añade temas o agrupaciones para ver el análisis</p>
-                                  </div>
-                                </div>
-                              </>
-                            );
-                          }
-
-                          /* ── DIAGNOSTIC RADAR: 1–2 agrupaciones O más de 30 → se mantiene el
-                             radar geométrico midiendo las variables del curso (dominio, materiales,
-                             tareas, notas, sesiones, tiempo, intensidad) en 7 esquinas. Nunca donut,
-                             nunca listado — siempre la telaraña geométrica conectada con todos los
-                             datos del curso. ── */
+                          /* ── DIAGNOSTIC RADAR: 0–2 agrupaciones (incluye sin agrupaciones →
+                             análisis COMPLETO del curso en 7 pilares geométricos) O más de 30 → se
+                             mantiene el radar geométrico midiendo las variables del curso (dominio,
+                             materiales, tareas, notas, sesiones, tiempo, intensidad) en 7 esquinas.
+                             Nunca donut, nunca listado, nunca empty state — siempre la telaraña
+                             geométrica conectada con todos los datos del curso. ── */
                           if (axisItems.length <= 2 || axisItems.length > 30) {
                             const diagAxes = [
                               { label: 'Dominio', value: courseMastery, detail: courseMastery > 0 ? `${Math.round(courseMastery * 100)}% de dominio medio` : 'sin repaso todavía' },
@@ -4960,10 +5031,24 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                             onChange={v => { setPlanGroupId(v); setPlanTopicId(''); }}
                             options={groups.map(g => ({ id: g.id, label: g.name }))}
                             noneLabel="Sin agrupación" color={course.color} />
-                          <PlanSelectDropdown value={planTopicId}
-                            onChange={setPlanTopicId}
-                            options={planGroupId ? parsedTopics.filter(t => t.groupId === planGroupId).map(t => ({ id: t.id, label: t.title })) : []}
-                            noneLabel={planGroupId ? 'Sin tema' : 'Elige agrupación'} color={course.color} />
+                          {planGroupId ? (
+                            parsedTopics.filter(t => t.groupId === planGroupId).length > 0 ? (
+                              <div style={{ animation: 'fadeIn 200ms ' + EASE }}>
+                                <PlanSelectDropdown value={planTopicId}
+                                  onChange={setPlanTopicId}
+                                  options={parsedTopics.filter(t => t.groupId === planGroupId).map(t => ({ id: t.id, label: t.title }))}
+                                  noneLabel="Sin tema" color={course.color} />
+                              </div>
+                            ) : (
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 42, borderRadius: 10, border: '1px dashed var(--border-subtle)', background: 'var(--bg-deep)', padding: '0 13px', animation: 'fadeIn 200ms ' + EASE }}>
+                                <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)', fontFamily: "'Inter', sans-serif" }}>Esta agrupación no tiene temas</span>
+                              </div>
+                            )
+                          ) : (
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 42, borderRadius: 10, border: '1px dashed var(--border-subtle)', background: 'var(--bg-deep)', padding: '0 13px' }}>
+                              <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)', fontFamily: "'Inter', sans-serif" }}>Elige una agrupación para vincular un tema</span>
+                            </div>
+                          )}
                         </div>
 
                         <div style={{ padding: '14px 24px 20px', borderTop: '1px solid var(--border-subtle)', display: 'flex', gap: 10, justifyContent: 'flex-end', flexShrink: 0 }}>

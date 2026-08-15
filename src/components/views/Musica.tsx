@@ -19,6 +19,7 @@ import { open, save } from '@tauri-apps/plugin-dialog';
 import { readFile } from '@tauri-apps/plugin-fs';
 import { format, subDays, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { extractYouTubeId } from '../../lib/ytEngine';
 import {
   fetchMetadata, searchMusic, startDownload, cancelDownload,
   getDownloadPath, setDownloadPath,
@@ -200,8 +201,10 @@ export default function Musica() {
     importLocalTracks,
     setCoverModalTrackId,
     downloadPath: persistentDownloadPath, setDownloadPathCtx,
-    setPipUrl, pipPlaying, pipUrl, queuePipAfter,
+    setPipUrl, pipPlaying, pipUrl, pipTitle, queuePipAfter,
   } = useApp();
+
+  const pipId = pipUrl ? extractYouTubeId(pipUrl) : null;
 
   const [activeTab, setActiveTab] = useState<TabId>(() => loadUiState()?.activeTab || 'biblioteca');
   const [url, setUrl] = useState(() => loadExploreState()?.url || '');
@@ -1831,7 +1834,10 @@ export default function Musica() {
                           </div>
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3 }}>{r.title}</div>
+                          <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            {(pipPlaying && !!r.id && pipId === r.id) && <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#10B981', boxShadow: '0 0 8px rgba(16,185,129,0.9)', animation: 'pulse 1.6s ease-in-out infinite', flexShrink: 0 }} />}
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title}</span>
+                          </div>
                           <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
                             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.channel}</span>
                             <span style={{ opacity: 0.3, flexShrink: 0 }}>·</span>
@@ -1939,7 +1945,10 @@ export default function Musica() {
                               {entry.thumbnail ? <img src={entry.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={10} color="var(--text-muted)" style={{ opacity: 0.3 }} />}
                             </div>
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.title}</div>
+                              <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                {(pipPlaying && !!entry.id && pipId === entry.id) && <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#10B981', boxShadow: '0 0 8px rgba(16,185,129,0.9)', animation: 'pulse 1.6s ease-in-out infinite', flexShrink: 0 }} />}
+                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.title}</span>
+                              </div>
                             </div>
                             <span style={{ fontSize: 9, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{formatDuration(entry.duration)}</span>
                             <button onClick={() => handleDownloadOne(entry)} style={{ padding: 4, background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', borderRadius: 5, transition: 'all 150ms', flexShrink: 0 }}
@@ -1962,35 +1971,55 @@ export default function Musica() {
         {showRightSidebar && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
 
-          {/* REPRODUCIENDO CARD */}
-          {currentTrack ? (
-            <div className="bento-card" style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', border: isPlayingMusic ? '1px solid var(--accent)' : (currentTrack.source !== 'local' ? '1px solid color-mix(in srgb, var(--accent) 42%, var(--border-soft))' : '1px solid var(--border-default)'), boxShadow: (isPlayingMusic && currentTrack.source !== 'local') ? '0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent), 0 10px 34px rgba(0,0,0,0.22)' : undefined, transition: 'all 300ms' }}>
+          {/* REPRODUCIENDO CARD — detecta la nube tanto en el reproductor general (currentTrack)
+              como en el reproductor emergente (pipUrl/pipPlaying): título, portada de YouTube,
+              estado play/pausa y filas marcadas en tiempo real */}
+          {(currentTrack || pipUrl) ? (() => {
+            const isPip = !!pipUrl;
+            const nowPlaying = isPip ? pipPlaying : isPlayingMusic;
+            const nowTitle = isPip ? (pipTitle || 'Reproduciendo desde la nube') : (currentTrack ? currentTrack.title : '');
+            const nowArtist = isPip ? '' : (currentTrack ? (currentTrack.artist || '') : '');
+            const nowCover = isPip ? (pipId ? `https://i.ytimg.com/vi/${pipId}/hqdefault.jpg` : '') : (currentTrack ? (currentTrack.coverImage || '') : '');
+            const nowCloud = isPip || (currentTrack ? currentTrack.source !== 'local' : false);
+            return (
+            <div className="bento-card" style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', border: nowPlaying ? '1px solid var(--accent)' : (nowCloud ? '1px solid color-mix(in srgb, var(--accent) 42%, var(--border-soft))' : '1px solid var(--border-default)'), boxShadow: (nowPlaying && nowCloud) ? '0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent), 0 10px 34px rgba(0,0,0,0.22)' : undefined, transition: 'all 300ms' }}>
               <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: isPlayingMusic ? 'var(--accent)' : 'var(--text-muted)' }} />
+                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: nowPlaying ? 'var(--accent)' : 'var(--text-muted)', boxShadow: nowPlaying ? '0 0 8px var(--accent-glow)' : 'none', animation: nowPlaying ? 'pulse 1.6s ease-in-out infinite' : 'none' }} />
                   <span className="section-header" style={{ marginBottom: 0, fontSize: 12, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                    {isPlayingMusic ? 'Reproduciendo' : 'Pausado'}
+                    {nowPlaying ? 'Reproduciendo' : 'Pausado'}
                   </span>
-                  {currentTrack.source !== 'local' && (
+                  {nowCloud && (
                     <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--accent)', border: '1px solid color-mix(in srgb, var(--accent) 45%, transparent)', borderRadius: 999, padding: '2px 7px', background: 'color-mix(in srgb, var(--accent) 10%, transparent)' }}>
                       <Cloud size={10} style={{ flexShrink: 0 }} />
                     </span>
                   )}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <Heart size={16} style={{ color: currentTrack.isFavorite ? 'var(--accent)' : 'var(--text-muted)', fill: currentTrack.isFavorite ? 'var(--accent)' : 'none', cursor: 'pointer' }} onClick={() => toggleTrackFavorite(currentTrack.id)} />
-                  <Edit2 size={13} style={{ color: 'var(--text-muted)', cursor: 'pointer', opacity: 0.5 }} onClick={() => { setEditingTrackId(currentTrack.id); setEditTitle(currentTrack.title); setEditArtist(currentTrack.artist); setEditCover(currentTrack.coverImage || ''); }} />
+                  {currentTrack && (
+                    <>
+                      <Heart size={16} style={{ color: currentTrack.isFavorite ? 'var(--accent)' : 'var(--text-muted)', fill: currentTrack.isFavorite ? 'var(--accent)' : 'none', cursor: 'pointer' }} onClick={() => toggleTrackFavorite(currentTrack.id)} />
+                      <Edit2 size={13} style={{ color: 'var(--text-muted)', cursor: 'pointer', opacity: 0.5 }} onClick={() => { setEditingTrackId(currentTrack.id); setEditTitle(currentTrack.title); setEditArtist(currentTrack.artist); setEditCover(currentTrack.coverImage || ''); }} />
+                    </>
+                  )}
                 </div>
               </div>
 
-              <div onClick={() => currentTrack && setCoverModalTrackId(currentTrack.id)} style={{ width: '100%', aspectRatio: '1/1', borderRadius: 12, overflow: 'hidden', marginBottom: 20, boxShadow: '0 8px 24px rgba(0,0,0,0.6)', position: 'relative', background: 'var(--bg-surface)', cursor: 'pointer' }}
-                onMouseEnter={() => setCoverHover(true)}
-                onMouseLeave={() => setCoverHover(false)}>
-                {currentTrack.coverImage ? <img src={currentTrack.coverImage} alt={currentTrack.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={48} style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', color: 'var(--text-muted)', opacity: 0.15 }} />}
-                {isPlayingMusic && (
+              <div onClick={() => currentTrack && setCoverModalTrackId(currentTrack.id)} style={{ width: '100%', aspectRatio: '1/1', borderRadius: 12, overflow: 'hidden', marginBottom: 20, boxShadow: '0 8px 24px rgba(0,0,0,0.6)', position: 'relative', background: 'var(--bg-surface)', cursor: currentTrack ? 'pointer' : 'default' }}
+                onMouseEnter={() => currentTrack && setCoverHover(true)}
+                onMouseLeave={() => currentTrack && setCoverHover(false)}>
+                {nowCover ? <img src={nowCover} alt={nowTitle} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={48} style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', color: 'var(--text-muted)', opacity: 0.15 }} />}
+                {nowPlaying && (
                   <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, transparent 60%, rgba(0,0,0,0.12) 100%)', pointerEvents: 'none' }} />
                 )}
+                {isPip && nowPlaying && (
+                  <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', alignItems: 'center', gap: 4, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#10B981', background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.35)', borderRadius: 999, padding: '2px 7px', pointerEvents: 'none' }}>
+                    <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#10B981', boxShadow: '0 0 6px rgba(16,185,129,0.9)', animation: 'pulse 1.6s ease-in-out infinite' }} />
+                    Emergente
+                  </div>
+                )}
                 {/* Expand hint overlay */}
+                {currentTrack && (
                 <div style={{
                   position: 'absolute', inset: 0,
                   background: 'rgba(0,0,0,0.2)',
@@ -2017,13 +2046,16 @@ export default function Musica() {
                     </svg>
                   </div>
                 </div>
+                )}
               </div>
 
               <div style={{ textAlign: 'center', marginBottom: 20, width: '100%' }}>
-                <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{currentTrack.title}</h3>
-                <p style={{ fontSize: 13, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{currentTrack.artist}</p>
+                <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nowTitle}</h3>
+                {nowArtist && <p style={{ fontSize: 13, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nowArtist}</p>}
               </div>
 
+              {currentTrack ? (
+                <>
                 <div style={{ width: '100%', marginBottom: 20 }}>
                   <div className="progress-track" style={{ height: 4, marginBottom: 8, borderRadius: 2, overflow: 'hidden', cursor: 'pointer', position: 'relative' }}
                     onClick={(e) => {
@@ -2040,47 +2072,61 @@ export default function Musica() {
                   </div>
                 </div>
 
-              {/* Player Controls */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '0 12px' }}>
-                <button onClick={() => setShuffleMode(!shuffleMode)} className="btn-ghost" style={{ padding: 8, color: shuffleMode ? 'var(--accent)' : 'var(--text-tertiary)' }}>
-                  <Shuffle size={16} />
-                </button>
-                <button onClick={() => {
-                  const pool = queueSource?.pool ?? tracks.map(t => t.id);
-                  const idx = pool.indexOf(currentTrack.id);
-                  if (idx > 0) playTrack(pool[idx - 1]);
-                  else if (repeatMode !== 'none' && pool.length > 0) playTrack(pool[pool.length - 1]);
-                }} className="btn-ghost" style={{ padding: 8 }}>
-                  <SkipBack size={20} style={{ color: 'var(--text-primary)' }} />
-                </button>
-                <button onClick={toggleMusicPlayback} style={{ width: 42, height: 42, borderRadius: '50%', background: 'var(--accent)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', cursor: 'pointer', transition: 'transform 120ms' }} onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.08)'} onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'} onMouseDown={e => e.currentTarget.style.transform = 'scale(0.94)'} onMouseUp={e => e.currentTarget.style.transform = 'scale(1.08)'}>
-                  {isPlayingMusic ? <Pause size={18} fill="#fff" /> : <Play size={18} fill="#fff" style={{ marginLeft: 2 }} />}
-                </button>
-                <button onClick={() => {
-                  if (musicQueue.length > 0) { setMusicQueue(musicQueue.slice(1)); playTrack(musicQueue[0]); return; }
-                  const pool = queueSource?.pool ?? tracks.map(t => t.id);
-                  if (shuffleMode) {
-                    const rest = pool.filter(tid => tid !== currentTrack.id);
-                    if (rest.length > 0) { const pick = rest[Math.floor(Math.random() * rest.length)]; playTrack(pick); }
-                    else if (pool.length > 0) playTrack(pool[0]);
-                  } else {
+                {/* Player Controls */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '0 12px' }}>
+                  <button onClick={() => setShuffleMode(!shuffleMode)} className="btn-ghost" style={{ padding: 8, color: shuffleMode ? 'var(--accent)' : 'var(--text-tertiary)' }}>
+                    <Shuffle size={16} />
+                  </button>
+                  <button onClick={() => {
+                    const pool = queueSource?.pool ?? tracks.map(t => t.id);
                     const idx = pool.indexOf(currentTrack.id);
-                    if (idx < pool.length - 1) playTrack(pool[idx + 1]);
-                    else if (repeatMode === 'all' && pool.length > 0) playTrack(pool[(idx + 1) % pool.length]);
-                  }
-                }} className="btn-ghost" style={{ padding: 8 }}>
-                  <SkipForward size={20} style={{ color: 'var(--text-primary)' }} />
-                </button>
-                <button onClick={() => {
-                  const next = repeatMode === 'none' ? 'all' : repeatMode === 'all' ? 'one' : 'none';
-                  setRepeatMode(next);
-                }} className="btn-ghost" style={{ padding: 8, position: 'relative', color: repeatMode !== 'none' ? 'var(--accent)' : 'var(--text-tertiary)' }} title={repeatMode === 'none' ? 'Sin bucle' : repeatMode === 'all' ? 'Repetir lista' : 'Repetir una'}>
-                  <Repeat size={16} />
-                  {repeatMode === 'one' && <span style={{ position: 'absolute', top: 2, right: 2, fontSize: 8, fontWeight: 900, background: 'var(--bg-surface)', padding: '0 3px', borderRadius: 4, border: '1px solid var(--accent)' }}>1</span>}
-                </button>
-              </div>
+                    if (idx > 0) playTrack(pool[idx - 1]);
+                    else if (repeatMode !== 'none' && pool.length > 0) playTrack(pool[pool.length - 1]);
+                  }} className="btn-ghost" style={{ padding: 8 }}>
+                    <SkipBack size={20} style={{ color: 'var(--text-primary)' }} />
+                  </button>
+                  <button onClick={toggleMusicPlayback} style={{ width: 42, height: 42, borderRadius: '50%', background: 'var(--accent)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', cursor: 'pointer', transition: 'transform 120ms' }} onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.08)'} onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'} onMouseDown={e => e.currentTarget.style.transform = 'scale(0.94)'} onMouseUp={e => e.currentTarget.style.transform = 'scale(1.08)'}>
+                    {isPlayingMusic ? <Pause size={18} fill="#fff" /> : <Play size={18} fill="#fff" style={{ marginLeft: 2 }} />}
+                  </button>
+                  <button onClick={() => {
+                    if (musicQueue.length > 0) { setMusicQueue(musicQueue.slice(1)); playTrack(musicQueue[0]); return; }
+                    const pool = queueSource?.pool ?? tracks.map(t => t.id);
+                    if (shuffleMode) {
+                      const rest = pool.filter(tid => tid !== currentTrack.id);
+                      if (rest.length > 0) { const pick = rest[Math.floor(Math.random() * rest.length)]; playTrack(pick); }
+                      else if (pool.length > 0) playTrack(pool[0]);
+                    } else {
+                      const idx = pool.indexOf(currentTrack.id);
+                      if (idx < pool.length - 1) playTrack(pool[idx + 1]);
+                      else if (repeatMode === 'all' && pool.length > 0) playTrack(pool[(idx + 1) % pool.length]);
+                    }
+                  }} className="btn-ghost" style={{ padding: 8 }}>
+                    <SkipForward size={20} style={{ color: 'var(--text-primary)' }} />
+                  </button>
+                  <button onClick={() => {
+                    const next = repeatMode === 'none' ? 'all' : repeatMode === 'all' ? 'one' : 'none';
+                    setRepeatMode(next);
+                  }} className="btn-ghost" style={{ padding: 8, position: 'relative', color: repeatMode !== 'none' ? 'var(--accent)' : 'var(--text-tertiary)' }} title={repeatMode === 'none' ? 'Sin bucle' : repeatMode === 'all' ? 'Repetir lista' : 'Repetir una'}>
+                    <Repeat size={16} />
+                    {repeatMode === 'one' && <span style={{ position: 'absolute', top: 2, right: 2, fontSize: 8, fontWeight: 900, background: 'var(--bg-surface)', padding: '0 3px', borderRadius: 4, border: '1px solid var(--accent)' }}>1</span>}
+                  </button>
+                </div>
+                </>
+              ) : (
+                <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", textAlign: 'center', lineHeight: 1.5 }}>
+                    Reproduciendo en el reproductor emergente
+                  </div>
+                  <button onClick={() => setPipUrl(null)} style={{ height: 32, padding: '0 16px', fontSize: 11, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, borderRadius: 8, border: '1px solid rgba(239,68,68,0.35)', background: 'rgba(239,68,68,0.08)', color: '#EF4444', cursor: 'pointer', transition: 'all 150ms' }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.15)'; e.currentTarget.style.boxShadow = '0 0 12px rgba(239,68,68,0.2)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; e.currentTarget.style.boxShadow = 'none'; }}>
+                    <X size={13} /> Cerrar emergente
+                  </button>
+                </div>
+              )}
             </div>
-          ) : (
+            );
+          })() : (
             <div className="bento-card" style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, border: '1px dashed var(--border-subtle)' }}>
               <Music size={32} style={{ color: 'var(--text-muted)', opacity: 0.4 }} />
               <div style={{ textAlign: 'center' }}>
