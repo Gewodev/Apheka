@@ -1,6 +1,6 @@
 {
   "productName": "OWA Studio",
-  "version": "1.0.0",
+  "version": "6.7",
   "identifier": "com.owa.studio",
   "build": {
     "beforeDevCommand": "pnpm run dev",

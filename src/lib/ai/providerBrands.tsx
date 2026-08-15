@@ -1,13 +1,13 @@
 // ═══════════════════════════════════════════════════
 //  CHARVIS — Logos oficiales de los proveedores de IA
 // ═══════════════════════════════════════════════════
-// Marcas SVG reales (path data oficial) en un solo color
-// (`color`, por defecto blanco) para que destaquen sobre
-// tiles neutros. Sin colores de marca ni iconos genéricos.
+// Marcas SVG reales (path data oficial) en el COLOR DE MARCA
+// de cada proveedor, sobre tiles neutros oscuros. Sin iconos
+// genéricos ni marcas inventadas.
 
 import React from 'react';
 
-/** Color de marca original del proveedor (referencia, no se usa en los tiles). */
+/** Color de marca original del proveedor (los logos se pintan con él). */
 export function providerBrandColor(id: string): string {
   switch (id) {
     case 'opencode': return '#22c55e';
@@ -18,13 +18,12 @@ export function providerBrandColor(id: string): string {
     case 'kimi': return '#4F46E5';
     case 'mistral': return '#FA520F';
     case 'groq': return '#F55036';
-    case 'openrouter': return '#8B5CF6';
     case 'xai': return '#a1a1aa';
     default: return '#22c55e';
   }
 }
 
-/** Marca oficial del proveedor, monocroma (por defecto blanca). */
+/** Marca oficial del proveedor, monocroma en el color indicado (por defecto blanco). */
 export function BrandMark({ id, size = 20, color = '#fff' }: { id: string; size?: number; color?: string }) {
   const svg: React.CSSProperties = { display: 'block', flexShrink: 0 };
   switch (id) {
@@ -77,12 +76,6 @@ export function BrandMark({ id, size = 20, color = '#fff' }: { id: string; size?
           <path d="m18.445 4.406-9.468 13.74 7.341.665-1.69 9.578 9.469-13.74-7.342-.664 1.69-9.579Z" />
         </svg>
       );
-    case 'openrouter':
-      return (
-        <svg width={size} height={size} viewBox="0 0 24 24" fill={color} style={svg}>
-          <path d="M16.778 1.844v1.919q-.569-.026-1.138-.032-.708-.008-1.415.037c-1.93.126-4.023.728-6.149 2.237-2.911 2.066-2.731 1.95-4.14 2.75-.396.223-1.342.574-2.185.798-.841.225-1.753.333-1.751.333v4.229s.768.108 1.61.333c.842.224 1.789.575 2.185.799 1.41.798 1.228.683 4.14 2.75 2.126 1.509 4.22 2.11 6.148 2.236.88.058 1.716.041 2.555.005v1.918l7.222-4.168-7.222-4.17v2.176c-.86.038-1.611.065-2.278.021-1.364-.09-2.417-.357-3.979-1.465-2.244-1.593-2.866-2.027-3.68-2.508.889-.518 1.449-.906 3.822-2.59 1.56-1.109 2.614-1.377 3.978-1.466.667-.044 1.418-.017 2.278.02v2.176L24 6.014Z" />
-        </svg>
-      );
     case 'xai':
       return (
         <svg width={size} height={size} viewBox="0 0 466.04 516.93" fill={color} style={svg}>
@@ -101,7 +94,7 @@ export function BrandMark({ id, size = 20, color = '#fff' }: { id: string; size?
   }
 }
 
-/** Tile neutro con la marca oficial (sin colores de marca, fondo oscuro fijo). */
+/** Tile neutro con la marca oficial en el color de marca del proveedor. */
 export function BrandLogo({ id, size = 40, radius = 12 }: { id: string; size?: number; radius?: number }) {
   return (
     <span
@@ -119,7 +112,7 @@ export function BrandLogo({ id, size = 40, radius = 12 }: { id: string; size?: n
         overflow: 'hidden',
       }}
     >
-      <BrandMark id={id} size={Math.round(size * 0.52)} />
+      <BrandMark id={id} size={Math.round(size * 0.52)} color="#fff" />
     </span>
   );
 }

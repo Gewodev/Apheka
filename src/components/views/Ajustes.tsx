@@ -259,8 +259,16 @@ export default function Ajustes() {
   const [clearAllMusicText, setClearAllMusicText] = useState('');
   const [appInfo, setAppInfo] = useState<{ name: string; version: string; tauriVersion: string } | null>(null);
   const [appDirs, setAppDirs] = useState<{ label: string; path: string; root?: boolean }[]>([]);
+  const [idbUsage, setIdbUsage] = useState<number | null>(null);
   const bgInputRef = useRef<HTMLInputElement>(null);
   const profilePhotoInputRef = useRef<HTMLInputElement>(null);
+
+  // Peso de la app: uso de la base de datos IndexedDB (localStorage se mide directo).
+  useEffect(() => {
+    if (typeof navigator !== 'undefined' && navigator.storage && typeof navigator.storage.estimate === 'function') {
+      navigator.storage.estimate().then(e => setIdbUsage(typeof e.usage === 'number' ? e.usage : null)).catch(() => setIdbUsage(null));
+    }
+  }, []);
 
   // ─── Charvis configuration state ───
   const [capturingShortcut, setCapturingShortcut] = useState(false);
@@ -2084,10 +2092,86 @@ export default function Ajustes() {
                   <CardHeader icon={<AppWindow size={14} />} title="Sobre OWA" desc="Aplicación instalada" />
                   <div>
                     <InfoRow label="Nombre" value={appInfo?.name || 'OWA Studio'} mono />
-                    <InfoRow label="Versión" value={appInfo?.version || '1.0.0'} mono />
+                    <InfoRow label="Versión" value={appInfo?.version || '6.7'} mono />
                     <InfoRow label="Tauri" value={appInfo?.tauriVersion || '—'} mono />
                     <InfoRow label="Entorno" value={isTauri() ? 'Aplicación nativa (Tauri)' : 'Navegador web'} last />
                   </div>
+                </div>
+
+                {/* Peso de la app */}
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
+                  <CardHeader icon={<Database size={14} />} title="Peso de la app" desc="En qué se gastan los datos guardados" />
+                  {(() => {
+                    const keys = Object.keys(localStorage);
+                    let lsTotal = 0;
+                    const entries: { key: string; size: number }[] = [];
+                    for (const k of keys) {
+                      const sz = new Blob([localStorage.getItem(k) || '']).size;
+                      lsTotal += sz;
+                      entries.push({ key: k, size: sz });
+                    }
+                    const idb = idbUsage ?? 0;
+                    const grand = lsTotal + idb;
+                    const KNOWN: [string, string, string][] = [
+                      ['owa_studio', 'Datos de la app', '#6366F1'],
+                      ['owa_course', 'Cursos', '#F59E0B'],
+                      ['owa_planner', 'Planificador', '#3B82F6'],
+                      ['owa_sched', 'Horario', '#06B6D4'],
+                      ['owa_habit', 'Hábitos', '#10B981'],
+                      ['owa_study', 'Estudio', '#EF4444'],
+                      ['owa_estudio', 'Estudio', '#EF4444'],
+                      ['owa_timer', 'Temporizador', '#EC4899'],
+                      ['owa_task', 'Tareas', '#8B5CF6'],
+                      ['owa_note', 'Notas', '#F472B6'],
+                      ['owa_music', 'Música', '#10B981'],
+                      ['owa_yt', 'Música', '#10B981'],
+                      ['owa_brain', 'Charvis', '#22c55e'],
+                      ['owa_charvis', 'Charvis', '#22c55e'],
+                      ['owa_google', 'Google', '#4285F4'],
+                      ['owa_event', 'Eventos', '#3B82F6'],
+                    ];
+                    const groups = new Map<string, { size: number; color: string }>();
+                    for (const [prefix, label, color] of KNOWN) {
+                      const sum = entries.filter(e => e.key.startsWith(prefix)).reduce((a, e) => a + e.size, 0);
+                      if (sum > 0) {
+                        const g = groups.get(label) || { size: 0, color };
+                        g.size += sum;
+                        groups.set(label, g);
+                      }
+                    }
+                    const other = entries.filter(e => !KNOWN.some(([p]) => e.key.startsWith(p))).reduce((a, e) => a + e.size, 0);
+                    if (other > 0) groups.set('Otras claves', { size: other, color: '#6B7280' });
+                    const rows: { label: string; size: number; color: string }[] = [];
+                    for (const [label, g] of groups) rows.push({ label, size: g.size, color: g.color });
+                    if (idb > 0) rows.push({ label: 'Base de datos (IndexedDB)', size: idb, color: '#9CA3AF' });
+                    rows.sort((a, b) => b.size - a.size);
+                    const barMax = Math.max(1, rows.length ? rows[0].size : 1);
+                    return (
+                      <>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', paddingBottom: 10, borderBottom: '1px solid var(--border-subtle)', marginBottom: 12 }}>
+                          <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)' }}>Peso total</span>
+                          <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Share Tech Mono', monospace" }}>{fmtBytes(grand)}</span>
+                        </div>
+                        {rows.map(r => (
+                          <div key={r.label} style={{ marginBottom: 10 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                              <span style={{ fontSize: 10.5, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 7, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                <span style={{ width: 8, height: 8, borderRadius: 3, background: r.color, flexShrink: 0 }} />
+                                {r.label}
+                              </span>
+                              <span style={{ fontSize: 10, fontFamily: "'Share Tech Mono', monospace", color: 'var(--text-muted)', flexShrink: 0, marginLeft: 10 }}>{fmtBytes(r.size)} · {Math.round((r.size / grand) * 100)}%</span>
+                            </div>
+                            <div style={{ height: 5, borderRadius: 4, background: 'var(--bg-deep)', overflow: 'hidden' }}>
+                              <div style={{ height: '100%', width: `${Math.max(1.5, (r.size / barMax) * 100)}%`, borderRadius: 4, background: `linear-gradient(90deg, ${r.color}cc, ${r.color}66)`, transition: 'width 300ms' }} />
+                            </div>
+                          </div>
+                        ))}
+                        <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.5 }}>
+                          {keys.length} claves en localStorage · {idb > 0 ? `la base de datos IndexedDB ocupa ${fmtBytes(idb)}` : 'la base de datos IndexedDB no está disponible en este navegador'}.
+                        </p>
+                      </>
+                    );
+                  })()}
                 </div>
 
                 {/* Charvis */}
@@ -2241,6 +2325,12 @@ export default function Ajustes() {
                     ))}
                   </div>
                   <p style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>Afecta a todo el planificador, horario, eventos, cabeceras y tiempos en toda la app.</p>
+                </div>
+
+                {/* Hecho por */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, padding: '18px 0 6px' }}>
+                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Hecho por</span>
+                  <span style={{ fontSize: 17, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em' }}>MaxCB</span>
                 </div>
 
               </section>

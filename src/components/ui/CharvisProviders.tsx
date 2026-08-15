@@ -1,14 +1,14 @@
 // ═══════════════════════════════════════════════════
 //  CHARVIS — Panel de proveedores de IA (Ajustes → Sistema)
-//  Tarjetas solo-logo (sin nombres, sin colores de marca) y
-//  detalle en modal: primero VALIDAR la API, luego elegir
-//  modelo y por último ACTIVAR el proveedor.
+//  Tarjetas solo-logo (marca oficial en su color sobre tile
+//  neutro) y detalle en modal: primero VALIDAR la API, luego
+//  elegir modelo y por último ACTIVAR el proveedor.
 // ═══════════════════════════════════════════════════
 import React, { useEffect, useState } from 'react';
-import { Check, X, Loader2, Eye, EyeOff, ExternalLink, KeyRound, Globe, Cpu, ShieldCheck, ChevronDown, Boxes } from 'lucide-react';
+import { Check, X, Loader2, Eye, EyeOff, ChevronDown } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { useApp } from '../../store/AppContext';
-import { BrandLogo } from '../../lib/ai/providerBrands';
+import { BrandLogo, providerBrandColor } from '../../lib/ai/providerBrands';
 import {
   CHARVIS_PROVIDERS,
   CharvisProvider,
@@ -53,9 +53,9 @@ export default function CharvisProviders() {
     const s = providerState(states, p);
     setApiKeyDraft(s.apiKey);
     setUrlDraft(s.baseUrl || p.baseUrl);
-    setModelDraft(s.model || s.models[0] || p.defaultModel);
-    setModels(s.models.length ? s.models : p.defaultModels);
-    setModelsNote(s.validatedAt ? 'Modelos detectados con tu API' : 'Pulsa "Validar API" para detectar los modelos exactos de tu cuenta');
+    setModelDraft(s.validatedAt ? (s.model || s.models[0] || '') : '');
+    setModels(s.validatedAt ? s.models : []);
+    setModelsNote(s.validatedAt ? 'Modelos detectados con tu API' : 'Valida tu API para detectar los modelos exactos de tu cuenta');
     setResult(null);
     setShowKey(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -129,48 +129,46 @@ export default function CharvisProviders() {
     addNotification(`${p.name} activado como proveedor de Charvis`, 'success');
   };
 
+  const validated = !!st.validatedAt;
+
   return (
     <div style={{ marginTop: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 10 }}>
-        <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Boxes size={12} /> Proveedor de IA
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 12 }}>
+        <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+          Proveedor de IA
         </span>
         <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Cada proveedor guarda su propia clave en tu dispositivo</span>
       </div>
 
-      {/* Grid de proveedores: solo logos oficiales, sin nombres ni colores de marca */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(168px, 1fr))', gap: 10 }}>
+      {/* Grid de proveedores: solo logos oficiales en su color de marca, sin nombres */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(168px, 1fr))', gap: 12 }}>
         {CHARVIS_PROVIDERS.map(p => {
           const ps = providerState(states, p);
           const active = activeId === p.id;
+          const verified = !!ps.validatedAt;
           return (
             <button
               key={p.id}
               onClick={() => setOpenId(p.id)}
               title={`${p.name} — ${p.baseUrl}`}
               style={{
-                position: 'relative',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 aspectRatio: '1',
-                borderRadius: 16,
+                borderRadius: 18,
                 cursor: 'pointer',
                 background: 'linear-gradient(160deg, var(--bg-elevated) 0%, var(--bg-deep) 100%)',
-                border: active ? '1px solid var(--accent)' : '1px solid var(--border-subtle)',
-                boxShadow: active ? '0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent), 0 10px 26px rgba(0,0,0,0.20)' : '0 2px 8px rgba(0,0,0,0.10)',
-                transition: 'all 170ms',
+                border: active ? '1.5px solid var(--accent)' : verified ? `1.5px solid ${p.brandColor}` : '1px solid var(--border-subtle)',
+                boxShadow: active
+                  ? '0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent), 0 12px 28px rgba(0,0,0,0.22)'
+                  : verified
+                    ? `0 0 14px ${p.brandColor}22, 0 8px 22px rgba(0,0,0,0.16)`
+                    : '0 2px 8px rgba(0,0,0,0.10)',
+                transition: 'all 180ms',
               }}
-              onMouseEnter={e => { if (!active) { e.currentTarget.style.borderColor = 'var(--border-default)'; e.currentTarget.style.transform = 'translateY(-2px)'; } }}
-              onMouseLeave={e => { if (!active) { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.transform = 'translateY(0)'; } }}
+              onMouseEnter={e => { if (!active && !verified) { e.currentTarget.style.borderColor = 'var(--border-default)'; e.currentTarget.style.transform = 'translateY(-2px)'; } }}
+              onMouseLeave={e => { if (!active && !verified) { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.transform = 'translateY(0)'; } }}
             >
-              <BrandLogo id={p.id} size={64} radius={17} />
-              {active && (
-                <span style={{ position: 'absolute', top: 10, right: 10, width: 8, height: 8, borderRadius: '50%', background: 'var(--accent)', boxShadow: '0 0 10px var(--accent)' }} />
-              )}
-              {ps.validatedAt && (
-                <span style={{ position: 'absolute', bottom: 9, right: 9, color: '#10B981', display: 'flex', alignItems: 'center' }}>
-                  <ShieldCheck size={13} />
-                </span>
-              )}
+              <BrandLogo id={p.id} size={76} radius={19} />
             </button>
           );
         })}
@@ -199,8 +197,8 @@ export default function CharvisProviders() {
             }}
           >
             {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '22px 28px 18px', borderBottom: '1px solid var(--border-subtle)' }}>
-              <BrandLogo id={expanded.id} size={52} radius={15} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '24px 30px 18px', borderBottom: '1px solid var(--border-subtle)' }}>
+              <BrandLogo id={expanded.id} size={60} radius={16} />
               <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
                   <span style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>{expanded.name}</span>
@@ -208,11 +206,11 @@ export default function CharvisProviders() {
                     <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 16%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 45%, transparent)', borderRadius: 6, padding: '2px 7px' }}>Activo</span>
                   )}
                 </div>
-                <div style={{ fontSize: 10, color: 'var(--text-tertiary)', fontFamily: "'JetBrains Mono', monospace", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>{expanded.baseUrl}</div>
+                <div style={{ fontSize: 10, color: 'var(--text-tertiary)', fontFamily: "'JetBrains Mono', monospace", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 3 }}>{expanded.baseUrl}</div>
               </div>
               <a href={expanded.docsUrl} target="_blank" rel="noreferrer" title="Documentación oficial"
-                style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10.5, color: 'var(--text-secondary)', textDecoration: 'none', padding: '7px 10px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-deep)', whiteSpace: 'nowrap' }}>
-                <ExternalLink size={11} /> Docs
+                style={{ fontSize: 11, color: 'var(--text-secondary)', textDecoration: 'none', padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-deep)', whiteSpace: 'nowrap', fontWeight: 500 }}>
+                Documentación
               </a>
               <button
                 onClick={() => setOpenId(null)}
@@ -223,18 +221,18 @@ export default function CharvisProviders() {
               </button>
             </div>
 
-            <div style={{ padding: '18px 28px 26px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ padding: '20px 30px 26px', display: 'flex', flexDirection: 'column', gap: 16 }}>
               {/* API key */}
               <div>
-                <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.05em', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6 }}>
-                  <KeyRound size={11} /> API Key de {expanded.name}
+                <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.05em', textTransform: 'uppercase', display: 'block', marginBottom: 7 }}>
+                  API Key de {expanded.name}
                 </label>
                 <div style={{ display: 'flex', gap: 6 }}>
                   <input
                     type={showKey ? 'text' : 'password'}
                     value={apiKeyDraft}
                     onChange={e => setApiKeyDraft(e.target.value)}
-                    placeholder={expanded.id === 'opencode' ? 'sk-... (opcional: funciona gratis sin clave)' : 'sk-...'}
+                    placeholder="sk-..."
                     className="input-base"
                     style={{ flex: 1, height: 40, fontSize: 12, fontFamily: "'JetBrains Mono', monospace" }}
                     onKeyDown={e => { if (e.key === 'Enter') validate(); }}
@@ -243,13 +241,13 @@ export default function CharvisProviders() {
                     {showKey ? <EyeOff size={14} /> : <Eye size={14} />}
                   </button>
                 </div>
-                <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.5 }}>{expanded.keyHint}</p>
+                <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 7, lineHeight: 1.5 }}>{expanded.keyHint}</p>
               </div>
 
               {/* Base URL */}
               <div>
-                <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.05em', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6 }}>
-                  <Globe size={11} /> URL base (endpoint OpenAI-compatible)
+                <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.05em', textTransform: 'uppercase', display: 'block', marginBottom: 7 }}>
+                  URL base (endpoint OpenAI-compatible)
                 </label>
                 <input
                   type="text"
@@ -262,30 +260,31 @@ export default function CharvisProviders() {
 
               {/* Modelo */}
               <div>
-                <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.05em', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6 }}>
-                  <Cpu size={11} /> Modelo · {models.length}
+                <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.05em', textTransform: 'uppercase', display: 'block', marginBottom: 7 }}>
+                  Modelo{models.length ? ` · ${models.length}` : ''}
                 </label>
                 <div style={{ position: 'relative' }}>
                   <select
                     value={modelDraft}
                     onChange={e => setModelDraft(e.target.value)}
+                    disabled={!validated}
                     className="input-base"
-                    style={{ width: '100%', height: 40, fontSize: 12, appearance: 'none', paddingRight: 30, fontFamily: "'JetBrains Mono', monospace" }}
+                    style={{ width: '100%', height: 40, fontSize: 12, appearance: 'none', paddingRight: 30, fontFamily: "'JetBrains Mono', monospace", opacity: validated ? 1 : 0.65, cursor: validated ? 'pointer' : 'not-allowed' }}
                   >
-                    {models.length ? (
+                    {!validated ? (
+                      <option value="">Valida tu API para ver los modelos disponibles</option>
+                    ) : (
                       <>
                         {!models.includes(modelDraft) && modelDraft && <option value={modelDraft}>{modelDraft}</option>}
                         {models.map(m => (
                           <option key={m} value={m}>{m}</option>
                         ))}
                       </>
-                    ) : (
-                      <option value={expanded.defaultModel}>{expanded.defaultModel}</option>
                     )}
                   </select>
                   <ChevronDown size={13} style={{ position: 'absolute', right: 10, top: 14, color: 'var(--text-tertiary)', pointerEvents: 'none' }} />
                 </div>
-                <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.5 }}>{modelsNote || 'Valida tu API para detectar los modelos exactos de tu cuenta.'}</p>
+                <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 7, lineHeight: 1.5 }}>{modelsNote || (validated ? '' : 'Pulsa "Validar API" para detectar los modelos exactos de tu cuenta.')}</p>
               </div>
 
               {/* Resultado */}
@@ -310,35 +309,30 @@ export default function CharvisProviders() {
                   disabled={validating}
                   title="Comprueba tu API, detecta los modelos y guarda la configuración (sin activarla todavía)"
                   style={{
-                    display: 'flex', alignItems: 'center', gap: 7, padding: '10px 18px', borderRadius: 9,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '10px 18px', borderRadius: 9,
                     fontSize: 12, fontWeight: 600, cursor: 'pointer',
                     background: 'var(--bg-deep)', border: '1px solid var(--border-default)', color: 'var(--text-primary)',
                     transition: 'all 150ms', opacity: validating ? 0.6 : 1,
                   }}
                 >
-                  {validating ? <Loader2 size={13} className="spin" /> : <ShieldCheck size={13} />}
+                  {validating ? <Loader2 size={13} className="spin" /> : null}
                   {validating ? 'Validando…' : 'Validar API'}
                 </button>
                 <button
                   onClick={activate}
-                  disabled={validating || !st.validatedAt}
-                  title={st.validatedAt ? `Activar ${expanded.name} como proveedor de Charvis` : 'Primero valida tu API para poder activar este proveedor'}
+                  disabled={validating || !validated}
+                  title={validated ? `Activar ${expanded.name} como proveedor de Charvis` : 'Primero valida tu API para poder activar este proveedor'}
                   style={{
-                    display: 'flex', alignItems: 'center', gap: 7, padding: '10px 18px', borderRadius: 9,
-                    fontSize: 12, fontWeight: 600, cursor: st.validatedAt ? 'pointer' : 'not-allowed',
-                    background: st.validatedAt ? 'color-mix(in srgb, var(--accent) 14%, transparent)' : 'var(--bg-deep)',
-                    border: st.validatedAt ? '1px solid color-mix(in srgb, var(--accent) 55%, transparent)' : '1px solid var(--border-soft)',
-                    color: st.validatedAt ? 'var(--accent)' : 'var(--text-muted)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '10px 18px', borderRadius: 9,
+                    fontSize: 12, fontWeight: 600, cursor: validated ? 'pointer' : 'not-allowed',
+                    background: validated ? 'color-mix(in srgb, var(--accent) 14%, transparent)' : 'var(--bg-deep)',
+                    border: validated ? '1px solid color-mix(in srgb, var(--accent) 55%, transparent)' : '1px solid var(--border-soft)',
+                    color: validated ? 'var(--accent)' : 'var(--text-muted)',
                     transition: 'all 150ms', opacity: validating ? 0.6 : 1,
                   }}
                 >
-                  <Check size={13} /> Activar proveedor
+                  Activar proveedor
                 </button>
-                {st.validatedAt && (
-                  <span style={{ fontSize: 10, color: '#10B981', display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <ShieldCheck size={11} /> Verificado
-                  </span>
-                )}
               </div>
             </div>
           </div>
