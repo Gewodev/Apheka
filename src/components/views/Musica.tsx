@@ -108,6 +108,28 @@ function SortableQueueRow({ track, index, onSelect, onMenu, formatTime }: { trac
   );
 }
 
+function normalizeStr(s: string): string {
+  return (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+function fuzzyMatch(hay: string, needle: string): boolean {
+  const h = normalizeStr(hay);
+  const n = normalizeStr(needle);
+  if (!n) return true;
+  if (h.includes(n)) return true;
+  let i = 0;
+  let skipped = 0;
+  const maxSkip = Math.max(2, Math.floor(n.length / 3));
+  for (const ch of n) {
+    const idx = h.indexOf(ch, i);
+    if (idx === -1) return false;
+    skipped += idx - i;
+    if (skipped > maxSkip) return false;
+    i = idx + 1;
+  }
+  return true;
+}
+
 function SortableLibraryRow({ track, index, isPlaying, isOnline, formatTime, onSelect, onMenu, onToggleFav, onEdit, onDelete }: {
   track: Track; index: number; isPlaying: boolean; isOnline: boolean;
   formatTime: (secs: number) => string;
@@ -143,6 +165,11 @@ function SortableLibraryRow({ track, index, isPlaying, isOnline, formatTime, onS
       {cloudOffline && (
         <div style={{ position: 'absolute', top: -1, left: 12, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--error)', background: 'var(--bg-surface)', border: '1px solid color-mix(in srgb, var(--error) 40%, transparent)', borderRadius: 999, padding: '2px 8px', zIndex: 2 }}>
           No hay conexión a internet
+        </div>
+      )}
+      {!cloudOffline && track.source !== 'local' && (
+        <div style={{ position: 'absolute', top: -1, right: 12, display: 'flex', alignItems: 'center', gap: 4, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 38%, transparent)', borderRadius: 999, padding: '2px 7px', zIndex: 2, pointerEvents: 'none' }}>
+          <Cloud size={10} style={{ flexShrink: 0 }} /> Nube
         </div>
       )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -725,8 +752,7 @@ export default function Musica() {
       filtered = filtered.filter(t => t.artist === selectedArtist);
     }
     if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      filtered = filtered.filter(t => t.title.toLowerCase().includes(q) || t.artist.toLowerCase().includes(q));
+      filtered = filtered.filter(t => fuzzyMatch(t.title, searchQuery) || fuzzyMatch(t.artist, searchQuery));
     }
     return filtered;
   }, [dailyShuffledTracks, selectedArtist, searchQuery, manualOrder]);
@@ -1591,6 +1617,11 @@ export default function Musica() {
                         {cloudOffline && (
                           <div style={{ position: 'absolute', top: 8, left: 8, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--error)', background: 'var(--bg-surface)', border: '1px solid color-mix(in srgb, var(--error) 40%, transparent)', borderRadius: 999, padding: '2px 8px', zIndex: 2 }}>
                             No hay conexión a internet
+                          </div>
+                        )}
+                        {!cloudOffline && track.source !== 'local' && (
+                          <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', alignItems: 'center', gap: 4, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 38%, transparent)', borderRadius: 999, padding: '2px 7px', zIndex: 2, pointerEvents: 'none' }}>
+                            <Cloud size={10} style={{ flexShrink: 0 }} /> Nube
                           </div>
                         )}
                         <div style={{ position: 'relative', width: '100%', aspectRatio: '1', borderRadius: 8, overflow: 'hidden', background: 'var(--bg-surface)' }}>

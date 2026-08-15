@@ -1,11 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { ZoomIn, ZoomOut, Maximize2, X, Check, Pencil } from 'lucide-react';
+import { X, Check, Pencil } from 'lucide-react';
 
 const BANNER_ASPECT = 16 / 7;
-const MIN_ZOOM = 0.4;
-const MAX_ZOOM = 4;
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-const clampZoom = (z: number) => clamp(z, MIN_ZOOM, MAX_ZOOM);
 
 const iconBtn: React.CSSProperties = {
   width: 32, height: 32, borderRadius: 9, border: '1px solid var(--border-subtle)',
@@ -18,9 +15,10 @@ const ghostBtn: React.CSSProperties = {
   color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-primary)',
 };
 
-// ─── Editor de imagen estilo "gran empresa": zoom y arrastre ───
-// El área visible (stage) ES el recorte con las dimensiones del banner (16:7):
-// la imagen se mueve/acerca por detrás y al aplicar se exporta un canvas
+// ─── Editor de posición del banner ───
+// El área visible (stage) ES el recorte con las dimensiones del banner (16:7).
+// La imagen se ajusta sola al encuadre (cover, sin opciones de tamaño) y lo
+// único editable es la POSICIÓN (arrastrar). Al aplicar se exporta un canvas
 // con exactamente ese encuadre.
 export default function ImageEditorModal({ src, title = 'Editar imagen', onConfirm, onCancel }: {
   src: string;
@@ -29,18 +27,18 @@ export default function ImageEditorModal({ src, title = 'Editar imagen', onConfi
   onCancel: () => void;
 }) {
   const [imgDims, setImgDims] = useState<{ nw: number; nh: number } | null>(null);
-  const [zoom, setZoom] = useState(1);
   const [panX, setPanX] = useState(0);
   const [panY, setPanY] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const dragRef = useRef<{ x: number; y: number; px: number; py: number } | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setImgDims(null);
-    setZoom(1);
     setPanX(0);
     setPanY(0);
+    setLoadError(false);
   }, [src]);
 
   const aspect = BANNER_ASPECT;
@@ -48,9 +46,8 @@ export default function ImageEditorModal({ src, title = 'Editar imagen', onConfi
   const H = W / aspect;
 
   const s0 = imgDims ? Math.max(W / imgDims.nw, H / imgDims.nh) : 1;
-  const s = s0 * zoom;
-  const dw = imgDims ? imgDims.nw * s : 0;
-  const dh = imgDims ? imgDims.nh * s : 0;
+  const dw = imgDims ? imgDims.nw * s0 : 0;
+  const dh = imgDims ? imgDims.nh * s0 : 0;
   const lx = Math.max(0, (dw - W) / 2);
   const ly = Math.max(0, (dh - H) / 2);
 
@@ -58,18 +55,6 @@ export default function ImageEditorModal({ src, title = 'Editar imagen', onConfi
     x: clamp(x, -lx, lx),
     y: clamp(y, -ly, ly),
   }), [lx, ly]);
-
-  // Rueda del ratón para acercar/alejar (listener no pasivo para poder preventDefault).
-  useEffect(() => {
-    const el = stageRef.current;
-    if (!el) return;
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      setZoom(z => clampZoom(z * (e.deltaY < 0 ? 1.08 : 0.92)));
-    };
-    el.addEventListener('wheel', onWheel, { passive: false });
-    return () => el.removeEventListener('wheel', onWheel);
-  }, []);
 
   const handleApply = () => {
     if (!imgDims || busy) return;
@@ -122,7 +107,7 @@ export default function ImageEditorModal({ src, title = 'Editar imagen', onConfi
           }}
           onPointerUp={() => { dragRef.current = null; }}
           onPointerCancel={() => { dragRef.current = null; }}
-          onDoubleClick={() => { setZoom(1); setPanX(0); setPanY(0); }}
+          onDoubleClick={() => { setPanX(0); setPanY(0); }}
           style={{
             width: W, height: H, margin: '0 auto', position: 'relative', overflow: 'hidden',
             borderRadius: 12, cursor: dragRef.current ? 'grabbing' : 'grab', touchAction: 'none',
@@ -130,42 +115,37 @@ export default function ImageEditorModal({ src, title = 'Editar imagen', onConfi
             border: '1px solid var(--border-default)', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.04)',
           }}
         >
-          {imgDims ? (
-            <img src={src} alt="" draggable={false}
-              style={{
-                position: 'absolute', left: '50%', top: '50%',
-                width: dw, height: dh,
-                transform: `translate(calc(-50% + ${panX}px), calc(-50% + ${panY}px))`,
-                pointerEvents: 'none', userSelect: 'none', willChange: 'transform',
-              }}
-            />
-          ) : (
-            <img src={src} alt="" onLoad={(e) => setImgDims({ nw: e.currentTarget.naturalWidth, nh: e.currentTarget.naturalHeight })}
-              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', opacity: 0, pointerEvents: 'none' }} />
+          <img src={src} alt="" draggable={false}
+            onLoad={(e) => { if (!imgDims) setImgDims({ nw: e.currentTarget.naturalWidth, nh: e.currentTarget.naturalHeight }); }}
+            onError={() => setLoadError(true)}
+            style={{
+              position: 'absolute',
+              left: '50%', top: '50%',
+              width: imgDims ? dw : '100%',
+              height: imgDims ? dh : '100%',
+              objectFit: imgDims ? undefined : 'cover',
+              transform: imgDims ? `translate(calc(-50% + ${panX}px), calc(-50% + ${panY}px))` : 'translate(-50%, -50%)',
+              pointerEvents: 'none', userSelect: 'none', willChange: 'transform',
+            }}
+          />
+          {loadError && (
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.55)' }}>
+              <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>No se pudo cargar la imagen. Inténtalo de nuevo.</span>
+            </div>
           )}
         </div>
         <p style={{ textAlign: 'center', fontSize: 10, color: 'var(--text-tertiary)', marginTop: 8 }}>
-          Arrastra para mover la imagen · rueda del ratón para acercar · doble clic para ajustar
+          Arrastra para mover la imagen · doble clic para centrar
         </p>
-
-        {/* Zoom */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
-          <button onClick={() => setZoom(z => clampZoom(z - 0.25))} title="Alejar" style={iconBtn}><ZoomOut size={15} /></button>
-          <input type="range" min={MIN_ZOOM} max={MAX_ZOOM} step={0.05} value={zoom} onChange={e => setZoom(clampZoom(Number(e.target.value)))}
-            style={{ width: 180, accentColor: 'var(--accent)' }} />
-          <button onClick={() => setZoom(z => clampZoom(z + 0.25))} title="Acercar" style={iconBtn}><ZoomIn size={15} /></button>
-          <button onClick={() => { setZoom(1); setPanX(0); setPanY(0); }} title="Ajustar al encuadre" style={iconBtn}><Maximize2 size={15} /></button>
-          <span style={{ fontSize: 11, fontFamily: "'JetBrains Mono', monospace", color: 'var(--text-tertiary)', minWidth: 42, textAlign: 'center' }}>{Math.round(zoom * 100)}%</span>
-        </div>
 
         {/* Footer */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
           <button onClick={onCancel} style={ghostBtn}>Cancelar</button>
-          <button onClick={handleApply} disabled={!imgDims || busy}
+          <button onClick={handleApply} disabled={!imgDims || busy || loadError}
             style={{
               height: 38, padding: '0 22px', border: 'none', borderRadius: 10, cursor: 'pointer',
-              background: imgDims && !busy ? 'var(--accent)' : 'var(--bg-hover)',
-              color: imgDims && !busy ? '#fff' : 'var(--text-muted)',
+              background: imgDims && !busy && !loadError ? 'var(--accent)' : 'var(--bg-hover)',
+              color: imgDims && !busy && !loadError ? '#fff' : 'var(--text-muted)',
               fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-primary)', display: 'flex', alignItems: 'center', gap: 8,
               transition: 'all 200ms',
             }}>

@@ -277,7 +277,7 @@ export default function CursosHub({ onSelectCourse, onTabSelect }: CursosHubProp
                       <img src={courseCover} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                     </div>
                     <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                      <button onClick={() => setEditorSrc(courseCover)} title="Editar la imagen (acercar, mover, proporción)"
+                      <button onClick={() => setEditorSrc(courseCover)} title="Editar la imagen (mover la posición)"
                         style={{ height: 30, padding: '0 13px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 9, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: "'Inter Tight', sans-serif", transition: 'all 180ms ' + EASE }}
                         onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)'; }}
                         onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>

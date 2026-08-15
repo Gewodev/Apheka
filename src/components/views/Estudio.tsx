@@ -1870,6 +1870,42 @@ export default function Estudio() {
               </div>
             )}
 
+            {/* ¿Qué tan bien lo hiciste? — velocímetro 1-20 (mismo estilo que la evaluación de tareas) */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.02em' }}>¿Qué tan bien lo hiciste?</span>
+                <span style={{ fontSize: 20, fontWeight: 700, color: evalVolmeter > 14 ? '#10B981' : (evalVolmeter > 7 ? '#F59E0B' : '#EF4444'), fontFamily: "'Inter Tight', sans-serif", lineHeight: 1 }}>{evalVolmeter}<span style={{ fontSize: 12, fontWeight: 500, opacity: 0.4 }}>/20</span></span>
+              </div>
+              <div style={{
+                position: 'relative', height: 40, display: 'flex', alignItems: 'flex-end', gap: 3,
+                padding: '4px 0',
+                background: 'var(--bg-surface)', borderRadius: 10,
+                border: '1px solid var(--border-subtle)',
+                overflow: 'hidden',
+              }}>
+                {Array.from({ length: 20 }, (_, i) => {
+                  const isActive = i < evalVolmeter;
+                  const barColor = i < 7 ? '#EF4444' : i < 14 ? '#F59E0B' : '#10B981';
+                  const barH = isActive ? 8 + (i / 20) * 28 : 4;
+                  return (
+                    <div key={i} style={{
+                      flex: 1, height: barH, borderRadius: '3px 3px 1px 1px',
+                      background: isActive ? barColor : 'rgba(255,255,255,0.04)',
+                      transition: 'all 250ms cubic-bezier(0.16, 1, 0.3, 1)',
+                      boxShadow: isActive ? `0 0 8px ${barColor}40, inset 0 1px 0 rgba(255,255,255,0.15)` : 'none',
+                      opacity: isActive ? 1 : 0.5,
+                    }} />
+                  );
+                })}
+              </div>
+              <input type="range" min="0" max="20" value={evalVolmeter} onChange={e => setEvalVolmeter(Number(e.target.value))}
+                style={{ width: '100%', height: 3, cursor: 'pointer', WebkitAppearance: 'none', appearance: 'none', outline: 'none', borderRadius: 2, background: 'transparent', marginTop: 6 }}
+                className="volume-slider" />
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>
+                <span>Bajo</span><span>Alto</span>
+              </div>
+            </div>
+
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
               <button onClick={() => {
                 setShowSessionEval(false);
@@ -1888,6 +1924,7 @@ export default function Estudio() {
                 handleEvalAndStartRest({
                   title: freeTitle,
                   subjects: evalSubjects.length > 0 ? evalSubjects : undefined,
+                  volmeter: evalVolmeter,
                   evaluatedAt: new Date().toISOString(),
                 });
                 if (activePlannedSessionId) {
