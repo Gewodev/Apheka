@@ -1275,22 +1275,22 @@ function EditorToolbar({ onFormat }: EditorToolbarProps) {
 
       {/* 2. INLINE STYLING — only bold, italic, underline, strikethrough */}
       <button onClick={() => onFormat("bold")} title="Negrita (Ctrl+B)"
-        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: activeFormats.bold ? "var(--accent-dim)" : "transparent", color: activeFormats.bold ? "var(--accent)" : "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
+        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: activeFormats.bold ? "color-mix(in srgb, var(--accent) 16%, transparent)" : "transparent", boxShadow: activeFormats.bold ? "0 0 10px color-mix(in srgb, var(--accent) 28%, transparent)" : "none", color: activeFormats.bold ? "var(--accent)" : "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
         className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
         <Bold size={14} />
       </button>
       <button onClick={() => onFormat("italic")} title="Cursiva (Ctrl+I)"
-        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: activeFormats.italic ? "var(--accent-dim)" : "transparent", color: activeFormats.italic ? "var(--accent)" : "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
+        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: activeFormats.italic ? "color-mix(in srgb, var(--accent) 16%, transparent)" : "transparent", boxShadow: activeFormats.italic ? "0 0 10px color-mix(in srgb, var(--accent) 28%, transparent)" : "none", color: activeFormats.italic ? "var(--accent)" : "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
         className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
         <Italic size={14} />
       </button>
       <button onClick={() => onFormat("underline")} title="Subrayado (Ctrl+U)"
-        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: activeFormats.underline ? "var(--accent-dim)" : "transparent", color: activeFormats.underline ? "var(--accent)" : "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
+        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: activeFormats.underline ? "color-mix(in srgb, var(--accent) 16%, transparent)" : "transparent", boxShadow: activeFormats.underline ? "0 0 10px color-mix(in srgb, var(--accent) 28%, transparent)" : "none", color: activeFormats.underline ? "var(--accent)" : "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
         className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
         <Underline size={14} />
       </button>
       <button onClick={() => onFormat("strikeThrough")} title="Tachado"
-        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: activeFormats.strikeThrough ? "var(--accent-dim)" : "transparent", color: activeFormats.strikeThrough ? "var(--accent)" : "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
+        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: activeFormats.strikeThrough ? "color-mix(in srgb, var(--accent) 16%, transparent)" : "transparent", boxShadow: activeFormats.strikeThrough ? "0 0 10px color-mix(in srgb, var(--accent) 28%, transparent)" : "none", color: activeFormats.strikeThrough ? "var(--accent)" : "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
         className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
         <Strikethrough size={14} />
       </button>
@@ -1304,12 +1304,12 @@ function EditorToolbar({ onFormat }: EditorToolbarProps) {
 
       {/* 3. LISTS + BLOCKS */}
       <button onClick={() => onFormat("insertUnorderedList")} title="Lista con viñetas"
-        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: activeFormats.insertUnorderedList ? "var(--accent-dim)" : "transparent", color: activeFormats.insertUnorderedList ? "var(--accent)" : "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
+        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: activeFormats.insertUnorderedList ? "color-mix(in srgb, var(--accent) 16%, transparent)" : "transparent", boxShadow: activeFormats.insertUnorderedList ? "0 0 10px color-mix(in srgb, var(--accent) 28%, transparent)" : "none", color: activeFormats.insertUnorderedList ? "var(--accent)" : "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
         className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
         <List size={14} />
       </button>
       <button onClick={() => onFormat("insertOrderedList")} title="Lista numerada"
-        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: activeFormats.insertOrderedList ? "var(--accent-dim)" : "transparent", color: activeFormats.insertOrderedList ? "var(--accent)" : "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
+        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: activeFormats.insertOrderedList ? "color-mix(in srgb, var(--accent) 16%, transparent)" : "transparent", boxShadow: activeFormats.insertOrderedList ? "0 0 10px color-mix(in srgb, var(--accent) 28%, transparent)" : "none", color: activeFormats.insertOrderedList ? "var(--accent)" : "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
         className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
         <ListOrdered size={14} />
       </button>

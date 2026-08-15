@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import {
   GraduationCap, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Pencil, PlusCircle, Layers, Trash2,
   Book, Upload, X, Search, Edit3, Plus, File, Sigma, Lightbulb, Key, Type, HelpCircle, ListChecks, ExternalLink,
-  Check, GripVertical, StickyNote, BookOpen, ArrowUpRight, ArrowLeft, Play,
+  Check, StickyNote, BookOpen, ArrowUpRight, ArrowLeft, Play,
   NotebookPen, ListTodo, Bold, Italic, Underline, Heading1, Heading2, Heading3,
   List, ListOrdered, Highlighter, Paperclip, MoreHorizontal, Eye, FolderOpen,
   ArrowLeftRight, BarChart3, Calendar, Flag, ArrowUpDown, Star, EyeOff, Strikethrough, AlignLeft, AlignCenter, AlertTriangle, ArrowRight,
@@ -17,7 +17,7 @@ import {
 import { FormatToolbar } from '../ui/FormatToolbar';
 import { GoogleClassroomIcon, GoogleDriveIcon, GoogleDocsIcon, GoogleSheetsIcon, GoogleSlidesIcon, GoogleFormsIcon, WordIcon, ExcelIcon, PowerPointIcon } from '../ui/GoogleIcons';
 import {
-  DndContext, closestCorners, useSensor, useSensors, PointerSensor, useDroppable, DragEndEvent
+  DndContext, closestCenter, closestCorners, useSensor, useSensors, PointerSensor, useDroppable, DragEndEvent
 } from '@dnd-kit/core';
 import {
   SortableContext, rectSortingStrategy, useSortable, arrayMove, verticalListSortingStrategy
@@ -33,6 +33,7 @@ import { es } from "date-fns/locale";
 import toast from 'react-hot-toast';
 import { openBrainWithAnchor, isOverBrainZone, getLastPointer, setBrainDragState } from '../../lib/brainDrop';
 import { useMaterialMenu } from '../ui/MaterialContextMenu';
+import ImageEditorModal from '../ui/ImageEditorModal';
 
 export const MATERIAL_META = {
   resource: { label: 'Recurso', icon: File },
@@ -914,8 +915,8 @@ function TaskRow({ task, onToggle, onDelete, courseColor }: { task: any; onToggl
 }
 
 // ─── Note Full Editor ───
-function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolbar, onImageClick }: {
-  note: any; courseColor: string; onSave: (id: string, data: any) => void; editable?: boolean; toolbarEnd?: React.ReactNode; hideToolbar?: boolean; onImageClick?: (src: string) => void;
+function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolbar, onImageClick, onActiveFormatsChange }: {
+  note: any; courseColor: string; onSave: (id: string, data: any) => void; editable?: boolean; toolbarEnd?: React.ReactNode; hideToolbar?: boolean; onImageClick?: (src: string) => void; onActiveFormatsChange?: (f: Record<string, boolean>) => void;
 }) {
   const editorRef = useRef<HTMLDivElement>(null);
   const dirtyRef = useRef(false);
@@ -981,6 +982,7 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
       insertOrderedList = insertOrderedList || document.queryCommandState('insertOrderedList');
     }
     setActiveFormats({ bold, italic, underline, strikeThrough, insertUnorderedList, insertOrderedList, heading1, heading2, heading3, blockquote });
+    onActiveFormatsChange?.({ bold, italic, underline, strikeThrough, insertUnorderedList, insertOrderedList, heading1, heading2, heading3, blockquote });
   };
 
   const scheduleTrack = () => {
@@ -1232,9 +1234,9 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
         </div>
       )}
       <div ref={editorRef} contentEditable={editable} suppressContentEditableWarning
-        onPaste={handlePaste} onInput={() => { markDirty(); scheduleTrack(); }}
+        onPaste={handlePaste} onInput={markDirty}
         onBlur={autoSave} onKeyDown={handleEditorKeyDown}
-        onMouseUp={scheduleTrack} onKeyUp={scheduleTrack}
+        onMouseUp={scheduleTrack}
         onClick={(e) => { const t = e.target as HTMLElement; if (t.tagName === 'IMG' && onImageClick) { e.stopPropagation(); onImageClick((t as HTMLImageElement).src); } }}
         className="notes-editor-area"
         style={{ padding: '12px 16px', minHeight: 80, fontSize: 14, lineHeight: 1.8, color: 'var(--text-primary)',
@@ -1295,7 +1297,7 @@ function PlanSelectDropdown({ value, onChange, options, noneLabel, color }: { va
 
 // ─── Main Component ───
 export default function Cursos({ initialCourseId, initialTab = 'overview', onNavigate }: { initialCourseId?: string; initialTab?: 'overview' | 'tareas' | 'notas' | 'archivos'; onNavigate?: (view: string) => void }) {
-  const { courses = [], tasks = [], notes = [], noteFolders = [], updateCourse, deleteCourse, setNavigateTo, setFocusedTaskId, addTask, updateTask, deleteTask, addNote, updateNote, deleteNote, reorderNotes, plannedSessions, addPlannedSession, updatePlannedSession, deletePlannedSession, reorderPlannedSessions, setPipUrl, studySessions, activePlannedSessionId, linkPlannedSessionToTimer, unlinkPlannedSessionFromTimer, courseDeepLink, setCourseDeepLink, navigateToCourse, activeTaskId, addNotification } = useApp();
+  const { courses = [], tasks = [], notes = [], noteFolders = [], updateCourse, deleteCourse, setNavigateTo, setFocusedTaskId, addTask, updateTask, deleteTask, addNote, updateNote, deleteNote, reorderNotes, reorderTasks, plannedSessions, addPlannedSession, updatePlannedSession, deletePlannedSession, reorderPlannedSessions, setPipUrl, studySessions, activePlannedSessionId, linkPlannedSessionToTimer, unlinkPlannedSessionFromTimer, courseDeepLink, setCourseDeepLink, navigateToCourse, activeTaskId, addNotification } = useApp();
   const th = document.documentElement.getAttribute('data-theme');
   const isDarkSelect = !th || th === 'oscuro' || th === 'vibrante';
   const selectBorder = isDarkSelect ? '1px solid rgba(255,255,255,0.12)' : '1px solid rgba(0,0,0,0.12)';
@@ -1347,6 +1349,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const [showEditCourse, setShowEditCourse] = useState(false);
   const [editCourseName, setEditCourseName] = useState('');
   const [editCourseCover, setEditCourseCover] = useState<string | undefined>(undefined);
+  const [editEditorSrc, setEditEditorSrc] = useState<string | null>(null);
   const [editCourseTeacher, setEditCourseTeacher] = useState('');
   const [editCourseColor, setEditCourseColor] = useState('#6366f1');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -1958,6 +1961,9 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   };
   const [selectedOverviewNoteId, setSelectedOverviewNoteId] = useState<string | null>(null);
   const [overviewNoteEditMode, setOverviewNoteEditMode] = useState(false);
+  const [overviewActiveFormats, setOverviewActiveFormats] = useState<Record<string, boolean>>({});
+  const [taskMenu, setTaskMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [confirmDeleteTaskId, setConfirmDeleteTaskId] = useState<string | null>(null);
   const [overviewNoteHighlights, setOverviewNoteHighlights] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('owa_course_note_highlights') || '[]'); } catch { return []; }
   });
@@ -1976,7 +1982,13 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const [overviewAddingNote, setOverviewAddingNote] = useState(false);
   const [overviewEditContent, setOverviewEditContent] = useState('');
   const [overviewNotesSort, setOverviewNotesSort] = useState<'date' | 'title'>('date');
-  const [showCompletedTasks, setShowCompletedTasks] = useState(false);
+  const [showCompletedTasks, setShowCompletedTasks] = useState(() => {
+    try { return localStorage.getItem('owa_course_tasks_show_completed_v1') === '1'; } catch { return false; }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('owa_course_tasks_show_completed_v1', showCompletedTasks ? '1' : '0');
+  }, [showCompletedTasks]);
 
   // Escape key closes expanded overview note or editing mode
   useEffect(() => {
@@ -1994,6 +2006,26 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [selectedOverviewNoteId, editingNoteId]);
+
+  // Click outside the expanded overview note: closes only in view mode (edit mode persists)
+  useEffect(() => {
+    if (!selectedOverviewNoteId) return;
+    const handler = (e: MouseEvent) => {
+      if (overviewNoteEditMode) return;
+      // No cerrar el apunte ni las ventanas de confirmación mientras un modal
+      // está abierto: el mousedown mataría el click del botón Eliminar (el modal
+      // se desmonta antes del evento click → el borrado nunca ocurría)
+      if (confirmDeleteNoteId || confirmDeleteTaskId) return;
+      const t = e.target as HTMLElement;
+      if (overviewNoteContainerRef.current && !overviewNoteContainerRef.current.contains(t)) {
+        setSelectedOverviewNoteId(null);
+        setOverviewNoteEditMode(false);
+        setConfirmDeleteNoteId(null);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [selectedOverviewNoteId, overviewNoteEditMode, confirmDeleteNoteId, confirmDeleteTaskId]);
 
   useEffect(() => {
     localStorage.setItem('owa_course_note_highlights', JSON.stringify(overviewNoteHighlights));
@@ -2265,6 +2297,21 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   }, [course]);
 
   // --- Handlers ---
+  const handleEditCoverUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => { setEditEditorSrc(event.target?.result as string); };
+    reader.readAsDataURL(file);
+    if (e.target) e.target.value = '';
+  };
+
+  const handleEditCoverConfirm = (dataUrl: string) => {
+    setEditCourseCover(dataUrl);
+    setEditEditorSrc(null);
+    toast.success('Imagen aplicada');
+  };
+
   const handleSaveCourseSettings = () => {
     if (!editCourseName.trim()) return;
     updateCourse(course.id, { name: editCourseName.trim(), coverImage: editCourseCover, coverUrl: editCourseCover, color: editCourseColor, teacher: editCourseTeacher.trim() || undefined, teacherName: editCourseTeacher.trim() || undefined });
@@ -2686,6 +2733,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   }, [course?.id, course?.studyTopics, selectedGroupId, updateCourse]);
 
   const notesDragRef = useRef(false);
+  const tasksDragRef = useRef(false);
 
   const handleNoteDragEnd = (event: DragEndEvent) => {
     setTimeout(() => { notesDragRef.current = false; }, 80);
@@ -2723,6 +2771,28 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     reorderNotes(newIds);
   };
 
+  const buildTaskIds = (includeCompleted: boolean) => {
+    const byOrder = (a: any, b: any) => (a.sortOrder ?? Number.MAX_SAFE_INTEGER) - (b.sortOrder ?? Number.MAX_SAFE_INTEGER);
+    return (includeCompleted
+      ? [...courseTasks].sort((a, b) => {
+          if (a.status === 'completado' && b.status !== 'completado') return 1;
+          if (a.status !== 'completado' && b.status === 'completado') return -1;
+          return byOrder(a, b);
+        })
+      : [...pendingTasks].sort(byOrder)).map(t => t.id);
+  };
+
+  const handleTaskDragEnd = (event: DragEndEvent, includeCompleted: boolean) => {
+    setTimeout(() => { tasksDragRef.current = false; }, 80);
+    const { active, over } = event;
+    if (!over) return;
+    const ids = buildTaskIds(includeCompleted);
+    const oldIdx = ids.indexOf(active.id as string);
+    const newIdx = ids.indexOf(over.id as string);
+    if (oldIdx < 0 || newIdx < 0 || oldIdx === newIdx) return;
+    reorderTasks(arrayMove(ids, oldIdx, newIdx));
+  };
+
   // --- Task Handlers ---
   const handleAddTask = () => {
     if (!newTaskTitle.trim() || !course) return;
@@ -2733,6 +2803,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   };
 
   const handleToggleTask = (taskId: string) => {
+    if (tasksDragRef.current) return;
     const task = courseTasks.find(t => t.id === taskId);
     if (!task) return;
     const nextStatus = task.status === 'inicio' ? 'progreso' as const : task.status === 'progreso' ? 'completado' as const : 'inicio' as const;
@@ -3248,10 +3319,12 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                       ? [...courseTasks].sort((a, b) => {
                           if (a.status === 'completado' && b.status !== 'completado') return 1;
                           if (a.status !== 'completado' && b.status === 'completado') return -1;
-                          return 0;
+                          return (a.sortOrder ?? Number.MAX_SAFE_INTEGER) - (b.sortOrder ?? Number.MAX_SAFE_INTEGER);
                         })
-                      : pendingTasks;
+                      : [...pendingTasks].sort((a, b) => (a.sortOrder ?? Number.MAX_SAFE_INTEGER) - (b.sortOrder ?? Number.MAX_SAFE_INTEGER));
                     return tasksToShow.length > 0 ? (
+                      <DndContext sensors={sensors} collisionDetection={closestCenter} modifiers={[restrictToParentElement]} onDragStart={() => { tasksDragRef.current = true; }} onDragEnd={(e) => handleTaskDragEnd(e, showCompletedTasks)}>
+                        <SortableContext items={tasksToShow.map(t => t.id)} strategy={rectSortingStrategy}>
                       <div className="course-tasks-scroll" style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 232, overflowY: 'auto', paddingRight: 4 }}>
                         {tasksToShow.map(task => {
                           const descPreview = (task.notes || '').replace(/<[^>]+>/g, '').trim().slice(0, 45);
@@ -3274,10 +3347,12 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                           const pCol = prioLevel > 0 ? (prioColors[task.priority] || '#EF4444') : '';
                           const pct = prioLevel === 3 ? '100%' : prioLevel === 2 ? '66.67%' : prioLevel === 1 ? '33.33%' : '0%';
                           return (
-                            <div key={task.id} className={isDone ? '' : 'item-card'} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated-alpha, var(--bg-elevated))', overflow: 'hidden', flexShrink: 0, transition: 'border-color 200ms ' + EASE, opacity: isDone ? 0.65 : 1, cursor: isDone ? 'default' : 'context-menu' }}
+                            <SortableWrapper key={task.id} id={task.id} style={{ touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none', flexShrink: 0 }}>
+                              {({ attributes, listeners, isDragging }) => (
+                            <div {...attributes} {...listeners} className={isDone ? '' : 'item-card'} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated-alpha, var(--bg-elevated))', overflow: 'hidden', flexShrink: 0, transition: 'all 200ms ' + EASE, opacity: isDone ? 0.65 : isDragging ? 0.35 : 1, cursor: isDone ? 'default' : isDragging ? 'grabbing' : 'grab', touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none' }}
                               onMouseEnter={e => { if (!isDone) e.currentTarget.style.borderColor = `${course.color}45`; }}
                               onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; }}
-                              onContextMenu={e => { e.preventDefault(); handleBackTaskStatus(task.id); }}>
+                              onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setTaskMenu({ id: task.id, x: e.clientX, y: e.clientY }); }}>
                               {prioLevel > 0 && (
                                 <>
                                   <div style={{ position: 'absolute', top: 0, bottom: 0, right: 16, display: 'flex', alignItems: 'center', zIndex: 0, pointerEvents: 'none' }}>
@@ -3318,9 +3393,13 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                 <ArrowUpRight size={14} />
                               </button>
                             </div>
+                              )}
+                            </SortableWrapper>
                           );
                         })}
                       </div>
+                        </SortableContext>
+                      </DndContext>
                     ) : (
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 96, borderRadius: 10, border: '1px dashed var(--border-subtle)', background: 'var(--bg-surface)' }}>
                         <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>No hay tareas para este curso.</p>
@@ -3390,8 +3469,8 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0, padding: '4px 10px', borderBottom: '1px solid var(--border-subtle)', background: `${course.color}05`, flexWrap: 'wrap', minHeight: 32 }}>
                                           {overviewNoteEditMode && (
                                             <>
-                                              <FormatToolbar onFormat={(cmd, val) => document.execCommand(cmd, false, val)} color={course.color}
-                                                toolbarItems={['bold','italic','underline','strikethrough','list','orderedList']} />
+                                              <FormatToolbar onFormat={(cmd, val) => { document.execCommand(cmd, false, val); document.dispatchEvent(new Event('selectionchange')); }} color={course.color}
+                                                toolbarItems={['bold','italic','underline','strikethrough','list','orderedList']} activeFormats={overviewActiveFormats} />
                                               <div style={{ width: 1, height: 18, background: 'var(--border-subtle)', margin: '0 4px' }} />
                                             </>
                                           )}
@@ -3409,7 +3488,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                             <Star size={11} fill={isHighlighted ? '#D4A017' : 'none'} />
                                           </button>
                                           {!overviewNoteEditMode && !showCourseNotesInOverview && (
-                                            <button onClick={() => { setOverviewNoteEditMode(true); }}
+                                            <button onClick={() => { setOverviewNoteEditMode(true); setOverviewActiveFormats({}); }}
                                               title="Editar"
                                               style={{ width: 24, height: 24, borderRadius: 5, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
                                               onMouseEnter={e => e.currentTarget.style.background = `${course.color}10`}
@@ -3441,6 +3520,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                             onSave={updateNote}
                                             editable={overviewNoteEditMode}
                                             hideToolbar
+                                            onActiveFormatsChange={setOverviewActiveFormats}
                                             onImageClick={(src) => { setPreviewImageSrc(src); setShowImagePreview(true); }}
                                           />
                                         </div>
@@ -5659,8 +5739,10 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
             </div>
             {/* Task list */}
             {pendingTasks.length > 0 ? (
+              <DndContext sensors={sensors} collisionDetection={closestCenter} modifiers={[restrictToParentElement]} onDragStart={() => { tasksDragRef.current = true; }} onDragEnd={(e) => handleTaskDragEnd(e, false)}>
+                <SortableContext items={[...pendingTasks].sort((a, b) => (a.sortOrder ?? Number.MAX_SAFE_INTEGER) - (b.sortOrder ?? Number.MAX_SAFE_INTEGER)).map(t => t.id)} strategy={rectSortingStrategy}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {pendingTasks.map((task, idx) => {
+                {[...pendingTasks].sort((a, b) => (a.sortOrder ?? Number.MAX_SAFE_INTEGER) - (b.sortOrder ?? Number.MAX_SAFE_INTEGER)).map((task, idx) => {
                   const priorityColors: Record<string, string> = { high: '#EF4444', medium: '#F59E0B', low: '#10B981' };
                   const priorityLabels: Record<string, string> = { high: 'Alta', medium: 'Media', low: 'Baja' };
                   const descPreview = (task.notes || '').replace(/<[^>]+>/g, '').trim().slice(0, 45);
@@ -5676,9 +5758,12 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                     isOverdue = Math.ceil((due.getTime() - today.getTime()) / (1000*60*60*24)) < 0;
                   }
                   return (
-                    <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, border: '1px solid var(--border-subtle)', borderLeft: task.priority !== 'none' && task.priority ? `3px solid ${priorityColors[task.priority]}` : '3px solid transparent', background: 'var(--bg-elevated-alpha, var(--bg-elevated))', transition: 'all 200ms ' + EASE, boxShadow: '0 0 0 0 rgba(0,0,0,0)' }}
+                    <SortableWrapper key={task.id} id={task.id} style={{ touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none' }}>
+                      {({ attributes, listeners, isDragging }) => (
+                    <div {...attributes} {...listeners} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, border: '1px solid var(--border-subtle)', borderLeft: task.priority !== 'none' && task.priority ? `3px solid ${priorityColors[task.priority]}` : '3px solid transparent', background: 'var(--bg-elevated-alpha, var(--bg-elevated))', transition: 'all 200ms ' + EASE, boxShadow: '0 0 0 0 rgba(0,0,0,0)', touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none', opacity: isDragging ? 0.4 : 1, cursor: isDragging ? 'grabbing' : 'grab' }}
                       onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}30`; e.currentTarget.style.boxShadow = `0 2px 10px ${course.color}08`; }}
-                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.boxShadow = '0 0 0 0 rgba(0,0,0,0)'; }}>
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.boxShadow = '0 0 0 0 rgba(0,0,0,0)'; }}
+                      onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setTaskMenu({ id: task.id, x: e.clientX, y: e.clientY }); }}>
                       <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-tertiary)', minWidth: 14, textAlign: 'right', flexShrink: 0, fontFamily: "'Inter Tight', sans-serif" }}>{idx + 1}</span>
                       <div onClick={() => handleToggleTask(task.id)} style={{ width: 20, height: 20, borderRadius: 6, flexShrink: 0, cursor: 'pointer', border: `1.5px solid ${task.status === 'progreso' ? '#3B82F6' : task.status === 'completado' ? '#10B981' : `${course.color}40`}`, background: task.status === 'progreso' ? '#3B82F6' : task.status === 'completado' ? '#10B981' : `${course.color}08`, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms ' + EASE }}>
                         {task.status === 'completado' && <Check size={11} strokeWidth={2.5} color="#fff" />}
@@ -5703,9 +5788,13 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                         )}
                       </div>
                     </div>
+                      )}
+                    </SortableWrapper>
                   );
                 })}
-              </div>
+                </div>
+                </SortableContext>
+              </DndContext>
             ) : (
               <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)', border: '1px dashed var(--border-subtle)', borderRadius: 10 }}>
                 <ListTodo size={28} style={{ margin: '0 auto 6px', opacity: 0.3 }} />
@@ -5818,9 +5907,8 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                                     contentEditable
                                     suppressContentEditableWarning
                                     dangerouslySetInnerHTML={{ __html: editContent }}
-                                    onInput={(e: React.FormEvent<HTMLDivElement>) => { const html = (e.target as HTMLDivElement).innerHTML; setEditContent(html); scheduleNoteTrack(); if (saveTimerRef.current) clearTimeout(saveTimerRef.current); saveTimerRef.current = setTimeout(() => updateNote(n.id, { content: html }), 800); }}
+                                    onInput={(e: React.FormEvent<HTMLDivElement>) => { const html = (e.target as HTMLDivElement).innerHTML; setEditContent(html); if (saveTimerRef.current) clearTimeout(saveTimerRef.current); saveTimerRef.current = setTimeout(() => updateNote(n.id, { content: html }), 800); }}
                                     onBlur={() => { updateNote(n.id, { content: editContent }); }}
-                                    onKeyUp={scheduleNoteTrack}
                                     onMouseUp={scheduleNoteTrack}
                                     style={{ padding: '16px 20px 12px', minHeight: 80, maxHeight: 'calc(100vh - 240px)', overflowY: 'auto', fontSize: 15, lineHeight: 1.9, color: 'var(--text-primary)', background: 'transparent', outline: 'none', fontFamily: "'Atkinson Hyperlegible', system-ui, serif", wordBreak: 'break-word' }} />
                                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 14px 10px', borderTop: '1px solid var(--border-subtle)', background: `${course.color}04` }}>
@@ -5907,24 +5995,39 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
       {/* ═══════════ MODALS ═══════════ */}
       {showEditCourse && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }} onClick={() => setShowEditCourse(false)}>
-          <div className="bento-card" style={{ width: 400, padding: 22, borderRadius: 12, background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
-              <h3 style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', margin: 0, fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em' }}>Configurar curso</h3>
-              <button onClick={() => setShowEditCourse(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}><X size={15} /></button>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div className="bento-card" style={{ width: 432, padding: '26px 28px', borderRadius: 16, background: "linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)", border: '1px solid var(--border-default)', boxShadow: "var(--shadow-elevated)" }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 22 }}>
               <div>
-                <div style={{ fontSize: 7.5, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>Nombre</div>
+                <h3 style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)', margin: 0, fontFamily: "'Inter Tight', sans-serif", letterSpacing: '0.01em', display: 'flex', alignItems: 'center', gap: 9 }}>
+                  <GraduationCap size={16} style={{ color: course.color }} /> Configurar curso
+                </h3>
+                <p style={{ fontSize: 10, color: 'var(--text-tertiary)', margin: '4px 0 0', fontFamily: "'Inter', sans-serif", fontWeight: 400 }}>Ajusta la información de la asignatura</p>
+              </div>
+              <button onClick={() => setShowEditCourse(false)} title="Cerrar"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4, display: 'flex', borderRadius: 6, transition: 'all 150ms ' + EASE }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
+                <X size={16} />
+              </button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div>
+                <div style={{ fontSize: 8.5, fontWeight: 500, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.14em', marginBottom: 8, fontFamily: "'Inter Tight', sans-serif" }}>Nombre</div>
                 <input value={editCourseName} onChange={e => setEditCourseName(e.target.value)} placeholder="Nombre del curso"
-                  style={{ width: '100%', height: 40, borderRadius: 8, padding: '0 12px', fontSize: 15, fontWeight: 300, fontFamily: "'Inter Tight', sans-serif", border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', letterSpacing: '-0.01em' }} />
+                  style={{ width: '100%', height: 42, borderRadius: 10, padding: '0 13px', fontSize: 13, fontWeight: 500, fontFamily: "'Inter Tight', sans-serif", border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', transition: 'border-color 180ms ' + EASE }}
+                  onFocus={e => e.currentTarget.style.borderColor = 'var(--accent)'}
+                  onBlur={e => e.currentTarget.style.borderColor = 'var(--border-subtle)'} />
               </div>
               <div>
-                <div style={{ fontSize: 7.5, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>Profesor</div>
+                <div style={{ fontSize: 8.5, fontWeight: 500, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.14em', marginBottom: 8, fontFamily: "'Inter Tight', sans-serif" }}>Profesor</div>
                 <input value={editCourseTeacher} onChange={e => setEditCourseTeacher(e.target.value)} placeholder="Nombre del profesor"
-                  style={{ width: '100%', height: 38, borderRadius: 8, padding: '0 12px', fontSize: 13, fontWeight: 300, fontFamily: "'Inter Tight', sans-serif", border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', letterSpacing: '-0.01em' }} />
+                  style={{ width: '100%', height: 42, borderRadius: 10, padding: '0 13px', fontSize: 13, fontWeight: 500, fontFamily: "'Inter Tight', sans-serif", border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', transition: 'border-color 180ms ' + EASE }}
+                  onFocus={e => e.currentTarget.style.borderColor = 'var(--accent)'}
+                  onBlur={e => e.currentTarget.style.borderColor = 'var(--border-subtle)'} />
                </div>
-               <div style={{ fontSize: 7.5, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>Color</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, background: 'var(--bg-deep)' }}>
+               <div>
+               <div style={{ fontSize: 8.5, fontWeight: 500, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.14em', marginBottom: 8, fontFamily: "'Inter Tight', sans-serif" }}>Color</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 10, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)' }}>
                 <div style={{ width: 34, height: 34, borderRadius: '50%', background: editCourseColor, flexShrink: 0, border: '2px solid var(--bg-surface)', boxShadow: '0 2px 8px rgba(0,0,0,0.3)', transition: 'background 200ms ' + EASE }} />
                 <div style={{ flex: 1, position: 'relative', height: 30, borderRadius: 6, overflow: 'hidden' }}>
                   <div style={{ width: '100%', height: '100%', background: 'linear-gradient(to right, #E11D48, #EC4899, #8B5CF6, #3B82F6, #06B6D4, #10B981, #84CC16, #F59E0B, #F97316)', borderRadius: 6 }} />
@@ -5933,20 +6036,48 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                 </div>
                 <input value={editCourseColor.toUpperCase()} onChange={e => { const v = e.target.value; if (/^#[0-9A-Fa-f]{6}$/.test(v)) setEditCourseColor(v.toLowerCase()); }} style={{ width: 68, height: 26, borderRadius: 4, padding: '0 6px', fontSize: 9, fontFamily: 'monospace', fontWeight: 600, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', textAlign: 'center' }} />
               </div>
-              <div style={{ fontSize: 7.5, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>Banner</div>
+              </div>
+              <div>
+              <div style={{ fontSize: 8.5, fontWeight: 500, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.14em', marginBottom: 8, fontFamily: "'Inter Tight', sans-serif" }}>Banner</div>
               {editCourseCover ? (
-                <div style={{ position: 'relative', width: '100%', aspectRatio: '16/7', borderRadius: 6, overflow: 'hidden' }}>
-                  <img src={editCourseCover} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  <button onClick={() => setEditCourseCover(undefined)} style={{ position: 'absolute', top: 4, right: 4, width: 20, height: 20, borderRadius: '50%', background: 'rgba(239,68,68,0.9)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={9} /></button>
+                <div>
+                  <div style={{ position: 'relative', width: '100%', aspectRatio: '16/7', borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border-soft)', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.04), 0 2px 12px rgba(0,0,0,0.12)' }}>
+                    <img src={editCourseCover} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                    <button onClick={() => setEditEditorSrc(editCourseCover)} title="Editar la imagen (acercar, mover, proporción)"
+                      style={{ height: 30, padding: '0 13px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 9, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: "'Inter Tight', sans-serif", transition: 'all 180ms ' + EASE }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
+                      <Pencil size={11} /> Editar imagen
+                    </button>
+                    <button onClick={() => setEditCourseCover(undefined)} title="Quitar el banner"
+                      style={{ height: 30, padding: '0 13px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'rgba(239,68,68,0.7)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 9, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: "'Inter Tight', sans-serif", transition: 'all 180ms ' + EASE }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(239,68,68,0.5)'; e.currentTarget.style.color = '#EF4444'; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'rgba(239,68,68,0.7)'; }}>
+                      <X size={12} /> Quitar
+                    </button>
+                  </div>
                 </div>
               ) : (
-                <button onClick={() => courseCoverInputRef.current?.click()} style={{ width: '100%', height: 56, borderRadius: 6, border: '1px dashed var(--border-subtle)', background: 'transparent', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, color: 'var(--text-muted)' }}>
-                  <Upload size={12} /><span style={{ fontSize: 8, fontWeight: 600, textTransform: 'uppercase' }}>Subir</span>
+                <button onClick={() => courseCoverInputRef.current?.click()}
+                  style={{ width: '100%', height: 84, borderRadius: 10, border: '1px dashed var(--border-default)', background: 'var(--bg-deep)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 7, transition: "all 200ms " + EASE }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 4%, var(--bg-deep))'; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-default)'; e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.background = 'var(--bg-deep)'; }}>
+                  <ImageIcon size={16} style={{ color: "var(--accent)", opacity: 0.85 }} />
+                  <span style={{ fontSize: 8.5, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.12em', fontFamily: "'Inter Tight', sans-serif" }}>Subir banner</span>
+                  <span style={{ fontSize: 9.5, color: 'var(--text-tertiary)', fontWeight: 400 }}>Se abrirá el editor para ajustar la imagen</span>
                 </button>
               )}
-              <input type="file" ref={courseCoverInputRef} style={{ display: 'none' }} accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) { const r = new FileReader(); r.onload = ev => setEditCourseCover(ev.target?.result as string); r.readAsDataURL(f); }}} />
-              <button onClick={handleSaveCourseSettings} style={{ width: '100%', height: 34, borderRadius: 6, border: 'none', background: course.color, color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>Guardar</button>
-              <div style={{ borderTop: '1px solid var(--border-subtle)', marginTop: 8, paddingTop: 12, display: 'flex', justifyContent: 'center' }}>
+              <input type="file" ref={courseCoverInputRef} style={{ display: 'none' }} accept="image/*" onChange={handleEditCoverUpload} />
+              </div>
+              <button onClick={handleSaveCourseSettings}
+                style={{ width: '100%', height: 42, borderRadius: 10, border: 'none', background: course.color, color: '#fff', fontSize: 12, fontWeight: 600, fontFamily: "'Inter Tight', sans-serif", letterSpacing: '0.03em', cursor: 'pointer', transition: "all 200ms " + EASE, boxShadow: `0 6px 20px color-mix(in srgb, ${course.color} 28%, transparent)` }}
+                onMouseEnter={e => { e.currentTarget.style.filter = 'brightness(1.07)'; }}
+                onMouseLeave={e => { e.currentTarget.style.filter = 'none'; }}>
+                Guardar cambios
+              </button>
+              <div style={{ borderTop: '1px solid var(--border-subtle)', marginTop: 4, paddingTop: 14, display: 'flex', justifyContent: 'center' }}>
                 <button onClick={() => { setShowDeleteConfirm(true); setDeleteConfirmName(''); }}
                   style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 18px', borderRadius: 8, border: '1px solid rgba(239,68,68,0.25)', background: 'transparent', color: 'rgba(239,68,68,0.7)', fontSize: 10, fontWeight: 600, cursor: 'pointer', transition: 'all 150ms', letterSpacing: '0.02em' }}
                   onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; e.currentTarget.style.borderColor = 'rgba(239,68,68,0.5)'; e.currentTarget.style.color = '#EF4444'; }}
@@ -5957,6 +6088,12 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
             </div>
           </div>
         </div>
+      )}
+
+      {/* Editor de imagen del banner (se abre al subir o al pulsar el lápiz) */}
+      {editEditorSrc && (
+        <ImageEditorModal src={editEditorSrc} title="Banner de la asignatura"
+          onConfirm={handleEditCoverConfirm} onCancel={() => setEditEditorSrc(null)} />
       )}
 
       {showDeleteConfirm && (
@@ -6421,7 +6558,73 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
         </div>,
         document.body
       )}
-      {/* PDF Preview Modal */}
+      {taskMenu && createPortal(
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 99996 }} onClick={() => setTaskMenu(null)} onContextMenu={(e) => { e.preventDefault(); setTaskMenu(null); }} onWheel={() => setTaskMenu(null)} />
+          <div style={{ position: 'fixed', top: Math.min(taskMenu.y, window.innerHeight - 150), left: Math.min(taskMenu.x, window.innerWidth - 200), zIndex: 99997, width: 190, padding: 4, borderRadius: 10, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', boxShadow: '0 12px 32px rgba(0,0,0,0.4)', display: 'flex', flexDirection: 'column', gap: 1 }}>
+            {(() => {
+              const mt = courseTasks.find(t => t.id === taskMenu.id);
+              const canBack = !!mt && mt.status !== 'inicio';
+              return (
+                <>
+                  {canBack && (
+                    <button onClick={() => { handleBackTaskStatus(taskMenu.id); setTaskMenu(null); }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, height: 32, padding: '0 10px', borderRadius: 7, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 11.5, fontWeight: 500, fontFamily: "'Inter', sans-serif", transition: 'all 120ms' }}
+                      onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
+                      <LI.Undo2 size={12} /> Retroceder
+                    </button>
+                  )}
+                  <button onClick={() => { const mt = courseTasks.find(t => t.id === taskMenu.id); if (mt) { setFocusedTaskId(mt.id); setNavigateTo('tareas'); } setTaskMenu(null); }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, height: 32, padding: '0 10px', borderRadius: 7, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 11.5, fontWeight: 500, fontFamily: "'Inter', sans-serif", transition: 'all 120ms' }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
+                    <LI.ExternalLink size={12} /> Abrir en Tareas
+                  </button>
+                  <div style={{ height: 1, background: 'var(--border-subtle)', margin: '3px 6px' }} />
+                  <button onClick={() => { setConfirmDeleteTaskId(taskMenu.id); setTaskMenu(null); }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, height: 32, padding: '0 10px', borderRadius: 7, border: 'none', background: 'transparent', cursor: 'pointer', color: 'rgba(239,68,68,0.75)', fontSize: 11.5, fontWeight: 500, fontFamily: "'Inter', sans-serif", transition: 'all 120ms' }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#EF4444'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(239,68,68,0.75)'; }}>
+                    <Trash2 size={12} /> Borrar
+                  </button>
+                </>
+              );
+            })()}
+          </div>
+        </>,
+        document.body
+      )}
+      {confirmDeleteTaskId && createPortal(
+        <div style={{ position: 'fixed', inset: 0, zIndex: 99996, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => setConfirmDeleteTaskId(null)}>
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)' }} />
+          <div className="bento-card" style={{ position: 'relative', width: 360, padding: '28px 32px 24px', borderRadius: 16, background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', boxShadow: '0 24px 64px rgba(0,0,0,0.5)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }} onClick={e => e.stopPropagation()}>
+            <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(239,68,68,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(239,68,68,0.2)' }}>
+              <Trash2 size={20} style={{ color: '#EF4444' }} />
+            </div>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', margin: 0, fontFamily: "'Inter Tight', sans-serif", textAlign: 'center' }}>Eliminar tarea</h3>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0, textAlign: 'center', lineHeight: 1.5, maxWidth: 260 }}>
+              ¿Eliminar "{courseTasks.find(t => t.id === confirmDeleteTaskId)?.title || ''}"? Esta accion no se puede deshacer.
+            </p>
+            <div style={{ display: 'flex', gap: 8, width: '100%', marginTop: 8 }}>
+              <button onClick={() => setConfirmDeleteTaskId(null)}
+                style={{ flex: 1, height: 36, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter', sans-serif", transition: 'all 150ms' }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-elevated)'; }}>
+                Cancelar
+              </button>
+              <button onClick={() => { deleteTask(confirmDeleteTaskId); setConfirmDeleteTaskId(null); toast.success('Tarea eliminada'); }}
+                style={{ flex: 1, height: 36, borderRadius: 8, border: 'none', background: '#EF4444', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter', sans-serif", transition: 'all 150ms', boxShadow: '0 2px 8px rgba(239,68,68,0.35)' }}
+                onMouseEnter={e => { e.currentTarget.style.opacity = '0.88'; }}
+                onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
+                Sí, eliminar
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
       {showPdfPreview && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(12px)' }} onClick={() => setShowPdfPreview(false)}>          <div className="bento-card" style={{ width: '90vw', height: '90vh', borderRadius: 12, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0 }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }}>

@@ -15,6 +15,7 @@ import { es } from 'date-fns/locale';
 import { notifySessionComplete, notifyBreakOver, sendNativeNotification } from '../../lib/notifications';
 import NotificationBell from '../ui/NotificationBell';
 import AnalyticsDrawer from '../ui/AnalyticsDrawer';
+import PlanSelectDropdown from '../ui/PlanSelectDropdown';
 import { DigitSVG, ColonSVG } from '../LEDDigits';
 
 const REVIEW_LEVEL_COLORS = ['#EF4444', '#F97316', '#F59E0B', '#FBBF24', '#EAB308', '#A3E635', '#84CC16', '#4ADE80', '#22C55E', '#10B981'];
@@ -314,21 +315,19 @@ export default function Estudio() {
       setEvalVolmeter(0);
       setEvalMode('rendimiento');
       setEvalFreeText('');
-      if (activePlannedSessionId) {
-        const ps = (plannedSessions || []).find(p => p.id === activePlannedSessionId);
-        setEvalPlanOutcome(ps?.completed ? 'logrado' : 'no_logrado');
-      }
-      if (activeTaskId) {
-        const task = tasks.find(t => t.id === activeTaskId);
-        setEvalTaskAction(task?.status === 'inicio' ? null : (task?.status === 'progreso' ? 'not_finished' : 'complete'));
-        setEvalSubjects(courses.filter(c => task?.course === c.name).map(c => c.id));
+      const ps = activePlannedSessionId ? (plannedSessions || []).find(p => p.id === activePlannedSessionId) : undefined;
+      if (ps) setEvalPlanOutcome(ps.completed ? 'logrado' : 'no_logrado');
+      if (activeTask) {
+        setEvalTaskAction(activeTask.status === 'inicio' ? null : (activeTask.status === 'progreso' ? 'not_finished' : 'complete'));
+        setEvalSubjects(courses.filter(c => activeTask.course === c.name).map(c => c.id));
         setShowSessionEval(true);
-      } else if (activePlannedSessionId) {
+      } else if (ps) {
         // Sesión de estudio vinculada — mismo flujo de registro (eval con volmeter,
         // updatePlannedSession + unlink) pero con el recuadro personalizado 1-10
         setEvalSubjects([]);
         setShowSessionEval(true);
       } else {
+        // Sin vínculo real (o vínculo perdido) → registro libre: nombre + materia opcional
         setEvalSubjects([]);
         setShowFreeStudyPrompt(true);
       }
@@ -943,7 +942,7 @@ export default function Estudio() {
                   setEvalTaskAction(activeTask.status === 'inicio' ? null : (activeTask.status === 'progreso' ? 'not_finished' : 'complete'));
                   setEvalSubjects(courses.filter(c => activeTask.course === c.name).map(c => c.id));
                   setShowSessionEval(true);
-                } else if (activePlannedSessionId) {
+                } else if (linkedPlanSession) {
                   setEvalSubjects([]);
                   setShowSessionEval(true);
                 } else {
@@ -1857,74 +1856,19 @@ export default function Estudio() {
                 placeholder="Tema, materia o concepto..." className="input-base" />
             </div>
 
-            {/* Course selector (free study only) — single select */}
+            {/* Course selector (free study only) — desplegable como Agrupación/Tema del Planificador */}
             {courses.length > 0 && (
               <div style={{ marginBottom: 20 }}>
                 <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8, letterSpacing: '0.02em' }}>Materia (opcional)</label>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 6 }}>
-                  {courses.map(c => {
-                    const sel = evalSubjects.includes(c.id);
-                    return (
-                      <button key={c.id} onClick={() => setEvalSubjects(sel ? [] : [c.id])}
-                        style={{
-                          padding: '10px 12px', borderRadius: 10, fontSize: 11, fontWeight: 500,
-                          border: sel ? `1.5px solid ${c.color}` : '1px solid var(--border-soft)',
-                          background: sel ? `${c.color}15` : 'var(--bg-deep)',
-                          color: sel ? c.color : 'var(--text-tertiary)',
-                          cursor: 'pointer', transition: 'all 180ms',
-                          display: 'flex', alignItems: 'center', gap: 8,
-                          boxShadow: sel ? `0 0 12px ${c.color}25` : 'none',
-                        }}>
-                        <div style={{
-                          width: 8, height: 8, borderRadius: '50%',
-                          background: c.color, flexShrink: 0,
-                          boxShadow: sel ? `0 0 6px ${c.color}` : 'none',
-                          transition: 'box-shadow 200ms',
-                        }} />
-                        <span style={{ flex: 1, textAlign: 'left' }}>{c.name}</span>
-                        {sel && <span style={{ fontSize: 9, opacity: 0.5 }}>✓</span>}
-                      </button>
-                    );
-                  })}
-                </div>
+                <PlanSelectDropdown
+                  value={evalSubjects[0] || ''}
+                  onChange={(v) => setEvalSubjects(v ? [v] : [])}
+                  options={courses.map(c => ({ id: c.id, label: c.name, color: c.color }))}
+                  noneLabel="Sin materia"
+                  color={courses.find(c => c.id === evalSubjects[0])?.color || statusColor}
+                />
               </div>
             )}
-
-            {/* Volmeter 1-20 — premium bar display */}
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.02em' }}>¿Qué tan bien lo hiciste?</span>
-                <span style={{ fontSize: 20, fontWeight: 700, color: evalVolmeter > 14 ? '#10B981' : (evalVolmeter > 7 ? '#F59E0B' : '#EF4444'), fontFamily: "'Inter Tight', sans-serif", lineHeight: 1 }}>{evalVolmeter}<span style={{ fontSize: 12, fontWeight: 500, opacity: 0.4 }}>/20</span></span>
-              </div>
-              <div style={{
-                position: 'relative', height: 40, display: 'flex', alignItems: 'flex-end', gap: 3,
-                padding: '4px 0',
-                background: 'var(--bg-surface)', borderRadius: 10,
-                border: '1px solid var(--border-subtle)',
-                overflow: 'hidden',
-              }}>
-                {Array.from({ length: 20 }, (_, i) => {
-                  const isActive = i < evalVolmeter;
-                  const barColor = i < 7 ? '#EF4444' : i < 14 ? '#F59E0B' : '#10B981';
-                  const barH = isActive ? 8 + (i / 20) * 28 : 4;
-                  return (
-                    <div key={i} style={{
-                      flex: 1, height: barH, borderRadius: '3px 3px 1px 1px',
-                      background: isActive ? barColor : 'rgba(255,255,255,0.04)',
-                      transition: 'all 250ms cubic-bezier(0.16, 1, 0.3, 1)',
-                      boxShadow: isActive ? `0 0 8px ${barColor}40, inset 0 1px 0 rgba(255,255,255,0.15)` : 'none',
-                      opacity: isActive ? 1 : 0.5,
-                    }} />
-                  );
-                })}
-              </div>
-              <input type="range" min="1" max="20" value={evalVolmeter} onChange={e => setEvalVolmeter(Number(e.target.value))}
-                style={{ width: '100%', height: 3, cursor: 'pointer', WebkitAppearance: 'none', appearance: 'none', outline: 'none', borderRadius: 2, background: 'transparent', marginTop: 6 }}
-                className="volume-slider" />
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>
-                <span>Bajo</span><span>Alto</span>
-              </div>
-            </div>
 
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
               <button onClick={() => {
@@ -1944,7 +1888,6 @@ export default function Estudio() {
                 handleEvalAndStartRest({
                   title: freeTitle,
                   subjects: evalSubjects.length > 0 ? evalSubjects : undefined,
-                  volmeter: evalVolmeter,
                   evaluatedAt: new Date().toISOString(),
                 });
                 if (activePlannedSessionId) {

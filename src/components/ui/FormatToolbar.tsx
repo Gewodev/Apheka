@@ -44,7 +44,7 @@ export function FormatToolbar({ onFormat, color, toolbarItems, activeFormats }: 
   const activeColor = color || 'var(--accent)';
   return (
     <div onMouseDown={e => { const t = e.target as HTMLElement; if (e.button === 0 && t.tagName !== 'INPUT') e.preventDefault(); }} style={{
-      display: 'flex', alignItems: 'center', gap: 1, padding: '6px 12px',
+      display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px',
       background: color ? `${color}06` : 'var(--bg-surface)',
       borderBottom: '1px solid var(--border-subtle)',
       flexShrink: 0, overflowX: 'auto',
