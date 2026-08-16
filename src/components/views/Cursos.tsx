@@ -32,6 +32,7 @@ import { format, addDays, startOfWeek, endOfWeek } from "date-fns";
 import { es } from "date-fns/locale";
 import toast from 'react-hot-toast';
 import { openBrainWithAnchor, isOverBrainZone, getLastPointer, setBrainDragState } from '../../lib/brainDrop';
+import { fuzzyMatch } from '../../lib/fuzzy';
 import { useMaterialMenu } from '../ui/MaterialContextMenu';
 import ImageEditorModal from '../ui/ImageEditorModal';
 
@@ -1254,7 +1255,7 @@ function PlanSelectDropdown({ value, onChange, options, noneLabel, color }: { va
   const [query, setQuery] = useState('');
   const wrapRef = useRef<HTMLDivElement>(null);
   const sel = options.find(o => o.id === value);
-  const filtered = options.filter(o => !query.trim() || o.label.toLowerCase().includes(query.trim().toLowerCase()));
+  const filtered = options.filter(o => !query.trim() || fuzzyMatch(o.label, query));
   const close = () => { setOpen(false); setQuery(''); };
   return (
     <div ref={wrapRef} tabIndex={-1} style={{ position: 'relative', outline: 'none' }}
@@ -2195,8 +2196,8 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
       if (activeTagFilter && !((entry.item.tagIds as string[]) || []).includes(activeTagFilter)) return false;
       if (!q) return true;
       const it = entry.item as any;
-      const text = [it.question, it.answer, it.title, it.name, it.word, it.content, it.meaning, it.description, it.clarification].filter(Boolean).join(' ').toLowerCase();
-      return text.includes(q);
+      const text = [it.question, it.answer, it.title, it.name, it.word, it.content, it.meaning, it.description, it.clarification].filter(Boolean).join(' ');
+      return fuzzyMatch(text, topicSearch);
     });
   }, [topicItems, topicSearch, activeTagFilter]);
 
@@ -2263,8 +2264,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   }, [filteredCourseNotes, selectedOverviewNoteId]);
   const filteredNotes = useMemo(() => {
     if (!notesSearch.trim()) return courseNotes;
-    const q = notesSearch.toLowerCase();
-    return courseNotes.filter(n => (n.title || '').toLowerCase().includes(q) || (n.content || '').toLowerCase().includes(q));
+    return courseNotes.filter(n => fuzzyMatch(n.title || '', notesSearch) || fuzzyMatch(n.content || '', notesSearch));
   }, [courseNotes, notesSearch]);
   const sortedNotes = useMemo(() => {
     return [...courseNotes].sort((a, b) => {

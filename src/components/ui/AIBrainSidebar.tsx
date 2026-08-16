@@ -14,7 +14,7 @@ import {
 } from '../../lib/brainDrop';
 import { useApp } from '../../store/AppContext';
 import { streamChat, type AIMessage, type AIContentPart, type AIToolCall } from '../../lib/ai/aiProvider';
-import { getProvider, DEFAULT_PROVIDER_ID } from '../../lib/ai/aiProviders';
+import { getProvider, DEFAULT_PROVIDER_ID, providerModelHasVision } from '../../lib/ai/aiProviders';
 import { buildContextSnapshot } from '../../lib/ai/aiContext';
 import { composeSystemPrompt } from '../../lib/ai/aiPrompts';
 import { AI_TOOL_DEFINITIONS, executeToolCall, type AppContextActions } from '../../lib/ai/aiTools';
@@ -77,8 +77,14 @@ function formatSpeechTranscription(raw: string): string {
 /**
  * Tarjeta interactiva y detallada de ejecución de herramientas estilo Claude/Perplexity.
  */
+// Skills externas visibles como pills en el chat (estilo Perplexity).
+// Las tools internas (notas, música, cursos, agenda…) se ocultan: no son "skills" del agente.
+const VISIBLE_SKILLS = new Set(['webSearch', 'searchYouTubeMusic']);
+
 function ToolExecutionCard({ tc, index }: { tc: { name: string; args: string; result?: string; status: 'pending' | 'success' | 'error' }; index: number }) {
   const [expanded, setExpanded] = useState(true);
+
+  const isSkill = VISIBLE_SKILLS.has(tc.name);
 
   let parsedArgs: Record<string, any> = {};
   try { parsedArgs = JSON.parse(tc.args || '{}'); } catch {}
@@ -141,11 +147,17 @@ function ToolExecutionCard({ tc, index }: { tc: { name: string; args: string; re
 
       <div
         style={{
-          background: 'rgba(255, 255, 255, 0.03)',
-          border: '1px solid var(--border-soft)',
+          background: isSkill
+            ? 'color-mix(in srgb, var(--accent) 5%, rgba(255,255,255,0.03))'
+            : 'rgba(255, 255, 255, 0.03)',
+          border: isSkill
+            ? '1px solid color-mix(in srgb, var(--accent) 45%, transparent)'
+            : '1px solid var(--border-soft)',
           borderRadius: 12,
           padding: '10px 12px',
-          boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
+          boxShadow: isSkill
+            ? '0 4px 16px rgba(0,0,0,0.18), 0 0 0 1px color-mix(in srgb, var(--accent) 10%, transparent)'
+            : '0 4px 16px rgba(0,0,0,0.18)',
         }}
       >
         <div
@@ -448,10 +460,6 @@ interface ChatItem {
 
 const STORAGE_KEY_MESSAGES = 'owa_brain_messages_v1';
 const STORAGE_KEY_ARCHIVE = 'owa_brain_messages_archive_v1';
-
-// Solo estas "skills" externas se muestran como pills en el chat (estilo Perplexity).
-// Las tools internas (notas, música, cursos, agenda…) se ocultan: no son "skills" del agente.
-const VISIBLE_SKILLS = new Set(['webSearch', 'searchYouTubeMusic']);
 
 function buildUserContent(text: string, attachments: Attachment[]): string | AIContentPart[] {
   if (!attachments.length) return text;
@@ -979,7 +987,7 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
       // Autoconciencia del modelo: el prompt sabe exactamente quién lo impulsa
       // (proveedor + modelo) y si tiene visión, para responder con identidad real.
       const providerName = provider.name || providerId;
-      const vision = !['opencode', 'groq'].includes(providerId);
+      const vision = providerModelHasVision(provider, model);
       const systemPrompt = composeSystemPrompt(snapshot, deepMode, {
         providerId,
         providerName,

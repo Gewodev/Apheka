@@ -20,6 +20,7 @@ import { readFile } from '@tauri-apps/plugin-fs';
 import { format, subDays, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { extractYouTubeId } from '../../lib/ytEngine';
+import { fuzzyMatch as sharedFuzzyMatch, normalizeSearch } from '../../lib/fuzzy';
 import {
   fetchMetadata, searchMusic, startDownload, cancelDownload,
   getDownloadPath, setDownloadPath,
@@ -109,25 +110,11 @@ function SortableQueueRow({ track, index, onSelect, onMenu, formatTime }: { trac
 }
 
 function normalizeStr(s: string): string {
-  return (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  return normalizeSearch(s);
 }
 
 function fuzzyMatch(hay: string, needle: string): boolean {
-  const h = normalizeStr(hay);
-  const n = normalizeStr(needle);
-  if (!n) return true;
-  if (h.includes(n)) return true;
-  let i = 0;
-  let skipped = 0;
-  const maxSkip = Math.max(2, Math.floor(n.length / 3));
-  for (const ch of n) {
-    const idx = h.indexOf(ch, i);
-    if (idx === -1) return false;
-    skipped += idx - i;
-    if (skipped > maxSkip) return false;
-    i = idx + 1;
-  }
-  return true;
+  return sharedFuzzyMatch(hay, needle);
 }
 
 function SortableLibraryRow({ track, index, isPlaying, isOnline, formatTime, onSelect, onMenu, onToggleFav, onEdit, onDelete }: {
@@ -870,8 +857,8 @@ export default function Musica() {
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && searchQuery.trim()) {
-                  const q = searchQuery.trim().toLowerCase();
-                  const hasLocal = tracks.some(t => t.title.toLowerCase().includes(q) || t.artist.toLowerCase().includes(q));
+                  const q = searchQuery.trim();
+                  const hasLocal = tracks.some(t => fuzzyMatch(t.title, q) || fuzzyMatch(t.artist, q));
                   if (!hasLocal) {
                     setActiveTab('explorar');
                     setSearchMode('query');
@@ -883,8 +870,8 @@ export default function Musica() {
               style={{ width: '100%', height: 38, paddingLeft: 36, fontSize: 12, borderRadius: 10, border: '1px solid var(--border-subtle)', transition: 'all 200ms' }}
             />
             {searchQuery.trim() && (() => {
-              const q = searchQuery.trim().toLowerCase();
-              const localCount = tracks.filter(t => t.title.toLowerCase().includes(q) || t.artist.toLowerCase().includes(q)).length;
+              const q = searchQuery.trim();
+              const localCount = tracks.filter(t => fuzzyMatch(t.title, q) || fuzzyMatch(t.artist, q)).length;
               if (localCount === 0) return null;
               return (
                 <div style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', gap: 5, pointerEvents: 'none' }}>
@@ -1252,7 +1239,7 @@ export default function Musica() {
                 const closePL = () => { setShowCreatePlaylist(false); setPlaylistStep(0); setPlaylistCoverData(''); setNewPlaylistName(''); setSelectedTrackIds(new Set()); setEditingPlaylistId(null); };
                 const filteredPLTracks = tracks.filter(t => {
                   if (playlistArtistFilter && t.artist !== playlistArtistFilter) return false;
-                  if (playlistSongSearch && !t.title.toLowerCase().includes(playlistSongSearch.toLowerCase()) && !t.artist?.toLowerCase().includes(playlistSongSearch.toLowerCase())) return false;
+                  if (playlistSongSearch && !fuzzyMatch(t.title, playlistSongSearch) && !fuzzyMatch(t.artist || '', playlistSongSearch)) return false;
                   return true;
                 });
                 const SongPickerListInner = ({ items }: { items: Track[] }) => (
@@ -2676,8 +2663,8 @@ export default function Musica() {
                   <div style={{ maxHeight: 240, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
                     {tracks.filter(t => {
                       if (!artistTrackSearch) return true;
-                      const q = artistTrackSearch.toLowerCase();
-                      return t.title.toLowerCase().includes(q) || (t.artist?.toLowerCase() || '').includes(q);
+                      const q = artistTrackSearch.trim();
+                      return fuzzyMatch(t.title, q) || fuzzyMatch(t.artist || '', q);
                     }).length === 0 && (
                       <div style={{ fontSize: 12, color: 'var(--text-tertiary)', padding: '16px 8px', textAlign: 'center' }}>
                         {artistTrackSearch ? 'Sin resultados' : 'No hay canciones en tu biblioteca'}
@@ -2685,8 +2672,8 @@ export default function Musica() {
                     )}
                     {tracks.filter(t => {
                       if (!artistTrackSearch) return true;
-                      const q = artistTrackSearch.toLowerCase();
-                      return t.title.toLowerCase().includes(q) || (t.artist?.toLowerCase() || '').includes(q);
+                      const q = artistTrackSearch.trim();
+                      return fuzzyMatch(t.title, q) || fuzzyMatch(t.artist || '', q);
                     }).map(t => {
                       const selected = artistSelectedTrackIds.includes(t.id);
                       return (

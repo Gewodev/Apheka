@@ -26,6 +26,7 @@ import EventModal, { PlanEvent } from './planificacion/EventModal';
 import ScheduleBuilder, { ScheduleClass } from './planificacion/ScheduleBuilder';
 import HabitsView from './planificacion/HabitsView';
 import LateralPanel, { SelectedItem } from './planificacion/LateralPanel';
+import { fuzzyMatch } from '../../lib/fuzzy';
 
 const H_START = 0;
 const H_END   = 23;
@@ -37,7 +38,7 @@ function PlanSelectDropdown({ value, onChange, options, noneLabel, color }: { va
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const sel = options.find(o => o.id === value);
-  const filtered = options.filter(o => !query.trim() || o.label.toLowerCase().includes(query.trim().toLowerCase()));
+  const filtered = options.filter(o => !query.trim() || fuzzyMatch(o.label, query));
   const close = () => { setOpen(false); setQuery(''); };
   return (
     <div tabIndex={-1} style={{ position: 'relative', outline: 'none' }}

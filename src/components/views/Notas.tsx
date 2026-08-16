@@ -39,6 +39,7 @@ import {
 } from "lucide-react";
 import { useApp, Note, NoteFolder, NoteAttachment, fmtClock } from "../../store/AppContext";
 import { openFileSmart, pickAndPersistFile } from '../../lib/openFileSmart';
+import { fuzzyMatch } from '../../lib/fuzzy';
 import { useMaterialMenu } from '../ui/MaterialContextMenu';
 import { GoogleClassroomIcon, GoogleDriveIcon, GoogleDocsIcon, GoogleSheetsIcon, GoogleSlidesIcon, GoogleFormsIcon, WordIcon, ExcelIcon, PowerPointIcon } from '../ui/GoogleIcons';
 import { isTauri, convertFileSrc } from '@tauri-apps/api/core';
@@ -1678,12 +1679,11 @@ const noteLiveAtts = useMemo(
     }
 
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
       result = result.filter((n) =>
-        n.title.toLowerCase().includes(q) ||
-        (n.subtitle && n.subtitle.toLowerCase().includes(q)) ||
-        (n.content && n.content.toLowerCase().includes(q)) ||
-        (n.tags && n.tags.some((t) => t.toLowerCase().includes(q))),
+        fuzzyMatch(n.title, searchQuery) ||
+        (n.subtitle && fuzzyMatch(n.subtitle, searchQuery)) ||
+        (n.content && fuzzyMatch(n.content, searchQuery)) ||
+        (n.tags && n.tags.some((t) => fuzzyMatch(t, searchQuery))),
       );
     }
 
@@ -2217,11 +2217,10 @@ const noteLiveAtts = useMemo(
       if (e.key === "Enter") {
         e.preventDefault();
         const allItems = buildSlashItems();
-        const low = slashFilter.toLowerCase();
         let first: { cmd: string; value?: string } | null = null;
         for (const s of allItems) {
           for (const o of s.opts) {
-            if (o.label.toLowerCase().includes(low)) { first = o; break; }
+            if (fuzzyMatch(o.label, slashFilter)) { first = o; break; }
           }
           if (first) break;
         }
@@ -3084,9 +3083,8 @@ const noteLiveAtts = useMemo(
 
               {slashMenuPos && (() => {
                 const allItems = buildSlashItems();
-                const low = slashFilter.toLowerCase();
                 const filtered = allItems
-                  .map(s => ({ ...s, opts: s.opts.filter(o => o.label.toLowerCase().includes(low)) }))
+                  .map(s => ({ ...s, opts: s.opts.filter(o => fuzzyMatch(o.label, slashFilter)) }))
                   .filter(s => s.opts.length > 0);
                 return (
                   <div ref={slashMenuRef} style={{

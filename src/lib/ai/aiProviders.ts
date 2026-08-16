@@ -16,6 +16,10 @@ export interface CharvisProvider {
   defaultModel: string;
   /** Modelos exactos conocidos (fallback si el endpoint /models no responde). */
   defaultModels: string[];
+  /** Modelos del catálogo con visión (imágenes). Vacío = ninguno del catálogo. */
+  visionModels?: string[];
+  /** Visión por defecto para modelos personalizados no listados. */
+  defaultVision?: boolean;
   /** URL base oficial. */
   baseUrl: string;
   /** URL de documentación oficial. */
@@ -51,6 +55,8 @@ export const CHARVIS_PROVIDERS: CharvisProvider[] = [
     baseUrl: 'https://opencode.ai/zen/v1',
     docsUrl: 'https://opencode.ai',
     keyHint: 'Clave en opencode.ai/auth. Cada cuenta tiene su propia API key privada.',
+    visionModels: ['glm-5.2', 'glm-5.1', 'glm-5'],
+    defaultVision: false,
   },
   {
     id: 'openai',
@@ -69,6 +75,8 @@ export const CHARVIS_PROVIDERS: CharvisProvider[] = [
     baseUrl: 'https://api.openai.com/v1',
     docsUrl: 'https://platform.openai.com/api-keys',
     keyHint: 'Crea tu clave en platform.openai.com/api-keys. Requiere créditos en tu cuenta de OpenAI.',
+    visionModels: ['gpt-5.6', 'gpt-5.6-mini', 'gpt-5', 'gpt-4o', 'gpt-4o-mini'],
+    defaultVision: false,
   },
   {
     id: 'gemini',
@@ -85,6 +93,7 @@ export const CHARVIS_PROVIDERS: CharvisProvider[] = [
     baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
     docsUrl: 'https://aistudio.google.com/apikey',
     keyHint: 'Clave gratuita en aistudio.google.com/apikey. Endpoint OpenAI-compatible oficial de Google.',
+    defaultVision: true,
   },
   {
     id: 'anthropic',
@@ -102,6 +111,7 @@ export const CHARVIS_PROVIDERS: CharvisProvider[] = [
     baseUrl: 'https://api.anthropic.com/v1',
     docsUrl: 'https://console.anthropic.com/settings/keys',
     keyHint: 'Clave en console.anthropic.com/settings/keys. Conexión nativa con Claude API.',
+    defaultVision: true,
   },
   {
     id: 'deepseek',
@@ -112,6 +122,8 @@ export const CHARVIS_PROVIDERS: CharvisProvider[] = [
     baseUrl: 'https://api.deepseek.com',
     docsUrl: 'https://api-docs.deepseek.com',
     keyHint: 'Clave en platform.deepseek.com/api_keys. La URL base oficial es https://api.deepseek.com.',
+    visionModels: ['deepseek-v4-pro', 'deepseek-v4-flash'],
+    defaultVision: false,
   },
   {
     id: 'kimi',
@@ -122,6 +134,7 @@ export const CHARVIS_PROVIDERS: CharvisProvider[] = [
     baseUrl: 'https://api.moonshot.ai/v1',
     docsUrl: 'https://platform.kimi.ai/docs',
     keyHint: 'Clave en platform.moonshot.ai/console/api-keys. Recarga mínima de 1 dólar.',
+    defaultVision: false,
   },
   {
     id: 'mistral',
@@ -138,6 +151,8 @@ export const CHARVIS_PROVIDERS: CharvisProvider[] = [
     baseUrl: 'https://api.mistral.ai/v1',
     docsUrl: 'https://console.mistral.ai/api-keys',
     keyHint: 'Clave en console.mistral.ai/api-keys. Los alias -latest apuntan a la versión estable.',
+    visionModels: ['pixtral-large-latest'],
+    defaultVision: false,
   },
   {
     id: 'groq',
@@ -157,6 +172,7 @@ export const CHARVIS_PROVIDERS: CharvisProvider[] = [
     baseUrl: 'https://api.groq.com/openai/v1',
     docsUrl: 'https://console.groq.com/keys',
     keyHint: 'Clave gratuita en console.groq.com/keys. Inferencia ultra veloz en LPU.',
+    defaultVision: false,
   },
   {
     id: 'xai',
@@ -167,6 +183,8 @@ export const CHARVIS_PROVIDERS: CharvisProvider[] = [
     baseUrl: 'https://api.x.ai/v1',
     docsUrl: 'https://console.x.ai',
     keyHint: 'Clave en console.x.ai. Modelos Grok de xAI con gran contexto.',
+    visionModels: ['grok-4.6', 'grok-4', 'grok-4-fast', 'grok-3'],
+    defaultVision: false,
   },
 ];
 
@@ -174,6 +192,15 @@ export const DEFAULT_PROVIDER_ID = 'opencode';
 
 export function getProvider(id: string): CharvisProvider {
   return CHARVIS_PROVIDERS.find(p => p.id === id) || CHARVIS_PROVIDERS[0];
+}
+
+/** ¿El modelo concreto tiene visión? (autoconciencia real de capacidades del modelo activo). */
+export function providerModelHasVision(p: CharvisProvider, model: string): boolean {
+  const list = p.visionModels || [];
+  if (list.length === 0) return !!p.defaultVision;
+  if (list.includes(model)) return true;
+  if (!(p.defaultModels || []).includes(model)) return !!p.defaultVision;
+  return false;
 }
 
 const STORAGE_KEY = 'owa_charvis_providers_v1';

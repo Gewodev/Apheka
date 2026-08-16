@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useApp, Task, fmtClock } from '../../store/AppContext';
 import { openFileSmart, pickAndPersistFile } from '../../lib/openFileSmart';
+import { fuzzyMatch } from '../../lib/fuzzy';
 import { useMaterialMenu } from '../ui/MaterialContextMenu';
 import { isTauri, convertFileSrc } from '@tauri-apps/api/core';
 import { BRAIN_DROP_MIME, writeBrainAnchor } from '../../lib/brainDrop';
@@ -318,7 +319,7 @@ export default function Tareas() {
   const filteredTasks = useMemo(() => {
     let filtered = tasks;
     if (courseFilter) filtered = filtered.filter(t => t.course === courseFilter);
-    if (searchQuery) filtered = filtered.filter(t => t.title.toLowerCase().includes(searchQuery.toLowerCase()));
+    if (searchQuery) filtered = filtered.filter(t => fuzzyMatch(t.title, searchQuery));
     filtered = filtered.filter(t => !shouldHideCompleted(t));
     const allHaveSortOrder = filtered.length > 0 && filtered.every(t => t.sortOrder !== undefined);
     return [...filtered].sort((a, b) => {
