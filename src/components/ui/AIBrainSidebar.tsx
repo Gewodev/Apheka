@@ -31,8 +31,19 @@ function formatSpeechTranscription(raw: string): string {
 
   text = text.replace(/\s+/g, ' ');
 
-  const spanishQuestionStarters = /^(cómo|como|qué|que|cuándo|cuando|dónde|donde|por qué|porque|quién|quien|cuál|cual|cuánto|cuanto|puedes|podrías|podrias|me puedes|sabes|crees|habrá|habria|acaso)\b/i;
-  const englishQuestionStarters = /^(what|how|why|when|where|who|which|can you|could you|is there|do you|would you)\b/i;
+  text = text.replace(/\s+([.,;:!?])/g, '$1');
+
+  const words = text.split(' ');
+  const deduped: string[] = [];
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i].toLowerCase();
+    if (i > 0 && w === words[i - 1].toLowerCase() && /^[a-záéíóúñü]+$/i.test(w)) continue;
+    deduped.push(words[i]);
+  }
+  text = deduped.join(' ');
+
+  const spanishQuestionStarters = /^(cómo|como|qué|que|cuándo|cuando|dónde|donde|por qué|porque|quién|quien|cuál|cual|cuánto|cuanto|puedes|podrías|podrias|me puedes|sabes|crees|habrá|habria|acaso|sería|seria|me ayudarías|me ayudarias|tienes|quieres|dime|hay)\b/i;
+  const englishQuestionStarters = /^(what|how|why|when|where|who|which|can you|could you|is there|do you|would you|are you|will you)\b/i;
 
   const sentences = text.split(/(?<=[.?!])\s+/);
   const formatted = sentences.map(sentence => {
@@ -40,21 +51,27 @@ function formatSpeechTranscription(raw: string): string {
     if (!s) return '';
 
     s = s.charAt(0).toUpperCase() + s.slice(1);
+    s = s.replace(/\bi\b/g, 'I');
 
-    if (spanishQuestionStarters.test(s) && !s.startsWith('¿') && !s.endsWith('?')) {
-      s = `¿${s}?`;
-    } else if (englishQuestionStarters.test(s) && !s.endsWith('?')) {
-      s = `${s}?`;
+    if (spanishQuestionStarters.test(s)) {
+      s = s.replace(/\.+$/, '');
+      if (!s.endsWith('?')) s = `${s}?`;
+      if (!s.startsWith('¿')) s = `¿${s}`;
+    } else if (englishQuestionStarters.test(s)) {
+      s = s.replace(/\.+$/, '');
+      if (!s.endsWith('?')) s = `${s}?`;
     } else if (!/[.?!]$/.test(s)) {
-      if (s.split(' ').length > 2) {
+      const wc = s.split(' ').length;
+      if (wc > 2 && !/^(sí|no|si|ok|vale|listo|perfecto|gracias)\b/i.test(s)) {
         s = `${s}.`;
       }
     }
 
+    s = s.replace(/\?+/g, '?');
     return s;
   });
 
-  return formatted.join(' ');
+  return formatted.filter(Boolean).join(' ');
 }
 
 /**
@@ -110,6 +127,8 @@ function ToolExecutionCard({ tc, index }: { tc: { name: string; args: string; re
 
   const searchResults: Array<{ title: string; url: string; snippet?: string; source?: string }> =
     resultData?.results || [];
+  const digests: Array<{ title: string; url: string; excerpt?: string; host?: string }> =
+    resultData?.digests || [];
 
   return (
     <div style={{ marginTop: 8, marginBottom: 4 }}>
@@ -171,6 +190,21 @@ function ToolExecutionCard({ tc, index }: { tc: { name: string; args: string; re
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+            {isWebSearch && digests.length > 0 && (
+              <span
+                style={{
+                  fontSize: 9.5,
+                  fontWeight: 600,
+                  padding: '2px 7px',
+                  borderRadius: 6,
+                  background: 'color-mix(in srgb, var(--accent) 10%, transparent)',
+                  color: 'var(--accent)',
+                  fontFamily: "'JetBrains Mono', monospace",
+                }}
+              >
+                {digests.length} artículos leídos
+              </span>
+            )}
             {isWebSearch && searchResults.length > 0 && (
               <span
                 style={{
@@ -253,6 +287,51 @@ function ToolExecutionCard({ tc, index }: { tc: { name: string; args: string; re
                 {resultMsg || 'Ejecutando acción…'}
               </div>
             )}
+
+            {digests.length > 0 && (
+              <div style={{ marginTop: 6 }}>
+                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-tertiary)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <FileText size={10} />
+                  Contenido extraído de los artículos
+                </div>
+                <div className="no-scrollbar" style={{ maxHeight: 160, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {digests.slice(0, 5).map((d, i) => (
+                    <a
+                      key={i}
+                      href={d.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{
+                        textDecoration: 'none',
+                        background: 'rgba(0,0,0,0.3)',
+                        border: '1px solid var(--border-subtle)',
+                        borderRadius: 8,
+                        padding: '7px 9px',
+                        display: 'block',
+                        transition: 'border-color 120ms, background 120ms',
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--accent) 55%, transparent)'; e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = 'rgba(0,0,0,0.3)'; }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                        <FileText size={10} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                        <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.title}</span>
+                        {d.host && (
+                          <span style={{ marginLeft: 'auto', fontSize: 9, color: 'var(--text-tertiary)', fontFamily: "'JetBrains Mono', monospace", flexShrink: 0 }}>
+                            {d.host}
+                          </span>
+                        )}
+                      </div>
+                      {d.excerpt && (
+                        <div style={{ fontSize: 10, color: 'var(--text-secondary)', lineHeight: 1.45, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                          {d.excerpt}
+                        </div>
+                      )}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -275,6 +354,65 @@ function ToolExecutionCard({ tc, index }: { tc: { name: string; args: string; re
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Pill de skill externa (estilo Perplexity/Claude): icono de marca + nombre + estado.
+ * Solo se muestran las skills visibles (webSearch, searchYouTubeMusic); las tools
+ * internas quedan ocultas de la fila de pills (pero siguen en sus ToolExecutionCard).
+ */
+function SkillPill({ tc }: { tc: { name: string; args: string; result?: string; status: 'pending' | 'success' | 'error' } }) {
+  const isWeb = tc.name === 'webSearch';
+  const Icon = isWeb ? Globe : Music;
+  const label = isWeb ? 'Búsqueda web' : 'Buscar en YouTube';
+  const iconColor = isWeb ? 'var(--accent)' : '#ef4444';
+
+  const stateColor =
+    tc.status === 'error' ? '#ef4444' :
+    tc.status === 'success' ? '#34d399' :
+    'var(--text-tertiary)';
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        padding: '4px 10px 4px 8px',
+        borderRadius: 999,
+        background:
+          tc.status === 'error' ? 'rgba(239,68,68,0.10)' :
+          tc.status === 'success' ? 'rgba(16,185,129,0.08)' :
+          'rgba(255,255,255,0.045)',
+        border: `1px solid ${
+          tc.status === 'error' ? 'rgba(239,68,68,0.35)' :
+          tc.status === 'success' ? 'rgba(16,185,129,0.30)' :
+          'var(--border-soft)'
+        }`,
+        fontSize: 10.5,
+        fontWeight: 500,
+        color: 'var(--text-primary)',
+        transition: 'border-color 140ms, background 140ms, transform 140ms',
+      }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--accent) 45%, transparent)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+      onMouseLeave={e => {
+        e.currentTarget.style.borderColor =
+          tc.status === 'error' ? 'rgba(239,68,68,0.35)' :
+          tc.status === 'success' ? 'rgba(16,185,129,0.30)' : 'var(--border-soft)';
+        e.currentTarget.style.transform = 'translateY(0px)';
+      }}
+    >
+      <Icon size={11} style={{ color: iconColor, flexShrink: 0 }} />
+      <span>{label}</span>
+      {tc.status === 'pending' ? (
+        <Loader2 size={10} className="spin" style={{ color: stateColor, flexShrink: 0 }} />
+      ) : tc.status === 'success' ? (
+        <Check size={10} style={{ color: stateColor, flexShrink: 0 }} />
+      ) : (
+        <X size={10} style={{ color: stateColor, flexShrink: 0 }} />
+      )}
     </div>
   );
 }
@@ -420,14 +558,14 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
   // forzamos el scroll abajo otra vez (solo cuando está pegado al final).
   const stickToBottomRef = useRef(true);
 
-  // Auto-resize inteligente del textarea al escribir o transcribir audio (hasta 220px)
+  // Auto-resize inteligente del textarea al escribir o transcribir audio (hasta 300px)
   useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      const scrollH = textareaRef.current.scrollHeight;
-      const newHeight = Math.min(Math.max(scrollH, 28), 220);
-      textareaRef.current.style.height = `${newHeight}px`;
-    }
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = '0px';
+    const scrollH = el.scrollHeight;
+    const newHeight = Math.min(Math.max(scrollH, 28), 300);
+    el.style.height = `${newHeight}px`;
   }, [input]);
 
   const [messages, setMessages] = useState<ChatItem[]>(() => {
@@ -832,7 +970,22 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
         dailyStudyTime: appCtx.dailyStudyTime,
         pomodoroSessions: appCtx.pomodoroSessions,
       });
-      const systemPrompt = composeSystemPrompt(snapshot, deepMode);
+      const providerId = settings.owaBrainProvider || DEFAULT_PROVIDER_ID;
+      const provider = getProvider(providerId);
+      const apiKey = (settings.owaBrainApiKey || '').trim();
+      const baseUrl = (settings.owaBrainBaseUrl || provider.baseUrl).replace(/\/+$/, '');
+      const model = settings.owaBrainModel || provider.defaultModel;
+
+      // Autoconciencia del modelo: el prompt sabe exactamente quién lo impulsa
+      // (proveedor + modelo) y si tiene visión, para responder con identidad real.
+      const providerName = provider.name || providerId;
+      const vision = !['opencode', 'groq'].includes(providerId);
+      const systemPrompt = composeSystemPrompt(snapshot, deepMode, {
+        providerId,
+        providerName,
+        modelName: model,
+        vision,
+      });
 
       const history = messages.filter(m => m.role === 'user' || m.role === 'assistant').slice(-10);
       const apiMessages: AIMessage[] = [
@@ -843,12 +996,6 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
         })),
         { role: 'user', content: buildUserContent(userText, attachments) },
       ];
-
-      const providerId = settings.owaBrainProvider || DEFAULT_PROVIDER_ID;
-      const provider = getProvider(providerId);
-      const apiKey = (settings.owaBrainApiKey || '').trim();
-      const baseUrl = (settings.owaBrainBaseUrl || provider.baseUrl).replace(/\/+$/, '');
-      const model = settings.owaBrainModel || provider.defaultModel;
 
       let accumulatedContent = '';
       let accumulatedReasoning = '';
@@ -1689,13 +1836,25 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                   )}
                 </div>
 
-                {msg.role !== 'user' && msg.toolCalls && msg.toolCalls.length > 0 && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
-                    {msg.toolCalls.map((tc, idx) => (
-                      <ToolExecutionCard key={idx} tc={tc} index={idx} />
-                    ))}
-                  </div>
-                )}
+                {msg.role !== 'user' && msg.toolCalls && msg.toolCalls.length > 0 && (() => {
+                  const skillCalls = msg.toolCalls.filter(tc => VISIBLE_SKILLS.has(tc.name));
+                  return (
+                    <>
+                      {skillCalls.length > 0 && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+                          {skillCalls.map((tc, i) => (
+                            <SkillPill key={i} tc={tc} />
+                          ))}
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: skillCalls.length > 0 ? 6 : 10 }}>
+                        {msg.toolCalls.map((tc, idx) => (
+                          <ToolExecutionCard key={idx} tc={tc} index={idx} />
+                        ))}
+                      </div>
+                    </>
+                  );
+                })()}
 
                 {msg.role === 'user' && (
                   <div style={{ fontSize: 9.5, color: 'var(--text-tertiary)', marginTop: 4, padding: '0 4px', letterSpacing: '0.08em' }}>
@@ -1803,7 +1962,7 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                   fontFamily: "'JetBrains Mono', monospace",
                   padding: '4px 4px 2px 4px',
                   minHeight: 28,
-                  maxHeight: 220,
+                  maxHeight: 300,
                   overflowY: 'auto',
                 }}
               />

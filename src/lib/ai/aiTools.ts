@@ -826,7 +826,7 @@ export const AI_TOOL_DEFINITIONS: AIToolDefinition[] = [
     type: 'function',
     function: {
       name: 'webSearch',
-      description: 'Busca en TODO internet con investigación profunda en vivo (DuckDuckGo, Bing, Wikipedia y extracción de contenido de artículos) y devuelve resultados detallados y páginas analizadas para responder con datos actuales, noticias, tutoriales y fuentes oficiales.',
+      description: 'Busca en TODO internet con investigación profunda en vivo (DuckDuckGo, Mojeek, Bing, Wikipedia), LEE el contenido de los artículos más relevantes (contenido extraído como Claude/Perplexity) y devuelve resultados con extractos reales para responder con datos actuales, noticias, tutoriales y fuentes oficiales.',
       parameters: {
         type: 'object',
         properties: { query: { type: 'string', description: 'Concepto o pregunta a buscar' } },
@@ -1228,18 +1228,12 @@ export async function executeToolCall(
         const query = (args.query || '').trim();
         if (!query) return { success: true, message: 'Se requiere una consulta para buscar. Pregúntame con más detalle.' };
         const truncate = (s: string, n = 900) => (s.length > n ? s.slice(0, n).trimEnd() + '…' : s);
-        const snip = (s: string, n = 150) => {
+        const snip = (s: string, n = 160) => {
           const t = (s || '').replace(/\s+/g, ' ').trim();
           return t.length > n ? t.slice(0, n).trimEnd() + '…' : t;
         };
         const f = await getFetch();
-        const seen = new Set<string>();
-        const results: { title: string; url: string; snippet: string; source: string }[] = [];
-        const addResult = (r: { title: string; url: string; snippet: string; source: string }) => {
-          if (!r.title || !r.url || seen.has(r.url)) return;
-          seen.add(r.url);
-          results.push({ title: r.title, url: r.url, snippet: r.snippet, source: r.source });
-        };
+
         const cleanUrl = (raw: string): string => {
           try {
             const u = new URL(raw.startsWith('//') ? 'https:' + raw : raw);
@@ -1250,67 +1244,106 @@ export async function executeToolCall(
           } catch { return raw; }
         };
 
-        // 1) DuckDuckGo HTML — varias páginas (≈60 resultados de la web real)
+        // ── Relevancia: cuántos tokens de la consulta (sin stopwords) aparecen en título/URL/snippet ──
+        const STOP = new Set('el la los las de del en y a al con por para que un una es son se su sus como cual cuando donde qué cuál cómo cuándo dónde quién cuánto the of to in and is are for on with at from what how why when where who which a an it this that i you we they he she not no or but if then'.split(' '));
+        const queryTokens = query.toLowerCase().split(/[^a-z0-9áéíóúñü]+/i).filter((t: string) => t.length > 2 && !STOP.has(t));
+        const scoreResult = (title: string, url: string, snippet: string): number => {
+          if (queryTokens.length === 0) return 1;
+          const hay = `${title} ${url} ${snippet}`.toLowerCase();
+          let hits = 0;
+          for (const t of queryTokens) if (hay.includes(t)) hits++;
+          return hits / queryTokens.length;
+        };
+
+        const seen = new Set<string>();
+        const results: { title: string; url: string; snippet: string; source: string; score: number }[] = [];
+        const addResult = (title: string, url: string, snippet: string, source: string) => {
+          if (!title || !url) return;
+          const u = cleanUrl(url);
+          if (!u || !/^https?:\/\//i.test(u)) return;
+          let key = '';
+          try {
+            const p = new URL(u);
+            key = `${p.hostname.replace(/^www\./, '').toLowerCase()}${p.pathname.toLowerCase().replace(/\/+$/, '')}`;
+          } catch { return; }
+          if (seen.has(key)) return;
+          const score = scoreResult(title, u, snippet);
+          if (score < 0.25 && results.length >= 4) return;
+          seen.add(key);
+          results.push({ title, url: u, snippet: snip(snippet), source, score });
+        };
+
+        // 1) DuckDuckGo HTML — resultados reales de la web (2 páginas)
         if (typeof DOMParser !== 'undefined') {
-          for (const offset of [0, 30, 60]) {
-            if (results.length >= 60) break;
+          for (const offset of [0, 30]) {
             try {
               const htmlRes = await f(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}&s=${offset}`);
               if (!htmlRes.ok) break;
               const doc = new DOMParser().parseFromString(await htmlRes.text(), 'text/html');
               const nodes = doc.querySelectorAll('.result');
-              let added = 0;
-              for (let i = 0; i < nodes.length && added < 20; i++) {
+              for (let i = 0; i < nodes.length; i++) {
                 const a = nodes[i].querySelector('.result__a');
                 if (!a) continue;
                 const title = (a.textContent || '').trim();
-                if (!title) continue;
-                const url = cleanUrl((a.getAttribute('href') || '').trim());
-                if (!url) continue;
+                const href = (a.getAttribute('href') || '').trim();
                 const snippet = (nodes[i].querySelector('.result__snippet')?.textContent || '').trim();
-                addResult({ title, url, snippet: snip(snippet), source: 'Web' });
-                added++;
+                addResult(title, href, snippet, 'Web');
               }
             } catch { break; }
           }
         }
 
-        // 2) Bing HTML — segunda fuente, en paralelo (hasta ~30 resultados más)
+        // 2) Mojeek — buscador independiente, HTML limpio y sin consentimientos
         if (typeof DOMParser !== 'undefined') {
-          for (const offset of [0, 10]) {
-            if (results.length >= 80) break;
-            try {
-              const bingRes = await f(`https://www.bing.com/search?q=${encodeURIComponent(query)}&count=20&first=${offset + 1}`);
-              if (!bingRes.ok) break;
-              const doc = new DOMParser().parseFromString(await bingRes.text(), 'text/html');
-              const nodes = doc.querySelectorAll('li.b_algo');
-              let added = 0;
-              for (let i = 0; i < nodes.length && added < 15; i++) {
+          try {
+            const mojRes = await f(`https://www.mojeek.com/search?q=${encodeURIComponent(query)}`);
+            if (mojRes.ok) {
+              const doc = new DOMParser().parseFromString(await mojRes.text(), 'text/html');
+              const nodes = doc.querySelectorAll('.ob');
+              for (let i = 0; i < nodes.length; i++) {
                 const a = nodes[i].querySelector('h2 a');
                 if (!a) continue;
                 const title = (a.textContent || '').trim();
-                const url = (a.getAttribute('href') || '').trim();
-                if (!title || !/^https?:\/\//.test(url)) continue;
-                const snippet = (nodes[i].querySelector('.b_caption p')?.textContent || '').trim();
-                addResult({ title, url, snippet: snip(snippet), source: 'Bing' });
-                added++;
+                const href = (a.getAttribute('href') || '').trim();
+                const snippet = (nodes[i].querySelector('.s')?.textContent || '').trim();
+                addResult(title, href, snippet, 'Web');
               }
-            } catch { break; }
-          }
+            }
+          } catch {}
         }
 
-        // 3) DuckDuckGo Instant Answer (respuesta corta estructurada)
+        // 3) Bing — tercera fuente, solo enlaces externos reales (sin basura de redirección)
+        if (typeof DOMParser !== 'undefined') {
+          try {
+            const bingRes = await f(`https://www.bing.com/search?q=${encodeURIComponent(query)}&count=15`);
+            if (bingRes.ok) {
+              const doc = new DOMParser().parseFromString(await bingRes.text(), 'text/html');
+              const nodes = doc.querySelectorAll('li.b_algo');
+              for (let i = 0; i < nodes.length; i++) {
+                const a = nodes[i].querySelector('h2 a');
+                if (!a) continue;
+                const title = (a.textContent || '').trim();
+                const href = (a.getAttribute('href') || '').trim();
+                if (/bing\.com|microsoft\.com|go\.microsoft/.test(href)) continue;
+                const snippet = (nodes[i].querySelector('.b_caption p')?.textContent || '').trim();
+                addResult(title, href, snippet, 'Bing');
+              }
+            }
+          } catch {}
+        }
+
+        // 4) DuckDuckGo Instant Answer (respuesta breve estructurada)
         let instantAnswer = '';
         try {
           const ddgRes = await f(`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`);
           if (ddgRes.ok) {
             const ddgData = await ddgRes.json();
             instantAnswer = ddgData.AbstractText || ddgData.Definition || '';
-            if (ddgData.AbstractURL) addResult({ title: ddgData.Answer || query, url: ddgData.AbstractURL, snippet: snip(instantAnswer), source: 'Instant Answer' });
+            if (ddgData.AbstractURL) addResult(ddgData.Answer || query, ddgData.AbstractURL, instantAnswer, 'Instant Answer');
           }
         } catch {}
 
-        // 4) Wikipedia directa + búsqueda (una entrada enciclopédica fiable más)
+        // 5) Wikipedia directa + búsqueda (entrada enciclopédica fiable)
         let wikiTitle = '';
         let wikiUrl = '';
         let wikiExtract = '';
@@ -1341,21 +1374,60 @@ export async function executeToolCall(
             }
           } catch {}
         }
-        if (wikiUrl) addResult({ title: `Wikipedia — ${wikiTitle}`, url: wikiUrl, snippet: snip(wikiExtract), source: 'Wikipedia' });
+        if (wikiUrl) addResult(`Wikipedia — ${wikiTitle}`, wikiUrl, wikiExtract, 'Wikipedia');
 
-        // 5) Listado largo numerado (como un buscador: resultados uno debajo de otro)
+        // Ordenar por relevancia real (tokens de la consulta presentes en el resultado)
+        results.sort((a, b) => b.score - a.score);
         const shown = results.slice(0, 40);
-        const webLines = shown.map((r, i) =>
+
+        // 6) LECTURA DE ARTÍCULOS: entrar en las páginas top y extraer el contenido real
+        //    (como Claude/Perplexity: no basta con los snippets, hay que leer el artículo)
+        type Digest = { title: string; url: string; excerpt: string; host: string };
+        const digests: Digest[] = [];
+        const topUrls = shown.filter(r => !r.url.includes('wikipedia.org')).slice(0, 6);
+        if (typeof DOMParser !== 'undefined' && topUrls.length > 0) {
+          await Promise.allSettled(topUrls.map(async (r) => {
+            try {
+              const ac = new AbortController();
+              const timer = setTimeout(() => ac.abort(), 6000);
+              const res = await f(r.url, { signal: ac.signal });
+              clearTimeout(timer);
+              if (!res.ok) return;
+              const html = await res.text();
+              if (html.length > 3_000_000) return;
+              const doc = new DOMParser().parseFromString(html, 'text/html');
+              doc.querySelectorAll('script,style,noscript,nav,header,footer,aside,form,iframe,svg,button,select,[class*="ad"],[id*="ad"],[class*="menu"],[class*="nav"],[class*="cookie"]').forEach(n => n.remove());
+              const main = doc.querySelector('article, main, [role="main"], .content, .article, .post, .entry-content');
+              const pool = main || doc.body;
+              if (!pool) return;
+              const paras = Array.from(pool.querySelectorAll('p'))
+                .map(p => (p.textContent || '').replace(/\s+/g, ' ').trim())
+                .filter(t => t.length > 80 && t.length < 3000);
+              const text = paras.join(' ').trim();
+              if (text.length < 350) return;
+              const title = (doc.querySelector('h1')?.textContent || doc.title || r.title || '').replace(/\s+/g, ' ').trim();
+              let host = '';
+              try { host = new URL(r.url).hostname.replace(/^www\./, ''); } catch {}
+              digests.push({ title: snip(title || r.title, 140), url: r.url, excerpt: text.slice(0, 1400), host });
+            } catch {}
+          }));
+        }
+
+        // 7) Listado final numerado + contenido extraído para responder con datos reales
+        const webLines = shown.slice(0, 30).map((r, i) =>
           `${i + 1}. ${r.title}\n   ${r.url}\n   ${snip(r.snippet || '—')}`
         ).join('\n');
         const instantBlock = instantAnswer ? `Respuesta breve: ${truncate(instantAnswer)}\n\n` : '';
+        const digestBlock = digests.length
+          ? `\n\n📰 CONTENIDO EXTRAÍDO DE LOS ARTÍCULOS (${digests.length} páginas leídas en vivo — úsalo para responder con datos reales):\n${digests.map((d, i) => `${i + 1}. ${d.title} [${d.host}]\n   ${truncate(d.excerpt, 420)}`).join('\n\n')}`
+          : '';
         const more = results.length > shown.length ? `\n… y ${results.length - shown.length} resultados más en la lista completa.` : '';
-        const sources = results.slice(0, 10).map(r => r.url).join(' | ');
+        const sources = shown.slice(0, 8).map(r => r.url).join(' | ');
         if (results.length > 0) {
           return {
             success: true,
-            message: `🔎 ${results.length} resultados para "${query}":\n\n${instantBlock}${webLines}${more}\n\nFuentes destacadas: ${sources}`,
-            data: { results, instantAnswer },
+            message: `🔎 ${results.length} resultados relevantes para "${query}" (en vivo):\n\n${instantBlock}${webLines}${more}${digestBlock}\n\nFuentes destacadas: ${sources}`,
+            data: { results: shown.map(({ score: _s, ...r }) => r), instantAnswer, digests },
           };
         }
         return {

@@ -23,6 +23,7 @@ const STORAGE_KEY = 'owa_charvis_providers_v1';
 export default function CharvisProviders() {
   const { settings, updateSettings, addNotification } = useApp();
   const activeId = settings.owaBrainProvider || DEFAULT_PROVIDER_ID;
+  const activeProvider: CharvisProvider = CHARVIS_PROVIDERS.find(p => p.id === activeId) || CHARVIS_PROVIDERS[0];
 
   const [states, setStates] = useState<Record<string, CharvisProviderState>>(() => {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch { return {}; }
@@ -205,6 +206,9 @@ export default function CharvisProviders() {
                   {isActive && (
                     <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 16%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 45%, transparent)', borderRadius: 6, padding: '2px 7px' }}>Activo</span>
                   )}
+                  {validated && !isActive && (
+                    <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#34d399', background: 'rgba(16,185,129,0.10)', border: '1px solid rgba(16,185,129,0.35)', borderRadius: 6, padding: '2px 7px' }}>Validado</span>
+                  )}
                 </div>
                 <div style={{ fontSize: 10, color: 'var(--text-tertiary)', fontFamily: "'JetBrains Mono', monospace", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 3 }}>{expanded.baseUrl}</div>
               </div>
@@ -299,6 +303,20 @@ export default function CharvisProviders() {
                 }}>
                   {result.ok ? <Check size={13} /> : <X size={13} />}
                   {result.msg}
+                </div>
+              )}
+
+              {/* Nodo actual vs este proveedor */}
+              {!isActive && (
+                <div style={{
+                  fontSize: 10.5, lineHeight: 1.55, color: 'var(--text-secondary)',
+                  background: 'var(--bg-deep)', border: '1px dashed var(--border-default)',
+                  borderRadius: 9, padding: '9px 12px',
+                }}>
+                  La app usa actualmente el nodo <b style={{ color: 'var(--text-primary)' }}>{activeProvider.name}</b>.
+                  {validated
+                    ? ' Este proveedor quedó validado: pulsa "Activar proveedor" para que Charvis pase a usar tu clave.'
+                    : ' Valida tu API y luego actívalo para cambiar el nodo.'}
                 </div>
               )}
 
