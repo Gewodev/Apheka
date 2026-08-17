@@ -27,6 +27,7 @@ import {
   signIn, signOut, isSignedIn, onAuthChange, configureGoogle, restoreSession,
 } from '../../lib/google/index';
 import { isTauri } from '../../lib/tauri';
+import { exportOwaBackup, pickAndImportOwaBackup, importOwaBackupFromFile, getOwaDataFolder, revealOwaDataFolder } from '../../lib/owaBackup';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 const GOOGLE_CLIENT_SECRET = import.meta.env.VITE_GOOGLE_CLIENT_SECRET || '';
@@ -260,13 +261,54 @@ export default function Ajustes() {
   const [appInfo, setAppInfo] = useState<{ name: string; version: string; tauriVersion: string } | null>(null);
   const [appDirs, setAppDirs] = useState<{ label: string; path: string; root?: boolean }[]>([]);
   const [idbUsage, setIdbUsage] = useState<number | null>(null);
+  const [storageQuota, setStorageQuota] = useState<number | null>(null);
   const bgInputRef = useRef<HTMLInputElement>(null);
   const profilePhotoInputRef = useRef<HTMLInputElement>(null);
+  const [dataFolder, setDataFolder] = useState('');
+  const backupFileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!isTauri()) return;
+    getOwaDataFolder().then(d => { if (d) setDataFolder(d); }).catch(() => {});
+  }, []);
+
+  const handleExportBackup = async () => {
+    const res = await exportOwaBackup();
+    addNotification(res.message, res.ok ? 'success' : 'error');
+  };
+
+  const handleImportBackup = async () => {
+    if (!isTauri()) { backupFileRef.current?.click(); return; }
+    const res = await pickAndImportOwaBackup();
+    addNotification(res.message, res.ok ? 'success' : 'error');
+    if (res.ok) setTimeout(() => window.location.reload(), 800);
+  };
+
+  const handleBackupFilePicked = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const res = await importOwaBackupFromFile(file);
+    addNotification(res.message, res.ok ? 'success' : 'error');
+    if (res.ok) setTimeout(() => window.location.reload(), 800);
+    e.target.value = '';
+  };
+
+  const handleRevealData = async () => {
+    const dir = await revealOwaDataFolder();
+    if (dir) {
+      addNotification(`Carpeta de datos: ${dir}`, 'success');
+    } else {
+      addNotification('La carpeta de datos solo está disponible en la app instalada', 'error');
+    }
+  };
 
   // Peso de la app: uso de la base de datos IndexedDB (localStorage se mide directo).
   useEffect(() => {
     if (typeof navigator !== 'undefined' && navigator.storage && typeof navigator.storage.estimate === 'function') {
-      navigator.storage.estimate().then(e => setIdbUsage(typeof e.usage === 'number' ? e.usage : null)).catch(() => setIdbUsage(null));
+      navigator.storage.estimate().then(e => {
+        setIdbUsage(typeof e.usage === 'number' ? e.usage : null);
+        setStorageQuota(typeof e.quota === 'number' ? e.quota : null);
+      }).catch(() => { setIdbUsage(null); setStorageQuota(null); });
     }
   }, []);
 
@@ -2152,20 +2194,43 @@ export default function Ajustes() {
                           <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)' }}>Peso total</span>
                           <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Share Tech Mono', monospace" }}>{fmtBytes(grand)}</span>
                         </div>
-                        {rows.map(r => (
-                          <div key={r.label} style={{ marginBottom: 10 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                              <span style={{ fontSize: 10.5, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 7, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                <span style={{ width: 8, height: 8, borderRadius: 3, background: r.color, flexShrink: 0 }} />
-                                {r.label}
-                              </span>
-                              <span style={{ fontSize: 10, fontFamily: "'Share Tech Mono', monospace", color: 'var(--text-muted)', flexShrink: 0, marginLeft: 10 }}>{fmtBytes(r.size)} · {Math.round((r.size / grand) * 100)}%</span>
+                        {(() => {
+                          const quota = storageQuota && storageQuota > 0 ? storageQuota : 0;
+                          const totalPct = quota > 0 ? Math.min(100, (grand / quota) * 100) : 0;
+                          const totalColor = totalPct >= 80 ? '#EF4444' : totalPct >= 55 ? '#F59E0B' : '#10B981';
+                          return quota > 0 ? (
+                            <div style={{ marginBottom: 16 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
+                                <span style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Uso de almacenamiento</span>
+                                <span style={{ fontSize: 9.5, fontFamily: "'Share Tech Mono', monospace", color: totalColor }}>{totalPct.toFixed(1)}% de {fmtBytes(quota)}</span>
+                              </div>
+                              <div style={{ height: 8, borderRadius: 6, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', overflow: 'hidden', boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.28)' }}>
+                                <div style={{ height: '100%', width: `${Math.max(0.6, totalPct)}%`, borderRadius: 6, background: `linear-gradient(90deg, ${totalColor}88, ${totalColor})`, boxShadow: `0 0 12px ${totalColor}55`, transition: 'width 400ms ease' }} />
+                              </div>
                             </div>
-                            <div style={{ height: 5, borderRadius: 4, background: 'var(--bg-deep)', overflow: 'hidden' }}>
-                              <div style={{ height: '100%', width: `${Math.max(1.5, (r.size / barMax) * 100)}%`, borderRadius: 4, background: `linear-gradient(90deg, ${r.color}cc, ${r.color}66)`, transition: 'width 300ms' }} />
+                          ) : null;
+                        })()}
+                        {rows.map(r => {
+                          const pct = grand > 0 ? (r.size / grand) * 100 : 0;
+                          return (
+                            <div key={r.label} style={{ marginBottom: 12 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5, gap: 10 }}>
+                                <span style={{ fontSize: 10.5, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                                  <span style={{ width: 9, height: 9, borderRadius: 3, background: `linear-gradient(135deg, ${r.color}, ${r.color}77)`, boxShadow: `0 0 6px ${r.color}55`, flexShrink: 0 }} />
+                                  {r.label}
+                                </span>
+                                <span style={{ fontSize: 10, fontFamily: "'Share Tech Mono', monospace", color: 'var(--text-muted)', flexShrink: 0 }}>
+                                  {fmtBytes(r.size)} <span style={{ color: r.color }}>· {pct.toFixed(1)}%</span>
+                                </span>
+                              </div>
+                              <div style={{ height: 7, borderRadius: 5, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', overflow: 'hidden', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.28)' }}>
+                                <div style={{ height: '100%', width: `${Math.max(1.5, (r.size / barMax) * 100)}%`, borderRadius: 5, background: `linear-gradient(180deg, ${r.color}ee, ${r.color}77)`, boxShadow: `0 0 10px ${r.color}44`, transition: 'width 400ms ease', position: 'relative' }}>
+                                  <div style={{ position: 'absolute', inset: '0 0 50% 0', background: 'rgba(255,255,255,0.16)', borderRadius: 5 }} />
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                         <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.5 }}>
                           {keys.length} claves en localStorage · {idb > 0 ? `la base de datos IndexedDB ocupa ${fmtBytes(idb)}` : 'la base de datos IndexedDB no está disponible en este navegador'}.
                         </p>
@@ -2325,6 +2390,34 @@ export default function Ajustes() {
                     ))}
                   </div>
                   <p style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>Afecta a todo el planificador, horario, eventos, cabeceras y tiempos en toda la app.</p>
+                </div>
+
+                {/* Respaldo y migración */}
+                <div className="bento-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>Respaldo y migración de datos</span>
+                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.6 }}>
+                    Exporta todo tu contenido (notas, tareas, cursos, eventos, hábitos, música, ajustes) a un archivo
+                    para pasarlo a otra computadora o a una futura versión. Al instalar una versión nueva sobre esta
+                    app, tus datos se conservan automáticamente. Las cuentas y claves de Google no se incluyen en el
+                    respaldo por seguridad (se reconectan al importar).
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button onClick={handleExportBackup} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'color-mix(in srgb, var(--accent) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 35%, transparent)', color: 'var(--accent)' }}>
+                      <Download size={14} /> Exportar respaldo
+                    </button>
+                    <button onClick={handleImportBackup} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-secondary)' }}>
+                      <Upload size={14} /> Importar respaldo
+                    </button>
+                    <button onClick={handleRevealData} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-secondary)' }}>
+                      <FolderOpen size={14} /> Abrir carpeta de datos
+                    </button>
+                  </div>
+                  {dataFolder && (
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: "'Share Tech Mono', monospace", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={dataFolder}>
+                      {dataFolder}
+                    </div>
+                  )}
+                  <input ref={backupFileRef} type="file" accept=".json,application/json" style={{ display: 'none' }} onChange={handleBackupFilePicked} />
                 </div>
 
                 {/* Hecho por */}

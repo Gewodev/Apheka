@@ -74,6 +74,14 @@
       ]
     },
     {
+      "identifier": "fs:allow-read-text-file",
+      "allow": [{ "path": "$APPCACHE/**" }, { "path": "$APPCACHE" }, { "path": "$APPDATA/**" }, { "path": "$APPDATA" }, { "path": "$RESOURCE/**" }, { "path": "$RESOURCE" }, { "path": "$HOME/**" }, { "path": "$HOME" }, { "path": "C:/Users/USER/AppData/Local/com.owa.studio/**" }, { "path": "C:/Users/USER/AppData/Local/com.owa.studio" }, { "path": "C:/**" }, { "path": "D:/**" }, { "path": "**" }]
+    },
+    {
+      "identifier": "fs:allow-write-text-file",
+      "allow": [{ "path": "$APPCACHE/**" }, { "path": "$APPCACHE" }, { "path": "$APPDATA/**" }, { "path": "$APPDATA" }, { "path": "$HOME/**" }, { "path": "$HOME" }, { "path": "C:/Users/USER/AppData/Local/com.owa.studio/**" }, { "path": "C:/Users/USER/AppData/Local/com.owa.studio" }, { "path": "C:/**" }, { "path": "D:/**" }, { "path": "**" }]
+    },
+    {
       "identifier": "fs:allow-read",
       "allow": [{ "path": "$APPCACHE/**" }, { "path": "$APPCACHE" }, { "path": "$APPDATA/**" }, { "path": "$APPDATA" }, { "path": "$RESOURCE/**" }, { "path": "$RESOURCE" }, { "path": "$HOME/**" }, { "path": "$HOME" }, { "path": "C:/Users/USER/AppData/Local/com.owa.studio/**" }, { "path": "C:/Users/USER/AppData/Local/com.owa.studio" }, { "path": "C:/**" }, { "path": "D:/**" }, { "path": "E:/**" }, { "path": "F:/**" }, { "path": "G:/**" }, { "path": "H:/**" }, { "path": "I:/**" }, { "path": "**" }]
     },
