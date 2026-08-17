@@ -589,7 +589,7 @@ interface AppContextType extends AppState {
   setMusicProgress: (progress: number) => void;
   setShuffleMode: (mode: boolean) => void;
   setRepeatMode: (mode: 'none' | 'all' | 'one') => void;
-  setMusicQueue: (queue: string[]) => void;
+  setMusicQueue: (queue: string[] | ((prev: string[]) => string[])) => void;
   setQueueSource: (source: { pool: string[]; name?: string } | null) => void;
   clearCurrentTrack: () => void;
   clearAllMusicData: () => void;

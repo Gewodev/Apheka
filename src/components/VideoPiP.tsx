@@ -80,6 +80,19 @@ function VideoPiPInner({ url, title, onClose, autoplay = false, onPlayingChange,
 
   useEffect(() => { urlRef.current = url; titleRef.current = title; }, [url, title]);
 
+  // La cola "después de esta canción" se lee por REF dentro del onStateChange del
+  // player (creado una sola vez por URL): sin ref, la closure quedaría STALE y al
+  // terminar el video no encontraría la canción encolada mientras reproducía.
+  const pipAfterQueueRef = useRef(pipAfterQueue);
+  const setPipAfterQueueRef = useRef(setPipAfterQueue);
+  const onPipPlayNextRef = useRef(onPipPlayNext);
+
+  useEffect(() => {
+    pipAfterQueueRef.current = pipAfterQueue;
+    setPipAfterQueueRef.current = setPipAfterQueue;
+    onPipPlayNextRef.current = onPipPlayNext;
+  }, [pipAfterQueue, setPipAfterQueue, onPipPlayNext]);
+
   const initialPos = useMemo(() => {
     const d = loadPipStorage();
     const w = Math.max(DEFAULT_W, MINI_W);
@@ -303,11 +316,11 @@ function VideoPiPInner({ url, title, onClose, autoplay = false, onPlayingChange,
               }
               if (e.data === 0) {
                 // ¿Hay una canción programada "después de la actual"? → consumirla
-                const pq = pipAfterQueue ?? [];
+                const pq = pipAfterQueueRef.current ?? [];
                 if (pq.length > 0) {
                   const [next, ...rest] = pq;
-                  setPipAfterQueue?.(rest);
-                  onPipPlayNext?.(next.url, next.title);
+                  setPipAfterQueueRef.current?.(rest);
+                  onPipPlayNextRef.current?.(next.url, next.title);
                   return;
                 }
                 if (!ytList) {

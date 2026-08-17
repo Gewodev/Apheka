@@ -8,6 +8,7 @@
 
 import type { AIToolDefinition } from './aiProvider';
 import { getFetch } from './aiProvider';
+import { fuzzyMatch } from '../fuzzy';
 
 // ─── Stores reales de la app (mismos que usa la UI) ───
 const PLANNER_STORE = 'owa_planner_v3';   // { events: PlanEvent[], classes: [] }
@@ -685,10 +686,13 @@ export const AI_TOOL_DEFINITIONS: AIToolDefinition[] = [
     type: 'function',
     function: {
       name: 'searchYouTubeMusic',
-      description: 'Busca música en internet (YouTube) con el MISMO buscador que usa la app en Música.',
+      description: 'Busca canciones PRIMERO en la biblioteca local de Música de Owa Studio y, si no hay resultados, pregunta al usuario si quiere que la busque y reproduzca en YouTube; tras su confirmación vuelve a llamarla con allowYouTube=true para buscar y reproducir en YouTube. Nunca digas "YouTube Music": di solo "YouTube".',
       parameters: {
         type: 'object',
-        properties: { query: { type: 'string', description: 'Texto a buscar (canción, artista, género)' } },
+        properties: {
+          query: { type: 'string', description: 'Texto a buscar (canción, artista, género)' },
+          allowYouTube: { type: 'boolean', description: 'Solo en true cuando el usuario ya confirmó explícitamente que quiere buscar y reproducir en YouTube (porque la canción no está en su biblioteca local).' },
+        },
         required: ['query'],
       },
     },
@@ -826,11 +830,27 @@ export const AI_TOOL_DEFINITIONS: AIToolDefinition[] = [
     type: 'function',
     function: {
       name: 'webSearch',
-      description: 'Busca en TODO internet con investigación profunda en vivo (DuckDuckGo, Mojeek, Bing, Wikipedia), LEE el contenido de los artículos más relevantes (contenido extraído como Claude/Perplexity) y devuelve resultados con extractos reales para responder con datos actuales, noticias, tutoriales y fuentes oficiales.',
+      description: 'Busca en TODO internet con investigación profunda en vivo (DuckDuckGo, Mojeek, Bing, Wikipedia), LEE el contenido de los artículos más relevantes (contenido extraído como Claude/Perplexity) y devuelve resultados con extractos reales para responder con datos actuales, noticias, tutoriales y fuentes oficiales. IMPORTANTE: la consulta debe ser de 2 a 6 PALABRAS CLAVE, nunca la pregunta completa (ej. "terremotos Perú 2026" en vez de "¿hubo sismos en junio?"); una búsqueda por cada ítem o tema; si el tema es de actualidad sin año, añádele el año actual. No uses webSearch para definiciones atemporales que ya conoces: úsala cuando necesites datos vigentes, verificables o recientes.',
       parameters: {
         type: 'object',
-        properties: { query: { type: 'string', description: 'Concepto o pregunta a buscar' } },
+        properties: { query: { type: 'string', description: '2-6 palabras clave del tema (no la pregunta completa)' } },
         required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'createDiagram',
+      description: 'Genera un DIAGRAMA VECTORIAL REAL en SVG (no una imagen ni una foto): dibuja línea por línea con medidas, coordenadas y ángulos exactos. Úsalo para figuras geométricas con sus medidas (triángulos, círculos, polígonos), gráficas de funciones, diagramas de física, líneas de tiempo, mapas conceptuales, diagramas de flujo y diagramas de bases de datos. REGLAS OBLIGATORIAS DEL SVG: (1) un solo <svg> con width="100%" y viewBox="0 0 W H", donde H se calcula DESPUÉS de colocar todo el contenido (el punto más bajo de todas las figuras y textos + margen de 16); (2) NUNCA coordenadas negativas; (3) el <text> no salta de línea solo: cada línea necesita su propio <tspan x="..." dy="1.2em">; (4) verifica que el texto quepa en su caja (N caracteres × (tamaño × 0.6) px); (5) evita líneas/flechas que crucen cajas; (6) usa variables CSS (--d-bg, --d-fg, --d-mut, --d-line, --d-acc, --d-acc2) en vez de colores fijos para que se adapte a modo claro/oscuro; (7) role="img" + <title> + <desc> como primeros hijos; (8) sin comentarios <!-- -->. Después de mostrarlo, continúa tu respuesta con texto que explique el concepto SIN repetir los números que el diagrama ya muestra.',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'Título corto del diagrama (aparece en la tarjeta)' },
+          widget_code: { type: 'string', description: 'Código SVG completo: un único elemento <svg> raíz con su contenido vectorial' },
+          loading_messages: { type: 'array', items: { type: 'string' }, description: '1-4 mensajes cortos de carga mostrados mientras se genera el diagrama' },
+        },
+        required: ['title', 'widget_code'],
       },
     },
   },
@@ -1133,7 +1153,7 @@ export interface AppContextActions {
   currentTrackId: string | null;
   isPlayingMusic: boolean;
   musicQueue: string[];
-  setMusicQueue: (q: string[]) => void;
+  setMusicQueue: (q: string[] | ((prev: string[]) => string[])) => void;
   queueSource: { pool: string[]; name?: string } | null;
   setQueueSource: (s: { pool: string[]; name?: string } | null) => void;
   shuffleMode: boolean;
@@ -1150,6 +1170,8 @@ export interface AppContextActions {
   deleteTrack?: (id: string) => void;
   musicVolume: number;
   searchYouTubeMusic?: (query: string) => Promise<{ videoId: string; title: string; channel: string; thumbnail: string }[]>;
+  pipUrl?: string | null;
+  setPipUrl?: (url: string | null, title?: string, autoplay?: boolean) => void;
   // Planner sessions
   plannedSessions: any[];
   addPlannedSession: (session: any) => void;
@@ -1180,28 +1202,35 @@ export interface AppContextActions {
 
 // ─── Helpers de búsqueda por ID/título ───
 
+// Caché de la última búsqueda de YouTube (la usa addYouTubeTrack para resolver el videoId)
+let lastYouTubeResults: any[] = [];
+
+// Avisa a las vistas del Planificador/Inicio de cambios externos en owa_planner_v3
+const notifyPlannerChanged = () => {
+  try { window.dispatchEvent(new CustomEvent('owa-planner-external-change')); } catch { /* sin window */ }
+};
+
 function findTask(ctx: AppContextActions, ref: string) {
   return ctx.tasks.find(t => t.id === ref) ||
-    ctx.tasks.find(t => t.title?.toLowerCase().includes(ref.toLowerCase()));
+    ctx.tasks.find(t => fuzzyMatch(t.title || '', ref));
 }
 function findNote(ctx: AppContextActions, ref: string) {
   return ctx.notes.find(n => n.id === ref) ||
-    ctx.notes.find(n => n.title?.toLowerCase().includes(ref.toLowerCase()));
+    ctx.notes.find(n => fuzzyMatch(n.title || '', ref));
 }
 function findCourse(ctx: AppContextActions, name: string) {
   const q = (name || '').toLowerCase();
   return ctx.courses.find(c => c.name?.toLowerCase() === q) ||
-    ctx.courses.find(c => c.name?.toLowerCase().includes(q));
+    ctx.courses.find(c => fuzzyMatch(c.name || '', q));
 }
 function findTrack(ctx: AppContextActions, name: string) {
   const q = (name || '').toLowerCase();
-  return ctx.tracks.find(t => t.title?.toLowerCase().includes(q)) ||
-    ctx.tracks.find(t => t.artist?.toLowerCase().includes(q));
+  return ctx.tracks.find(t => fuzzyMatch(`${t.title || ''} ${t.artist || ''}`, q));
 }
 function findHabit(ctx: AppContextActions, name: string) {
   const q = (name || '').toLowerCase();
   return ctx.habits.find(h => h.name?.toLowerCase() === q) ||
-    ctx.habits.find(h => h.name?.toLowerCase().includes(q));
+    ctx.habits.find(h => fuzzyMatch(h.name || '', q));
 }
 const stripHtml = (s: string) => (s || '').replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim();
 
@@ -1215,18 +1244,35 @@ export async function executeToolCall(
   ctx: AppContextActions,
 ): Promise<ToolExecutionResult> {
   let args: Record<string, any>;
-  try {
-    args = JSON.parse(argsStr);
-  } catch {
-    return { success: false, message: 'Error parseando argumentos: JSON inválido' };
+  const rawArgs = typeof argsStr === 'string' ? argsStr.trim() : '';
+  if (rawArgs && (rawArgs[0] === '{' || rawArgs[0] === '[')) {
+    try {
+      args = JSON.parse(rawArgs);
+    } catch {
+      // JSON roto del modelo: reparar comas finales, comillas simples y keys sin comillas
+      const fixed = rawArgs
+        .replace(/,\s*([}\]])/g, '$1')
+        .replace(/[\u201C\u201D]/g, '"')
+        .replace(/[\u2018\u2019]/g, "'")
+        .replace(/'/g, '"')
+        .replace(/([{,]\s*)([A-Za-z_$][A-Za-z0-9_$]*)\s*:/g, '$1"$2":');
+      try {
+        args = JSON.parse(fixed);
+      } catch {
+        args = {};
+      }
+    }
+  } else {
+    args = {};
   }
+  if (!args || typeof args !== 'object' || Array.isArray(args)) args = {};
 
   try {
     switch (toolName) {
       // ═══ KNOWLEDGE & WEB SEARCH ═══
       case 'webSearch': {
-        const query = (args.query || '').trim();
-        if (!query) return { success: true, message: 'Se requiere una consulta para buscar. Pregúntame con más detalle.' };
+        const rawQuery = (args.query || '').trim();
+        if (!rawQuery) return { success: true, message: 'Se requiere una consulta para buscar. Pregúntame con más detalle.' };
         const truncate = (s: string, n = 900) => (s.length > n ? s.slice(0, n).trimEnd() + '…' : s);
         const snip = (s: string, n = 160) => {
           const t = (s || '').replace(/\s+/g, ' ').trim();
@@ -1244,139 +1290,177 @@ export async function executeToolCall(
           } catch { return raw; }
         };
 
-        // ── Relevancia: cuántos tokens de la consulta (sin stopwords) aparecen en título/URL/snippet ──
+        // ── INGENIERÍA DE CONSULTAS: la pregunta completa no busca bien ──
+        //    1) destilar 2-6 palabras clave reales (sin stopwords ni palabras de pregunta)
+        //    2) dividir temas múltiples ("X y Y") en sub-consultas independientes
+        //    3) inyectar el año actual si el tema es de actualidad y no lo incluye
+        const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
         const STOP = new Set('el la los las de del en y a al con por para que un una es son se su sus como cual cuando donde qué cuál cómo cuándo dónde quién cuánto the of to in and is are for on with at from what how why when where who which a an it this that i you we they he she not no or but if then'.split(' '));
-        const queryTokens = query.toLowerCase().split(/[^a-z0-9áéíóúñü]+/i).filter((t: string) => t.length > 2 && !STOP.has(t));
-        const scoreResult = (title: string, url: string, snippet: string): number => {
-          if (queryTokens.length === 0) return 1;
+        const QUESTION = new Set('qué que cual cuál cuales cuáles cuándo dónde donde quién cómo porque porqué para qué es son era fueron existe hay significa significado historia definición definiciones mejor mejores ejemplos ejemplo diferencia diferencias entre explicar explicación cuántos cuántas cuánto se puede hacer hace hizo como nuevo novedad novedades últimas últimos'.split(' '));
+        const distill = (q: string): string[] => {
+          const seen = new Set<string>();
+          const toks: string[] = [];
+          for (const t of q.toLowerCase().split(/[^a-z0-9áéíóúñü]+/i)) {
+            const tt = normalize(t);
+            if (tt.length < 3 || STOP.has(tt) || QUESTION.has(tt) || seen.has(tt)) continue;
+            seen.add(tt);
+            toks.push(t);
+            if (toks.length >= 6) break;
+          }
+          return toks;
+        };
+        const subQueries = rawQuery
+          .split(/\s+y\s+|,\s*|\s*;\s*|\s+vs\s+/i)
+          .map((s: string) => s.trim())
+          .filter((s: string) => s.length > 2)
+          .slice(0, 3);
+        const year = new Date().getFullYear();
+        const buildEngineQuery = (q: string): string => {
+          const toks = distill(q);
+          if (toks.length === 0) return q;
+          let eq = toks.join(' ');
+          if (/\b(19|20)\d{2}\b/.test(q)) return eq;
+          if (/\b(actual|últim|recient|hoy|noticia|ahora|este\s*año|nuevo|novedad)\b/i.test(q)) eq += ` ${year}`;
+          return eq;
+        };
+        const globalTokens = distill(rawQuery);
+        const scoreResult = (title: string, url: string, snippet: string, qt: string[]): number => {
+          if (qt.length === 0) return 1;
           const hay = `${title} ${url} ${snippet}`.toLowerCase();
           let hits = 0;
-          for (const t of queryTokens) if (hay.includes(t)) hits++;
-          return hits / queryTokens.length;
+          for (const t of qt) if (hay.includes(t.toLowerCase())) hits++;
+          return hits / qt.length;
         };
+
+        // ── Filtro de contenido basura (redes sociales, marketplaces, agregadores de humo) ──
+        const JUNK_HOST = /(facebook\.com|instagram\.com|tiktok\.com|pinterest\.[a-z]+|amazon\.[a-z]+|amzn\.to|ebay\.[a-z]+|aliexpress\.[a-z]+|walmart\.[a-z]+|mercadolibre\.[a-z]+|twitter\.com|x\.com|snapchat\.com|onlyfans\.com|wattpad\.com|forocoches\.com|burbuja\.info|temu\.com|shein\.com|quora\.com\/es|\.tumblr\.com|blogspot\.com)/i;
 
         const seen = new Set<string>();
         const results: { title: string; url: string; snippet: string; source: string; score: number }[] = [];
-        const addResult = (title: string, url: string, snippet: string, source: string) => {
+        const addResult = (title: string, url: string, snippet: string, source: string, qt: string[] = globalTokens) => {
           if (!title || !url) return;
           const u = cleanUrl(url);
           if (!u || !/^https?:\/\//i.test(u)) return;
+          if (JUNK_HOST.test(u)) return;
           let key = '';
           try {
             const p = new URL(u);
             key = `${p.hostname.replace(/^www\./, '').toLowerCase()}${p.pathname.toLowerCase().replace(/\/+$/, '')}`;
           } catch { return; }
           if (seen.has(key)) return;
-          const score = scoreResult(title, u, snippet);
+          let score = scoreResult(title, u, snippet, qt);
+          if (/\.(gov|edu|gob|int)(\/|$)/i.test(u) || u.includes('wikipedia.org')) score += 0.12;
           if (score < 0.25 && results.length >= 4) return;
           seen.add(key);
-          results.push({ title, url: u, snippet: snip(snippet), source, score });
+          results.push({ title, url: u, snippet: snip(snippet), source, score: Math.min(1.1, score) });
         };
 
-        // 1) DuckDuckGo HTML — resultados reales de la web (2 páginas)
+        // 1-3) Motores de búsqueda: una pasada por cada sub-consulta destilada
+        // UA de navegador (DDG/Bing rechazan el UA por defecto de plugin-http → 202 anti-bot)
+        // y, si el fetch directo falla (CORS en web / bloqueo), reintento vía proxy allorigins
+        const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+        const engineFetch = async (url: string): Promise<Response | null> => {
+          // Timeout por motor (8s directo, 10s proxy): evita que webSearch cuelgue la respuesta
+          try {
+            const ctrl1 = new AbortController();
+            const timer1 = setTimeout(() => ctrl1.abort(), 8000);
+            const r = await f(url, { headers: { 'User-Agent': BROWSER_UA, 'Accept-Language': 'es-ES,es;q=0.9' }, signal: ctrl1.signal });
+            clearTimeout(timer1);
+            if (r.ok) return r;
+          } catch {}
+          try {
+            const ctrl2 = new AbortController();
+            const timer2 = setTimeout(() => ctrl2.abort(), 10000);
+            const proxied = await f(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, { signal: ctrl2.signal });
+            clearTimeout(timer2);
+            if (proxied.ok) return proxied;
+          } catch {}
+          return null;
+        };
         if (typeof DOMParser !== 'undefined') {
-          for (const offset of [0, 30]) {
+          for (const sq of subQueries) {
+            const eq = buildEngineQuery(sq);
+            const qt = distill(sq).length > 0 ? distill(sq) : globalTokens;
+            for (const offset of [0, 30]) {
+              try {
+                const htmlRes = await engineFetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(eq)}&s=${offset}`);
+                if (!htmlRes) break;
+                const doc = new DOMParser().parseFromString(await htmlRes.text(), 'text/html');
+                const nodes = doc.querySelectorAll('.result');
+                for (let i = 0; i < nodes.length; i++) {
+                  const a = nodes[i].querySelector('.result__a');
+                  if (!a) continue;
+                  addResult((a.textContent || '').trim(), (a.getAttribute('href') || '').trim(), (nodes[i].querySelector('.result__snippet')?.textContent || '').trim(), 'Web', qt);
+                }
+              } catch { break; }
+            }
             try {
-              const htmlRes = await f(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}&s=${offset}`);
-              if (!htmlRes.ok) break;
-              const doc = new DOMParser().parseFromString(await htmlRes.text(), 'text/html');
-              const nodes = doc.querySelectorAll('.result');
-              for (let i = 0; i < nodes.length; i++) {
-                const a = nodes[i].querySelector('.result__a');
-                if (!a) continue;
-                const title = (a.textContent || '').trim();
-                const href = (a.getAttribute('href') || '').trim();
-                const snippet = (nodes[i].querySelector('.result__snippet')?.textContent || '').trim();
-                addResult(title, href, snippet, 'Web');
+              const mojRes = await engineFetch(`https://www.mojeek.com/search?q=${encodeURIComponent(eq)}`);
+              if (mojRes) {
+                const doc = new DOMParser().parseFromString(await mojRes.text(), 'text/html');
+                const nodes = doc.querySelectorAll('.ob');
+                for (let i = 0; i < nodes.length; i++) {
+                  const a = nodes[i].querySelector('h2 a');
+                  if (!a) continue;
+                  addResult((a.textContent || '').trim(), (a.getAttribute('href') || '').trim(), (nodes[i].querySelector('.s')?.textContent || '').trim(), 'Web', qt);
+                }
               }
-            } catch { break; }
+            } catch {}
+            try {
+              const bingRes = await engineFetch(`https://www.bing.com/search?q=${encodeURIComponent(eq)}&count=15`);
+              if (bingRes) {
+                const doc = new DOMParser().parseFromString(await bingRes.text(), 'text/html');
+                const nodes = doc.querySelectorAll('li.b_algo');
+                for (let i = 0; i < nodes.length; i++) {
+                  const a = nodes[i].querySelector('h2 a');
+                  if (!a) continue;
+                  const href = (a.getAttribute('href') || '').trim();
+                  if (/bing\.com|microsoft\.com|go\.microsoft/.test(href)) continue;
+                  addResult((a.textContent || '').trim(), href, (nodes[i].querySelector('.b_caption p')?.textContent || '').trim(), 'Bing', qt);
+                }
+              }
+            } catch {}
           }
-        }
-
-        // 2) Mojeek — buscador independiente, HTML limpio y sin consentimientos
-        if (typeof DOMParser !== 'undefined') {
-          try {
-            const mojRes = await f(`https://www.mojeek.com/search?q=${encodeURIComponent(query)}`);
-            if (mojRes.ok) {
-              const doc = new DOMParser().parseFromString(await mojRes.text(), 'text/html');
-              const nodes = doc.querySelectorAll('.ob');
-              for (let i = 0; i < nodes.length; i++) {
-                const a = nodes[i].querySelector('h2 a');
-                if (!a) continue;
-                const title = (a.textContent || '').trim();
-                const href = (a.getAttribute('href') || '').trim();
-                const snippet = (nodes[i].querySelector('.s')?.textContent || '').trim();
-                addResult(title, href, snippet, 'Web');
-              }
-            }
-          } catch {}
-        }
-
-        // 3) Bing — tercera fuente, solo enlaces externos reales (sin basura de redirección)
-        if (typeof DOMParser !== 'undefined') {
-          try {
-            const bingRes = await f(`https://www.bing.com/search?q=${encodeURIComponent(query)}&count=15`);
-            if (bingRes.ok) {
-              const doc = new DOMParser().parseFromString(await bingRes.text(), 'text/html');
-              const nodes = doc.querySelectorAll('li.b_algo');
-              for (let i = 0; i < nodes.length; i++) {
-                const a = nodes[i].querySelector('h2 a');
-                if (!a) continue;
-                const title = (a.textContent || '').trim();
-                const href = (a.getAttribute('href') || '').trim();
-                if (/bing\.com|microsoft\.com|go\.microsoft/.test(href)) continue;
-                const snippet = (nodes[i].querySelector('.b_caption p')?.textContent || '').trim();
-                addResult(title, href, snippet, 'Bing');
-              }
-            }
-          } catch {}
         }
 
         // 4) DuckDuckGo Instant Answer (respuesta breve estructurada)
         let instantAnswer = '';
         try {
-          const ddgRes = await f(`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`);
+          const ddgRes = await f(`https://api.duckduckgo.com/?q=${encodeURIComponent(buildEngineQuery(subQueries[0] || rawQuery))}&format=json&no_html=1&skip_disambig=1`);
           if (ddgRes.ok) {
             const ddgData = await ddgRes.json();
             instantAnswer = ddgData.AbstractText || ddgData.Definition || '';
-            if (ddgData.AbstractURL) addResult(ddgData.Answer || query, ddgData.AbstractURL, instantAnswer, 'Instant Answer');
+            if (ddgData.AbstractURL) addResult(ddgData.Answer || rawQuery, ddgData.AbstractURL, instantAnswer, 'Instant Answer');
           }
         } catch {}
 
-        // 5) Wikipedia directa + búsqueda (entrada enciclopédica fiable)
-        let wikiTitle = '';
-        let wikiUrl = '';
-        let wikiExtract = '';
+        // 5) Wikipedia — SOLO con gate de relevancia: el título debe contener al menos
+        //    una palabra clave destilada (una búsqueda de "terremotos de junio" ya no
+        //    devuelve la biografía de Alan García)
+        let wikiTitle = ''; let wikiUrl = ''; let wikiExtract = '';
         try {
-          const direct = await f(`https://es.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(query)}`);
-          if (direct.ok) {
-            const d = await direct.json();
-            if (d.extract && d.extract.length > 30) {
-              wikiTitle = d.title || query; wikiUrl = d.content_urls?.desktop?.page || ''; wikiExtract = d.extract;
-            }
-          }
-        } catch {}
-        if (!wikiExtract) {
-          try {
-            const sr = await f(`https://es.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&srlimit=1`);
-            if (sr.ok) {
-              const sd = await sr.json();
-              const top = sd?.query?.search?.[0];
-              if (top?.title) {
-                const sr2 = await f(`https://es.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(top.title)}`);
-                if (sr2.ok) {
-                  const d = await sr2.json();
-                  if (d.extract && d.extract.length > 30) {
-                    wikiTitle = d.title; wikiUrl = d.content_urls?.desktop?.page || ''; wikiExtract = d.extract;
-                  }
-                }
+          const sr = await f(`https://es.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(buildEngineQuery(subQueries[0] || rawQuery))}&format=json&srlimit=4`);
+          if (sr.ok) {
+            const sd = await sr.json();
+            const candidates = (sd?.query?.search || []).slice(0, 4);
+            for (const top of candidates) {
+              if (!top?.title) continue;
+              const tNorm = normalize(top.title);
+              const pass = globalTokens.length === 0 || globalTokens.some((t: string) => tNorm.includes(normalize(t)));
+              if (!pass) continue;
+              const sr2 = await f(`https://es.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(top.title)}`);
+              if (!sr2.ok) continue;
+              const d = await sr2.json();
+              if (d.extract && d.extract.length > 30) {
+                wikiTitle = d.title; wikiUrl = d.content_urls?.desktop?.page || ''; wikiExtract = d.extract;
+                break;
               }
             }
-          } catch {}
-        }
+          }
+        } catch {}
         if (wikiUrl) addResult(`Wikipedia — ${wikiTitle}`, wikiUrl, wikiExtract, 'Wikipedia');
 
-        // Ordenar por relevancia real (tokens de la consulta presentes en el resultado)
+        // Ordenar por relevancia real (tokens destilados presentes en el resultado)
         results.sort((a, b) => b.score - a.score);
         const shown = results.slice(0, 40);
 
@@ -1390,9 +1474,13 @@ export async function executeToolCall(
             try {
               const ac = new AbortController();
               const timer = setTimeout(() => ac.abort(), 6000);
-              const res = await f(r.url, { signal: ac.signal });
-              clearTimeout(timer);
-              if (!res.ok) return;
+              let res: Response | null = null;
+              try {
+                res = await f(r.url, { signal: ac.signal, headers: { 'User-Agent': BROWSER_UA } });
+              } catch {
+                try { res = await f(`https://api.allorigins.win/raw?url=${encodeURIComponent(r.url)}`); } catch { res = null; }
+              } finally { clearTimeout(timer); }
+              if (!res || !res.ok) return;
               const html = await res.text();
               if (html.length > 3_000_000) return;
               const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -1419,21 +1507,112 @@ export async function executeToolCall(
         ).join('\n');
         const instantBlock = instantAnswer ? `Respuesta breve: ${truncate(instantAnswer)}\n\n` : '';
         const digestBlock = digests.length
-          ? `\n\n📰 CONTENIDO EXTRAÍDO DE LOS ARTÍCULOS (${digests.length} páginas leídas en vivo — úsalo para responder con datos reales):\n${digests.map((d, i) => `${i + 1}. ${d.title} [${d.host}]\n   ${truncate(d.excerpt, 420)}`).join('\n\n')}`
+          ? `\n\nCONTENIDO EXTRAÍDO DE LOS ARTÍCULOS (${digests.length} páginas leídas en vivo — úsalo para responder con datos reales):\n${digests.map((d, i) => `${i + 1}. ${d.title} [${d.host}]\n   ${truncate(d.excerpt, 420)}`).join('\n\n')}`
           : '';
         const more = results.length > shown.length ? `\n… y ${results.length - shown.length} resultados más en la lista completa.` : '';
         const sources = shown.slice(0, 8).map(r => r.url).join(' | ');
         if (results.length > 0) {
           return {
             success: true,
-            message: `🔎 ${results.length} resultados relevantes para "${query}" (en vivo):\n\n${instantBlock}${webLines}${more}${digestBlock}\n\nFuentes destacadas: ${sources}`,
+            message: `${results.length} resultados relevantes para "${rawQuery}" (en vivo):\n\n${instantBlock}${webLines}${more}${digestBlock}\n\nFuentes destacadas: ${sources}`,
             data: { results: shown.map(({ score: _s, ...r }) => r), instantAnswer, digests },
           };
         }
         return {
           success: true,
-          message: `No hay conexión con los buscadores en este momento para "${query}". Continuo con mi conocimiento propio sobre el tema.`,
+          message: `No hay conexión con los buscadores en este momento para "${rawQuery}". Continuo con mi conocimiento propio sobre el tema.`,
           data: { offline: true },
+        };
+      }
+
+      case 'createDiagram': {
+        const title = String(args.title || 'Diagrama').slice(0, 80);
+        const code = String(args.widget_code || '').trim();
+        if (!code) return { success: false, message: 'No se recibió el código vectorial del diagrama.' };
+        let valid = true;
+        let reason = '';
+        if (typeof DOMParser !== 'undefined') {
+          try {
+            const doc = new DOMParser().parseFromString(code, 'image/svg+xml');
+            if (doc.querySelector('parsererror')) {
+              valid = false; reason = 'el SVG tiene errores de parseo';
+            } else {
+              const svgs = doc.querySelectorAll('svg');
+              if (svgs.length !== 1) { valid = false; reason = 'debe haber exactamente un elemento <svg> raíz'; }
+              else if (code.length > 80000) { valid = false; reason = 'el diagrama excede el tamaño máximo'; }
+            }
+          } catch { valid = false; reason = 'no se pudo validar el SVG'; }
+        } else if (!(code.includes('<svg') && code.trim().endsWith('</svg>'))) {
+          valid = false; reason = 'no es un SVG válido';
+        }
+        if (!valid) {
+          return { success: true, message: `No pude renderizar el diagrama "${title}" (${reason}). Explícalo con texto o intenta de nuevo con un SVG válido.` };
+        }
+        return {
+          success: true,
+          message: `Diagrama vectorial "${title}" renderizado en el chat. Continúa tu explicación sin repetir lo que el diagrama ya muestra.`,
+          data: {
+            diagram: {
+              title,
+              code,
+              loading: Array.isArray(args.loading_messages) ? args.loading_messages.slice(0, 4) : [],
+            },
+          },
+        };
+      }
+
+      case 'readWebPage': {
+        const rawUrl = String(args.url || '').trim();
+        if (!rawUrl) return { success: false, message: 'Se requiere una URL para leer la página.' };
+        let target = rawUrl;
+        if (!/^https?:\/\//i.test(target)) target = 'https://' + target;
+        const ff = await getFetch();
+        const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+        const fetchPage = async (u: string, ms: number): Promise<Response> => {
+          const ctrl = new AbortController();
+          const timer = setTimeout(() => ctrl.abort(), ms);
+          try {
+            const r = await ff(u, { headers: { 'User-Agent': UA, 'Accept-Language': 'es-ES,es;q=0.9' }, signal: ctrl.signal });
+            clearTimeout(timer);
+            return r;
+          } catch (e) { clearTimeout(timer); throw e; }
+        };
+        let html = '';
+        try {
+          const r = await fetchPage(target, 6000);
+          html = await r.text();
+        } catch {
+          try {
+            const r = await fetchPage(`https://api.allorigins.win/raw?url=${encodeURIComponent(target)}`, 10000);
+            html = await r.text();
+          } catch {
+            return { success: false, message: `No se pudo leer "${rawUrl}" (sin conexión o bloqueada).` };
+          }
+        }
+        if (html.length > 3_000_000) html = html.slice(0, 3_000_000);
+        let text = '';
+        if (typeof DOMParser !== 'undefined') {
+          try {
+            const doc = new DOMParser().parseFromString(html, 'text/html');
+            doc.querySelectorAll('script,style,nav,header,footer,aside,form,iframe,svg,canvas,.ads,.advertisement,ins').forEach(el => el.remove());
+            const main = doc.querySelector('article,main,[role="main"],.content,.article,.post,.entry-content') || doc.body;
+            const paragraphs: string[] = [];
+            (main.querySelectorAll('p') || []).forEach(p => {
+              const t = (p.textContent || '').replace(/\s+/g, ' ').trim();
+              if (t.length > 80) paragraphs.push(t);
+            });
+            text = paragraphs.join('\n\n');
+            if (!text) text = (main.textContent || '').replace(/\s+/g, ' ').trim();
+          } catch {
+            text = html.replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim();
+          }
+        } else {
+          text = html.replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim();
+        }
+        if (!text) return { success: false, message: `La página "${rawUrl}" no tiene contenido legible.` };
+        return {
+          success: true,
+          message: `Contenido extraído de ${rawUrl}:\n\n${text.slice(0, 4000)}${text.length > 4000 ? '…' : ''}`,
         };
       }
 
@@ -1442,7 +1621,7 @@ export async function executeToolCall(
         if (!note) return { success: false, message: `No se encontró ninguna nota con "${args.noteIdOrTitle}"` };
         return {
           success: true,
-          message: `📖 Nota "${note.title || 'Sin título'}" (${note.course || 'General'}):\n\n${stripHtml(note.content).slice(0, 1500)}`,
+          message: `Nota "${note.title || 'Sin título'}" (${note.course || 'General'}):\n\n${stripHtml(note.content).slice(0, 1500)}`,
           data: { id: note.id, title: note.title, course: note.course, content: note.content },
         };
       }
@@ -1509,7 +1688,7 @@ export async function executeToolCall(
         const task = findTask(ctx, args.taskId);
         if (!task) return { success: false, message: `Tarea no encontrada` };
         ctx.updateTask(task.id, { status: 'completado', completedAt: new Date().toISOString() });
-        return { success: true, message: `Tarea "${task.title}" completada ✓` };
+        return { success: true, message: `Tarea "${task.title}" completada` };
       }
 
       case 'toggleTaskStatus': {
@@ -1517,11 +1696,11 @@ export async function executeToolCall(
         if (!task) return { success: false, message: `Tarea no encontrada: ${args.taskId}` };
         if (args.status) {
           ctx.updateTask(task.id, { status: args.status, completedAt: args.status === 'completado' ? new Date().toISOString() : undefined });
-          return { success: true, message: `Tarea "${task.title}" → ${args.status === 'completado' ? 'completada ✓' : args.status}` };
+          return { success: true, message: `Tarea "${task.title}" → ${args.status === 'completado' ? 'completada' : args.status}` };
         }
         const next = task.status === 'inicio' ? 'progreso' : task.status === 'progreso' ? 'completado' : 'inicio';
         ctx.updateTask(task.id, { status: next, completedAt: next === 'completado' ? new Date().toISOString() : undefined });
-        return { success: true, message: `Tarea "${task.title}" → ${next === 'completado' ? 'completada ✓' : next}` };
+        return { success: true, message: `Tarea "${task.title}" → ${next === 'completado' ? 'completada' : next}` };
       }
 
       case 'listTasks': {
@@ -1596,7 +1775,7 @@ export async function executeToolCall(
       case 'listNotes': {
         let filtered = ctx.notes.filter(n => !n.deletedAt);
         if (args.course) filtered = filtered.filter(n => n.course?.toLowerCase().includes(args.course.toLowerCase()));
-        const summary = filtered.slice(0, 20).map(n => `• "${n.title || '(sin título)'}" — ${n.course}${n.isPinned ? ' ⭐' : ''}`).join('\n');
+        const summary = filtered.slice(0, 20).map(n => `• "${n.title || '(sin título)'}" — ${n.course}${n.isPinned ? ' (destacada)' : ''}`).join('\n');
         return {
           success: true,
           message: `${filtered.length} nota(s):\n${summary}`,
@@ -1716,7 +1895,7 @@ export async function executeToolCall(
         const s = ctx.plannedSessions.find(x => x.id === args.sessionId);
         if (!s) return { success: false, message: `Sesión no encontrada: ${args.sessionId}` };
         ctx.updatePlannedSession(s.id, { completed: args.completed !== false });
-        return { success: true, message: `Sesión "${s.title}" ${args.completed === false ? 'desmarcada' : 'completada ✓'}` };
+        return { success: true, message: `Sesión "${s.title}" ${args.completed === false ? 'desmarcada' : 'completada'}` };
       }
 
       case 'listPlannedSessions': {
@@ -1724,7 +1903,7 @@ export async function executeToolCall(
         const sessions = ctx.plannedSessions.filter(s => s.date === date);
         if (sessions.length === 0) return { success: true, message: `No hay sesiones planificadas para ${date}` };
         const summary = sessions.map(s =>
-          `• "${s.title}" (${s.durationMinutes}min, ${s.type}${s.completed ? ' ✓' : ''})`
+          `• "${s.title}" (${s.durationMinutes}min, ${s.type})`
         ).join('\n');
         return { success: true, message: `Sesiones para ${date}:\n${summary}`, data: sessions };
       }
@@ -1752,6 +1931,7 @@ export async function executeToolCall(
         if (!ev.title) return { success: false, message: 'El título del evento es obligatorio' };
         store.events.push(ev);
         savePlanner(store.events, store.classes);
+        notifyPlannerChanged();
         ctx.setPlanEvents((prev: any[]) => [...prev, {
           id: ev.id, title: ev.title, description: ev.description || '', date: ev.date,
           startTime: ev.startTime, endTime: ev.endTime, allDay, color: ev.color,
@@ -1780,6 +1960,7 @@ export async function executeToolCall(
         if (args.description !== undefined) ev.description = args.description || undefined;
         if (args.color !== undefined) ev.color = String(args.color);
         savePlanner(store.events, store.classes);
+        notifyPlannerChanged();
         ctx.setPlanEvents((prev: any[]) => prev.map(p => p.id === ev.id ? { ...p, title: ev.title, description: ev.description || '', date: ev.date, startTime: ev.startTime, endTime: ev.endTime, allDay: ev.allDay, color: ev.color } : p));
         ctx.addNotification?.(`Evento actualizado: ${ev.title}`, 'success');
         return { success: true, message: `Evento "${ev.title}" actualizado` };
@@ -1792,10 +1973,11 @@ export async function executeToolCall(
         if (!ev) return { success: false, message: `Evento no encontrado: ${args.eventIdOrTitle}` };
         store.events = store.events.filter(e => e.id !== ev.id);
         savePlanner(store.events, store.classes);
+        notifyPlannerChanged();
         if (readGoal() === ev.id) writeGoal(null);
         ctx.setPlanEvents((prev: any[]) => prev.filter(p => p.id !== ev.id));
         ctx.addNotification?.(`Evento eliminado: ${ev.title}`, 'info');
-        return { success: true, message: `Evento "${ev.title}" eliminado${readGoal() === ev.id ? '' : ''}` };
+        return { success: true, message: `Evento "${ev.title}" eliminado` };
       }
 
       case 'listEvents': {
@@ -1807,7 +1989,7 @@ export async function executeToolCall(
         if (args.query) evs = evs.filter(e => e.title?.toLowerCase().includes(String(args.query).toLowerCase()));
         evs.sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime));
         const summary = evs.slice(0, 15).map(e =>
-          `• ${e.date} ${e.allDay ? '(todo el día)' : `${e.startTime}-${e.endTime}`} — "${e.title}"${readGoal() === e.id ? ' ⭐ (meta en Inicio)' : ''}`
+          `• ${e.date} ${e.allDay ? '(todo el día)' : `${e.startTime}-${e.endTime}`} — "${e.title}"${readGoal() === e.id ? ' (meta en Inicio)' : ''}`
         ).join('\n');
         return {
           success: true,
@@ -1822,8 +2004,9 @@ export async function executeToolCall(
           store.events.find(e => e.title?.toLowerCase().includes((args.eventIdOrTitle || '').toLowerCase()));
         if (!ev) return { success: false, message: `Evento no encontrado: ${args.eventIdOrTitle}. Crea primero el evento.` };
         writeGoal(ev.id);
+        notifyPlannerChanged();
         ctx.addNotification?.(`"${ev.title}" anclado como meta en Inicio`, 'success');
-        return { success: true, message: `"${ev.title}" anclado como Meta planificada en Inicio ⭐` };
+        return { success: true, message: `"${ev.title}" anclado como Meta planificada en Inicio` };
       }
 
       // ═══ HABITS ═══
@@ -1841,7 +2024,7 @@ export async function executeToolCall(
           return { success: true, message: `El hábito "${habit.name}" ya está completado hoy` };
         }
         ctx.updateHabit(habit.id, { completedOn: [...(habit.completedOn || []), today] });
-        return { success: true, message: `Hábito "${habit.name}" completado hoy ✓` };
+        return { success: true, message: `Hábito "${habit.name}" completado hoy` };
       }
 
       case 'uncompleteHabit': {
@@ -1863,7 +2046,7 @@ export async function executeToolCall(
             if (on.includes(iso)) streak++; else break;
             d.setDate(d.getDate() - 1);
           }
-          return `• "${h.name}" — hoy: ${on.includes(today) ? '✓' : '—'} · racha: ${streak}d`;
+          return `• "${h.name}" — hoy: ${on.includes(today) ? 'sí' : 'no'} · racha: ${streak}d`;
         }).join('\n');
         return { success: true, message: `${ctx.habits.length} hábito(s):\n${summary}`, data: ctx.habits };
       }
@@ -1893,7 +2076,7 @@ export async function executeToolCall(
       case 'pauseTimer': {
         if (ctx.isTimerActive) {
           ctx.toggleTimer();
-          return { success: true, message: 'Timer pausado ⏸' };
+          return { success: true, message: 'Timer pausado' };
         }
         return { success: true, message: 'El timer ya está pausado' };
       }
@@ -1901,7 +2084,7 @@ export async function executeToolCall(
       case 'resumeTimer': {
         if (!ctx.isTimerActive) {
           ctx.toggleTimer();
-          return { success: true, message: 'Timer reanudado ▶' };
+          return { success: true, message: 'Timer reanudado' };
         }
         return { success: true, message: 'El timer ya está en marcha' };
       }
@@ -1912,7 +2095,7 @@ export async function executeToolCall(
         const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
         return {
           success: true,
-          message: `⏱ Timer: ${ctx.isTimerActive ? (ctx.isRest ? 'en descanso' : 'en marcha') : 'pausado'}\n• Tipo: ${ctx.sessionType}\n• Transcurrido: ${fmt(ctx.sessionTime)}\n• Restante: ${fmt(remaining)}\n• Descanso: ${ctx.isRest ? 'sí' : 'no'}`,
+          message: `Timer: ${ctx.isTimerActive ? (ctx.isRest ? 'en descanso' : 'en marcha') : 'pausado'}\n• Tipo: ${ctx.sessionType}\n• Transcurrido: ${fmt(ctx.sessionTime)}\n• Restante: ${fmt(remaining)}\n• Descanso: ${ctx.isRest ? 'sí' : 'no'}`,
         };
       }
 
@@ -1931,16 +2114,18 @@ export async function executeToolCall(
         const mins = Math.floor(ctx.dailyStudyTime / 60);
         return {
           success: true,
-          message: `📊 Estadísticas de hoy:\n• Tiempo estudiado: ${mins} min\n• Pomodoros: ${ctx.pomodoroSessions}\n• Timer activo: ${ctx.isTimerActive ? 'sí' : 'no'}\n• Tipo: ${ctx.sessionType}`,
+          message: `Estadísticas de hoy:\n• Tiempo estudiado: ${mins} min\n• Pomodoros: ${ctx.pomodoroSessions}\n• Timer activo: ${ctx.isTimerActive ? 'sí' : 'no'}\n• Tipo: ${ctx.sessionType}`,
         };
       }
 
       // ═══ MUSIC ═══
       case 'playMusic': {
+        const closePip = () => { if (ctx.pipUrl) ctx.setPipUrl?.(null); };
         if (args.trackName) {
           const q = args.trackName.toLowerCase();
           const inPlaylist = ctx.playlists.find(p => p.name?.toLowerCase().includes(q));
           if (inPlaylist && inPlaylist.trackIds?.length > 0) {
+            closePip();
             ctx.setQueueSource({ pool: [...inPlaylist.trackIds], name: inPlaylist.name });
             ctx.playTrack(inPlaylist.trackIds[0]);
             const t = ctx.tracks.find(tr => tr.id === inPlaylist.trackIds[0]);
@@ -1948,23 +2133,27 @@ export async function executeToolCall(
           }
           const byArtist = ctx.tracks.filter(t => t.artist?.toLowerCase().includes(q));
           if (byArtist.length > 0) {
+            closePip();
             ctx.setQueueSource({ pool: byArtist.map(t => t.id), name: byArtist[0].artist });
             ctx.playTrack(byArtist[0].id);
             return { success: true, message: `Reproduciendo "${byArtist[0].title}" de ${byArtist[0].artist} (${byArtist.length} canciones de este artista)` };
           }
           const match = findTrack(ctx, args.trackName);
           if (match) {
+            closePip();
             ctx.playTrack(match.id);
             return { success: true, message: `Reproduciendo: "${match.title}" — ${match.artist}` };
           }
           return { success: false, message: `No se encontró la canción "${args.trackName}". Tienes ${ctx.tracks.length} canciones en tu biblioteca.` };
         }
         if (ctx.currentTrackId && !ctx.isPlayingMusic) {
+          closePip();
           ctx.toggleMusicPlayback();
           const t = ctx.tracks.find(tr => tr.id === ctx.currentTrackId);
           return { success: true, message: `Reproducción reanudada${t ? `: "${t.title}"` : ''}` };
         }
         if (ctx.tracks.length > 0) {
+          closePip();
           const randomTrack = ctx.tracks[Math.floor(Math.random() * ctx.tracks.length)];
           ctx.playTrack(randomTrack.id);
           return { success: true, message: `Reproduciendo: "${randomTrack.title}" — ${randomTrack.artist}` };
@@ -1973,18 +2162,24 @@ export async function executeToolCall(
       }
 
       case 'pauseMusic': {
+        if (ctx.pipUrl) {
+          ctx.setPipUrl?.(null);
+          return { success: true, message: 'Reproducción del reproductor emergente detenida' };
+        }
         if (ctx.isPlayingMusic) {
           ctx.toggleMusicPlayback();
-          return { success: true, message: 'Música pausada ⏸' };
+          return { success: true, message: 'Música pausada' };
         }
         return { success: true, message: 'La música ya está pausada' };
       }
 
       case 'nextTrack': {
+        if (ctx.pipUrl) ctx.setPipUrl?.(null);
         if (ctx.musicQueue.length > 0) {
-          ctx.setMusicQueue(ctx.musicQueue.slice(1));
-          ctx.playTrack(ctx.musicQueue[0]);
-          const t = ctx.tracks.find(tr => tr.id === ctx.musicQueue[0]);
+          const next = ctx.musicQueue[0];
+          ctx.setMusicQueue(prev => prev.slice(1));
+          ctx.playTrack(next);
+          const t = ctx.tracks.find(tr => tr.id === next);
           return { success: true, message: `Siguiente: "${t?.title || 'desconocida'}"` };
         }
         const pool = ctx.queueSource?.pool ?? ctx.tracks.map(t => t.id);
@@ -2006,6 +2201,7 @@ export async function executeToolCall(
       }
 
       case 'previousTrack': {
+        if (ctx.pipUrl) ctx.setPipUrl?.(null);
         const pool = ctx.queueSource?.pool ?? ctx.tracks.map(t => t.id);
         const cur = ctx.currentTrackId;
         if (cur) {
@@ -2031,7 +2227,7 @@ export async function executeToolCall(
       case 'searchTracks': {
         const query = (args.query || '').toLowerCase();
         const results = ctx.tracks
-          .filter(t => t.title?.toLowerCase().includes(query) || t.artist?.toLowerCase().includes(query))
+          .filter(t => fuzzyMatch(`${t.title || ''} ${t.artist || ''}`, query))
           .slice(0, 10);
         if (results.length === 0) return { success: true, message: `No se encontraron canciones con "${args.query}" en la biblioteca` };
         const summary = results.map(t => `• "${t.title}" — ${t.artist}`).join('\n');
@@ -2039,31 +2235,53 @@ export async function executeToolCall(
       }
 
       case 'searchYouTubeMusic': {
-        if (!ctx.searchYouTubeMusic) return { success: false, message: 'Búsqueda de YouTube no disponible' };
         const query = (args.query || '').trim();
         if (!query) return { success: false, message: 'Indica qué música buscar' };
+        // 1) SIEMPRE primero la biblioteca local de Música (búsqueda difusa, tolerante a erratas)
+        const local = ctx.tracks
+          .filter(t => fuzzyMatch(`${t.title || ''} ${t.artist || ''}`, query))
+          .slice(0, 10);
+        if (local.length > 0) {
+          const summary = local.map(t => `• "${t.title}" — ${t.artist}`).join('\n');
+          return {
+            success: true,
+            message: `Encontré en tu biblioteca local:\n${summary}\n\nUsa playMusic para reproducirla (ej. playMusic con trackName "${local[0].title}").`,
+            data: { source: 'local', tracks: local.map(t => ({ id: t.id, title: t.title, artist: t.artist })) },
+          };
+        }
+        // 2) Sin resultados locales: pedir confirmación ANTES de buscar en YouTube
+        if (!args.allowYouTube) {
+          return {
+            success: true,
+            message: `"${query}" no está en tu biblioteca local. Pregunta al usuario si quiere que la busque y reproduzca en YouTube; si acepta, llama de nuevo a searchYouTubeMusic con allowYouTube: true.`,
+            data: { source: 'none', askYouTube: true },
+          };
+        }
+        // 3) Confirmado: buscar en YouTube y REPRODUCIR SOLO EN EL EMERGENTE
+        //    (petición del usuario: la canción de internet NO se agrega a la biblioteca
+        //    ni se muestra en el reproductor general; si quiere guardarla usa addYouTubeTrack)
+        if (!ctx.searchYouTubeMusic) return { success: false, message: 'Búsqueda de YouTube no disponible' };
         const found = await ctx.searchYouTubeMusic(query);
-        if (!found || found.length === 0) return { success: true, message: `No se encontraron resultados de "${query}" en YouTube` };
-        const list = found.slice(0, 5).map((r, i) => `${i + 1}. "${r.title}" — ${r.channel} (videoId: ${r.videoId})`).join('\n');
+        lastYouTubeResults = found;
+        if (!found || found.length === 0) return { success: true, message: `No encontré "${query}" en YouTube tampoco` };
+        const top = found[0];
+        if (ctx.isPlayingMusic) ctx.toggleMusicPlayback();
+        ctx.setPipUrl?.(`https://www.youtube.com/watch?v=${top.videoId}`, `${top.title} — ${top.channel}`.trim(), true);
         return {
           success: true,
-          message: `🎵 Resultados de YouTube para "${query}":\n${list}\n\nUsa addYouTubeTrack con el videoId para añadirla a la biblioteca.`,
-          data: found,
+          message: `Reproduciendo "${top.title}" — ${top.channel} desde YouTube en el reproductor emergente (sin agregarla a tu biblioteca).`,
+          data: { source: 'youtube', pip: { videoId: top.videoId, title: top.title, channel: top.channel } },
         };
       }
 
       case 'addYouTubeTrack': {
         const videoId = String(args.videoId || '').trim();
         if (!videoId) return { success: false, message: 'Falta el videoId' };
-        if (!ctx.searchYouTubeMusic) return { success: false, message: 'Búsqueda de YouTube no disponible' };
-        const found = await ctx.searchYouTubeMusic('');
-        // Buscar en el snapshot de la última búsqueda: si no, intentar con el videoId como query no sirve;
-        // mejor: si el videoId ya está como pista, avisamos.
+        // El videoId se resuelve contra la caché de la última búsqueda de YouTube
         const existing = ctx.tracks.find(t => t.url?.includes(videoId));
         if (existing) return { success: false, message: `Esa canción ya está en tu biblioteca: "${existing.title}"` };
-        const results = found && found.length ? found : [];
-        const match = results.find(r => r.videoId === videoId);
-        if (!match) return { success: true, message: 'No se pudo resolver ese videoId (la búsqueda previa ya no está disponible). Pide de nuevo la búsqueda y luego el alta.' };
+        const match = lastYouTubeResults.find(r => r.videoId === videoId);
+        if (!match) return { success: false, message: 'No se pudo resolver ese videoId. Pide de nuevo la búsqueda en YouTube y luego el alta.' };
         ctx.addTrack({
           title: match.title,
           artist: match.channel || 'Artista Desconocido',
@@ -2081,9 +2299,7 @@ export async function executeToolCall(
       case 'addToQueue': {
         const track = findTrack(ctx, args.trackName);
         if (!track) return { success: false, message: `Canción no encontrada: "${args.trackName}"` };
-        if (!ctx.musicQueue.includes(track.id)) {
-          ctx.setMusicQueue([...ctx.musicQueue, track.id]);
-        }
+        ctx.setMusicQueue(prev => (prev.includes(track.id) ? prev : [...prev, track.id]));
         ctx.addNotification?.(`"${track.title}" añadida a la cola`, 'success');
         return { success: true, message: `"${track.title}" añadida a la cola (sonará al terminar la actual)` };
       }
@@ -2137,7 +2353,7 @@ export async function executeToolCall(
         const cur = ctx.tracks.find(t => t.id === ctx.currentTrackId);
         return {
           success: true,
-          message: `🎵 Reproductor:\n• Actual: ${cur ? `"${cur.title}" — ${cur.artist}` : 'ninguna'}\n• Estado: ${ctx.isPlayingMusic ? 'reproduciendo' : 'pausado'}\n• Cola: ${ctx.musicQueue.length} canción(es)\n• Shuffle: ${ctx.shuffleMode ? 'sí' : 'no'}\n• Repeat: ${ctx.repeatMode === 'none' ? 'no' : ctx.repeatMode}\n• Volumen: ${Math.round((ctx.musicVolume || 0) * 100)}%`,
+          message: `Reproductor:\n• Actual: ${cur ? `"${cur.title}" — ${cur.artist}` : 'ninguna'}\n• Estado: ${ctx.isPlayingMusic ? 'reproduciendo' : 'pausado'}\n• Emergente (YouTube): ${ctx.pipUrl ? 'reproduciendo en el reproductor emergente' : 'cerrado'}\n• Cola: ${ctx.musicQueue.length} canción(es)\n• Shuffle: ${ctx.shuffleMode ? 'sí' : 'no'}\n• Repeat: ${ctx.repeatMode === 'none' ? 'no' : ctx.repeatMode}\n• Volumen: ${Math.round((ctx.musicVolume || 0) * 100)}%`,
         };
       }
 
@@ -2169,7 +2385,7 @@ export async function executeToolCall(
         const sessionsToday = ctx.plannedSessions.filter(s => s.date === today && !s.completed);
         return {
           success: true,
-          message: `📋 Estado de Owa Studio:\n• Cursos: ${ctx.courses.length}\n• Tareas pendientes: ${pending.length}\n• Notas: ${ctx.notes.filter(n => !n.deletedAt).length}\n• Eventos próximos (7d): ${upcoming.length}\n• Sesiones de hoy: ${sessionsToday.length}\n• Hábitos: ${ctx.habits.length}\n• Canciones: ${ctx.tracks.length}\n• Música: ${ctx.isPlayingMusic ? 'reproduciendo' : 'detenida'}\n• Timer: ${ctx.isTimerActive ? 'en marcha' : 'pausado'} (${ctx.sessionType})\n• Meta en Inicio: ${readGoal() ? 'sí' : 'no'}`,
+          message: `Estado de Owa Studio:\n• Cursos: ${ctx.courses.length}\n• Tareas pendientes: ${pending.length}\n• Notas: ${ctx.notes.filter(n => !n.deletedAt).length}\n• Eventos próximos (7d): ${upcoming.length}\n• Sesiones de hoy: ${sessionsToday.length}\n• Hábitos: ${ctx.habits.length}\n• Canciones: ${ctx.tracks.length}\n• Música: ${ctx.isPlayingMusic ? 'reproduciendo' : 'detenida'}\n• Timer: ${ctx.isTimerActive ? 'en marcha' : 'pausado'} (${ctx.sessionType})\n• Meta en Inicio: ${readGoal() ? 'sí' : 'no'}`,
         };
       }
 
@@ -2180,7 +2396,7 @@ export async function executeToolCall(
         if (args.artist) list = list.filter(t => t.artist?.toLowerCase().includes(String(args.artist).toLowerCase()));
         if (args.favorite) list = list.filter(t => t.isFavorite);
         if (list.length === 0) return { success: true, message: `No hay canciones${args.artist ? ` de "${args.artist}"` : ''} en la biblioteca` };
-        const summary = list.slice(0, limit).map(t => `• "${t.title}" — ${t.artist}${t.isFavorite ? ' ❤' : ''}`).join('\n');
+        const summary = list.slice(0, limit).map(t => `• "${t.title}" — ${t.artist}${t.isFavorite ? ' (favorita)' : ''}`).join('\n');
         return {
           success: true,
           message: `${list.length} canción(es)${args.artist ? ` de "${args.artist}"` : ''}:\n${summary}`,
@@ -2272,7 +2488,7 @@ export async function executeToolCall(
         const mastered = topics.filter((t: any) => (t.reviewLevel || 0) >= 8).length;
         const inProgress = topics.filter((t: any) => (t.reviewLevel || 0) >= 1 && (t.reviewLevel || 0) < 8).length;
         const lines = [
-          `📚 "${course.name}"`,
+          `"${course.name}"`,
           `• Temas: ${topics.length} (${mastered} dominados, ${inProgress} en estudio)`,
           `• Agrupaciones: ${groups.map((g: any) => g.name).join(', ') || 'ninguna'}`,
           `• Materiales: ${matCount}`,
@@ -2342,22 +2558,22 @@ export async function executeToolCall(
         const tasksToday = ctx.tasks.filter(t => t.status !== 'completado' && t.dueDate === today);
         const habits = ctx.habits;
         const habitsDone = habits.filter(h => (h.completedOn || []).includes(today)).length;
-        const lines = [`📅 Agenda de hoy (${today}):`];
+        const lines = [`Agenda de hoy (${today}):`];
         if (events.length === 0 && sessions.length === 0 && tasksToday.length === 0) lines.push('Sin eventos, sesiones ni tareas para hoy.');
         if (events.length > 0) {
-          lines.push('\n📌 Eventos:');
-          events.forEach(e => lines.push(`  ${e.allDay ? 'Todo el día' : `${e.startTime}–${e.endTime}`} — ${e.title}${readGoal() === e.id ? ' ⭐' : ''}`));
+          lines.push('\nEventos:');
+          events.forEach(e => lines.push(`  ${e.allDay ? 'Todo el día' : `${e.startTime}–${e.endTime}`} — ${e.title}${readGoal() === e.id ? ' (meta)' : ''}`));
         }
         if (sessions.length > 0) {
-          lines.push('\n⏳ Sesiones de estudio:');
+          lines.push('\nSesiones de estudio:');
           sessions.forEach(s => lines.push(`  ${s.startTime || '—'} · ${s.title} (${s.durationMinutes} min)`));
         }
         if (tasksToday.length > 0) {
-          lines.push('\n✅ Tareas con entrega hoy:');
-          tasksToday.forEach(t => lines.push(`  ${t.priority === 'high' ? '⚠' : '·'} ${t.title}`));
+          lines.push('\nTareas con entrega hoy:');
+          tasksToday.forEach(t => lines.push(`  ${t.priority === 'high' ? '!' : '·'} ${t.title}`));
         }
-        lines.push(`\n🔥 Hábitos: ${habitsDone}/${habits.length} completados hoy`);
-        lines.push(`⏱ Estudiado hoy: ${Math.floor(ctx.dailyStudyTime / 60)} min`);
+        lines.push(`Hábitos: ${habitsDone}/${habits.length} completados hoy`);
+        lines.push(`Estudiado hoy: ${Math.floor(ctx.dailyStudyTime / 60)} min`);
         return { success: true, message: lines.join('\n'), data: { events, sessions, tasksToday, habitsDone } };
       }
 
@@ -2369,11 +2585,11 @@ export async function executeToolCall(
         const events = store.events.filter(e => e.date >= from && e.date <= to).sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime));
         const sessions = ctx.plannedSessions.filter(s => s.date >= from && s.date <= to);
         const lines = [
-          `📅 Planificador del ${from} al ${to}:`,
+          `Planificador del ${from} al ${to}:`,
           `• Eventos: ${events.length}`,
           `• Sesiones de estudio: ${sessions.length} (${sessions.filter(s => s.completed).length} completadas)`,
         ];
-        events.slice(0, 12).forEach(e => lines.push(`  ${e.date} — ${e.title}${readGoal() === e.id ? ' ⭐' : ''}`));
+        events.slice(0, 12).forEach(e => lines.push(`  ${e.date} — ${e.title}${readGoal() === e.id ? ' (meta)' : ''}`));
         return { success: true, message: lines.join('\n'), data: { events: events.slice(0, 20), sessions } };
       }
 
@@ -2383,7 +2599,7 @@ export async function executeToolCall(
         const fmt = (sec: number) => `${Math.floor(sec / 60)} min`;
         return {
           success: true,
-          message: `⚙️ Configuración actual:\n• Tema: ${s.theme || 'oscuro'}\n• Pomodoro: ${fmt(s.pomodoroTime || 25 * 60)}\n• Descanso corto: ${fmt(s.shortBreakTime || 5 * 60)}\n• Descanso largo: ${fmt(s.longBreakTime || 15 * 60)}\n• Objetivo cronómetro: ${fmt(s.chronoGoal || 25 * 60)}\n• Enfoque diario: ${s.dailyStudyGoal ? fmt(s.dailyStudyGoal) : '—'}\n• Racha diaria: ${s.dailyStreakGoal ? `${s.dailyStreakGoal} días` : '—'}`,
+          message: `Configuración actual:\n• Tema: ${s.theme || 'oscuro'}\n• Pomodoro: ${fmt(s.pomodoroTime || 25 * 60)}\n• Descanso corto: ${fmt(s.shortBreakTime || 5 * 60)}\n• Descanso largo: ${fmt(s.longBreakTime || 15 * 60)}\n• Objetivo cronómetro: ${fmt(s.chronoGoal || 25 * 60)}\n• Enfoque diario: ${s.dailyStudyGoal ? fmt(s.dailyStudyGoal) : '—'}\n• Racha diaria: ${s.dailyStreakGoal ? `${s.dailyStreakGoal} días` : '—'}`,
         };
       }
 

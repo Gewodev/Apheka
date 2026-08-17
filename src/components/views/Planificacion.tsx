@@ -322,6 +322,21 @@ export default function Planificacion() {
 
   useEffect(() => { const d = loadStore(); setEvents(d.events); setClasses(d.classes); }, []);
 
+  // Refresca en vivo los eventos creados/editados/eliminados por Charvis (owa-planner-external-change)
+  useEffect(() => {
+    const reload = () => {
+      const d = loadStore();
+      setEvents(prev => {
+        const storedIds = new Set(d.events.map(e => e.id));
+        const pending = prev.filter(e => !storedIds.has(e.id));
+        return [...d.events, ...pending];
+      });
+      setClasses(d.classes);
+    };
+    window.addEventListener('owa-planner-external-change', reload);
+    return () => window.removeEventListener('owa-planner-external-change', reload);
+  }, []);
+
   // Registra los eventos del planificador en el contexto para el sync con Google Calendar
   useEffect(() => {
     setPlanEvents(events.map(e => ({

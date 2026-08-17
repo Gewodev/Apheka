@@ -90,9 +90,17 @@ select option:disabled {
   --led-dim: rgba(255, 23, 68, 0.08);
   --led-segment-off: rgba(255, 23, 68, 0.06);
 
-  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.25);
+--shadow-card: 0 4px 24px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.25);
   --shadow-elevated: 0 8px 32px rgba(0, 0, 0, 0.4);
   --shadow-glow: 0 0 24px var(--accent-glow);
+
+  /* ── Variables para DIAGRAMAS VECTORIALES (SVG de Charvis / apuntes) ── */
+  --d-bg: #101016;
+  --d-fg: #f4f4f5;
+  --d-mut: #a1a1aa;
+  --d-line: #3f3f46;
+  --d-acc: var(--accent);
+  --d-acc2: color-mix(in srgb, var(--accent) 55%, #ffffff 45%);
 }
 
 [data-theme='claro'] {
@@ -129,9 +137,16 @@ select option:disabled {
   --led-dim: rgba(225, 29, 72, 0.05);
   --led-segment-off: rgba(225, 29, 72, 0.04);
 
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.08);
+--shadow-card: 0 1px 3px rgba(0, 0, 0, 0.08);
   --shadow-elevated: 0 4px 12px rgba(0, 0, 0, 0.08);
   --shadow-glow: none;
+
+  --d-bg: #f8fafc;
+  --d-fg: #0f172a;
+  --d-mut: #64748b;
+  --d-line: #cbd5e1;
+  --d-acc: #E11D48;
+  --d-acc2: #be123c;
 }
 
 * {

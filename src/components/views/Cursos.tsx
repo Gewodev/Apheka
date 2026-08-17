@@ -1021,6 +1021,9 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
       temp.innerHTML = html;
       const all = temp.querySelectorAll('*');
       for (const el of all) {
+        // Los SVG vectoriales (diagramas de Charvis u otros) se conservan INTEGROS:
+        // sus atributos (viewBox, fill, stroke, d, x, y…) son su contenido.
+        if (el.closest('svg')) continue;
         const st = (el as HTMLElement).style;
         st.removeProperty('background-color'); st.removeProperty('background');
         st.removeProperty('color'); st.removeProperty('font-family'); st.removeProperty('font-size');

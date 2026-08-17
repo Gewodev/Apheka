@@ -6,7 +6,7 @@ import {
   RotateCcw, GripVertical, ChevronDown, ChevronRight, Check,
   Copy, SquareX, Search, MessageSquareText, Undo2,
   Globe, CheckCircle2, XCircle, ExternalLink, Sparkles, Music,
-  CheckSquare, Clock, Calendar, BookOpen
+  CheckSquare, Clock, Calendar, BookOpen, PenLine
 } from 'lucide-react';
 import {
   BRAIN_DROP_MIME, readBrainAnchor, subscribeBrainDrag,
@@ -32,6 +32,15 @@ function formatSpeechTranscription(raw: string): string {
   text = text.replace(/\s+/g, ' ');
 
   text = text.replace(/\s+([.,;:!?])/g, '$1');
+
+  // Horas habladas: "9 30", "9.30", "9:30 h", "10 horas" → formato HH:MM limpio
+  text = text.replace(/\b(\d{1,2})\s*[.:]\s*(\d{2})\s*h\b/gi, '$1:$2');
+  text = text.replace(/\b(\d{1,2})\s+(\d{2})\s*h\b/gi, '$1:$2');
+  text = text.replace(/\b(\d{1,2})[:.](\d{2})\b/g, '$1:$2');
+  text = text.replace(/\b(\d{1,2})\s+(?:h|hrs|horas)\b/gi, '$1:00');
+  text = text.replace(/\b(\d{1,2}):(\d{2})\s+de la mañana\b/gi, '$1:$2 a. m.');
+  text = text.replace(/\b(\d{1,2}):(\d{2})\s+de la tarde\b/gi, '$1:$2 p. m.');
+  text = text.replace(/\b(\d{1,2}):(\d{2})\s+de la noche\b/gi, '$1:$2 p. m.');
 
   const words = text.split(' ');
   const deduped: string[] = [];
@@ -77,17 +86,18 @@ function formatSpeechTranscription(raw: string): string {
 /**
  * Tarjeta interactiva y detallada de ejecución de herramientas estilo Claude/Perplexity.
  */
-// Skills externas visibles como pills en el chat (estilo Perplexity).
-// Las tools internas (notas, música, cursos, agenda…) se ocultan: no son "skills" del agente.
-const VISIBLE_SKILLS = new Set(['webSearch', 'searchYouTubeMusic']);
 
-function ToolExecutionCard({ tc, index }: { tc: { name: string; args: string; result?: string; status: 'pending' | 'success' | 'error' }; index: number }) {
+function sanitizeSvg(code: string): string {
+  return code
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<foreignObject[\s\S]*?<\/foreignObject>/gi, '')
+    .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
+    .replace(/\son[a-z]+\s*=\s*"[^"]*"/gi, '')
+    .replace(/\son[a-z]+\s*=\s*'[^']*'/gi, '');
+}
+
+function ToolExecutionCard({ tc }: { tc: { name: string; args: string; result?: string; status: 'pending' | 'success' | 'error' } }) {
   const [expanded, setExpanded] = useState(true);
-
-  const isSkill = VISIBLE_SKILLS.has(tc.name);
-
-  let parsedArgs: Record<string, any> = {};
-  try { parsedArgs = JSON.parse(tc.args || '{}'); } catch {}
 
   let parsedResult: any = null;
   let resultData: any = null;
@@ -103,61 +113,69 @@ function ToolExecutionCard({ tc, index }: { tc: { name: string; args: string; re
   }
 
   const isWebSearch = tc.name === 'webSearch';
+  const isDiagram = tc.name === 'createDiagram';
   const isMusic = tc.name.toLowerCase().includes('music') || tc.name.toLowerCase().includes('track') || tc.name.toLowerCase().includes('playlist');
   const isTask = tc.name.toLowerCase().includes('task');
   const isTimer = tc.name.toLowerCase().includes('timer');
   const isEvent = tc.name.toLowerCase().includes('event') || tc.name.toLowerCase().includes('agenda');
   const isNote = tc.name.toLowerCase().includes('note');
 
-  let title = `${index + 1}) ${tc.name}`;
+  let title = tc.name;
   let subtitle = 'Se ejecutó en la app';
+  let iconColor = 'var(--text-secondary)';
+  let IconComp = Sparkles;
   if (isWebSearch) {
-    title = `${index + 1}) web_search — motor de búsqueda (snippets en vivo)`;
+    title = 'Búsqueda web';
     subtitle = 'Se buscó en la web';
+    iconColor = 'var(--accent)';
+    IconComp = Globe;
+  } else if (tc.name === 'createDiagram') {
+    title = 'Diagrama vectorial';
+    subtitle = 'Figura generada en el chat';
+    iconColor = 'var(--accent)';
+    IconComp = PenLine;
+  } else if (tc.name === 'searchYouTubeMusic') {
+    title = 'Buscar en YouTube';
+    subtitle = 'Búsqueda y reproducción musical';
+    iconColor = '#ef4444';
+    IconComp = Music;
   } else if (isTask) {
-    title = `${index + 1}) ${tc.name} — gestión de tareas`;
     subtitle = 'Acción en Tareas de Owa';
+    iconColor = '#3b82f6';
+    IconComp = CheckSquare;
   } else if (isMusic) {
-    title = `${index + 1}) ${tc.name} — reproductor musical`;
     subtitle = 'Control de audio de Owa';
+    iconColor = '#ec4899';
+    IconComp = Music;
   } else if (isTimer) {
-    title = `${index + 1}) ${tc.name} — temporizador de estudio`;
     subtitle = 'Control de enfoque';
+    iconColor = '#f59e0b';
+    IconComp = Clock;
   } else if (isEvent) {
-    title = `${index + 1}) ${tc.name} — agenda y planificador`;
     subtitle = 'Planificador de Owa';
+    iconColor = '#8b5cf6';
+    IconComp = Calendar;
   } else if (isNote) {
-    title = `${index + 1}) ${tc.name} — notas y apuntes`;
     subtitle = 'Base de conocimientos';
+    iconColor = '#10b981';
+    IconComp = BookOpen;
   }
 
   const searchResults: Array<{ title: string; url: string; snippet?: string; source?: string }> =
     resultData?.results || [];
   const digests: Array<{ title: string; url: string; excerpt?: string; host?: string }> =
     resultData?.digests || [];
+  const diagram: { title?: string; code?: string; loading?: string[] } | null = resultData?.diagram || null;
 
   return (
     <div style={{ marginTop: 8, marginBottom: 4 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-        <span>{title}</span>
-      </div>
-      <div style={{ fontSize: 9.5, color: 'var(--text-tertiary)', marginBottom: 6 }}>
-        {subtitle}
-      </div>
-
       <div
         style={{
-          background: isSkill
-            ? 'color-mix(in srgb, var(--accent) 5%, rgba(255,255,255,0.03))'
-            : 'rgba(255, 255, 255, 0.03)',
-          border: isSkill
-            ? '1px solid color-mix(in srgb, var(--accent) 45%, transparent)'
-            : '1px solid var(--border-soft)',
+          background: 'rgba(255, 255, 255, 0.03)',
+          border: '1px solid var(--border-soft)',
           borderRadius: 12,
           padding: '10px 12px',
-          boxShadow: isSkill
-            ? '0 4px 16px rgba(0,0,0,0.18), 0 0 0 1px color-mix(in srgb, var(--accent) 10%, transparent)'
-            : '0 4px 16px rgba(0,0,0,0.18)',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
         }}
       >
         <div
@@ -171,37 +189,57 @@ function ToolExecutionCard({ tc, index }: { tc: { name: string; args: string; re
             userSelect: 'none',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
-            {isWebSearch ? (
-              <Globe size={14} style={{ color: 'var(--accent)', flexShrink: 0 }} />
-            ) : isTask ? (
-              <CheckSquare size={14} style={{ color: '#3b82f6', flexShrink: 0 }} />
-            ) : isMusic ? (
-              <Music size={14} style={{ color: '#ec4899', flexShrink: 0 }} />
-            ) : isTimer ? (
-              <Clock size={14} style={{ color: '#f59e0b', flexShrink: 0 }} />
-            ) : isEvent ? (
-              <Calendar size={14} style={{ color: '#8b5cf6', flexShrink: 0 }} />
-            ) : isNote ? (
-              <BookOpen size={14} style={{ color: '#10b981', flexShrink: 0 }} />
-            ) : (
-              <Sparkles size={14} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
-            )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0, flex: 1 }}>
             <span
               style={{
-                fontSize: 12,
-                fontWeight: 500,
-                color: 'var(--text-primary)',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
+                width: 26,
+                height: 26,
+                borderRadius: 8,
+                flexShrink: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: `color-mix(in srgb, ${iconColor} 12%, transparent)`,
+                border: `1px solid color-mix(in srgb, ${iconColor} 28%, transparent)`,
               }}
             >
-              {parsedArgs.query || parsedArgs.title || parsedArgs.trackName || parsedArgs.name || tc.name}
+              <IconComp size={13} style={{ color: iconColor }} />
             </span>
+            <div style={{ minWidth: 0 }}>
+              <div
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: 'var(--text-primary)',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {title}
+              </div>
+              <div
+                style={{
+                  fontSize: 9.5,
+                  color: 'var(--text-tertiary)',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {subtitle}
+              </div>
+            </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexShrink: 0 }}>
+            {tc.status === 'pending' ? (
+              <Loader2 size={12} className="spin" style={{ color: 'var(--text-tertiary)' }} />
+            ) : tc.status === 'success' ? (
+              <Check size={12} style={{ color: '#34d399' }} />
+            ) : (
+              <X size={12} style={{ color: '#ef4444' }} />
+            )}
             {isWebSearch && digests.length > 0 && (
               <span
                 style={{
@@ -344,6 +382,34 @@ function ToolExecutionCard({ tc, index }: { tc: { name: string; args: string; re
                 </div>
               </div>
             )}
+
+            {isDiagram && diagram?.code && (
+              <div style={{ marginTop: 8 }}>
+                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-tertiary)', marginBottom: 5, display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <FileText size={10} />
+                  Diagrama vectorial{diagram.title ? ` · ${diagram.title}` : ''}
+                </div>
+                <div
+                  className="no-scrollbar"
+                  style={{
+                    background: 'var(--bg-deep)',
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: 10,
+                    padding: 14,
+                    overflowX: 'auto',
+                    overflowY: 'auto',
+                    maxHeight: 440,
+                    display: 'flex',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <div
+                    dangerouslySetInnerHTML={{ __html: sanitizeSvg(diagram.code) }}
+                    style={{ minWidth: 0, width: '100%', display: 'flex', justifyContent: 'center' }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -375,60 +441,6 @@ function ToolExecutionCard({ tc, index }: { tc: { name: string; args: string; re
  * Solo se muestran las skills visibles (webSearch, searchYouTubeMusic); las tools
  * internas quedan ocultas de la fila de pills (pero siguen en sus ToolExecutionCard).
  */
-function SkillPill({ tc }: { tc: { name: string; args: string; result?: string; status: 'pending' | 'success' | 'error' } }) {
-  const isWeb = tc.name === 'webSearch';
-  const Icon = isWeb ? Globe : Music;
-  const label = isWeb ? 'Búsqueda web' : 'Buscar en YouTube';
-  const iconColor = isWeb ? 'var(--accent)' : '#ef4444';
-
-  const stateColor =
-    tc.status === 'error' ? '#ef4444' :
-    tc.status === 'success' ? '#34d399' :
-    'var(--text-tertiary)';
-
-  return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 6,
-        padding: '4px 10px 4px 8px',
-        borderRadius: 999,
-        background:
-          tc.status === 'error' ? 'rgba(239,68,68,0.10)' :
-          tc.status === 'success' ? 'rgba(16,185,129,0.08)' :
-          'rgba(255,255,255,0.045)',
-        border: `1px solid ${
-          tc.status === 'error' ? 'rgba(239,68,68,0.35)' :
-          tc.status === 'success' ? 'rgba(16,185,129,0.30)' :
-          'var(--border-soft)'
-        }`,
-        fontSize: 10.5,
-        fontWeight: 500,
-        color: 'var(--text-primary)',
-        transition: 'border-color 140ms, background 140ms, transform 140ms',
-      }}
-      onMouseEnter={e => { e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--accent) 45%, transparent)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
-      onMouseLeave={e => {
-        e.currentTarget.style.borderColor =
-          tc.status === 'error' ? 'rgba(239,68,68,0.35)' :
-          tc.status === 'success' ? 'rgba(16,185,129,0.30)' : 'var(--border-soft)';
-        e.currentTarget.style.transform = 'translateY(0px)';
-      }}
-    >
-      <Icon size={11} style={{ color: iconColor, flexShrink: 0 }} />
-      <span>{label}</span>
-      {tc.status === 'pending' ? (
-        <Loader2 size={10} className="spin" style={{ color: stateColor, flexShrink: 0 }} />
-      ) : tc.status === 'success' ? (
-        <Check size={10} style={{ color: stateColor, flexShrink: 0 }} />
-      ) : (
-        <X size={10} style={{ color: stateColor, flexShrink: 0 }} />
-      )}
-    </div>
-  );
-}
-
 interface AIBrainSidebarProps {
   isOpen: boolean;
   onClose: () => void;
@@ -763,73 +775,81 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
     if (recognitionRef.current) { try { recognitionRef.current.stop(); } catch {} }
   }, []);
 
-  const getContextActions = (): AppContextActions => ({
-    addTask: appCtx.addTask,
-    updateTask: appCtx.updateTask,
-    deleteTask: appCtx.deleteTask,
-    toggleTaskStatus: appCtx.toggleTaskStatus,
-    tasks: appCtx.tasks,
-    addNote: appCtx.addNote,
-    updateNote: appCtx.updateNote,
-    deleteNote: appCtx.deleteNote,
-    restoreNote: appCtx.restoreNote,
-    permanentlyDeleteNote: appCtx.permanentlyDeleteNote,
-    notes: appCtx.notes,
-    addCourse: appCtx.addCourse,
-    updateCourse: appCtx.updateCourse,
-    deleteCourse: appCtx.deleteCourse,
-    courses: appCtx.courses,
-    planEvents: appCtx.planEvents,
-    setPlanEvents: appCtx.setPlanEvents,
-    addHabit: appCtx.addHabit,
-    updateHabit: appCtx.updateHabit,
-    deleteHabit: appCtx.deleteHabit,
-    habits: appCtx.habits,
-    playTrack: appCtx.playTrack,
-    toggleMusicPlayback: appCtx.toggleMusicPlayback,
-    setMusicVolume: appCtx.setMusicVolume,
-    setIsPlayingMusic: appCtx.setIsPlayingMusic,
-    tracks: appCtx.tracks,
-    currentTrackId: appCtx.currentTrackId,
-    isPlayingMusic: appCtx.isPlayingMusic,
-    musicQueue: appCtx.musicQueue,
-    setMusicQueue: appCtx.setMusicQueue,
-    queueSource: appCtx.queueSource,
-    setQueueSource: appCtx.setQueueSource,
-    shuffleMode: appCtx.shuffleMode,
-    setShuffleMode: appCtx.setShuffleMode,
-    repeatMode: appCtx.repeatMode,
-    setRepeatMode: appCtx.setRepeatMode,
-    playlists: appCtx.playlists,
-    addPlaylist: appCtx.addPlaylist,
-    updatePlaylist: appCtx.updatePlaylist,
-    deletePlaylist: appCtx.deletePlaylist,
-    toggleTrackFavorite: appCtx.toggleTrackFavorite,
-    addTrack: appCtx.addTrack,
-    updateTrack: appCtx.updateTrack,
-    deleteTrack: appCtx.deleteTrack,
-    musicVolume: appCtx.musicVolume,
-    searchYouTubeMusic: appCtx.searchYouTubeMusic,
-    plannedSessions: appCtx.plannedSessions,
-    addPlannedSession: appCtx.addPlannedSession,
-    updatePlannedSession: appCtx.updatePlannedSession,
-    isTimerActive: appCtx.isTimerActive,
-    sessionType: appCtx.sessionType,
-    sessionTime: appCtx.sessionTime,
-    dailyStudyTime: appCtx.dailyStudyTime,
-    pomodoroSessions: appCtx.pomodoroSessions,
-    setSessionType: appCtx.setSessionType,
-    toggleTimer: appCtx.toggleTimer,
-    resetTimer: appCtx.resetTimer,
-    setIsTimerActive: appCtx.setIsTimerActive,
-    setSessionTime: appCtx.setSessionTime,
-    isRest: appCtx.isRest,
-    setIsRest: appCtx.setIsRest,
-    setNavigateTo: appCtx.setNavigateTo,
-    settings: appCtx.settings,
-    updateSettings: appCtx.updateSettings,
-    addNotification: appCtx.addNotification,
-  });
+  const appCtxRef = useRef(appCtx);
+  appCtxRef.current = appCtx;
+
+  const getContextActions = (): AppContextActions => {
+    const a = appCtxRef.current;
+    return {
+    addTask: a.addTask,
+    updateTask: a.updateTask,
+    deleteTask: a.deleteTask,
+    toggleTaskStatus: a.toggleTaskStatus,
+    tasks: a.tasks,
+    addNote: a.addNote,
+    updateNote: a.updateNote,
+    deleteNote: a.deleteNote,
+    restoreNote: a.restoreNote,
+    permanentlyDeleteNote: a.permanentlyDeleteNote,
+    notes: a.notes,
+    addCourse: a.addCourse,
+    updateCourse: a.updateCourse,
+    deleteCourse: a.deleteCourse,
+    courses: a.courses,
+    planEvents: a.planEvents,
+    setPlanEvents: a.setPlanEvents,
+    addHabit: a.addHabit,
+    updateHabit: a.updateHabit,
+    deleteHabit: a.deleteHabit,
+    habits: a.habits,
+    playTrack: a.playTrack,
+    toggleMusicPlayback: a.toggleMusicPlayback,
+    setMusicVolume: a.setMusicVolume,
+    setIsPlayingMusic: a.setIsPlayingMusic,
+    tracks: a.tracks,
+    currentTrackId: a.currentTrackId,
+    isPlayingMusic: a.isPlayingMusic,
+    musicQueue: a.musicQueue,
+    setMusicQueue: a.setMusicQueue,
+    queueSource: a.queueSource,
+    setQueueSource: a.setQueueSource,
+    shuffleMode: a.shuffleMode,
+    setShuffleMode: a.setShuffleMode,
+    repeatMode: a.repeatMode,
+    setRepeatMode: a.setRepeatMode,
+    playlists: a.playlists,
+    addPlaylist: a.addPlaylist,
+    updatePlaylist: a.updatePlaylist,
+    deletePlaylist: a.deletePlaylist,
+    toggleTrackFavorite: a.toggleTrackFavorite,
+    addTrack: a.addTrack,
+    updateTrack: a.updateTrack,
+    deleteTrack: a.deleteTrack,
+    musicVolume: a.musicVolume,
+    searchYouTubeMusic: a.searchYouTubeMusic,
+    pipUrl: a.pipUrl,
+    setPipUrl: a.setPipUrl,
+    plannedSessions: a.plannedSessions,
+    addPlannedSession: a.addPlannedSession,
+    updatePlannedSession: a.updatePlannedSession,
+    isTimerActive: a.isTimerActive,
+    sessionType: a.sessionType,
+    sessionTime: a.sessionTime,
+    dailyStudyTime: a.dailyStudyTime,
+    pomodoroSessions: a.pomodoroSessions,
+    setSessionType: a.setSessionType,
+    toggleTimer: a.toggleTimer,
+    resetTimer: a.resetTimer,
+    setIsTimerActive: a.setIsTimerActive,
+    setSessionTime: a.setSessionTime,
+    isRest: a.isRest,
+    setIsRest: a.setIsRest,
+    setNavigateTo: a.setNavigateTo,
+    settings: a.settings,
+    updateSettings: a.updateSettings,
+    addNotification: a.addNotification,
+  };
+  }
 
   // ─── Anclar elementos arrastrados (cursos, materiales, apuntes, tareas, grupos) ───
   const consumedAnchorRef = useRef<string | null>(null);
@@ -1056,7 +1076,7 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
         // Sin tools en esta ronda → la conversación termina aquí
         if (toolCallsThisRound.length === 0) {
           if (hadError && !accumulatedContent && toolStatusList.length === 0) {
-            updateAsst({ content: `⚠️ Error: ${lastError}`, isStreaming: false });
+            updateAsst({ content: `Error: ${lastError}`, isStreaming: false });
           }
           break;
         }
@@ -1067,7 +1087,13 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
           toolStatusList.push({ name: tc.function.name, args: tc.function.arguments, status: 'pending' });
           updateAsst({ toolCalls: [...toolStatusList] });
 
-          const result = await executeToolCall(tc.function.name, tc.function.arguments, getContextActions());
+          // Timeout global de 40s por herramienta: ninguna tool puede colgar el chat
+          const result = await Promise.race([
+            executeToolCall(tc.function.name, tc.function.arguments, getContextActions()),
+            new Promise<{ success: false; message: string }>(resolve =>
+              setTimeout(() => resolve({ success: false, message: 'La herramienta tardó demasiado. Reintenta con una petición más concreta.' }), 40000)
+            ),
+          ]);
           toolStatusList[idx] = {
             name: tc.function.name,
             args: tc.function.arguments,
@@ -1103,7 +1129,7 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
           const patch: Partial<ChatItem> = { isStreaming: false };
           if (wasAborted) {
             // El usuario detuvo la respuesta: si ya había texto se conserva.
-            patch.content = finalContent ? finalContent + '\n\n*⏹ Respuesta detenida.*' : '*⏹ Respuesta detenida.*';
+            patch.content = finalContent ? finalContent + '\n\n*Respuesta detenida.*' : '*Respuesta detenida.*';
             if (accumulatedContent && accumulatedReasoning) patch.reasoning = accumulatedReasoning;
             return { ...m, ...patch };
           }
@@ -1120,8 +1146,8 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
             ? {
                 ...m,
                 content: aborted
-                  ? '*⏹ Respuesta detenida.*'
-                  : `⚠️ Hubo un problema conectando con el motor de IA: ${err instanceof Error ? err.message : String(err)}`,
+                  ? '*Respuesta detenida.*'
+                  : `Hubo un problema conectando con el motor de IA: ${err instanceof Error ? err.message : String(err)}`,
                 isStreaming: false,
               }
             : m
@@ -1317,6 +1343,12 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
       streamRef.current = stream;
       isRecordingRef.current = true;
       setLiveTranscript('');
+      // Dejar el textarea visible mientras se dicta: la transcripción en vivo
+      // se muestra junto al micrófono y el texto final cae en el input.
+      setTimeout(() => {
+        textareaRef.current?.focus();
+        textareaRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }, 50);
 
       // ─── Analizador de forma de onda en tiempo real ───
       try {
@@ -1345,21 +1377,18 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
         const raw = transcriptRef.current.trim();
         if (raw) {
           const formatted = formatSpeechTranscription(raw);
-          // Escribir la transcripción formateada directamente en el input del chat
+          // Escribir la transcripción formateada directamente en el input del chat (UNA sola vez)
           setInput(prev => {
             const trimmed = prev.trim();
             return trimmed ? `${trimmed} ${formatted}` : formatted;
           });
-          setAttachments(prev => [...prev, {
-            id: `trs_${Date.now()}`,
-            kind: 'transcript',
-            name: 'Audio transcripción',
-            text: formatted,
-          }]);
         }
         setLiveTranscript('');
         setIsPreparingAudio(false);
-        setTimeout(() => textareaRef.current?.focus(), 50);
+        setTimeout(() => {
+          textareaRef.current?.focus();
+          textareaRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }, 50);
       };
       mr.start();
       setIsRecording(true);
@@ -1769,6 +1798,23 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                               <span key={a.id} style={{ fontSize: 10.5, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 5, padding: '5px 9px', borderRadius: 7, background: 'rgba(167, 139, 250, 0.08)', border: '1px solid rgba(167, 139, 250, 0.22)' }}>
                                 <GripVertical size={11} style={{ color: '#a78bfa' }} /> {a.name}
                               </span>
+                            ) : a.kind === 'image' || /^data:image\//.test(a.url || '') ? (
+                              <img
+                                key={a.id}
+                                src={a.url}
+                                alt={a.name || 'imagen adjunta'}
+                                style={{
+                                  width: '100%',
+                                  maxWidth: 340,
+                                  maxHeight: 300,
+                                  objectFit: 'contain',
+                                  borderRadius: 10,
+                                  border: '1px solid var(--border-soft)',
+                                  background: 'rgba(0,0,0,0.18)',
+                                  marginTop: 4,
+                                  display: 'block',
+                                }}
+                              />
                             ) : (
                               <span key={a.id} style={{ fontSize: 10.5, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 5 }}>
                                 <Paperclip size={11} /> {a.name}
@@ -1834,6 +1880,15 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                           )}
                         </div>
                       )}
+                      {/* Tarjetas de ejecución de herramientas (arriba) y la respuesta
+                          continúa escribiendo DEBAJO, en línea continua sin límite. */}
+                      {msg.toolCalls && msg.toolCalls.length > 0 && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+                          {msg.toolCalls.map((tc, idx) => (
+                            <ToolExecutionCard key={idx} tc={tc} />
+                          ))}
+                        </div>
+                      )}
                       <MarkdownRenderer content={msg.content} />
                       {msg.isStreaming && !msg.content && (!msg.toolCalls || msg.toolCalls.length === 0) && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: 'var(--text-tertiary)', fontSize: 11.5 }}>
@@ -1843,26 +1898,6 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                     </>
                   )}
                 </div>
-
-                {msg.role !== 'user' && msg.toolCalls && msg.toolCalls.length > 0 && (() => {
-                  const skillCalls = msg.toolCalls.filter(tc => VISIBLE_SKILLS.has(tc.name));
-                  return (
-                    <>
-                      {skillCalls.length > 0 && (
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
-                          {skillCalls.map((tc, i) => (
-                            <SkillPill key={i} tc={tc} />
-                          ))}
-                        </div>
-                      )}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: skillCalls.length > 0 ? 6 : 10 }}>
-                        {msg.toolCalls.map((tc, idx) => (
-                          <ToolExecutionCard key={idx} tc={tc} index={idx} />
-                        ))}
-                      </div>
-                    </>
-                  );
-                })()}
 
                 {msg.role === 'user' && (
                   <div style={{ fontSize: 9.5, color: 'var(--text-tertiary)', marginTop: 4, padding: '0 4px', letterSpacing: '0.08em' }}>
