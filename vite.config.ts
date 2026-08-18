@@ -29,4 +29,23 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
   },
+  build: {
+    chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          "react-vendor": ["react", "react-dom"],
+          "dnd-kit": ["@dnd-kit/core", "@dnd-kit/modifiers", "@dnd-kit/sortable", "@dnd-kit/utilities"],
+          "radix": ["@radix-ui/react-checkbox", "@radix-ui/react-dialog", "@radix-ui/react-dropdown-menu", "@radix-ui/react-progress", "@radix-ui/react-select", "@radix-ui/react-tabs"],
+          "charts": ["recharts"],
+          "markdown": ["marked", "katex"],
+          "tauri": ["@tauri-apps/api", "@tauri-apps/plugin-dialog", "@tauri-apps/plugin-fs", "@tauri-apps/plugin-http", "@tauri-apps/plugin-notification", "@tauri-apps/plugin-opener"],
+          "anim": ["framer-motion"],
+          "audio-meta": ["music-metadata-browser"],
+          "storage": ["idb-keyval"],
+          "date": ["date-fns"],
+        },
+      },
+    },
+  },
 }));

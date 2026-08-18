@@ -1,23 +1,24 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react';
 import {
   Home, NotebookPen, Clock, ListTodo, Settings,
   Music,
   Calendar, Layers, Plus, GraduationCap, X, Image as ImageIcon,
+  Loader2,
 } from 'lucide-react';
 import { AppProvider, useApp } from './store/AppContext';
 import toast from 'react-hot-toast';
 import ErrorBoundary from './components/ErrorBoundary';
 import { ensureYouTubeApi, extractYouTubeId, extractPlaylistId, generalYtControl } from './lib/ytEngine';
 
-import Inicio from './components/views/Inicio';
-import Estudio from './components/views/Estudio';
-import Tareas from './components/views/Tareas';
-import Notas from './components/views/Notas';
-import Musica from './components/views/Musica';
-import Planificacion from './components/views/Planificacion';
-import Ajustes from './components/views/Ajustes';
-import Cursos from './components/views/Cursos';
-import CursosHub from './components/views/CursosHub';
+const Inicio = lazy(() => import('./components/views/Inicio'));
+const Estudio = lazy(() => import('./components/views/Estudio'));
+const Tareas = lazy(() => import('./components/views/Tareas'));
+const Notas = lazy(() => import('./components/views/Notas'));
+const Musica = lazy(() => import('./components/views/Musica'));
+const Planificacion = lazy(() => import('./components/views/Planificacion'));
+const Ajustes = lazy(() => import('./components/views/Ajustes'));
+const Cursos = lazy(() => import('./components/views/Cursos'));
+const CursosHub = lazy(() => import('./components/views/CursosHub'));
 import OAuthCallback from './components/OAuthCallback';
 import GlobalPlayer from './components/GlobalPlayer';
 import DownloadManager from './components/ui/DownloadManager';
@@ -718,15 +719,17 @@ function AppContent() {
           <OAuthCallback />
         ) : (
           <div key={activeView} className="fade-in-animation" style={{ flex: 1, overflow: 'hidden' }}>
-            {activeView === 'inicio' && <Inicio />}
-            {activeView === 'estudio' && <Estudio />}
-            {activeView === 'tareas' && <Tareas />}
-            {activeView === 'notas' && <Notas />}
-            {activeView === 'musica' && <Musica />}
-            {activeView === 'planificacion' && <Planificacion />}
-            {activeView === 'cursos' && <CursosHub onSelectCourse={(courseId) => { setSelectedCourseId(courseId); setActiveView('curso_detalle'); }} onTabSelect={(courseId, tab) => { setSelectedCourseId(courseId); setSelectedCourseTab(tab); setActiveView('curso_detalle'); }} />}
-            {activeView === 'ajustes' && <Ajustes />}
-          {activeView === 'curso_detalle' && <Cursos initialCourseId={selectedCourseId || undefined} initialTab={selectedCourseTab as any} onNavigate={(v) => setActiveView(v as ViewId)} />}
+            <Suspense fallback={<div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Loader2 className="spin" size={22} style={{ color: 'var(--text-tertiary)' }} /></div>}>
+              {activeView === 'inicio' && <Inicio />}
+              {activeView === 'estudio' && <Estudio />}
+              {activeView === 'tareas' && <Tareas />}
+              {activeView === 'notas' && <Notas />}
+              {activeView === 'musica' && <Musica />}
+              {activeView === 'planificacion' && <Planificacion />}
+              {activeView === 'cursos' && <CursosHub onSelectCourse={(courseId) => { setSelectedCourseId(courseId); setActiveView('curso_detalle'); }} onTabSelect={(courseId, tab) => { setSelectedCourseId(courseId); setSelectedCourseTab(tab); setActiveView('curso_detalle'); }} />}
+              {activeView === 'ajustes' && <Ajustes />}
+            {activeView === 'curso_detalle' && <Cursos initialCourseId={selectedCourseId || undefined} initialTab={selectedCourseTab as any} onNavigate={(v) => setActiveView(v as ViewId)} />}
+            </Suspense>
           </div>
         )}
         {youtubeVideoUrl && <div ref={ytHolderRef} style={{ position: 'fixed', top: 0, left: -10000, width: 640, height: 360, zIndex: -1, opacity: 0.01, pointerEvents: 'none' }} />}
