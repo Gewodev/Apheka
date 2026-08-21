@@ -9,7 +9,7 @@ import {
   Wifi, WifiOff, Image, Coffee, X, Trash2, Save,
   Monitor, Activity, Sparkles, LogOut, Eye, EyeOff, CalendarDays, Clock, ChevronDown,
   FolderOpen, Boxes, AppWindow, HardDrive, Copy, Check, RefreshCcw,
-  CheckSquare, GraduationCap, FileText, ExternalLink, Loader2, CalendarPlus, ListTodo, Keyboard
+  CheckSquare, GraduationCap, FileText, ExternalLink, Loader2, CalendarPlus, ListTodo, Keyboard, Mic, Square
 } from 'lucide-react';
 import { GoogleCalendarIcon, GoogleTasksIcon, GoogleClassroomIcon, GoogleDriveIcon, GoogleDocsIcon, GoogleSheetsIcon } from '../ui/GoogleIcons';
 import { useApp, fmtClock } from '../../store/AppContext';
@@ -181,7 +181,7 @@ function InfoRow({ label, value, mono, color, last }: { label: string; value: Re
 const fmtBytes = (b: number) => b > 1024 * 1024 ? `${(b / 1024 / 1024).toFixed(1)} MB` : b > 1024 ? `${(b / 1024).toFixed(1)} KB` : `${b} B`;
 
 // ── REAL network measurement (not simulated) ────────────────────────────────
-const LATENCY_URL = 'https://www.gstatic.com/generate_204';
+const LATENCY_URL = 'https://speed.cloudflare.com/__down?bytes=0';
 const SPEED_URL = 'https://speed.cloudflare.com/__down?bytes=1000000';
 
 async function measureLatency(): Promise<number | null> {
@@ -2271,6 +2271,24 @@ export default function Ajustes() {
                     </button>
                   </div>
                   <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 8, lineHeight: 1.5 }}>El motor siempre está habilitado. Ábrelo con el atajo o pasando el ratón por el borde derecho.</p>
+
+                  {/* Voz en vivo (Alt+A) */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, padding: '13px 15px', borderRadius: 11, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', marginTop: 10, flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
+                      <span style={{ width: 30, height: 30, borderRadius: 9, background: (settings.owaBrainColor || '#34d399') + '14', border: '1px solid ' + (settings.owaBrainColor || '#34d399') + '30', color: settings.owaBrainColor || '#34d399', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <Mic size={14} />
+                      </span>
+                      <div style={{ minWidth: 0 }}>
+                        <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)', display: 'block' }}>Voz en vivo</span>
+                        <span style={{ fontSize: 10.5, color: 'var(--text-muted)', display: 'block', marginTop: 2, lineHeight: 1.4 }}>Dicta con la esfera 3D (Alt+A): responde Charvis en voz por encima de la app</span>
+                      </div>
+                    </div>
+                    <label style={{ position: 'relative', width: 36, height: 20, borderRadius: 10, background: settings.owaBrainLiveVoice !== false ? (settings.owaBrainColor || '#34d399') : 'var(--bg-surface)', border: '1px solid var(--border-default)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', padding: 2, transition: 'all 200ms' }}>
+                      <div style={{ width: 14, height: 14, borderRadius: '50%', background: '#fff', transform: settings.owaBrainLiveVoice !== false ? 'translateX(16px)' : 'translateX(0)', transition: 'all 200ms', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                      <input type="checkbox" checked={settings.owaBrainLiveVoice !== false} onChange={e => updateSettings({ owaBrainLiveVoice: e.target.checked } as any)} style={{ display: 'none' }} />
+                    </label>
+                  </div>
+                  <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 8, lineHeight: 1.5 }}>La esfera se abre en cualquier ventana con la combinación Alt + A y se detiene sola en silencios.</p>
 
                   {/* Proveedores de IA */}
                   <CharvisProviders />

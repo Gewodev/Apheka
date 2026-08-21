@@ -33,6 +33,9 @@ function formatSpeechTranscription(raw: string): string {
 
   text = text.replace(/\s+([.,;:!?])/g, '$1');
 
+  // Cortar oraciones a mitad de frase cuando aparece un interrogativo fuerte
+  text = text.replace(/(?<=[^\s.!?¿])\s+(?=(?:cómo|qué|cuándo|dónde|quién|cuál|cuánto|por qué|puedes|podrías|me puedes|me ayudarías|acaso|dime|how|why|when|where|who|which|can you|could you|would you|are you|will you)\b)/gi, '. ');
+
   // Horas habladas: "9 30", "9.30", "9:30 h", "10 horas" → formato HH:MM limpio
   text = text.replace(/\b(\d{1,2})\s*[.:]\s*(\d{2})\s*h\b/gi, '$1:$2');
   text = text.replace(/\b(\d{1,2})\s+(\d{2})\s*h\b/gi, '$1:$2');
@@ -165,7 +168,6 @@ function ToolExecutionCard({ tc }: { tc: { name: string; args: string; result?: 
     resultData?.results || [];
   const digests: Array<{ title: string; url: string; excerpt?: string; host?: string }> =
     resultData?.digests || [];
-  const diagram: { title?: string; code?: string; loading?: string[] } | null = resultData?.diagram || null;
 
   return (
     <div style={{ marginTop: 8, marginBottom: 4 }}>
@@ -383,33 +385,6 @@ function ToolExecutionCard({ tc }: { tc: { name: string; args: string; result?: 
               </div>
             )}
 
-            {isDiagram && diagram?.code && (
-              <div style={{ marginTop: 8 }}>
-                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-tertiary)', marginBottom: 5, display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <FileText size={10} />
-                  Diagrama vectorial{diagram.title ? ` · ${diagram.title}` : ''}
-                </div>
-                <div
-                  className="no-scrollbar"
-                  style={{
-                    background: 'var(--bg-deep)',
-                    border: '1px solid var(--border-subtle)',
-                    borderRadius: 10,
-                    padding: 14,
-                    overflowX: 'auto',
-                    overflowY: 'auto',
-                    maxHeight: 440,
-                    display: 'flex',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <div
-                    dangerouslySetInnerHTML={{ __html: sanitizeSvg(diagram.code) }}
-                    style={{ minWidth: 0, width: '100%', display: 'flex', justifyContent: 'center' }}
-                  />
-                </div>
-              </div>
-            )}
           </div>
         )}
 
@@ -431,6 +406,52 @@ function ToolExecutionCard({ tc }: { tc: { name: string; args: string; result?: 
             </>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function extractDiagram(tc: { name: string; status: string; result?: string }): { title?: string; code?: string } | null {
+  if (tc.name !== 'createDiagram' || tc.status !== 'success' || !tc.result) return null;
+  try {
+    const parsed = JSON.parse(tc.result);
+    const diagram = parsed?.data?.diagram;
+    if (diagram && typeof diagram.code === 'string' && diagram.code.trim().length > 0) {
+      return {
+        title: typeof diagram.title === 'string' ? diagram.title : undefined,
+        code: diagram.code,
+      };
+    }
+  } catch {}
+  return null;
+}
+
+function DiagramFigure({ diagram }: { diagram: { title?: string; code?: string } }) {
+  return (
+    <div style={{ marginTop: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+        <PenLine size={11} style={{ color: 'var(--accent)' }} />
+        <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-tertiary)' }}>
+          Diagrama vectorial{diagram.title ? ` · ${diagram.title}` : ''}
+        </span>
+      </div>
+      <div
+        className="no-scrollbar"
+        style={{
+          background: 'var(--bg-deep)',
+          border: '1px solid var(--border-subtle)',
+          borderRadius: 12,
+          padding: 16,
+          overflow: 'auto',
+          maxHeight: 460,
+          display: 'flex',
+          justifyContent: 'center',
+        }}
+      >
+        <div
+          dangerouslySetInnerHTML={{ __html: sanitizeSvg(diagram.code || '') }}
+          style={{ minWidth: 0, width: '100%', display: 'flex', justifyContent: 'center' }}
+        />
       </div>
     </div>
   );
@@ -463,6 +484,7 @@ interface ChatItem {
   id: string;
   role: 'user' | 'assistant' | 'system' | 'tool';
   content: string;
+  versions?: string[];
   attachments?: Attachment[];
   toolCalls?: { name: string; args: string; result?: string; status: 'pending' | 'success' | 'error' }[];
   reasoning?: string;
@@ -534,7 +556,6 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
   const [isRecording, setIsRecording] = useState(false);
   const [recTime, setRecTime] = useState(0);
   const [isPreparingAudio, setIsPreparingAudio] = useState(false);
-  const [liveTranscript, setLiveTranscript] = useState('');
   const [deepMode, setDeepMode] = useState(false);
   const [dragHint, setDragHint] = useState<string | null>(null);
   const [openThinking, setOpenThinking] = useState<string>('');
@@ -564,6 +585,8 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
   const streamRef = useRef<MediaStream | null>(null);
   const recognitionRef = useRef<any>(null);
   const transcriptRef = useRef('');
+  const inputAtRecordStartRef = useRef<string | null>(null);
+  const inputEditedDuringRecordRef = useRef(false);
   const isRecordingRef = useRef(false);
   const recTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const waveCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -622,6 +645,18 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
     const el = messagesWrapRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, []);
+
+  useEffect(() => {
+    const onVoiceMessage = (e: Event) => {
+      const detail = (e as CustomEvent<{ text?: string }>).detail;
+      const text = (detail?.text || '').trim();
+      if (!text) return;
+      setMessages(prev => [...prev, { id: `asst_${Date.now()}`, role: 'assistant', content: text, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }]);
+      setTimeout(() => { stickToBottomRef.current = true; scrollToBottom(); }, 60);
+    };
+    window.addEventListener('owa-brain-voice-message', onVoiceMessage);
+    return () => window.removeEventListener('owa-brain-voice-message', onVoiceMessage);
+  }, [scrollToBottom]);
 
   // Scroll libre: al hacer scroll manual, si el usuario sube dejamos de
   // perseguirlo; si vuelve al final, reenganchamos el auto-scroll.
@@ -1128,12 +1163,20 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
           let finalContent = accumulatedContent || (accumulatedReasoning ? accumulatedReasoning.trim() : '');
           const patch: Partial<ChatItem> = { isStreaming: false };
           if (wasAborted) {
-            // El usuario detuvo la respuesta: si ya había texto se conserva.
             patch.content = finalContent ? finalContent + '\n\n*Respuesta detenida.*' : '*Respuesta detenida.*';
             if (accumulatedContent && accumulatedReasoning) patch.reasoning = accumulatedReasoning;
             return { ...m, ...patch };
           }
           if (accumulatedContent && accumulatedReasoning) patch.reasoning = accumulatedReasoning;
+          if (!finalContent) {
+            if (lastError) {
+              finalContent = `No se pudo generar una respuesta. ${lastError}`;
+            } else if (toolStatusList.length > 0) {
+              finalContent = 'Ejecuté la acción, pero el proveedor no completó su texto final. Reintenta con una petición más concreta.';
+            } else {
+              finalContent = 'No se obtuvo respuesta del proveedor. Inténtalo de nuevo.';
+            }
+          }
           patch.content = finalContent;
           return { ...m, ...patch };
         })
@@ -1146,8 +1189,12 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
             ? {
                 ...m,
                 content: aborted
-                  ? '*Respuesta detenida.*'
-                  : `Hubo un problema conectando con el motor de IA: ${err instanceof Error ? err.message : String(err)}`,
+                  ? m.content
+                    ? m.content + '\n\n*Respuesta detenida.*'
+                    : '*Respuesta detenida.*'
+                  : m.content
+                    ? m.content + `\n\nHubo un problema terminando la respuesta: ${err instanceof Error ? err.message : String(err)}`
+                    : `Hubo un problema conectando con el motor de IA: ${err instanceof Error ? err.message : String(err)}`,
                 isStreaming: false,
               }
             : m
@@ -1342,9 +1389,8 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
       });
       streamRef.current = stream;
       isRecordingRef.current = true;
-      setLiveTranscript('');
-      // Dejar el textarea visible mientras se dicta: la transcripción en vivo
-      // se muestra junto al micrófono y el texto final cae en el input.
+      inputAtRecordStartRef.current = textareaRef.current?.value ?? '';
+      inputEditedDuringRecordRef.current = false;
       setTimeout(() => {
         textareaRef.current?.focus();
         textareaRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -1377,13 +1423,18 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
         const raw = transcriptRef.current.trim();
         if (raw) {
           const formatted = formatSpeechTranscription(raw);
-          // Escribir la transcripción formateada directamente en el input del chat (UNA sola vez)
-          setInput(prev => {
-            const trimmed = prev.trim();
-            return trimmed ? `${trimmed} ${formatted}` : formatted;
-          });
+          const atStart = inputAtRecordStartRef.current ?? '';
+          if (inputEditedDuringRecordRef.current) {
+            setInput(prev => {
+              const trimmed = prev.trim();
+              return trimmed ? `${trimmed} ${formatted}` : formatted;
+            });
+          } else {
+            setInput(atStart ? `${atStart} ${formatted}` : formatted);
+          }
         }
-        setLiveTranscript('');
+        inputAtRecordStartRef.current = null;
+        inputEditedDuringRecordRef.current = false;
         setIsPreparingAudio(false);
         setTimeout(() => {
           textareaRef.current?.focus();
@@ -1414,7 +1465,11 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
             }
             const current = (finalText + interim).trim();
             transcriptRef.current = current;
-            setLiveTranscript(formatSpeechTranscription(current));
+            if (current && !inputEditedDuringRecordRef.current) {
+              const formatted = formatSpeechTranscription(current);
+              const atStart = inputAtRecordStartRef.current ?? '';
+              setInput(atStart ? `${atStart} ${formatted}` : formatted);
+            }
           };
           rec.onerror = () => {};
           rec.onend = () => {
@@ -1734,26 +1789,6 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                     <span style={{ width: 5, height: 5, borderRadius: '50%', background: brainColor, boxShadow: `0 0 6px ${hexToRgba(brainColor, 0.8)}` }} />
                     CHARVIS
                     <span style={{ flex: 1 }} />
-                    {msg.content && (
-                      <button
-                        onClick={() => handleCopyMessage(msg)}
-                        title={copiedId === msg.id ? 'Copiado' : 'Copiar mensaje'}
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          padding: 3,
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          color: copiedId === msg.id ? brainColor : 'var(--text-muted)',
-                          transition: 'color 150ms',
-                        }}
-                        onMouseEnter={e => (e.currentTarget.style.color = copiedId === msg.id ? brainColor : 'var(--text-secondary)')}
-                        onMouseLeave={e => (e.currentTarget.style.color = copiedId === msg.id ? brainColor : 'var(--text-muted)')}
-                      >
-                        {copiedId === msg.id ? <Check size={11} /> : <Copy size={11} />}
-                      </button>
-                    )}
                   </div>
                 )}
 
@@ -1777,7 +1812,7 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                 >
                   {msg.role === 'user' ? (
                     <>
-                      {msg.content}
+                      <div style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</div>
                       {msg.attachments && msg.attachments.length > 0 && (
                         <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 5 }}>
                           {msg.attachments.map(a => (
@@ -1890,6 +1925,14 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                         </div>
                       )}
                       <MarkdownRenderer content={msg.content} />
+                      {msg.toolCalls && msg.toolCalls.length > 0 && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          {msg.toolCalls.map((tc, idx) => {
+                            const dg = extractDiagram(tc);
+                            return dg ? <DiagramFigure key={idx} diagram={dg} /> : null;
+                          })}
+                        </div>
+                      )}
                       {msg.isStreaming && !msg.content && (!msg.toolCalls || msg.toolCalls.length === 0) && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: 'var(--text-tertiary)', fontSize: 11.5 }}>
                           <Loader2 size={13} className="spin" /> procesando…
@@ -1898,6 +1941,35 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                     </>
                   )}
                 </div>
+
+                {msg.role !== 'user' && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, padding: '0 4px' }}>
+                    {msg.content && (
+                      <button
+                        onClick={() => handleCopyMessage(msg)}
+                        title={copiedId === msg.id ? 'Copiado' : 'Copiar mensaje'}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          padding: 3,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          fontSize: 9.5,
+                          letterSpacing: '0.08em',
+                          color: copiedId === msg.id ? brainColor : 'var(--text-tertiary)',
+                          transition: 'color 150ms',
+                        }}
+                        onMouseEnter={e => (e.currentTarget.style.color = copiedId === msg.id ? brainColor : 'var(--text-secondary)')}
+                        onMouseLeave={e => (e.currentTarget.style.color = copiedId === msg.id ? brainColor : 'var(--text-tertiary)')}
+                      >
+                        {copiedId === msg.id ? <Check size={10} /> : <Copy size={10} />}
+                        {copiedId === msg.id ? 'Copiado' : 'Copiar'}
+                      </button>
+                    )}
+                  </div>
+                )}
 
                 {msg.role === 'user' && (
                   <div style={{ fontSize: 9.5, color: 'var(--text-tertiary)', marginTop: 4, padding: '0 4px', letterSpacing: '0.08em' }}>
@@ -1979,7 +2051,7 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
               <textarea
                 ref={textareaRef}
                 value={input}
-                onChange={e => setInput(e.target.value)}
+                onChange={e => { inputEditedDuringRecordRef.current = true; setInput(e.target.value); }}
                 onKeyDown={e => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
@@ -2175,11 +2247,6 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
                   </button>
                 </div>
                 <canvas ref={waveCanvasRef} width={380} height={54} className="charvis-waveform" style={{ width: '100%', height: 54, display: 'block', marginTop: 8 }} />
-                {liveTranscript && (
-                  <div style={{ marginTop: 7, fontSize: 11, lineHeight: 1.5, color: 'var(--text-secondary)', fontStyle: 'italic', maxHeight: 48, overflowY: 'auto', wordBreak: 'break-word' }}>
-                    “{liveTranscript}”
-                  </div>
-                )}
               </div>
             )}
             <input ref={fileInputRef} type="file" multiple accept="image/*,video/*,.pdf,.docx,.xlsx,.pptx,.txt,.md,.csv,.json,.ts,.tsx,.js,.css,.html,.py,.log" onChange={handleFileSelected} style={{ display: 'none' }} />

@@ -1125,6 +1125,62 @@ body {
   }
 }
 
+/* Voz en vivo (Alt+A): entrada suave del texto transcrito al cambiar. */
+@keyframes voiceLiveIn {
+  from {
+    opacity: 0;
+    transform: translateY(26px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Voz en vivo (Alt+A): salida suave (fundido + ascenso ligero), no lateral. */
+@keyframes voiceLiveOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-18px);
+  }
+}
+
+@keyframes voiceLiveInCenter {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 26px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@keyframes voiceLiveOutCenter {
+  from {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -18px);
+  }
+}
+
+/* Voz en vivo: cursor de escritura mientras Charvis responde. */
+@keyframes voiceCaretBlink {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
 /* Cursos — panel de sesión de estudio: los dos puntos de la hora (reloj digital)
    parpadean suavemente como un reloj real. */
 @keyframes clockColonBlink {

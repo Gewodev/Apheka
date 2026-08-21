@@ -27,6 +27,7 @@ import type { BrainAnchor } from './lib/brainDrop';
 import NowPlayingView from './components/NowPlayingView';
 import VideoPiP from './components/VideoPiP';
 import ImageContextMenu from './components/ui/ImageContextMenu';
+import VoiceLiveOverlay from './components/ui/VoiceLiveOverlay';
 
 type ViewId = 'inicio' | 'estudio' | 'tareas' | 'notas' | 'musica' | 'planificacion' | 'cursos' | 'ajustes' | 'curso_detalle';
 
@@ -318,6 +319,7 @@ function AppContent() {
 
   // ─── Charvis: hotkey + trigger lateral ───
   const [isBrainOpen, setIsBrainOpen] = useState(false);
+  const [voiceLiveOpen, setVoiceLiveOpen] = useState(false);
   const [brainAnchor, setBrainAnchor] = useState<BrainAnchor | null>(null);
 
   // Cualquier vista puede "anclar" un elemento arrastrado sobre Charvis
@@ -327,8 +329,9 @@ function AppContent() {
       const detail = (e as CustomEvent<BrainAnchor>).detail;
       if (detail && detail.id) {
         setBrainAnchor(detail);
-        setIsBrainOpen(true);
       }
+      setVoiceLiveOpen(false);
+      setIsBrainOpen(true);
     };
     window.addEventListener('owa-open-brain', handler);
     return () => window.removeEventListener('owa-open-brain', handler);
@@ -346,12 +349,31 @@ function AppContent() {
       const hasMeta = parts.includes('Meta');
       if (e.code === code && !!e.altKey === hasAlt && !!e.ctrlKey === hasCtrl && !!e.shiftKey === hasShift && !!e.metaKey === hasMeta) {
         e.preventDefault();
-        setIsBrainOpen(o => !o);
+        setIsBrainOpen(o => {
+          const next = !o;
+          if (next) setVoiceLiveOpen(false);
+          return next;
+        });
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [settings.owaBrainShortcut]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (document.body.dataset.capturingShortcut) return;
+      if (e.altKey && e.code === 'KeyA' && (settings.owaBrainLiveVoice !== false)) {
+        e.preventDefault();
+        setVoiceLiveOpen(o => {
+          if (!o) setIsBrainOpen(false);
+          return !o;
+        });
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [settings.owaBrainLiveVoice]);
 
   useEffect(() => {
     const path = window.location.pathname;
@@ -1070,7 +1092,10 @@ function AppContent() {
       <ImageContextMenu />
 
       {/* ─── Charvis sidebar ─── */}
-      <AIBrainSidebar isOpen={isBrainOpen} onClose={() => setIsBrainOpen(false)} onOpen={() => setIsBrainOpen(true)} anchor={brainAnchor} />
+      <AIBrainSidebar isOpen={isBrainOpen} onClose={() => setIsBrainOpen(false)} onOpen={() => { setVoiceLiveOpen(false); setIsBrainOpen(true); }} anchor={brainAnchor} />
+
+      {/* ─── Voz en vivo (Alt+A) ─── */}
+      <VoiceLiveOverlay open={voiceLiveOpen} onClose={() => setVoiceLiveOpen(false)} />
     </div>
   );
 }

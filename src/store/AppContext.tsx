@@ -468,6 +468,7 @@ export interface Settings {
   // Owa Brain AI Engine settings
   owaBrainEnabled?: boolean;
   owaBrainShortcut?: string;
+  owaBrainLiveVoice?: boolean;
   owaBrainApiKey?: string;
   owaBrainBaseUrl?: string;
   owaBrainModel?: string;
@@ -782,6 +783,7 @@ const defaultSettings: Settings = {
   autoRetryOnError: true,
   owaBrainEnabled: true,
   owaBrainShortcut: 'Alt+KeyQ',
+  owaBrainLiveVoice: true,
   owaBrainApiKey: '',
   owaBrainBaseUrl: 'https://opencode.ai/zen/v1',
   owaBrainModel: 'big-pickle',

@@ -5,7 +5,7 @@
 //  elegir modelo y por último ACTIVAR el proveedor.
 // ═══════════════════════════════════════════════════
 import React, { useEffect, useState } from 'react';
-import { Check, X, Loader2, Eye, EyeOff, ChevronDown } from 'lucide-react';
+import { Check, X, Loader2, Eye, EyeOff, ChevronDown, RefreshCw } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { useApp } from '../../store/AppContext';
 import { BrandLogo, providerBrandColor } from '../../lib/ai/providerBrands';
@@ -34,6 +34,7 @@ export default function CharvisProviders() {
   const [modelDraft, setModelDraft] = useState('');
   const [showKey, setShowKey] = useState(false);
   const [validating, setValidating] = useState(false);
+  const [diagnosing, setDiagnosing] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [models, setModels] = useState<string[]>([]);
   const [modelsNote, setModelsNote] = useState('');
@@ -47,7 +48,9 @@ export default function CharvisProviders() {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
   };
 
-  // Al abrir el modal de un proveedor se cargan los borradores desde el estado guardado.
+  // Al abrir el modal de un proveedor se cargan los borradores desde el estado guardado
+  // y se detectan los modelos AUTOMÁTICAMENTE (opencode no necesita clave; con clave
+  // guardada se consulta el /models real del proveedor, como en Gemini).
   useEffect(() => {
     if (!openId) return;
     const p = CHARVIS_PROVIDERS.find(pp => pp.id === openId) || CHARVIS_PROVIDERS[0];
@@ -59,6 +62,22 @@ export default function CharvisProviders() {
     setModelsNote(s.validatedAt ? 'Modelos detectados con tu API' : 'Valida tu API para detectar los modelos exactos de tu cuenta');
     setResult(null);
     setShowKey(false);
+    if ((!s.validatedAt || p.id === activeId) && (p.id === 'opencode' || s.apiKey.trim())) {
+      let cancelled = false;
+      (async () => {
+        try {
+          const detected = await fetchProviderModels(s.baseUrl || p.baseUrl, s.apiKey.trim());
+          if (cancelled) return;
+          if (detected.length) {
+            const list = detected.slice(0, 80);
+            setModels(list);
+            setModelsNote(`${list.length} modelos detectados desde la API de ${p.name} (automático)`);
+            setModelDraft(m => m || list[0] || '');
+          }
+        } catch {}
+      })();
+      return () => { cancelled = true; };
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openId]);
 
@@ -96,7 +115,7 @@ export default function CharvisProviders() {
         note = '';
       }
       const finalModels = detected.slice(0, 80);
-      const finalModel = finalModels.includes(model) ? model : (finalModels[0] || p.defaultModel);
+      const finalModel = finalModels.includes(model) ? model : (finalModels[0] || model || p.defaultModel);
       const nextState: CharvisProviderState = {
         apiKey, baseUrl, model: finalModel, models: finalModels,
         validatedAt: probe.ok ? Date.now() : (st.validatedAt || null),
@@ -115,6 +134,35 @@ export default function CharvisProviders() {
       setResult({ ok: false, msg: err instanceof Error ? err.message : String(err) });
     } finally {
       setValidating(false);
+    }
+  };
+
+  // DIAGNOSTICAR: vuelve a consultar /models en vivo (por si el proveedor
+  // actualizó o retiró modelos) usando la clave/URL actuales. NO usa la
+  // lista de referencia: solo lo que devuelve la API.
+  const diagnose = async () => {
+    const p = expanded;
+    const apiKey = apiKeyDraft.trim();
+    const baseUrl = (urlDraft.trim() || p.baseUrl).replace(/\/+$/, '');
+    setDiagnosing(true);
+    setResult(null);
+    try {
+      const detected = await fetchProviderModels(baseUrl, apiKey);
+      if (!detected.length) throw new Error('El endpoint /models devolvió vacío');
+      const list = detected.slice(0, 80);
+      setModels(list);
+      setModelDraft(m => (m && list.includes(m) ? m : list[0] || m));
+      const note = `${list.length} modelos detectados desde la API de ${p.name} (diagnóstico en vivo)`;
+      setModelsNote(note);
+      const nextState: CharvisProviderState = { ...st, apiKey, baseUrl, models: list, model: list.includes(modelDraft) ? modelDraft : (list[0] || st.model) };
+      persist({ ...states, [p.id]: nextState });
+      setResult({ ok: true, msg: `Diagnóstico: ${list.length} modelos disponibles en la API` });
+      addNotification(`${p.name}: ${list.length} modelos detectados desde la API`, 'success');
+    } catch (err) {
+      setModelsNote('No se pudo consultar /models — revisa tu clave o la URL base');
+      setResult({ ok: false, msg: `Diagnóstico fallido: ${err instanceof Error ? err.message : String(err)}` });
+    } finally {
+      setDiagnosing(false);
     }
   };
 
@@ -212,10 +260,12 @@ export default function CharvisProviders() {
                 </div>
                 <div style={{ fontSize: 10, color: 'var(--text-tertiary)', fontFamily: "'JetBrains Mono', monospace", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 3 }}>{expanded.baseUrl}</div>
               </div>
-              <a href={expanded.docsUrl} target="_blank" rel="noreferrer" title="Documentación oficial"
-                style={{ fontSize: 11, color: 'var(--text-secondary)', textDecoration: 'none', padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-deep)', whiteSpace: 'nowrap', fontWeight: 500 }}>
-                Documentación
-              </a>
+              {expanded.docsUrl && (
+                <a href={expanded.docsUrl} target="_blank" rel="noreferrer" title="Documentación oficial"
+                  style={{ fontSize: 11, color: 'var(--text-secondary)', textDecoration: 'none', padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-deep)', whiteSpace: 'nowrap', fontWeight: 500 }}>
+                  Documentación
+                </a>
+              )}
               <button
                 onClick={() => setOpenId(null)}
                 title="Cerrar"
@@ -265,30 +315,59 @@ export default function CharvisProviders() {
               {/* Modelo */}
               <div>
                 <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.05em', textTransform: 'uppercase', display: 'block', marginBottom: 7 }}>
-                  Modelo{models.length ? ` · ${models.length}` : ''}
+                  Modelo{expanded.id === 'custom' ? ' (escribe el identificador exacto de tu API)' : models.length ? ` · ${models.length}` : ''}
                 </label>
-                <div style={{ position: 'relative' }}>
-                  <select
-                    value={modelDraft}
-                    onChange={e => setModelDraft(e.target.value)}
-                    disabled={!validated}
-                    className="input-base"
-                    style={{ width: '100%', height: 40, fontSize: 12, appearance: 'none', paddingRight: 30, fontFamily: "'JetBrains Mono', monospace", opacity: validated ? 1 : 0.65, cursor: validated ? 'pointer' : 'not-allowed' }}
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {expanded.id === 'custom' ? (
+                    <input
+                      type="text"
+                      value={modelDraft}
+                      onChange={e => setModelDraft(e.target.value)}
+                      placeholder="mi-modelo (ej. gpt-4o, claude-3-5-sonnet)"
+                      className="input-base"
+                      style={{ flex: 1, height: 40, fontSize: 12, fontFamily: "'JetBrains Mono', monospace" }}
+                    />
+                  ) : (
+                    <div style={{ position: 'relative', flex: 1 }}>
+                      <select
+                        value={modelDraft}
+                        onChange={e => setModelDraft(e.target.value)}
+                        disabled={!validated}
+                        className="input-base"
+                        style={{ width: '100%', height: 40, fontSize: 12, appearance: 'none', paddingRight: 30, fontFamily: "'JetBrains Mono', monospace", opacity: validated ? 1 : 0.65, cursor: validated ? 'pointer' : 'not-allowed' }}
+                      >
+                        {!validated ? (
+                          <option value="">Valida tu API para ver los modelos disponibles</option>
+                        ) : (
+                          <>
+                            {!models.includes(modelDraft) && modelDraft && <option value={modelDraft}>{modelDraft}</option>}
+                            {models.map(m => (
+                              <option key={m} value={m}>{m}</option>
+                            ))}
+                          </>
+                        )}
+                      </select>
+                      <ChevronDown size={13} style={{ position: 'absolute', right: 10, top: 14, color: 'var(--text-tertiary)', pointerEvents: 'none' }} />
+                    </div>
+                  )}
+                  <button
+                    onClick={diagnose}
+                    disabled={diagnosing || validating || (!validated && !apiKeyDraft.trim() && expanded.id !== 'opencode' && expanded.id !== 'custom')}
+                    title={expanded.id === 'custom' ? 'Consulta los modelos que expone tu endpoint /models (opcional)' : 'Vuelve a consultar los modelos desde la API del proveedor (por si se actualizaron o retiraron)'}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                      padding: '0 12px', height: 40, borderRadius: 9, flexShrink: 0, whiteSpace: 'nowrap',
+                      fontSize: 11, fontWeight: 600, cursor: (diagnosing || validating || (!validated && !apiKeyDraft.trim() && expanded.id !== 'opencode' && expanded.id !== 'custom')) ? 'not-allowed' : 'pointer',
+                      background: 'var(--bg-deep)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)',
+                      opacity: (diagnosing || validating || (!validated && !apiKeyDraft.trim() && expanded.id !== 'opencode' && expanded.id !== 'custom')) ? 0.55 : 1,
+                      transition: 'all 150ms',
+                    }}
                   >
-                    {!validated ? (
-                      <option value="">Valida tu API para ver los modelos disponibles</option>
-                    ) : (
-                      <>
-                        {!models.includes(modelDraft) && modelDraft && <option value={modelDraft}>{modelDraft}</option>}
-                        {models.map(m => (
-                          <option key={m} value={m}>{m}</option>
-                        ))}
-                      </>
-                    )}
-                  </select>
-                  <ChevronDown size={13} style={{ position: 'absolute', right: 10, top: 14, color: 'var(--text-tertiary)', pointerEvents: 'none' }} />
+                    {diagnosing ? <Loader2 size={13} className="spin" /> : <RefreshCw size={13} />}
+                    Diagnosticar
+                  </button>
                 </div>
-                <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 7, lineHeight: 1.5 }}>{modelsNote || (validated ? '' : 'Pulsa "Validar API" para detectar los modelos exactos de tu cuenta.')}</p>
+                <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 7, lineHeight: 1.5 }}>{expanded.id === 'custom' ? 'Este proveedor es 100% configurable: pega la URL base, la clave y el identificador del modelo de tu API.' : (modelsNote || (validated ? '' : 'Pulsa "Validar API" para detectar los modelos exactos de tu cuenta.'))}</p>
               </div>
 
               {/* Resultado */}

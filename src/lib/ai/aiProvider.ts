@@ -490,7 +490,13 @@ export async function* streamChat(
         if (!delta) continue;
 
         if (delta.content) {
-          yield { type: 'text', text: delta.content };
+          const text = Array.isArray(delta.content)
+            ? delta.content
+                .filter((p: any) => p && typeof p === 'object' && p.type === 'text' && typeof p.text === 'string')
+                .map((p: any) => p.text)
+                .join('')
+            : delta.content;
+          if (text) yield { type: 'text', text };
         }
 
         if (delta.reasoning_content) {

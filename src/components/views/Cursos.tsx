@@ -33,6 +33,7 @@ import { es } from "date-fns/locale";
 import toast from 'react-hot-toast';
 import { openBrainWithAnchor, isOverBrainZone, getLastPointer, setBrainDragState } from '../../lib/brainDrop';
 import { fuzzyMatch } from '../../lib/fuzzy';
+import { usePlannerDay } from '../../lib/plannerDay';
 import { useMaterialMenu } from '../ui/MaterialContextMenu';
 import ImageEditorModal from '../ui/ImageEditorModal';
 
@@ -934,10 +935,8 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
 
   useEffect(() => {
     return () => {
-      if (dirtyRef.current) {
-        const content = editorRef.current?.innerHTML || '';
-        onSave(note.id, { content });
-      }
+      const content = editorRef.current?.innerHTML || '';
+      onSave(note.id, { content });
       if (trackTimeout.current) clearTimeout(trackTimeout.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1463,68 +1462,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [planEditId, setPlanEditId] = useState<string | null>(null);
   const [planDate, setPlanDate] = useState('');
-  const [plannerDate, setPlannerDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
-  const plannerManualRef = useRef(false);
-  const lastPlannerDayRef = useRef(format(new Date(), 'yyyy-MM-dd'));
-  const [todayTick, setTodayTick] = useState(0);
-
-  // A medianoche el cronograma vuelve a HOY automáticamente. La selección manual
-  // (click en un día de la franja) se respeta mientras dure el mismo día natural;
-  // al cambiar la fecha (medianoche) se reinicia a HOY.
-  useEffect(() => {
-    const t = setInterval(() => {
-      const cur = format(new Date(), 'yyyy-MM-dd');
-      if (cur === lastPlannerDayRef.current) return;
-      lastPlannerDayRef.current = cur;
-      plannerManualRef.current = false;
-      if (selectedCourseId) { try { localStorage.setItem(`owa_estudio_planner_manual_${selectedCourseId}`, '0'); } catch { /* noop */ } }
-      setTodayTick(x => x + 1);
-    }, 30000);
-    return () => clearInterval(t);
-  }, [selectedCourseId]);
-  useEffect(() => {
-    if (!selectedCourseId) return;
-    setPlannerDate(format(new Date(), 'yyyy-MM-dd'));
-  }, [todayTick, selectedCourseId]);
-
-  // Restauración del día del cronograma al abrir el curso. La selección MANUAL
-  // (click en un día de la franja) se respeta mientras ese día siga en la semana
-  // actual; sin selección manual se abre el día de la semana con la sesión más
-  // reciente del curso (ninguna sesión parece borrada) o HOY si no hay sesiones.
-  useEffect(() => {
-    if (!selectedCourseId) return;
-    // Salto inmediato al día de la sesión recién creada/editada (marcada por
-    // AppContext en owa_last_planned_session): la sesión nueva se ve SIEMPRE,
-    // incluso si el usuario había seleccionado manualmente otro día.
-    try {
-      const lastRaw = localStorage.getItem('owa_last_planned_session');
-      if (lastRaw) {
-        localStorage.removeItem('owa_last_planned_session');
-        const last = JSON.parse(lastRaw);
-        if (last && last.courseId === selectedCourseId && typeof last.date === 'string') {
-          setPlannerDate(last.date);
-          return;
-        }
-      }
-    } catch { /* noop */ }
-    const now = new Date();
-    const todayStr = format(now, 'yyyy-MM-dd');
-    const ws = startOfWeek(now, { weekStartsOn: 1 });
-    const we = addDays(ws, 6);
-    const saved = localStorage.getItem(`owa_estudio_planner_date_${selectedCourseId}`);
-    const savedOk = saved && /^\d{4}-\d{2}-\d{2}$/.test(saved) ? saved : null;
-    const savedInWeek = savedOk ? (() => { const d = new Date(savedOk + 'T12:00:00'); return d >= ws && d <= we; })() : false;
-    const manual = localStorage.getItem(`owa_estudio_planner_manual_${selectedCourseId}`) === '1';
-    plannerManualRef.current = manual && savedInWeek;
-    if (plannerManualRef.current && savedOk) { setPlannerDate(savedOk); return; }
-    const weekDays = Array.from({ length: 7 }, (_, i) => format(addDays(ws, i), 'yyyy-MM-dd'));
-    const weekSessions = (plannedSessions || []).filter(s => !!s && s.courseId === selectedCourseId && weekDays.includes(s.date));
-    const latest = weekSessions.sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0];
-    setPlannerDate(latest ? latest.date : todayStr);
-  }, [selectedCourseId, plannedSessions]);
-  useEffect(() => {
-    if (selectedCourseId) localStorage.setItem(`owa_estudio_planner_date_${selectedCourseId}`, plannerDate);
-  }, [plannerDate, selectedCourseId]);
+  const { plannerDate, setPlannerDate, markManual } = usePlannerDay(selectedCourseId);
   // Deep-link para editar una sesión desde otro curso: el panel escribe owa_course_edit_session antes de navegar
   useEffect(() => {
     if (!selectedCourseId) return;
@@ -1986,6 +1924,20 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const [overviewAddingNote, setOverviewAddingNote] = useState(false);
   const [overviewEditContent, setOverviewEditContent] = useState('');
   const [overviewNotesSort, setOverviewNotesSort] = useState<'date' | 'title'>('date');
+  const freshEmptyNotesRef = useRef<Set<string>>(new Set());
+  const saveCourseNoteContent = (id: string, html: string) => {
+    const text = (html || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, '').trim();
+    const hasImg = /<img[^>]*>/i.test(html || '');
+    if (freshEmptyNotesRef.current.has(id) && !text && !hasImg) {
+      deleteNote(id);
+      freshEmptyNotesRef.current.delete(id);
+      setSelectedOverviewNoteId(prev => (prev === id ? null : prev));
+      setOverviewNoteEditMode(false);
+      toast.success('Apunte vacío descartado');
+      return;
+    }
+    updateNote(id, { content: html || '' });
+  };
   const [showCompletedTasks, setShowCompletedTasks] = useState(() => {
     try { return localStorage.getItem('owa_course_tasks_show_completed_v1') === '1'; } catch { return false; }
   });
@@ -2842,6 +2794,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const handleCreateNote = () => {
     const courseFolder = noteFolders.find(f => f.courseId === course.id);
     const id = addNote({ title: '', content: '', tags: courseFolder ? [] : [course.name], folderId: courseFolder?.id || '', isPinned: false, course: course.name, courseColor: course.color });
+    freshEmptyNotesRef.current.add(id);
     setEditingNoteId(id);
     setEditContent('');
     setSelectedNoteId(id);
@@ -3427,6 +3380,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                       </button>
                       <button onClick={() => {
                         const newId = addNote({ title: '', content: '', course: course.name, courseColor: course.color, isCoursePrivate: true, isPinned: false });
+                        freshEmptyNotesRef.current.add(newId);
                         setSelectedOverviewNoteId(newId);
                         setOverviewNoteEditMode(true);
                       }}
@@ -3520,7 +3474,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                           <NoteEditor
                                             note={n}
                                             courseColor={course.color}
-                                            onSave={updateNote}
+                                            onSave={(id, data) => saveCourseNoteContent(id, data?.content ?? '')}
                                             editable={overviewNoteEditMode}
                                             hideToolbar
                                             onActiveFormatsChange={setOverviewActiveFormats}
@@ -3941,7 +3895,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                   const isTodayDay = d.iso === today;
                                   const isSel = d.iso === plannerDate;
                                   return (
-                                    <button key={d.iso} onClick={() => { plannerManualRef.current = true; try { localStorage.setItem(`owa_estudio_planner_manual_${selectedCourseId}`, '1'); } catch { /* noop */ } setPlannerDate(d.iso); }}
+                                    <button key={d.iso} onClick={() => markManual(d.iso)}
                                       title={format(new Date(d.iso + 'T12:00:00'), 'EEEE d MMMM', { locale: es })}
                                       style={{ flex: 1, minWidth: 0, cursor: 'pointer', height: 28, padding: '0 4px', borderRadius: 8, border: isSel ? `1px solid ${course.color}` : '1px solid transparent', background: 'transparent', transition: 'all 180ms ' + EASE, fontFamily: 'inherit' }}
                                       onMouseEnter={e => { if (!isTodayDay && !isSel) { e.currentTarget.style.background = 'var(--bg-hover)'; } }}
@@ -5882,7 +5836,8 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                         }
                       };
                       const handleDoneEditing = () => {
-                        updateNote(n.id, { content: editContent });
+                        saveCourseNoteContent(n.id, editContent);
+
                         setEditingNoteId(null);
                       };
                       return (
@@ -5910,8 +5865,8 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                                     contentEditable
                                     suppressContentEditableWarning
                                     dangerouslySetInnerHTML={{ __html: editContent }}
-                                    onInput={(e: React.FormEvent<HTMLDivElement>) => { const html = (e.target as HTMLDivElement).innerHTML; setEditContent(html); if (saveTimerRef.current) clearTimeout(saveTimerRef.current); saveTimerRef.current = setTimeout(() => updateNote(n.id, { content: html }), 800); }}
-                                    onBlur={() => { updateNote(n.id, { content: editContent }); }}
+                                    onInput={(e: React.FormEvent<HTMLDivElement>) => { const html = (e.target as HTMLDivElement).innerHTML; setEditContent(html); if (saveTimerRef.current) clearTimeout(saveTimerRef.current); saveTimerRef.current = setTimeout(() => saveCourseNoteContent(n.id, html), 800); }}
+                                    onBlur={() => { saveCourseNoteContent(n.id, editContent); }}
                                     onMouseUp={scheduleNoteTrack}
                                     style={{ padding: '16px 20px 12px', minHeight: 80, maxHeight: 'calc(100vh - 240px)', overflowY: 'auto', fontSize: 15, lineHeight: 1.9, color: 'var(--text-primary)', background: 'transparent', outline: 'none', fontFamily: "'Atkinson Hyperlegible', system-ui, serif", wordBreak: 'break-word' }} />
                                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 14px 10px', borderTop: '1px solid var(--border-subtle)', background: `${course.color}04` }}>

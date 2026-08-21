@@ -109,6 +109,30 @@ interface ActivityEntry {
   plannedSessionId?: string;
 }
 
+function detectPerformanceSuggestion(opts: {
+  sessionType: string;
+  durationSec: number;
+  targetSec: number;
+  distractionCount?: number;
+  pauseDurationSec?: number;
+  plannedIntensity?: number;
+  scale: 10 | 20;
+}): number {
+  const ratio = opts.targetSec > 0 ? opts.durationSec / opts.targetSec : 1;
+  let score: number;
+  if (opts.plannedIntensity && opts.plannedIntensity >= 1) {
+    const expected = opts.scale === 10 ? opts.plannedIntensity : Math.min(20, opts.plannedIntensity * 2);
+    score = expected * Math.max(0.5, Math.min(1, ratio));
+  } else {
+    score = 5 + 10 * Math.min(1, ratio) + (ratio >= 1 ? 1 : 0);
+    const dist = opts.distractionCount || 0;
+    if (dist > 1) score -= Math.min(8, (dist - 1) * 2);
+    const pauseMin = (opts.pauseDurationSec || 0) / 60;
+    if (pauseMin > 5) score -= Math.min(5, Math.floor((pauseMin - 5) / 5));
+  }
+  return Math.max(1, Math.min(opts.scale, Math.round(score)));
+}
+
 
 export default function Estudio() {
   const {
@@ -121,7 +145,7 @@ export default function Estudio() {
     addNotification, updateTask, setAccumulatedPauseTime, setIsTimerActive,
     setDistractionCount, setShowRestPrompt,
     plannedSessions, updatePlannedSession,
-    activePlannedSessionId, linkPlannedSessionToTimer, unlinkPlannedSessionFromTimer,
+    activePlannedSessionId, linkPlannedSessionToTimer, unlinkPlannedSessionFromTimer, unlinkTaskFromTimer,
     navigateToCourse, setNavigateTo,
   } = useApp();
 
@@ -312,11 +336,19 @@ export default function Estudio() {
       setEvalSessionId(null);
       setEvalPerception(7);
       setEvalDiscomfort(Math.min(10, distractionCount));
-      setEvalVolmeter(0);
       setEvalMode('rendimiento');
       setEvalFreeText('');
       const ps = activePlannedSessionId ? (plannedSessions || []).find(p => p.id === activePlannedSessionId) : undefined;
       if (ps) setEvalPlanOutcome(ps.completed ? 'logrado' : 'no_logrado');
+      setEvalVolmeter(detectPerformanceSuggestion({
+        sessionType: 'pomodoro',
+        durationSec: sessionTime,
+        targetSec: settings.pomodoroTime || 1500,
+        distractionCount,
+        pauseDurationSec: accumulatedPauseTime - lastPauseTimeRef.current,
+        plannedIntensity: ps?.intensity,
+        scale: ps ? 10 : 20,
+      }));
       if (activeTask) {
         setEvalTaskAction(activeTask.status === 'inicio' ? null : (activeTask.status === 'progreso' ? 'not_finished' : 'complete'));
         setEvalSubjects(courses.filter(c => activeTask.course === c.name).map(c => c.id));
@@ -422,7 +454,16 @@ export default function Estudio() {
     const session = studySessions.find(s => s.id === entryId);
     if (!session || (session.type !== 'pomodoro' && session.type !== 'chrono')) return;
     setEvalSessionId(entryId);
-    setEvalVolmeter(session.volmeter ?? Math.min(20, Math.max(1, 10 - (session.pauseCount || 0) + 5)));
+    const psReopen = session.plannedSessionId ? (plannedSessions || []).find(p => p.id === session.plannedSessionId) : undefined;
+    setEvalVolmeter(session.volmeter ?? detectPerformanceSuggestion({
+      sessionType: session.type,
+      durationSec: session.duration,
+      targetSec: session.type === 'chrono' ? (chronoGoal || 3600) : (settings.pomodoroTime || 1500),
+      distractionCount: session.pauseCount,
+      pauseDurationSec: session.pauseDuration,
+      plannedIntensity: psReopen?.intensity,
+      scale: session.plannedSessionId ? 10 : 20,
+    }));
     setEvalFreeText('');
     setEvalPerception(session.perception ?? 7);
     setEvalDiscomfort(session.discomfort ?? Math.min(10, session.pauseCount || 0));
@@ -932,12 +973,18 @@ export default function Estudio() {
                 }
                 lastPauseTimeRef.current = accumulatedPauseTime;
                 setEvalSessionId(null);
-                setEvalVolmeter(0);
                 setEvalFreeText('');
-                if (activePlannedSessionId) {
-                  const ps = (plannedSessions || []).find(p => p.id === activePlannedSessionId);
-                  setEvalPlanOutcome(ps?.completed ? 'logrado' : 'no_logrado');
-                }
+                const psManual = activePlannedSessionId ? (plannedSessions || []).find(p => p.id === activePlannedSessionId) : undefined;
+                if (psManual) setEvalPlanOutcome(psManual.completed ? 'logrado' : 'no_logrado');
+                setEvalVolmeter(detectPerformanceSuggestion({
+                  sessionType,
+                  durationSec: nowSessionTime,
+                  targetSec: sessionType === 'chrono' ? (chronoGoal || 3600) : (settings.pomodoroTime || 1500),
+                  distractionCount,
+                  pauseDurationSec: accumulatedPauseTime,
+                  plannedIntensity: psManual?.intensity,
+                  scale: psManual ? 10 : 20,
+                }));
                 if (activeTask) {
                   setEvalTaskAction(activeTask.status === 'inicio' ? null : (activeTask.status === 'progreso' ? 'not_finished' : 'complete'));
                   setEvalSubjects(courses.filter(c => activeTask.course === c.name).map(c => c.id));
@@ -1816,11 +1863,17 @@ export default function Estudio() {
                   evaluatedAt: new Date().toISOString(),
                 });
                 if (activePlannedSessionId) {
-                  updatePlannedSession(activePlannedSessionId, { completed: evalPlanOutcome !== 'no_logrado' });
+                  const completed = evalPlanOutcome !== 'no_logrado';
+                  updatePlannedSession(activePlannedSessionId, { completed });
+                  if (completed) {
+                    unlinkPlannedSessionFromTimer();
+                    addNotification('¡Sesión cumplida y desvinculada del temporizador!', 'success');
+                  }
                 }
                 if (evalTaskAction === 'complete' && activeTaskId) {
                   updateTask(activeTaskId, { status: 'completado', completedAt: new Date().toISOString() });
-                  addNotification('¡Tarea completada!', 'success');
+                  unlinkTaskFromTimer();
+                  addNotification('¡Tarea completada y desvinculada del temporizador!', 'success');
                 } else if (evalTaskAction === 'progress' && activeTaskId) {
                   updateTask(activeTaskId, { status: 'progreso' });
                 }

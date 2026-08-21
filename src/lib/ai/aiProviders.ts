@@ -186,6 +186,62 @@ export const CHARVIS_PROVIDERS: CharvisProvider[] = [
     visionModels: ['grok-4.6', 'grok-4', 'grok-4-fast', 'grok-3'],
     defaultVision: false,
   },
+  {
+    id: 'nvidia',
+    name: 'NVIDIA NIM',
+    brandColor: '#76B900',
+    defaultModel: 'deepseek-ai/deepseek-v3.1',
+    defaultModels: [
+      'deepseek-ai/deepseek-v3.1',
+      'meta/llama-3.3-70b-instruct',
+      'nvidia/llama-3.3-nemotron-super-49b-v1',
+      'nvidia/llama-3.1-nemotron-ultra-253b-v1',
+      'mistralai/mistral-large',
+      'qwen/qwen2.5-72b-instruct',
+    ],
+    baseUrl: 'https://integrate.api.nvidia.com/v1',
+    docsUrl: 'https://build.nvidia.com',
+    keyHint: 'Clave gratuita en build.nvidia.com. Modelos de NVIDIA NIM con inferencia acelerada.',
+    visionModels: ['nvidia/llava-v1.6-34b', 'nvidia/neva-22b'],
+    defaultVision: false,
+  },
+  {
+    id: 'openrouter',
+    name: 'OpenRouter',
+    brandColor: '#8B5CF6',
+    defaultModel: 'anthropic/claude-3.7-sonnet',
+    defaultModels: [
+      'anthropic/claude-3.7-sonnet',
+      'openai/gpt-5.6',
+      'openai/gpt-4o',
+      'google/gemini-3.1-pro',
+      'meta-llama/llama-4-maverick',
+      'deepseek/deepseek-chat-v3-0324',
+      'qwen/qwen3-235b-a22b',
+    ],
+    baseUrl: 'https://openrouter.ai/api/v1',
+    docsUrl: 'https://openrouter.ai/keys',
+    keyHint: 'Clave en openrouter.ai/keys. Un solo endpoint para cientos de modelos de todos los proveedores.',
+    visionModels: [
+      'anthropic/claude-3.7-sonnet',
+      'openai/gpt-5.6',
+      'openai/gpt-4o',
+      'google/gemini-3.1-pro',
+      'meta-llama/llama-4-maverick',
+    ],
+    defaultVision: false,
+  },
+  {
+    id: 'custom',
+    name: 'Personalizado',
+    brandColor: '#94a3b8',
+    defaultModel: '',
+    defaultModels: [],
+    baseUrl: 'https://api.ejemplo.com/v1',
+    docsUrl: '',
+    keyHint: 'Proveedor OpenAI-compatible configurable: escribe tu propia URL base, clave y modelo.',
+    defaultVision: true,
+  },
 ];
 
 export const DEFAULT_PROVIDER_ID = 'opencode';
@@ -243,7 +299,7 @@ export async function fetchProviderModels(baseUrl: string, apiKey: string): Prom
   const f = await getFetch();
   const cleanBase = baseUrl.replace(/\/+$/, '');
   const url = `${cleanBase}/models`;
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const headers: Record<string, string> = {};
 
   if (cleanBase.includes('anthropic.com')) {
     if (apiKey) headers['x-api-key'] = apiKey;
@@ -252,10 +308,36 @@ export async function fetchProviderModels(baseUrl: string, apiKey: string): Prom
     if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
   }
 
-  const res = await f(url, { method: 'GET', headers });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const data = await res.json();
-  const arr = Array.isArray(data?.data) ? data.data : Array.isArray(data?.models) ? data.models : [];
-  return arr.map((m: any) => (typeof m === 'string' ? m : m?.id)).filter(Boolean).filter((x: unknown) => typeof x === 'string') as string[];
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 10000);
+  try {
+    const res = await f(url, { method: 'GET', headers, signal: ctrl.signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const arr = Array.isArray(data?.data) ? data.data : Array.isArray(data?.models) ? data.models : [];
+    const list = arr.map((m: any) => (typeof m === 'string' ? m : m?.id)).filter(Boolean).filter((x: unknown) => typeof x === 'string') as string[];
+    if (list.length === 0) throw new Error('Sin modelos');
+    return list.sort((a, b) => {
+      const ra = favoriteRank(a);
+      const rb = favoriteRank(b);
+      return ra === rb ? a.localeCompare(b) : ra - rb;
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function favoriteRank(model: string): number {
+  const m = model.toLowerCase();
+  const rank =
+    /(^|[-_/])(gpt-5\.6|gpt-5\b|gpt-4o)/i.test(m) ? 1 :
+    /(^|[-_/])(claude|sonnet|opus|haiku)/i.test(m) ? 1 :
+    /(^|[-_/])(gemini)/i.test(m) ? 1 :
+    /(^|[-_/])(deepseek)/i.test(m) ? 1 :
+    /(^|[-_/])(big-pickle|glm|kimi|minimax)/i.test(m) ? 1 :
+    /(^|[-_/])(grok)/i.test(m) ? 2 :
+    /(^|[-_/])(mistral|pixtral|codestral)/i.test(m) ? 2 :
+    /(^|[-_/])(llama|qwen|moonshotai|compound)/i.test(m) ? 2 : 3;
+  return rank;
 }
 
