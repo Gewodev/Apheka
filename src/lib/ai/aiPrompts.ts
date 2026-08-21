@@ -37,7 +37,8 @@ Tienes acceso de lectura y escritura a TODOS los subsistemas de la aplicación m
 - **Estructura Visual Impecable**: Usa Markdown elegante, títulos estructurados, listas limpias, tablas comparativas y negritas en conceptos clave.
 - **Formulación Matemática**: Utiliza LaTeX siempre: \`$...$\` para fórmulas en línea y \`$$...$$\` para bloques de ecuaciones destacados.
 - **Código y Snippets**: Bloques de código con sintaxis exacta y nombres de archivo cuando aplique.
-- **Idioma**: Responde siempre en español fluido, natural y elegante, salvo que el usuario consulte en otro idioma.`;
+- **Idioma**: Responde siempre en español fluido, natural y elegante, salvo que el usuario consulte en otro idioma.
+- **CERO EMOJIS**: NUNCA uses emojis, emoticones, caritas faciales, símbolos pictográficos ni iconos Unicode en ninguna parte de tus respuestas. Ni al inicio, ni al final, ni dentro del texto, ni en listas, ni en títulos. En su lugar usa texto plano con formato Markdown elegante: viñetas con \`-\`, negritas con \`**\`, negritas con \`**\`, etc. La única excepción son los caracteres de puntuación tipográfica normal (guiones, comillas, asteriscos de formato).`;
 
 export interface CharvisModelMeta {
   providerId?: string;
@@ -46,7 +47,7 @@ export interface CharvisModelMeta {
   vision?: boolean;
 }
 
-export function composeSystemPrompt(context: AppContextSnapshot, deepMode = false, meta: CharvisModelMeta = {}): string {
+export function composeSystemPrompt(context: AppContextSnapshot, deepMode = false, meta: CharvisModelMeta = {}, voiceMode = false): string {
   const parts: string[] = [SYSTEM_PROMPT];
 
   if (meta.providerName || meta.modelName) {
@@ -69,6 +70,15 @@ export function composeSystemPrompt(context: AppContextSnapshot, deepMode = fals
     parts.push(`- Si se trata de un tema académico, investigativo o técnico, profundiza en causas, implicaciones, metodologías y conclusiones fundamentadas.`);
     parts.push(`- Emplea la herramienta de búsqueda web (\`webSearch\`) para respaldar hechos, cifras y datos recientes citando las fuentes.`);
     parts.push(`- Ejecuta herramientas de forma autónoma sin preámbulos y sintetiza los hallazgos con claridad magistral.`);
+  }
+
+  if (voiceMode) {
+    parts.push(`\n\n=== MODO VOZ EN VIVO ===`);
+    parts.push(`El usuario te escucha por voz a través del micrófono. Tus respuestas serán leídas en voz alta por un sintetizador de voz (TTS).`);
+    parts.push(`- Responde de forma BREVE y DIRECTA: máximo 2-4 oraciones por respuesta.`);
+    parts.push(`- Ve al grano sin preámbulos, despedidas ni fórmulas de cortesía innecesarias.`);
+    parts.push(`- Evita listas largas, tablas y bloques de código extensos — si necesitas estructura, usa viñetas simples de máximo 3 puntos.`);
+    parts.push(`- Cuando una tarea requiera más profundidad, ofrece un resumen hablado breve y sugiere al usuario abrir el chat de texto para los detalles.`);
   }
 
   parts.push(`\n--- ESTADO Y CONTEXTO EN VIVO DE OWA STUDIO ---`);

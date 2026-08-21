@@ -199,7 +199,7 @@ export default function VoiceLiveOverlay({ open, onClose }: VoiceLiveOverlayProp
       const system = composeSystemPrompt(snapshot, false, {
         providerId: a.settings.owaBrainProvider, providerName: a.settings.owaBrainProvider,
         modelName: model, vision: false,
-      });
+      }, true);
       const history = historyRef.current.slice(-8);
       const runningMessages: AIMessage[] = [
         { role: 'system', content: system } as AIMessage,
@@ -480,7 +480,7 @@ export default function VoiceLiveOverlay({ open, onClose }: VoiceLiveOverlayProp
     <div
       key={`${eraseTick}-${showResponse ? 'resp' : 'trans'}`}
       style={{
-        position: 'fixed', top: 'min(12vh, 110px)', left: '50%', transform: 'translateX(-50%)',
+        position: 'fixed', top: 'min(16vh, 150px)', left: '50%', transform: 'translateX(-50%)',
         zIndex: 100000, width: 'min(92vw, 880px)', textAlign: 'center', pointerEvents: 'none',
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14,
         animation: closing ? 'voiceLiveOutCenter 240ms ease forwards' : 'voiceLiveInCenter 350ms ease',
