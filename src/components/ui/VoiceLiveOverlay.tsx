@@ -435,6 +435,22 @@ export default function VoiceLiveOverlay({ open, onClose }: VoiceLiveOverlayProp
         >
           <Trash2 size={14} />
         </button>
+        {phase === 'processing' && (
+          <button
+            onClick={() => abortRef.current?.abort()}
+            title="Detener respuesta"
+            style={{
+              width: 42, height: 42, borderRadius: 13,
+              background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.40)',
+              color: '#f87171', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 150ms',
+              backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.22)'; e.currentTarget.style.borderColor = 'rgba(239,68,68,0.65)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.12)'; e.currentTarget.style.borderColor = 'rgba(239,68,68,0.40)'; }}
+          >
+            <Square size={13} />
+          </button>
+        )}
         <button
           onClick={() => { const t = transcriptRef.current.trim(); if (t && !busyRef.current && !pausedRef.current) sendTurn(t); }}
           title="Enviar (Enter)"
