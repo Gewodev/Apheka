@@ -67,7 +67,7 @@ git config user.email "tu@email.com"
 |---|---|---|
 | `main` | Produccion -- siempre funcional. **Nunca commitear directamente.** Solo merges aprobados. | Todos (solo via PR) |
 | `camicon-cambios` | Branch de trabajo | Cami |
-| `gemommits` | Branch de trabajo | Gemma |
+| `gemommits` | Branch de trabajo | MaxCB |
 
 ---
 
