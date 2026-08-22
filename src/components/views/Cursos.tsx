@@ -32,6 +32,7 @@ import { format, addDays, startOfWeek, endOfWeek } from "date-fns";
 import { es } from "date-fns/locale";
 import toast from 'react-hot-toast';
 import { openBrainWithAnchor, isOverBrainZone, getLastPointer, setBrainDragState } from '../../lib/brainDrop';
+import { createEditorHistory } from '../../lib/editorHistory';
 import { fuzzyMatch } from '../../lib/fuzzy';
 import { usePlannerDay } from '../../lib/plannerDay';
 import { useMaterialMenu } from '../ui/MaterialContextMenu';
@@ -924,6 +925,7 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
 }) {
   const editorRef = useRef<HTMLDivElement>(null);
   const dirtyRef = useRef(false);
+  const histRef = useRef(createEditorHistory(() => editorRef.current));
   const [activeFormats, setActiveFormats] = useState<Record<string, boolean>>({});
   const lastEnterEmpty = useRef(false);
   const trackTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -939,6 +941,12 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
     }
     dirtyRef.current = false;
   }, [note?.id, note?.content]);
+
+  // Historial undo/redo propio: se reinicia SOLO al cambiar de apunte
+  // (no con cada commit del autosave, que re-renderiza el contenido)
+  useEffect(() => {
+    histRef.current.reset();
+  }, [note.id]);
 
   useEffect(() => {
     return () => {
@@ -1075,7 +1083,20 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
 
   const handleEditorKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (!editable) { e.preventDefault(); return; }
-    if (e.key === "Tab") { e.preventDefault(); document.execCommand("insertHTML", false, "&#09;"); return; }
+    if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+      const uk = e.key.toLowerCase();
+      if (uk === "z" && !e.shiftKey) {
+        e.preventDefault();
+        if (histRef.current.undo()) markDirty();
+        return;
+      }
+      if (uk === "y" || (uk === "z" && e.shiftKey)) {
+        e.preventDefault();
+        if (histRef.current.redo()) markDirty();
+        return;
+      }
+    }
+    if (e.key === "Tab") { e.preventDefault(); document.execCommand("insertHTML", false, "&#09;"); histRef.current.capture(false); markDirty(); return; }
 
     const sel = window.getSelection();
     if (!sel || !sel.rangeCount) return;
@@ -1104,6 +1125,7 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
               newRange.selectNodeContents(p); newRange.collapse(true);
               sel.removeAllRanges(); sel.addRange(newRange);
               lastEnterEmpty.current = false;
+              histRef.current.capture(false);
               markDirty(); return;
             }
             lastEnterEmpty.current = true;
@@ -1118,6 +1140,7 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
             const newRange = document.createRange();
             newRange.selectNodeContents(p); newRange.collapse(true);
             sel.removeAllRanges(); sel.addRange(newRange);
+            histRef.current.capture(false);
             markDirty(); return;
           }
         }
@@ -1137,6 +1160,7 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
             const nr = document.createRange();
             nr.selectNodeContents(cb.previousElementSibling); nr.collapse(false);
             sel.removeAllRanges(); sel.addRange(nr);
+            histRef.current.capture(false);
             markDirty(); return;
           }
         }
@@ -1183,6 +1207,7 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
       document.execCommand(cmd, false, value);
     }
     editorRef.current?.focus();
+    histRef.current.capture(false);
     markDirty();
     trackFormats();
   };
@@ -1245,7 +1270,7 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
         </div>
       )}
       <div ref={editorRef} contentEditable={editable} suppressContentEditableWarning
-        onPaste={handlePaste} onInput={markDirty}
+        onPaste={handlePaste} onInput={() => { markDirty(); histRef.current.capture(true); }}
         onBlur={autoSave} onKeyDown={handleEditorKeyDown}
         onMouseUp={scheduleTrack}
         onClick={(e) => { const t = e.target as HTMLElement; if (t.tagName === 'IMG' && onImageClick) { e.stopPropagation(); onImageClick((t as HTMLImageElement).src); } }}
@@ -1639,6 +1664,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
   const editContentRef = useRef<HTMLDivElement>(null);
+  const topicHistRef = useRef(createEditorHistory(() => editContentRef.current));
   const [noteActiveFormats, setNoteActiveFormats] = useState<Record<string, boolean>>({});
   const noteTrackTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [notesSearch, setNotesSearch] = useState('');
@@ -1652,7 +1678,10 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
 
   // Auto-focus contentEditable when entering editing mode
   useEffect(() => {
-    if (editingNoteId) setTimeout(() => editContentRef.current?.focus(), 60);
+    if (editingNoteId) {
+      setTimeout(() => editContentRef.current?.focus(), 60);
+      topicHistRef.current.reset();
+    }
   }, [editingNoteId]);
   // Study mode state
   const [showMaterialsDropdown, setShowMaterialsDropdown] = useState(false);
@@ -5897,8 +5926,9 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                                     contentEditable
                                     suppressContentEditableWarning
                                     dangerouslySetInnerHTML={{ __html: editContent }}
-                                    onInput={(e: React.FormEvent<HTMLDivElement>) => { const html = (e.target as HTMLDivElement).innerHTML; setEditContent(html); if (saveTimerRef.current) clearTimeout(saveTimerRef.current); saveTimerRef.current = setTimeout(() => saveCourseNoteContent(n.id, html), 800); }}
-                                    onBlur={() => { saveCourseNoteContent(n.id, editContent); }}
+                                    onKeyDown={(e) => { if ((e.ctrlKey || e.metaKey) && !e.altKey) { const uk = e.key.toLowerCase(); if (uk === 'z' && !e.shiftKey) { e.preventDefault(); topicHistRef.current.undo(); } else if (uk === 'y' || (uk === 'z' && e.shiftKey)) { e.preventDefault(); topicHistRef.current.redo(); } } }}
+                                    onInput={(e: React.FormEvent<HTMLDivElement>) => { const html = (e.target as HTMLDivElement).innerHTML; setEditContent(html); topicHistRef.current.capture(true); if (saveTimerRef.current) clearTimeout(saveTimerRef.current); saveTimerRef.current = setTimeout(() => saveCourseNoteContent(n.id, html), 800); }}
+                                    onBlur={() => { saveCourseNoteContent(n.id, editContentRef.current?.innerHTML ?? editContent); }}
                                     onMouseUp={scheduleNoteTrack}
                                     style={{ padding: '16px 20px 12px', minHeight: 80, maxHeight: 'calc(100vh - 240px)', overflowY: 'auto', fontSize: 15, lineHeight: 1.9, color: 'var(--text-primary)', background: 'transparent', outline: 'none', fontFamily: "'Atkinson Hyperlegible', system-ui, serif", wordBreak: 'break-word' }} />
                                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 14px 10px', borderTop: '1px solid var(--border-subtle)', background: `${course.color}04` }}>

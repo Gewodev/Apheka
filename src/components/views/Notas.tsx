@@ -39,6 +39,7 @@ import {
 } from "lucide-react";
 import { useApp, Note, NoteFolder, NoteAttachment, fmtClock } from "../../store/AppContext";
 import { openFileSmart, pickAndPersistFile } from '../../lib/openFileSmart';
+import { createEditorHistory } from '../../lib/editorHistory';
 import { fuzzyMatch } from '../../lib/fuzzy';
 import { useMaterialMenu } from '../ui/MaterialContextMenu';
 import { GoogleClassroomIcon, GoogleDriveIcon, GoogleDocsIcon, GoogleSheetsIcon, GoogleSlidesIcon, GoogleFormsIcon, WordIcon, ExcelIcon, PowerPointIcon } from '../ui/GoogleIcons';
@@ -1150,6 +1151,8 @@ function NewTagModal({ onClose, onCreate }: NewTagModalProps) {
 /* ====== EDITOR FORMATTING TOOLBAR ====== */
 interface EditorToolbarProps {
   onFormat: (cmd: string, value?: string) => void;
+  onUndo?: () => void;
+  onRedo?: () => void;
 }
 
 const TEXT_COLORS = [
@@ -1174,7 +1177,7 @@ const HIGHLIGHT_COLORS = [
   { name: "Resaltado Rosa", value: "rgba(236, 72, 153, 0.25)" },
 ];
 
-function EditorToolbar({ onFormat }: EditorToolbarProps) {
+function EditorToolbar({ onFormat, onUndo, onRedo }: EditorToolbarProps) {
   const [showColorMenu, setShowColorMenu] = useState(false);
   const [showTablePicker, setShowTablePicker] = useState(false);
   const [tableRows, setTableRows] = useState(3);
@@ -1245,6 +1248,23 @@ function EditorToolbar({ onFormat }: EditorToolbarProps) {
     <div onMouseDown={e => { const t = e.target as HTMLElement; if (e.button === 0 && t.tagName !== 'INPUT' && t.tagName !== 'SELECT' && t.tagName !== 'TEXTAREA') e.preventDefault(); }} style={{
       display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", position: "relative",
     }}>
+      {/* 0. UNDO / REDO */}
+      {onUndo && (
+        <button onClick={onUndo} title="Deshacer (Ctrl+Z)"
+          style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
+          className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6" /><path d="M21 17a9 9 0 0 0-15-6.7L3 13" /></svg>
+        </button>
+      )}
+      {onRedo && (
+        <button onClick={onRedo} title="Rehacer (Ctrl+Y)"
+          style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
+          className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 7v6h-6" /><path d="M3 17a9 9 0 0 1 15-6.7L21 13" /></svg>
+        </button>
+      )}
+      {(onUndo || onRedo) && <div style={{ width: 1, height: 16, background: "var(--border-default)", margin: "0 4px" }} />}
+
       {/* 1. HEADINGS — icon cuadritos */}
       <div style={{ display: "flex", gap: 2, alignItems: "stretch" }}>
         {([
@@ -1619,6 +1639,7 @@ export default function Notas() {
 
   const editorRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLInputElement>(null);
+  const histRef = useRef(createEditorHistory(() => editorRef.current));
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Real-time clock tick
@@ -1746,6 +1767,7 @@ const noteLiveAtts = useMemo(
           }
         });
       }
+      histRef.current.reset();
     }
   }, [selectedNoteId, isEditing]);
 
@@ -1979,8 +2001,66 @@ const noteLiveAtts = useMemo(
     };
   }, [selectedNote, flushNoteContent]);
 
-  const handleEditorInput = useCallback(() => {
+  // Detección de fórmulas en vivo: al teclear el "$" que cierra, envuelve
+  // $f$ (inline) o $$f$$ (bloque) con el mismo estilo de la vista previa,
+  // conservando el LaTeX crudo dentro para poder seguir editándolo.
+  const tryFormatMathAtCaret = useCallback(() => {
+    const ed = editorRef.current;
+    const sel = window.getSelection();
+    if (!ed || !sel || sel.rangeCount === 0) return;
+    const range = sel.getRangeAt(0);
+    const node = range.startContainer;
+    if (!ed.contains(node) || node.nodeType !== Node.TEXT_NODE) return;
+    let anc: HTMLElement | null = (node as Text).parentElement;
+    while (anc && anc !== ed) {
+      if (anc.classList.contains("notes-code-block") || anc.tagName === "PRE" || anc.tagName === "CODE") return;
+      anc = anc.parentElement;
+    }
+    const offset = range.startOffset;
+    const textNode = node as Text;
+    const before = textNode.textContent?.slice(0, offset) || "";
+    if (!before.endsWith("$")) return;
+    const bm = before.match(/\$\$([^$\n]{1,300})\$\$$/);
+    const im = bm ? null : before.match(/(^|[\s(\[{>])\$([^$\n]{1,200})\$$/);
+    const m = bm || im;
+    if (!m) return;
+    const inner = (bm ? m[1] : m![2]).trim();
+    if (!inner) return;
+    const delLen = bm ? m[0].length : m[0].length - m[1].length;
+    const startIdx = offset - delLen;
+    const wrap = document.createElement(bm ? "div" : "span");
+    if (bm) {
+      wrap.className = "math-formula-box";
+      wrap.setAttribute("style", "background: var(--bg-deep); border: 1px solid var(--border-default); padding: 12px 14px; border-radius: 8px; text-align: center; font-family: monospace; font-size: 15px; margin: 12px 0; color: var(--accent); box-shadow: inset 0 1px 3px rgba(0,0,0,0.3);");
+      const strong = document.createElement("span");
+      strong.setAttribute("style", "font-weight:600; letter-spacing:0.02em;");
+      strong.textContent = `$$${inner}$$`;
+      wrap.appendChild(strong);
+    } else {
+      wrap.setAttribute("style", "font-family: monospace; color: var(--accent); background: var(--bg-hover); padding: 1px 4px; border-radius: 4px; font-size: 13px;");
+      wrap.textContent = `$${inner}$`;
+    }
+    try {
+      textNode.deleteData(startIdx, delLen);
+      const r = document.createRange();
+      r.setStart(textNode, startIdx);
+      r.collapse(true);
+      r.insertNode(wrap);
+      textNode.parentElement?.normalize();
+      const r2 = document.createRange();
+      r2.setStartAfter(wrap);
+      r2.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(r2);
+      histRef.current.capture(false);
+    } catch { /* noop */ }
+  }, []);
+
+  const handleEditorInput = useCallback((e?: React.FormEvent<HTMLDivElement>) => {
+    const data = e ? ((e.nativeEvent as InputEvent | undefined)?.data ?? null) : null;
     setSaveStatus("pending");
+    histRef.current.capture(true);
+    if (data === "$") tryFormatMathAtCaret();
     if (editorRef.current && selectedNote) {
       const html = editorRef.current.innerHTML;
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -1988,7 +2068,7 @@ const noteLiveAtts = useMemo(
         updateNote(selectedNote.id, { content: html });
       }, 600);
     }
-  }, [selectedNote, updateNote]);
+  }, [selectedNote, updateNote, tryFormatMathAtCaret]);
 
   const handleFormat = useCallback((cmd: string, value?: string) => {
     if (cmd === "codeBlock") {
@@ -2117,12 +2197,28 @@ const noteLiveAtts = useMemo(
     }
     editorRef.current?.focus();
     setSaveStatus("pending");
+    histRef.current.capture(false);
     if (editorRef.current && selectedNote) {
       updateNote(selectedNote.id, { content: editorRef.current.innerHTML });
     }
   }, [selectedNote, updateNote]);
 
   const handleEditorKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    // 0. Undo/Redo propio (el nativo se rompe con las manipulaciones directas del DOM)
+    if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+      const uk = e.key.toLowerCase();
+      if (uk === "z" && !e.shiftKey) {
+        e.preventDefault();
+        if (histRef.current.undo()) setSaveStatus("pending");
+        return;
+      }
+      if (uk === "y" || (uk === "z" && e.shiftKey)) {
+        e.preventDefault();
+        if (histRef.current.redo()) setSaveStatus("pending");
+        return;
+      }
+    }
+
     // 1. Tab indentation / outdentation
     if (e.key === "Tab") {
       e.preventDefault();
@@ -2196,6 +2292,7 @@ const noteLiveAtts = useMemo(
         if (sel && sel.toString()) {
           document.execCommand("insertHTML", false, `<code style="background:var(--bg-elevated);padding:2px 6px;border-radius:4px;font-family:'JetBrains Mono',monospace;font-size:0.9em;color:var(--accent);">${sel.toString()}</code>`);
           setSaveStatus("pending");
+          histRef.current.capture(false);
           if (editorRef.current && selectedNote) {
             updateNote(selectedNote.id, { content: editorRef.current.innerHTML });
           }
@@ -2423,6 +2520,7 @@ const noteLiveAtts = useMemo(
               newRange.collapse(false);
               sel.removeAllRanges();
               sel.addRange(newRange);
+              histRef.current.capture(false);
               setSaveStatus("pending");
               return;
             }
@@ -2490,6 +2588,7 @@ const noteLiveAtts = useMemo(
           } else if (cmd === "mathBlock") {
             handleFormat("mathBlock");
           }
+          histRef.current.capture(false);
           setSaveStatus("pending");
         }
       }
@@ -2555,6 +2654,7 @@ const noteLiveAtts = useMemo(
             }
             document.execCommand("insertHTML", false, html);
             setSaveStatus("pending");
+            histRef.current.capture(false);
             if (selectedNote) updateNote(selectedNote.id, { content: editorRef.current.innerHTML });
           };
           reader.readAsDataURL(file);
@@ -2626,6 +2726,7 @@ const noteLiveAtts = useMemo(
         .replace(/<div([^>]*)>/gi, "<p$1>")
         .replace(/<\/div>/gi, "</p>");
       document.execCommand("insertHTML", false, cleaned);
+      histRef.current.capture(false);
       setSaveStatus("pending");
     } else {
       // Plain text paste: detect URLs
@@ -2982,7 +3083,9 @@ const noteLiveAtts = useMemo(
 
                 {/* Rich formatting Toolbar */}
                 <div style={{ padding: "8px 16px", borderBottom: "1px solid var(--border-default)", flexShrink: 0 }}>
-                  <EditorToolbar onFormat={handleFormat} />
+                  <EditorToolbar onFormat={handleFormat}
+                    onUndo={() => { if (histRef.current.undo()) setSaveStatus("pending"); }}
+                    onRedo={() => { if (histRef.current.redo()) setSaveStatus("pending"); }} />
                 </div>
 
                 {/* Write panel — adaptive margins */}
