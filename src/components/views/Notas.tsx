@@ -1434,7 +1434,7 @@ function ShelfPlank() {
 }
 
 export default function Notas() {
-  const { notes, noteFolders: folders, addNote, updateNote, updateNoteVisual, deleteNote, restoreNote, permanentlyDeleteNote, addNoteFolder, duplicateNote, reorderNotes, settings, addNotification, setPipUrl } = useApp();
+  const { notes, noteFolders: folders, addNote, updateNote, updateNoteVisual, deleteNote, restoreNote, permanentlyDeleteNote, addNoteFolder, duplicateNote, reorderNotes, settings, addNotification, setPipUrl, flushNoteContent } = useApp();
 
   const matMenu = useMaterialMenu((m) => addNotification(m, 'error'));
 
@@ -1959,6 +1959,25 @@ const noteLiveAtts = useMemo(
   }, []);
 
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const flushNow = () => {
+      if (saveTimeoutRef.current) { clearTimeout(saveTimeoutRef.current); saveTimeoutRef.current = null; }
+      if (!selectedNote || !editorRef.current || !flushNoteContent) return;
+      const html = editorRef.current.innerHTML ?? '';
+      const title = titleRef.current?.value;
+      flushNoteContent(selectedNote.id, html, typeof title === 'string' ? title : undefined);
+    };
+    const onVis = () => { if (document.visibilityState === 'hidden') flushNow(); };
+    window.addEventListener('beforeunload', flushNow);
+    window.addEventListener('pagehide', flushNow);
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      window.removeEventListener('beforeunload', flushNow);
+      window.removeEventListener('pagehide', flushNow);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, [selectedNote, flushNoteContent]);
 
   const handleEditorInput = useCallback(() => {
     setSaveStatus("pending");

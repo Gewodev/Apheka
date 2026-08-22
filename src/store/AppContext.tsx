@@ -539,6 +539,7 @@ interface AppContextType extends AppState {
   reorderNotes: (noteIds: string[]) => void;
   updateNoteFolder: (id: string, updates: Partial<NoteFolder>) => void;
   duplicateNote: (noteId: string) => string | null;
+  flushNoteContent: (noteId: string, content: string, title?: string) => void;
   addCourse: (course: Omit<Course, 'id' | 'sortOrder'>) => string;
   updateCourse: (id: string, updates: Partial<Course>) => void;
   deleteCourse: (id: string) => void;
@@ -2139,6 +2140,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const permanentlyDeleteNote = useCallback((id: string) => {
     setNotes(prev => prev.filter(n => n.id !== id));
+  }, []);
+
+  const flushNoteContent = useCallback((noteId: string, content: string, title?: string) => {
+    const stamp = new Date().toISOString();
+    setNotes(prev => prev.some(n => n.id === noteId) ? prev.map(n => n.id === noteId ? { ...n, content, ...(typeof title === 'string' ? { title } : {}), updatedAt: stamp } : n) : prev);
+    try {
+      const raw = latestJsonRef.current;
+      if (!raw) return;
+      const data = JSON.parse(raw);
+      if (!Array.isArray(data.notes)) return;
+      const idx = data.notes.findIndex((n: any) => n && n.id === noteId);
+      if (idx === -1) return;
+      const updated = { ...data.notes[idx], content, updatedAt: stamp };
+      if (typeof title === 'string') updated.title = title;
+      data.notes[idx] = updated;
+      const json = JSON.stringify(data);
+      latestJsonRef.current = json;
+      try { localStorage.setItem(STORAGE_KEY, json); } catch { }
+      try { if (json.length <= 5_000_000) localStorage.setItem('owa_studio_data_backup', json); } catch { }
+    } catch { }
   }, []);
 
   const addNoteFolder = useCallback((folder: Omit<NoteFolder, 'id'>) => {
@@ -3795,7 +3816,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     googleConnected, calendarSyncEnabled, lastCalendarSync, importState,
     addTask, updateTask, deleteTask, toggleTaskStatus, clearAllTasks, deleteCompletedTasks, deleteOldCompletedTasks, reorderTasks,
     addSubTask, toggleSubTask, deleteSubTask, addTaskFile, removeTaskFile, incrementTaskStudyTime,
-    addNote, updateNote, updateNoteVisual, deleteNote, restoreNote, permanentlyDeleteNote, addNoteFolder, deleteNoteFolder, reorderFolders, reorderNotes, updateNoteFolder, duplicateNote,
+    addNote, updateNote, updateNoteVisual, deleteNote, restoreNote, permanentlyDeleteNote, addNoteFolder, deleteNoteFolder, reorderFolders, reorderNotes, updateNoteFolder, duplicateNote, flushNoteContent,
     addCourse, updateCourse, deleteCourse, reorderCourses,
     addEvent, updateEvent, deleteEvent,
     addHabit, updateHabit, deleteHabit, setHabits,

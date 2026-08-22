@@ -917,6 +917,8 @@ function TaskRow({ task, onToggle, onDelete, courseColor }: { task: any; onToggl
 }
 
 // ─── Note Full Editor ───
+const liveNoteEditors = new Map<string, () => string | null>();
+
 function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolbar, onImageClick, onActiveFormatsChange }: {
   note: any; courseColor: string; onSave: (id: string, data: any) => void; editable?: boolean; toolbarEnd?: React.ReactNode; hideToolbar?: boolean; onImageClick?: (src: string) => void; onActiveFormatsChange?: (f: Record<string, boolean>) => void;
 }) {
@@ -927,6 +929,11 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
   const trackTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    liveNoteEditors.set(note.id, () => (editorRef.current ? editorRef.current.innerHTML : null));
+    return () => { liveNoteEditors.delete(note.id); };
+  }, [note.id]);
+
+  useEffect(() => {
     if (editorRef.current && editorRef.current.innerHTML !== note?.content) {
       editorRef.current.innerHTML = note?.content || '';
     }
@@ -935,7 +942,8 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
 
   useEffect(() => {
     return () => {
-      const content = editorRef.current?.innerHTML || '';
+      if (!editorRef.current) return;
+      const content = editorRef.current.innerHTML;
       onSave(note.id, { content });
       if (trackTimeout.current) clearTimeout(trackTimeout.current);
     };
@@ -1300,7 +1308,7 @@ function PlanSelectDropdown({ value, onChange, options, noneLabel, color }: { va
 
 // ─── Main Component ───
 export default function Cursos({ initialCourseId, initialTab = 'overview', onNavigate }: { initialCourseId?: string; initialTab?: 'overview' | 'tareas' | 'notas' | 'archivos'; onNavigate?: (view: string) => void }) {
-  const { courses = [], tasks = [], notes = [], noteFolders = [], updateCourse, deleteCourse, setNavigateTo, setFocusedTaskId, addTask, updateTask, deleteTask, addNote, updateNote, deleteNote, reorderNotes, reorderTasks, plannedSessions, addPlannedSession, updatePlannedSession, deletePlannedSession, reorderPlannedSessions, setPipUrl, studySessions, activePlannedSessionId, linkPlannedSessionToTimer, unlinkPlannedSessionFromTimer, courseDeepLink, setCourseDeepLink, navigateToCourse, activeTaskId, addNotification } = useApp();
+  const { courses = [], tasks = [], notes = [], noteFolders = [], updateCourse, deleteCourse, setNavigateTo, setFocusedTaskId, addTask, updateTask, deleteTask, addNote, updateNote, deleteNote, reorderNotes, reorderTasks, plannedSessions, addPlannedSession, updatePlannedSession, deletePlannedSession, reorderPlannedSessions, setPipUrl, studySessions, activePlannedSessionId, linkPlannedSessionToTimer, unlinkPlannedSessionFromTimer, courseDeepLink, setCourseDeepLink, navigateToCourse, activeTaskId, addNotification, flushNoteContent } = useApp();
   const th = document.documentElement.getAttribute('data-theme');
   const isDarkSelect = !th || th === 'oscuro' || th === 'vibrante';
   const selectBorder = isDarkSelect ? '1px solid rgba(255,255,255,0.12)' : '1px solid rgba(0,0,0,0.12)';
@@ -1924,19 +1932,16 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const [overviewAddingNote, setOverviewAddingNote] = useState(false);
   const [overviewEditContent, setOverviewEditContent] = useState('');
   const [overviewNotesSort, setOverviewNotesSort] = useState<'date' | 'title'>('date');
-  const freshEmptyNotesRef = useRef<Set<string>>(new Set());
   const saveCourseNoteContent = (id: string, html: string) => {
-    const text = (html || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, '').trim();
-    const hasImg = /<img[^>]*>/i.test(html || '');
-    if (freshEmptyNotesRef.current.has(id) && !text && !hasImg) {
-      deleteNote(id);
-      freshEmptyNotesRef.current.delete(id);
-      setSelectedOverviewNoteId(prev => (prev === id ? null : prev));
-      setOverviewNoteEditMode(false);
-      toast.success('Apunte vacío descartado');
-      return;
-    }
     updateNote(id, { content: html || '' });
+  };
+  const flushOverviewEditors = () => {
+    for (const [id, read] of Array.from(liveNoteEditors.entries())) {
+      try {
+        const html = read();
+        if (html !== null) saveCourseNoteContent(id, html);
+      } catch { }
+    }
   };
   const [showCompletedTasks, setShowCompletedTasks] = useState(() => {
     try { return localStorage.getItem('owa_course_tasks_show_completed_v1') === '1'; } catch { return false; }
@@ -1951,10 +1956,14 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (selectedOverviewNoteId) {
+          flushOverviewEditors();
           setSelectedOverviewNoteId(null);
           setOverviewNoteEditMode(false);
           setConfirmDeleteNoteId(null);
         } else if (editingNoteId) {
+          const html = editContentRef.current?.innerHTML || editContent;
+          if (html) saveCourseNoteContent(editingNoteId, html);
+          if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
           setEditingNoteId(null);
         }
       }
@@ -1962,6 +1971,31 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [selectedOverviewNoteId, editingNoteId]);
+
+  useEffect(() => {
+    const flushAll = () => {
+      if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
+      for (const [id, read] of Array.from(liveNoteEditors.entries())) {
+        try {
+          const html = read();
+          if (html !== null) flushNoteContent(id, html);
+        } catch { }
+      }
+      if (editingNoteId) {
+        const html = editContentRef.current?.innerHTML || editContent;
+        try { flushNoteContent(editingNoteId, html || ''); } catch { }
+      }
+    };
+    const onVis = () => { if (document.visibilityState === 'hidden') flushAll(); };
+    window.addEventListener('beforeunload', flushAll);
+    window.addEventListener('pagehide', flushAll);
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      window.removeEventListener('beforeunload', flushAll);
+      window.removeEventListener('pagehide', flushAll);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, [editingNoteId, editContent, flushNoteContent]);
 
   // Click outside the expanded overview note: closes only in view mode (edit mode persists)
   useEffect(() => {
@@ -2794,7 +2828,6 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const handleCreateNote = () => {
     const courseFolder = noteFolders.find(f => f.courseId === course.id);
     const id = addNote({ title: '', content: '', tags: courseFolder ? [] : [course.name], folderId: courseFolder?.id || '', isPinned: false, course: course.name, courseColor: course.color });
-    freshEmptyNotesRef.current.add(id);
     setEditingNoteId(id);
     setEditContent('');
     setSelectedNoteId(id);
@@ -3380,7 +3413,6 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                       </button>
                       <button onClick={() => {
                         const newId = addNote({ title: '', content: '', course: course.name, courseColor: course.color, isCoursePrivate: true, isPinned: false });
-                        freshEmptyNotesRef.current.add(newId);
                         setSelectedOverviewNoteId(newId);
                         setOverviewNoteEditMode(true);
                       }}
@@ -3463,7 +3495,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                             </button>
                                           )}
                                           <div style={{ width: 1, height: 18, background: 'var(--border-subtle)', margin: '0 4px' }} />
-                                          <button onClick={() => { setSelectedOverviewNoteId(null); setOverviewNoteEditMode(false); setConfirmDeleteNoteId(null); }}
+                                           <button onClick={() => { flushOverviewEditors(); setSelectedOverviewNoteId(null); setOverviewNoteEditMode(false); setConfirmDeleteNoteId(null); }}
                                             style={{ width: 24, height: 24, borderRadius: 5, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                                             onMouseEnter={e => e.currentTarget.style.background = `${course.color}10`}
                                             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
