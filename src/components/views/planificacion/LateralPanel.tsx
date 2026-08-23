@@ -9,8 +9,8 @@ import { GoogleClassroomIcon, GoogleDriveIcon, GoogleDocsIcon, GoogleSheetsIcon,
 
 const REVIEW_LEVEL_COLORS = ['#EF4444', '#F97316', '#F59E0B', '#FBBF24', '#EAB308', '#A3E635', '#84CC16', '#4ADE80', '#22C55E', '#10B981'];
 
-export type SelectedItem = 
-  | { type: 'day'; date: Date; events: PlanEvent[]; tasks: any[] }
+export type SelectedItem =
+  | { type: 'day'; date: Date; events: PlanEvent[]; tasks: any[]; sessions?: any[] }
   | { type: 'event'; event: PlanEvent }
   | { type: 'task'; task: any }
   | { type: 'plansession'; session: any };
@@ -25,10 +25,11 @@ interface LateralPanelProps {
   onAddEvent?: (date: Date) => void;
   onAddPlanSession?: (date: Date) => void;
   onEditPlanSession?: (session: any) => void;
+  onSelectSession?: (session: any) => void;
   onFileMoved?: (evId: string, oldUrl: string, newPath: string) => void;
 }
 
-export default function LateralPanel({ item, onClose, onSelectEvent, onEditEvent, onDeleteEvent, onViewTask, onAddEvent, onAddPlanSession, onEditPlanSession, onFileMoved }: LateralPanelProps) {
+export default function LateralPanel({ item, onClose, onSelectEvent, onEditEvent, onDeleteEvent, onViewTask, onAddEvent, onAddPlanSession, onEditPlanSession, onSelectSession, onFileMoved }: LateralPanelProps) {
   const { settings, tasks, setPipUrl } = useApp();
   const tf = settings?.timeFormat;
   if (!item) return null;
@@ -85,7 +86,7 @@ export default function LateralPanel({ item, onClose, onSelectEvent, onEditEvent
         {/* Content */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '36px 36px 120px' }}>
           {item.type === 'day' && (
-            <DayDetails item={item} onSelectEvent={onSelectEvent} onViewTask={onViewTask} timeFormat={tf} onAddEvent={onAddEvent} onAddPlanSession={onAddPlanSession} />
+            <DayDetails item={item} onSelectEvent={onSelectEvent} onViewTask={onViewTask} timeFormat={tf} onAddEvent={onAddEvent} onAddPlanSession={onAddPlanSession} onSelectSession={onSelectSession} />
           )}
           {item.type === 'event' && (
             <EventDetails item={item} onEdit={onEditEvent} onDelete={onDeleteEvent} timeFormat={tf} tasks={tasks} onViewTask={onViewTask} onFileMoved={onFileMoved} />
@@ -102,10 +103,11 @@ export default function LateralPanel({ item, onClose, onSelectEvent, onEditEvent
   );
 }
 
-function DayDetails({ item, onSelectEvent, onViewTask, timeFormat, onAddEvent, onAddPlanSession }: { item: Extract<SelectedItem, {type: 'day'}>, onSelectEvent?: (ev: PlanEvent) => void, onViewTask?: (taskId: string) => void, timeFormat?: '24h' | '12h', onAddEvent?: (date: Date) => void, onAddPlanSession?: (date: Date) => void }) {
-  const { date, events, tasks } = item;
+function DayDetails({ item, onSelectEvent, onViewTask, timeFormat, onAddEvent, onAddPlanSession, onSelectSession }: { item: Extract<SelectedItem, {type: 'day'}>, onSelectEvent?: (ev: PlanEvent) => void, onViewTask?: (taskId: string) => void, timeFormat?: '24h' | '12h', onAddEvent?: (date: Date) => void, onAddPlanSession?: (date: Date) => void, onSelectSession?: (session: any) => void }) {
+  const { date, events, tasks, sessions } = item;
+  const { courses } = useApp();
   const formattedDate = format(date, "EEEE d 'de' MMMM", { locale: es });
-  
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 40 }}>
       <div>
@@ -113,7 +115,7 @@ function DayDetails({ item, onSelectEvent, onViewTask, timeFormat, onAddEvent, o
           {formattedDate}
         </h2>
         <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 8, fontWeight: 400 }}>
-          {events.length} eventos programados y {tasks.length} entregas
+          {events.length} eventos programados y {tasks.length} entregas{sessions && sessions.length > 0 ? ` · ${sessions.length} sesión${sessions.length !== 1 ? 'es' : ''} de estudio` : ''}
         </div>
       </div>
 
@@ -169,7 +171,59 @@ function DayDetails({ item, onSelectEvent, onViewTask, timeFormat, onAddEvent, o
           </div>
         )}
 
-        {events.length === 0 && tasks.length === 0 && (
+        {sessions && sessions.length > 0 && (
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Clock size={13} /> Sesiones de estudio
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {sessions.map((ps) => {
+                const cInfo = (courses || []).find((c: any) => c.id === ps.courseId);
+                const pCol = cInfo?.color || '#9CA3AF';
+                const done = !!ps.completed;
+                const psInt = Math.max(0, Math.min(10, ps.intensity || 0));
+                const endTime = (() => {
+                  if (!ps.startTime) return '';
+                  const [sh, sm] = String(ps.startTime).split(':').map(Number);
+                  const m = Math.round(sh * 60 + sm + (ps.durationMinutes || 30));
+                  return `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+                })();
+                return (
+                  <div
+                    key={ps.id}
+                    onClick={() => onSelectSession?.(ps)}
+                    style={{ padding: '16px 20px', background: `linear-gradient(135deg, ${pCol}10, ${pCol}04)`, border: `1px solid ${pCol}30`, borderRadius: 14, borderLeft: `3px solid ${pCol}`, cursor: 'pointer', transition: 'all 200ms', opacity: done ? 0.72 : 1 }}
+                    onMouseEnter={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${pCol}1a, ${pCol}08)`; e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = `0 8px 24px ${pCol}22`; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${pCol}10, ${pCol}04)`; e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                      {done && <CheckCircle2 size={14} style={{ color: '#10B981', flexShrink: 0 }} />}
+                      <div style={{ fontSize: 16, fontWeight: 500, color: done ? 'var(--text-tertiary)' : 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{done ? '' : ''}{ps.title || 'Sesión de estudio'}</div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                      <Clock size={13} style={{ color: pCol, flexShrink: 0 }} />
+                      <span style={{ fontSize: 12.5, fontFamily: "'JetBrains Mono', monospace", color: 'var(--text-secondary)' }}>
+                        {ps.startTime ? `${fmtTimeRange(ps.startTime, endTime, timeFormat)} · ${ps.durationMinutes}m` : 'Flexible'}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
+                      <div style={{ display: 'flex', gap: 2, flex: 1, maxWidth: 160 }}>
+                        {REVIEW_LEVEL_COLORS.map((col, i) => (
+                          <div key={i} style={{ flex: 1, height: 4, borderRadius: 1, background: i < psInt ? col : 'var(--surface-hover)', opacity: i < psInt ? 0.9 : 0.5 }} />
+                        ))}
+                      </div>
+                      {(cInfo?.name || ps.groupId || ps.topicId) && (
+                        <span style={{ fontSize: 11, color: pCol, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{cInfo?.name || ''}</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {events.length === 0 && tasks.length === 0 && !(sessions && sessions.length > 0) && (
           <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text-muted)' }}>
             <Calendar size={48} style={{ margin: '0 auto 16px', opacity: 0.2, strokeWidth: 1 }} />
             <div style={{ fontSize: 18, fontWeight: 300, fontFamily: "'Outfit',sans-serif" }}>Día libre</div>

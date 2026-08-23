@@ -1281,7 +1281,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
             setCourses(data.courses);
           }
           if (data.events) setEvents(data.events);
-          if (data.studySessions) setStudySessions(data.studySessions);
+          if (data.studySessions) {
+            // Cura duplicados históricos: mismo origen + solapamiento > 1 min = un solo registro
+            const arr = [...(data.studySessions as any[])].filter((s: any) => s && typeof s === 'object' && s.startedAt);
+            const kept: any[] = [];
+            for (const s of arr.sort((a, b) => new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime())) {
+              const flag = s.isDistraction ? 'd' : 'r';
+              const st = new Date(s.startedAt).getTime();
+              const en = st + (s.duration || 0) * 1000;
+              const idx = kept.findIndex(k => {
+                if ((k.isDistraction ? 'd' : 'r') !== flag) return false;
+                if ((k.taskId ?? '') !== (s.taskId ?? '')) return false;
+                if ((k.plannedSessionId ?? '') !== (s.plannedSessionId ?? '')) return false;
+                const ks = new Date(k.startedAt).getTime();
+                const ke = ks + (k.duration || 0) * 1000;
+                return ks < en - 60000 && st < ke - 60000;
+              });
+              if (idx >= 0) {
+                if ((s.duration || 0) > (kept[idx].duration || 0)) kept[idx] = s;
+              } else kept.push(s);
+            }
+            setStudySessions(kept as any);
+          }
           if (data.plannedSessions) setPlannedSessions(data.plannedSessions);
           if (data.settings) {
             // Migration: dailyGoalHistory keys might have been stored in UTC (from old code using toISOString)
@@ -3225,6 +3246,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const key = `${session.type}-${session.duration}-${Math.floor(Date.now() / 2000)}`;
     if (key === lastSessionKeyRef.current) return null;
     lastSessionKeyRef.current = key;
+    // Anti-duplicados real: solo hay UN temporizador activo, así que dos registros
+    // del mismo origen (tarea/sesión planificada y mismo tipo normal/distracción)
+    // que se SOLAPAN en el tiempo son el mismo estudio registrado dos veces.
+    // Las rutas de distracción (pausa>10min por blur Y por reanudación del timer)
+    // podían dispararse ambas para una misma ausencia y crear el duplicado.
+    const nFlag = session.isDistraction ? 'd' : 'r';
+    const nStart = new Date(session.startedAt).getTime();
+    const nEnd = nStart + (session.duration || 0) * 1000;
+    if (isFinite(nStart)) {
+      const dup = (studySessions || []).find(s => {
+        if (!s || !s.startedAt) return false;
+        if ((s.isDistraction ? 'd' : 'r') !== nFlag) return false;
+        if ((s.taskId ?? '') !== (session.taskId ?? '')) return false;
+        if (((s as any).plannedSessionId ?? '') !== ((session as any).plannedSessionId ?? '')) return false;
+        const sStart = new Date(s.startedAt).getTime();
+        if (!isFinite(sStart)) return false;
+        const sEnd = sStart + (s.duration || 0) * 1000;
+        return sStart < nEnd - 60000 && nStart < sEnd - 60000;
+      });
+      if (dup) return dup.id;
+    }
     const id = Date.now().toString();
     const newSession = { ...session, id };
     setStudySessions(prev => {

@@ -1,4 +1,4 @@
-﻿import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import {
   GraduationCap, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Pencil, PlusCircle, Layers, Trash2,
@@ -59,19 +59,67 @@ export const BUILT_IN_SESSION_TYPES = [
 export const SESSION_TYPE_COLORS = ['#8B5CF6','#3B82F6','#10B981','#F59E0B','#EF4444','#EC4899','#06B6D4','#6366F1','#84CC16','#F97316','#14B8A6','#A855F7'];
 
 
-// ─── Specialized tool creators (each tool has its own tailored form) ───
+// --- Specialized tool creators (each tool has its own tailored form) ---
+// Teoría de cada técnica: qué es, cómo se aplica y evidencia científica.
+export type ToolTheory = { what: string; how: string[]; evidence: string; ref: string };
 export const TOOL_CREATOR_META = {
-  quizzes: { name: 'Quiz rápido', hint: 'Pregunta y respuesta para autoevaluarte', color: '#EF4444', icon: HelpCircle },
-  blurting: { name: 'Blurting', hint: 'Escribe todo lo que recuerdes del tema, sin mirar apuntes', color: '#3B82F6', icon: NotebookPen },
-  feynman: { name: 'Feynman', hint: 'Explica el concepto en palabras simples, como si fuera para un niño', color: '#F59E0B', icon: Lightbulb },
-  matching: { name: 'Matching', hint: 'Relaciona pares: escribe el concepto y su pareja', color: '#10B981', icon: Shuffle },
-  cloze: { name: 'Cloze', hint: 'Crea un texto con huecos para completar', color: '#06B6D4', icon: Type },
-  categorization: { name: 'Categorizar', hint: 'Agrupa elementos por categoría', color: '#EC4899', icon: Puzzle },
-  mnemonics: { name: 'Mnemotecnia', hint: 'Crea un dato clave con una regla mnemotécnica', color: '#6366F1', icon: Key },
+  quizzes: { name: 'Quiz rápido', hint: 'Pregunta y respuesta para autoevaluarte', color: '#EF4444', icon: HelpCircle,
+    theory: { what: 'Recuperación activa: responder SIN mirar la respuesta fortalece la memoria mucho más que releer.', how: ['Escribe una pregunta concreta.', 'Responde de memoria, en voz alta o por escrito.', 'Comprueba solo después de intentarlo.', 'Repite las falladas en la siguiente ronda.'], evidence: 'El testing effect muestra ganancias grandes frente a relectura.', ref: 'Roediger & Karpicke (2006), Psychological Science' } },
+  blurting: { name: 'Blurting', hint: 'Escribe todo lo que recuerdes sin mirar apuntes', color: '#3B82F6', icon: NotebookPen,
+    theory: { what: 'Vaciado libre: volcar TODO lo que recuerdas de memoria expone tus huecos al instante.', how: ['Cierra apuntes, hoja en blanco.', 'Escribe 5-10 min todo lo que recuerdes.', 'Abre apuntes y marca en otro color lo faltado.', 'Estudia SOLO lo marcado y repite mañana.'], evidence: 'Generar contenido de memoria supera a releer en retención a largo plazo.', ref: 'Karpicke & Blunt (2011), Science' } },
+  feynman: { name: 'Feynman', hint: 'Explícalo en palabras simples, como para un niño', color: '#F59E0B', icon: Lightbulb,
+    theory: { what: 'Si no puedes explicarlo simple, no lo entiendes: la explicación simple destapa la jerga que oculta huecos.', how: ['Elige UN concepto.', 'Explícalo como a un niño de 12 años.', 'Donde te trabes ahí está el hueco: vuelve a la fuente.', 'Simplifica con analógicas propias.'], evidence: 'Explicar en simple revela lagunas y crea organizadores mentales profundos.', ref: 'R. Feynman; popularizado por Scott Young (2011)' } },
+  matching: { name: 'Matching', hint: 'Relaciona pares: concepto y su pareja', color: '#10B981', icon: Shuffle,
+    theory: { what: 'Emparejar término-definición afina la memoria discriminativa entre opciones parecidas.', how: ['Lista conceptos y parejas.', 'Mezcla una columna y une de memoria.', 'Los pares que falles repetidamente son los débiles.'], evidence: 'La práctica de emparejar da aprendizaje robusto en menos tiempo que el pasivo.', ref: 'Dickinson & OConnell (1990), J. Applied Behavior Analysis' } },
+  cloze: { name: 'Cloze', hint: 'Texto con huecos para completar', color: '#06B6D4', icon: Type,
+    theory: { what: 'Borrar palabras clave y completarlas fuerza reconstruir el contexto completo activamente.', how: ['Copia una definición o proceso clave.', 'Borra las 2-5 palabras más importantes.', 'Rellena de memoria.', 'Los huecos fallados son prioridad de repaso.'], evidence: 'Cloze deletion es base de los SRS modernos por eficiencia por minuto.', ref: 'Richmond & Cummings (2005), Psychological Record' } },
+  categorization: { name: 'Categorizar', hint: 'Agrupa elementos por categoría', color: '#EC4899', icon: Puzzle,
+    theory: { what: 'Clasificar en categorías construye esquemas: lo organizado se recuerda mejor que lo suelto.', how: ['Lista elementos mezclados.', 'Define tú 3-5 categorías (no las copies).', 'Clasifica y justifica cada decisión.', 'Compara con el material y ajusta.'], evidence: 'El clustering mejora el recuerdo libre frente a listas sin estructura.', ref: 'Bousfield (1953), J. General Psychology' } },
+  mnemonics: { name: 'Mnemotecnia', hint: 'Regla mnemotécnica para un dato clave', color: '#6366F1', icon: Key,
+    theory: { what: 'Acrónimos, frases absurdas e historias convierten información arbitraria en memorable mediante asociación vívida.', how: ['Toma el dato o lista difícil.', 'Construye acrónimo/frase/historia absurda.', 'Cuanto más vívida y rara, mejor se pega.', 'Recupérala de memoria 3 veces hoy.'], evidence: 'Efectos grandes en listas y orden arbitrario.', ref: 'McCarty (1980), Review of Educational Research' } },
+  spacedRep: { name: 'Repaso espaciado', hint: 'Intervalos crecientes: 1d · 3d · 1sem · 1mes', color: '#22C55E', icon: LI.CalendarClock,
+    theory: { what: 'Repasar justo antes de olvidar multiplica la retención; cada espaciado exitoso alarga el siguiente intervalo.', how: ['Repasa a: 1 día, 3 días, 1 semana, 2 semanas, 1 mes.', 'Si fallas un repaso, vuelve al intervalo anterior.', 'Marca tu dominio (0-10) tras cada repaso.'], evidence: 'El espaciado duplica retención frente a masificar con igual tiempo total.', ref: 'Cepeda et al. (2006), Psychological Bulletin' } },
+  leitner: { name: 'Cajas Leitner', hint: 'Acertar sube de caja, fallar vuelve al inicio', color: '#0EA5E9', icon: Layers,
+    theory: { what: 'Sistema de cajas con frecuencias distintas: acertar sube la tarjeta, fallar la devuelve al inicio — tu tiempo se concentra en lo débil.', how: ['Caja 1 diaria, caja 2 cada 3 días, caja 3 semanal...', 'Acierto sube; fallo baja a la 1.', 'Revisa solo las cajas que tocan hoy.'], evidence: 'Automatiza el espaciado adaptativo comparable a software SRS.', ref: 'Leitner (1972), So lernt man lernen' } },
+  interleaving: { name: 'Intercalado', hint: 'Mezcla tipos de problema en vez de bloques', color: '#F97316', icon: LI.ArrowLeftRight,
+    theory: { what: 'Alternar tipos (ABCABC) cuesta más ahora pero produce aprendizaje flexible y transferencia real.', how: ['Alterna 2-3 temas o tipos relacionados por sesión.', 'Antes de resolver pregúntate: qué tipo es y qué estrategia pide.', 'Sentirte peor al inicio es normal: ese esfuerzo ES el aprendizaje.'], evidence: 'Mejora tests tardíos y resolución en matemáticas y categorización.', ref: 'Rohrer & Taylor (2007), Instructional Science' } },
+  selfExplain: { name: 'Autoexplicación', hint: 'Explica EN VOZ ALTA cada paso que estudias', color: '#14B8A6', icon: LI.Brain,
+    theory: { what: 'Narrar en voz alta por qué sigue cada paso integra lo nuevo con lo conocido y destapa inferencias falsas.', how: ['Lee un paso o ejemplo.', 'Di en voz alta: qué hizo y POR Qué.', 'Conecta: "es igual que X pero...".', 'Lo no explicable = a revisar ya.'], evidence: 'Efecto grande en resolución de problemas y comprensión lectora.', ref: 'Chi et al. (1994), Cognitive Science' } },
+  elaborate: { name: 'Interrogación elaborativa', hint: 'Pregúntate ¿POR QUÉ es cierto esto?', color: '#8B5CF6', icon: HelpCircle,
+    theory: { what: 'Responder por qué es cierto enlaza lo nuevo con lo previo y crea múltiples rutas de recuperación.', how: ['Ante cada dato: por qué? y si no fuera así?', 'Responde CON TUS PALABRAS con ejemplos propios.', 'No avances sin una respuesta, aunque sea imperfecta.'], evidence: 'Supera leer dos veces en hechos factuales.', ref: 'Pressley et al. (1992), J. Educational Psychology' } },
+  dualCoding: { name: 'Codificación dual', hint: 'Palabra + dibujo propio del concepto', color: '#EC4899', icon: LI.Palette,
+    theory: { what: 'Codificar verbal Y visual crea dos huellas independientes; dibujarlo tú importa más que verlo hecho (drawing effect).', how: ['Cierra el material y dibuja el diagrama de memoria.', 'Etiqueta palabras clave junto al dibujo.', 'Explícalo usando solo tu dibujo.'], evidence: 'Codificación dual + drawing effect mejoran el recuerdo claramente.', ref: 'Paivio (1971); Wammes et al. (2016)' } },
+  cornell: { name: 'Notas Cornell', hint: 'Notas · señales al margen · resumen abajo', color: '#3B82F6', icon: LI.PenLine,
+    theory: { what: 'Página en 3 zonas: notas libres, preguntas-Señal al margen y resumen · convierte tomar apuntes en repasar.', how: ['Derecha: notas normales de clase.', 'Izquierda (tras clase): preguntas clave.', 'Abajo: resumen en 2-3 líneas con tus palabras.', 'Estudia tapando la derecha, respondiendo señales.'], evidence: 'Integra captura + recuperación estructurada; el valor está en las señales.', ref: 'Pauk & Owens (2010), How to Study in College' } },
+  memoryPalace: { name: 'Palacio de memoria', hint: 'Cada dato en un lugar de una ruta conocida', color: '#A78BFA', icon: LI.Landmark,
+    theory: { what: 'Método de loci: engancha datos vívidos a puntos fijos de una ruta conocida y recupéralos recorriéndola mentalmente.', how: ['Elige una ruta que conozcas al detalle.', 'Define 10-20 puntos fijos ordenados.', 'Coloca UN dato absurdo/vívido por punto.', 'Recorre la ruta para recuperarlos en orden.'], evidence: 'Entre los métodos más potentes para listas ordenadas; usado por campeones de memoria.', ref: 'Yates (1966); Maguire et al. (2003), Nature Neuroscience' } },
+  chunking: { name: 'Fragmentación', hint: 'Bloques pequeños dominados uno a uno', color: '#F59E0B', icon: LI.Blocks,
+    theory: { what: 'La memoria de trabajo maneja ~4 unidades; agrupar en trozos significativos multiplica lo retenible.', how: ['Divide el tema en bloques de 5-15 min.', 'Domina UN bloque antes del siguiente.', 'Nómbralo con 1-3 palabras: el nombre ES el chunk.'], evidence: 'La capacidad limitada explica el beneficio de segmentar (segmenting).', ref: 'Miller (1956); Mayer & Moreno (2003)' } },
+  retrievalGrid: { name: 'Cuadrícula de recuperación', hint: 'Tabla temas × aspectos para rellenar de memoria', color: '#84CC16', icon: LI.LayoutGrid,
+    theory: { what: 'Tabla vacía que rellenas SIN apuntes: visión global instantánea de tus huecos.', how: ['Filas = temas; columnas = aspectos (causas/fechas/fórmulas).', 'Rellena toda celda posible de memoria.', 'Las vacías en rojo son tu plan de estudio.'], evidence: 'Combina recuperación activa con organización del conocimiento.', ref: 'Agarwal et al. (2014), J. Applied Research in Memory and Cognition' } },
+  errorAnalysis: { name: 'Análisis de errores', hint: 'Diario: qué falló · por qué · regla anti-repetir', color: '#EF4444', icon: LI.Bug,
+    theory: { what: 'Catalogar TUS errores reales convierte cada fallo en una regla personal anti-repetición.', how: ['Tras un test, lista cada error.', 'Clasifica: descuido / concepto / procedimiento / lectura.', 'Escribe corrección Y regla para evitarlo.', 'Relee el diario antes del próximo examen.'], evidence: 'El feedback específico sobre errores propios supera repetir práctica sin análisis.', ref: 'Hattie & Timperley (2007), Review of Educational Research' } },
+  timeline: { name: 'Línea de tiempo', hint: 'Eventos en el tiempo con causa-efecto', color: '#0891B2', icon: LI.History,
+    theory: { what: 'El eje temporal añade estructura ordinal y causal: recuerdas cuándo porque sabes qué precedió a qué.', how: ['Dibuja el eje del tema.', 'Marcas cortas: fecha + 3 palabras.', 'Flechas causa ? efecto entre eventos.', 'Recítala de memoria hacia adelante y Atrás.'], evidence: 'La organización secuencial mejora el recuerdo serial y causal.', ref: 'Deese & Kaufman (1957), J. Exp. Psychology' } },
+  mindmap: { name: 'Mapa mental', hint: 'Centro + ramas jerárquicas de memoria', color: '#10B981', icon: LI.Network,
+    theory: { what: 'Jerarquía visual desde un centro para ver la estructura general — hazlo DE MEMORIA para que sea recuperación, no copia.', how: ['Centro: tema principal.', 'Ramas gruesas: ideas madre; subramas: detalles.', 'Una palabra clave por rama + color distintivo.', 'redibújalo de memoria mañana.'], evidence: 'Beneficio cuando se construye activamente; como transcripción aporta poco.', ref: 'Farrand et al. (2002), Medical Education' } },
+  teach: { name: 'Enseñar (Protégé)', hint: 'Prepárate para enséñrselo a otro de verdad', color: '#EAB308', icon: Users,
+    theory: { what: 'Solo ESPERAR enseñar ya cambia cómo estudias; enseñar de verdad lo multiplica.', how: ['Decide: mañana explico este tema a alguien.', 'Prepara como profesor: qué, orden, ejemplos.', 'Da la clase en voz alta sin apuntes 5-10 min.', 'Donde dudaste, ahí estudia más.'], evidence: 'Expectativa de enseñanza mejora recuerdo; enseñar activamente aún más.', ref: 'Nestojko et al. (2014); Fiorella & Mayer (2013)' } },
+  sq3r: { name: 'SQ3R', hint: 'Explora · Pregunta · Lee · Recita · Repasa', color: '#2563EB', icon: LI.BookMarked,
+    theory: { what: 'Protocolo de lectura en 5 pasos que convierte leer en recuperar.', how: ['Survey: títulos y negritas (2 min).', 'Question: cada título ? pregunta.', 'Read: busca SOLO esas respuestas.', 'Recite: respóndelas SIN mirar.', 'Review: mañana repite el paso 4.'], evidence: 'Mejora comprensión frente a lectura lineal cuando se cumple el recitado.', ref: 'Robinson (1946); Thomas & Robinson PQ4R (1972)' } },
+  concrete: { name: 'Ejemplos concretos', hint: '2-3 ejemplos propios por idea abstracta', color: '#059669', icon: LI.Boxes,
+    theory: { what: 'Lo abstracto se recuerda anclado a casos concretos variados: uno propio vale más que tres copiados.', how: ['Por definición: 2 ejemplos propios + 1 contraejemplo.', 'Varía contextos.', 'Contrasta por qué el contraejemplo NO es el concepto.'], evidence: 'Generar ejemplos concretos mejora comprensión abstracta.', ref: 'Weinstein & Mayer (1986); Rawson et al. (2015)' } },
+  summarize: { name: 'Resumen progresivo', hint: '1 frase por sección · luego todo en 5', color: '#64748B', icon: AlignLeft,
+    theory: { what: 'Resumir SIN mirar obliga a seleccionar lo esencial; progresivo = primero por sección, luego fusión global.', how: ['Cierra el material: UNA frase por sección.', 'Fusiona en un total de 5 líneas.', 'Compara y corrige solo lo esencial.'], evidence: 'Ayuda si se genera desde la memoria; copiar no aporta.', ref: 'Dunlosky et al. (2013), PSPI' } },
+  rubberDuck: { name: 'Pato de goma', hint: 'Explícale tu proceso a un objeto sin pausas', color: '#F472B6', icon: LI.Bird,
+    theory: { what: 'Explicar en voz alta e ininterrumpida obliga a verbalizar supuestos ocultos · clásico de programación y debugging.', how: ['Pon cualquier objeto delante (el pato).', 'Explícale TODO tu razonamiento sin saltos.', 'La solución suele aparecer al verbalizar el supuesto falso.'], evidence: 'verbalización estructurada expone supuestos implícitos.', ref: 'Hunt & Thomas, The Pragmatic Programmer (1999)' } },
 } as const;
 type ToolCreatorMode = keyof typeof TOOL_CREATOR_META;
 const TOOL_MATERIAL_TYPE: Record<ToolCreatorMode, SubjectMaterial['type']> = {
   quizzes: 'quiz', blurting: 'concept', feynman: 'meaning', matching: 'quiz', cloze: 'key-data', categorization: 'concept', mnemonics: 'key-data',
+  spacedRep: 'procedure', leitner: 'quiz', interleaving: 'procedure', selfExplain: 'meaning', elaborate: 'concept', dualCoding: 'resource',
+  cornell: 'concept', memoryPalace: 'meaning', chunking: 'procedure', retrievalGrid: 'key-data', errorAnalysis: 'key-data', timeline: 'concept',
+  mindmap: 'resource', teach: 'procedure', sq3r: 'procedure', concrete: 'concept', summarize: 'concept', rubberDuck: 'procedure',
 };
 
 const TOOL_ITEMS = {
@@ -79,13 +127,31 @@ const TOOL_ITEMS = {
   quizzes: { icon: HelpCircle, label: 'Quiz rápido', color: '#EF4444', sub: 'Autoevaluación' },
   blurting: { icon: NotebookPen, label: 'Blurting', color: '#3B82F6', sub: 'Recuerdo libre' },
   feynman: { icon: Lightbulb, label: 'Feynman', color: '#F59E0B', sub: 'Explica en simple' },
+  spacedRep: { icon: LI.CalendarClock, label: 'Repaso espaciado', color: '#22C55E', sub: '1d · 3d · 1sem · 1mes' },
+  leitner: { icon: Layers, label: 'Cajas Leitner', color: '#0EA5E9', sub: 'Cajas por dominio' },
+  interleaving: { icon: LI.ArrowLeftRight, label: 'Intercalado', color: '#F97316', sub: 'Mezcla de tipos' },
+  selfExplain: { icon: LI.Brain, label: 'Autoexplicación', color: '#14B8A6', sub: 'Paso a paso en voz alta' },
+  elaborate: { icon: HelpCircle, label: 'Interrog. elaborativa', color: '#8B5CF6', sub: '¿Por qué es cierto?' },
+  dualCoding: { icon: LI.Palette, label: 'Codificación dual', color: '#EC4899', sub: 'Palabra + dibujo' },
+  cornell: { icon: LI.PenLine, label: 'Notas Cornell', color: '#3B82F6', sub: 'Notas · señales · resumen' },
+  memoryPalace: { icon: LI.Landmark, label: 'Palacio memoria', color: '#A78BFA', sub: 'Ruta + loci' },
+  chunking: { icon: LI.Blocks, label: 'Fragmentación', color: '#F59E0B', sub: 'Bloques pequeños' },
   matching: { icon: Shuffle, label: 'Matching', color: '#10B981', sub: 'Relaciona pares' },
   cloze: { icon: Type, label: 'Cloze', color: '#06B6D4', sub: 'Texto con huecos' },
   categorization: { icon: Puzzle, label: 'Categorizar', color: '#EC4899', sub: 'Agrupa elementos' },
+  retrievalGrid: { icon: LI.LayoutGrid, label: 'Cuadrícula recup.', color: '#84CC16', sub: 'Temas × aspectos' },
+  errorAnalysis: { icon: LI.Bug, label: 'Análisis errores', color: '#EF4444', sub: 'Diario de fallos' },
+  timeline: { icon: LI.History, label: 'Línea de tiempo', color: '#0891B2', sub: 'Causa y efecto' },
+  mindmap: { icon: LI.Network, label: 'Mapa mental', color: '#10B981', sub: 'Ramas desde el centro' },
   mnemonics: { icon: Key, label: 'Mnemotecnia', color: '#6366F1', sub: 'Reglas para recordar' },
+  teach: { icon: Users, label: 'Enseñar (Protégé)', color: '#EAB308', sub: 'Prepárate para explicar' },
+  sq3r: { icon: LI.BookMarked, label: 'SQ3R', color: '#2563EB', sub: 'Lectura en 5 pasos' },
+  concrete: { icon: LI.Boxes, label: 'Ejemplos concretos', color: '#059669', sub: 'Ancla lo abstracto' },
+  summarize: { icon: AlignLeft, label: 'Resumen progresivo', color: '#64748B', sub: 'De sección a global' },
+  rubberDuck: { icon: LI.Bird, label: 'Pato de goma', color: '#F472B6', sub: 'Verbaliza sin parar' },
 } as const;
 type ToolKey = keyof typeof TOOL_ITEMS;
-const TOOL_DEFAULT_ORDER: ToolKey[] = ['flashcards', 'quizzes', 'blurting', 'feynman', 'matching', 'cloze', 'categorization', 'mnemonics'];
+const TOOL_DEFAULT_ORDER: ToolKey[] = ['flashcards', 'quizzes', 'blurting', 'feynman', 'spacedRep', 'leitner', 'interleaving', 'selfExplain', 'elaborate', 'dualCoding', 'cornell', 'memoryPalace', 'chunking', 'matching', 'cloze', 'categorization', 'retrievalGrid', 'errorAnalysis', 'timeline', 'mindmap', 'mnemonics', 'teach', 'sq3r', 'concrete', 'summarize', 'rubberDuck'];
 
 const EASE = "cubic-bezier(0.16, 1, 0.3, 1)";
 const REVIEW_LEVEL_COLORS = ['#EF4444', '#F97316', '#F59E0B', '#FBBF24', '#EAB308', '#A3E635', '#84CC16', '#4ADE80', '#22C55E', '#10B981'];
@@ -112,7 +178,7 @@ function expandsToDate(s: { date: string; repeat?: 'none' | 'daily' | 'weekly' |
   return false;
 }
 
-// Texto legible sobre un color de fondo hex: si el color es claro → negro, si es oscuro → blanco
+// Texto legible sobre un color de fondo hex: si el color es claro ? negro, si es oscuro ? blanco
 function dateContrast(hex: string, th?: string | null): string {
   const h = (hex || '#6366F1').replace('#', '');
   const r = parseInt(h.substring(0, 2), 16) || 0;
@@ -134,7 +200,7 @@ const SPINE_COLORS = [
 function formatTime(s: number) { if (!s || !isFinite(s)) return '0:00'; const m = Math.floor(s / 60); const sec = Math.floor(s % 60); return `${m}:${sec.toString().padStart(2, '0')}`; }
 
 // Reuse SPINE_COLORS token in case the user wants the same selection.
-// ─── Icon Picker Stuff ───
+// --- Icon Picker Stuff ---
 import * as LI from 'lucide-react';
 import { openFileSmart, pickAndPersistFile } from '../../lib/openFileSmart';
 const AVAILABLE_ICONS: { name: string; icon: React.ComponentType<{ size?: number; color?: string; style?: React.CSSProperties }>; label: string }[] = (() => {
@@ -375,16 +441,54 @@ function MaterialCard({ mat, dragAttributes, dragListeners, onEdit, onDelete, on
   const meta = MATERIAL_META[mat.type];
   const typeColors: Record<string, string> = { formula: '#8B5CF6', concept: '#3B82F6', 'key-data': '#F59E0B', meaning: '#10B981', quiz: '#EF4444', procedure: '#EC4899', resource: '#6366F1' };
   const toolMeta = mat.toolMode ? TOOL_CREATOR_META[mat.toolMode as ToolCreatorMode] : undefined;
-  const Icon = toolMeta ? toolMeta.icon : meta.icon;
-  const accent = toolMeta?.color || typeColors[mat.type] || 'var(--accent)';
-  const cardLabel = toolMeta?.name || meta.label;
+  // Detección de TIPO REAL del recurso (idéntica a Materiales de curso)
+  const _url = mat.dataUrl || '';
+  const _nm = (mat.name || '').toLowerCase();
+  const _ext = _nm.split('.').pop() || '';
+  const _lk = /^https?:\/\//i.test(_url);
+  const _isYT = _lk && (_url.includes('youtube.com') || _url.includes('youtu.be'));
+  const _isDrive = _lk && _url.includes('drive.google.com');
+  const _isClassroom = _lk && _url.includes('classroom.google.com');
+  const _isGDocs = _lk && _url.includes('docs.google.com');
+  const _isGSheets = _lk && _url.includes('sheets.google.com');
+  const _isGSlides = _lk && _url.includes('slides.google.com');
+  const _isGForms = _lk && _url.includes('forms.google.com');
+  const _isPdf = _ext === 'pdf' || _url.startsWith('data:application/pdf');
+  const _isDoc = ['doc', 'docx'].includes(_ext);
+  const _isXls = ['xls', 'xlsx', 'csv'].includes(_ext);
+  const _isPpt = ['ppt', 'pptx'].includes(_ext);
+  const _isAud = ['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a'].includes(_ext) || _url.startsWith('data:audio');
+  const _isVid = ['mp4', 'webm', 'avi', 'mov', 'mkv'].includes(_ext) || _url.startsWith('data:video');
+  const _isImgE = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'].includes(_ext) || _url.startsWith('data:image');
+  const _isWeb = _lk && !_isYT && !_isDrive && !_isClassroom && !_isGDocs && !_isGSheets && !_isGSlides && !_isGForms;
+  let Icon: any = toolMeta ? toolMeta.icon : meta.icon;
+  let accent: string = toolMeta?.color || typeColors[mat.type] || 'var(--accent)';
+  let cardLabel = toolMeta?.name || meta.label;
+  if (!toolMeta && mat.type === 'resource') {
+    if (_isYT) { Icon = (p: any) => (<svg viewBox="0 0 24 24" width={p.size || 17} height={p.size || 17} fill="#EF4444" style={{ display: 'block', flexShrink: 0 }}><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>); accent = '#EF4444'; cardLabel = 'YouTube'; }
+    else if (_isPdf) { Icon = (p: any) => (<svg viewBox="0 0 24 24" width={p.size || 17} height={p.size || 17} fill="#EF4444" style={{ display: 'block', flexShrink: 0 }}><path d="M23.63 15.3c-.71-.745-2.166-1.17-4.224-1.17-1.1 0-2.377.106-3.761.354a19.443 19.443 0 0 1-2.307-2.661c-.532-.71-.994-1.49-1.42-2.236.817-2.484 1.207-4.507 1.207-5.962 0-1.632-.603-3.336-2.342-3.336-.532 0-1.065.32-1.349.781-.78 1.384-.425 4.4.923 7.381a60.277 60.277 0 0 1-1.703 4.507c-.568 1.349-1.207 2.733-1.917 4.01C2.834 18.53.314 20.34.03 21.758c-.106.533.071 1.03.462 1.42.142.107.639.533 1.49.533 2.59 0 5.323-4.188 6.707-6.707 1.065-.355 2.13-.71 3.194-.994a34.963 34.963 0 0 1 3.407-.745c2.732 2.448 5.145 2.839 6.352 2.839 1.49 0 2.023-.604 2.2-1.1.32-.64.106-1.349-.213-1.704z"/></svg>); accent = '#EF4444'; cardLabel = 'PDF'; }
+    else if (_isDoc) { Icon = WordIcon; accent = '#2563EB'; cardLabel = 'Word'; }
+    else if (_isGDocs) { Icon = GoogleDocsIcon; accent = '#2563EB'; cardLabel = 'Docs'; }
+    else if (_isXls) { Icon = ExcelIcon; accent = '#10B981'; cardLabel = 'Excel'; }
+    else if (_isGSheets) { Icon = GoogleSheetsIcon; accent = '#10B981'; cardLabel = 'Sheets'; }
+    else if (_isPpt) { Icon = PowerPointIcon; accent = '#F97316'; cardLabel = 'PowerPoint'; }
+    else if (_isGSlides) { Icon = GoogleSlidesIcon; accent = '#F97316'; cardLabel = 'Slides'; }
+    else if (_isGForms) { Icon = GoogleFormsIcon; accent = '#7C3AED'; cardLabel = 'Forms'; }
+    else if (_isDrive) { Icon = GoogleDriveIcon; accent = '#4285F4'; cardLabel = 'Drive'; }
+    else if (_isClassroom) { Icon = GoogleClassroomIcon; accent = '#0F9D58'; cardLabel = 'Classroom'; }
+    else if (_isAud) { Icon = Music; accent = '#8B5CF6'; cardLabel = 'Audio'; }
+    else if (_isVid) { Icon = LI.Film; accent = '#EC4899'; cardLabel = 'Video'; }
+    else if (_isImgE) { Icon = ImageIcon; accent = '#F59E0B'; cardLabel = 'Imagen'; }
+    else if (_isWeb) { Icon = LI.Globe; accent = '#10B981'; cardLabel = 'Sitio web'; }
+    else if (_url && !_lk) { Icon = File; accent = '#64748B'; cardLabel = 'Archivo'; }
+  }
   const title = mat.name || mat.title || mat.word || mat.question || 'Sin título';
   const practice = toolMeta && onPractice;
   const canOpen = !!mat.dataUrl && !practice;
   return (
     <div {...dragAttributes} {...dragListeners}
       onContextMenu={onContextMenu ? (e) => onContextMenu(e, mat) : undefined}
-      title={practice ? 'Mantén pulsado para arrastrar · Toca para practicar' : canOpen ? 'Mantén pulsado para arrastrar · Toca para abrir' : 'Mantén pulsado para arrastrar'}
+      title={practice ? 'mantén pulsado para arrastrar · Toca para practicar' : canOpen ? 'mantén pulsado para arrastrar · Toca para abrir' : 'mantén pulsado para arrastrar'}
       onClick={practice ? () => onPractice(mat) : canOpen ? () => { if (clickSuppressed && clickSuppressed()) return; onOpenResource(mat); } : () => { if (clickSuppressed && clickSuppressed()) return; onView?.(mat); }}
       style={{ display: 'flex', flexDirection: 'column', borderRadius: 14, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', overflow: 'hidden', transition: 'all 200ms ' + EASE, boxShadow: '0 1px 2px rgba(0,0,0,0.04)', minHeight: 118, touchAction: 'none', cursor: 'pointer', userSelect: 'none', WebkitUserSelect: 'none' }}
       onMouseEnter={e => { e.currentTarget.style.borderColor = `${accent}50`; e.currentTarget.style.background = 'var(--bg-surface)'; e.currentTarget.style.boxShadow = `0 8px 24px ${accent}12`; }}
@@ -394,10 +498,12 @@ function MaterialCard({ mat, dragAttributes, dragListeners, onEdit, onDelete, on
           <Icon size={17} style={{ color: accent }} />
         </div>
         <span style={{ flex: 1, fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: accent, fontFamily: "'Inter Tight', sans-serif" }}>{cardLabel}</span>
-        <button onPointerDown={e => e.stopPropagation()} onClick={() => onEdit(mat)} title="Editar"
-          style={{ width: 26, height: 26, borderRadius: 8, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
-          onMouseEnter={e => { e.currentTarget.style.background = `${accent}14`; e.currentTarget.style.color = accent; }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}><Edit3 size={11} /></button>
+        {practice && (
+          <button onPointerDown={e => e.stopPropagation()} onClick={() => onEdit(mat)} title="Editar"
+            style={{ width: 26, height: 26, borderRadius: 8, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+            onMouseEnter={e => { e.currentTarget.style.background = `${accent}14`; e.currentTarget.style.color = accent; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}><Edit3 size={11} /></button>
+        )}
         <button onPointerDown={e => e.stopPropagation()} onClick={() => onDelete(mat)} title="Eliminar"
           style={{ width: 26, height: 26, borderRadius: 8, border: 'none', background: 'transparent', cursor: 'pointer', color: 'rgba(239,68,68,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
           onMouseEnter={e => { e.currentTarget.style.background = '#EF444414'; e.currentTarget.style.color = '#EF4444'; }}
@@ -409,15 +515,13 @@ function MaterialCard({ mat, dragAttributes, dragListeners, onEdit, onDelete, on
           <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 10, fontSize: 9, fontWeight: 700, color: accent, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
             <Play size={9} /> Practicar
           </div>
-        ) : mat.type === 'resource' ? (
-          <button onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); onOpenResource(mat); }} style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 5, height: 26, padding: '0 11px', borderRadius: 8, border: `1px solid ${accent}30`, background: `${accent}0d`, cursor: 'pointer', color: accent, fontSize: 9.5, fontWeight: 700, fontFamily: "'Inter Tight', sans-serif" }}><ExternalLink size={9} /> {mat.dataUrl?.startsWith('http') ? 'Abrir enlace' : 'Ver archivo'}</button>
-        ) : null}
+        ) : mat.type === 'resource' ? null : null}
       </div>
     </div>
   );
 }
 
-// ─── Tool row (Herramientas panel) — long-press to reorder ───
+// --- Tool row (Herramientas panel) · long-press to reorder ---
 function ToolSortableRow({ id, tool, isActive, onClick }: { id: ToolKey; tool: typeof TOOL_ITEMS[ToolKey]; isActive: boolean; onClick: () => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const ToolIcon = tool.icon;
@@ -443,7 +547,7 @@ function ToolSortableRow({ id, tool, isActive, onClick }: { id: ToolKey; tool: t
   );
 }
 
-// ─── Per-tool practice overlay (each tool has its own review flow) ───
+// --- Per-tool practice overlay (each tool has its own review flow) ---
 const shuffleArr = <T,>(arr: T[]): T[] => {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
@@ -528,7 +632,7 @@ function ToolPracticeModal({ mat, topicMaterials, onClose }: { mat: SubjectMater
     </div>
   );
 
-  // ─── Quiz ───
+  // --- Quiz ---
   if (mode === 'quizzes') {
     const q = mat.question || '';
     const a = mat.answer || '';
@@ -561,7 +665,7 @@ function ToolPracticeModal({ mat, topicMaterials, onClose }: { mat: SubjectMater
     );
   }
 
-  // ─── Matching ───
+  // --- Matching ---
   if (mode === 'matching') {
     if (pairs.length === 0) {
       return wrap(
@@ -620,7 +724,7 @@ function ToolPracticeModal({ mat, topicMaterials, onClose }: { mat: SubjectMater
     );
   }
 
-  // ─── Blurting / Feynman ───
+  // --- Blurting / Feynman ---
   if (mode === 'blurting' || mode === 'feynman') {
     const isFey = mode === 'feynman';
     const missing = origWords.filter(w => !userSet.has(normWord(w)));
@@ -663,7 +767,7 @@ function ToolPracticeModal({ mat, topicMaterials, onClose }: { mat: SubjectMater
     );
   }
 
-  // ─── Cloze ───
+  // --- Cloze ---
   if (mode === 'cloze') {
     let gi = 0;
     const correctGaps = clozeChecked ? gapParts.filter((p, i) => p.answer ? normalizePhrase(gaps[i]) === normalizePhrase(p.answer) : gaps[i].trim().length > 0).length : 0;
@@ -698,7 +802,7 @@ function ToolPracticeModal({ mat, topicMaterials, onClose }: { mat: SubjectMater
     );
   }
 
-  // ─── Categorización ───
+  // --- Categorización ---
   if (mode === 'categorization') {
     const items = (mat.content || '').split('\n').map(s => s.trim()).filter(Boolean);
     const count = catText.trim().split(/\s+/).filter(Boolean).length;
@@ -707,7 +811,7 @@ function ToolPracticeModal({ mat, topicMaterials, onClose }: { mat: SubjectMater
         {!catResult ? (
           <>
             <div style={{ borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', padding: '14px 18px', marginBottom: 12 }}>
-              <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: accent, marginBottom: 6, fontFamily: "'Inter Tight', sans-serif" }}>Categoría</div>
+              <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: accent, marginBottom: 6, fontFamily: "'Inter Tight', sans-serif" }}>categoría</div>
               <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{mat.title || 'Sin título'}</div>
               <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 6 }}>{items.length} {items.length === 1 ? 'elemento' : 'elementos'} guardados</div>
             </div>
@@ -746,7 +850,7 @@ function ToolPracticeModal({ mat, topicMaterials, onClose }: { mat: SubjectMater
     );
   }
 
-  // ─── Mnemotecnia ───
+  // --- Mnemotecnia ---
   if (mode === 'mnemonics') {
     const usedSet = new Set(mneAnswer);
     const built = mneAnswer.map(i => mneWords[i].w).join(' ');
@@ -768,7 +872,7 @@ function ToolPracticeModal({ mat, topicMaterials, onClose }: { mat: SubjectMater
               {built ? mneAnswer.map(i => (
                 <button key={i} onClick={() => setMneAnswer(m => m.filter(x => x !== i))} title="Quitar"
                   style={{ height: 26, padding: '0 10px', borderRadius: 7, border: `1px solid ${accent}45`, background: `${accent}0d`, color: accent, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{mneWords[i].w}</button>
-              )) : <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Construye la regla aquí…</span>}
+              )) : <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Construye la regla aquí</span>}
             </div>
             <div style={{ fontSize: 10, color: 'var(--text-tertiary)', margin: '12px 0 8px' }}>Palabras disponibles · pulsa para añadir</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -804,7 +908,7 @@ function ToolPracticeModal({ mat, topicMaterials, onClose }: { mat: SubjectMater
   </div>);
 }
 
-// ─── Tag Assign Inline (per-item tag popover) ───
+// --- Tag Assign Inline (per-item tag popover) ---
 function TagAssignInline({ defs, assigned, onToggle, accent }: {
   defs: { id: string; name: string; color: string }[];
   assigned: string[];
@@ -859,7 +963,7 @@ function TagAssignInline({ defs, assigned, onToggle, accent }: {
   );
 }
 
-// ─── Note Card ───
+// --- Note Card ---
 function NoteCard({ note, courseColor, onSelect }: { note: any; courseColor: string; onSelect: (id: string) => void }) {
   const preview = useMemo(() => note.content?.replace(/<[^>]+>/g, '').trim().slice(0, 120) || 'Sin contenido', [note.content]);
   return (
@@ -888,7 +992,7 @@ function NoteCard({ note, courseColor, onSelect }: { note: any; courseColor: str
   );
 }
 
-// ─── Task Card ───
+// --- Task Card ---
 function TaskRow({ task, onToggle, onDelete, courseColor }: { task: any; onToggle: () => void; onDelete: () => void; courseColor: string }) {
   const priorityColors: Record<string, string> = { high: '#EF4444', medium: '#F59E0B', low: '#10B981' };
   const isDone = task.status === 'completado';
@@ -917,8 +1021,31 @@ function TaskRow({ task, onToggle, onDelete, courseColor }: { task: any; onToggl
   );
 }
 
-// ─── Note Full Editor ───
+// --- Note Full Editor ---
 const liveNoteEditors = new Map<string, () => string | null>();
+
+// Comprime imágenes pegadas en apuntes: dataURLs gigantes rompían el guardado
+function compressImageForNote(dataUrl: string, maxSize = 1400): Promise<string> {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const needsWork = img.width > maxSize || dataUrl.length > 350_000;
+        if (!needsWork) { resolve(dataUrl); return; }
+        const scale = Math.min(1, maxSize / img.width);
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(img.width * scale));
+        c.height = Math.max(1, Math.round(img.height * scale));
+        const ctx = c.getContext('2d');
+        if (!ctx) { resolve(dataUrl); return; }
+        ctx.drawImage(img, 0, 0, c.width, c.height);
+        resolve(c.toDataURL('image/jpeg', 0.82));
+      } catch { resolve(dataUrl); }
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
 
 function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolbar, onImageClick, onActiveFormatsChange }: {
   note: any; courseColor: string; onSave: (id: string, data: any) => void; editable?: boolean; toolbarEnd?: React.ReactNode; hideToolbar?: boolean; onImageClick?: (src: string) => void; onActiveFormatsChange?: (f: Record<string, boolean>) => void;
@@ -1020,11 +1147,15 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
       if (file && file.type.startsWith('image/')) {
         const reader = new FileReader();
         reader.onload = (ev) => {
-          const dataUrl = ev.target?.result as string;
-          if (dataUrl && editorRef.current) {
-            document.execCommand('insertHTML', false, `<img src="${dataUrl}" alt="" style="max-width:100%;max-height:360px;border-radius:6px;margin:6px 0;cursor:pointer;object-fit:contain;" />`);
-            markDirty();
-          }
+          const raw = ev.target?.result as string;
+          if (!raw) return;
+          compressImageForNote(raw).then(dataUrl => {
+            if (dataUrl && editorRef.current) {
+              document.execCommand('insertHTML', false, `<img src="${dataUrl}" alt="" style="max-width:100%;max-height:360px;border-radius:6px;margin:6px 0;cursor:pointer;object-fit:contain;" />`);
+              histRef.current.capture(false);
+              markDirty();
+            }
+          });
         };
         reader.readAsDataURL(file);
         return;
@@ -1254,7 +1385,7 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
           <button ref={blockquoteButtonRef} onClick={() => applyFormat('blockquote')} title="Cita"
             style={{ width: 26, height: 26, borderRadius: 5, border: 'none', background: activeFormats.blockquote ? `${courseColor}18` : 'transparent', cursor: 'pointer', color: activeFormats.blockquote ? courseColor : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms', fontSize: 14 }}
             onMouseEnter={e => e.currentTarget.style.background = `${courseColor}12`}
-            onMouseLeave={e => { if (!activeFormats.blockquote) e.currentTarget.style.background = 'transparent'; }}>❝</button>
+            onMouseLeave={e => { if (!activeFormats.blockquote) e.currentTarget.style.background = 'transparent'; }}>?</button>
           <button onClick={insertCode} title="Código"
             style={{ width: 26, height: 26, borderRadius: 5, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms', fontSize: 12, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}
             onMouseEnter={e => e.currentTarget.style.background = `${courseColor}12`}
@@ -1284,7 +1415,7 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
   );
 }
 
-// ─── Desplegable custom (agrupación / tema): siempre hacia arriba, con buscador y scroll interno acotado ───
+// --- Desplegable custom (agrupación / tema): siempre hacia arriba, con buscador y scroll interno acotado ---
 function PlanSelectDropdown({ value, onChange, options, noneLabel, color }: { value: string; onChange: (v: string) => void; options: { id: string; label: string }[]; noneLabel: string; color: string }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -1331,7 +1462,7 @@ function PlanSelectDropdown({ value, onChange, options, noneLabel, color }: { va
   );
 }
 
-// ─── Main Component ───
+// --- Main Component ---
 export default function Cursos({ initialCourseId, initialTab = 'overview', onNavigate }: { initialCourseId?: string; initialTab?: 'overview' | 'tareas' | 'notas' | 'archivos'; onNavigate?: (view: string) => void }) {
   const { courses = [], tasks = [], notes = [], noteFolders = [], updateCourse, deleteCourse, setNavigateTo, setFocusedTaskId, addTask, updateTask, deleteTask, addNote, updateNote, deleteNote, reorderNotes, reorderTasks, plannedSessions, addPlannedSession, updatePlannedSession, deletePlannedSession, reorderPlannedSessions, setPipUrl, studySessions, activePlannedSessionId, linkPlannedSessionToTimer, unlinkPlannedSessionFromTimer, courseDeepLink, setCourseDeepLink, navigateToCourse, activeTaskId, addNotification, flushNoteContent } = useApp();
   const th = document.documentElement.getAttribute('data-theme');
@@ -1354,7 +1485,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     }
   }, [initialCourseId]);
 
-  // Per-course route persistence — each course remembers the tab/view/topic/group it was left open in
+  // Per-course route persistence · each course remembers the tab/view/topic/group it was left open in
   const routeRestoredForRef = useRef<string | null>(null);
   useEffect(() => {
     if (!selectedCourseId || routeRestoredForRef.current === selectedCourseId) return;
@@ -1483,6 +1614,9 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
 
   // Add link modal
   const [showAddLinkModal, setShowAddLinkModal] = useState(false);
+  // Tema destino del enlace: undefined = comportamiento clásico (primer tema);
+  // cuando se abre desde Herramientas apunta AL TEMA ACTIVO de la agrupación.
+  const [addLinkTargetTopic, setAddLinkTargetTopic] = useState<string | undefined>(undefined);
   const [addLinkUrl, setAddLinkUrl] = useState('');
   const [addLinkName, setAddLinkName] = useState('');
 
@@ -1760,7 +1894,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
 
   const closeReview = () => { setReviewing(false); setReviewFlipped(false); };
 
-  // ─── Topic tags (CRUD + assignment) ───
+  // --- Topic tags (CRUD + assignment) ---
   const openTagModal = (tag?: { id: string; name: string; color: string }) => {
     setEditingTagId(tag?.id || null);
     setTagNameInput(tag?.name || '');
@@ -1903,7 +2037,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     }
   }, [selectedCourseId, overviewMode]);
 
-  // Consume course deep links — navigate straight to the group/topic of a planned session
+  // Consume course deep links · navigate straight to the group/topic of a planned session
   useEffect(() => {
     if (!courseDeepLink || courseDeepLink.courseId !== selectedCourseId) return;
     if (overviewMode !== 'temas_archivos') setOverviewMode('temas_archivos');
@@ -2311,7 +2445,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
         mats.push({ ...m, _topicTitle: t.title } as SubjectMaterial & { _topicTitle: string });
       });
     });
-    return mats.filter(m => m.type === 'resource');
+    return mats.filter(m => m.type === 'resource' && !(m as any).topicOnly);
   }, [course]);
 
   // --- Handlers ---
@@ -2401,6 +2535,13 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     setToolModal({ mode: mode as ToolCreatorMode, editingId: null });
   };
 
+  // Info-first: al pulsar una técnica se abre su Teoría (qué es · cómo · evidencia)
+  const [toolInfo, setToolInfo] = useState<Exclude<ToolKey, 'flashcards'> | null>(null);
+  const openToolInfo = (mode: ToolKey) => {
+    if (mode === 'flashcards') { openFlashcardModal(); return; }
+    setToolInfo(mode);
+  };
+
   const startEditToolMaterial = (mat: SubjectMaterial) => {
     const mode = mat.toolMode as ToolCreatorMode | undefined;
     if (mode && TOOL_CREATOR_META[mode]) {
@@ -2440,6 +2581,9 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
         break;
       case 'mnemonics':
         payload = { title: f.title.trim(), content: (f.content || '').trim() };
+        break;
+      default:
+        payload = { title: f.title.trim(), content: (f.body || '').trim() };
         break;
     }
     const type = TOOL_MATERIAL_TYPE[toolModal.mode];
@@ -2482,7 +2626,8 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
       r.onerror = () => reject(r.error);
       r.readAsDataURL(file);
     });
-    const newMat: SubjectMaterial = { id: Math.random().toString(), type: 'resource', createdAt: Date.now(), columnIndex: materialColIndex, name: file.name, fileType: file.type, dataUrl: url };
+    const newMat: SubjectMaterial = { id: Math.random().toString(), type: 'resource', createdAt: Date.now(), columnIndex: materialColIndex, name: file.name, fileType: file.type, dataUrl: url, ...(topicOnlyRef.current ? { topicOnly: true } : {}) } as SubjectMaterial;
+    topicOnlyRef.current = false;
     updateCourse(course.id, { studyTopics: withMaterial(tid, newMat, materialColIndex) });
     toast.success('Archivo subido');
     if (e.target) e.target.value = '';
@@ -2495,7 +2640,8 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
       catch { toast.error('No se pudo abrir el selector de archivos'); return; }
       if (!r) return;
       const tid = topicId || activeTopic?.id;
-      const newMat: SubjectMaterial = { id: Math.random().toString(), type: 'resource', createdAt: Date.now(), columnIndex: colIndex ?? materialColIndex, name: r.name, dataUrl: r.path };
+      const newMat: SubjectMaterial = { id: Math.random().toString(), type: 'resource', createdAt: Date.now(), columnIndex: colIndex ?? materialColIndex, name: r.name, dataUrl: r.path, ...(topicOnlyRef.current ? { topicOnly: true } : {}) } as SubjectMaterial;
+      topicOnlyRef.current = false;
       updateCourse(course.id, { studyTopics: withMaterial(tid, newMat, colIndex ?? materialColIndex) });
       toast.success('Archivo subido');
       return;
@@ -2508,10 +2654,10 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     if (!addLinkUrl.trim()) return;
     const url = addLinkUrl.trim();
     const name = addLinkName.trim() || url;
-    const newMat: SubjectMaterial = { id: Math.random().toString(), type: 'resource', createdAt: Date.now(), columnIndex: 0, name, dataUrl: url };
-    updateCourse(course.id, { studyTopics: withMaterial(undefined, newMat, 0) });
-    setAddLinkUrl(''); setAddLinkName(''); setShowAddLinkModal(false);
-    toast.success('Enlace agregado');
+    const newMat: SubjectMaterial = { id: Math.random().toString(), type: 'resource', createdAt: Date.now(), columnIndex: 0, name, dataUrl: url, ...(addLinkTargetTopic ? { topicOnly: true } : {}) } as SubjectMaterial;
+    updateCourse(course.id, { studyTopics: withMaterial(addLinkTargetTopic, newMat, 0) });
+    setAddLinkUrl(''); setAddLinkName(''); setAddLinkTargetTopic(undefined); setShowAddLinkModal(false);
+    toast.success(addLinkTargetTopic ? 'Enlace agregado al tema' : 'Enlace agregado');
   };
 
   const handleSaveEditLink = () => {
@@ -2558,10 +2704,15 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     setShowMaterialModal(true);
   };
 
+  const [confirmDelToolMat, setConfirmDelToolMat] = useState<{ id: string; name: string } | null>(null);
   const handleDeleteMaterial = (mat: SubjectMaterial) => {
-    if (!activeTopic) return;
-    updateCourse(course.id, { studyTopics: (safeArr(course.studyTopics)).map(t => t.id === activeTopic.id ? { ...t, materials: (safeArr(t.materials)).filter(m => m.id !== mat.id) } : t) });
-    toast.success('Material removido');
+    setConfirmDelToolMat({ id: mat.id, name: mat.name || mat.title || 'Material' });
+  };
+  const confirmDeleteMaterialNow = () => {
+    if (!confirmDelToolMat || !activeTopic) return;
+    updateCourse(course.id, { studyTopics: (safeArr(course.studyTopics)).map(tp => tp.id === activeTopic.id ? { ...tp, materials: (safeArr(tp.materials)).filter(m => m.id !== confirmDelToolMat.id) } : tp) });
+    toast.success('Material eliminado');
+    setConfirmDelToolMat(null);
   };
 
   const handleDeleteResourceFromOverview = (matId: string) => {
@@ -2570,7 +2721,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     setConfirmDeleteMatId(null);
   };
 
-  // onMoved de openFileSmart: el archivo fue hallado en OTRA carpeta → actualiza su ruta en el material
+  // onMoved de openFileSmart: el archivo fue hallado en OTRA carpeta ? actualiza su ruta en el material
   const handleMatMoved = (matId: string, newPath: string) => {
     updateCourse(course.id, { studyTopics: (safeArr(course.studyTopics)).map(t => ({ ...t, materials: (safeArr(t.materials)).map(m => m.id === matId ? { ...m, dataUrl: newPath } : m) })) });
     toast.success('Material actualizado a su nueva ubicación');
@@ -2578,11 +2729,31 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
 
   const handleOpenResource = (mat: SubjectMaterial) => {
     if (!mat.dataUrl) return;
-    const isPdfData = mat.dataUrl.startsWith('data:') && ((mat.fileType || '').includes('pdf') || (mat.name || '').toLowerCase().endsWith('.pdf'));
-    if (isPdfData) {
-      setPdfPreviewUrl(mat.dataUrl);
-      setPdfPreviewName(mat.name || 'Archivo');
-      setShowPdfPreview(true);
+    const isPdfData = mat.dataUrl.startsWith('data:application/pdf') || ((mat.name || '').toLowerCase().endsWith('.pdf') && !/^https?:\/\//i.test(mat.dataUrl)) || (mat.fileType || '').includes('pdf');
+    // Enlace o PDF + navegador predeterminado (curso > global) → abrir CON ESE navegador
+    const wantsBrowser = /^https?:\/\//i.test(mat.dataUrl) || isPdfData;
+    if (wantsBrowser) {
+      const url = mat.dataUrl;
+      const name = mat.name || 'Archivo';
+      const id = mat.id;
+      (async () => {
+        try {
+          const { resolveDefaultBrowserExe, openUrlInBrowser } = await import('../../lib/browsers');
+          const exe = await resolveDefaultBrowserExe(course.id);
+          if (exe) {
+            let u = url;
+            if (!/^https?:\/\//i.test(u)) {
+              try { const { convertFileSrc } = await import('@tauri-apps/api/core'); u = convertFileSrc(u); } catch { /* noop */ }
+            }
+            await openUrlInBrowser(exe, u);
+            return;
+          }
+        } catch { /* cae al flujo normal */ }
+        if (isPdfData && !/^https?:\/\//i.test(url)) {
+          setPdfPreviewUrl(url); setPdfPreviewName(name); setShowPdfPreview(true); return;
+        }
+        openFileSmart(url, name, { onMedia: (u, n) => setPipUrl(u, n), onError: (m) => toast.error(m), onMoved: (np) => handleMatMoved(id, np) }).catch(() => toast.error('No se pudo abrir el recurso'));
+      })();
       return;
     }
     openFileSmart(mat.dataUrl, mat.name || 'Archivo', { onMedia: (u, n) => setPipUrl(u, n), onError: (m) => toast.error(m), onMoved: (np) => handleMatMoved(mat.id, np) }).catch(() => toast.error('No se pudo abrir el recurso'));
@@ -2596,6 +2767,12 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { delay: 300, tolerance: 8 } }));
   const [activeMatDragId, setActiveMatDragId] = useState<string | null>(null);
   const matDragSuppressRef = useRef(false);
+  // Los materiales añadidos desde Herramientas (dentro de un tema) son de ecosistema
+  // "tema": viven SOLO en su tema y NO aparecen en el panel Materiales del curso.
+  const topicOnlyRef = useRef(false);
+  // Guard anti click-fantasma para la lista de materiales del tema: si hubo un
+  // drag (reordenar), el click posterior NO debe abrir el enlace/material.
+  const matLinkDragRef = useRef(false);
   const [activeTopicDragId, setActiveTopicDragId] = useState<string | null>(null);
   const [activeGroupDragId, setActiveGroupDragId] = useState<string | null>(null);
   const studySensors = useSensors(useSensor(PointerSensor, { activationConstraint: { delay: 300, tolerance: 8 } }));
@@ -2973,13 +3150,13 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const ungroupedTopics = parsedTopics.filter(t => !t.groupId);
   const topicTagDefs = course.topicTagDefs || [];
 
-  // ─── RENDER ───
+  // --- RENDER ---
   return (
     <div className="cursos-root-view" style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg-base)', overflow: 'hidden' }}>
       {/* Content */}
       <div style={{ flex: 1, height: '100%', display: 'flex', flexDirection: 'column', overflowY: currentView === 'overview' ? 'hidden' : 'auto', overflowX: 'hidden' }}>
         {currentView === 'topic' && activeTopic ? (
-          /* ─── TOPIC VIEW with Big Banner ─── */
+          /* --- TOPIC VIEW with Big Banner --- */
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
             {/* Big banner */}
             <div style={{ position: 'relative', height: 200, overflow: 'hidden', background: `linear-gradient(135deg, ${course.color}33 0%, var(--bg-surface) 100%)` }}>
@@ -3189,18 +3366,82 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
               {(() => {
                 return (
                 <div style={{ width: 300, flexShrink: 0, borderLeft: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                    {/* ─── Header ─── */}
-                    <div style={{ padding: '20px 20px 14px', flexShrink: 0, borderBottom: '1px solid var(--border-subtle)' }}>
+                    {/* --- Header --- */}
+                    <div style={{ padding: '20px 20px 14px', flexShrink: 0, borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                       <div style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-secondary)', fontFamily: "'Inter Tight', sans-serif" }}>Herramientas</div>
-                      <div style={{ fontSize: 9.5, color: 'var(--text-tertiary)', marginTop: 5 }}>Mantén pulsado para reordenar.</div>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button onClick={() => { topicOnlyRef.current = true; handleAddFileBtn(activeTopic?.id); }}
+                          style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${course.color}30`, background: `${course.color}10`, cursor: 'pointer', color: course.color, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms ' + EASE }}
+                          onMouseEnter={e => { e.currentTarget.style.background = `${course.color}22`; e.currentTarget.style.borderColor = `${course.color}50`; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = `${course.color}10`; e.currentTarget.style.borderColor = `${course.color}30`; }}
+                          title="Subir archivo al tema activo">
+                          <Upload size={15} />
+                        </button>
+                        <button onClick={() => { setAddLinkTargetTopic(activeTopic?.id); setShowAddLinkModal(true); setAddLinkUrl(''); setAddLinkName(''); }}
+                          style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${course.color}30`, background: `${course.color}10`, cursor: 'pointer', color: course.color, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms ' + EASE }}
+                          onMouseEnter={e => { e.currentTarget.style.background = `${course.color}22`; e.currentTarget.style.borderColor = `${course.color}50`; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = `${course.color}10`; e.currentTarget.style.borderColor = `${course.color}30`; }}
+                          title="Añadir enlace">
+                          <Link2 size={15} />
+                        </button>
+                      </div>
                     </div>
-                    {/* ─── Tool list ─── */}
+
+                    {/* Modal de Teoría de la técnica (info-first) */}
+                    {toolInfo && (() => {
+                      const m = TOOL_CREATOR_META[toolInfo];
+                      const TIcon = m.icon;
+                      return (
+                        <div style={{ position: 'fixed', inset: 0, zIndex: 2002, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }} onClick={() => setToolInfo(null)}>
+                          <div className="bento-card" style={{ width: 470, padding: 24, borderRadius: 14, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', maxHeight: '84vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                              <h3 style={{ fontSize: 17, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 11, margin: 0, fontFamily: "'Inter Tight', sans-serif" }}>
+                                <span style={{ width: 38, height: 38, borderRadius: 11, background: `${m.color}16`, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${m.color}25`, flexShrink: 0 }}>
+                                  <TIcon size={17} style={{ color: m.color }} />
+                                </span>
+                                {m.name}
+                              </h3>
+                              <button onClick={() => setToolInfo(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}><X size={16} /></button>
+                            </div>
+                            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: '2px 0 18px 49px', fontStyle: 'italic' }}>{m.hint}</div>
+
+                            <div style={{ fontSize: 8.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.12em', color: m.color, marginBottom: 7, fontFamily: "'Inter Tight', sans-serif" }}>Qué es</div>
+                            <p style={{ fontSize: 12.5, lineHeight: 1.65, color: 'var(--text-primary)', margin: '0 0 16px' }}>{m.theory.what}</p>
+
+                            <div style={{ fontSize: 8.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.12em', color: m.color, marginBottom: 7, fontFamily: "'Inter Tight', sans-serif" }}>Cómo se aplica</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
+                              {m.theory.how.map((h, i) => (
+                                <div key={i} style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}>
+                                  <span style={{ width: 17, height: 17, borderRadius: 6, background: `${m.color}16`, color: m.color, fontSize: 9.5, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>{i + 1}</span>
+                                  <span style={{ fontSize: 12, lineHeight: 1.55, color: 'var(--text-secondary)' }}>{h}</span>
+                                </div>
+                              ))}
+                            </div>
+
+                            <div style={{ padding: '11px 13px', borderRadius: 10, background: `${m.color}0a`, border: `1px solid ${m.color}26`, marginBottom: 16 }}>
+                              <div style={{ fontSize: 8.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.12em', color: m.color, marginBottom: 5, fontFamily: "'Inter Tight', sans-serif" }}>Evidencia científica</div>
+                              <div style={{ fontSize: 11.5, lineHeight: 1.55, color: 'var(--text-secondary)' }}>{m.theory.evidence}</div>
+                              <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 6, fontStyle: 'italic' }}>{m.theory.ref}</div>
+                            </div>
+
+                            <button
+                              onClick={() => { const mk = toolInfo; setToolInfo(null); if (!mk) return; setStudyToolMode(mk as any); openToolCreator(mk as any); }}
+                              style={{ width: '100%', height: 40, borderRadius: 10, border: 'none', background: m.color, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', boxShadow: `0 6px 20px ${m.color}30`, transition: 'transform 150ms ' + EASE, fontFamily: "'Inter Tight', sans-serif" }}
+                              onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+                              onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}>
+                              Crear ejercicio · {m.name}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                    {/* --- Tool list --- */}
                     <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 16px 20px', display: 'flex', flexDirection: 'column' }} className="no-scrollbar">
                       <DndContext sensors={toolSensors} collisionDetection={closestCorners} onDragStart={handleToolDragStart} onDragEnd={handleToolDragEnd} onDragCancel={handleToolDragCancel}>
                         <SortableContext items={toolOrder} strategy={verticalListSortingStrategy}>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, justifyContent: 'space-between', flex: 1 }}>
                             {toolOrder.map(mode => (
-                              <ToolSortableRow key={mode} id={mode} tool={TOOL_ITEMS[mode]} isActive={studyToolMode === mode} onClick={() => { if (toolDragRef.current) { toolDragRef.current = false; return; } setStudyToolMode(studyToolMode === mode ? 'none' : mode); openToolCreator(mode); }} />
+                              <ToolSortableRow key={mode} id={mode} tool={TOOL_ITEMS[mode]} isActive={studyToolMode === mode} onClick={() => { if (toolDragRef.current) { toolDragRef.current = false; return; } openToolInfo(mode); }} />
                             ))}
                           </div>
                         </SortableContext>
@@ -3211,7 +3452,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
             </div>
           </div>
         ) : activeTab === 'overview' ? (
-            /* ─── OVERVIEW TAB ─── */
+            /* --- OVERVIEW TAB --- */
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
             {/* Big banner */}
             <div style={{ position: 'relative', height: 200, overflow: 'hidden', background: `linear-gradient(135deg, ${course.color}33 0%, var(--bg-surface) 100%)` }}>
@@ -3284,7 +3525,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
             }}>
             {overviewMode === 'tareas_notas' ? (
               <div key="tasks_notes" style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', gap: 48, padding: '32px 40px 60px', width: '100%', boxSizing: 'border-box' }} className="no-scrollbar">
-                {/* ─── LEFT: Tasks ─── */}
+                {/* --- LEFT: Tasks --- */}
                 <div style={{ flex: 4, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 32 }}>
                   {/* Task Creator Card */}
                   <div className="bento-card" style={{ borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', overflow: 'hidden', padding: 0, boxShadow: '0 1px 8px rgba(0,0,0,0.04)' }}>
@@ -3425,7 +3666,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                     );
                   })()}
                 </div>
-                {/* ─── RIGHT: Mis Apuntes — Vertical Expandable Blocks ─── */}
+                {/* --- RIGHT: Mis Apuntes · Vertical Expandable Blocks --- */}
                   <div style={{ flex: 3, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 0 }}>
                   {/* Header */}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 0, marginBottom: 16 }}>
@@ -3454,7 +3695,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                     </div>
                   </div>
 
-                  {/* Note Blocks — always collapsed */}
+                  {/* Note Blocks · always collapsed */}
                   {filteredCourseNotes.length > 0 ? (
                     <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={() => { notesDragRef.current = true; }} onDragEnd={handleOverviewNoteDragEnd}>
                       <SortableContext items={sortedIds} strategy={rectSortingStrategy}>
@@ -3483,7 +3724,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                   >
                                     {isExpanded ? (
                                       <>
-                                        {/* ── EXPANDED ── */}
+                                        {/* -- EXPANDED -- */}
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0, padding: '4px 10px', borderBottom: '1px solid var(--border-subtle)', background: `${course.color}05`, flexWrap: 'wrap', minHeight: 32 }}>
                                           {overviewNoteEditMode && (
                                             <>
@@ -3551,7 +3792,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                             {format(new Date(n.createdAt), "dd/MM/yy", { locale: es })}
                            </div>
                                          )}
-                                         {/* ── COLLAPSED (preview) ── */}
+                                         {/* -- COLLAPSED (preview) -- */}
                                         <div style={{ padding: showOverviewNoteDates ? '6px 16px 12px' : '12px 16px' }}>
                                           <div style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text-primary)', fontFamily: "'Atkinson Hyperlegible', system-ui, serif", wordBreak: 'break-word', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical' }}
                                             dangerouslySetInnerHTML={{ __html: n.content?.replace(/<img[^>]+style="([^"]*)"/g, (m: string, s: string) => m.replace(s, s + ';max-height:100px;width:auto') ) || '<span style="color:var(--text-muted);font-style:italic;font-size:12px">Vacío</span>' }} />
@@ -3574,7 +3815,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                 </div>
               </div>
               ) : currentView === 'group' && selectedGroupId ? (
-                /* ═══ GROUP DETAIL VIEW ═══ */
+                /* --- GROUP DETAIL VIEW --- */
                 (() => {
                   const grp = groups.find(g => g.id === selectedGroupId);
                   const grpTopics = parsedTopics.filter(t => t.groupId === selectedGroupId);
@@ -3601,7 +3842,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                             {grpTopics.map(topic => {
                                 const mats = safeArr(topic.materials);
                                 const typeColors: Record<string, string> = { resource: '#3B82F6', concept: '#8B5CF6', 'key-data': '#10B981', formula: '#F59E0B', meaning: '#EC4899', quiz: '#EF4444', procedure: '#06B6D4' };
-                                const typeLabels: Record<string, string> = { resource: 'Recursos', concept: 'Conceptos', 'key-data': 'Datos clave', formula: 'Fórmulas', meaning: 'Significados', quiz: 'Quizzes', procedure: 'Procedimientos' };
+                                const typeLabels: Record<string, string> = { resource: 'Recursos', concept: 'Conceptos', 'key-data': 'Datos clave', formula: 'fórmulas', meaning: 'Significados', quiz: 'Quizzes', procedure: 'Procedimientos' };
                                 const toolNames: Record<string, { label: string; color: string }> = {
                                   flashcards: { label: 'Flashcards', color: '#8B5CF6' },
                                   quizzes: { label: 'Quiz rápido', color: '#EF4444' },
@@ -3629,7 +3870,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                   <SortableWrapper key={topic.id} id={topic.id}>
                                     {({ attributes, listeners, isDragging }) => (
                                   <div {...attributes} {...listeners} onClick={() => { setActiveTopicId(topic.id); setCurrentView('topic'); setTopicSearch(''); setActiveTagFilter(null); }}
-                                    title="Mantén pulsado para arrastrar · Toca para abrir"
+                                    title="mantén pulsado para arrastrar · Toca para abrir"
                                     style={{ borderRadius: 14, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', overflow: 'hidden', cursor: isDragging ? 'grabbing' : 'pointer', transition: 'all 250ms cubic-bezier(0.16,1,0.3,1)', display: 'flex', flexDirection: 'column', position: 'relative', touchAction: 'none', opacity: isDragging ? 0.45 : 1, transform: isDragging ? 'scale(0.98)' : 'none', zIndex: isDragging ? 20 : 1 }}
                                     className="topic-card"
                                     onMouseEnter={e => { if (!isDragging) { e.currentTarget.style.borderColor = `${course.color}40`; e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = `0 12px 36px ${course.color}14`; } const a = e.currentTarget; a.querySelectorAll('.topic-actions').forEach(el => (el as HTMLElement).style.opacity = '1'); }}
@@ -3708,14 +3949,14 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                   );
                 })()
               ) : (
-/* ═══ ESTUDIO MODE ═══ */
+/* --- ESTUDIO MODE --- */
                 <>
                 <div style={{ display: 'flex', flexDirection: 'row', flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>
 
-                  {/* ══ LEFT COLUMN: PANEL RESUMEN (4 MÉTRICAS + CRONOGRAMA) + MATERIALES ══ */}
+                  {/* -- LEFT COLUMN: PANEL RESUMEN (4 Métricas + CRONOGRAMA) + MATERIALES -- */}
                   <div style={{ width: 380, flexShrink: 0, display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
 
-                    {/* ══ PANEL MÉTRICAS: UN SOLO BLOQUE (estética bloques de temas) CON LOS 4 DATOS EN 2×2 + DIVISORES ANIMADOS ══ */}
+                    {/* -- PANEL Métricas: UN SOLO BLOQUE (estética bloques de temas) CON LOS 4 DATOS EN 2×2 + DIVISORES ANIMADOS -- */}
                     <div style={{ flexShrink: 0, padding: '14px 16px 0' }}>
                       {(() => {
                         const totalTopics = parsedTopics.length;
@@ -3754,20 +3995,20 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                       })()}
                     </div>
 
-                    {/* ══ MATERIALES ══ */}
+                    {/* -- MATERIALES -- */}
                     <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', flex: 1, minHeight: 0, alignSelf: 'stretch' }}>
 
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '24px 20px 10px', flexShrink: 0 }}>
                           <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: "'Inter Tight', sans-serif" }}>Materiales</h3>
                           <div style={{ display: 'flex', gap: 6 }}>
-                            <button onClick={() => { handleAddFileBtn(parsedTopics[0]?.id); }}
+                            <button onClick={() => { topicOnlyRef.current = false; handleAddFileBtn(parsedTopics[0]?.id); }}
                               style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${course.color}30`, background: `${course.color}10`, cursor: 'pointer', color: course.color, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms ' + EASE }}
                               onMouseEnter={e => { e.currentTarget.style.background = `${course.color}22`; e.currentTarget.style.borderColor = `${course.color}50`; }}
                               onMouseLeave={e => { e.currentTarget.style.background = `${course.color}10`; e.currentTarget.style.borderColor = `${course.color}30`; }}
                               title="Subir archivo">
                               <Upload size={15} />
                             </button>
-                            <button onClick={() => { setShowAddLinkModal(true); setAddLinkUrl(''); setAddLinkName(''); }}
+                            <button onClick={() => { topicOnlyRef.current = false; setAddLinkTargetTopic(undefined); setShowAddLinkModal(true); setAddLinkUrl(''); setAddLinkName(''); }}
                               style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${course.color}30`, background: `${course.color}10`, cursor: 'pointer', color: course.color, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms ' + EASE }}
                               onMouseEnter={e => { e.currentTarget.style.background = `${course.color}22`; e.currentTarget.style.borderColor = `${course.color}50`; }}
                               onMouseLeave={e => { e.currentTarget.style.background = `${course.color}10`; e.currentTarget.style.borderColor = `${course.color}30`; }}
@@ -3784,7 +4025,11 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                               <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>Sin materiales todavia</p>
                             </div>
                           ) : (
-                          <DndContext sensors={studySensors} collisionDetection={closestCorners} onDragStart={e => { setActiveMatDragId(e.active.id as string); syncBrainDragOverlay(); }} onDragMove={syncBrainDragOverlay} onDragCancel={clearBrainDragOverlay} onDragEnd={handleStudyMatDragEnd}>
+                          <DndContext sensors={studySensors} collisionDetection={closestCorners}
+                            onDragStart={e => { setActiveMatDragId(e.active.id as string); matLinkDragRef.current = true; syncBrainDragOverlay(); }}
+                            onDragMove={syncBrainDragOverlay}
+                            onDragCancel={() => { clearBrainDragOverlay(); setActiveMatDragId(null); setTimeout(() => { matLinkDragRef.current = false; }, 250); }}
+                            onDragEnd={(e) => { handleStudyMatDragEnd(e); setActiveMatDragId(null); setTimeout(() => { matLinkDragRef.current = false; }, 250); }}>
                           <SortableContext items={allCourseMaterials.filter(m => !!m).map(m => m.id)} strategy={verticalListSortingStrategy}>
                           {allCourseMaterials.filter(m => !!m && typeof m === 'object').map((mat, idx) => {
                             const matName = mat.name || 'Sin nombre';
@@ -3853,6 +4098,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                   onMouseEnter={e => { if (loadingMatId !== (mat.id || `idx_${idx}`)) { e.currentTarget.style.borderColor = `${badgeColor}40`; e.currentTarget.style.background = 'var(--bg-hover)'; } }}
                                   onMouseLeave={e => { if (loadingMatId !== (mat.id || `idx_${idx}`)) { e.currentTarget.style.borderColor = isAudio && playingAudioId === mat.id ? `${badgeColor}30` : 'var(--border-soft)'; e.currentTarget.style.background = isAudio && playingAudioId === mat.id ? `${badgeColor}08` : 'var(--bg-elevated)'; } }}>
                                   <div onClick={() => {
+                                    if (matLinkDragRef.current) return;
                                     if (isAudio) {
                                       if (playingAudioId === mat.id && audioRef.current) {
                                         audioRef.current.paused ? audioRef.current.play() : audioRef.current.pause();
@@ -3865,6 +4111,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                     {iconEl}
                                   </div>
                                   <div onClick={() => {
+                                    if (matLinkDragRef.current) return;
                                     if (isAudio) {
                                       if (playingAudioId === mat.id && audioRef.current) {
                                         audioRef.current.paused ? audioRef.current.play() : audioRef.current.pause();
@@ -3887,7 +4134,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                     </div>
                                   )}
                                   {isLink ? (
-                                    <button onClick={e => { e.stopPropagation(); setEditLinkId(mat.id); setEditLinkUrl(dataUrl); setEditLinkName(matName); }}
+                                    <button onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); setEditLinkId(mat.id); setEditLinkUrl(dataUrl); setEditLinkName(matName); }}
                                       style={{ width: 24, height: 24, borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, transition: 'all 150ms', opacity: 0.4 }}
                                       onMouseEnter={ev => { ev.currentTarget.style.background = 'var(--bg-hover)'; ev.currentTarget.style.color = 'var(--text-primary)'; ev.currentTarget.style.opacity = '1'; }}
                                       onMouseLeave={ev => { ev.currentTarget.style.background = 'transparent'; ev.currentTarget.style.color = 'var(--text-muted)'; ev.currentTarget.style.opacity = '0.4'; }}
@@ -3915,10 +4162,10 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                       </div>
                     </div>
 
-                    {/* ══ CENTER: PLANNER SEMANAL (superior) + RADAR DE RENDIMIENTO (inferior) ══ */}
+                    {/* -- CENTER: PLANNER SEMANAL (superior) + RADAR DE RENDIMIENTO (inferior) -- */}
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
 
-                      {/* ══ PLANNER SEMANAL — franja de días (solo días) + sesiones del día seleccionado ══ */}
+                      {/* -- PLANNER SEMANAL · franja de días (solo días) + sesiones del día seleccionado -- */}
                       <div className="crono-block" style={{ flexShrink: 0, margin: '14px 20px 0', height: 168, borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'linear-gradient(160deg, var(--bg-elevated-alpha, var(--bg-elevated)) 0%, color-mix(in srgb, var(--bg-elevated-alpha, var(--bg-elevated)) 82%, transparent) 100%)', position: 'relative', overflow: 'hidden', boxShadow: `0 1px 0 rgba(255,255,255,0.035) inset, 0 8px 24px ${course.color}0d`, display: 'flex', flexDirection: 'column' }}>
                         {(() => {
                           const today = format(new Date(), 'yyyy-MM-dd');
@@ -3950,7 +4197,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                           };
                           return (
                             <>
-                              {/* header: franja de días — solo el nombre del día, sin números ni flechas, con botón + */}
+                              {/* header: franja de días · solo el nombre del día, sin números ni flechas, con botón + */}
                               <div style={{ display: 'flex', alignItems: 'center', gap: 5, height: 40, padding: '0 12px', flexShrink: 0 }}>
                                 {weekDays.map(d => {
                                   const isTodayDay = d.iso === today;
@@ -3976,7 +4223,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                               {/* separador fino */}
                               <div style={{ margin: '0 12px', height: 1, background: 'var(--border-soft)', opacity: 0.8, flexShrink: 0 }} />
 
-                              {/* sesiones del día seleccionado — SOLO 2 visibles, sin scroll */}
+                              {/* sesiones del día seleccionado · SOLO 2 visibles, sin scroll */}
                               <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '4px 14px 6px', display: 'flex', flexDirection: 'column', gap: 6 }} className="no-scrollbar">
                                 {daySessions.length === 0 ? (
                                   <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 9, padding: '0 12px' }}>
@@ -3997,7 +4244,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                       {({ attributes, listeners, isDragging }) => (
                                     <div {...attributes} {...listeners}
                                       onClick={() => setDetailSessionId(sess.id)}
-                                      title={(isDone ? 'Sesión completada — ' : '') + 'Mantén pulsado para mover · Toca para ver detalle'}
+                                      title={(isDone ? 'Sesión completada · ' : '') + 'mantén pulsado para mover · Toca para ver detalle'}
                                       style={{ touchAction: 'none', flexGrow: 1, minHeight: 56, display: 'flex', alignItems: 'center', gap: 10, padding: '16px 14px', borderRadius: 10, border: isDragging ? `1px solid ${course.color}60` : '1px solid var(--border-subtle)', background: isDragging ? `${course.color}0d` : rowBg, boxShadow: isDragging ? `0 10px 26px ${course.color}22` : 'none', transition: 'all 200ms ' + EASE, cursor: 'grab', position: 'relative', overflow: 'hidden', opacity: isDragging ? 0.85 : (isDone ? 0.85 : 1) }}
                                       onMouseEnter={e => { if (!isDragging) { e.currentTarget.style.borderColor = `${course.color}45`; e.currentTarget.style.background = `${course.color}08`; } }}
                                       onMouseLeave={e => { if (!isDragging) { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = rowBg; } }}>
@@ -4050,7 +4297,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                         })()}
                       </div>
 
-                      {/* ══ PANEL DE DETALLE DE SESIÓN — overlay rectangular horizontal (estética bloques de temas) ══ */}
+                      {/* -- PANEL DE DETALLE DE Sesión · overlay rectangular horizontal (estética bloques de temas) -- */}
                       {detailSessionId && (() => {
                         const ds = (plannedSessions || []).find(s => s.id === detailSessionId);
                         if (!ds) return null;
@@ -4079,8 +4326,8 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                           if (activeTaskId) { addNotification('Hay una tarea vinculada al temporizador. Desvincula esa tarea para iniciar esta sesión.', 'info'); return; }
                           linkPlannedSessionToTimer(ds.id); setNavigateTo('estudio');
                         };
-                        const goGroup = () => { const tc = dOtherCourse || course; navigateToCourse(tc.id, ds.groupId || undefined); };
-                        const goTopic = () => { const tc = dOtherCourse || course; navigateToCourse(tc.id, ds.groupId || undefined, ds.topicId || undefined); };
+                        const goGroup = () => { setDetailSessionId(null); try { localStorage.removeItem('owa_session_detail_v1'); } catch { } const tc = dOtherCourse || course; navigateToCourse(tc.id, ds.groupId || undefined); };
+                        const goTopic = () => { setDetailSessionId(null); try { localStorage.removeItem('owa_session_detail_v1'); } catch { } const tc = dOtherCourse || course; navigateToCourse(tc.id, ds.groupId || undefined, ds.topicId || undefined); };
                         const closePanel = () => { setDetailSessionId(null); setConfirmDeleteSession(null); setChangeCourseFor(null); };
                         const openEditFromSession = (ps: PlannedSession) => {
                           setPlanEditId(ps.id);
@@ -4180,7 +4427,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                                 </div>
                               </div>
 
-                              {/* fila central: intensidad + horario + duración — 3 columnas que llenan el ancho */}
+                              {/* fila central: intensidad + horario + duración · 3 columnas que llenan el ancho */}
                               <div style={{ display: 'flex', flexDirection: 'row', gap: 12, alignItems: 'stretch' }}>
                                 <div style={{ flex: 1, minWidth: 0, border: '1px solid var(--border-soft)', borderRadius: 12, padding: '12px 16px', background: 'linear-gradient(160deg, var(--bg-elevated-alpha, var(--bg-elevated)) 0%, transparent 100%)', display: 'flex', flexDirection: 'column', gap: 9 }}>
                                   <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
@@ -4200,7 +4447,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                                     <>
                                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginTop: 'auto' }}>
                                         <span style={{ fontSize: 28, fontWeight: 200, letterSpacing: '0.01em', fontFamily: "'JetBrains Mono', monospace", color: 'var(--text-primary)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{dHh}<span style={{ animation: 'clockColonBlink 1.2s ' + EASE + ' infinite', display: 'inline-block' }}>:</span>{dMm}</span>
-                                        <span style={{ fontSize: 19, fontWeight: 300, color: course.color, fontFamily: "'JetBrains Mono', monospace", lineHeight: 1 }}>→</span>
+                                        <span style={{ fontSize: 19, fontWeight: 300, color: course.color, fontFamily: "'JetBrains Mono', monospace", lineHeight: 1 }}>?</span>
                                         <span style={{ fontSize: 17, fontWeight: 300, fontFamily: "'JetBrains Mono', monospace", color: 'var(--text-secondary)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{dEndStr}</span>
                                       </div>
                                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 8, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif" }}>
@@ -4216,7 +4463,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                                 </div>
                               </div>
 
-                              {/* fila inferior: carpeta grande + línea + tema con sus materiales (izq) + últimos ingresos (der) */}
+                              {/* fila inferior: carpeta grande + línea + tema con sus materiales (izq) + Últimos ingresos (der) */}
                               <div style={{ display: 'flex', flexDirection: 'row', gap: 16, alignItems: 'stretch', padding: '0 2px' }}>
                                 {(dGroup || dTopic) ? (
                                   <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -4276,7 +4523,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                                     <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
                                       <div style={{ fontSize: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", marginBottom: 2 }}>Últimos ingresos a temas</div>
                                       {recentTopicsList.map(rt => (
-                                        <button key={rt.id} onClick={() => navigateToCourse(course.id, rt.groupId || undefined, rt.id)} title={rt.title}
+                                        <button key={rt.id} onClick={() => { setDetailSessionId(null); try { localStorage.removeItem('owa_session_detail_v1'); } catch { } navigateToCourse(course.id, rt.groupId || undefined, rt.id); }} title={rt.title}
                                           style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 8, background: 'transparent', border: 'none', color: 'var(--text-secondary)', fontFamily: "'Inter Tight', sans-serif", fontSize: 11, cursor: 'pointer', transition: 'all 150ms ' + EASE, width: '100%', textAlign: 'left' }}
                                           onMouseEnter={e => { e.currentTarget.style.background = `${course.color}0a`; e.currentTarget.style.color = 'var(--text-primary)'; }}
                                           onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
@@ -4308,7 +4555,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                         );
                       })()}
 
-                      {/* ══ VENTANA DE CONFIRMACIÓN — eliminar sesión (evita borrados accidentales) ══ */}
+                      {/* -- VENTANA DE confirmación · eliminar sesión (evita borrados accidentales) -- */}
                       {detailSessionId && confirmDeleteSession && createPortal(
                         <div onClick={() => setConfirmDeleteSession(null)} style={{ position: 'fixed', inset: 0, zIndex: 99996, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)', animation: 'fadeIn 180ms ' + EASE }}>
                           <div onClick={e => e.stopPropagation()} className="bento-card" style={{ width: 400, maxWidth: 'calc(100% - 48px)', background: 'var(--bg-surface)', border: '1px solid var(--border-soft)', borderRadius: 16, boxShadow: '0 24px 60px rgba(0,0,0,0.5)', padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -4319,7 +4566,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                               <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>Eliminar sesión</span>
                             </div>
                             <span style={{ fontSize: 11.5, color: 'var(--text-secondary)', fontFamily: "'Inter', sans-serif", lineHeight: 1.55 }}>
-                              ¿Eliminar <b style={{ color: 'var(--text-primary)', fontWeight: 600 }}>“{confirmDeleteSession.title || 'Sesión de estudio'}”</b>? Se quitará del cronograma y no se puede deshacer.
+                              ¿Eliminar <b style={{ color: 'var(--text-primary)', fontWeight: 600 }}>“{confirmDeleteSession.title || 'Sesión de estudio'}</b>? Se quitará del cronograma y no se puede deshacer.
                             </span>
                             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 2 }}>
                               <button onClick={() => setConfirmDeleteSession(null)}
@@ -4340,7 +4587,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                         document.body
                       )}
 
-                      {/* ══ RADAR DE RENDIMIENTO — centro inferior ══ */}
+                      {/* -- RADAR DE RENDIMIENTO · centro inferior -- */}
                       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                         {(() => {
                           const AXIS_COLORS = ['#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#EC4899', '#06B6D4', '#F97316', '#6366F1', '#14B8A6', '#A855F7', '#84CC16', '#E11D48', '#0EA5E9', '#D946EF', '#F43F5E', '#4ADE80', '#FBBF24', '#22D3EE', '#C084FC', '#FB923C'];
@@ -4396,19 +4643,19 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                           const courseMat = parsedTopics.reduce((s, t) => s + (t.materials?.length || 0), 0);
                           const courseMastery = parsedTopics.length > 0 ? parsedTopics.reduce((s, t) => s + Math.min(1, (t.reviewLevel || 0) / 10), 0) / parsedTopics.length : 0;
 
-                          // Unified course-performance score — a weighted blend of EVERYTHING
+                          // Unified course-performance score · a weighted blend of EVERYTHING
                           // measurable. Every term comes from real, countable data:
-                          //   mastery   → avg topic reviewLevel/10 inside the grouping
-                          //   materials → material count of the grouping, normalized by the
+                          //   mastery   ? avg topic reviewLevel/10 inside the grouping
+                          //   materials ? material count of the grouping, normalized by the
                           //               busiest grouping (so the top grouping scores 1.0)
-                          //   sessions  → completed ÷ planned sessions of the grouping
-                          //   intensity → real intensity achieved (volmeter 1-10 of linked
-                          //               study sessions) ÷ programmed intensity (1-10);
-                          //               falls back to course minutes studied ÷ planned
+                          //   sessions  ? completed · planned sessions of the grouping
+                          //   intensity ? real intensity achieved (volmeter 1-10 of linked
+                          //               study sessions) · programmed intensity (1-10);
+                          //               falls back to course minutes studied · planned
                           //               minutes (60 min floor) when nothing is programmed
-                          //   progress  → topics with reviewLevel > 0 ÷ total topics
-                          //   tasks     → completed course tasks ÷ total course tasks
-                          //   notes     → course notes ÷ topics (clamped to 1)
+                          //   progress  ? topics with reviewLevel > 0 · total topics
+                          //   tasks     ? completed course tasks · total course tasks
+                          //   notes     ? course notes · topics (clamped to 1)
                           // Weights sum to 1.0, so the result is a true 0–100 % performance.
                           const WEIGHTS = { mastery: 0.22, materials: 0.18, sessions: 0.18, intensity: 0.16, progress: 0.12, tasks: 0.10, notes: 0.04 } as const;
                           const WLABELS: Record<keyof typeof WEIGHTS, string> = { mastery: 'Dominio', materials: 'Materiales', sessions: 'Sesiones', intensity: 'Intensidad', progress: 'Progreso', tasks: 'Tareas', notes: 'Notas' };
@@ -4484,12 +4731,12 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                             </div>
                           );
 
-                          /* ── DIAGNOSTIC RADAR: 0–2 agrupaciones (incluye sin agrupaciones →
+                          /* -- DIAGNOSTIC RADAR: 0–2 agrupaciones (incluye sin agrupaciones ?
                              análisis COMPLETO del curso en 7 pilares geométricos) O más de 30 → se
                              mantiene el radar geométrico midiendo las variables del curso (dominio,
                              materiales, tareas, notas, sesiones, tiempo, intensidad) en 7 esquinas.
-                             Nunca donut, nunca listado, nunca empty state — siempre la telaraña
-                             geométrica conectada con todos los datos del curso. ── */
+                             Nunca donut, nunca listado, nunca empty state · siempre la telaraña
+                             geométrica conectada con todos los datos del curso. -- */
                           if (axisItems.length <= 2 || axisItems.length > 30) {
                             const diagAxes = [
                               { label: 'Dominio', value: courseMastery, detail: courseMastery > 0 ? `${Math.round(courseMastery * 100)}% de dominio medio` : 'sin repaso todavía' },
@@ -4625,7 +4872,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                             <>
                               {headerEl}
 
-                              {/* ── MULTI-COLOR SPIDER CHART ── */}
+                              {/* -- MULTI-COLOR SPIDER CHART -- */}
                               <div style={{ flex: 1, minHeight: 0, padding: '6px 22px 14px', position: 'relative', display: 'flex', flexDirection: 'column' }}>
                                 <div ref={radarWrapRef} style={{ flex: 1, minHeight: 0, position: 'relative' }}>
                                 <svg ref={radarSvgRef} width="100%" height="100%" viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} preserveAspectRatio="xMidYMid meet" style={{ maxHeight: '100%', margin: '0 auto', display: 'block', overflow: 'visible' }}>
@@ -4643,7 +4890,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                                       fill="none" stroke="var(--border-subtle)" strokeWidth="1" opacity={lv === 1 ? 0.45 : 0.24} />
                                   ))}
 
-                                  {/* tinted wedge sectors — one color per axis */}
+                                  {/* tinted wedge sectors · one color per axis */}
                                   {Array.from({ length: n }, (_, i) => {
                                     const p1 = pts[i];
                                     const p2 = pts[(i + 1) % n];
@@ -4662,7 +4909,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                                   {/* data area (translucent glow, no heavy fill) */}
                                   <path d={dataPath} fill="url(#spiderFill)" style={{ transition: 'all 500ms cubic-bezier(0.16,1,0.3,1)' }} />
 
-                                  {/* multi-color boundary — each segment in its own axis color */}
+                                  {/* multi-color boundary · each segment in its own axis color */}
                                   {Array.from({ length: n }, (_, i) => {
                                     const a = pts[i];
                                     const b = pts[(i + 1) % n];
@@ -4681,8 +4928,8 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                                     </g>
                                   ))}
 
-                                  {/* vertex labels — rotated along the spoke when crowded (>12 ejes,
-                                      así cada nombre se lee sin chocar con el vecino); ≤12 horizontales */}
+                                  {/* vertex labels · rotated along the spoke when crowded (>12 ejes,
+                                      así cada nombre se lee sin chocar con el vecino); =12 horizontales */}
                                   {labels.map((lbl, i) => {
                                     const p = getPoint(i, rotated ? 1.2 : 1.24);
                                     const col = cAxis(i);
@@ -4724,7 +4971,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                                   <circle cx={radarCx} cy={radarCy} r={3} fill={course.color} opacity={0.85} />
                                 </svg>
 
-                                {/* Hover tooltip — full course-stat breakdown */}
+                                {/* Hover tooltip · full course-stat breakdown */}
                                 {radarHover !== null && axisItems[radarHover] && (
                                   (() => {
                                     const item = axisItems[radarHover];
@@ -4819,7 +5066,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                       </div>
                     </div>
 
-                  {/* ══ RIGHT: AGRUPACIONES — FULL LATERAL ══ */}
+                  {/* -- RIGHT: AGRUPACIONES · FULL LATERAL -- */}
                   <div style={{ width: 320, flexShrink: 0, display: 'flex', flexDirection: 'column', borderLeft: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '24px 20px 10px', flexShrink: 0 }}>
                       <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: "'Inter Tight', sans-serif" }}>Agrupaciones</h3>
@@ -4899,7 +5146,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                   </div>
                 </div>
 
-                {/* ══ DELETE MATERIAL CONFIRMATION ══ */}
+                {/* -- DELETE MATERIAL CONFIRMATION -- */}
                 {confirmDeleteMatId && (() => {
                   const delMat = allCourseMaterials.find(m => m.id === confirmDeleteMatId);
                   return (
@@ -4933,7 +5180,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                   );
                 })()}
 
-                {/* ══ ADD LINK MODAL ══ */}
+                {/* -- ADD LINK MODAL -- */}
                 {showAddLinkModal && (
                   <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                     onClick={e => { if (e.target === e.currentTarget) setShowAddLinkModal(false); }}>
@@ -4985,7 +5232,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                   </div>
                 )}
 
-                {/* ══ EDIT LINK MODAL ══ */}
+                {/* -- EDIT LINK MODAL -- */}
                 {editLinkId && (
                   <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                     onClick={e => { if (e.target === e.currentTarget) setEditLinkId(null); }}>
@@ -5045,7 +5292,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                   </div>
                 )}
 
-                {/* ══ PLAN SESSION MODAL ══ */}
+                {/* -- PLAN SESSION MODAL -- */}
                 {showPlanModal && (
                   <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                     onClick={e => { if (e.target === e.currentTarget) setShowPlanModal(false); }}>
@@ -5112,7 +5359,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                                     {String(parsePlanTime(planStartTime).h).padStart(2, '0')}
                                   </button>
                                 )}
-                                <button onClick={() => shiftPlanTime('h', -1)} title="Bajar hora (−1h)"
+                                <button onClick={() => shiftPlanTime('h', -1)} title="Bajar hora (-1h)"
                                   style={{ width: '100%', height: 16, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'color 150ms' }}
                                   onMouseEnter={e => e.currentTarget.style.color = course.color}
                                   onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
@@ -5141,7 +5388,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                                     {String(parsePlanTime(planStartTime).m).padStart(2, '0')}
                                   </button>
                                 )}
-                                <button onClick={() => shiftPlanTime('m', -1)} title="Bajar minutos (−5m)"
+                                <button onClick={() => shiftPlanTime('m', -1)} title="Bajar minutos (-5m)"
                                   style={{ width: '100%', height: 16, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'color 150ms' }}
                                   onMouseEnter={e => e.currentTarget.style.color = course.color}
                                   onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
@@ -5258,7 +5505,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                 </div>
                 )}
 
-                {/* ══ DAY DETAIL MODAL ══ */}
+                {/* -- DAY DETAIL MODAL -- */}
                 {showDayDetail && dayDetailDate && (
                   <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                     onClick={e => { if (e.target === e.currentTarget) setShowDayDetail(false); }}>
@@ -5431,7 +5678,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                   </div>
                 )}
 
-                {/* ══ CHARTS & ANALYTICS MODAL ══ */}
+                {/* -- CHARTS & ANALYTICS MODAL -- */}
                 {showChartsModal && (
                   <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                     onClick={e => { if (e.target === e.currentTarget) setShowChartsModal(false); }}>
@@ -5583,7 +5830,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                   </div>
                 )}
 
-                {/* ══ INLINE EDIT MODAL OVERLAY ══ */}
+                {/* -- INLINE EDIT MODAL OVERLAY -- */}
                 {inlineEditGroupId && (() => {
                   const editingGroup = groups.find(g => g.id === inlineEditGroupId);
                   if (!editingGroup) return null;
@@ -5675,7 +5922,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                   );
                 })()}
 
-                {/* ══ DELETE CONFIRMATION DIALOG ══ */}
+                {/* -- DELETE CONFIRMATION DIALOG -- */}
                 {confirmDeleteGroupId && (() => {
                   const delGroup = groups.find(g => g.id === confirmDeleteGroupId);
                   const delCount = parsedTopics.filter(t => t.groupId === confirmDeleteGroupId).length;
@@ -5716,7 +5963,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
             </div>
           </div>
         ) : activeTab === 'tareas' ? (
-          /* ─── TAREAS TAB ─── */
+          /* --- TAREAS TAB --- */
             <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px 24px 60px' }}>
             {/* Create task card */}
             <div className="bento-card" style={{ borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', overflow: 'hidden', marginBottom: 20, padding: 0, boxShadow: '0 1px 8px rgba(0,0,0,0.04)' }}>
@@ -5856,7 +6103,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
             )}
           </div>
         ) : activeTab === 'notas' ? (
-          /* ─── APUNTES TAB ─── */
+          /* --- APUNTES TAB --- */
           <div style={{ maxWidth: 800, margin: '0 auto', padding: editingNoteId ? '20px 24px 20px' : '20px 24px 60px' }}>
             {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
@@ -5912,14 +6159,14 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                               onClick={() => { if (!isEditing && !editingNoteId && !notesDragRef.current) handleStartEdit(); }}
                               onMouseEnter={e => { if (!isEditing && !editingNoteId) { e.currentTarget.style.borderColor = `${course.color}28`; e.currentTarget.style.background = `${course.color}03`; } }}
                               onMouseLeave={e => { if (!isEditing && !editingNoteId) { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = 'var(--bg-elevated-alpha, var(--bg-elevated))'; } }}>
-                              {/* ── NOT EDITING ── */}
+                              {/* -- NOT EDITING -- */}
                               {!isEditing ? (
                                 <div style={{ padding: '28px' }}>
                                   <div style={{ fontSize: 15, lineHeight: 1.8, color: 'var(--text-primary)', fontFamily: "'Atkinson Hyperlegible', system-ui, serif", wordBreak: 'break-word', maxHeight: 360, overflowY: 'auto' }}
                                     dangerouslySetInnerHTML={{ __html: n.content || '<span style="color:var(--text-muted);font-style:italic;font-size:13px">Haz clic para añadir contenido...</span>' }} />
                                 </div>
                               ) : (
-                                /* ── EDITING ── */
+                                /* -- EDITING -- */
                                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                                   <FormatToolbar onFormat={handleNoteFormat} color={course.color} activeFormats={noteActiveFormats} />
                                   <div ref={editContentRef}
@@ -5979,7 +6226,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
             )}
           </div>
         ) : activeTab === 'archivos' ? (
-          /* ─── ARCHIVOS TAB ─── */
+          /* --- ARCHIVOS TAB --- */
           <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px 24px 60px' }}>
             <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 16, fontFamily: "'Inter Tight', sans-serif" }}>Archivos de {course.name}</h2>
             {allCourseMaterials.filter(m => !!m && m.type === 'resource').length > 0 ? (
@@ -6012,7 +6259,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
         ) : null}
       </div>
 
-      {/* ═══════════ MODALS ═══════════ */}
+      {/* ----------- MODALS ----------- */}
       {showEditCourse && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }} onClick={() => setShowEditCourse(false)}>
           <div className="bento-card" style={{ width: 432, padding: '26px 28px', borderRadius: 16, background: "linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)", border: '1px solid var(--border-default)', boxShadow: "var(--shadow-elevated)" }} onClick={e => e.stopPropagation()}>
@@ -6378,7 +6625,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
               ) : (
                 <>
                   {importExportMode === 'choose' ? (
-                    /* ══ CHOOSE: Two Elegant Blocks ══ */
+                    /* -- CHOOSE: Two Elegant Blocks -- */
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '8px 0' }}>
                       <button onClick={() => setImportExportMode('import')}
                         style={{ display: 'flex', alignItems: 'center', gap: 14, width: '100%', padding: '16px 18px', borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', cursor: 'pointer', textAlign: 'left', transition: 'all 200ms ' + EASE }}
@@ -6408,9 +6655,9 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                       </button>
                     </div>
                   ) : importExportMode === 'export' ? (
-                    /* ══ EXPORT ══ */
+                    /* -- EXPORT -- */
                     selectedGroupId ? (
-                      /* ── Export topics within current group ── */
+                      /* -- Export topics within current group -- */
                       <div>
                         <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '0 0 10px' }}>Selecciona los temas que deseas exportar de esta agrupacion.</p>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 280, overflowY: 'auto' }} className="no-scrollbar">
@@ -6464,7 +6711,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                         </div>
                       </div>
                     ) : (
-                      /* ── Export groups (fallback when no group selected) ── */
+                      /* -- Export groups (fallback when no group selected) -- */
                       <div>
                         <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '0 0 10px' }}>Selecciona las agrupaciones cuyos temas deseas exportar.</p>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 200, overflowY: 'auto' }} className="no-scrollbar">
@@ -6519,7 +6766,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                       </div>
                     )
                   ) : (
-                    /* ══ IMPORT ══ */
+                    /* -- IMPORT -- */
                     <div>
                       <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '0 0 10px' }}>Selecciona un archivo JSON exportado desde Owa Studio.</p>
                       <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, height: 44, borderRadius: 8, border: '1px dashed var(--border-subtle)', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 11, fontWeight: 500, transition: 'all 200ms ' + EASE }}
@@ -6558,7 +6805,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
             </div>
             <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', margin: 0, fontFamily: "'Inter Tight', sans-serif", textAlign: 'center' }}>Eliminar tema</h3>
             <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0, textAlign: 'center', lineHeight: 1.5, maxWidth: 260 }}>
-              Esta accion eliminara permanentemente este tema y todo su contenido. No se puede deshacer.
+              Esta acción eliminara permanentemente este tema y todo su contenido. No se puede deshacer.
             </p>
             <div style={{ display: 'flex', gap: 8, width: '100%', marginTop: 8 }}>
               <button onClick={() => setDeleteTopicId(null)}
@@ -6625,7 +6872,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
             </div>
             <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', margin: 0, fontFamily: "'Inter Tight', sans-serif", textAlign: 'center' }}>Eliminar tarea</h3>
             <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0, textAlign: 'center', lineHeight: 1.5, maxWidth: 260 }}>
-              ¿Eliminar "{courseTasks.find(t => t.id === confirmDeleteTaskId)?.title || ''}"? Esta accion no se puede deshacer.
+              ¿Eliminar "{courseTasks.find(t => t.id === confirmDeleteTaskId)?.title || ''}"? Esta acción no se puede deshacer.
             </p>
             <div style={{ display: 'flex', gap: 8, width: '100%', marginTop: 8 }}>
               <button onClick={() => setConfirmDeleteTaskId(null)}
@@ -6680,7 +6927,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
               const vAccent = vColor[vm.type] || 'var(--accent)';
               const vTitle = vm.name || vm.title || vm.word || vm.question || 'Sin título';
               const vBody = vm.content || vm.meaning || vm.answer || vm.clarification || vm.description || '';
-              const vBodyLabel = vm.type === 'concept' || vm.type === 'key-data' ? 'Contenido' : vm.type === 'formula' ? 'Clarificación' : vm.type === 'meaning' ? 'Definición' : vm.type === 'quiz' ? 'Respuesta' : vm.type === 'procedure' ? 'Descripción' : 'Contenido';
+              const vBodyLabel = vm.type === 'concept' || vm.type === 'key-data' ? 'Contenido' : vm.type === 'formula' ? 'Clarificación' : vm.type === 'meaning' ? 'definición' : vm.type === 'quiz' ? 'Respuesta' : vm.type === 'procedure' ? 'Descripción' : 'Contenido';
               return (
                 <>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }}>
@@ -6740,7 +6987,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                 <textarea value={materialForm.content} onChange={e => setForm({ content: e.target.value })} placeholder="Dato clave..." style={{ width: '100%', minHeight: 50, padding: 8, borderRadius: 5, fontSize: 11, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} /></>
               )}
               {materialType === 'meaning' && (
-                <><input value={materialForm.word} onChange={e => setForm({ word: e.target.value })} placeholder="Término" autoFocus style={{ width: '100%', height: 32, borderRadius: 5, padding: '0 10px', fontSize: 11, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box' }} />
+                <><input value={materialForm.word} onChange={e => setForm({ word: e.target.value })} placeholder="terminó" autoFocus style={{ width: '100%', height: 32, borderRadius: 5, padding: '0 10px', fontSize: 11, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box' }} />
                 <textarea value={materialForm.meaning} onChange={e => setForm({ meaning: e.target.value })} placeholder="Significado..." style={{ width: '100%', minHeight: 60, padding: 8, borderRadius: 5, fontSize: 11, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} /></>
               )}
               {materialType === 'quiz' && (
@@ -6779,7 +7026,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
         const textareaStyle: React.CSSProperties = { ...baseField, padding: '10px 12px', resize: 'vertical', lineHeight: 1.55, minHeight: 80 };
         const focusIn = (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) => { e.currentTarget.style.borderColor = meta.color; e.currentTarget.style.boxShadow = `0 0 0 3px ${meta.color}12`; };
         const focusOut = (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) => { e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.boxShadow = 'none'; };
-        const titlePh: Record<ToolCreatorMode, string> = {
+        const titlePh: Partial<Record<ToolCreatorMode, string>> = {
           quizzes: 'Ej. Quiz: divisiones',
           blurting: 'Ej. Repaso del tema 3',
           feynman: 'Ej. La fotosíntesis',
@@ -6854,22 +7101,33 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
               {toolModal.mode === 'cloze' && (
                 <Field txt="Texto con huecos">
                   <div style={{ display: 'flex', alignItems: 'center', marginBottom: 7 }}>
-                    <span onClick={insertClozeGap} title="Selecciona una palabra y púlsalo para convertirla en hueco (guardará la respuesta)" style={{ display: 'flex', alignItems: 'center', gap: 5, height: 26, padding: '0 10px', borderRadius: 7, border: `1px solid ${meta.color}40`, background: `${meta.color}0d`, color: meta.color, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: "'Inter Tight', sans-serif", transition: 'background 150ms' }} onMouseEnter={e => e.currentTarget.style.background = `${meta.color}1a`} onMouseLeave={e => e.currentTarget.style.background = `${meta.color}0d`}><Plus size={10} /> Insertar hueco</span>
+                    <span onClick={insertClozeGap} title="Selecciona una palabra y plsalo para convertirla en hueco (guardará la respuesta)" style={{ display: 'flex', alignItems: 'center', gap: 5, height: 26, padding: '0 10px', borderRadius: 7, border: `1px solid ${meta.color}40`, background: `${meta.color}0d`, color: meta.color, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: "'Inter Tight', sans-serif", transition: 'background 150ms' }} onMouseEnter={e => e.currentTarget.style.background = `${meta.color}1a`} onMouseLeave={e => e.currentTarget.style.background = `${meta.color}0d`}><Plus size={10} /> Insertar hueco</span>
                     <span style={{ fontSize: 8.5, color: 'var(--text-tertiary)', marginLeft: 8 }}>Selecciona texto para guardar la respuesta</span>
                   </div>
-                  <textarea ref={clozeRef} value={toolFields.body || ''} onChange={e => setToolField('body', e.target.value)} placeholder="Escribe el texto aquí…" style={{ ...textareaStyle, minHeight: 140 }} onFocus={focusIn} onBlur={focusOut} />
+                  <textarea ref={clozeRef} value={toolFields.body || ''} onChange={e => setToolField('body', e.target.value)} placeholder="Escribe el texto aquí" style={{ ...textareaStyle, minHeight: 140 }} onFocus={focusIn} onBlur={focusOut} />
                 </Field>
               )}
 
               {toolModal.mode === 'categorization' && (
                 <Field txt="Elementos (uno por línea)">
-                  <textarea value={toolFields.content || ''} onChange={e => setToolField('content', e.target.value)} placeholder={'Perro\nGato\nBallena…'} style={{ ...textareaStyle, minHeight: 110 }} onFocus={focusIn} onBlur={focusOut} />
+                  <textarea value={toolFields.content || ''} onChange={e => setToolField('content', e.target.value)} placeholder={'Perro\nGato\nBallena'} style={{ ...textareaStyle, minHeight: 110 }} onFocus={focusIn} onBlur={focusOut} />
                 </Field>
               )}
 
               {toolModal.mode === 'mnemonics' && (
                 <Field txt="Regla mnemotécnica">
-                  <textarea value={toolFields.content || ''} onChange={e => setToolField('content', e.target.value)} placeholder="Ej. «Mi vieja hace mucho frío este mes»" style={{ ...textareaStyle, minHeight: 80 }} onFocus={focusIn} onBlur={focusOut} />
+                  <textarea value={toolFields.content || ''} onChange={e => setToolField('content', e.target.value)} placeholder="Ej. Mi vieja hace mucho fro este mes…" style={{ ...textareaStyle, minHeight: 80 }} onFocus={focusIn} onBlur={focusOut} />
+                </Field>
+              )}
+
+              {!['quizzes', 'matching', 'blurting', 'feynman', 'cloze', 'categorization', 'mnemonics'].includes(toolModal.mode) && (
+                <Field txt="Desarrollo de la técnica">
+                  <div style={{ fontSize: 9.5, color: 'var(--text-tertiary)', lineHeight: 1.55, marginBottom: 8, padding: '8px 10px', borderRadius: 8, background: `${meta.color}0a`, border: `1px dashed ${meta.color}30` }}>
+                    {TOOL_CREATOR_META[toolModal.mode].theory.how.map((h, i) => (
+                      <div key={i} style={{ display: 'flex', gap: 6 }}><span style={{ color: meta.color, fontWeight: 700 }}>{i + 1}.</span><span>{h}</span></div>
+                    ))}
+                  </div>
+                  <textarea value={toolFields.body || ''} onChange={e => setToolField('body', e.target.value)} placeholder={`Aplica aquí ${meta.name} a tu tema`} style={{ ...textareaStyle, minHeight: 130 }} onFocus={focusIn} onBlur={focusOut} />
                 </Field>
               )}
             </div>
@@ -6882,6 +7140,27 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
         </div>
         );
       })()}
+
+      {/* ===== CONFIRMAR ELIMINAR MATERIAL (temas) ===== */}
+      {confirmDelToolMat && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 2003, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }} onClick={() => setConfirmDelToolMat(null)}>
+          <div className="bento-card" style={{ width: 380, padding: 22, borderRadius: 14, background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+              <span style={{ width: 38, height: 38, borderRadius: 11, background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Trash2 size={17} style={{ color: '#EF4444' }} />
+              </span>
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', margin: 0, fontFamily: "'Inter Tight', sans-serif" }}>Eliminar material</h3>
+            </div>
+            <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.55, margin: '0 0 18px' }}>
+              ¿Eliminar <b style={{ color: 'var(--text-primary)', fontWeight: 600 }}>“{confirmDelToolMat.name}”</b> del tema? Esta acción no se puede deshacer.
+            </p>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setConfirmDelToolMat(null)} style={{ flex: 1, height: 38, borderRadius: 9, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter Tight', sans-serif" }}>Cancelar</button>
+              <button onClick={confirmDeleteMaterialNow} style={{ flex: 1, height: 38, borderRadius: 9, border: 'none', background: '#EF4444', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', boxShadow: '0 6px 20px rgba(239,68,68,0.30)', fontFamily: "'Inter Tight', sans-serif" }}>Sí, eliminar</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ===== FLASHCARD MODAL ===== */}
       {showFlashcardModal && (
@@ -6931,7 +7210,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
       {showImagePreview && previewImageSrc && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 10002, display: 'flex', flexDirection: 'column', background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(12px)' }}
           onClick={() => { setShowImagePreview(false); setPreviewZoom(1); setPanOffset({ x: 0, y: 0 }); }}>
-          {/* TOP BAR — floating bare icons */}
+          {/* TOP BAR · floating bare icons */}
           <div onClick={e => e.stopPropagation()} style={{ position: 'absolute', top: 24, right: 24, zIndex: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
             <button onClick={handleDeleteImage} title="Eliminar imagen"
               style={{ width: 32, height: 32, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(6px)', cursor: 'pointer', color: 'rgba(255,255,255,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 120ms' }}>
@@ -7047,7 +7326,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
               )}
               <div>
                 <div style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-tertiary)', marginBottom: 5 }}>Nombre</div>
-                <input value={tagNameInput} onChange={e => setTagNameInput(e.target.value)} placeholder="Ej. Fórmulas, Examen, Repaso..." autoFocus
+                <input value={tagNameInput} onChange={e => setTagNameInput(e.target.value)} placeholder="Ej. fórmulas, Examen, Repaso..." autoFocus
                   onKeyDown={e => { if (e.key === 'Enter') handleSaveTag(); }}
                   style={{ width: '100%', height: 38, padding: '0 12px', borderRadius: 8, fontSize: 13, fontFamily: "'Inter Tight', sans-serif", fontWeight: 500, border: `1px solid ${tagNameInput ? `${tagColorInput}50` : 'var(--border-soft)'}`, background: 'var(--bg-deep)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box' }} />
               </div>
@@ -7098,4 +7377,6 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
       </div>
     );
   }
+
+
 

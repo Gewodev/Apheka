@@ -486,8 +486,7 @@ async fn get_system_stats(app_handle: tauri::AppHandle) -> Result<serde_json::Va
 }
 
 #[tauri::command]
-async fn export_to_zip(app_handle: tauri::AppHandle, save_path: String) -> Result<String, String> {
-    let state = app_handle.state::<DownloadState>();
+async fn export_to_zip(app_handle: tauri::AppHandle, save_path: String) -> Result<String, String> {    let state = app_handle.state::<DownloadState>();
     let download_dir = state.path.lock().map_err(|e| e.to_string())?.clone();
 
     let dir = std::path::Path::new(&download_dir);
@@ -530,6 +529,80 @@ async fn export_to_zip(app_handle: tauri::AppHandle, save_path: String) -> Resul
     Ok(save_path)
 }
 
+#[derive(serde::Serialize)]
+struct FoundBrowser {
+    id: String,
+    name: String,
+    exe: String,
+}
+
+// Detecta navegadores INSTALADOS en el sistema revisando sus rutas conocidas.
+// Solo se devuelven los que realmente existen — nada de listas fijas en la UI.
+#[tauri::command]
+fn detect_installed_browsers() -> Vec<FoundBrowser> {
+    let pf = std::env::var("ProgramFiles").unwrap_or_default();
+    let pfx86 = std::env::var("ProgramFiles(x86)").unwrap_or_default();
+    let lad = std::env::var("LOCALAPPDATA").unwrap_or_default();
+    let defs: &[(&str, &str, &[&str])] = &[
+        ("chrome", "Google Chrome", &[
+            "{PF}\\Google\\Chrome\\Application\\chrome.exe",
+            "{PFX}\\Google\\Chrome\\Application\\chrome.exe",
+            "{LAD}\\Google\\Chrome\\Application\\chrome.exe",
+        ]),
+        ("edge", "Microsoft Edge", &[
+            "{PFX}\\Microsoft\\Edge\\Application\\msedge.exe",
+            "{PF}\\Microsoft\\Edge\\Application\\msedge.exe",
+        ]),
+        ("brave", "Brave", &[
+            "{PF}\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
+            "{PFX}\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
+            "{LAD}\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
+        ]),
+        ("firefox", "Firefox", &[
+            "{PF}\\Mozilla Firefox\\firefox.exe",
+            "{PFX}\\Mozilla Firefox\\firefox.exe",
+        ]),
+        ("opera", "Opera", &[
+            "{LAD}\\Programs\\Opera\\opera.exe",
+            "{PF}\\Opera\\opera.exe",
+        ]),
+        ("operagx", "Opera GX", &[
+            "{LAD}\\Programs\\Opera GX\\launcher.exe",
+        ]),
+        ("vivaldi", "Vivaldi", &[
+            "{LAD}\\Vivaldi\\Application\\vivaldi.exe",
+        ]),
+    ];
+    let mut out: Vec<FoundBrowser> = Vec::new();
+    for (id, name, paths) in defs {
+        for p in *paths {
+            let full = p.replace("{PF}", &pf).replace("{PFX}", &pfx86).replace("{LAD}", &lad);
+            if std::path::Path::new(&full).exists() {
+                out.push(FoundBrowser { id: id.to_string(), name: name.to_string(), exe: full });
+                break;
+            }
+        }
+    }
+    out
+}
+
+// Abre un URL EN UN NAVEGADOR CONCRETO (no el predeterminado del sistema).
+#[tauri::command]
+fn open_url_in_browser(exe: String, url: String) -> Result<(), String> {
+    if !url.starts_with("http://") && !url.starts_with("https://") {
+        return Err("Solo se puede abrir un enlace http(s) con este comando".into());
+    }
+    let p = std::path::PathBuf::from(&exe);
+    if !p.exists() {
+        return Err("Ese navegador ya no está disponible en el sistema".into());
+    }
+    std::process::Command::new(&p)
+        .arg(&url)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| format!("No se pudo abrir con ese navegador: {e}"))
+}
+
 fn main() {
     let default_download_path = dirs::download_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
@@ -558,6 +631,8 @@ fn main() {
             set_download_path,
             get_system_stats,
             export_to_zip,
+            detect_installed_browsers,
+            open_url_in_browser,
         ])
         .setup(|app| {
             ensure_simple_binaries(app.handle());

@@ -815,7 +815,7 @@ export default function Planificacion() {
                   const tod = isToday(d);
                   return (
                     <div key={i}
-                      onClick={() => { const dIso = format(d, 'yyyy-MM-dd'); const dEvs = getEventsForDate(dIso); const dLinkedIds = new Set(dEvs.map(ev => (ev as PlanEvent).taskId).filter(Boolean)); setSelectedItem({ type: 'day', date: d, events: dEvs, tasks: tasks.filter(t => { if (!t.dueDate) return false; if (dLinkedIds.has(t.id)) return false; return (t.dueDate || '').slice(0, 10) === dIso; }) }); }}
+                      onClick={() => { const dIso = format(d, 'yyyy-MM-dd'); const dEvs = getEventsForDate(dIso); const dLinkedIds = new Set(dEvs.map(ev => (ev as PlanEvent).taskId).filter(Boolean)); setSelectedItem({ type: 'day', date: d, events: dEvs, tasks: tasks.filter(t => { if (!t.dueDate) return false; if (dLinkedIds.has(t.id)) return false; return (t.dueDate || '').slice(0, 10) === dIso; }), sessions: getPlannedSessionsForDate(dIso) }); }}
                       style={{ padding:'12px 0', textAlign:'center', cursor:'pointer', borderLeft: i > 0 ? '1px solid var(--border-soft)' : 'none', background:tod?'rgba(225,29,72,0.05)':'transparent', position:'relative', transition:'background 200ms' }}
                       onMouseEnter={e=>!tod && (e.currentTarget.style.outline='1px solid var(--border-strong)')}
                       onMouseLeave={e=>!tod && (e.currentTarget.style.outline='none')}
@@ -880,7 +880,7 @@ export default function Planificacion() {
                           if (isClass) {
                             return (
                               <div key={item.id}
-                                onClick={e => { e.stopPropagation(); setSelectedItem({ type: 'day', date: d, events: timedEvs, tasks: [] }); }}
+                                onClick={e => { e.stopPropagation(); setSelectedItem({ type: 'day', date: d, events: timedEvs, tasks: [], sessions: getPlannedSessionsForDate(iso) }); }}
                                 style={{
                                   position:'absolute', top, left: `${pos.left}%`, width: `${pos.width}%`, height: hpx,
                                   borderRadius: '4px',
@@ -953,7 +953,24 @@ export default function Planificacion() {
                             if (sTop < -sH) return null;
                             return { id: `planned-${ps.id}`, kind: 'planned' as const, start: stH, end: stH + ps.durationMinutes / 60, sTop, sH, ps };
                           }).filter((x): x is NonNullable<typeof x> => !!x);
-                          const lanes = layoutTimeLanes([...dayStudy, ...dayPlanned]);
+                          const evLinkedIds = new Set(timedEvs.map(e => (e as PlanEvent).taskId).filter(Boolean));
+                          const dayTasksTimed = tasks.filter(t => {
+                            if (!t.dueDate) return false;
+                            if (evLinkedIds.has(t.id)) return false;
+                            return (t.dueDate as string).slice(0, 10) === iso;
+                          }).map(t => {
+                            const hasT = (t.dueDate as string).includes('T');
+                            const hhmm = hasT ? (t.dueDate as string).slice(11, 16) : '';
+                            const [th, tm] = (hasT ? hhmm.split(':').map(Number) : [H_START, 0]);
+                            if (!isFinite(th) || !isFinite(tm)) return null;
+                            const durMin = hasT ? 30 : 60;
+                            const stH = th + tm / 60;
+                            const sH = Math.max((durMin / 60) * H_PX, 22);
+                            const sTop = (stH - H_START) * H_PX;
+                            if (sTop < -sH) return null;
+                            return { id: `task-${t.id}`, kind: 'task' as const, start: stH, end: stH + durMin / 60, sTop, sH, t, hasT };
+                          }).filter((x): x is NonNullable<typeof x> => !!x);
+                          const lanes = layoutTimeLanes([...dayStudy, ...dayPlanned, ...dayTasksTimed]);
                           return (
                             <>
                               {dayStudy.map(x => {
@@ -1023,6 +1040,35 @@ export default function Planificacion() {
                                         ))}
                                       </div>
                                     )}
+                                  </div>
+                                );
+                              })}
+                              {dayTasksTimed.map(x => {
+                                const t = x.t;
+                                const ln = lanes.get(x.id) || { col: 0, cols: 1 };
+                                const wPct = 96 / ln.cols;
+                                const col = t.courseColor || '#9CA3AF';
+                                const done = t.status === 'completado';
+                                const hhmm = (t.dueDate as string).slice(11, 16);
+                                return (
+                                  <div key={x.id} title={`${t.title} — entrega ${x.hasT ? hhmm : 'sin hora'}`}
+                                    onClick={e => { e.stopPropagation(); setSelectedItem({ type: 'task', task: t }); }}
+                                    style={{
+                                      position:'absolute', top: x.sTop, left: `${2 + ln.col * wPct}%`, width: `${wPct}%`, height: x.sH,
+                                      borderRadius: 6, zIndex: 2, cursor: 'pointer',
+                                      background: `linear-gradient(135deg, ${col}14, ${col}05)`,
+                                      borderLeft: `3px dashed ${col}99`,
+                                      display:'flex', flexDirection:'column', justifyContent:'center', padding:'4px 9px', overflow:'hidden',
+                                      transition:'all 150ms', opacity: done ? 0.65 : 1,
+                                    }}
+                                    onMouseEnter={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${col}22, ${col}0c)`; e.currentTarget.style.boxShadow = `0 4px 14px ${col}30`; }}
+                                    onMouseLeave={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${col}14, ${col}05)`; e.currentTarget.style.boxShadow = 'none'; }}
+                                  >
+                                    <span style={{ fontSize: 10.5, fontWeight: 700, color: col, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%', textDecoration: done ? 'line-through' : 'none' }}>
+                                      {done && <span style={{ color:'#10B981', fontWeight:800, marginRight:4 }}>✓</span>}
+                                      {t.title}
+                                    </span>
+                                    <span style={{ fontSize: 8.5, fontWeight: 600, color: col, opacity: 0.75, fontFamily:"'JetBrains Mono',monospace", marginTop: 1 }}>{x.hasT ? `Entrega ${fmtClock(hhmm, settings?.timeFormat)}` : 'Sin hora · 1 h'}</span>
                                   </div>
                                 );
                               })}
@@ -1152,7 +1198,24 @@ export default function Planificacion() {
                         if (sTop < -sH) return null;
                         return { id: `planned-${ps.id}`, kind: 'planned' as const, start: stH, end: stH + ps.durationMinutes / 60, sTop, sH, ps };
                       }).filter((x): x is NonNullable<typeof x> => !!x);
-                      const lanes = layoutTimeLanes([...dayStudy, ...dayPlanned]);
+                      const evLinkedIds2 = new Set(getTimedEventsForDate(isoD).map(e => (e as PlanEvent).taskId).filter(Boolean));
+                      const dayTasksTimed = tasks.filter(t => {
+                        if (!t.dueDate) return false;
+                        if (evLinkedIds2.has(t.id)) return false;
+                        return (t.dueDate as string).slice(0, 10) === isoD;
+                      }).map(t => {
+                        const hasT = (t.dueDate as string).includes('T');
+                        const hhmm = hasT ? (t.dueDate as string).slice(11, 16) : '';
+                        const [th, tm] = (hasT ? hhmm.split(':').map(Number) : [H_START, 0]);
+                        if (!isFinite(th) || !isFinite(tm)) return null;
+                        const durMin = hasT ? 30 : 60;
+                        const stH = th + tm / 60;
+                        const sH = Math.max((durMin / 60) * H_PX, 22);
+                        const sTop = (stH - H_START) * H_PX;
+                        if (sTop < -sH) return null;
+                        return { id: `task-${t.id}`, kind: 'task' as const, start: stH, end: stH + durMin / 60, sTop, sH, t, hasT };
+                      }).filter((x): x is NonNullable<typeof x> => !!x);
+                      const lanes = layoutTimeLanes([...dayStudy, ...dayPlanned, ...dayTasksTimed]);
                       return (
                         <>
                       {dayStudy.map(x => {
@@ -1225,6 +1288,35 @@ export default function Planificacion() {
                           </div>
                         );
                       })}
+                      {dayTasksTimed.map(x => {
+                        const t = x.t;
+                        const ln = lanes.get(x.id) || { col: 0, cols: 1 };
+                        const wPct = 95 / ln.cols;
+                        const col = t.courseColor || '#9CA3AF';
+                        const done = t.status === 'completado';
+                        const hhmm = (t.dueDate as string).slice(11, 16);
+                        return (
+                          <div key={x.id} title={`${t.title} — entrega ${x.hasT ? hhmm : 'sin hora'}`}
+                            onClick={e => { e.stopPropagation(); setSelectedItem({ type: 'task', task: t }); }}
+                            style={{
+                              position:'absolute', top: x.sTop, left: `${2.5 + ln.col * wPct}%`, width: `${wPct}%`, height: x.sH,
+                              borderRadius: 6, zIndex: 2, cursor: 'pointer',
+                              background: `linear-gradient(135deg, ${col}14, ${col}05)`,
+                              borderLeft: `3px dashed ${col}99`,
+                              display:'flex', flexDirection:'column', justifyContent:'center', padding:'5px 11px', overflow:'hidden',
+                              transition:'all 150ms', opacity: done ? 0.65 : 1,
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${col}22, ${col}0c)`; e.currentTarget.style.boxShadow = `0 4px 14px ${col}30`; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${col}14, ${col}05)`; e.currentTarget.style.boxShadow = 'none'; }}
+                          >
+                            <span style={{ fontSize: 12, fontWeight: 700, color: col, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%', textDecoration: done ? 'line-through' : 'none' }}>
+                              {done && <span style={{ color:'#10B981', fontWeight:800, marginRight:4 }}>✓</span>}
+                              {t.title}
+                            </span>
+                            <span style={{ fontSize: 9.5, fontWeight: 600, color: col, opacity: 0.75, fontFamily:"'JetBrains Mono',monospace", marginTop: 1 }}>{x.hasT ? `Entrega ${fmtClock(hhmm, settings?.timeFormat)}` : 'Sin hora · 1 h'}</span>
+                          </div>
+                        );
+                      })}
                     {isToday(navDate) && nowH>=H_START && nowH<=H_END && (
                       <div style={{ position:'absolute', top:nowPx, left:0, right:0, height:2, background:'var(--accent)', zIndex:10, pointerEvents:'none', boxShadow:'0 0 16px var(--accent-glow)' }}>
                         <div style={{ position:'absolute', left:-4, top:-4, width:10, height:10, borderRadius:'50%', background:'var(--accent)', boxShadow:'0 0 20px var(--accent-glow)' }}/>
@@ -1258,7 +1350,7 @@ export default function Planificacion() {
                       const opacity = isOld(iso) && !tod ? 0.35 : (inc ? 1 : 0.25);
                       return (
                         <div key={di}
-                          onClick={()=>{ setSelectedItem({ type: 'day', date: day, events: dayEvs, tasks: dayTasks }); }}
+                          onClick={()=>{ setSelectedItem({ type: 'day', date: day, events: dayEvs, tasks: dayTasks, sessions: getPlannedSessionsForDate(iso) }); }}
                           style={{ height:130, padding:'10px 12px', cursor:'pointer', overflow:'hidden', borderRight:di<6?'1px solid var(--border-soft)':'none', background:'transparent', opacity, transition:'background 200ms', position:'relative' }}
                           onMouseEnter={e=>!tod && (e.currentTarget.style.outline='1px solid var(--border-strong)')}
                           onMouseLeave={e=>!tod && (e.currentTarget.style.outline='none')}
@@ -1331,7 +1423,7 @@ export default function Planificacion() {
                             const dayTasks2 = tasks.filter(t => { if(!t.dueDate) return false; if(dayLinkedIds2.has(t.id)) return false; return (t.dueDate||'').slice(0,10)===iso });
                             return (
                               <div key={di}
-                                onClick={(e) => { e.stopPropagation(); if (inc) setSelectedItem({ type: 'day', date: day, events: dayEvs2, tasks: dayTasks2 }); }}
+                                onClick={(e) => { e.stopPropagation(); if (inc) setSelectedItem({ type: 'day', date: day, events: dayEvs2, tasks: dayTasks2, sessions: getPlannedSessionsForDate(iso) }); }}
                                 style={{
                                   width:'100%', aspectRatio:'1', borderRadius:4,
                                   display:'flex', alignItems:'center', justifyContent:'center',
@@ -1371,6 +1463,7 @@ export default function Planificacion() {
         onAddEvent={(date) => { setModalDefaults({ date: format(date, 'yyyy-MM-dd') }); setEditingEvent(null); setShowEventModal(true); setSelectedItem(null); }}
         onAddPlanSession={(date) => { openNewPlanSession(format(date, 'yyyy-MM-dd')); setSelectedItem(null); }}
         onEditPlanSession={(session) => { setSelectedItem(null); openEditPlanSession(session); }}
+        onSelectSession={(session) => setSelectedItem({ type: 'plansession', session })}
         onFileMoved={(evId, oldUrl, newPath) => {
           setEvents(p => p.map(e => e.id === evId ? { ...e, attachments: (e.attachments || []).map(f => f.url === oldUrl ? { ...f, url: newPath } : f) } : e));
           setSelectedItem(prev => prev?.type === 'event' && prev.event.id === evId ? { type: 'event', event: { ...prev.event, attachments: (prev.event.attachments || []).map(f => f.url === oldUrl ? { ...f, url: newPath } : f) } } : prev);

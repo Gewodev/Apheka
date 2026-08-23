@@ -440,6 +440,30 @@ function getPageCount(html: string): number {
   return Math.max(1, Math.ceil(wc / 250));
 }
 
+// Comprime imágenes pegadas antes de guardarlas: evita que un dataURL gigante
+// infle localStorage/IDB (era la causa de notas que "no se guardaban bien").
+function compressImageForNote(dataUrl: string, maxSize = 1400): Promise<string> {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const needsWork = img.width > maxSize || dataUrl.length > 350_000;
+        if (!needsWork) { resolve(dataUrl); return; }
+        const scale = Math.min(1, maxSize / img.width);
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(img.width * scale));
+        c.height = Math.max(1, Math.round(img.height * scale));
+        const ctx = c.getContext('2d');
+        if (!ctx) { resolve(dataUrl); return; }
+        ctx.drawImage(img, 0, 0, c.width, c.height);
+        resolve(c.toDataURL('image/jpeg', 0.82));
+      } catch { resolve(dataUrl); }
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
 function formatMathContent(html: string): string {
   if (!html) return "";
   let formatted = html;
@@ -1758,6 +1782,8 @@ const noteLiveAtts = useMemo(
   // contentEditable caret jumping fix: populate DOM only ONCE when note changes
   useEffect(() => {
     if (isEditing && selectedNote && editorRef.current) {
+      // Enter genera <p> limpios (párrafos reales, saltos de línea consistentes)
+      try { document.execCommand('defaultParagraphSeparator', false, 'p'); } catch { /* noop */ }
       if (editorRef.current.innerHTML !== selectedNote.content) {
         editorRef.current.innerHTML = selectedNote.content || "";
         editorRef.current.querySelectorAll('a').forEach(a => {
@@ -2642,20 +2668,25 @@ const noteLiveAtts = useMemo(
           e.preventDefault();
           const reader = new FileReader();
           reader.onload = (ev) => {
-            const dataUrl = ev.target?.result as string;
-            if (!dataUrl || !editorRef.current) return;
-            let html = "";
-            if (isImg) {
-              html = `<img src="${dataUrl}" alt="${file.name}" style="max-width:100%;border-radius:8px;margin:8px 0;" class="editable-image" />`;
-            } else if (isAudio) {
-              html = `<div class="notes-attachment" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--border-default);border-radius:10px;margin:8px 0;background:var(--bg-hover);"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${file.name}</div><audio controls src="${dataUrl}" style="width:100%;height:36px;margin-top:4px;">${file.name}</audio></div><span style="font-size:10px;color:var(--text-tertiary);flex-shrink:0;">${(file.size / 1024).toFixed(0)} KB</span></div>`;
-            } else if (isVideo) {
-              html = `<div class="notes-attachment" style="display:flex;flex-direction:column;gap:6px;padding:10px 14px;border:1px solid var(--border-default);border-radius:10px;margin:8px 0;background:var(--bg-hover);"><div style="display:flex;align-items:center;gap:8px;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg><span style="font-size:12px;font-weight:600;color:var(--text-primary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${file.name}</span><span style="font-size:10px;color:var(--text-tertiary);flex-shrink:0;">${(file.size / 1024).toFixed(0)} KB</span></div><video controls src="${dataUrl}" style="width:100%;max-height:400px;border-radius:6px;">${file.name}</video></div>`;
-            }
-            document.execCommand("insertHTML", false, html);
-            setSaveStatus("pending");
-            histRef.current.capture(false);
-            if (selectedNote) updateNote(selectedNote.id, { content: editorRef.current.innerHTML });
+            const raw = ev.target?.result as string;
+            if (!raw || !editorRef.current) return;
+            // Imágenes: comprimir antes de insertar (guardado ligero y fiable)
+            const ready: Promise<string> = isImg ? compressImageForNote(raw) : Promise.resolve(raw);
+            ready.then(dataUrl => {
+              if (!editorRef.current || !selectedNote) return;
+              let html = "";
+              if (isImg) {
+                html = `<img src="${dataUrl}" alt="${file.name}" style="max-width:100%;border-radius:8px;margin:8px 0;" class="editable-image" />`;
+              } else if (isAudio) {
+                html = `<div class="notes-attachment" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--border-default);border-radius:10px;margin:8px 0;background:var(--bg-hover);"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${file.name}</div><audio controls src="${dataUrl}" style="width:100%;height:36px;margin-top:4px;">${file.name}</audio></div><span style="font-size:10px;color:var(--text-tertiary);flex-shrink:0;">${(file.size / 1024).toFixed(0)} KB</span></div>`;
+              } else if (isVideo) {
+                html = `<div class="notes-attachment" style="display:flex;flex-direction:column;gap:6px;padding:10px 14px;border:1px solid var(--border-default);border-radius:10px;margin:8px 0;background:var(--bg-hover);"><div style="display:flex;align-items:center;gap:8px;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg><span style="font-size:12px;font-weight:600;color:var(--text-primary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${file.name}</span><span style="font-size:10px;color:var(--text-tertiary);flex-shrink:0;">${(file.size / 1024).toFixed(0)} KB</span></div><video controls src="${dataUrl}" style="width:100%;max-height:400px;border-radius:6px;">${file.name}</video></div>`;
+              }
+              document.execCommand("insertHTML", false, html);
+              setSaveStatus("pending");
+              histRef.current.capture(false);
+              updateNote(selectedNote.id, { content: editorRef.current.innerHTML });
+            });
           };
           reader.readAsDataURL(file);
           return;
@@ -3052,6 +3083,10 @@ const noteLiveAtts = useMemo(
                       color: saveStatus === "saved" ? "var(--success)" : "var(--warning)",
                     }}>
                       <Check size={12} />
+                      {saveStatus === "saved" ? "Guardado" : "Guardando"}
+                    </span>
+                    <span style={{ fontSize: 10.5, color: "var(--text-tertiary)", fontFamily: "'JetBrains Mono', monospace", fontVariantNumeric: 'tabular-nums' }}>
+                      {selectedNote ? getWordCount(selectedNote.content).toLocaleString('es') : 0} palabras
                     </span>
                     
                     <button onClick={() => setShowDetailsPanel(!showDetailsPanel)}

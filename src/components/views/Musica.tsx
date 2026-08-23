@@ -8,7 +8,7 @@ import {
   ExternalLink, FolderOpen, Plus,
   Disc3, Activity, Heart, Copy, Clock,
   User, Wifi, Sliders, Repeat, Shuffle, BarChart2,
-  Edit2, Grid, List, Image, ListPlus, ListX, CornerDownRight, Cloud,
+  Edit2, Grid, List, Image, ListPlus, ListX, CornerDownRight,
 } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
@@ -126,7 +126,7 @@ function SortableLibraryRow({ track, index, isPlaying, isOnline, formatTime, onS
   const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({ id: track.id });
   const cloudOffline = !isOnline && track.source !== 'local';
   const cloudBorder = track.source !== 'local'
-    ? '1px solid color-mix(in srgb, var(--accent) 34%, var(--border-subtle))'
+    ? '1.5px solid color-mix(in srgb, var(--accent) 58%, transparent)'
     : '1px solid transparent';
   return (
     <div
@@ -155,9 +155,7 @@ function SortableLibraryRow({ track, index, isPlaying, isOnline, formatTime, onS
         </div>
       )}
       {!cloudOffline && track.source !== 'local' && (
-        <div style={{ position: 'absolute', top: -1, right: 12, display: 'flex', alignItems: 'center', gap: 4, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 38%, transparent)', borderRadius: 999, padding: '2px 7px', zIndex: 2, pointerEvents: 'none' }}>
-          <Cloud size={10} style={{ flexShrink: 0 }} /> Nube
-        </div>
+        <div style={{ position: 'absolute', top: -1, left: -1, bottom: -1, width: 3, borderRadius: '6px 0 0 6px', background: 'var(--accent)', opacity: 0.55, pointerEvents: 'none' }} />
       )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         {isPlaying ? (
@@ -1580,7 +1578,7 @@ export default function Musica() {
                     const isPlaying = currentTrackId === track.id && isPlayingMusic;
                     const cloudOffline = !isOnline && track.source !== 'local';
                     const cloudBorder = track.source !== 'local' && !isPlaying
-                      ? '1px solid color-mix(in srgb, var(--accent) 38%, var(--border-subtle))'
+                      ? '1.5px solid color-mix(in srgb, var(--accent) 60%, transparent)'
                       : '1px solid var(--border-subtle)';
                     return (
                       <div
@@ -1607,9 +1605,7 @@ export default function Musica() {
                           </div>
                         )}
                         {!cloudOffline && track.source !== 'local' && (
-                          <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', alignItems: 'center', gap: 4, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 38%, transparent)', borderRadius: 999, padding: '2px 7px', zIndex: 2, pointerEvents: 'none' }}>
-                            <Cloud size={10} style={{ flexShrink: 0 }} /> Nube
-                          </div>
+                          <div style={{ position: 'absolute', top: -1, left: -1, bottom: -1, width: 3, borderRadius: '12px 0 0 12px', background: 'var(--accent)', opacity: 0.55, pointerEvents: 'none' }} />
                         )}
                         <div style={{ position: 'relative', width: '100%', aspectRatio: '1', borderRadius: 8, overflow: 'hidden', background: 'var(--bg-surface)' }}>
                           {track.coverImage ? <img src={track.coverImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} /> : <Music size={28} style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', color: 'var(--text-muted)', opacity: 0.25 }} />}
@@ -1845,7 +1841,7 @@ export default function Musica() {
                         onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'transparent'; const ov = e.currentTarget.querySelector('.play-ov') as HTMLElement; if (ov) ov.style.opacity = '0'; const act = e.currentTarget.querySelector('.row-act') as HTMLElement; if (act) act.style.opacity = '0.35'; }}>
                         {/* Thumbnail with play overlay */}
                         <div style={{ width: 60, height: 42, borderRadius: 8, background: 'var(--bg-deep)', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border-subtle)', position: 'relative', cursor: 'pointer' }}
-                          onClick={() => { if (isPlayingMusic) toggleMusicPlayback(); setPipUrl(r.id ? `https://www.youtube.com/watch?v=${r.id}` : r.webpage_url, r.title); }}>
+                          onClick={() => { if (!isOnline) { addNotification('Sin conexión a internet: no se puede reproducir desde YouTube', 'error'); return; } if (isPlayingMusic) toggleMusicPlayback(); setPipUrl(r.id ? `https://www.youtube.com/watch?v=${r.id}` : r.webpage_url, r.title); }}>
                           {r.thumbnail ? <img src={r.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={14} color="var(--text-muted)" style={{ opacity: 0.3 }} />}
                           <div className="play-ov" style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 180ms', borderRadius: 8 }}>
                             <Play size={15} fill="white" color="white" />
@@ -1939,6 +1935,7 @@ export default function Musica() {
                       <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span>{preview.entries.length} canciones</span>
                         <button onClick={() => {
+                          if (!isOnline) { addNotification('Sin conexión a internet: no se puede reproducir la playlist', 'error'); return; }
                           if (preview.entries.length > 0) {
                             const plUrl = preview.webpage_url?.includes('list=') ? preview.webpage_url : `https://www.youtube.com/playlist?list=${preview.id}`;
                             if (isPlayingMusic) toggleMusicPlayback();
@@ -1957,7 +1954,7 @@ export default function Musica() {
                             onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'transparent'; }}>
                             <span style={{ fontSize: 10, color: 'var(--text-muted)', width: 20, textAlign: 'right', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{i + 1}</span>
                             <div
-                              onClick={() => { if (isPlayingMusic) toggleMusicPlayback(); setPipUrl(entry.id ? `https://www.youtube.com/watch?v=${entry.id}` : entry.webpage_url, entry.title); }}
+                              onClick={() => { if (!isOnline) { addNotification('Sin conexión a internet: no se puede reproducir desde YouTube', 'error'); return; } if (isPlayingMusic) toggleMusicPlayback(); setPipUrl(entry.id ? `https://www.youtube.com/watch?v=${entry.id}` : entry.webpage_url, entry.title); }}
                               style={{ width: 36, height: 26, borderRadius: 5, background: 'var(--bg-deep)', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', position: 'relative' }}
                             >
                               {entry.thumbnail ? <img src={entry.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={10} color="var(--text-muted)" style={{ opacity: 0.3 }} />}
@@ -1989,29 +1986,21 @@ export default function Musica() {
         {showRightSidebar && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
 
-          {/* REPRODUCIENDO CARD — detecta la nube tanto en el reproductor general (currentTrack)
-              como en el reproductor emergente (pipUrl/pipPlaying): título, portada de YouTube,
-              estado play/pausa y filas marcadas en tiempo real */}
-          {(currentTrack || pipUrl) ? (() => {
-            const isPip = !!pipUrl;
-            const nowPlaying = isPip ? pipPlaying : isPlayingMusic;
-            const nowTitle = isPip ? (pipTitle || 'Reproduciendo desde la nube') : (currentTrack ? currentTrack.title : '');
-            const nowArtist = isPip ? '' : (currentTrack ? (currentTrack.artist || '') : '');
-            const nowCover = isPip ? (pipId ? `https://i.ytimg.com/vi/${pipId}/hqdefault.jpg` : '') : (currentTrack ? (currentTrack.coverImage || '') : '');
-            const nowCloud = isPip || (currentTrack ? currentTrack.source !== 'local' : false);
+          {/* REPRODUCIENDO CARD — SOLO el reproductor general. Lo del emergente
+              vive exclusivamente en su ventana PiP y NUNCA se refleja aquí */}
+          {currentTrack ? (() => {
+            const nowPlaying = isPlayingMusic;
+            const nowTitle = currentTrack.title;
+            const nowArtist = currentTrack.artist || '';
+            const nowCover = currentTrack.coverImage || '';
             return (
-            <div className="bento-card" style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', border: nowPlaying ? '1px solid var(--accent)' : (nowCloud ? '1px solid color-mix(in srgb, var(--accent) 42%, var(--border-soft))' : '1px solid var(--border-default)'), boxShadow: (nowPlaying && nowCloud) ? '0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent), 0 10px 34px rgba(0,0,0,0.22)' : undefined, transition: 'all 300ms' }}>
+            <div className="bento-card" style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', border: nowPlaying ? '1px solid var(--accent)' : '1px solid var(--border-default)', boxShadow: nowPlaying ? '0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent), 0 10px 34px rgba(0,0,0,0.22)' : undefined, transition: 'all 300ms' }}>
               <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <div style={{ width: 6, height: 6, borderRadius: '50%', background: nowPlaying ? 'var(--accent)' : 'var(--text-muted)', boxShadow: nowPlaying ? '0 0 8px var(--accent-glow)' : 'none', animation: nowPlaying ? 'pulse 1.6s ease-in-out infinite' : 'none' }} />
                   <span className="section-header" style={{ marginBottom: 0, fontSize: 12, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                     {nowPlaying ? 'Reproduciendo' : 'Pausado'}
                   </span>
-                  {nowCloud && (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--accent)', border: '1px solid color-mix(in srgb, var(--accent) 45%, transparent)', borderRadius: 999, padding: '2px 7px', background: 'color-mix(in srgb, var(--accent) 10%, transparent)' }}>
-                      <Cloud size={10} style={{ flexShrink: 0 }} />
-                    </span>
-                  )}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   {currentTrack && (
@@ -2029,12 +2018,6 @@ export default function Musica() {
                 {nowCover ? <img src={nowCover} alt={nowTitle} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Music size={48} style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', color: 'var(--text-muted)', opacity: 0.15 }} />}
                 {nowPlaying && (
                   <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, transparent 60%, rgba(0,0,0,0.12) 100%)', pointerEvents: 'none' }} />
-                )}
-                {isPip && nowPlaying && (
-                  <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', alignItems: 'center', gap: 4, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#10B981', background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.35)', borderRadius: 999, padding: '2px 7px', pointerEvents: 'none' }}>
-                    <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#10B981', boxShadow: '0 0 6px rgba(16,185,129,0.9)', animation: 'pulse 1.6s ease-in-out infinite' }} />
-                    Emergente
-                  </div>
                 )}
                 {/* Expand hint overlay */}
                 {currentTrack && (
@@ -2072,9 +2055,7 @@ export default function Musica() {
                 {nowArtist && <p style={{ fontSize: 13, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nowArtist}</p>}
               </div>
 
-              {currentTrack ? (
-                <>
-                <div style={{ width: '100%', marginBottom: 20 }}>
+              <div style={{ width: '100%', marginBottom: 20 }}>
                   <div className="progress-track" style={{ height: 4, marginBottom: 8, borderRadius: 2, overflow: 'hidden', cursor: 'pointer', position: 'relative' }}
                     onClick={(e) => {
                       const rect = e.currentTarget.getBoundingClientRect();
@@ -2129,19 +2110,6 @@ export default function Musica() {
                     {repeatMode === 'one' && <span style={{ position: 'absolute', top: 2, right: 2, fontSize: 8, fontWeight: 900, background: 'var(--bg-surface)', padding: '0 3px', borderRadius: 4, border: '1px solid var(--accent)' }}>1</span>}
                   </button>
                 </div>
-                </>
-              ) : (
-                <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", textAlign: 'center', lineHeight: 1.5 }}>
-                    Reproduciendo en el reproductor emergente
-                  </div>
-                  <button onClick={() => setPipUrl(null)} style={{ height: 32, padding: '0 16px', fontSize: 11, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, borderRadius: 8, border: '1px solid rgba(239,68,68,0.35)', background: 'rgba(239,68,68,0.08)', color: '#EF4444', cursor: 'pointer', transition: 'all 150ms' }}
-                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.15)'; e.currentTarget.style.boxShadow = '0 0 12px rgba(239,68,68,0.2)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; e.currentTarget.style.boxShadow = 'none'; }}>
-                    <X size={13} /> Cerrar emergente
-                  </button>
-                </div>
-              )}
             </div>
             );
           })() : (

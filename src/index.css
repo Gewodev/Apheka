@@ -1832,12 +1832,14 @@ h6,
   outline: none;
   min-height: 100%;
   font-family: 'Inter', sans-serif;
-  font-size: 15px;
-  line-height: 1.85;
+  font-size: 16px;
+  line-height: 1.9;
   color: var(--text-primary);
-  padding: 0 12px 80px;
+  padding: 4px 16px 110px;
   caret-color: var(--accent);
-  max-width: 100%;
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
   word-wrap: break-word;
   overflow-wrap: break-word;
 }
@@ -1929,15 +1931,15 @@ h6,
   color: var(--text-tertiary);
 }
 .notes-editor-area:empty::before {
-  content: 'Comienza a escribir tu nota...';
+  content: 'Escribe algo, o presiona "/" para ver comandos...';
   color: var(--text-muted);
   font-style: italic;
 }
-.notes-editor-area h1 { font-size: 28px; font-weight: 800; margin: 24px 0 12px; font-family: 'Inter Tight', sans-serif; letter-spacing: -0.02em; color: var(--text-primary); }
-.notes-editor-area h2 { font-size: 22px; font-weight: 700; margin: 20px 0 10px; font-family: 'Inter Tight', sans-serif; letter-spacing: -0.01em; color: var(--text-primary); }
-.notes-editor-area h3 { font-size: 18px; font-weight: 600; margin: 16px 0 8px; color: var(--text-primary); }
+.notes-editor-area h1 { font-size: 30px; font-weight: 800; margin: 26px 0 12px; font-family: 'Inter Tight', sans-serif; letter-spacing: -0.02em; color: var(--text-primary); }
+.notes-editor-area h2 { font-size: 23px; font-weight: 700; margin: 22px 0 10px; font-family: 'Inter Tight', sans-serif; letter-spacing: -0.01em; color: var(--text-primary); }
+.notes-editor-area h3 { font-size: 19px; font-weight: 650; margin: 18px 0 8px; color: var(--text-primary); }
 .notes-editor-area h4 { font-size: 15px; font-weight: 600; margin: 14px 0 6px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
-.notes-editor-area p { margin: 6px 0; }
+.notes-editor-area p { margin: 2px 0 10px; }
 .notes-editor-area blockquote {
   border-left: 3px solid var(--accent);
   padding: 12px 20px;
@@ -2090,8 +2092,24 @@ h6,
 .notes-checkbox {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin: 4px 0;
+  gap: 10px;
+  margin: 5px 0;
+  padding: 5px 10px 5px 6px;
+  border-radius: 8px;
+  transition: background 150ms ease;
+}
+.notes-checkbox:hover {
+  background: var(--bg-hover);
+}
+.notes-checkbox > span {
+  flex: 1;
+  min-width: 0;
+}
+.notes-checkbox input[type='checkbox'] {
+  width: 17px;
+  height: 17px;
+  cursor: pointer;
+  accent-color: var(--accent);
 }
 
 /* Notes attachment */
