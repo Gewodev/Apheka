@@ -21,6 +21,8 @@ export interface MatMenuEntry {
   name: string;
   color?: string;
   courseId?: string;
+  onMoveToGroup?: () => void;
+  onRemoveFromGroup?: () => void;
 }
 
 interface MenuState {
@@ -120,8 +122,11 @@ function MenuPanel(props: {
   runOpen: () => void;
   runReveal: () => void;
   runCopy: () => void;
+  runOpenAppPdf: () => void;
+  openPdfWithApp: (exe: string) => void;
+  resolveToOpenable: (url: string) => Promise<string>;
 }) {
-  const { state, close, runOpen, runReveal, runCopy } = props;
+  const { state, close, runOpen, runReveal, runCopy, runOpenAppPdf, openPdfWithApp, resolveToOpenable } = props;
   const { x, y, entry } = state;
   const inTauri = isTauri();
   const isLink = /^https?:\/\//i.test(entry.url);
@@ -132,6 +137,7 @@ function MenuPanel(props: {
 
   const [subOpen, setSubOpen] = useState(false);
   const [browsers, setBrowsers] = useState<DetectedBrowser[]>([]);
+  const [pdfApps, setPdfApps] = useState<PdfApp[]>([]);
   const [defaultId, setDefaultId] = useState<string | null>(null);
   const [defaultModal, setDefaultModal] = useState<DetectedBrowser | null>(null);
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -143,12 +149,17 @@ function MenuPanel(props: {
   const [courseName, setCourseName] = useState<string | undefined>(undefined);
 
   useEffect(() => {
-    if (!inTauri || !isLink) return;
+    if (!inTauri || !canOpenWith) return;
     let alive = true;
     (async () => {
       const list = await getInstalledBrowsers();
       if (!alive) return;
       setBrowsers(list);
+      if (isPdf) {
+        const apps = await getPdfApps();
+        if (!alive) return;
+        setPdfApps(apps);
+      }
       setDefaultId(getDefaultBrowserId(selCourseId()));
       setCourseName(getSelectedCourseName());
     })();
@@ -160,12 +171,14 @@ function MenuPanel(props: {
 
   const openWith = async (b: DetectedBrowser) => {
     close();
-    try {
-      await openUrlInBrowser(b.exe, entry.url);
-    } catch (e) {
-      // eslint-disable-next-line no-console
-      console.warn(e);
-    }
+    try { await openUrlInBrowser(b.exe, await resolveToOpenable(entry.url)); }
+    catch (e) { console.warn(e); }
+  };
+
+  const openWithExe = async (exe: string) => {
+    close();
+    try { await openUrlInBrowser(exe, await resolveToOpenable(entry.url)); }
+    catch (e) { console.warn(e); }
   };
 
   const pickDefault = (scope: 'course' | 'global') => {
@@ -226,19 +239,10 @@ function MenuPanel(props: {
           </div>
         </div>
 
-        {(!isLink || !inTauri || browsers.length === 0) && (
+        {(!canOpenWith || !inTauri || (browsers.length === 0 && pdfApps.length === 0)) && (
           <Item icon={<FolderOpen size={13} />} label="Abrir" accent={entry.color} onClick={runOpen} />
         )}
-        {inTauri && isPdf && (
-          <>
-            <Item icon={<FileText size={13} />} label="Abrir con aplicación" accent="#EF4444" onClick={runOpenAppPdf} />
-            <Item icon={<Globe size={13} />} label="Abrir con navegador" accent="#3B82F6" onClick={runOpenBrowserPdf} />
-          </>
-        )}
-        {inTauri && isLocal && (
-          <Item icon={<FolderSearch size={13} />} label="Mostrar en carpeta" onClick={runReveal} />
-        )}
-        {inTauri && isLink && browsers.length > 0 && (
+        {inTauri && canOpenWith && (browsers.length > 0 || pdfApps.length > 0) && (
           <Item
             icon={<ExternalLink size={13} />}
             label="Abrir con"
@@ -252,8 +256,8 @@ function MenuPanel(props: {
           />
         )}
         {showSubmenu && (
-          <div style={{ margin: '3px 4px 2px', paddingTop: 3, borderTop: '1px dashed var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: 1, maxHeight: 190, overflowY: 'auto' }}>
-            {isPdf && (
+          <div style={{ margin: '3px 4px 2px', paddingTop: 3, borderTop: '1px dashed var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: 1, maxHeight: 220, overflowY: 'auto' }}>
+            {isPdf && pdfApps.length === 0 && (
               <div
                 onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
@@ -261,10 +265,23 @@ function MenuPanel(props: {
                 title="Abrir con la aplicación de PDF del sistema"
                 style={{ ...itemBase, height: 28 }}
               >
-                <span style={{ display: 'flex', width: 17, justifyContent: 'center' }}><FileText size={15} style={{ color: '#EF4444' }} /></span>
+                <span style={{ display: 'flex', width: 17, justifyContent: 'center' }}><PdfAppIcon id="sys" size={15} /></span>
                 <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>App de PDF del sistema</span>
               </div>
             )}
+            {isPdf && pdfApps.map(a => (
+              <div
+                key={a.id}
+                onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                onClick={() => openWithExe(a.exe)}
+                title={`Abrir con ${a.name}`}
+                style={{ ...itemBase, height: 28 }}
+              >
+                <span style={{ display: 'flex', width: 17, justifyContent: 'center' }}><PdfAppIcon id={a.id} size={15} /></span>
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</span>
+              </div>
+            ))}
             {browsers.map(b => (
               <div
                 key={b.id}
@@ -287,8 +304,19 @@ function MenuPanel(props: {
             ))}
           </div>
         )}
-        <Divider />
-        <Item icon={<Copy size={13} />} label={isLink ? 'Copiar enlace' : 'Copiar ruta'} onClick={runCopy} />
+        {inTauri && isLocal && !isPdf && (
+          <Item icon={<FolderSearch size={13} />} label="Mostrar en carpeta" onClick={runReveal} />
+        )}
+        {entry.onMoveToGroup && (
+          <Item icon={<FolderOpen size={13} />} label="Mover a grupo" accent="#8B5CF6" onClick={() => { close(); entry.onMoveToGroup!(); }} />
+        )}
+        {entry.onRemoveFromGroup && (
+          <Item icon={<ExternalLink size={13} />} label="Sacar del grupo" accent="#F59E0B" onClick={() => { close(); entry.onRemoveFromGroup!(); }} />
+        )}
+        {(!isPdf) && <Divider />}
+        {(!isPdf) && (
+          <Item icon={<Copy size={13} />} label={isLink ? 'Copiar enlace' : 'Copiar ruta'} onClick={runCopy} />
+        )}
       </div>
     </>
   );
@@ -323,33 +351,48 @@ export function useMaterialMenu(notify?: (msg: string) => void) {
     };
   }, [state]);
 
-  // Montaje imperativo del menú (independiente del árbol del consumidor)
+  // Montaje imperativo del menú: el root se crea UNA sola vez y persiste.
+  // Nunca unmount síncrono durante el render (evita el warning de React 19);
+  // al cerrar solo se renderiza null y se oculta el host.
+  const rootRef = useRef<any>(null);
+  const hostRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
     let host = document.getElementById('owa-mat-menu');
-    if (!state) {
-      if (host) host.style.display = 'none';
-      return;
-    }
     if (!host) {
       host = document.createElement('div');
       host.id = 'owa-mat-menu';
       host.style.cssText = `position:fixed;left:0;top:0;z-index:${Z_MENU};width:0;height:0;`;
       document.body.appendChild(host);
     }
+    hostRef.current = host;
+    if (!rootRef.current) {
+      rootRef.current = createRoot(host);
+    }
+    return undefined;
+  }, []);
+
+  useEffect(() => {
+    const host = hostRef.current;
+    const root = rootRef.current;
+    if (!host || !root) return;
+    if (!state) {
+      host.style.display = 'none';
+      root.render(null);
+      return;
+    }
     host.style.display = '';
-    const root = createRoot(host);
-    root.render(
-      <MenuPanel
-        state={state}
-        close={closeMenu}
-        runOpen={runOpen}
-        runReveal={runReveal}
-        runCopy={runCopy}
-        runOpenAppPdf={runOpenAppPdf}
-        runOpenBrowserPdf={runOpenBrowserPdf}
-      />
-    );
-    return () => { root.unmount(); };
+      root.render(
+        <MenuPanel
+          state={state}
+          close={closeMenu}
+          runOpen={runOpen}
+          runReveal={runReveal}
+          runCopy={runCopy}
+          runOpenAppPdf={runOpenAppPdf}
+          openPdfWithApp={openPdfWithApp}
+          resolveToOpenable={resolveToOpenable}
+        />
+      );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
 
@@ -376,6 +419,33 @@ export function useMaterialMenu(notify?: (msg: string) => void) {
 
   const readCourseId = (): string | undefined => {
     try { return localStorage.getItem('owa_selected_course_id') || undefined; } catch { return undefined; }
+  };
+
+  // Convierte cualquier entrada (http / ruta local / data) en URL abrible:
+  // http queda igual; rutas locales se exponen vía asset protocol.
+  const resolveToOpenable = async (url: string): Promise<string> => {
+    if (/^https?:\/\//i.test(url)) return url;
+    const loc = toLocal(url);
+    if (loc) {
+      const resolved = await resolveOrDirect(loc, stateRef.current?.entry.name || '');
+      return convertFileSrc(resolved);
+    }
+    return url;
+  };
+
+  const openPdfWithApp = async (exe: string): Promise<void> => {
+    const s = stateRef.current;
+    if (!s) return;
+    closeMenu();
+    try {
+      const loc = toLocal(s.entry.url);
+      if (loc) {
+        const resolved = await resolveOrDirect(loc, s.entry.name);
+        await openPath(resolved);
+        return;
+      }
+      await openUrlInBrowser(exe, s.entry.url);
+    } catch { notify?.('No se pudo abrir el PDF'); }
   };
 
   const runOpen = async () => {

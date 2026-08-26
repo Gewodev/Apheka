@@ -1074,6 +1074,10 @@ body {
   }
 }
 
+@keyframes folderDropPulse {
+  0%, 100% { box-shadow: 0 0 0 4px var(--fd-color, rgba(139,92,246,0.12)); }
+  50% { box-shadow: 0 0 0 8px var(--fd-color, rgba(139,92,246,0.06)); }
+}
 @keyframes fadeInScale {
   from {
     opacity: 0;

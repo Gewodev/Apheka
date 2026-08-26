@@ -31,6 +31,7 @@
     }
   },
   "bundle": {
+      "resources": ["bin/*.exe"],
     "active": true,
     "targets": "all",
     "icon": [

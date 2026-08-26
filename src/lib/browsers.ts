@@ -92,9 +92,8 @@ const PDF_CANDIDATES: { id: string; name: string; paths: string[] }[] = [
 
 async function localAppData(): Promise<string> {
   try {
-    const { env } = await import('@tauri-apps/api/process');
-    const e = await env();
-    return e.LOCALAPPDATA || '';
+    const { localDataDir } = await import('@tauri-apps/api/path');
+    return await localDataDir();
   } catch { return ''; }
 }
 

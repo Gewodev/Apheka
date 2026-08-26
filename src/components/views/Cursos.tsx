@@ -436,8 +436,8 @@ function SortableWrapper({ id, children, style }: { id: string; style?: React.CS
   return <div ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition, zIndex: isDragging ? 100 : 1, opacity: isDragging ? 0.5 : 1, position: 'relative' as const, ...style }}>{children({ attributes, listeners, isDragging })}</div>;
 }
 
-function MaterialCard({ mat, dragAttributes, dragListeners, onEdit, onDelete, onOpenResource, onPractice, onView, clickSuppressed, onContextMenu }:
-  { mat: SubjectMaterial; dragAttributes?: any; dragListeners?: any; onEdit: (m: SubjectMaterial) => void; onDelete: (m: SubjectMaterial) => void; onOpenResource: (m: SubjectMaterial) => void; onPractice?: (m: SubjectMaterial) => void; onView?: (m: SubjectMaterial) => void; clickSuppressed?: () => boolean; onContextMenu?: (e: React.MouseEvent, m: SubjectMaterial) => void }) {
+function MaterialCard({ mat, dragAttributes, dragListeners, onEdit, onDelete, onOpenResource, onPractice, onView, clickSuppressed, onContextMenu, groupName, onUngroup }: {
+  mat: SubjectMaterial; dragAttributes?: any; dragListeners?: any; onEdit: (m: SubjectMaterial) => void; onDelete: (m: SubjectMaterial) => void; onOpenResource: (m: SubjectMaterial) => void; onPractice?: (m: SubjectMaterial) => void; onView?: (m: SubjectMaterial) => void; clickSuppressed?: () => boolean; onContextMenu?: (e: React.MouseEvent, m: SubjectMaterial) => void; groupName?: string; onUngroup?: () => void }) {
   const meta = MATERIAL_META[mat.type];
   const typeColors: Record<string, string> = { formula: '#8B5CF6', concept: '#3B82F6', 'key-data': '#F59E0B', meaning: '#10B981', quiz: '#EF4444', procedure: '#EC4899', resource: '#6366F1' };
   const toolMeta = mat.toolMode ? TOOL_CREATOR_META[mat.toolMode as ToolCreatorMode] : undefined;
@@ -479,7 +479,15 @@ function MaterialCard({ mat, dragAttributes, dragListeners, onEdit, onDelete, on
     else if (_isAud) { Icon = Music; accent = '#8B5CF6'; cardLabel = 'Audio'; }
     else if (_isVid) { Icon = LI.Film; accent = '#EC4899'; cardLabel = 'Video'; }
     else if (_isImgE) { Icon = ImageIcon; accent = '#F59E0B'; cardLabel = 'Imagen'; }
-    else if (_isWeb) { Icon = LI.Globe; accent = '#10B981'; cardLabel = 'Sitio web'; }
+    else if (_isWeb) {
+      const _dom = (() => { try { return new URL(_url).hostname; } catch { return ''; } })();
+      Icon = (p: any) => (<span style={{ position: 'relative', width: p.size || 17, height: p.size || 17, display: 'inline-flex', flexShrink: 0 }}>
+        <img src={`https://www.google.com/s2/favicons?domain=${_dom}&sz=32`} alt="" style={{ width: '100%', height: '100%', borderRadius: 3, position: 'absolute', inset: 0 }}
+          onError={e => { e.currentTarget.style.display = 'none'; const fb = e.currentTarget.parentElement?.querySelector('.lk-fb') as HTMLElement; if (fb) fb.style.display = 'flex'; }} />
+        <span className="lk-fb" style={{ display: 'none', position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center', color: '#10B981' }}><Link2 size={12} /></span>
+      </span>);
+      accent = '#10B981'; cardLabel = 'Sitio web';
+    }
     else if (_url && !_lk) { Icon = File; accent = '#64748B'; cardLabel = 'Archivo'; }
   }
   const title = mat.name || mat.title || mat.word || mat.question || 'Sin título';
@@ -498,13 +506,19 @@ function MaterialCard({ mat, dragAttributes, dragListeners, onEdit, onDelete, on
           <Icon size={17} style={{ color: accent }} />
         </div>
         <span style={{ flex: 1, fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: accent, fontFamily: "'Inter Tight', sans-serif" }}>{cardLabel}</span>
-        {practice && (
-          <button onPointerDown={e => e.stopPropagation()} onClick={() => onEdit(mat)} title="Editar"
+        {(practice || _lk) && (
+          <button onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); onEdit(mat); }} title="Editar"
             style={{ width: 26, height: 26, borderRadius: 8, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
             onMouseEnter={e => { e.currentTarget.style.background = `${accent}14`; e.currentTarget.style.color = accent; }}
             onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}><Edit3 size={11} /></button>
         )}
-        <button onPointerDown={e => e.stopPropagation()} onClick={() => onDelete(mat)} title="Eliminar"
+        {(mat as any).groupName && onUngroup && (
+          <button onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); onUngroup(); }} title="Sacar al tema principal"
+            style={{ width: 26, height: 26, borderRadius: 8, border: 'none', background: 'transparent', cursor: 'pointer', color: '#F59E0B', opacity: 0.55, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+            onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = 'rgba(245,158,11,0.12)'; }}
+            onMouseLeave={e => { e.currentTarget.style.opacity = '0.55'; e.currentTarget.style.background = 'transparent'; }}><LI.FolderMinus size={11} /></button>
+        )}
+        <button onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); onDelete(mat); }} title="Eliminar"
           style={{ width: 26, height: 26, borderRadius: 8, border: 'none', background: 'transparent', cursor: 'pointer', color: 'rgba(239,68,68,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
           onMouseEnter={e => { e.currentTarget.style.background = '#EF444414'; e.currentTarget.style.color = '#EF4444'; }}
           onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(239,68,68,0.55)'; }}><Trash2 size={11} /></button>
@@ -522,7 +536,23 @@ function MaterialCard({ mat, dragAttributes, dragListeners, onEdit, onDelete, on
 }
 
 // --- Tool row (Herramientas panel) · long-press to reorder ---
-function ToolSortableRow({ id, tool, isActive, onClick }: { id: ToolKey; tool: typeof TOOL_ITEMS[ToolKey]; isActive: boolean; onClick: () => void }) {
+// Tarjeta de carpeta arrastrable-destino (drop de materiales dentro de ella)
+function FolderTile({ g, color, count, onOpen, onRename, onDelete }: { g: string; color: string; count: number; onOpen: () => void; onRename: () => void; onDelete: () => void }) {
+  const { setNodeRef, isOver } = useDroppable({ id: 'grp-' + g });
+  return (
+    <div ref={setNodeRef} onClick={onOpen} title="Abrir carpeta · arrastra materiales aquí"
+      style={{ minHeight: 118, borderRadius: 14, border: isOver ? `2px solid ${color}` : `1.5px dashed ${color}45`, background: isOver ? `linear-gradient(160deg, ${color}26, transparent 90%)` : `linear-gradient(160deg, ${courseColorSafe(color)}0d, transparent 90%)`, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, transition: 'all 180ms cubic-bezier(0.16,1,0.3,1)', transform: isOver ? 'scale(1.04)' : 'none', boxShadow: isOver ? `0 0 0 4px ${color}20` : 'none', animation: isOver ? 'folderDropPulse 1.2s ease-in-out infinite' : 'none' }}
+      onMouseEnter={e => { if (!isOver) { e.currentTarget.style.borderColor = color + '80'; e.currentTarget.style.transform = 'translateY(-2px)'; } const acts = e.currentTarget.querySelectorAll('div[style*="opacity: 0"]') as any; acts.forEach ? null : null; Array.from(e.currentTarget.children).forEach(ch => { const st = (ch as HTMLElement).style; if (st.opacity === '0') st.opacity = '1'; }); }}
+      onMouseLeave={e => { if (!isOver) { e.currentTarget.style.borderColor = color + '45'; e.currentTarget.style.transform = 'none'; } }}>
+      <LI.Folder size={isOver ? 32 : 28} style={{ color, opacity: isOver ? 1 : 0.9, transition: 'all 180ms' }} />
+      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>{g.split('/').pop()}</div>
+      <div style={{ fontSize: 9.5, color: 'var(--text-tertiary)' }}>{count} elemento{count !== 1 ? 's' : ''}</div>
+    </div>
+  );
+}
+const courseColorSafe = (c: string) => c;
+
+function ToolSortableRow({ id, tool, isActive, onClick, onContextMenu }: { id: ToolKey; tool: typeof TOOL_ITEMS[ToolKey]; isActive: boolean; onClick: () => void; onContextMenu?: () => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const ToolIcon = tool.icon;
   return (
@@ -531,6 +561,7 @@ function ToolSortableRow({ id, tool, isActive, onClick }: { id: ToolKey; tool: t
       {...attributes}
       {...listeners}
       onClick={onClick}
+      onContextMenu={e => { e.preventDefault(); e.stopPropagation(); onContextMenu?.(); }}
       style={{ transform: CSS.Transform.toString(transform), transition, touchAction: 'none', cursor: isDragging ? 'grabbing' : 'pointer', opacity: isDragging ? 0.45 : 1, display: 'flex', alignItems: 'center', gap: 12, padding: '12px 13px', borderRadius: 13, border: `1px solid ${isActive ? `${tool.color}4d` : 'var(--border-subtle)'}`, background: isActive ? `${tool.color}0d` : 'var(--bg-elevated)', boxShadow: isActive ? `0 0 0 1px ${tool.color}14, 0 6px 18px ${tool.color}12` : '0 1px 2px rgba(0,0,0,0.04)' }}
       onMouseEnter={e => { if (!isActive) { e.currentTarget.style.borderColor = `${tool.color}4d`; e.currentTarget.style.background = `${tool.color}08`; e.currentTarget.style.boxShadow = `0 6px 18px ${tool.color}10`; } }}
       onMouseLeave={e => { if (!isActive) { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.04)'; } }}
@@ -615,19 +646,27 @@ function ToolPracticeModal({ mat, topicMaterials, onClose }: { mat: SubjectMater
   const recCount = origWords.filter(w => userSet.has(normWord(w))).length;
 
   const wrap = (children: React.ReactNode) => (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 2003, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }} onClick={onClose}>
-      <div className="bento-card" style={{ width: 520, padding: 24, borderRadius: 14, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', maxHeight: '84vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            <span style={{ width: 38, height: 38, borderRadius: 11, background: `${accent}14`, border: `1px solid ${accent}22`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><ToolIcon size={16} style={{ color: accent }} /></span>
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'Inter Tight', sans-serif", color: 'var(--text-primary)', lineHeight: 1.3 }}>{mat.title || meta.name}</div>
-              <div style={{ fontSize: 8, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: accent, marginTop: 2, fontFamily: "'Inter Tight', sans-serif" }}>{meta.name} · práctica</div>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 2003, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(12px)' }} onClick={onClose}>
+      <div className="bento-card" style={{ width: 560, padding: 0, borderRadius: 18, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', maxHeight: '86vh', overflowY: 'auto', boxShadow: `0 24px 80px rgba(0,0,0,0.35), 0 0 0 1px ${accent}08`, animation: 'fadeInScale 220ms cubic-bezier(0.16,1,0.3,1)' }} onClick={e => e.stopPropagation()}>
+        {/* Header strip */}
+        <div style={{ height: 4, borderRadius: '18px 18px 0 0', background: `linear-gradient(90deg, ${accent}, ${accent}60)` }} />
+        <div style={{ padding: '20px 26px 24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+              <span style={{ width: 42, height: 42, borderRadius: 13, background: `${accent}10`, border: `1.5px solid ${accent}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <ToolIcon size={18} style={{ color: accent }} />
+              </span>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Inter Tight', sans-serif", color: 'var(--text-primary)', lineHeight: 1.25 }}>{mat.title || meta.name}</div>
+                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: accent, marginTop: 3, fontFamily: "'Inter Tight', sans-serif" }}>{meta.name}</div>
+              </div>
             </div>
+            <button onClick={onClose} title="Cerrar" style={{ width: 30, height: 30, borderRadius: 9, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = '#EF444455'; e.currentTarget.style.color = '#EF4444'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-muted)'; }}><X size={14} /></button>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}><X size={15} /></button>
+          {children}
         </div>
-        {children}
       </div>
     </div>
   );
@@ -639,26 +678,28 @@ function ToolPracticeModal({ mat, topicMaterials, onClose }: { mat: SubjectMater
     const correct = quizChecked && normalizePhrase(quizAnswer) === normalizePhrase(a);
     return wrap(
       <>
-        <div style={{ borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', padding: '18px 20px' }}>
-          <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: accent, marginBottom: 8, fontFamily: "'Inter Tight', sans-serif" }}>Pregunta</div>
-          <div style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.55, color: 'var(--text-primary)' }}>{q}</div>
+        <div style={{ borderRadius: 14, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', padding: '22px 24px', marginBottom: 16 }}>
+          <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: accent, marginBottom: 10, fontFamily: "'Inter Tight', sans-serif" }}>Pregunta</div>
+          <div style={{ fontSize: 17, fontWeight: 600, lineHeight: 1.5, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>{q}</div>
         </div>
         {!quizChecked ? (
           <>
             <textarea value={quizAnswer} onChange={e => setQuizAnswer(e.target.value)} placeholder="Escribe tu respuesta…" autoFocus
-              style={{ width: '100%', minHeight: 90, marginTop: 12, padding: 12, borderRadius: 10, fontSize: 13, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', lineHeight: 1.55 }} />
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
-              <button onClick={() => setQuizChecked(true)} disabled={!quizAnswer.trim()} style={{ ...btnBase, opacity: !quizAnswer.trim() ? 0.4 : 1 }}>Comprobar</button>
-            </div>
+              style={{ width: '100%', minHeight: 90, padding: 14, borderRadius: 12, fontSize: 13.5, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', lineHeight: 1.55 }} />
+            <button onClick={() => setQuizChecked(true)} disabled={!quizAnswer.trim()} style={{ ...btnBase, width: '100%', height: 40, borderRadius: 11, marginTop: 14, fontSize: 12.5, opacity: !quizAnswer.trim() ? 0.4 : 1 }}>Comprobar respuesta</button>
           </>
         ) : (
-          <div style={{ marginTop: 12, borderRadius: 12, border: `1px solid ${correct ? '#10B98140' : '#EF444440'}`, background: correct ? '#10B9810d' : '#EF44440d', padding: '16px 18px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: correct ? '#10B981' : '#EF4444', fontFamily: "'Inter Tight', sans-serif" }}>
-              {correct ? <Check size={14} /> : <X size={14} />}{correct ? '¡Correcto!' : 'No coincide con la respuesta guardada'}
+          <div style={{ borderRadius: 14, border: `1px solid ${correct ? '#10B98135' : '#EF444435'}`, background: correct ? '#10B9810a' : '#EF44440a', padding: '18px 20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 15, fontWeight: 700, color: correct ? '#10B981' : '#EF4444', fontFamily: "'Inter Tight', sans-serif" }}>
+              {correct ? <Check size={16} /> : <X size={16} />}{correct ? '¡Correcto!' : 'No coincide'}
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6, marginTop: 8 }}><span style={{ color: 'var(--text-tertiary)' }}>Tu respuesta: </span>{quizAnswer.trim() || '(vacío)'}</div>
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6, marginTop: 4 }}><span style={{ color: 'var(--text-tertiary)' }}>Respuesta: </span>{a}</div>
-            <button onClick={() => { setQuizAnswer(''); setQuizChecked(false); }} style={{ ...ghostBtn, marginTop: 14 }}>Practicar otra vez</button>
+            {quizAnswer.trim() && (
+              <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.6, marginTop: 10, padding: '8px 12px', borderRadius: 8, background: 'rgba(0,0,0,0.04)' }}><span style={{ color: 'var(--text-tertiary)', fontWeight: 600 }}>Tu respuesta: </span>{quizAnswer.trim()}</div>
+            )}
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, marginTop: 8, padding: '8px 12px', borderRadius: 8, background: `${accent}08`, border: `1px solid ${accent}15` }}>
+              <span style={{ color: accent, fontWeight: 600 }}>Respuesta correcta: </span>{a}
+            </div>
+            <button onClick={() => { setQuizAnswer(''); setQuizChecked(false); }} style={{ ...ghostBtn, marginTop: 14, width: '100%', height: 36, borderRadius: 10 }}>Practicar otra vez</button>
           </div>
         )}
       </>
@@ -1839,6 +1880,10 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const [fcAnswer, setFcAnswer] = useState('');
   const [fcDifficulty, setFcDifficulty] = useState<'facil' | 'bueno' | 'dificil'>('bueno');
   const [editingFlashcard, setEditingFlashcard] = useState<TopicFlashcard | null>(null);
+  // Modo de creación: individual (1 pregunta/respuesta) o masivo estilo Quizlet
+  // (una tarjeta por línea: "pregunta - respuesta", admite fórmulas/texto libre)
+  const [fcMode, setFcMode] = useState<'uno' | 'masivo'>('uno');
+  const [fcBulk, setFcBulk] = useState('');
 
   // Review session
   const [reviewing, setReviewing] = useState(false);
@@ -1852,11 +1897,43 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     setFcQuestion(fc?.question || '');
     setFcAnswer(fc?.answer || '');
     setFcDifficulty(fc?.difficulty || 'bueno');
+    setFcMode(fc ? 'uno' : fcMode);
+    setFcBulk('');
     setShowFlashcardModal(true);
   };
 
+  // Parsea el bloque masivo: cada línea "pregunta - respuesta" (primer " - " separa).
+  // Líneas vacías se ignoran; fórmulas/texto pasan tal cual.
+  const parseBulkFlashcards = (): { q: string; a: string }[] => {
+    return fcBulk.split('\n').map(l => l.trim()).filter(Boolean).map(line => {
+      const sep = line.indexOf(' - ') !== -1 ? ' - ' : line.indexOf('\t') !== -1 ? '\t' : line.indexOf('-') === 0 ? '' : ' - ';
+      if (!sep) { return { q: line, a: '' }; }
+      const i = line.indexOf(sep);
+      return { q: line.slice(0, i).trim(), a: line.slice(i + sep.length).trim() };
+    }).filter(c => c.q);
+  };
+
   const handleSaveFlashcard = () => {
-    if (!fcQuestion.trim() || !fcAnswer.trim() || !activeTopic) return;
+    if (!activeTopic) return;
+    if (fcMode === 'masivo' && !editingFlashcard) {
+      const cards = parseBulkFlashcards().filter(c => c.a);
+      if (cards.length === 0) { toast.error('Formato: pregunta - respuesta (una por línea)'); return; }
+      const now = Date.now();
+      const newFcs: TopicFlashcard[] = cards.map((c, i) => ({
+        id: Math.random().toString() + i,
+        question: c.q, answer: c.a, difficulty: fcDifficulty,
+        lastReviewed: now, nextReview: now,
+      }));
+      updateCourse(course.id, {
+        studyTopics: (safeArr(course.studyTopics)).map(t => t.id === activeTopic.id
+          ? { ...t, flashcards: [...(safeArr(t.flashcards)), ...newFcs] }
+          : t)
+      });
+      toast.success(`${newFcs.length} flashcards creadas`);
+      setShowFlashcardModal(false); setEditingFlashcard(null); setFcBulk('');
+      return;
+    }
+    if (!fcQuestion.trim() || !fcAnswer.trim()) return;
     const now = Date.now();
     const newFc: TopicFlashcard = editingFlashcard
       ? { ...editingFlashcard, question: fcQuestion.trim(), answer: fcAnswer.trim(), difficulty: fcDifficulty }
@@ -2640,8 +2717,9 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
       catch { toast.error('No se pudo abrir el selector de archivos'); return; }
       if (!r) return;
       const tid = topicId || activeTopic?.id;
-      const newMat: SubjectMaterial = { id: Math.random().toString(), type: 'resource', createdAt: Date.now(), columnIndex: colIndex ?? materialColIndex, name: r.name, dataUrl: r.path, ...(topicOnlyRef.current ? { topicOnly: true } : {}) } as SubjectMaterial;
+      const newMat: SubjectMaterial = { id: Math.random().toString(), type: 'resource', createdAt: Date.now(), columnIndex: colIndex ?? materialColIndex, name: r.name, dataUrl: r.path, ...(topicOnlyRef.current ? { topicOnly: true } : {}), ...(pendingGroupNameRef.current ? { groupName: pendingGroupNameRef.current } : {}) } as SubjectMaterial;
       topicOnlyRef.current = false;
+      pendingGroupNameRef.current = undefined;
       updateCourse(course.id, { studyTopics: withMaterial(tid, newMat, colIndex ?? materialColIndex) });
       toast.success('Archivo subido');
       return;
@@ -2654,7 +2732,8 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     if (!addLinkUrl.trim()) return;
     const url = addLinkUrl.trim();
     const name = addLinkName.trim() || url;
-    const newMat: SubjectMaterial = { id: Math.random().toString(), type: 'resource', createdAt: Date.now(), columnIndex: 0, name, dataUrl: url, ...(addLinkTargetTopic ? { topicOnly: true } : {}) } as SubjectMaterial;
+    const newMat: SubjectMaterial = { id: Math.random().toString(), type: 'resource', createdAt: Date.now(), columnIndex: 0, name, dataUrl: url, ...(addLinkTargetTopic ? { topicOnly: true } : {}), ...(addLinkTargetTopic && pendingGroupNameRef.current ? { groupName: pendingGroupNameRef.current } : {}) } as SubjectMaterial;
+    pendingGroupNameRef.current = undefined;
     updateCourse(course.id, { studyTopics: withMaterial(addLinkTargetTopic, newMat, 0) });
     setAddLinkUrl(''); setAddLinkName(''); setAddLinkTargetTopic(undefined); setShowAddLinkModal(false);
     toast.success(addLinkTargetTopic ? 'Enlace agregado al tema' : 'Enlace agregado');
@@ -2705,6 +2784,12 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   };
 
   const [confirmDelToolMat, setConfirmDelToolMat] = useState<{ id: string; name: string } | null>(null);
+  const [moveToGroupMat, setMoveToGroupMat] = useState<{ id: string; name: string } | null>(null);
+  // Grupos dentro del tema (Herramientas): separan materiales por carpeta lógica
+  const [topicGroupModal, setTopicGroupModal] = useState<{ mode: 'create' | 'rename'; orig?: string } | null>(null);
+  const [confirmDelGroup, setConfirmDelGroup] = useState<string | null>(null);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [activeToolGroup, setActiveToolGroup] = useState<string>('todos');
   const handleDeleteMaterial = (mat: SubjectMaterial) => {
     setConfirmDelToolMat({ id: mat.id, name: mat.name || mat.title || 'Material' });
   };
@@ -2715,6 +2800,19 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     setConfirmDelToolMat(null);
   };
 
+  const renameToolGroup = (oldV: string, newV: string) => {
+    updateCourse(course.id, { studyTopics: (safeArr(course.studyTopics)).map(tp => tp.id === activeTopic?.id ? { ...tp, toolGroups: (((tp as any).toolGroups || []) as string[]).map(x => x === oldV ? newV : (x.startsWith(oldV + '/') ? newV + x.slice(oldV.length) : x)), materials: (safeArr(tp.materials)).map(m => { const gn = (m as any).groupName || ''; if (gn === oldV) return { ...m, groupName: newV }; if (gn.startsWith(oldV + '/')) return { ...m, groupName: newV + gn.slice(oldV.length) }; return m; }) } : tp) } as any);
+    if (activeToolGroup === oldV) setActiveToolGroup(newV);
+  };
+  const deleteToolGroup = (g: string) => {
+    updateCourse(course.id, { studyTopics: (safeArr(course.studyTopics)).map(tp => tp.id === activeTopic?.id ? { ...tp, toolGroups: ((((tp as any).toolGroups || []) as string[])).filter(x => x !== g && !x.startsWith(g + '/')), materials: (safeArr(tp.materials)).filter(m => { const gn = (m as any).groupName || ''; return gn !== g && !gn.startsWith(g + '/'); }) } : tp) } as any);
+    if (activeToolGroup === g || activeToolGroup.startsWith(g + '/')) setActiveToolGroup('todos');
+    toast.success('Carpeta eliminada con su contenido');
+  };
+  const ungroupMaterial = (matId: string) => {
+    updateCourse(course.id, { studyTopics: (safeArr(course.studyTopics)).map(tp => tp.id === activeTopic?.id ? { ...tp, materials: (safeArr(tp.materials)).map(m => m.id === matId ? ({ ...m, groupName: undefined } as any) : m) } : tp) } as any);
+    toast.success('Movido al tema principal');
+  };
   const handleDeleteResourceFromOverview = (matId: string) => {
     updateCourse(course.id, { studyTopics: (safeArr(course.studyTopics)).map(t => ({ ...t, materials: (safeArr(t.materials)).filter(m => m.id !== matId) })) });
     toast.success('Material eliminado');
@@ -2729,10 +2827,10 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
 
   const handleOpenResource = (mat: SubjectMaterial) => {
     if (!mat.dataUrl) return;
-    const isPdfData = mat.dataUrl.startsWith('data:application/pdf') || ((mat.name || '').toLowerCase().endsWith('.pdf') && !/^https?:\/\//i.test(mat.dataUrl)) || (mat.fileType || '').includes('pdf');
-    // Enlace o PDF + navegador predeterminado (curso > global) → abrir CON ESE navegador
-    const wantsBrowser = /^https?:\/\//i.test(mat.dataUrl) || isPdfData;
-    if (wantsBrowser) {
+    // Idéntico a Materiales de curso: openFileSmart resuelve nativo (ruta real,
+    // editable), http → navegador del sistema, media → PiP. Sin visor interno,
+    // sin copias asset. Los enlaces con predeterminado usan ESE navegador.
+    if (/^https?:\/\//i.test(mat.dataUrl)) {
       const url = mat.dataUrl;
       const name = mat.name || 'Archivo';
       const id = mat.id;
@@ -2740,18 +2838,8 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
         try {
           const { resolveDefaultBrowserExe, openUrlInBrowser } = await import('../../lib/browsers');
           const exe = await resolveDefaultBrowserExe(course.id);
-          if (exe) {
-            let u = url;
-            if (!/^https?:\/\//i.test(u)) {
-              try { const { convertFileSrc } = await import('@tauri-apps/api/core'); u = convertFileSrc(u); } catch { /* noop */ }
-            }
-            await openUrlInBrowser(exe, u);
-            return;
-          }
+          if (exe) { await openUrlInBrowser(exe, url); return; }
         } catch { /* cae al flujo normal */ }
-        if (isPdfData && !/^https?:\/\//i.test(url)) {
-          setPdfPreviewUrl(url); setPdfPreviewName(name); setShowPdfPreview(true); return;
-        }
         openFileSmart(url, name, { onMedia: (u, n) => setPipUrl(u, n), onError: (m) => toast.error(m), onMoved: (np) => handleMatMoved(id, np) }).catch(() => toast.error('No se pudo abrir el recurso'));
       })();
       return;
@@ -2770,6 +2858,8 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   // Los materiales añadidos desde Herramientas (dentro de un tema) son de ecosistema
   // "tema": viven SOLO en su tema y NO aparecen en el panel Materiales del curso.
   const topicOnlyRef = useRef(false);
+  // Grupo destino para el siguiente material creado desde Herramientas
+  const pendingGroupNameRef = useRef<string | undefined>(undefined);
   // Guard anti click-fantasma para la lista de materiales del tema: si hubo un
   // drag (reordenar), el click posterior NO debe abrir el enlace/material.
   const matLinkDragRef = useRef(false);
@@ -2790,6 +2880,26 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     clearBrainDragOverlay();
     setActiveTopicDragId(null);
     const { active, over } = event;
+    // Soltar sobre una carpeta → mover el material O herramienta dentro de ella
+    const overGrpId = String((over as any)?.id || '');
+    if (overGrpId.startsWith('grp-')) {
+      const gName = overGrpId.slice(4);
+      const activeId = active.id as string;
+      const isMat = (safeArr(activeTopic?.materials)).some(m => m.id === activeId);
+      const isFc = (safeArr(activeTopic?.flashcards)).some(f => f.id === activeId);
+      const isRec = (safeArr(activeTopic?.recordings)).some(r => r.id === activeId);
+      if (isMat) {
+        updateCourse(course.id, { studyTopics: (safeArr(course.studyTopics)).map(tp => tp.id === activeTopic?.id ? { ...tp, materials: (safeArr(tp.materials)).map(m => m.id === activeId ? ({ ...m, groupName: gName } as any) : m) } : tp) } as any);
+        toast.success('Movido a ' + gName.split('/').pop());
+      } else if (isFc) {
+        updateCourse(course.id, { studyTopics: (safeArr(course.studyTopics)).map(tp => tp.id === activeTopic?.id ? { ...tp, flashcards: (safeArr(tp.flashcards)).map(f => f.id === activeId ? ({ ...f, groupName: gName } as any) : f) } : tp) } as any);
+        toast.success('Flashcard movida a ' + gName.split('/').pop());
+      } else if (isRec) {
+        updateCourse(course.id, { studyTopics: (safeArr(course.studyTopics)).map(tp => tp.id === activeTopic?.id ? { ...tp, recordings: (safeArr(tp.recordings)).map(r => r.id === activeId ? ({ ...r, groupName: gName } as any) : r) } : tp) } as any);
+        toast.success('Grabación movida a ' + gName.split('/').pop());
+      }
+      clearBrainDragOverlay(); setActiveTopicDragId(null); return;
+    }
     if (active.id === over?.id) return;
     const visible = topicFiltered;
     const ids = visible.map(e => e.id);
@@ -3175,11 +3285,34 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                     {(() => { const g = groups.find(gr => gr.id === activeTopic.groupId); return g ? <><span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10 }}>/</span><span style={{ fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.01em', borderBottom: '1px solid rgba(255,255,255,0.15)', paddingBottom: 2 }}>{g.name}</span></> : null; })()}
                   </div>
                 </div>
+                {activeToolGroup !== 'todos' && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+                    <LI.FolderOpen size={36} style={{ color: 'rgba(255,255,255,0.40)' }} />
+                    <span style={{ fontSize: 38, fontWeight: 250, letterSpacing: '-0.02em', color: 'rgba(255,255,255,0.65)', textShadow: '0 2px 18px rgba(0,0,0,0.55)', fontFamily: "'Inter Tight', sans-serif", maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {activeToolGroup.includes('/') ? activeToolGroup.split('/').pop() : activeToolGroup}
+                    </span>
+                  </div>
+                )}
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  {activeToolGroup === 'todos' ? (
+                  <>
                   <button onClick={() => { setEditingTopicId(activeTopic.id); setTopicName(activeTopic.title); setShowTopicModal(true); }} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
                     onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'} title="Editar tema"><Pencil size={13} /></button>
                   <button onClick={() => { setStudyToolMode('none'); setReviewing(false); setReviewFlipped(false); setTopicSearch(''); setActiveTagFilter(null); if (activeTopic.groupId) { setSelectedGroupId(activeTopic.groupId); setCurrentView('group'); } else { setCurrentView('overview'); } }} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
                     onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.25)'; e.currentTarget.style.color = '#fff'; }} onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.15)'; }} title={activeTopic.groupId ? `Volver a ${groups.find(g => g.id === activeTopic.groupId)?.name || 'la agrupación'}` : 'Volver'}><ArrowLeft size={14} /></button>
+                  </>
+                  ) : (
+                  <>
+                  <button onClick={() => { setTopicGroupModal({ mode: 'rename', orig: activeToolGroup }); setNewGroupName(activeToolGroup.includes('/') ? activeToolGroup.split('/').pop()! : activeToolGroup); }} title="Editar nombre de la carpeta"
+                    style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}><Pencil size={13} /></button>
+                  <button onClick={() => setActiveToolGroup(activeToolGroup.includes('/') ? activeToolGroup.split('/').slice(0, -1).join('/') || 'todos' : 'todos')} title="Salir de la carpeta al tema"
+                    style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.28)'; e.currentTarget.style.color = '#fff'; }} onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.15)'; }}>
+                    <LI.CornerUpLeft size={14} />
+                  </button>
+                  </>
+                  )}
                 </div>
               </div>
             </div>
@@ -3284,8 +3417,12 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                   <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={e => { setActiveTopicDragId(e.active.id as string); syncBrainDragOverlay(); }} onDragMove={syncBrainDragOverlay} onDragCancel={clearBrainDragOverlay} onDragEnd={handleTopicGridDragEnd}>
                     <SortableContext items={filtered.map(e => e.id)} strategy={rectSortingStrategy}>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(235px, 1fr))', gap: 14, alignItems: 'start' }}>
+                {activeToolGroup === 'todos' && ((activeTopic as any)?.toolGroups || []).filter((g: string) => !g.includes('/')).map((g: string) => (
+                  <FolderTile key={'grp-' + g} g={g} color={course.color} onRename={() => { setTopicGroupModal({ mode: 'rename', orig: g }); setNewGroupName(g.split('/').pop()!); }} onDelete={() => setConfirmDelGroup(g)} count={filtered.filter(e => e.type === 'resource' && ((e.item as any).groupName === g || String((e.item as any).groupName || '').startsWith(g + '/'))).length} onOpen={() => setActiveToolGroup(g)} />
+                ))}
                 {filtered.map(entry => {
                   if (!entry || !entry.item) return null;
+                  if (activeToolGroup !== 'todos' && entry.type !== 'resource') return null;
                   if (entry.type === 'flashcard') {
                             const fc = entry.item;
                             return (
@@ -3344,11 +3481,14 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                             );
                           }
                           const mat = entry.item as SubjectMaterial;
+                          const _gn = (mat as any).groupName as string | undefined;
+                          if (activeToolGroup === 'todos') { if (_gn) return null; }
+                          else if (_gn !== activeToolGroup) return null;
                           return (
                             <SortableWrapper key={mat.id} id={mat.id}>
                               {({ attributes, listeners, isDragging }) => (
                                 <div style={{ opacity: isDragging ? 0.55 : 1 }}>
-                                  <MaterialCard mat={mat} dragAttributes={attributes} dragListeners={listeners} onEdit={startEditToolMaterial} onDelete={handleDeleteMaterial} onOpenResource={handleOpenResource} onPractice={openPractice} onView={viewMaterial} clickSuppressed={() => matDragSuppressRef.current} onContextMenu={(e, m) => matMenu.openMenu(e, { url: m.dataUrl || '', name: m.name || m.title || 'Material', color: course.color })} />
+                                  <MaterialCard mat={mat} dragAttributes={attributes} dragListeners={listeners} onEdit={startEditToolMaterial} onDelete={handleDeleteMaterial} onOpenResource={handleOpenResource} onPractice={openPractice} onView={viewMaterial} clickSuppressed={() => matDragSuppressRef.current} groupName={(mat as any).groupName} onUngroup={() => ungroupMaterial(mat.id)} onContextMenu={(e, m) => matMenu.openMenu(e, { url: m.dataUrl || '', name: m.name || m.title || 'Material', color: course.color, onMoveToGroup: () => setMoveToGroupMat({ id: m.id, name: m.name || m.title || 'Material' }), onRemoveFromGroup: (m as any).groupName ? () => ungroupMaterial(m.id) : undefined })} />
                                 </div>
                               )}
                             </SortableWrapper>
@@ -3370,14 +3510,23 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                     <div style={{ padding: '20px 20px 14px', flexShrink: 0, borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                       <div style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-secondary)', fontFamily: "'Inter Tight', sans-serif" }}>Herramientas</div>
                       <div style={{ display: 'flex', gap: 6 }}>
-                        <button onClick={() => { topicOnlyRef.current = true; handleAddFileBtn(activeTopic?.id); }}
+                        {activeToolGroup === 'todos' && (
+                        <button onClick={() => { setTopicGroupModal({ mode: 'create' }); setNewGroupName(''); }}
+                          style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${course.color}30`, background: `${course.color}10`, cursor: 'pointer', color: course.color, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms ' + EASE }}
+                          onMouseEnter={e => { e.currentTarget.style.background = `${course.color}22`; e.currentTarget.style.borderColor = `${course.color}50`; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = `${course.color}10`; e.currentTarget.style.borderColor = `${course.color}30`; }}
+                          title="Crear grupo (carpeta para separar materiales)">
+                          <LI.FolderPlus size={15} />
+                        </button>
+                        )}
+                        <button onClick={() => { topicOnlyRef.current = true; pendingGroupNameRef.current = activeToolGroup !== 'todos' ? activeToolGroup : undefined; handleAddFileBtn(activeTopic?.id); }}
                           style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${course.color}30`, background: `${course.color}10`, cursor: 'pointer', color: course.color, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms ' + EASE }}
                           onMouseEnter={e => { e.currentTarget.style.background = `${course.color}22`; e.currentTarget.style.borderColor = `${course.color}50`; }}
                           onMouseLeave={e => { e.currentTarget.style.background = `${course.color}10`; e.currentTarget.style.borderColor = `${course.color}30`; }}
                           title="Subir archivo al tema activo">
                           <Upload size={15} />
                         </button>
-                        <button onClick={() => { setAddLinkTargetTopic(activeTopic?.id); setShowAddLinkModal(true); setAddLinkUrl(''); setAddLinkName(''); }}
+                        <button onClick={() => { setAddLinkTargetTopic(activeTopic?.id); pendingGroupNameRef.current = activeToolGroup !== 'todos' ? activeToolGroup : undefined; setShowAddLinkModal(true); setAddLinkUrl(''); setAddLinkName(''); }}
                           style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${course.color}30`, background: `${course.color}10`, cursor: 'pointer', color: course.color, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms ' + EASE }}
                           onMouseEnter={e => { e.currentTarget.style.background = `${course.color}22`; e.currentTarget.style.borderColor = `${course.color}50`; }}
                           onMouseLeave={e => { e.currentTarget.style.background = `${course.color}10`; e.currentTarget.style.borderColor = `${course.color}30`; }}
@@ -3441,7 +3590,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                         <SortableContext items={toolOrder} strategy={verticalListSortingStrategy}>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, justifyContent: 'space-between', flex: 1 }}>
                             {toolOrder.map(mode => (
-                              <ToolSortableRow key={mode} id={mode} tool={TOOL_ITEMS[mode]} isActive={studyToolMode === mode} onClick={() => { if (toolDragRef.current) { toolDragRef.current = false; return; } openToolInfo(mode); }} />
+                              <ToolSortableRow key={mode} id={mode} tool={TOOL_ITEMS[mode]} isActive={studyToolMode === mode} onClick={() => { if (toolDragRef.current) { toolDragRef.current = false; return; } openToolInfo(mode); }} onContextMenu={() => setStudyToolMode(studyToolMode === mode ? 'none' : mode as any)} />
                             ))}
                           </div>
                         </SortableContext>
@@ -7141,7 +7290,69 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
         );
       })()}
 
+      {/* ===== MOVER A GRUPO (ventana emergente) ===== */}
+      {moveToGroupMat && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 2003, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }} onClick={() => setMoveToGroupMat(null)}>
+          <div className="bento-card" style={{ width: 340, padding: 22, borderRadius: 14, background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+              <span style={{ width: 38, height: 38, borderRadius: 11, background: `${course.color}12`, border: `1px solid ${course.color}25`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <LI.FolderInput size={17} style={{ color: course.color }} />
+              </span>
+              <div>
+                <h3 style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--text-primary)', margin: 0, fontFamily: "'Inter Tight', sans-serif" }}>Mover a grupo</h3>
+                <div style={{ fontSize: 10.5, color: 'var(--text-tertiary)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}>{moveToGroupMat.name}</div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 220, overflowY: 'auto', marginBottom: 16 }}>
+              {(((activeTopic as any)?.toolGroups || []) as string[]).length === 0 && (
+                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textAlign: 'center', padding: '20px 0' }}>No hay grupos creados. Crea uno desde Herramientas.</div>
+              )}
+              {(((activeTopic as any)?.toolGroups || []) as string[]).map((g: string) => {
+                const currentGn = String(((activeTopic as any)?.materials || []) as any[]).length >= 0;
+                const mat = (safeArr(activeTopic?.materials)).find(m => m.id === moveToGroupMat.id);
+                const isCurrent = (mat as any)?.groupName === g;
+                return (
+                  <button key={g} onClick={() => {
+                    updateCourse(course.id, { studyTopics: (safeArr(course.studyTopics)).map(tp => tp.id === activeTopic?.id ? { ...tp, materials: (safeArr(tp.materials)).map(m => m.id === moveToGroupMat.id ? ({ ...m, groupName: g } as any) : m) } : tp) } as any);
+                    toast.success('Movido a ' + g.split('/').pop());
+                    setMoveToGroupMat(null);
+                  }}
+                    disabled={isCurrent}
+                    style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '9px 12px', borderRadius: 9, border: `1px solid ${isCurrent ? 'transparent' : 'var(--border-subtle)'}`, background: isCurrent ? 'var(--bg-hover)' : 'transparent', cursor: isCurrent ? 'default' : 'pointer', transition: 'all 130ms', textAlign: 'left' }}
+                    onMouseEnter={e => { if (!isCurrent) e.currentTarget.style.background = `${course.color}08`; }}
+                    onMouseLeave={e => { if (!isCurrent) e.currentTarget.style.background = 'transparent'; }}>
+                    <LI.Folder size={13} style={{ color: course.color, flexShrink: 0 }} />
+                    <span style={{ flex: 1, fontSize: 12, fontWeight: 500, color: isCurrent ? 'var(--text-muted)' : 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>{g}</span>
+                    {isCurrent && <Check size={12} style={{ color: course.color }} />}
+                  </button>
+                );
+              })}
+            </div>
+            <button onClick={() => { ungroupMaterial(moveToGroupMat.id); setMoveToGroupMat(null); }} style={{ width: '100%', height: 34, borderRadius: 9, border: '1px dashed var(--border-subtle)', background: 'transparent', color: 'var(--text-tertiary)', fontSize: 11, fontWeight: 500, cursor: 'pointer', fontFamily: "'Inter Tight', sans-serif" }}>
+              Sacar al tema principal (sin grupo)
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ===== CONFIRMAR ELIMINAR MATERIAL (temas) ===== */}
+      {topicGroupModal && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 2003, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }} onClick={() => setTopicGroupModal(null)}>
+          <div className="bento-card" style={{ width: 360, padding: 22, borderRadius: 14, background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+              <span style={{ width: 38, height: 38, borderRadius: 11, background: `${course.color}12`, border: `1px solid ${course.color}25`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <LI.FolderPlus size={17} style={{ color: course.color }} />
+              </span>
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', margin: 0, fontFamily: "'Inter Tight', sans-serif" }}>Nuevo grupo</h3>
+            </div>
+            <input value={newGroupName} onChange={e => setNewGroupName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && newGroupName.trim() && activeTopic) { updateCourse(course.id, { studyTopics: (safeArr(course.studyTopics)).map(tp => tp.id === activeTopic.id ? { ...tp, toolGroups: [...((tp as any).toolGroups || []), newGroupName.trim()] } : tp) } as any); setActiveToolGroup(newGroupName.trim()); setTopicGroupModal(null); } }} autoFocus placeholder="Ej. Parciales · Laboratorio · Lecturas" style={{ width: '100%', height: 40, borderRadius: 9, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 12px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif", marginBottom: 16 }} />
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setTopicGroupModal(null)} style={{ flex: 1, height: 38, borderRadius: 9, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter Tight', sans-serif" }}>Cancelar</button>
+              <button onClick={() => { if (newGroupName.trim() && activeTopic) { updateCourse(course.id, { studyTopics: (safeArr(course.studyTopics)).map(tp => tp.id === activeTopic.id ? { ...tp, toolGroups: [...((tp as any).toolGroups || []), newGroupName.trim()] } : tp) } as any); setActiveToolGroup(newGroupName.trim()); setTopicGroupModal(null); } }} disabled={!newGroupName.trim()} style={{ flex: 1, height: 38, borderRadius: 9, border: 'none', background: course.color, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: !newGroupName.trim() ? 0.4 : 1, boxShadow: `0 6px 20px ${course.color}30`, fontFamily: "'Inter Tight', sans-serif" }}>Crear grupo</button>
+            </div>
+          </div>
+        </div>
+      )}
       {confirmDelToolMat && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 2003, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }} onClick={() => setConfirmDelToolMat(null)}>
           <div className="bento-card" style={{ width: 380, padding: 22, borderRadius: 14, background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }} onClick={e => e.stopPropagation()}>
@@ -7174,14 +7385,36 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
               <button onClick={() => { setShowFlashcardModal(false); setEditingFlashcard(null); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}><X size={15} /></button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div>
-                <span style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#8B5CF6', display: 'block', marginBottom: 5 }}>Pregunta</span>
-                <textarea value={fcQuestion} onChange={e => setFcQuestion(e.target.value)} placeholder="Escribe la pregunta..." autoFocus style={{ width: '100%', minHeight: 70, padding: 8, borderRadius: 5, fontSize: 12, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
-              </div>
-              <div>
-                <span style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#10B981', display: 'block', marginBottom: 5 }}>Respuesta</span>
-                <textarea value={fcAnswer} onChange={e => setFcAnswer(e.target.value)} placeholder="Escribe la respuesta..." style={{ width: '100%', minHeight: 70, padding: 8, borderRadius: 5, fontSize: 12, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
-              </div>
+              {!editingFlashcard && (
+                <div style={{ display: 'flex', gap: 4, padding: 3, borderRadius: 8, background: 'var(--bg-deep)' }}>
+                  {([['uno', 'Individual'], ['masivo', 'Masivo (varias a la vez)']] as const).map(([v, lbl]) => (
+                    <button key={v} onClick={() => setFcMode(v)}
+                      style={{ flex: 1, height: 28, borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 10.5, fontWeight: 600, transition: 'all 150ms', fontFamily: "'Inter Tight', sans-serif", background: fcMode === v ? '#8B5CF6' : 'transparent', color: fcMode === v ? '#fff' : 'var(--text-tertiary)' }}>
+                      {lbl}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {fcMode === 'uno' || editingFlashcard ? (
+                <>
+                  <div>
+                    <span style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#8B5CF6', display: 'block', marginBottom: 5 }}>Pregunta</span>
+                    <textarea value={fcQuestion} onChange={e => setFcQuestion(e.target.value)} placeholder="Escribe la pregunta..." autoFocus style={{ width: '100%', minHeight: 70, padding: 8, borderRadius: 5, fontSize: 12, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+                  </div>
+                  <div>
+                    <span style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#10B981', display: 'block', marginBottom: 5 }}>Respuesta</span>
+                    <textarea value={fcAnswer} onChange={e => setFcAnswer(e.target.value)} placeholder="Escribe la respuesta..." style={{ width: '100%', minHeight: 70, padding: 8, borderRadius: 5, fontSize: 12, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+                  </div>
+                </>
+              ) : (
+                <div>
+                  <span style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#8B5CF6', display: 'block', marginBottom: 5 }}>Una tarjeta por línea · pregunta - respuesta</span>
+                  <textarea value={fcBulk} onChange={e => setFcBulk(e.target.value)} placeholder={'Formato por línea:\npregunta - respuesta\n\nEj:\nCapital de Francia - París\nE=mc² - Relación masa-energía'} autoFocus style={{ width: '100%', minHeight: 170, padding: 10, borderRadius: 5, fontSize: 12, lineHeight: 1.7, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+                  <div style={{ fontSize: 9.5, color: 'var(--text-tertiary)', marginTop: 6, lineHeight: 1.5 }}>
+                    {parseBulkFlashcards().filter(c => c.a).length} tarjeta(s) detectada(s) · acepta fórmulas y texto libre
+                  </div>
+                </div>
+              )}
               <div>
                 <span style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-tertiary)', display: 'block', marginBottom: 5 }}>Dificultad</span>
                 <div style={{ display: 'flex', gap: 6 }}>
@@ -7197,7 +7430,13 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                   ))}
                 </div>
               </div>
-              <button onClick={handleSaveFlashcard} disabled={!fcQuestion.trim() || !fcAnswer.trim()} style={{ width: '100%', height: 34, borderRadius: 6, border: 'none', background: '#8B5CF6', color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', opacity: !fcQuestion.trim() || !fcAnswer.trim() ? 0.4 : 1 }}>{editingFlashcard ? 'Guardar cambios' : 'Crear flashcard'}</button>
+              {fcMode === 'masivo' && !editingFlashcard ? (
+                <button onClick={handleSaveFlashcard} disabled={parseBulkFlashcards().filter(c => c.a).length === 0} style={{ width: '100%', height: 34, borderRadius: 6, border: 'none', background: '#8B5CF6', color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', opacity: parseBulkFlashcards().filter(c => c.a).length === 0 ? 0.4 : 1 }}>
+                  Crear {parseBulkFlashcards().filter(c => c.a).length} flashcards
+                </button>
+              ) : (
+                <button onClick={handleSaveFlashcard} disabled={!fcQuestion.trim() || !fcAnswer.trim()} style={{ width: '100%', height: 34, borderRadius: 6, border: 'none', background: '#8B5CF6', color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', opacity: !fcQuestion.trim() || !fcAnswer.trim() ? 0.4 : 1 }}>{editingFlashcard ? 'Guardar cambios' : 'Crear flashcard'}</button>
+              )}
             </div>
           </div>
         </div>
