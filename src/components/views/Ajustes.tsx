@@ -28,6 +28,7 @@ import {
 } from '../../lib/google/index';
 import { isTauri } from '../../lib/tauri';
 import { exportOwaBackup, pickAndImportOwaBackup, importOwaBackupFromFile, getOwaDataFolder, revealOwaDataFolder } from '../../lib/owaBackup';
+import { downloadYtDlp } from '../../lib/musicApi';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 const GOOGLE_CLIENT_SECRET = import.meta.env.VITE_GOOGLE_CLIENT_SECRET || '';
@@ -1908,6 +1909,41 @@ export default function Ajustes() {
                   </div>
                   <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border-subtle)', fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.5 }}>
                     Las canciones descargadas se guardan en la carpeta configurada del sistema. Puedes cambiarla desde la sección de música.
+                  </div>
+                </div>
+
+                {/* yt-dlp Installer */}
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
+                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16, display: 'block' }}>
+                    Motor de Descarga (yt-dlp)
+                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                    <div>
+                      <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Motor de descarga (yt-dlp)</div>
+                      <div style={{ fontSize: 10, color: 'var(--text-tertiary)', lineHeight: 1.4 }}>Si las descargas fallan, Windows Defender pudo haber eliminado <code style={{ background: 'rgba(0,0,0,0.2)', padding: '1px 5px', borderRadius: 4, fontSize: 9 }}>yt-dlp.exe</code>. Descarga la última versión automáticamente.</div>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        try {
+                          const msg = await downloadYtDlp();
+                          addNotification(msg, 'success');
+                        } catch (e: any) {
+                          addNotification(e?.message || 'Error instalando yt-dlp', 'error');
+                        }
+                      }}
+                      style={{
+                        height: 36, padding: '0 16px', borderRadius: 8,
+                        background: 'linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 70%, #000))',
+                        border: 'none', color: '#fff', fontSize: 11, fontWeight: 600,
+                        cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+                        boxShadow: '0 4px 14px color-mix(in srgb, var(--accent) 35%, transparent)',
+                        transition: 'all 150ms',
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.filter = 'brightness(1.08)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.filter = 'none'; }}
+                    >
+                      <Download size={12} /> Instalar yt-dlp
+                    </button>
                   </div>
                 </div>
 

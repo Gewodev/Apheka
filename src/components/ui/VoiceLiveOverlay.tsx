@@ -206,6 +206,8 @@ export default function VoiceLiveOverlay({ open, onClose }: VoiceLiveOverlayProp
         ...history,
         { role: 'user', content: text } as AIMessage,
       ];
+      // Sync user transcript to Charvis chat panel
+      window.dispatchEvent(new CustomEvent('owa-brain-voice-user-message', { detail: { text } }));
       const controller = new AbortController();
       abortRef.current = controller;
       let accumulatedContent = '';

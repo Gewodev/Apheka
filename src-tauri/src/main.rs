@@ -4,8 +4,11 @@ use std::collections::HashMap;
 use std::io::{BufRead, Write};
 use std::process::{Command, Stdio};
 use std::sync::Mutex;
+use std::time::Duration;
 use tauri::{Emitter, Manager};
 use tauri_plugin_shell::ShellExt;
+use reqwest;
+use tokio::time::sleep;
 
 struct DownloadState {
     active: Mutex<HashMap<String, std::process::Child>>,
@@ -19,6 +22,8 @@ fn resolve_binary(app: &tauri::AppHandle, name: &str) -> Result<std::path::PathB
         std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("bin"),
         // In production, resource_dir is the app bundle dir
         app.path().resource_dir().ok().map(|r| r.join("bin")).unwrap_or_default(),
+        // User data directory (persistent, survives AV cleanup)
+        app.path().app_data_dir().ok().map(|r| r.join("bin")).unwrap_or_default(),
     ];
     for dir in &candidates {
         let with_triple = dir.join(format!("{name}-{triple}.exe"));
@@ -31,9 +36,114 @@ fn resolve_binary(app: &tauri::AppHandle, name: &str) -> Result<std::path::PathB
         }
     }
     Err(format!(
-        "{} no encontrado (Windows Defender pudo eliminarlo). Buscado en {:?} y {:?}.",
-        name, candidates[0], candidates[1],
+        "{} no encontrado (Windows Defender pudo eliminarlo). Buscado en {:?}, {:?} y {:?}.",
+        name, candidates[0], candidates[1], candidates[2],
     ))
+}
+
+/// Download yt-dlp from GitHub releases to app data dir
+#[tauri::command]
+async fn download_yt_dlp(app_handle: tauri::AppHandle) -> Result<String, String> {
+    let app_data = app_handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let bin_dir = app_data.join("bin");
+    std::fs::create_dir_all(&bin_dir).map_err(|e| format!("No se pudo crear directorio bin: {e}"))?;
+
+    let dest = bin_dir.join("yt-dlp.exe");
+
+    // Get latest release URL from GitHub
+    let client = reqwest::Client::new();
+    let release = client
+        .get("https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest")
+        .header("User-Agent", "OWA-Studio")
+        .send()
+        .await
+        .map_err(|e| format!("Error consultando release de yt-dlp: {e}"))?
+        .json::<serde_json::Value>()
+        .await
+        .map_err(|e| format!("Error parseando release: {e}"))?;
+
+    let assets = release["assets"].as_array().ok_or("No assets in release")?;
+    let asset = assets
+        .iter()
+        .find(|a| a["name"].as_str().unwrap_or("").contains("yt-dlp.exe"))
+        .ok_or("No yt-dlp.exe asset found")?;
+
+    let download_url = asset["browser_download_url"].as_str().ok_or("No download URL")?;
+
+    let mut resp = client
+        .get(download_url)
+        .header("User-Agent", "OWA-Studio")
+        .send()
+        .await
+        .map_err(|e| format!("Error descargando yt-dlp: {e}"))?;
+
+    let mut file = std::fs::File::create(&dest).map_err(|e| format!("No se pudo crear archivo: {e}"))?;
+    while let Some(chunk) = resp.chunk().await.map_err(|e| format!("Error en chunk: {e}"))? {
+        std::io::Write::write_all(&mut file, &chunk).map_err(|e| format!("Error escribiendo: {e}"))?;
+    }
+
+    // Verify it works
+    let output = Command::new(&dest).args(["--version"]).output().map_err(|e| format!("Error ejecutando yt-dlp: {e}"))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let _ = std::fs::remove_file(&dest);
+        return Err(format!("yt-dlp descargado no funciona: {stderr}"));
+    }
+
+    let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    Ok(format!("yt-dlp instalado en {}. Versión: {}", dest.display(), version))
+}
+
+/// Internal function for auto-downloading yt-dlp on startup
+async fn download_yt_dlp_internal(app_handle: &tauri::AppHandle) -> Result<(), String> {
+    let app_data = app_handle.path().app_data_dir().map_err(|e| e.to_string())?;
+    let bin_dir = app_data.join("bin");
+    std::fs::create_dir_all(&bin_dir).map_err(|e| format!("No se pudo crear directorio bin: {e}"))?;
+
+    let dest = bin_dir.join("yt-dlp.exe");
+
+    // Get latest release URL from GitHub
+    let client = reqwest::Client::new();
+    let release = client
+        .get("https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest")
+        .header("User-Agent", "OWA-Studio")
+        .send()
+        .await
+        .map_err(|e| format!("Error consultando release de yt-dlp: {e}"))?
+        .json::<serde_json::Value>()
+        .await
+        .map_err(|e| format!("Error parseando release: {e}"))?;
+
+    let assets = release["assets"].as_array().ok_or("No assets in release")?;
+    let asset = assets
+        .iter()
+        .find(|a| a["name"].as_str().unwrap_or("").contains("yt-dlp.exe"))
+        .ok_or("No yt-dlp.exe asset found")?;
+
+    let download_url = asset["browser_download_url"].as_str().ok_or("No download URL")?;
+
+    let mut resp = client
+        .get(download_url)
+        .header("User-Agent", "OWA-Studio")
+        .send()
+        .await
+        .map_err(|e| format!("Error descargando yt-dlp: {e}"))?;
+
+    let mut file = std::fs::File::create(&dest).map_err(|e| format!("No se pudo crear archivo: {e}"))?;
+    while let Some(chunk) = resp.chunk().await.map_err(|e| format!("Error en chunk: {e}"))? {
+        std::io::Write::write_all(&mut file, &chunk).map_err(|e| format!("Error escribiendo: {e}"))?;
+    }
+
+    // Verify it works
+    let output = Command::new(&dest).args(["--version"]).output().map_err(|e| format!("Error ejecutando yt-dlp: {e}"))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let _ = std::fs::remove_file(&dest);
+        return Err(format!("yt-dlp descargado no funciona: {stderr}"));
+    }
+
+    eprintln!("yt-dlp auto-instalado correctamente en {}", dest.display());
+    Ok(())
 }
 
 fn run_ytdlp(app: &tauri::AppHandle, args: &[&str]) -> Result<String, String> {
@@ -616,6 +726,7 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_http::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(DownloadState {
             active: Mutex::new(HashMap::new()),
             path: Mutex::new(default_download_path),
@@ -633,9 +744,30 @@ fn main() {
             export_to_zip,
             detect_installed_browsers,
             open_url_in_browser,
+            download_yt_dlp,
         ])
         .setup(|app| {
             ensure_simple_binaries(app.handle());
+            
+            // Auto-download yt-dlp if missing on startup
+            let app_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                // Wait a bit for app to fully initialize
+                sleep(Duration::from_secs(2)).await;
+                
+                if let Ok(app_data) = app_handle.path().app_data_dir() {
+                    let bin_dir = app_data.join("bin");
+                    let yt_dlp_path = bin_dir.join("yt-dlp.exe");
+                    
+                    if !yt_dlp_path.exists() {
+                        eprintln!("yt-dlp no encontrado, descargando automáticamente...");
+                        if let Err(e) = download_yt_dlp_internal(&app_handle).await {
+                            eprintln!("Error auto-descargando yt-dlp: {}", e);
+                        }
+                    }
+                }
+            });
+            
             Ok(())
         })
         .run(tauri::generate_context!())

@@ -223,7 +223,6 @@ export default function Musica() {
   const [searchQuery, setSearchQuery] = useState(() => loadExploreState()?.searchQuery || '');
   const [isLoading, setIsLoading] = useState(false);
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
-  const [spotifyUrl, setSpotifyUrl] = useState('');
   const [preview, setPreview] = useState<YouTubePlaylist | YouTubeMetadata | null>(() => loadExploreState()?.preview || null);
   const [searchResults, setSearchResults] = useState<SearchResult[]>(() => loadExploreState()?.searchResults || []);
   const [showAllLibrary, setShowAllLibrary] = useState(() => loadUiState()?.showAllLibrary ?? false);
@@ -234,7 +233,7 @@ export default function Musica() {
   const [selectedArtist, setSelectedArtist] = useState<string | null>(() => loadUiState()?.selectedArtist || null);
   const [showSearch, setShowSearch] = useState(() => loadUiState()?.showSearch ?? false);
   const [coverHover, setCoverHover] = useState(false);
-  const [searchMode, setSearchMode] = useState<'link' | 'query' | 'spotify'>(() => (loadExploreState()?.searchMode as 'link' | 'query' | 'spotify' | undefined) || 'link');
+  const [searchMode, setSearchMode] = useState<'link' | 'query'>(() => (loadExploreState()?.searchMode as 'link' | 'query' | undefined) || 'link');
   const [currentTime, setCurrentTime] = useState(new Date());
   const [confirmDelete, setConfirmDelete] = useState<{ type: 'track' | 'artist' | 'playlist'; id: string; name: string } | null>(null);
   const [showClearAllConfirm, setShowClearAllConfirm] = useState(false);
@@ -541,78 +540,7 @@ export default function Musica() {
     }
   };
 
-  const handleSpotifyImport = async () => {
-    const link = spotifyUrl.trim();
-    if (!link) return;
-    if (!link.includes('spotify.com/playlist/') && !link.includes('spotify.com/album/') && !link.includes('spotify.com/track/')) {
-      addNotification('Pega un enlace válido de playlist, álbum o track de Spotify', 'error');
-      return;
-    }
-    setIsLoading(true);
-    try {
-      const match = link.match(/spotify\.com\/(playlist|album|track)\/([a-zA-Z0-9]+)/);
-      if (!match) throw new Error('No se pudo extraer el ID del enlace');
-      const [, type, id] = match;
 
-      // Spotify embed page contiene el JSON con todos los tracks sin auth
-      const endpoint = `https://open.spotify.com/embed/${type}/${id}`;
-      const res = await fetch(endpoint);
-      if (!res.ok) throw new Error(`No se pudo acceder (HTTP ${res.status}). Verifica que la playlist sea pública.`);
-      const html = await res.text();
-      const jsonMatch = html.match(/<script id="__NEXT_DATA__" type="application\/json">(.*?)<\/script>/);
-      if (!jsonMatch) throw new Error('No se pudieron leer los tracks. La playlist podría ser privada.');
-      let data: any;
-      try { data = JSON.parse(jsonMatch[1]); } catch { throw new Error('Error al procesar la respuesta de Spotify'); }
-      const entity = data?.props?.pageProps?.state?.data?.entity;
-      if (!entity) throw new Error('Formato inesperado. Spotify pudo haber cambiado su estructura.');
-
-      const playlistName: string = entity.name || 'Playlist de Spotify';
-      const trackList: { title: string; artist: string; uri: string }[] = [];
-      if (type === 'track') {
-        trackList.push({ title: entity.name || 'Track', artist: entity.artists?.[0]?.name || 'Spotify', uri: id });
-      } else {
-        const items = entity.trackList || [];
-        for (const tr of items) {
-          trackList.push({ title: tr.title || '', artist: tr.subtitle || '', uri: tr.uri || '' });
-        }
-      }
-      if (trackList.length === 0) throw new Error('La playlist no tiene canciones');
-
-      setSpotifyUrl('');
-      addNotification(`"${playlistName}": ${trackList.length} canciones encontradas. Importando a tu biblioteca…`, 'success');
-
-      let imported = 0, skipped = 0;
-      for (const tr of trackList.slice(0, 30)) {
-        if (!tr.title.trim()) { skipped++; continue; }
-        try {
-          const entries = await searchMusic(`${tr.title} ${tr.artist}`);
-          if (entries.length > 0) {
-            const first = entries[0] as any;
-            const ytId = first.id || (first.url || first.webpage_url || '').match(/[?&]v=([^&]+)/)?.[1];
-            if (ytId) {
-              addCloudTrack({
-                id: ytId,
-                title: tr.title,
-                channel: tr.artist,
-                duration: first.duration || 0,
-                thumbnail: first.thumbnail || '',
-                webpage_url: '',
-              } as any);
-              imported++;
-            } else skipped++;
-          } else skipped++;
-        } catch { skipped++; }
-      }
-      addNotification(
-        `${imported}/${trackList.length} importadas${skipped > 0 ? ` · ${skipped} omitidas` : ''}`,
-        imported > 0 ? 'success' : 'error'
-      );
-    } catch (e: any) {
-      addNotification(e?.message || 'Error inesperado al importar desde Spotify', 'error');
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handleSearch = async () => {
     const q = searchQuery.trim();
@@ -1748,7 +1676,7 @@ export default function Musica() {
                   {([
                     { mode: 'link' as const, icon: Link, label: 'Pegar enlace' },
                     { mode: 'query' as const, icon: Search, label: 'Buscar en YouTube' },
-                    { mode: 'spotify' as const, icon: Music, label: 'Spotify' },
+                    { mode: 'link' as const, icon: Music, label: 'Enlace' },
                   ]).map(({ mode, icon: Icon, label }) => (
                     <button key={mode} onClick={() => setSearchMode(mode)}
                       style={{
@@ -1770,44 +1698,39 @@ export default function Musica() {
                   <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, borderRadius: 10, padding: '0 14px', background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', transition: 'border-color 200ms, box-shadow 200ms' }}
                     onFocus={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.boxShadow = '0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent)'; }}
                     onBlur={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.boxShadow = 'none'; }}>
-                    {searchMode === 'spotify'
-                      ? <Music size={15} style={{ color: '#1DB954', flexShrink: 0 }} />
-                      : searchMode === 'link'
-                        ? <Link size={15} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-                        : <Search size={15} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />}
+                    {searchMode === 'link'
+                      ? <Link size={15} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                      : <Search size={15} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />}
                     <input
                       ref={searchMode === 'link' ? urlInputRef : undefined}
                       type="text"
-                      value={searchMode === 'spotify' ? spotifyUrl : searchMode === 'link' ? url : searchQuery}
-                      onChange={e => searchMode === 'spotify' ? setSpotifyUrl(e.target.value) : searchMode === 'link' ? setUrl(e.target.value) : setSearchQuery(e.target.value)}
-                      onKeyDown={searchMode === 'spotify' ? (e => { if (e.key === 'Enter') handleSpotifyImport(); }) : handleKeyDown}
-                      placeholder={searchMode === 'spotify' ? 'Pega un enlace de playlist de Spotify...' : searchMode === 'link' ? 'Pega un enlace de YouTube...' : 'Busca canciones, artistas o playlists...'}
+                      value={searchMode === 'link' ? url : searchQuery}
+                      onChange={e => searchMode === 'link' ? setUrl(e.target.value) : setSearchQuery(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      placeholder={searchMode === 'link' ? 'Pega un enlace de YouTube...' : 'Busca canciones, artistas o playlists...'}
                       style={{ border: 'none', background: 'transparent', height: 42, padding: 0, fontSize: 13, flex: 1, color: 'var(--text-primary)', outline: 'none', fontFamily: 'inherit' }}
                     />
-                    {((searchMode === 'link' && url) || (searchMode === 'query' && searchQuery) || (searchMode === 'spotify' && spotifyUrl)) && (
-                      <button onClick={() => searchMode === 'spotify' ? setSpotifyUrl('') : searchMode === 'link' ? setUrl('') : setSearchQuery('')} style={{ padding: 4, background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', borderRadius: 4, transition: 'color 150ms' }}
+                    {((searchMode === 'link' && url) || (searchMode === 'query' && searchQuery)) && (
+                      <button onClick={() => setUrl('')} style={{ padding: 4, background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', borderRadius: 4, transition: 'color 150ms' }}
                         onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
                         onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
                         <X size={14} />
                       </button>
                     )}
                   </div>
-                  <button onClick={searchMode === 'spotify' ? handleSpotifyImport : searchMode === 'link' ? handleUrlSubmit : handleSearch}
-                    className="btn-primary"
-                    style={{ height: 44, padding: '0 22px', display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', borderRadius: 10, background: searchMode === 'spotify' ? '#1DB954' : undefined }}
+                  <button onClick={handleSearch} className="btn-primary"
+                    style={{ height: 44, padding: '0 22px', display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', borderRadius: 10, background: undefined }}
                     disabled={isLoading}>
-                    {isLoading ? <Loader size={15} style={{ animation: 'spin 1s linear infinite' }} /> : searchMode === 'spotify' ? <Music size={15} /> : <Search size={15} />}
-                    {searchMode === 'spotify' ? 'Importar' : searchMode === 'link' ? 'Analizar' : 'Buscar'}
+                    {isLoading ? <Loader size={15} style={{ animation: 'spin 1s linear infinite' }} /> : <Search size={15} />}
+                    {searchMode === 'link' ? 'Analizar' : 'Buscar'}
                   </button>
                 </div>
 
                 {/* Quick tip under input */}
                 <div style={{ marginTop: 10, fontSize: 10, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 5 }}>
-                  {searchMode === 'spotify'
-                    ? <><Music size={10} style={{ color: '#1DB954', opacity: 0.6 }} /> Pega el enlace de una playlist pública de Spotify para importar las canciones</>
-                    : searchMode === 'link'
-                      ? <><Link size={10} style={{ opacity: 0.4 }} /> Soporta enlaces de YouTube, playlists y canales</>
-                      : <><Search size={10} style={{ opacity: 0.4 }} /> Busca en YouTube o pega un enlace directamente</>
+                  {searchMode === 'link'
+                    ? <><Link size={10} style={{ opacity: 0.4 }} /> Soporta enlaces de YouTube, playlists y canales</>
+                    : <><Search size={10} style={{ opacity: 0.4 }} /> Busca en YouTube o pega un enlace directamente</>
                   }
                 </div>
               </div>

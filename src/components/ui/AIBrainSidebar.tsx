@@ -654,8 +654,19 @@ export default function AIBrainSidebar({ isOpen, onClose, onOpen, anchor }: AIBr
       setMessages(prev => [...prev, { id: `asst_${Date.now()}`, role: 'assistant', content: text, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }]);
       setTimeout(() => { stickToBottomRef.current = true; scrollToBottom(); }, 60);
     };
+    const onVoiceUserMessage = (e: Event) => {
+      const detail = (e as CustomEvent<{ text?: string }>).detail;
+      const text = (detail?.text || '').trim();
+      if (!text) return;
+      setMessages(prev => [...prev, { id: `user_${Date.now()}`, role: 'user', content: text, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }]);
+      setTimeout(() => { stickToBottomRef.current = true; scrollToBottom(); }, 60);
+    };
     window.addEventListener('owa-brain-voice-message', onVoiceMessage);
-    return () => window.removeEventListener('owa-brain-voice-message', onVoiceMessage);
+    window.addEventListener('owa-brain-voice-user-message', onVoiceUserMessage);
+    return () => {
+      window.removeEventListener('owa-brain-voice-message', onVoiceMessage);
+      window.removeEventListener('owa-brain-voice-user-message', onVoiceUserMessage);
+    };
   }, [scrollToBottom]);
 
   // Scroll libre: al hacer scroll manual, si el usuario sube dejamos de

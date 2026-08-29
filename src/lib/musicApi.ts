@@ -1,5 +1,27 @@
 import { invoke, isTauri } from './tauri';
 
+export async function downloadYtDlp(): Promise<string> {
+  if (!isTauri()) throw new Error('Solo disponible en la app de escritorio');
+  return invoke<string>('download_yt_dlp');
+}
+
+// ── Nuevas funciones para YouTube Music (usando yt-dlp vía main.rs) ──
+
+export async function searchYouTubeMusic(query: string): Promise<any> {
+  if (!isTauri()) return {};
+  return invoke('search_youtube', { query });
+}
+
+export async function getYouTubeMetadata(url: string): Promise<any> {
+  if (!isTauri()) return {};
+  return invoke('get_youtube_metadata', { url });
+}
+
+export async function streamYouTubeAudio(url: string): Promise<string> {
+  if (!isTauri()) return '';
+  return invoke('stream_youtube_audio', { url });
+}
+
 // ── Re-export for convenience ──
 export { isTauri };
 

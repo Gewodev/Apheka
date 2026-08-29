@@ -618,7 +618,7 @@ export async function probeProvider(
 
 /** Modelos de OpenCode Zen para selector rápido */
 export const AI_MODELS = [
-  { id: 'big-pickle', name: 'Big Pickle (OpenCode)', provider: 'OpenCode Zen', tier: 'balanced', free: true },
+  { id: 'big-pickle', name: 'Big Pickle (OpenCode)', provider: 'OpenCode Zen', tier: 'balanced' },
   { id: 'glm-5.2', name: 'GLM 5.2', provider: 'GLM', tier: 'advanced' },
   { id: 'glm-5.1', name: 'GLM 5.1', provider: 'GLM', tier: 'advanced' },
   { id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro', provider: 'DeepSeek', tier: 'advanced' },
@@ -627,5 +627,3 @@ export const AI_MODELS = [
   { id: 'minimax-m2.7', name: 'MiniMax M2.7', provider: 'MiniMax', tier: 'advanced' },
   { id: 'glm-5', name: 'GLM 5', provider: 'GLM', tier: 'balanced' },
 ] as const;
-
-export const FREE_MODELS = AI_MODELS.filter(m => (m as any).free).map(m => m.id);
