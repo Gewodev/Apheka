@@ -3,13 +3,14 @@ import {
   User, Palette, Brain, Download, Bell,
   Moon, Sun,
   Timer, Zap,
-  RefreshCw, Shield,
+  RefreshCw, Shield, ShieldCheck,
   Sliders, Music,
   Calendar, Database, Upload,
   Wifi, WifiOff, Image, Coffee, X, Trash2, Save,
   Monitor, Activity, Sparkles, LogOut, Eye, EyeOff, CalendarDays, Clock, ChevronDown,
   FolderOpen, Boxes, AppWindow, HardDrive, Copy, Check, RefreshCcw,
-  CheckSquare, GraduationCap, FileText, ExternalLink, Loader2, CalendarPlus, ListTodo, Keyboard, Mic, Square
+  CheckSquare, GraduationCap, FileText, ExternalLink, Loader2, CalendarPlus, ListTodo, Keyboard, Mic, Square,
+  BookOpen
 } from 'lucide-react';
 import { GoogleCalendarIcon, GoogleTasksIcon, GoogleClassroomIcon, GoogleDriveIcon, GoogleDocsIcon, GoogleSheetsIcon } from '../ui/GoogleIcons';
 import { useApp, fmtClock } from '../../store/AppContext';
@@ -2135,18 +2136,46 @@ export default function Ajustes() {
                   </div>
                 </div>
 
-                {/* Test notification */}
+                {/* Alertas y Notificaciones */}
                 <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
-                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 14, display: 'block' }}>Prueba de Notificaciones</span>
-                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                    <button onClick={() => { import('../../lib/notifications').then(m => m.sendNativeNotification('🔔 OWA Studio', 'Notificaciones funcionando correctamente')); }}
-                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'var(--accent)', border: 'none', color: '#fff', transition: 'all 200ms' }}>
-                      <Bell size={14} /> Probar Notificación
-                    </button>
-                    <button onClick={() => { addNotification('✅ Notificación de prueba enviada', 'success'); }}
-                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)', transition: 'all 200ms' }}>
-                      <Bell size={14} /> Probar Toast
-                    </button>
+                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 14, display: 'block' }}>Alertas y Notificaciones</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>Notificaciones nativas del sistema</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>Aparecen fuera de la app con el icono de OWA Studio</div>
+                      </div>
+                      <button onClick={async () => {
+                        const { requestNativePermission } = await import('../../lib/notifications');
+                        const ok = await requestNativePermission();
+                        addNotification(ok ? 'Permiso concedido' : 'Permiso denegado', ok ? 'success' : 'error');
+                      }} style={{ padding: '10px 16px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'var(--accent)', border: 'none', color: '#fff' }}>
+                        <ShieldCheck size={14} /> Solicitar Permiso
+                      </button>
+                    </div>
+                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                      <button onClick={async () => {
+                        const { sendNativeNotification } = await import('../../lib/notifications');
+                        sendNativeNotification('OWA Studio', 'Notificación nativa de prueba enviada');
+                      }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'var(--accent)', border: 'none', color: '#fff', transition: 'all 200ms' }}>
+                        <Bell size={14} /> Probar Nativa
+                      </button>
+                      <button onClick={() => { addNotification('Notificación de prueba enviada', 'success'); }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)', transition: 'all 200ms' }}>
+                        <Bell size={14} /> Probar Toast
+                      </button>
+                      <button onClick={async () => {
+                        const { sendNativeNotification } = await import('../../lib/notifications');
+                        sendNativeNotification('Recordatorio de evento', 'Tu evento "Reunión de equipo" empieza en 1 hora');
+                      }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)', transition: 'all 200ms' }}>
+                        <Calendar size={14} /> Simular Recordatorio Evento
+                      </button>
+                      <button onClick={async () => {
+                        const { sendNativeNotification } = await import('../../lib/notifications');
+                        sendNativeNotification('Sesión de estudio', 'Tu sesión programada "Matemáticas" comienza en 10 minutos');
+                      }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)', transition: 'all 200ms' }}>
+                        <BookOpen size={14} /> Simular Sesión Estudio
+                      </button>
+                    </div>
                   </div>
                 </div>
               </section>

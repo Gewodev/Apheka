@@ -1947,6 +1947,47 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => { unlistenSettings.then(fn => fn()); unlistenTimer.then(fn => fn()); };
   }, [settings.floatingBgMode, settings.floatingBgColor, settings.floatingFont, settings.floatingHideInFocus, settings.floatingAnimationType, settings.timerFocusColor, settings.timerBreakColor, settings.timerLongBreakColor, settings.timerChronoColor, settings.longBreakTime, settings.theme, settings.useThreeColors, settings.surfaceColor]);
 
+  // Programador de notificaciones nativas: recordatorios de eventos y sesiones de estudio
+  useEffect(() => {
+    if (!hydrated) return;
+    let notifiedEvents = new Set<string>();
+    let notifiedSessions = new Set<string>();
+    const checkReminders = async () => {
+      try {
+        const { requestNativePermission, sendNativeNotification } = await import('../lib/notifications');
+        const hasPerm = await requestNativePermission();
+        if (!hasPerm) return;
+        const now = new Date();
+        const nowMs = now.getTime();
+        const oneHourMs = 60 * 60 * 1000;
+        const tenMinMs = 10 * 60 * 1000;
+        for (const ev of events) {
+          if (!ev.startTime) continue;
+          const evStart = new Date(`${ev.date}T${ev.startTime}`).getTime();
+          const diff = evStart - nowMs;
+          if (diff > 0 && diff <= oneHourMs && !notifiedEvents.has(ev.id)) {
+            sendNativeNotification('Recordatorio de evento', `${ev.title} empieza en menos de 1 hora`);
+            notifiedEvents.add(ev.id);
+          }
+        }
+        notifiedEvents = new Set([...notifiedEvents].filter(id => events.some(e => e.id === id)));
+        for (const ps of plannedSessions) {
+          if (!ps.startTime || !ps.date) continue;
+          const psStart = new Date(`${ps.date}T${ps.startTime}`).getTime();
+          const diff = psStart - nowMs;
+          if (diff > 0 && diff <= tenMinMs && !notifiedSessions.has(ps.id)) {
+            sendNativeNotification('Sesión de estudio', `Tu sesión "${ps.title}" comienza en 10 minutos`);
+            notifiedSessions.add(ps.id);
+          }
+        }
+        notifiedSessions = new Set([...notifiedSessions].filter(id => plannedSessions.some(s => s.id === id)));
+      } catch { }
+    };
+    checkReminders();
+    const timer = setInterval(checkReminders, 60000);
+    return () => clearInterval(timer);
+  }, [hydrated, events, plannedSessions]);
+
   // Pause audio when closing window
   useEffect(() => {
     const handleBeforeUnload = () => {

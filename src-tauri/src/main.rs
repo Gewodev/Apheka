@@ -7,6 +7,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 use tauri::{Emitter, Manager};
 use tauri_plugin_shell::ShellExt;
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use reqwest;
 use tokio::time::sleep;
 
@@ -727,6 +728,7 @@ fn main() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .manage(DownloadState {
             active: Mutex::new(HashMap::new()),
             path: Mutex::new(default_download_path),
@@ -748,7 +750,26 @@ fn main() {
         ])
         .setup(|app| {
             ensure_simple_binaries(app.handle());
-            
+
+            // Atajo GLOBAL Alt+A: voz en vivo de Charvis desde cualquier parte del sistema.
+            // Si otro programa ya tiene Alt+A registrado, no se rompe el arranque —
+            // el atajo de teclado dentro de la ventana sigue funcionando como fallback.
+            if let Err(e) = app.global_shortcut().on_shortcut("Alt+A", |app, _shortcut, event| {
+                if event.state == ShortcutState::Pressed {
+                    if let Some(win) = app.get_webview_window("main") {
+                        // Si la ventana no tiene foco, traerla al frente primero
+                        if !win.is_focused().unwrap_or(true) {
+                            let _ = win.unminimize();
+                            let _ = win.show();
+                            let _ = win.set_focus();
+                        }
+                        let _ = win.emit("owa-global-shortcut", "alt+a");
+                    }
+                }
+            }) {
+                eprintln!("Alt+A global no disponible (ya usado por otro programa): {e}");
+            }
+
             // Auto-download yt-dlp if missing on startup
             let app_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {

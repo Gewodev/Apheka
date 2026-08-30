@@ -375,6 +375,21 @@ function AppContent() {
     return () => window.removeEventListener('keydown', handler);
   }, [settings.owaBrainLiveVoice]);
 
+  // Atajo GLOBAL (Rust): Alt+A funciona incluso cuando la ventana no tiene foco
+  useEffect(() => {
+    if (settings.owaBrainLiveVoice === false) return;
+    const handler = (e: CustomEvent) => {
+      if (e.detail === 'alt+a') {
+        setVoiceLiveOpen(o => {
+          if (!o) setIsBrainOpen(false);
+          return !o;
+        });
+      }
+    };
+    window.addEventListener('owa-global-shortcut', handler as EventListener);
+    return () => window.removeEventListener('owa-global-shortcut', handler as EventListener);
+  }, [settings.owaBrainLiveVoice]);
+
   useEffect(() => {
     const path = window.location.pathname;
     if (path.startsWith('/oauth/callback')) {
