@@ -123,35 +123,10 @@ const TOOL_MATERIAL_TYPE: Record<ToolCreatorMode, SubjectMaterial['type']> = {
 };
 
 const TOOL_ITEMS = {
-  flashcards: { icon: BookOpen, label: 'Flashcards', color: '#8B5CF6', sub: 'Pregunta · Respuesta' },
-  quizzes: { icon: HelpCircle, label: 'Quiz rápido', color: '#EF4444', sub: 'Autoevaluación' },
-  blurting: { icon: NotebookPen, label: 'Blurting', color: '#3B82F6', sub: 'Recuerdo libre' },
-  feynman: { icon: Lightbulb, label: 'Feynman', color: '#F59E0B', sub: 'Explica en simple' },
-  spacedRep: { icon: LI.CalendarClock, label: 'Repaso espaciado', color: '#22C55E', sub: '1d · 3d · 1sem · 1mes' },
-  leitner: { icon: Layers, label: 'Cajas Leitner', color: '#0EA5E9', sub: 'Cajas por dominio' },
-  interleaving: { icon: LI.ArrowLeftRight, label: 'Intercalado', color: '#F97316', sub: 'Mezcla de tipos' },
-  selfExplain: { icon: LI.Brain, label: 'Autoexplicación', color: '#14B8A6', sub: 'Paso a paso en voz alta' },
-  elaborate: { icon: HelpCircle, label: 'Interrog. elaborativa', color: '#8B5CF6', sub: '¿Por qué es cierto?' },
-  dualCoding: { icon: LI.Palette, label: 'Codificación dual', color: '#EC4899', sub: 'Palabra + dibujo' },
-  cornell: { icon: LI.PenLine, label: 'Notas Cornell', color: '#3B82F6', sub: 'Notas · señales · resumen' },
-  memoryPalace: { icon: LI.Landmark, label: 'Palacio memoria', color: '#A78BFA', sub: 'Ruta + loci' },
-  chunking: { icon: LI.Blocks, label: 'Fragmentación', color: '#F59E0B', sub: 'Bloques pequeños' },
-  matching: { icon: Shuffle, label: 'Matching', color: '#10B981', sub: 'Relaciona pares' },
-  cloze: { icon: Type, label: 'Cloze', color: '#06B6D4', sub: 'Texto con huecos' },
-  categorization: { icon: Puzzle, label: 'Categorizar', color: '#EC4899', sub: 'Agrupa elementos' },
-  retrievalGrid: { icon: LI.LayoutGrid, label: 'Cuadrícula recup.', color: '#84CC16', sub: 'Temas × aspectos' },
-  errorAnalysis: { icon: LI.Bug, label: 'Análisis errores', color: '#EF4444', sub: 'Diario de fallos' },
-  timeline: { icon: LI.History, label: 'Línea de tiempo', color: '#0891B2', sub: 'Causa y efecto' },
-  mindmap: { icon: LI.Network, label: 'Mapa mental', color: '#10B981', sub: 'Ramas desde el centro' },
-  mnemonics: { icon: Key, label: 'Mnemotecnia', color: '#6366F1', sub: 'Reglas para recordar' },
-  teach: { icon: Users, label: 'Enseñar (Protégé)', color: '#EAB308', sub: 'Prepárate para explicar' },
-  sq3r: { icon: LI.BookMarked, label: 'SQ3R', color: '#2563EB', sub: 'Lectura en 5 pasos' },
-  concrete: { icon: LI.Boxes, label: 'Ejemplos concretos', color: '#059669', sub: 'Ancla lo abstracto' },
-  summarize: { icon: AlignLeft, label: 'Resumen progresivo', color: '#64748B', sub: 'De sección a global' },
-  rubberDuck: { icon: LI.Bird, label: 'Pato de goma', color: '#F472B6', sub: 'Verbaliza sin parar' },
+  flashcards: { icon: BookOpen, label: 'Flashcards', color: '#8B5CF6', sub: 'Pregunta · Respuesta · Repetición espaciada' },
 } as const;
 type ToolKey = keyof typeof TOOL_ITEMS;
-const TOOL_DEFAULT_ORDER: ToolKey[] = ['flashcards', 'quizzes', 'blurting', 'feynman', 'spacedRep', 'leitner', 'interleaving', 'selfExplain', 'elaborate', 'dualCoding', 'cornell', 'memoryPalace', 'chunking', 'matching', 'cloze', 'categorization', 'retrievalGrid', 'errorAnalysis', 'timeline', 'mindmap', 'mnemonics', 'teach', 'sq3r', 'concrete', 'summarize', 'rubberDuck'];
+const TOOL_DEFAULT_ORDER: ToolKey[] = ['flashcards'];
 
 const EASE = "cubic-bezier(0.16, 1, 0.3, 1)";
 const REVIEW_LEVEL_COLORS = ['#EF4444', '#F97316', '#F59E0B', '#FBBF24', '#EAB308', '#A3E635', '#84CC16', '#4ADE80', '#22C55E', '#10B981'];
@@ -551,32 +526,6 @@ function FolderTile({ g, color, count, onOpen, onRename, onDelete }: { g: string
   );
 }
 const courseColorSafe = (c: string) => c;
-
-function ToolSortableRow({ id, tool, isActive, onClick, onContextMenu }: { id: ToolKey; tool: typeof TOOL_ITEMS[ToolKey]; isActive: boolean; onClick: () => void; onContextMenu?: () => void }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
-  const ToolIcon = tool.icon;
-  return (
-    <div
-      ref={setNodeRef}
-      {...attributes}
-      {...listeners}
-      onClick={onClick}
-      onContextMenu={e => { e.preventDefault(); e.stopPropagation(); onContextMenu?.(); }}
-      style={{ transform: CSS.Transform.toString(transform), transition, touchAction: 'none', cursor: isDragging ? 'grabbing' : 'pointer', opacity: isDragging ? 0.45 : 1, display: 'flex', alignItems: 'center', gap: 12, padding: '12px 13px', borderRadius: 13, border: `1px solid ${isActive ? `${tool.color}4d` : 'var(--border-subtle)'}`, background: isActive ? `${tool.color}0d` : 'var(--bg-elevated)', boxShadow: isActive ? `0 0 0 1px ${tool.color}14, 0 6px 18px ${tool.color}12` : '0 1px 2px rgba(0,0,0,0.04)' }}
-      onMouseEnter={e => { if (!isActive) { e.currentTarget.style.borderColor = `${tool.color}4d`; e.currentTarget.style.background = `${tool.color}08`; e.currentTarget.style.boxShadow = `0 6px 18px ${tool.color}10`; } }}
-      onMouseLeave={e => { if (!isActive) { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.04)'; } }}
-      title={isActive ? `${tool.label} · activo` : `Crear ${tool.label} · mantén pulsado para reordenar`}>
-      <div style={{ width: 40, height: 40, borderRadius: 11, background: `${tool.color}12`, border: `1px solid ${tool.color}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-        <ToolIcon size={17} style={{ color: tool.color }} />
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: isActive ? tool.color : 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tool.label}</div>
-        <div style={{ fontSize: 9.5, color: 'var(--text-tertiary)', marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tool.sub}</div>
-      </div>
-      {isActive && <Check size={14} style={{ color: tool.color, flexShrink: 0 }} />}
-    </div>
-  );
-}
 
 // --- Per-tool practice overlay (each tool has its own review flow) ---
 const shuffleArr = <T,>(arr: T[]): T[] => {
@@ -1860,10 +1809,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   }, [editingNoteId]);
   // Study mode state
   const [showMaterialsDropdown, setShowMaterialsDropdown] = useState(false);
-  type StudyTool = 'none' | 'flashcards' | 'quizzes' | 'notes' | 'mindmap' | 'review' | 'blurting' | 'feynman'
-    | 'freeRecall' | 'leitner' | 'summarize' | 'selfExplain' | 'teach' | 'matching' | 'cloze' | 'timeline'
-    | 'categorization' | 'errorAnalysis' | 'mnemonics' | 'cornell' | 'memoryPalace' | 'dualCoding' | 'interleaving'
-    | 'retrievalGrid' | 'chunking' | 'elaborate' | 'shadowing' | 'rubberDuck';
+  type StudyTool = 'none' | 'flashcards';
   const [studyToolMode, setStudyToolMode] = useState<StudyTool>('none');
   // Topic toolbar: tag filters
   const [activeTagFilter, setActiveTagFilter] = useState<string | null>(null);
@@ -2613,12 +2559,6 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   };
 
   // Info-first: al pulsar una técnica se abre su Teoría (qué es · cómo · evidencia)
-  const [toolInfo, setToolInfo] = useState<Exclude<ToolKey, 'flashcards'> | null>(null);
-  const openToolInfo = (mode: ToolKey) => {
-    if (mode === 'flashcards') { openFlashcardModal(); return; }
-    setToolInfo(mode);
-  };
-
   const startEditToolMaterial = (mat: SubjectMaterial) => {
     const mode = mat.toolMode as ToolCreatorMode | undefined;
     if (mode && TOOL_CREATOR_META[mode]) {
@@ -3536,71 +3476,33 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                       </div>
                     </div>
 
-                    {/* Modal de Teoría de la técnica (info-first) */}
-                    {toolInfo && (() => {
-                      const m = TOOL_CREATOR_META[toolInfo];
-                      const TIcon = m.icon;
-                      return (
-                        <div style={{ position: 'fixed', inset: 0, zIndex: 2002, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }} onClick={() => setToolInfo(null)}>
-                          <div className="bento-card" style={{ width: 470, padding: 24, borderRadius: 14, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', maxHeight: '84vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
-                              <h3 style={{ fontSize: 17, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 11, margin: 0, fontFamily: "'Inter Tight', sans-serif" }}>
-                                <span style={{ width: 38, height: 38, borderRadius: 11, background: `${m.color}16`, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${m.color}25`, flexShrink: 0 }}>
-                                  <TIcon size={17} style={{ color: m.color }} />
-                                </span>
-                                {m.name}
-                              </h3>
-                              <button onClick={() => setToolInfo(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}><X size={16} /></button>
-                            </div>
-                            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: '2px 0 18px 49px', fontStyle: 'italic' }}>{m.hint}</div>
-
-                            <div style={{ fontSize: 8.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.12em', color: m.color, marginBottom: 7, fontFamily: "'Inter Tight', sans-serif" }}>Qué es</div>
-                            <p style={{ fontSize: 12.5, lineHeight: 1.65, color: 'var(--text-primary)', margin: '0 0 16px' }}>{m.theory.what}</p>
-
-                            <div style={{ fontSize: 8.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.12em', color: m.color, marginBottom: 7, fontFamily: "'Inter Tight', sans-serif" }}>Cómo se aplica</div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
-                              {m.theory.how.map((h, i) => (
-                                <div key={i} style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}>
-                                  <span style={{ width: 17, height: 17, borderRadius: 6, background: `${m.color}16`, color: m.color, fontSize: 9.5, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>{i + 1}</span>
-                                  <span style={{ fontSize: 12, lineHeight: 1.55, color: 'var(--text-secondary)' }}>{h}</span>
-                                </div>
-                              ))}
-                            </div>
-
-                            <div style={{ padding: '11px 13px', borderRadius: 10, background: `${m.color}0a`, border: `1px solid ${m.color}26`, marginBottom: 16 }}>
-                              <div style={{ fontSize: 8.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.12em', color: m.color, marginBottom: 5, fontFamily: "'Inter Tight', sans-serif" }}>Evidencia científica</div>
-                              <div style={{ fontSize: 11.5, lineHeight: 1.55, color: 'var(--text-secondary)' }}>{m.theory.evidence}</div>
-                              <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 6, fontStyle: 'italic' }}>{m.theory.ref}</div>
-                            </div>
-
-                            <button
-                              onClick={() => { const mk = toolInfo; setToolInfo(null); if (!mk) return; setStudyToolMode(mk as any); openToolCreator(mk as any); }}
-                              style={{ width: '100%', height: 40, borderRadius: 10, border: 'none', background: m.color, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', boxShadow: `0 6px 20px ${m.color}30`, transition: 'transform 150ms ' + EASE, fontFamily: "'Inter Tight', sans-serif" }}
-                              onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-1px)'}
-                              onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}>
-                              Crear ejercicio · {m.name}
-                            </button>
+                    <button
+                              onClick={() => setStudyToolMode(studyToolMode === 'flashcards' ? 'none' : 'flashcards')}
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: 12, padding: '12px 13px', borderRadius: 13,
+                                border: `1px solid ${studyToolMode === 'flashcards' ? '#8B5CF64d' : 'var(--border-subtle)'}`,
+                                background: studyToolMode === 'flashcards' ? '#8B5CF60d' : 'var(--bg-elevated)',
+                                boxShadow: studyToolMode === 'flashcards' ? '0 0 0 1px #8B5CF614, 0 6px 18px #8B5CF612' : '0 1px 2px rgba(0,0,0,0.04)',
+                                cursor: 'pointer', transition: 'all 150ms',
+                              }}
+                              onMouseEnter={e => { if (studyToolMode !== 'flashcards') { e.currentTarget.style.borderColor = '#8B5CF64d'; e.currentTarget.style.background = '#8B5CF608'; }}}
+                              onMouseLeave={e => { if (studyToolMode !== 'flashcards') { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = 'var(--bg-elevated)'; }}}
+                              onClick={() => { if (toolDragRef.current) { toolDragRef.current = false; return; } setStudyToolMode(studyToolMode === 'flashcards' ? 'none' : 'flashcards'); }}
+                            >
+                              <div style={{ width: 40, height: 40, borderRadius: 11, background: '#8B5CF612', border: '1px solid #8B5CF620', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                <BookOpen size={17} style={{ color: '#8B5CF6' }} />
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: studyToolMode === 'flashcards' ? '#8B5CF6' : 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Flashcards</div>
+                                <div style={{ fontSize: 9.5, color: 'var(--text-tertiary)', marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Pregunta · Respuesta · Repetición espaciada</div>
+                              </div>
+                              {studyToolMode === 'flashcards' && <Check size={14} style={{ color: '#8B5CF6', flexShrink: 0 }} />}
+</button>
                           </div>
-                        </div>
-                      );
-                    })()}
-                    {/* --- Tool list --- */}
-                    <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 16px 20px', display: 'flex', flexDirection: 'column' }} className="no-scrollbar">
-                      <DndContext sensors={toolSensors} collisionDetection={closestCorners} onDragStart={handleToolDragStart} onDragEnd={handleToolDragEnd} onDragCancel={handleToolDragCancel}>
-                        <SortableContext items={toolOrder} strategy={verticalListSortingStrategy}>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, justifyContent: 'space-between', flex: 1 }}>
-                            {toolOrder.map(mode => (
-                              <ToolSortableRow key={mode} id={mode} tool={TOOL_ITEMS[mode]} isActive={studyToolMode === mode} onClick={() => { if (toolDragRef.current) { toolDragRef.current = false; return; } openToolInfo(mode); }} onContextMenu={() => setStudyToolMode(studyToolMode === mode ? 'none' : mode as any)} />
-                            ))}
-                          </div>
-                        </SortableContext>
-                      </DndContext>
-                    </div>
-                </div>);
-              })()}
-            </div>
-          </div>
-        ) : activeTab === 'overview' ? (
+                  </div>
+                ) : activeTab === 'overview' ? (
+              </div>
+            ) : activeTab === 'overview' ? (
             /* --- OVERVIEW TAB --- */
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
             {/* Big banner */}

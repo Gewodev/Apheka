@@ -2018,45 +2018,6 @@ export default function Ajustes() {
                   </div>
                 </div>
 
-                {/* Respaldo de biblioteca */}
-                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
-                  <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Save size={14} style={{ color: 'var(--accent)' }} /> Respaldo de Música
-                  </h3>
-                  <p style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.5, marginBottom: 14 }}>
-                    Exporta toda tu biblioteca de música (metadatos + archivos de audio) a una carpeta.
-                    Luego puedes importarla desde esa misma carpeta para restaurarla.
-                  </p>
-                  <div style={{ display: 'flex', gap: 10 }}>
-                    <button onClick={async () => {
-                      try {
-                        const selected = await open({ directory: true, title: 'Seleccionar carpeta para exportar música' });
-                        if (!selected) return;
-                        const count = await exportMusicLibrary(selected);
-                        addNotification(`Biblioteca exportada: ${count} archivos copiados`, 'success');
-                      } catch (e) {
-                        addNotification('Error al exportar música', 'error');
-                        console.error(e);
-                      }
-                    }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.15)', color: '#3B82F6' }}>
-                      <Upload size={14} /> Exportar biblioteca
-                    </button>
-                    <button onClick={async () => {
-                      try {
-                        const selected = await open({ directory: true, title: 'Seleccionar carpeta para importar música' });
-                        if (!selected) return;
-                        const count = await importMusicLibrary(selected);
-                        addNotification(`Biblioteca importada: ${count} canciones restauradas`, 'success');
-                      } catch (e) {
-                        addNotification('Error al importar música', 'error');
-                        console.error(e);
-                      }
-                    }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.15)', color: '#10B981' }}>
-                      <Download size={14} /> Importar biblioteca
-                    </button>
-                  </div>
-                </div>
-
                 {/* Zona de Peligro */}
                 <div className="bento-card" style={{ padding: '24px', border: '1px solid rgba(239,68,68,0.15)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>

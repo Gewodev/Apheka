@@ -211,6 +211,10 @@ export default function Musica() {
     clearAllMusicData,
     addNotification,
     importLocalTracks,
+    scanFolderForAudio,
+    checkLocalFileExists,
+    cleanupMissingLocalFiles,
+    importLocalZeroCopy,
     setCoverModalTrackId,
     downloadPath: persistentDownloadPath, setDownloadPathCtx,
     setPipUrl, pipPlaying, pipUrl, pipTitle, queuePipAfter,
@@ -1472,11 +1476,43 @@ export default function Musica() {
           {/* SONGS TABLE / CARDS GRID */}
           {(activeTab === 'biblioteca' || activeTab === 'favoritas') && (
             <div className="bento-card" style={{ padding: '20px 24px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
                 <span className="section-header" style={{ marginBottom: 0, fontSize: 14, color: 'var(--text-primary)' }}>
                   {activeTab === 'favoritas' ? 'Tus Canciones Favoritas' : 'Biblioteca de Canciones'} ({displayTracks.length})
                 </span>
-                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <button onClick={async () => {
+                    try {
+                      const folder = await open({ directory: true, title: 'Seleccionar carpeta con música', multiple: false });
+                      if (folder) {
+                        const count = await importLocalZeroCopy([folder], true);
+                        if (count > 0) addNotification(`${count} canciones agregadas desde carpeta (zero-copy)`, 'success');
+                      }
+                    } catch (e) {
+                      addNotification('Error al escanear carpeta', 'error');
+                    }
+                  }} className="btn-ghost" style={{ height: 30, padding: '0 16px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, borderRadius: 15, fontWeight: 500 }}>
+                    <FolderOpen size={11} /> Añadir carpeta
+                  </button>
+                  <button onClick={async () => {
+                    try {
+                      const files = await open({ filters: [{ name: 'Audio', extensions: ['mp3', 'wav', 'flac', 'ogg', 'm4a', 'aac', 'opus', 'mp4'] }], multiple: true, title: 'Seleccionar archivos de audio' });
+                      if (files && files.length > 0) {
+                        const count = await importLocalZeroCopy(files as string[], false);
+                        if (count > 0) addNotification(`${count} archivo(s) agregado(s) (zero-copy)`, 'success');
+                      }
+                    } catch (e) {
+                      addNotification('Error al agregar archivo(s)', 'error');
+                    }
+                  }} className="btn-ghost" style={{ height: 30, padding: '0 16px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, borderRadius: 15, fontWeight: 500 }}>
+                    <Upload size={11} /> Añadir archivo
+                  </button>
+                  <button onClick={async () => {
+                    const result = await cleanupMissingLocalFiles();
+                    if (result.removed === 0) addNotification('No hay archivos faltantes', 'info');
+                  }} className="btn-ghost" style={{ height: 30, padding: '0 16px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, borderRadius: 15, fontWeight: 500, color: 'var(--error)', borderColor: 'rgba(239,68,68,0.2)' }}>
+                    <Trash2 size={11} /> Limpiar faltantes
+                  </button>
                   {activeTab === 'favoritas' && displayTracks.length > 0 && (
                     <button
                       onClick={() => {
@@ -1834,9 +1870,9 @@ export default function Musica() {
                       onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-strong)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
                       onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>Limpiar</button>
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    {searchResults.map((r, i) => (
-                      <div key={i}
+<div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      {searchResults.map((r) => (
+                        <div key={r.id || `result-${r.webpage_url}`}
                         onContextMenu={(e) => openSearchMenu(e, r)}
                         style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 8px', borderRadius: 10, border: '1px solid transparent', transition: 'all 180ms ease' }}
                         onMouseEnter={e => { e.currentTarget.style.background = 'color-mix(in srgb, var(--bg-elevated) 60%, var(--bg-hover))'; e.currentTarget.style.borderColor = 'var(--border-subtle)'; const ov = e.currentTarget.querySelector('.play-ov') as HTMLElement; if (ov) ov.style.opacity = '1'; const act = e.currentTarget.querySelector('.row-act') as HTMLElement; if (act) act.style.opacity = '1'; }}

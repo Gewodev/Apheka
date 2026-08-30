@@ -311,6 +311,7 @@ export interface Track {
   coverUrl?: string;
   isFavorite: boolean;
   listenedTime: number; // seconds
+  filePath?: string;  // original file path for zero-copy (not copied to app storage)
 }
 
 export interface Playlist {
@@ -556,6 +557,10 @@ interface AppContextType extends AppState {
   deleteTrack: (id: string) => void;
   toggleTrackFavorite: (id: string) => void;
   importLocalTracks: (paths: string[]) => Promise<void>;
+  scanFolderForAudio: (folderPath: string) => Promise<Track[]>;
+  checkLocalFileExists: (track: Track) => Promise<boolean>;
+  cleanupMissingLocalFiles: () => Promise<{ removed: number }>;
+  importLocalZeroCopy: (paths: string[], isFolder?: boolean) => Promise<number>;
   setCoverModalTrackId: Dispatch<SetStateAction<string | null>>;
   isAudioLoading: boolean;
   currentTrackId: string | null;
@@ -2598,6 +2603,148 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addNotification(`${imported} cancion(es) importada(s) correctamente`, 'success');
   }, []);
 
+  // --- Zero-copy: folder scan for audio files ---
+  const scanFolderForAudio = useCallback(async (folderPath: string): Promise<Track[]> => {
+    const { readDir, stat } = await import('@tauri-apps/plugin-fs');
+    const AUDIO_EXTS = new Set(['mp3', 'wav', 'flac', 'ogg', 'm4a', 'aac', 'wma', 'opus', 'mp4', 'aiff', 'ape']);
+    const found: Track[] = [];
+
+    async function scan(dir: string) {
+      try {
+        const entries = await readDir(dir);
+        for (const entry of entries) {
+          const fullPath = `${dir}/${entry.name}`;
+          if (entry.isDirectory) {
+            await scan(fullPath);
+          } else if (entry.isFile) {
+            const ext = fullPath.split('.').pop()?.toLowerCase();
+            if (ext && AUDIO_EXTS.has(ext)) {
+              try {
+                const meta = await extractAudioMetadata(fullPath);
+                const name = fullPath.split(/[/\\]/).pop() || 'Unknown';
+                const trackId = crypto.randomUUID();
+                const newTrack: Track = {
+                  id: crypto.randomUUID(),
+                  title: meta.title || fullPath.split(/[/\\]/).pop()?.replace(/\.[^/.]+$/, '') || 'Unknown',
+                  artist: meta.artist || '',
+                  duration: Math.round(meta.duration || 0),
+                  source: 'local',
+                  url: fullPath,
+                  coverImage: meta.coverUrl || undefined,
+                  isFavorite: false,
+                  listenedTime: 0,
+                  filePath: fullPath,
+                };
+                // Save metadata to IndexedDB for persistence
+                await saveTrackMetadata({ ...newTrack, id: trackId });
+                found.push({ ...newTrack, id: trackId });
+              } catch {
+                // Skip files that can't be read
+              }
+            }
+          }
+        }
+      } catch { /* ignore read errors */ }
+    }
+
+    await scan(folderPath);
+    return found;
+  }, []);
+
+  // --- Zero-copy: check if local file still exists ---
+  const checkLocalFileExists = useCallback(async (track: Track): Promise<boolean> => {
+    if (!track.filePath) return false;
+    try {
+      const { stat } = await import('@tauri-apps/plugin-fs');
+      await stat(track.filePath);
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  // --- Zero-copy: cleanup missing files ---
+  const cleanupMissingLocalFiles = useCallback(async () => {
+    const localTracks = tracks.filter(t => t.source === 'local' && t.filePath);
+    if (localTracks.length === 0) return { removed: 0 };
+    
+    let removed = 0;
+    const stillExist: Track[] = [];
+    
+    for (const track of localTracks) {
+      const exists = await checkLocalFileExists(track);
+      if (exists) {
+        stillExist.push(track);
+      } else {
+        removed++;
+      }
+    }
+    
+    if (removed > 0) {
+      const allTracks = tracks.filter(t => t.source !== 'local' || !t.filePath);
+      const newTracks = [...allTracks, ...stillExist];
+      setTracks(newTracks);
+      addNotification(`${removed} canciones eliminadas (archivo no encontrado)`, 'info');
+    }
+    
+    return { removed };
+  }, [tracks, checkLocalFileExists, setTracks, addNotification]);
+
+  // --- Zero-copy: import single file or folder (zero-copy, follows path) ---
+  const importLocalZeroCopy = useCallback(async (paths: string[], isFolder = false): Promise<number> => {
+    if (!paths || paths.length === 0) return 0;
+    
+    let imported = 0;
+    const newTracks: Track[] = [];
+    
+    for (const path of paths) {
+      try {
+        // Check if already in library
+        const exists = tracks.some(t => t.filePath === path);
+        if (exists) continue;
+        
+        // For folders, scan recursively
+        if (isFolder) {
+          const found = await scanFolderForAudio(path);
+          for (const track of found) {
+            newTracks.push(track);
+          }
+        } else {
+          // Single file - extract metadata and add
+          const meta = await extractAudioMetadata(path);
+          const name = path.split(/[/\\]/).pop() || 'Unknown';
+          const trackId = crypto.randomUUID();
+          const newTrack: Track = {
+            id: trackId,
+            title: meta.title || name.replace(/\.[^/.]+$/, ''),
+            artist: meta.artist || '',
+            duration: Math.round(meta.duration || 0),
+            source: 'local',
+            url: path,
+            coverImage: meta.coverUrl || undefined,
+            isFavorite: false,
+            listenedTime: 0,
+            filePath: path,
+          };
+          await saveTrackMetadata({ ...newTrack, id: trackId });
+          newTracks.push(newTrack);
+        }
+      } catch (err) {
+        console.error('Error importing:', path, err);
+      }
+    }
+    
+    if (newTracks.length > 0) {
+      setTracks(prev => [...prev, ...newTracks]);
+      for (const track of newTracks) {
+        await saveTrackMetadata(track).catch(() => {});
+      }
+      addNotification(`${newTracks.length} cancion(es) agregadas (zero-copy)`, 'success');
+      return newTracks.length;
+    }
+    return 0;
+  }, [tracks, setTracks, addNotification]);
+
    const playTrack = useCallback((id: string) => {
     repeatOnePlayedRef.current = false;
     // Auto-detect group context when playing a track outside the current pool
@@ -3904,6 +4051,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addEvent, updateEvent, deleteEvent,
     addHabit, updateHabit, deleteHabit, setHabits,
     addTrack, updateTrack, deleteTrack, toggleTrackFavorite, importLocalTracks,
+    scanFolderForAudio, checkLocalFileExists, cleanupMissingLocalFiles, importLocalZeroCopy,
     playTrack, toggleMusicPlayback, setIsPlayingMusic, clearCurrentTrack, setMusicVolume: setMusicVolumeCb, setMusicProgress: setMusicProgressCb, setMusicProgressRaw: setMusicProgress,
     setShuffleMode, setRepeatMode, setMusicQueue, setQueueSource, clearAllMusicData,
     exportMusicLibrary, importMusicLibrary,
