@@ -37,6 +37,7 @@ import { fuzzyMatch } from '../../lib/fuzzy';
 import { usePlannerDay } from '../../lib/plannerDay';
 import { useMaterialMenu } from '../ui/MaterialContextMenu';
 import ImageEditorModal from '../ui/ImageEditorModal';
+import StudySets, { type SetCard, type StudySetsMode } from './cursos/StudySets';
 
 export const MATERIAL_META = {
   resource: { label: 'Recurso', icon: File },
@@ -1351,6 +1352,28 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
     markDirty();
   };
 
+  // --- Ecuaciones / notación matemática ---
+  const applyMathFormat = (cmd: 'superscript' | 'subscript') => {
+    document.execCommand(cmd, false);
+    markDirty();
+    histRef.current.capture(true);
+  };
+  // Convierte ^ y _ en super/subíndices y envuelve el resultado en un span matemático.
+  // Con texto seleccionado lo transforma; sin selección inserta x² editable.
+  const insertMathAtCaret = () => {
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return;
+    const raw = sel.toString().trim();
+    const conv = (raw || 'x^2')
+      .replace(/\^\{([^}]+)\}/g, '<sup>$1</sup>')
+      .replace(/_\{([^}]+)\}/g, '<sub>$1</sub>')
+      .replace(/\^(\S+)/g, '<sup>$1</sup>')
+      .replace(/_(\S+)/g, '<sub>$1</sub>');
+    document.execCommand('insertHTML', false, `<span style="font-family:'Cambria Math','STIX Two Math',Georgia,serif;font-style:italic;letter-spacing:0.02em;background:rgba(139,92,246,0.10);border:1px solid rgba(139,92,246,0.20);border-radius:6px;padding:2px 8px;white-space:nowrap;">${conv}</span>&nbsp;`);
+    markDirty();
+    histRef.current.capture(true);
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', background: 'transparent' }}>
       {editable && !hideToolbar && (
@@ -1385,6 +1408,21 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
             onMouseEnter={e => e.currentTarget.style.background = `${courseColor}12`}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          </button>
+          <div style={{ width: 1, height: 18, background: 'var(--border-subtle)', margin: '0 6px', flexShrink: 0 }} />
+          <button onClick={() => applyMathFormat('superscript')} title="Superíndice (x²)"
+            style={{ width: 26, height: 26, borderRadius: 5, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, transition: 'all 150ms' }}
+            onMouseEnter={e => e.currentTarget.style.background = `${courseColor}12`}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>x²</button>
+          <button onClick={() => applyMathFormat('subscript')} title="Subíndice (x₂)"
+            style={{ width: 26, height: 26, borderRadius: 5, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, transition: 'all 150ms' }}
+            onMouseEnter={e => e.currentTarget.style.background = `${courseColor}12`}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>x₂</button>
+          <button onClick={insertMathAtCaret} title="Ecuación — selecciona texto y convierte ^ y _ (ej. x^2, H_2O, x^{n+1})"
+            style={{ width: 26, height: 26, borderRadius: 5, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+            onMouseEnter={e => e.currentTarget.style.background = `${courseColor}12`}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+            <Sigma size={12} />
           </button>
           <div style={{ flex: 1 }} />
           {toolbarEnd}
@@ -1908,8 +1946,12 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   };
 
   const startReview = () => {
-    const fcs = safeArr(activeTopic?.flashcards);
-    if (fcs.length === 0) { toast('No hay flashcards para repasar'); return; }
+    const allFcs = safeArr(activeTopic?.flashcards) as SetCard[];
+    // El repaso respeta el grupo activo: si estás dentro de una carpeta, solo repasa ese set
+    const fcs = activeToolGroup !== 'todos'
+      ? allFcs.filter(f => { const gn = ((f as any).groupName || '') as string; return gn === activeToolGroup || gn.startsWith(activeToolGroup + '/'); })
+      : allFcs;
+    if (fcs.length === 0) { toast.error(activeToolGroup !== 'todos' ? 'No hay flashcards en este grupo' : 'No hay flashcards para repasar'); return; }
     const shuffled = [...fcs].sort((a, b) => a.nextReview - b.nextReview);
     setReviewDeck(shuffled); setReviewIndex(0); setReviewFlipped(false);
     setReviewStats({ correct: 0, again: 0 }); setReviewing(true);
@@ -2322,6 +2364,12 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
       if (e.key === 'Escape') {
         if (noteMenuTarget) { setNoteMenuTarget(null); return; }
         if (notasTabMenuTarget) { setNotasTabMenuTarget(null); return; }
+        if (studySets) { setStudySets(null); return; }
+        if (topicGroupModal) { setTopicGroupModal(null); return; }
+        if (moveToGroupMat) { setMoveToGroupMat(null); return; }
+        if (confirmDelToolMat) { setConfirmDelToolMat(null); return; }
+        if (confirmDelGroup) { setConfirmDelGroup(null); return; }
+        if (showAddLinkModal) { setShowAddLinkModal(false); return; }
         if (showMaterialModal) setShowMaterialModal(false);
         else if (showFlashcardModal) setShowFlashcardModal(false);
         else if (showGroupModal) setShowGroupModal(false);
@@ -2332,7 +2380,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [showMaterialModal, showFlashcardModal, showGroupModal, showTopicModal, showEditCourse, noteMenuTarget, reviewing]);
+  }, [showMaterialModal, showFlashcardModal, showGroupModal, showTopicModal, showEditCourse, noteMenuTarget, notasTabMenuTarget, reviewing, studySets, topicGroupModal, moveToGroupMat, confirmDelToolMat, confirmDelGroup, showAddLinkModal]);
 
   // Close note menus on click outside
   useEffect(() => {
@@ -2730,6 +2778,8 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const [confirmDelGroup, setConfirmDelGroup] = useState<string | null>(null);
   const [newGroupName, setNewGroupName] = useState('');
   const [activeToolGroup, setActiveToolGroup] = useState<string>('todos');
+  // Sets de estudio estilo Quizlet (Tarjetas/Prueba/Emparejar) por grupo del tema
+  const [studySets, setStudySets] = useState<{ mode: StudySetsMode } | null>(null);
   const handleDeleteMaterial = (mat: SubjectMaterial) => {
     setConfirmDelToolMat({ id: mat.id, name: mat.name || mat.title || 'Material' });
   };
@@ -2745,7 +2795,13 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     if (activeToolGroup === oldV) setActiveToolGroup(newV);
   };
   const deleteToolGroup = (g: string) => {
-    updateCourse(course.id, { studyTopics: (safeArr(course.studyTopics)).map(tp => tp.id === activeTopic?.id ? { ...tp, toolGroups: ((((tp as any).toolGroups || []) as string[])).filter(x => x !== g && !x.startsWith(g + '/')), materials: (safeArr(tp.materials)).filter(m => { const gn = (m as any).groupName || ''; return gn !== g && !gn.startsWith(g + '/'); }) } : tp) } as any);
+    updateCourse(course.id, { studyTopics: (safeArr(course.studyTopics)).map(tp => tp.id === activeTopic?.id ? {
+      ...tp,
+      toolGroups: ((((tp as any).toolGroups || []) as string[])).filter(x => x !== g && !x.startsWith(g + '/')),
+      materials: (safeArr(tp.materials)).filter(m => { const gn = (m as any).groupName || ''; return gn !== g && !gn.startsWith(g + '/'); }),
+      // Las flashcards del grupo también se eliminan (antes quedaban huérfanas)
+      flashcards: (safeArr(tp.flashcards)).filter(f => { const gn = ((f as any).groupName || '') as string; return gn !== g && !gn.startsWith(g + '/'); }),
+    } : tp) } as any);
     if (activeToolGroup === g || activeToolGroup.startsWith(g + '/')) setActiveToolGroup('todos');
     toast.success('Carpeta eliminada con su contenido');
   };
@@ -2753,6 +2809,11 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     updateCourse(course.id, { studyTopics: (safeArr(course.studyTopics)).map(tp => tp.id === activeTopic?.id ? { ...tp, materials: (safeArr(tp.materials)).map(m => m.id === matId ? ({ ...m, groupName: undefined } as any) : m) } : tp) } as any);
     toast.success('Movido al tema principal');
   };
+  // StudySets (modal Quizlet): persiste el array COMPLETO de flashcards del tema
+  const handleStudySetsChange = useCallback((next: SetCard[]) => {
+    if (!activeTopic) return;
+    updateCourse(course.id, { studyTopics: (safeArr(course.studyTopics)).map(t => t.id === activeTopic.id ? { ...t, flashcards: next } : t) });
+  }, [activeTopic, course.id, course.studyTopics, updateCourse]);
   const handleDeleteResourceFromOverview = (matId: string) => {
     updateCourse(course.id, { studyTopics: (safeArr(course.studyTopics)).map(t => ({ ...t, materials: (safeArr(t.materials)).filter(m => m.id !== matId) })) });
     toast.success('Material eliminado');
@@ -3476,33 +3537,40 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                       </div>
                     </div>
 
-                    <button
-                              onClick={() => setStudyToolMode(studyToolMode === 'flashcards' ? 'none' : 'flashcards')}
-                              style={{
-                                display: 'flex', alignItems: 'center', gap: 12, padding: '12px 13px', borderRadius: 13,
-                                border: `1px solid ${studyToolMode === 'flashcards' ? '#8B5CF64d' : 'var(--border-subtle)'}`,
-                                background: studyToolMode === 'flashcards' ? '#8B5CF60d' : 'var(--bg-elevated)',
-                                boxShadow: studyToolMode === 'flashcards' ? '0 0 0 1px #8B5CF614, 0 6px 18px #8B5CF612' : '0 1px 2px rgba(0,0,0,0.04)',
-                                cursor: 'pointer', transition: 'all 150ms',
-                              }}
-                              onMouseEnter={e => { if (studyToolMode !== 'flashcards') { e.currentTarget.style.borderColor = '#8B5CF64d'; e.currentTarget.style.background = '#8B5CF608'; }}}
-                              onMouseLeave={e => { if (studyToolMode !== 'flashcards') { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = 'var(--bg-elevated)'; }}}
-                              onClick={() => { if (toolDragRef.current) { toolDragRef.current = false; return; } setStudyToolMode(studyToolMode === 'flashcards' ? 'none' : 'flashcards'); }}
-                            >
-                              <div style={{ width: 40, height: 40, borderRadius: 11, background: '#8B5CF612', border: '1px solid #8B5CF620', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                <BookOpen size={17} style={{ color: '#8B5CF6' }} />
-                              </div>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: studyToolMode === 'flashcards' ? '#8B5CF6' : 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Flashcards</div>
-                                <div style={{ fontSize: 9.5, color: 'var(--text-tertiary)', marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Pregunta · Respuesta · Repetición espaciada</div>
-                              </div>
-                              {studyToolMode === 'flashcards' && <Check size={14} style={{ color: '#8B5CF6', flexShrink: 0 }} />}
-</button>
-                          </div>
-                  </div>
-                ) : activeTab === 'overview' ? (
-              </div>
-            ) : activeTab === 'overview' ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '14px 14px 0', flexShrink: 0 }}>
+                      {(() => {
+                        const allFcs = safeArr(activeTopic?.flashcards) as SetCard[];
+                        const setCards = activeToolGroup === 'todos' ? allFcs : allFcs.filter(f => { const gn = ((f as any).groupName || '') as string; return gn === activeToolGroup || gn.startsWith(activeToolGroup + '/'); });
+                        return ([
+                          { key: 'cards' as const, icon: BookOpen, label: 'Tarjetas', sub: `${setCards.length} · repetición espaciada`, color: '#8B5CF6' },
+                          { key: 'test' as const, icon: ClipboardList, label: 'Prueba', sub: setCards.length < 2 ? 'Necesita 2+ tarjetas' : 'Test generado del set', color: '#F59E0B' },
+                          { key: 'match' as const, icon: Shuffle, label: 'Emparejar', sub: setCards.length < 2 ? 'Necesita 2+ tarjetas' : 'Término ↔ definición', color: '#10B981' },
+                        ]).map(t => (
+                          <button key={t.key}
+                            onClick={() => setStudySets({ mode: t.key })}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: 12, padding: '11px 13px', borderRadius: 13,
+                              border: `1px solid ${t.color}30`,
+                              background: `${t.color}0a`,
+                              boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                              cursor: 'pointer', transition: 'all 150ms', textAlign: 'left', width: '100%',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.borderColor = `${t.color}55`; e.currentTarget.style.background = `${t.color}14`; }}
+                            onMouseLeave={e => { e.currentTarget.style.borderColor = `${t.color}30`; e.currentTarget.style.background = `${t.color}0a`; }}
+                          >
+                            <div style={{ width: 38, height: 38, borderRadius: 11, background: `${t.color}14`, border: `1px solid ${t.color}28`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                              <t.icon size={16} style={{ color: t.color }} />
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.label}</div>
+                              <div style={{ fontSize: 9.5, color: 'var(--text-tertiary)', marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.sub}</div>
+                            </div>
+                          </button>
+                        ));
+                      })()}
+                    </div>
+                    </div>
+                  ) : activeTab === 'overview' ? (
             /* --- OVERVIEW TAB --- */
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
             {/* Big banner */}
@@ -4684,7 +4752,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                           const coursePlanDone = coursePlan.filter(s => s.completed).length;
                           const realIntensity = Math.min(1, courseRealMin / Math.max(60, coursePlanMin || 0));
 
-                          const courseNotes = notes.filter(nn => nn.course === course.id && !nn.deletedAt).length;
+                          const courseNotes = notes.filter(nn => nn.course === course.name && !nn.deletedAt).length;
                           const courseTasksDone = courseTasks.filter(t => t.status === 'completado').length;
                           const coursePlanPct = coursePlanMin > 0 ? Math.round((courseRealMin / coursePlanMin) * 100) : (courseRealMin > 0 ? 100 : 0);
                           const coursePlanInt = coursePlan.length > 0 ? coursePlan.reduce((sm, s) => sm + (s.intensity || 0), 0) / coursePlan.length : 0;
@@ -7255,6 +7323,46 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
           </div>
         </div>
       )}
+      {confirmDelGroup && (() => {
+        const g = confirmDelGroup;
+        const mats = (safeArr(activeTopic?.materials)).filter(m => { const gn = ((m as any).groupName || '') as string; return gn === g || gn.startsWith(g + '/'); }).length;
+        const fcs = (safeArr(activeTopic?.flashcards)).filter(f => { const gn = ((f as any).groupName || '') as string; return gn === g || gn.startsWith(g + '/'); }).length;
+        const subs = (((activeTopic as any)?.toolGroups || []) as string[]).filter(x => x.startsWith(g + '/')).length;
+        return (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 2003, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }} onClick={() => setConfirmDelGroup(null)}>
+          <div className="bento-card" style={{ width: 400, padding: 22, borderRadius: 14, background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+              <span style={{ width: 38, height: 38, borderRadius: 11, background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <AlertTriangle size={17} style={{ color: '#EF4444' }} />
+              </span>
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', margin: 0, fontFamily: "'Inter Tight', sans-serif" }}>Eliminar grupo</h3>
+            </div>
+            <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.55, margin: '0 0 10px' }}>
+              Se eliminará <b style={{ color: 'var(--text-primary)', fontWeight: 600 }}>“{g}”</b> con todo su contenido:
+            </p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+              {[`${mats} material${mats === 1 ? '' : 'es'}`, `${fcs} tarjet${fcs === 1 ? 'a' : 'as'}`, subs > 0 ? `${subs} subgrupo${subs === 1 ? '' : 's'}` : null].filter(Boolean).map((t, i) => (
+                <span key={i} style={{ fontSize: 10.5, fontWeight: 600, color: '#EF4444', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', padding: '4px 10px', borderRadius: 8 }}>{t}</span>
+              ))}
+            </div>
+            <p style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.5, margin: '0 0 16px' }}>Esta acción no se puede deshacer.</p>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setConfirmDelGroup(null)} style={{ flex: 1, height: 38, borderRadius: 9, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter Tight', sans-serif" }}>Cancelar</button>
+              <button onClick={() => { deleteToolGroup(g); setConfirmDelGroup(null); }} style={{ flex: 1, height: 38, borderRadius: 9, border: 'none', background: '#EF4444', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', boxShadow: '0 6px 20px rgba(239,68,68,0.30)', fontFamily: "'Inter Tight', sans-serif" }}>Sí, eliminar</button>
+            </div>
+          </div>
+        </div>
+        );
+      })()}
+      <StudySets
+        open={!!studySets}
+        topicTitle={activeTopic?.title || ''}
+        groupName={activeToolGroup !== 'todos' ? activeToolGroup : null}
+        accent={course.color}
+        flashcards={(safeArr(activeTopic?.flashcards)) as SetCard[]}
+        onChange={handleStudySetsChange}
+        onClose={() => setStudySets(null)}
+      />
       {confirmDelToolMat && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 2003, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }} onClick={() => setConfirmDelToolMat(null)}>
           <div className="bento-card" style={{ width: 380, padding: 22, borderRadius: 14, background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }} onClick={e => e.stopPropagation()}>
