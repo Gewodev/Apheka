@@ -4010,29 +4010,46 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (e) { console.error('Firebase init failed:', e); return null; }
   }, []);
 
-  // ─── Task deadline notifications ───
-  const notifiedDueTasksRef = useRef<Set<string>>(new Set());
+  // ─── Task & Event deadline notifications (con Anti-Spam y Tiempos Inteligentes) ───
   useEffect(() => {
     const check = () => {
+      if (!settings.notifications) return;
       const now = Date.now();
       const oneDayMs = 86_400_000;
+      
+      // Chequeo de tareas
       tasks.forEach(t => {
         if (t.status === 'completado' || !t.dueDate) return;
         const due = new Date(t.dueDate).getTime();
         if (isNaN(due)) return;
         const diff = due - now;
-        // Within 1 day AND not already notified
-        if (diff > 0 && diff <= oneDayMs && !notifiedDueTasksRef.current.has(t.id)) {
-          notifiedDueTasksRef.current.add(t.id);
+
+        // Vence dentro de las próximas 24h
+        if (diff > 0 && diff <= oneDayMs) {
           const dueStr = new Date(t.dueDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
-          import('../lib/notifications').then(m => m.notifyTaskDueSoon(t.title, dueStr));
+          import('../lib/notifications').then(m => m.notifyTaskDueSoon(t.title, dueStr, t.id));
+        } else if (diff < 0 && Math.abs(diff) < 7 * oneDayMs) {
+          // Tarea ya vencida (vencida en los últimos 7 días) -> aviso reflexivo cada 6h max
+          import('../lib/notifications').then(m => m.notifyTaskOverdue(t.title, t.id));
+        }
+      });
+
+      // Chequeo de eventos próximos (próximos 30 min)
+      events.forEach(e => {
+        if (!e.date) return;
+        const evTime = new Date(`${e.date}T${e.startTime || '00:00'}`).getTime();
+        if (isNaN(evTime)) return;
+        const diff = evTime - now;
+        if (diff > 0 && diff <= 30 * 60 * 1000) {
+          import('../lib/notifications').then(m => m.notifyUpcomingEvent(e.title, e.startTime || 'pronto', e.id));
         }
       });
     };
+
     check();
-    const interval = setInterval(check, 1_800_000);
+    const interval = setInterval(check, 1_800_000); // Chequea cada 30 minutos sin saturar
     return () => clearInterval(interval);
-  }, [tasks]);
+  }, [tasks, events, settings.notifications]);
 
   const value: AppContextType = {
     tasks, habits, notes, noteFolders, courses, events, tracks, studySessions, plannedSessions,

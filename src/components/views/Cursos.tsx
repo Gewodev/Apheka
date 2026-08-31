@@ -9,7 +9,7 @@ import {
   ArrowLeftRight, BarChart3, Calendar, Flag, ArrowUpDown, Star, EyeOff, Strikethrough, AlignLeft, AlignCenter, AlertTriangle, ArrowRight,
   Users, MoreVertical, FileText, CheckCircle, FileSpreadsheet, Image as ImageIcon, Music, Link2, Lock,
   Download, ArrowDownToLine, ArrowUpFromLine, Package, PackageOpen, FileDown, FileUp, Mic,
-  ScrollText, Shuffle, Workflow, Puzzle, Clock, Minus,
+  ScrollText, Shuffle, Workflow, Puzzle, Clock, Minus, Sparkles, Brain, Timer,
   TreePine, Map as MapIcon, Split, Tag,
   Zap, DollarSign, CalendarDays,
   Library, Files, ClipboardList, Trophy,
@@ -515,14 +515,47 @@ function MaterialCard({ mat, dragAttributes, dragListeners, onEdit, onDelete, on
 // Tarjeta de carpeta arrastrable-destino (drop de materiales dentro de ella)
 function FolderTile({ g, color, count, onOpen, onRename, onDelete }: { g: string; color: string; count: number; onOpen: () => void; onRename: () => void; onDelete: () => void }) {
   const { setNodeRef, isOver } = useDroppable({ id: 'grp-' + g });
+  const [hovered, setHovered] = useState(false);
+  const folderName = g.split('/').pop() || g;
   return (
-    <div ref={setNodeRef} onClick={onOpen} title="Abrir carpeta · arrastra materiales aquí"
-      style={{ minHeight: 118, borderRadius: 14, border: isOver ? `2px solid ${color}` : `1.5px dashed ${color}45`, background: isOver ? `linear-gradient(160deg, ${color}26, transparent 90%)` : `linear-gradient(160deg, ${courseColorSafe(color)}0d, transparent 90%)`, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, transition: 'all 180ms cubic-bezier(0.16,1,0.3,1)', transform: isOver ? 'scale(1.04)' : 'none', boxShadow: isOver ? `0 0 0 4px ${color}20` : 'none', animation: isOver ? 'folderDropPulse 1.2s ease-in-out infinite' : 'none' }}
-      onMouseEnter={e => { if (!isOver) { e.currentTarget.style.borderColor = color + '80'; e.currentTarget.style.transform = 'translateY(-2px)'; } const acts = e.currentTarget.querySelectorAll('div[style*="opacity: 0"]') as any; acts.forEach ? null : null; Array.from(e.currentTarget.children).forEach(ch => { const st = (ch as HTMLElement).style; if (st.opacity === '0') st.opacity = '1'; }); }}
-      onMouseLeave={e => { if (!isOver) { e.currentTarget.style.borderColor = color + '45'; e.currentTarget.style.transform = 'none'; } }}>
-      <LI.Folder size={isOver ? 32 : 28} style={{ color, opacity: isOver ? 1 : 0.9, transition: 'all 180ms' }} />
-      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>{g.split('/').pop()}</div>
-      <div style={{ fontSize: 9.5, color: 'var(--text-tertiary)' }}>{count} elemento{count !== 1 ? 's' : ''}</div>
+    <div ref={setNodeRef} onClick={onOpen} title="Abrir grupo / carpeta · arrastra materiales aquí"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        minHeight: 124, borderRadius: 16, position: 'relative',
+        border: isOver ? `2px solid ${color}` : hovered ? `1px solid ${color}60` : `1px solid ${color}30`,
+        background: isOver ? `linear-gradient(140deg, ${color}26 0%, var(--bg-surface) 100%)` : `linear-gradient(140deg, ${color}12 0%, var(--bg-surface) 100%)`,
+        cursor: 'pointer', display: 'flex', flexDirection: 'column', padding: '16px 16px 14px',
+        justifyContent: 'space-between', transition: 'all 220ms cubic-bezier(0.16,1,0.3,1)',
+        transform: isOver ? 'scale(1.03)' : hovered ? 'translateY(-3px)' : 'none',
+        boxShadow: isOver ? `0 0 0 4px ${color}20` : hovered ? `0 12px 32px ${color}22` : '0 1px 3px rgba(0,0,0,0.04)',
+      }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
+        <div style={{ width: 40, height: 40, borderRadius: 12, background: `${color}18`, border: `1px solid ${color}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <FolderOpen size={19} style={{ color, opacity: isOver ? 1 : 0.9 }} />
+        </div>
+        <div style={{ display: 'flex', gap: 4, opacity: hovered ? 1 : 0, transition: 'opacity 180ms ease' }}>
+          <button onClick={(e) => { e.stopPropagation(); onRename(); }} title="Editar nombre del grupo"
+            style={{ width: 26, height: 26, borderRadius: 7, border: 'none', background: 'var(--bg-hover)', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 120ms' }}>
+            <Pencil size={12} />
+          </button>
+          <button onClick={(e) => { e.stopPropagation(); onDelete(); }} title="Eliminar grupo"
+            style={{ width: 26, height: 26, borderRadius: 7, border: 'none', background: 'rgba(239,68,68,0.12)', cursor: 'pointer', color: '#EF4444', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 120ms' }}>
+            <Trash2 size={12} />
+          </button>
+        </div>
+      </div>
+      <div style={{ marginTop: 12, minWidth: 0 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {folderName}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+          <span style={{ fontSize: 10, fontWeight: 600, color: color, background: `${color}14`, padding: '2px 8px', borderRadius: 99, letterSpacing: '0.04em' }}>
+            {count} {count === 1 ? 'elemento' : 'elementos'}
+          </span>
+          <span style={{ fontSize: 9.5, color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif" }}>Grupo</span>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1899,6 +1932,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
 
   const handleSaveFlashcard = () => {
     if (!activeTopic) return;
+    const targetGroup = activeToolGroup !== 'todos' ? activeToolGroup : undefined;
     if (fcMode === 'masivo' && !editingFlashcard) {
       const cards = parseBulkFlashcards().filter(c => c.a);
       if (cards.length === 0) { toast.error('Formato: pregunta - respuesta (una por línea)'); return; }
@@ -1907,6 +1941,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
         id: Math.random().toString() + i,
         question: c.q, answer: c.a, difficulty: fcDifficulty,
         lastReviewed: now, nextReview: now,
+        ...(targetGroup ? { groupName: targetGroup } : {}),
       }));
       updateCourse(course.id, {
         studyTopics: (safeArr(course.studyTopics)).map(t => t.id === activeTopic.id
@@ -1919,9 +1954,9 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     }
     if (!fcQuestion.trim() || !fcAnswer.trim()) return;
     const now = Date.now();
-    const newFc: TopicFlashcard = editingFlashcard
-      ? { ...editingFlashcard, question: fcQuestion.trim(), answer: fcAnswer.trim(), difficulty: fcDifficulty }
-      : { id: Math.random().toString(), question: fcQuestion.trim(), answer: fcAnswer.trim(), difficulty: fcDifficulty, lastReviewed: now, nextReview: now };
+    const newFc: TopicFlashcard = (editingFlashcard
+      ? { ...editingFlashcard, question: fcQuestion.trim(), answer: fcAnswer.trim(), difficulty: fcDifficulty, ...(targetGroup && !(editingFlashcard as any).groupName ? { groupName: targetGroup } : {}) }
+      : { id: Math.random().toString(), question: fcQuestion.trim(), answer: fcAnswer.trim(), difficulty: fcDifficulty, lastReviewed: now, nextReview: now, ...(targetGroup ? { groupName: targetGroup } : {}) }) as any;
     updateCourse(course.id, {
       studyTopics: (safeArr(course.studyTopics)).map(t => t.id === activeTopic.id ? {
         ...t,
@@ -2315,6 +2350,16 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   }, []);
 
 
+
+  const [confirmDelToolMat, setConfirmDelToolMat] = useState<{ id: string; name: string } | null>(null);
+  const [moveToGroupMat, setMoveToGroupMat] = useState<{ id: string; name: string } | null>(null);
+  // Grupos dentro del tema (Herramientas): separan materiales por carpeta lógica
+  const [topicGroupModal, setTopicGroupModal] = useState<{ mode: 'create' | 'rename'; orig?: string } | null>(null);
+  const [confirmDelGroup, setConfirmDelGroup] = useState<string | null>(null);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [activeToolGroup, setActiveToolGroup] = useState<string>('todos');
+  // Sets de estudio estilo Quizlet (Tarjetas/Prueba/Emparejar) por grupo del tema
+  const [studySets, setStudySets] = useState<{ mode: StudySetsMode } | null>(null);
 
   // Refs
   const courseCoverInputRef = useRef<HTMLInputElement>(null);
@@ -2771,15 +2816,6 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     setShowMaterialModal(true);
   };
 
-  const [confirmDelToolMat, setConfirmDelToolMat] = useState<{ id: string; name: string } | null>(null);
-  const [moveToGroupMat, setMoveToGroupMat] = useState<{ id: string; name: string } | null>(null);
-  // Grupos dentro del tema (Herramientas): separan materiales por carpeta lógica
-  const [topicGroupModal, setTopicGroupModal] = useState<{ mode: 'create' | 'rename'; orig?: string } | null>(null);
-  const [confirmDelGroup, setConfirmDelGroup] = useState<string | null>(null);
-  const [newGroupName, setNewGroupName] = useState('');
-  const [activeToolGroup, setActiveToolGroup] = useState<string>('todos');
-  // Sets de estudio estilo Quizlet (Tarjetas/Prueba/Emparejar) por grupo del tema
-  const [studySets, setStudySets] = useState<{ mode: StudySetsMode } | null>(null);
   const handleDeleteMaterial = (mat: SubjectMaterial) => {
     setConfirmDelToolMat({ id: mat.id, name: mat.name || mat.title || 'Material' });
   };
@@ -2866,7 +2902,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const matLinkDragRef = useRef(false);
   const [activeTopicDragId, setActiveTopicDragId] = useState<string | null>(null);
   const [activeGroupDragId, setActiveGroupDragId] = useState<string | null>(null);
-  const studySensors = useSensors(useSensor(PointerSensor, { activationConstraint: { delay: 300, tolerance: 8 } }));
+  const studySensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const planSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { delay: 300, tolerance: 8 } }));
 
   // Mantiene el overlay "Suelta aquí" de Charvis en síncrono con la posición del
@@ -3278,12 +3314,12 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                   <><img src={imgSrc} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.6 }} /><div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, rgba(0,0,0,0.65) 0%, transparent 60%)' }} /></>
                 ) : <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(135deg, ${course.color}22, rgba(0,0,0,0.4))` }} />;
               })()}
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', padding: '0 32px', gap: 20 }}>
-                <div style={{ flex: 1 }}>
-                  <h1 style={{ fontSize: 40, fontWeight: 200, color: '#fff', margin: '0 0 10px', letterSpacing: '-0.03em', fontFamily: "'Inter Tight', sans-serif", textShadow: '0 2px 20px rgba(0,0,0,0.6)' }}>{activeTopic.title}</h1>
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', padding: '0 36px', gap: 36 }}>
+                <div style={{ flex: 1, minWidth: 0, paddingRight: 28 }}>
+                  <h1 style={{ fontSize: 40, fontWeight: 200, color: '#fff', margin: '0 0 14px', letterSpacing: '-0.03em', fontFamily: "'Inter Tight', sans-serif", textShadow: '0 2px 20px rgba(0,0,0,0.6)', lineHeight: 1.15 }}>{activeTopic.title}</h1>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <span style={{ fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.01em', borderBottom: '1px solid rgba(255,255,255,0.15)', paddingBottom: 2 }}>{course.name}</span>
-                    {(() => { const g = groups.find(gr => gr.id === activeTopic.groupId); return g ? <><span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10 }}>/</span><span style={{ fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.01em', borderBottom: '1px solid rgba(255,255,255,0.15)', paddingBottom: 2 }}>{g.name}</span></> : null; })()}
+                    <span style={{ fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.7)', letterSpacing: '0.01em', borderBottom: '1px solid rgba(255,255,255,0.2)', paddingBottom: 2 }}>{course.name}</span>
+                    {(() => { const g = groups.find(gr => gr.id === activeTopic.groupId); return g ? <><span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>/</span><span style={{ fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.7)', letterSpacing: '0.01em', borderBottom: '1px solid rgba(255,255,255,0.2)', paddingBottom: 2 }}>{g.name}</span></> : null; })()}
                   </div>
                 </div>
                 {activeToolGroup !== 'todos' && (
@@ -3351,34 +3387,61 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                 const filteredEmpty = !noItems && filtered.length === 0;
 
                 return reviewing ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: '60%' }}>
-                    {/* Review header */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
-                      <button onClick={closeReview} title="Salir del repaso"
-                        style={{ width: 26, height: 26, borderRadius: 7, border: '1px solid var(--border-subtle)', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <X size={12} />
-                      </button>
-                      <div style={{ width: 26, height: 26, borderRadius: 7, background: '#8B5CF612', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <BookOpen size={12} style={{ color: '#8B5CF6' }} />
+                  <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: '60%', padding: '0 8px' }}>
+                    {/* Review header with Progress Bar */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <button onClick={closeReview} title="Salir del repaso"
+                          style={{ width: 30, height: 30, borderRadius: 9, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}>
+                          <X size={14} />
+                        </button>
+                        <div style={{ width: 32, height: 32, borderRadius: 10, background: '#8B5CF616', border: '1px solid #8B5CF630', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Sparkles size={16} style={{ color: '#8B5CF6' }} />
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.04em', color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>REPASO DE FLASHCARDS</div>
+                          <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{activeTopic?.title}</div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', fontFamily: "'Inter Tight', sans-serif" }}>{Math.min(reviewIndex + 1, reviewDeck.length)} / {reviewDeck.length}</span>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: '#10B981', background: '#10B98114', border: '1px solid #10B98125', padding: '3px 9px', borderRadius: 99 }}>{reviewStats.correct} acertadas</span>
+                          {reviewStats.again > 0 && <span style={{ fontSize: 10, fontWeight: 700, color: '#EF4444', background: '#EF444414', border: '1px solid #EF444425', padding: '3px 9px', borderRadius: 99 }}>{reviewStats.again} a repetir</span>}
+                        </div>
                       </div>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", flex: 1 }}>Repaso de Flashcards</span>
-                      <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-tertiary)' }}>{Math.min(reviewIndex + 1, reviewDeck.length)} / {reviewDeck.length}</span>
-                      <span style={{ fontSize: 9, fontWeight: 600, color: '#10B981', background: '#10B9810c', padding: '2px 7px', borderRadius: 4 }}>{reviewStats.correct} acertadas</span>
-                      {reviewStats.again > 0 && <span style={{ fontSize: 9, fontWeight: 600, color: '#EF4444', background: '#EF44440c', padding: '2px 7px', borderRadius: 4 }}>{reviewStats.again} repetidas</span>}
+                      {/* Barra de progreso */}
+                      <div style={{ width: '100%', height: 4, borderRadius: 99, background: 'var(--border-subtle)', overflow: 'hidden' }}>
+                        <div style={{ width: `${Math.round(((reviewIndex + 1) / Math.max(1, reviewDeck.length)) * 100)}%`, height: '100%', background: 'linear-gradient(90deg, #8B5CF6, #10B981)', transition: 'width 250ms ' + EASE }} />
+                      </div>
                     </div>
+
                     {/* Card */}
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20 }}>
                       <div onClick={() => setReviewFlipped(f => !f)}
                         className="bento-card"
-                        style={{ width: 'min(560px, 100%)', minHeight: 260, borderRadius: 16, border: reviewFlipped ? '1px solid #10B98140' : '1px solid #8B5CF640', background: reviewFlipped ? 'linear-gradient(145deg, #10B98108, var(--bg-surface))' : 'linear-gradient(145deg, #8B5CF612, var(--bg-surface))', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 36px', textAlign: 'center', gap: 10, transition: 'border-color 150ms, background 150ms' }}>
-                        <span style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: reviewFlipped ? '#10B981' : '#8B5CF6' }}>
-                          {reviewFlipped ? 'Respuesta' : 'Pregunta'}
+                        style={{
+                          width: 'min(620px, 100%)', minHeight: 280, borderRadius: 22,
+                          border: reviewFlipped ? '1.5px solid #10B98150' : '1.5px solid #8B5CF650',
+                          background: reviewFlipped ? 'linear-gradient(150deg, #10B98112 0%, var(--bg-surface) 100%)' : 'linear-gradient(150deg, #8B5CF615 0%, var(--bg-surface) 100%)',
+                          boxShadow: reviewFlipped ? '0 20px 60px rgba(16,185,129,0.18)' : '0 20px 60px rgba(139,92,246,0.18)',
+                          cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                          padding: '36px 42px', textAlign: 'center', gap: 14, transition: 'all 250ms ' + EASE, position: 'relative',
+                        }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: 99, background: reviewFlipped ? '#10B98116' : '#8B5CF616', border: `1px solid ${reviewFlipped ? '#10B98130' : '#8B5CF630'}` }}>
+                          {reviewFlipped ? <CheckCircle size={12} style={{ color: '#10B981' }} /> : <HelpCircle size={12} style={{ color: '#8B5CF6' }} />}
+                          <span style={{ fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.14em', color: reviewFlipped ? '#10B981' : '#8B5CF6', fontFamily: "'Inter Tight', sans-serif" }}>
+                            {reviewFlipped ? 'Respuesta · Revelada' : 'Pregunta'}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: 17, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.55, maxWidth: 520, fontFamily: "'Inter Tight', sans-serif", wordBreak: 'break-word' }}>
+                          {reviewFlipped ? reviewDeck[reviewIndex]?.answer : reviewDeck[reviewIndex]?.question}
+                        </div>
+                        <span style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 12, opacity: 0.8, fontFamily: "'Inter', sans-serif" }}>
+                          {reviewFlipped ? 'Haz clic para ver la pregunta' : 'Toca para revelar la respuesta'}
                         </span>
-                        <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.5, maxWidth: 460 }}>{reviewFlipped ? reviewDeck[reviewIndex]?.answer : reviewDeck[reviewIndex]?.question}</div>
-                        <span style={{ fontSize: 9, color: 'var(--text-tertiary)', marginTop: 8 }}>{reviewFlipped ? 'Haz clic para ver la pregunta' : 'Haz clic para revelar la respuesta'}</span>
                       </div>
+
                       {reviewFlipped && (
-                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+                        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center', width: 'min(620px, 100%)' }}>
                           {([
                             { grade: 'again', label: 'Otra vez', sub: '10 min', color: '#EF4444' },
                             { grade: 'hard', label: 'Difícil', sub: '1 día', color: '#F59E0B' },
@@ -3386,11 +3449,11 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                             { grade: 'easy', label: 'Fácil', sub: '7 días', color: '#10B981' },
                           ] as { grade: 'again' | 'hard' | 'good' | 'easy'; label: string; sub: string; color: string }[]).map(b => (
                             <button key={b.grade} onClick={() => gradeFlashcard(b.grade)}
-                              style={{ minWidth: 108, padding: '10px 16px', borderRadius: 10, border: `1px solid ${b.color}30`, background: `${b.color}0d`, cursor: 'pointer', transition: 'all 120ms' }}
-                              onMouseEnter={e => { e.currentTarget.style.background = `${b.color}1c`; e.currentTarget.style.transform = 'translateY(-1px)'; }}
-                              onMouseLeave={e => { e.currentTarget.style.background = `${b.color}0d`; e.currentTarget.style.transform = 'translateY(0)'; }}>
-                              <div style={{ fontSize: 11, fontWeight: 700, color: b.color }}>{b.label}</div>
-                              <div style={{ fontSize: 8, color: 'var(--text-tertiary)', marginTop: 2 }}>Próximo en {b.sub}</div>
+                              style={{ flex: 1, minWidth: 110, padding: '12px 16px', borderRadius: 14, border: `1px solid ${b.color}40`, background: `linear-gradient(135deg, ${b.color}14 0%, var(--bg-surface) 100%)`, cursor: 'pointer', transition: 'all 180ms ' + EASE, textAlign: 'center' }}
+                              onMouseEnter={e => { e.currentTarget.style.background = `${b.color}22`; e.currentTarget.style.borderColor = `${b.color}70`; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 6px 20px ${b.color}25`; }}
+                              onMouseLeave={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${b.color}14 0%, var(--bg-surface) 100%)`; e.currentTarget.style.borderColor = `${b.color}40`; e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}>
+                              <div style={{ fontSize: 12, fontWeight: 800, color: b.color, fontFamily: "'Inter Tight', sans-serif" }}>{b.label}</div>
+                              <div style={{ fontSize: 8.5, color: 'var(--text-tertiary)', marginTop: 3 }}>Repaso en {b.sub}</div>
                             </button>
                           ))}
                         </div>
@@ -3539,38 +3602,46 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '14px 14px 0', flexShrink: 0 }}>
                       {(() => {
-                        const allFcs = safeArr(activeTopic?.flashcards) as SetCard[];
-                        const setCards = activeToolGroup === 'todos' ? allFcs : allFcs.filter(f => { const gn = ((f as any).groupName || '') as string; return gn === activeToolGroup || gn.startsWith(activeToolGroup + '/'); });
-                        return ([
-                          { key: 'cards' as const, icon: BookOpen, label: 'Tarjetas', sub: `${setCards.length} · repetición espaciada`, color: '#8B5CF6' },
-                          { key: 'test' as const, icon: ClipboardList, label: 'Prueba', sub: setCards.length < 2 ? 'Necesita 2+ tarjetas' : 'Test generado del set', color: '#F59E0B' },
-                          { key: 'match' as const, icon: Shuffle, label: 'Emparejar', sub: setCards.length < 2 ? 'Necesita 2+ tarjetas' : 'Término ↔ definición', color: '#10B981' },
-                        ]).map(t => (
-                          <button key={t.key}
-                            onClick={() => setStudySets({ mode: t.key })}
+                        const toolsList = [
+                          { mode: 'flashcards' as const, icon: BookOpen, label: 'FLASHCARDS', color: '#8B5CF6', action: () => openFlashcardModal() },
+                          { mode: 'cornell' as const, icon: NotebookPen, label: 'NOTAS CORNELL', color: '#3B82F6', action: () => openToolCreator('cornell' as any) },
+                          { mode: 'quizzes' as const, icon: HelpCircle, label: 'CUESTIONARIOS', color: '#EC4899', action: () => openToolCreator('quizzes' as any) },
+                          { mode: 'feynman' as const, icon: Sigma, label: 'CONCEPTOS CLAVE', color: '#F59E0B', action: () => openToolCreator('feynman' as any) },
+                          { mode: 'spacedRep' as const, icon: Timer, label: 'REPASO ESPACIADO', color: '#10B981', action: () => openToolCreator('spacedRep' as any) },
+                        ];
+                        return toolsList.map(t => (
+                          <button key={t.mode}
+                            onClick={t.action}
+                            title={`Agregar ${t.label}`}
                             style={{
-                              display: 'flex', alignItems: 'center', gap: 12, padding: '11px 13px', borderRadius: 13,
-                              border: `1px solid ${t.color}30`,
-                              background: `${t.color}0a`,
-                              boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-                              cursor: 'pointer', transition: 'all 150ms', textAlign: 'left', width: '100%',
+                              display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderRadius: 14,
+                              border: `1px solid ${t.color}40`,
+                              background: `linear-gradient(135deg, ${t.color}14 0%, var(--bg-surface) 100%)`,
+                              boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+                              cursor: 'pointer', transition: 'all 200ms ' + EASE, textAlign: 'left', width: '100%',
                             }}
-                            onMouseEnter={e => { e.currentTarget.style.borderColor = `${t.color}55`; e.currentTarget.style.background = `${t.color}14`; }}
-                            onMouseLeave={e => { e.currentTarget.style.borderColor = `${t.color}30`; e.currentTarget.style.background = `${t.color}0a`; }}
+                            onMouseEnter={e => { e.currentTarget.style.borderColor = `${t.color}80`; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 8px 26px ${t.color}22`; }}
+                            onMouseLeave={e => { e.currentTarget.style.borderColor = `${t.color}40`; e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.03)'; }}
                           >
-                            <div style={{ width: 38, height: 38, borderRadius: 11, background: `${t.color}14`, border: `1px solid ${t.color}28`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                              <t.icon size={16} style={{ color: t.color }} />
+                            <div style={{ width: 38, height: 38, borderRadius: 11, background: `${t.color}18`, border: `1px solid ${t.color}35`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                              <t.icon size={19} style={{ color: t.color }} />
                             </div>
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.label}</div>
-                              <div style={{ fontSize: 9.5, color: 'var(--text-tertiary)', marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.sub}</div>
+                              <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.07em', color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.label}</div>
+                            </div>
+                            <div style={{ width: 24, height: 24, borderRadius: 8, background: `${t.color}20`, color: t.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                              <Plus size={14} />
                             </div>
                           </button>
                         ));
                       })()}
                     </div>
-                    </div>
-                  ) : activeTab === 'overview' ? (
+                  </div>
+                );
+              })()}
+              </div>
+            </div>
+          ) : activeTab === 'overview' ? (
             /* --- OVERVIEW TAB --- */
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
             {/* Big banner */}
@@ -6608,19 +6679,32 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                 <input type="file" ref={groupCoverInputRef} style={{ display: 'none' }} accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) { const r = new FileReader(); r.onload = ev => setGroupCover(ev.target?.result as string); r.readAsDataURL(f); } }} />
               </div>
             </div>
-            <div style={{ padding: '12px 24px 18px', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', flexShrink: 0, gap: 8 }}>
-                <button onClick={() => setShowGroupModal(false)}
-                  style={{ height: 36, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 500, cursor: 'pointer', padding: '0 16px', transition: 'all 150ms', fontFamily: "'Inter', sans-serif" }}
-                  onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
-                  Cancelar
-                </button>
-                <button onClick={handleSaveGroup} disabled={!groupName.trim()}
-                  style={{ height: 36, borderRadius: 8, border: 'none', background: groupName.trim() ? course.color : 'var(--bg-hover)', color: groupName.trim() ? '#fff' : 'var(--text-muted)', fontSize: 12, fontWeight: 600, cursor: groupName.trim() ? 'pointer' : 'default', padding: '0 20px', transition: 'all 150ms', fontFamily: "'Inter', sans-serif" }}
-                  onMouseEnter={e => { if (groupName.trim()) e.currentTarget.style.opacity = '0.9'; }}
-                  onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
-                  {editingGroupId ? 'Guardar' : 'Crear'}
-                </button>
+            <div style={{ padding: '12px 24px 18px', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0, gap: 8 }}>
+                {editingGroupId ? (
+                  <button onClick={() => {
+                    if (confirm('¿Eliminar esta agrupación? Los temas dentro pasarán a temas sueltos.')) {
+                      handleDeleteGroup(editingGroupId);
+                      setShowGroupModal(false);
+                      if (currentView === 'group') setCurrentView('overview');
+                    }
+                  }} style={{ height: 36, borderRadius: 8, border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.12)', color: '#EF4444', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '0 14px', display: 'flex', alignItems: 'center', gap: 6, fontFamily: "'Inter Tight', sans-serif" }}>
+                    <Trash2 size={13} /> Eliminar agrupación
+                  </button>
+                ) : <div />}
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => setShowGroupModal(false)}
+                    style={{ height: 36, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 500, cursor: 'pointer', padding: '0 16px', transition: 'all 150ms', fontFamily: "'Inter', sans-serif" }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
+                    Cancelar
+                  </button>
+                  <button onClick={handleSaveGroup} disabled={!groupName.trim()}
+                    style={{ height: 36, borderRadius: 8, border: 'none', background: groupName.trim() ? course.color : 'var(--bg-hover)', color: groupName.trim() ? '#fff' : 'var(--text-muted)', fontSize: 12, fontWeight: 600, cursor: groupName.trim() ? 'pointer' : 'default', padding: '0 20px', transition: 'all 150ms', fontFamily: "'Inter', sans-serif" }}
+                    onMouseEnter={e => { if (groupName.trim()) e.currentTarget.style.opacity = '0.9'; }}
+                    onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
+                    {editingGroupId ? 'Guardar' : 'Crear'}
+                  </button>
+                </div>
               </div>
           </div>
         </div>
@@ -7305,20 +7389,56 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
         </div>
       )}
 
-      {/* ===== CONFIRMAR ELIMINAR MATERIAL (temas) ===== */}
+      {/* ===== EDITAR / NUEVO GRUPO (temas) ===== */}
       {topicGroupModal && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 2003, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }} onClick={() => setTopicGroupModal(null)}>
-          <div className="bento-card" style={{ width: 360, padding: 22, borderRadius: 14, background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-              <span style={{ width: 38, height: 38, borderRadius: 11, background: `${course.color}12`, border: `1px solid ${course.color}25`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <LI.FolderPlus size={17} style={{ color: course.color }} />
-              </span>
-              <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', margin: 0, fontFamily: "'Inter Tight', sans-serif" }}>Nuevo grupo</h3>
+          <div className="bento-card" style={{ width: 380, padding: 22, borderRadius: 16, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', boxShadow: '0 24px 60px rgba(0,0,0,0.5)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ width: 38, height: 38, borderRadius: 11, background: `${course.color}12`, border: `1px solid ${course.color}25`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {topicGroupModal.mode === 'rename' ? <Pencil size={17} style={{ color: course.color }} /> : <LI.FolderPlus size={17} style={{ color: course.color }} />}
+                </span>
+                <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', margin: 0, fontFamily: "'Inter Tight', sans-serif" }}>
+                  {topicGroupModal.mode === 'rename' ? 'Editar grupo' : 'Nuevo grupo'}
+                </h3>
+              </div>
+              <button onClick={() => setTopicGroupModal(null)} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4 }}><X size={15} /></button>
             </div>
-            <input value={newGroupName} onChange={e => setNewGroupName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && newGroupName.trim() && activeTopic) { updateCourse(course.id, { studyTopics: (safeArr(course.studyTopics)).map(tp => tp.id === activeTopic.id ? { ...tp, toolGroups: [...((tp as any).toolGroups || []), newGroupName.trim()] } : tp) } as any); setActiveToolGroup(newGroupName.trim()); setTopicGroupModal(null); } }} autoFocus placeholder="Ej. Parciales · Laboratorio · Lecturas" style={{ width: '100%', height: 40, borderRadius: 9, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 12px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif", marginBottom: 16 }} />
-            <div style={{ display: 'flex', gap: 10 }}>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: 6, letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Nombre del grupo</label>
+            <input value={newGroupName} onChange={e => setNewGroupName(e.target.value)} onKeyDown={e => {
+              if (e.key === 'Enter' && newGroupName.trim() && activeTopic) {
+                if (topicGroupModal.mode === 'rename' && topicGroupModal.orig) {
+                  renameToolGroup(topicGroupModal.orig, newGroupName.trim());
+                } else {
+                  updateCourse(course.id, { studyTopics: (safeArr(course.studyTopics)).map(tp => tp.id === activeTopic.id ? { ...tp, toolGroups: [...((tp as any).toolGroups || []), newGroupName.trim()] } : tp) } as any);
+                  setActiveToolGroup(newGroupName.trim());
+                }
+                setTopicGroupModal(null);
+              }
+            }} autoFocus placeholder="Ej. Parciales · Laboratorio · Lecturas" style={{ width: '100%', height: 40, borderRadius: 9, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 12px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif", marginBottom: 16 }} />
+            
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              {topicGroupModal.mode === 'rename' && topicGroupModal.orig && (
+                <button onClick={() => { const orig = topicGroupModal.orig!; setTopicGroupModal(null); setConfirmDelGroup(orig); }}
+                  title="Eliminar grupo y sus contenidos"
+                  style={{ height: 38, padding: '0 12px', borderRadius: 9, border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.12)', color: '#EF4444', fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontFamily: "'Inter Tight', sans-serif" }}>
+                  <Trash2 size={13} /> Eliminar
+                </button>
+              )}
               <button onClick={() => setTopicGroupModal(null)} style={{ flex: 1, height: 38, borderRadius: 9, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter Tight', sans-serif" }}>Cancelar</button>
-              <button onClick={() => { if (newGroupName.trim() && activeTopic) { updateCourse(course.id, { studyTopics: (safeArr(course.studyTopics)).map(tp => tp.id === activeTopic.id ? { ...tp, toolGroups: [...((tp as any).toolGroups || []), newGroupName.trim()] } : tp) } as any); setActiveToolGroup(newGroupName.trim()); setTopicGroupModal(null); } }} disabled={!newGroupName.trim()} style={{ flex: 1, height: 38, borderRadius: 9, border: 'none', background: course.color, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: !newGroupName.trim() ? 0.4 : 1, boxShadow: `0 6px 20px ${course.color}30`, fontFamily: "'Inter Tight', sans-serif" }}>Crear grupo</button>
+              <button onClick={() => {
+                if (newGroupName.trim() && activeTopic) {
+                  if (topicGroupModal.mode === 'rename' && topicGroupModal.orig) {
+                    renameToolGroup(topicGroupModal.orig, newGroupName.trim());
+                  } else {
+                    updateCourse(course.id, { studyTopics: (safeArr(course.studyTopics)).map(tp => tp.id === activeTopic.id ? { ...tp, toolGroups: [...((tp as any).toolGroups || []), newGroupName.trim()] } : tp) } as any);
+                    setActiveToolGroup(newGroupName.trim());
+                  }
+                  setTopicGroupModal(null);
+                }
+              }} disabled={!newGroupName.trim()} style={{ flex: 1, height: 38, borderRadius: 9, border: 'none', background: course.color, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: !newGroupName.trim() ? 0.4 : 1, boxShadow: `0 6px 20px ${course.color}30`, fontFamily: "'Inter Tight', sans-serif" }}>
+                {topicGroupModal.mode === 'rename' ? 'Guardar' : 'Crear grupo'}
+              </button>
             </div>
           </div>
         </div>
@@ -7385,67 +7505,93 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
 
       {/* ===== FLASHCARD MODAL ===== */}
       {showFlashcardModal && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 2001, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }} onClick={() => { setShowFlashcardModal(false); setEditingFlashcard(null); }}>
-          <div className="bento-card" style={{ width: 420, padding: 22, borderRadius: 12, background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-              <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6, margin: 0 }}>
-                <BookOpen size={14} style={{ color: '#8B5CF6' }} />
-                {editingFlashcard ? 'Editar flashcard' : 'Nueva flashcard'}
-              </h3>
-              <button onClick={() => { setShowFlashcardModal(false); setEditingFlashcard(null); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}><X size={15} /></button>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 2001, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.62)', backdropFilter: 'blur(10px)' }} onClick={() => { setShowFlashcardModal(false); setEditingFlashcard(null); }}>
+          <div className="bento-card" style={{ width: 460, maxWidth: 'calc(100vw - 32px)', padding: 24, borderRadius: 18, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', boxShadow: '0 24px 70px rgba(0,0,0,0.55)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8, margin: 0, fontFamily: "'Inter Tight', sans-serif" }}>
+                  <Sparkles size={17} style={{ color: '#8B5CF6' }} />
+                  {editingFlashcard ? 'Editar Flashcard' : 'Crear Flashcard'}
+                </h3>
+                <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: '3px 0 0', fontFamily: "'Inter', sans-serif" }}>
+                  {activeToolGroup !== 'todos' ? `Añadiendo al grupo “${activeToolGroup.split('/').pop()}”` : 'Se vinculará al tema activo'}
+                </p>
+              </div>
+              <button onClick={() => { setShowFlashcardModal(false); setEditingFlashcard(null); }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}><X size={16} /></button>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               {!editingFlashcard && (
-                <div style={{ display: 'flex', gap: 4, padding: 3, borderRadius: 8, background: 'var(--bg-deep)' }}>
-                  {([['uno', 'Individual'], ['masivo', 'Masivo (varias a la vez)']] as const).map(([v, lbl]) => (
+                <div style={{ display: 'flex', gap: 6, padding: 4, borderRadius: 10, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)' }}>
+                  {([['uno', 'Individual'], ['masivo', 'Grupo / Masivo (pregunta - respuesta)']] as const).map(([v, lbl]) => (
                     <button key={v} onClick={() => setFcMode(v)}
-                      style={{ flex: 1, height: 28, borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 10.5, fontWeight: 600, transition: 'all 150ms', fontFamily: "'Inter Tight', sans-serif", background: fcMode === v ? '#8B5CF6' : 'transparent', color: fcMode === v ? '#fff' : 'var(--text-tertiary)' }}>
+                      style={{ flex: 1, height: 32, borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, transition: 'all 180ms ' + EASE, fontFamily: "'Inter Tight', sans-serif", background: fcMode === v ? '#8B5CF6' : 'transparent', color: fcMode === v ? '#fff' : 'var(--text-tertiary)', boxShadow: fcMode === v ? '0 4px 14px rgba(139,92,246,0.35)' : 'none' }}>
                       {lbl}
                     </button>
                   ))}
                 </div>
               )}
+
               {fcMode === 'uno' || editingFlashcard ? (
                 <>
                   <div>
-                    <span style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#8B5CF6', display: 'block', marginBottom: 5 }}>Pregunta</span>
-                    <textarea value={fcQuestion} onChange={e => setFcQuestion(e.target.value)} placeholder="Escribe la pregunta..." autoFocus style={{ width: '100%', minHeight: 70, padding: 8, borderRadius: 5, fontSize: 12, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+                    <label style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#8B5CF6', display: 'block', marginBottom: 6, fontFamily: "'Inter Tight', sans-serif" }}>Pregunta / Término</label>
+                    <textarea value={fcQuestion} onChange={e => setFcQuestion(e.target.value)} placeholder="Escribe la pregunta, fórmula, concepto o código…" autoFocus style={{ width: '100%', minHeight: 76, padding: '10px 12px', borderRadius: 10, fontSize: 12.5, lineHeight: 1.5, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
                   </div>
                   <div>
-                    <span style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#10B981', display: 'block', marginBottom: 5 }}>Respuesta</span>
-                    <textarea value={fcAnswer} onChange={e => setFcAnswer(e.target.value)} placeholder="Escribe la respuesta..." style={{ width: '100%', minHeight: 70, padding: 8, borderRadius: 5, fontSize: 12, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+                    <label style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#10B981', display: 'block', marginBottom: 6, fontFamily: "'Inter Tight', sans-serif" }}>Respuesta / Explicación</label>
+                    <textarea value={fcAnswer} onChange={e => setFcAnswer(e.target.value)} placeholder="Escribe la respuesta detallada, definición o solución…" style={{ width: '100%', minHeight: 76, padding: '10px 12px', borderRadius: 10, fontSize: 12.5, lineHeight: 1.5, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
                   </div>
                 </>
               ) : (
                 <div>
-                  <span style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#8B5CF6', display: 'block', marginBottom: 5 }}>Una tarjeta por línea · pregunta - respuesta</span>
-                  <textarea value={fcBulk} onChange={e => setFcBulk(e.target.value)} placeholder={'Formato por línea:\npregunta - respuesta\n\nEj:\nCapital de Francia - París\nE=mc² - Relación masa-energía'} autoFocus style={{ width: '100%', minHeight: 170, padding: 10, borderRadius: 5, fontSize: 12, lineHeight: 1.7, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
-                  <div style={{ fontSize: 9.5, color: 'var(--text-tertiary)', marginTop: 6, lineHeight: 1.5 }}>
-                    {parseBulkFlashcards().filter(c => c.a).length} tarjeta(s) detectada(s) · acepta fórmulas y texto libre
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <label style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#8B5CF6', fontFamily: "'Inter Tight', sans-serif" }}>Una por línea · pregunta - respuesta</label>
+                    <span style={{ fontSize: 10, fontWeight: 600, color: '#8B5CF6', background: '#8B5CF614', padding: '2px 8px', borderRadius: 99 }}>
+                      {parseBulkFlashcards().filter(c => c.a).length} detectadas
+                    </span>
                   </div>
+                  <textarea value={fcBulk} onChange={e => setFcBulk(e.target.value)} placeholder={'Formato:\npregunta - respuesta\n\nEjemplos:\nMitosis - Proceso de división celular en dos células hijas\nFórmula de Euler - e^(iπ) + 1 = 0\nCapital de Perú - Lima'} autoFocus style={{ width: '100%', minHeight: 180, padding: 12, borderRadius: 10, fontSize: 12, lineHeight: 1.6, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+                  
+                  {parseBulkFlashcards().filter(c => c.a).length > 0 && (
+                    <div style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap', maxHeight: 80, overflowY: 'auto', padding: 4 }}>
+                      {parseBulkFlashcards().filter(c => c.a).slice(0, 6).map((c, i) => (
+                        <span key={i} style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', padding: '3px 8px', borderRadius: 6, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <b style={{ color: '#8B5CF6' }}>{c.q}</b>: {c.a}
+                        </span>
+                      ))}
+                      {parseBulkFlashcards().filter(c => c.a).length > 6 && (
+                        <span style={{ fontSize: 9.5, color: 'var(--text-tertiary)', padding: '3px 6px' }}>+{parseBulkFlashcards().filter(c => c.a).length - 6} más</span>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
+
               <div>
-                <span style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-tertiary)', display: 'block', marginBottom: 5 }}>Dificultad</span>
-                <div style={{ display: 'flex', gap: 6 }}>
+                <label style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-tertiary)', display: 'block', marginBottom: 6, fontFamily: "'Inter Tight', sans-serif" }}>Dificultad inicial</label>
+                <div style={{ display: 'flex', gap: 8 }}>
                   {([
                     { v: 'facil', label: 'Fácil', color: '#10B981' },
                     { v: 'bueno', label: 'Medio', color: '#F59E0B' },
                     { v: 'dificil', label: 'Difícil', color: '#EF4444' },
                   ] as { v: 'facil' | 'bueno' | 'dificil'; label: string; color: string }[]).map(o => (
                     <button key={o.v} onClick={() => setFcDifficulty(o.v)}
-                      style={{ flex: 1, height: 30, borderRadius: 6, border: `1px solid ${fcDifficulty === o.v ? o.color : 'var(--border-soft)'}`, background: fcDifficulty === o.v ? `${o.color}12` : 'transparent', cursor: 'pointer', fontSize: 10, fontWeight: 600, color: fcDifficulty === o.v ? o.color : 'var(--text-muted)', transition: 'all 120ms' }}>
+                      style={{ flex: 1, height: 32, borderRadius: 8, border: `1px solid ${fcDifficulty === o.v ? o.color : 'var(--border-soft)'}`, background: fcDifficulty === o.v ? `${o.color}14` : 'transparent', cursor: 'pointer', fontSize: 11, fontWeight: 700, color: fcDifficulty === o.v ? o.color : 'var(--text-muted)', transition: 'all 150ms', fontFamily: "'Inter Tight', sans-serif" }}>
                       {o.label}
                     </button>
                   ))}
                 </div>
               </div>
+
               {fcMode === 'masivo' && !editingFlashcard ? (
-                <button onClick={handleSaveFlashcard} disabled={parseBulkFlashcards().filter(c => c.a).length === 0} style={{ width: '100%', height: 34, borderRadius: 6, border: 'none', background: '#8B5CF6', color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', opacity: parseBulkFlashcards().filter(c => c.a).length === 0 ? 0.4 : 1 }}>
-                  Crear {parseBulkFlashcards().filter(c => c.a).length} flashcards
+                <button onClick={handleSaveFlashcard} disabled={parseBulkFlashcards().filter(c => c.a).length === 0} style={{ width: '100%', height: 40, borderRadius: 10, border: 'none', background: '#8B5CF6', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: parseBulkFlashcards().filter(c => c.a).length === 0 ? 0.4 : 1, boxShadow: '0 6px 20px rgba(139,92,246,0.35)', fontFamily: "'Inter Tight', sans-serif", marginTop: 4 }}>
+                  Crear grupo de {parseBulkFlashcards().filter(c => c.a).length} flashcards
                 </button>
               ) : (
-                <button onClick={handleSaveFlashcard} disabled={!fcQuestion.trim() || !fcAnswer.trim()} style={{ width: '100%', height: 34, borderRadius: 6, border: 'none', background: '#8B5CF6', color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', opacity: !fcQuestion.trim() || !fcAnswer.trim() ? 0.4 : 1 }}>{editingFlashcard ? 'Guardar cambios' : 'Crear flashcard'}</button>
+                <button onClick={handleSaveFlashcard} disabled={!fcQuestion.trim() || !fcAnswer.trim()} style={{ width: '100%', height: 40, borderRadius: 10, border: 'none', background: '#8B5CF6', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: !fcQuestion.trim() || !fcAnswer.trim() ? 0.4 : 1, boxShadow: '0 6px 20px rgba(139,92,246,0.35)', fontFamily: "'Inter Tight', sans-serif", marginTop: 4 }}>
+                  {editingFlashcard ? 'Guardar cambios' : 'Crear flashcard'}
+                </button>
               )}
             </div>
           </div>
