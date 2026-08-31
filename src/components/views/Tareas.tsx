@@ -148,7 +148,7 @@ export default function Tareas() {
       if (days === 1) return 'Ayer';
       if (days < 30) return `Hace ${days}d`;
       const months = Math.floor(days / 30);
-      return `Hace ${months}m`;
+      return months === 1 ? 'Hace 1 mes' : `Hace ${months} meses`;
     } catch {
       return 'Reciente';
     }
@@ -850,7 +850,8 @@ export default function Tareas() {
                       const taskId = e.dataTransfer.getData('text/plain');
                       if (taskId) {
                         const newStatus = col.status === 'completado' ? 'completado' : col.status === 'progreso' ? 'progreso' : 'inicio';
-                        updateTask(taskId, { status: newStatus });
+                        // Fija/limpia completedAt igual que toggleTaskStatus (si no, las completadas nunca se ocultan)
+                        updateTask(taskId, { status: newStatus, completedAt: newStatus === 'completado' ? new Date().toISOString() : undefined });
                       }
                     }}
                     style={{ flex: '1 1 0', minWidth: 0, width: 0, overflow: 'hidden', padding: '14px 12px', display: 'flex', flexDirection: 'column', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 12 }}>
@@ -874,7 +875,7 @@ export default function Tareas() {
                       )) : colTasks.map((task, i) => {
                         const tr = task.dueDate ? getTimeRemaining(task.dueDate) : null;
                         return (
-                        <div key={task.id} className="board-card hover:bg-white/[0.03]" draggable onDragStart={e => handleDragStart(e, task.id)} onDragEnd={handleDragEnd} onClick={() => handleOpenDetail(task.id)}
+                        <div key={task.id} className="board-card hover:bg-white/[0.03]" draggable onDragStart={e => handleDragStart(e, task.id)} onDragEnd={handleDragEnd} onClick={() => { if (dragSuppressRef.current) { dragSuppressRef.current = false; return; } handleOpenDetail(task.id); }}
                           style={{
                             position: 'relative',
                             padding: '14px 14px 12px',
@@ -1446,27 +1447,24 @@ export default function Tareas() {
             <div className="bento-card" style={{ position: 'fixed', right: 0, top: 0, bottom: 0, width: 520, maxWidth: '94vw', padding: 0, display: 'flex', flexDirection: 'column', background: 'var(--bg-primary)', overflow: 'hidden', border: 'none', borderLeft: '1px solid var(--border-default)', boxShadow: '-20px 0 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.03) inset' }} onClick={e => e.stopPropagation()}>
 
               {/* ── Panel Header ── */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0, gap: 10 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 22px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0, gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
                   <button onClick={() => setSelectedTaskId(null)}
                     title="Cerrar"
-                    style={{ width: 30, height: 30, borderRadius: 9, background: 'var(--bg-hover)', border: '1px solid var(--border-soft)', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms', flexShrink: 0 }}
+                    style={{ width: 32, height: 32, borderRadius: 9, background: 'var(--bg-hover)', border: '1px solid var(--border-soft)', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms', flexShrink: 0 }}
                     onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.borderColor = 'var(--border-hover)'; }}
                     onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'var(--border-soft)'; }}>
                     <X size={14} />
                   </button>
-                  <div style={{ width: 38, height: 38, borderRadius: 11, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `linear-gradient(135deg, ${taskColor}1c, ${taskColor}08)`, border: `1px solid ${taskColor}30`, boxShadow: `0 0 16px ${taskColor}12` }}>
-                    <ClipboardList size={16} style={{ color: taskColor }} />
+                  <div style={{ width: 34, height: 34, borderRadius: 11, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `linear-gradient(135deg, ${taskColor}1c, ${taskColor}08)`, border: `1px solid ${taskColor}30` }}>
+                    <ClipboardList size={15} style={{ color: taskColor }} />
                   </div>
-                  <div style={{ minWidth: 0 }}>
-                    <span style={{ fontSize: 8.5, fontWeight: 700, color: taskColor, textTransform: 'uppercase', letterSpacing: '0.12em', fontFamily: "'Inter Tight', sans-serif", display: 'block' }}>Tarea</span>
-                    <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 190 }}>{selectedTask.title}</span>
-                  </div>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: taskColor, textTransform: 'uppercase', letterSpacing: '0.14em', fontFamily: "'Inter Tight', sans-serif" }}>Detalle de tarea</span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
                   <span onClick={() => toggleTaskStatus(selectedTask.id)}
                     title="Cambiar estado"
-                    style={{ cursor: 'pointer', fontSize: 9, fontWeight: 600, color: taskColor, letterSpacing: '0.06em', fontFamily: "'Inter Tight', sans-serif", padding: '5px 11px', borderRadius: 999, background: `${taskColor}10`, display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', transition: 'all 150ms', border: `1px solid ${taskColor}18` }}
+                    style={{ cursor: 'pointer', fontSize: 10, fontWeight: 600, color: taskColor, letterSpacing: '0.06em', fontFamily: "'Inter Tight', sans-serif", padding: '6px 13px', borderRadius: 999, background: `${taskColor}10`, display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', transition: 'all 150ms', border: `1px solid ${taskColor}18` }}
                     onMouseEnter={e => e.currentTarget.style.background = `${taskColor}18`}
                     onMouseLeave={e => e.currentTarget.style.background = `${taskColor}10`}>
                     <span style={{ width: 5, height: 5, borderRadius: '50%', background: taskColor, flexShrink: 0, boxShadow: `0 0 6px ${taskColor}80` }} />
@@ -1474,7 +1472,7 @@ export default function Tareas() {
                   </span>
                   <button onClick={() => setConfirmDeleteTask(selectedTask.id)}
                     title="Eliminar tarea"
-                    style={{ width: 30, height: 30, borderRadius: 9, background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms', opacity: 0.6, flexShrink: 0 }}
+                    style={{ width: 32, height: 32, borderRadius: 9, background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms', opacity: 0.6, flexShrink: 0 }}
                     onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.12)'; e.currentTarget.style.color = '#EF4444'; e.currentTarget.style.opacity = '1'; }}
                     onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.opacity = '0.6'; }}>
                     <Trash2 size={14} />
@@ -1483,7 +1481,7 @@ export default function Tareas() {
               </div>
 
               {/* ── Scrollable Content ── */}
-              <div style={{ flex: 1, overflowY: 'auto', padding: '20px 22px 24px', display: 'flex', flexDirection: 'column', gap: 16 }} className="no-scrollbar">
+              <div style={{ flex: 1, overflowY: 'auto', padding: '24px 26px 28px', display: 'flex', flexDirection: 'column', gap: 18 }} className="no-scrollbar">
 
                 {/* ── Title ── */}
                 <div style={{ padding: '4px 4px 12px' }}>
@@ -1505,8 +1503,8 @@ export default function Tareas() {
                   <div style={{ padding: '14px 14px', display: 'flex', flexDirection: 'column', gap: 10, background: 'var(--bg-surface)', border: '1px solid var(--border-soft)', borderRadius: 12, position: 'relative', overflow: 'hidden', transition: 'all 180ms' }}
                     onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-hover)'; }}
                     onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; }}>
-                    {selectedTask.course !== 'Sin curso' && <BookOpen size={72} strokeWidth={1} style={{ position: 'absolute', right: -12, bottom: -12, color: selectedCourseColor, opacity: 0.06, pointerEvents: 'none' }} />}
-                    <span style={{ fontSize: 8, fontWeight: 500, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.14em', fontFamily: "'Inter Tight', sans-serif" }}>Curso</span>
+                    {selectedTask.course !== 'Sin curso' && <BookOpen size={72} strokeWidth={1} style={{ position: 'absolute', right: -12, bottom: -12, color: selectedCourseColor, opacity: 0.045, pointerEvents: 'none' }} />}
+                    <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.12em', fontFamily: "'Inter Tight', sans-serif" }}>Curso</span>
                     <select value={selectedTask.course}
                       onChange={e => updateTask(selectedTask.id, { course: e.target.value, courseColor: e.target.value === 'Sin curso' ? '#888' : (courses.find(c => c.name === e.target.value)?.color || '#E11D48') })}
                       style={{ width: '100%', height: 36, padding: '0 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border-soft)', borderRadius: 9, fontSize: 12, fontWeight: 500, color: selectedTask.course !== 'Sin curso' ? selectedCourseColor : 'var(--text-primary)', outline: 'none', cursor: 'pointer', colorScheme: 'dark', fontFamily: "'Inter Tight', sans-serif", transition: 'all 150ms' }}>
@@ -1521,8 +1519,8 @@ export default function Tareas() {
                   <div style={{ padding: '14px 14px', display: 'flex', flexDirection: 'column', gap: 10, background: 'var(--bg-surface)', border: '1px solid var(--border-soft)', borderRadius: 12, position: 'relative', overflow: 'hidden', transition: 'all 180ms' }}
                     onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-hover)'; }}
                     onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; }}>
-                    {selectedTask.priority && selectedTask.priority !== 'none' && <Bookmark size={72} strokeWidth={1} style={{ position: 'absolute', right: -12, bottom: -12, color: priorityColor, opacity: 0.06, pointerEvents: 'none' }} />}
-                    <span style={{ fontSize: 8, fontWeight: 500, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.14em', fontFamily: "'Inter Tight', sans-serif" }}>Prioridad</span>
+                    {selectedTask.priority && selectedTask.priority !== 'none' && <Bookmark size={72} strokeWidth={1} style={{ position: 'absolute', right: -12, bottom: -12, color: priorityColor, opacity: 0.045, pointerEvents: 'none' }} />}
+                    <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.12em', fontFamily: "'Inter Tight', sans-serif" }}>Prioridad</span>
                     <select value={selectedTask.priority || 'none'} onChange={e => updateTask(selectedTask.id, { priority: e.target.value as any })}
                       style={{ width: '100%', height: 36, padding: '0 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border-soft)', borderRadius: 9, fontSize: 12, fontWeight: 500, color: selectedTask.priority && selectedTask.priority !== 'none' ? priorityColor : 'var(--text-primary)', outline: 'none', cursor: 'pointer', colorScheme: 'dark', fontFamily: "'Inter Tight', sans-serif", transition: 'all 150ms' }}>
                       <option value="none" style={{ background: '#18181b', color: '#e4e4e7' }}>Ninguna</option>
@@ -1540,12 +1538,12 @@ export default function Tareas() {
                     const hasTime = selectedTask.dueDate && selectedTask.dueDate.length > 10;
                     const timeVal = hasTime ? selectedTask.dueDate!.slice(11, 16) : '23:59';
                     return (
-                      <div style={{ padding: '14px 14px', display: 'flex', flexDirection: 'column', gap: 10, background: 'var(--bg-surface)', border: '1px solid var(--border-soft)', borderRadius: 12, position: 'relative', overflow: 'hidden', transition: 'all 180ms' }}
+                      <div style={{ padding: '16px', gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 10, background: 'var(--bg-surface)', border: '1px solid var(--border-soft)', borderRadius: 12, position: 'relative', overflow: 'hidden', transition: 'all 180ms' }}
                         onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-hover)'; }}
                         onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; }}>
-                        <CalendarDays size={72} strokeWidth={1} style={{ position: 'absolute', right: -12, bottom: -12, color: dateColor, opacity: 0.06, pointerEvents: 'none' }} />
+                        <CalendarDays size={72} strokeWidth={1} style={{ position: 'absolute', right: -12, bottom: -12, color: dateColor, opacity: 0.045, pointerEvents: 'none' }} />
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                          <span style={{ fontSize: 8, fontWeight: 500, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.14em', fontFamily: "'Inter Tight', sans-serif" }}>Fecha</span>
+                          <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.12em', fontFamily: "'Inter Tight', sans-serif" }}>Fecha</span>
                           {tr && (
                             <span style={{ fontSize: 8.5, fontWeight: 500, color: dateColor, display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
                               {tr.overdue && <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#EF4444', flexShrink: 0 }} />}
@@ -1593,12 +1591,12 @@ export default function Tareas() {
                     const progressColor = pct >= 100 ? '#10B981' : taskColor;
                     const setEst = (v: number) => updateTask(selectedTask.id, { estimatedMinutes: Math.max(5, v) });
                     return (
-                      <div style={{ padding: '14px 14px', display: 'flex', flexDirection: 'column', gap: 10, background: 'var(--bg-surface)', border: '1px solid var(--border-soft)', borderRadius: 12, position: 'relative', overflow: 'hidden', transition: 'all 180ms' }}
+                      <div style={{ padding: '16px', gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 10, background: 'var(--bg-surface)', border: '1px solid var(--border-soft)', borderRadius: 12, position: 'relative', overflow: 'hidden', transition: 'all 180ms' }}
                         onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-hover)'; }}
                         onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; }}>
-                        <Clock size={72} strokeWidth={1} style={{ position: 'absolute', right: -12, bottom: -12, color: progressColor, opacity: 0.06, pointerEvents: 'none' }} />
+                        <Clock size={72} strokeWidth={1} style={{ position: 'absolute', right: -12, bottom: -12, color: progressColor, opacity: 0.045, pointerEvents: 'none' }} />
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                          <span style={{ fontSize: 8, fontWeight: 500, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.14em', fontFamily: "'Inter Tight', sans-serif" }}>Tiempo</span>
+                          <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.12em', fontFamily: "'Inter Tight', sans-serif" }}>Tiempo</span>
                           <span style={{ fontSize: 19, fontWeight: 400, color: progressColor, fontFamily: "'Inter Tight', sans-serif", lineHeight: 1, marginTop: -1 }}>{pct}%</span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -1663,7 +1661,7 @@ export default function Tareas() {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 5, paddingTop: 10 }}>
                         {selectedTask.subtasks.map((st) => (
                           <div key={st.id}
-                            style={{ display: 'flex', alignItems: 'center', gap: 9, padding: "9px 11px", borderRadius: 8, background: st.done ? 'rgba(16,185,129,0.08)' : 'var(--bg-surface)', border: `1px solid ${st.done ? 'rgba(16,185,129,0.15)' : 'var(--border-soft)'}`, transition: 'all 150ms', opacity: st.done ? 0.55 : 1 }}
+                            style={{ display: 'flex', alignItems: 'center', gap: 10, padding: "11px 13px", borderRadius: 9, background: st.done ? 'rgba(16,185,129,0.08)' : 'var(--bg-surface)', border: `1px solid ${st.done ? 'rgba(16,185,129,0.15)' : 'var(--border-soft)'}`, transition: 'all 150ms', opacity: st.done ? 0.55 : 1 }}
                             onMouseEnter={e => { if (!st.done) { e.currentTarget.style.borderColor = `${taskColor}40`; e.currentTarget.style.background = `${taskColor}06`; } }}
                             onMouseLeave={e => { if (!st.done) { e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.background = 'var(--bg-surface)'; } }}>
                             <button onClick={() => toggleSubTask(selectedTask.id, st.id)}
@@ -1687,17 +1685,17 @@ export default function Tareas() {
                                 setSelectedTaskId(null);
                                 setNavigateTo('estudio');
                               }}
-                                style={{ width: 26, height: 26, borderRadius: 6, border: 'none', background: 'transparent', color: '#10B981', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 150ms', flexShrink: 0, opacity: 0 }}
+                                style={{ width: 26, height: 26, borderRadius: 6, border: 'none', background: 'transparent', color: '#10B981', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 150ms', flexShrink: 0, opacity: 0.4 }}
                                 onMouseEnter={e => { e.currentTarget.style.background = 'rgba(16,185,129,0.12)'; e.currentTarget.style.opacity = '1'; }}
-                                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.opacity = '0'; }}
+                                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.opacity = '0.4'; }}
                                 title="Estudiar esta subtarea">
                                 <Play size={11} fill="#10B981" style={{ color: '#10B981' }} />
                               </button>
                             )}
                             <button onClick={() => deleteSubTask(selectedTask.id, st.id)}
-                              style={{ width: 26, height: 26, borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 150ms', flexShrink: 0, opacity: 0 }}
+                              style={{ width: 26, height: 26, borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 150ms', flexShrink: 0, opacity: 0.4 }}
                               onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#EF4444'; e.currentTarget.style.opacity = '1'; }}
-                              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.opacity = '0'; }}
+                              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.opacity = '0.4'; }}
                               title="Eliminar">
                               <X size={11} />
                             </button>
@@ -2012,7 +2010,9 @@ export default function Tareas() {
         const isWebUrl = url.startsWith('http') && !url.includes('youtube.com/embed');
         if (!url) return null;
 
-        const MiniBrowser = () => {
+        // Identidad estable entre renders (el reloj re-renderiza cada segundo y antes
+        // desmontaba/remontaba el iframe del preview en cada tick).
+        const MiniBrowser = useMemo(() => () => {
           const [navUrl, setNavUrl] = useState(url);
           const [currentUrl, setCurrentUrl] = useState(url);
           const [canGoBack, setCanGoBack] = useState(false);
@@ -2104,7 +2104,7 @@ export default function Tareas() {
               </div>
             </div>
           );
-        };
+        }, [url, pdfPreviewUrl]);
 
         return createPortal(
           <div style={{ position: 'fixed', inset: 0, zIndex: 99995, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)' }}

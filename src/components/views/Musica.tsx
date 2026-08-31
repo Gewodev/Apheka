@@ -377,12 +377,19 @@ export default function Musica() {
     localStorage.setItem('owa_download_selection', JSON.stringify(downloadSelection));
   }, [downloadSelection]);
 
+  // Persistencia del estado de Explorar con debounce 400ms — antes escribía
+  // localStorage en CADA tecla (y volcaba results completos dentro).
+  const explorePersistTick = useRef(0);
   useEffect(() => {
-    try {
-      localStorage.setItem('owa_music_explore_v1', JSON.stringify({
-        searchMode, url, searchQuery, searchResults, searchPerformed, preview,
-      }));
-    } catch { /* noop */ }
+    if (explorePersistTick.current) clearTimeout(explorePersistTick.current);
+    explorePersistTick.current = window.setTimeout(() => {
+      try {
+        localStorage.setItem('owa_music_explore_v1', JSON.stringify({
+          searchMode, url, searchQuery, searchResults, searchPerformed, preview,
+        }));
+      } catch { /* noop */ }
+    }, 400);
+    return () => { if (explorePersistTick.current) clearTimeout(explorePersistTick.current); };
   }, [searchMode, url, searchQuery, searchResults, searchPerformed, preview]);
 
   useEffect(() => {
@@ -575,7 +582,9 @@ export default function Musica() {
     return entry.webpage_url || entry.url || (entry.id ? `https://www.youtube.com/watch?v=${entry.id}` : '');
   }, []);
 
-  const autoImportTracks = useCallback((entries: YouTubeMetadata[]) => {
+  // Devuelve cuántas importó (0 = todas ya existían) — reutilizado por la importación manual
+  const autoImportTracks = useCallback((entries: YouTubeMetadata[]): number => {
+    let imported = 0;
     entries.forEach(entry => {
       if (!entry.id) return;
       const exists = tracks.some(t => t.url?.includes(entry.id!) || t.url?.includes(entry.webpage_url || ''));
@@ -590,7 +599,9 @@ export default function Musica() {
         isFavorite: false,
         listenedTime: 0,
       });
+      imported++;
     });
+    return imported;
   }, [addTrack, tracks, getVideoUrl]);
 
   const doDownload = useCallback(async (entry: YouTubeMetadata, dlItemId: string, path: string) => {
@@ -626,12 +637,18 @@ export default function Musica() {
   const handleDownloadAll = async () => {
     if (!preview) return;
     const entries = getEntries(preview);
-    // Add all entries to download selection panel
-    entries.forEach(entry => {
-      const videoUrl = getVideoUrl(entry);
-      if (videoUrl && !downloadSelection.some(s => s.url === videoUrl)) {
-        setDownloadSelection(prev => [...prev, { url: videoUrl, title: entry.title || 'Unknown', channel: entry.channel, thumbnail: entry.thumbnail, duration: entry.duration }]);
-      }
+    // Añade todas de una sola actualización (antes: N setState secuenciales)
+    setDownloadSelection(prev => {
+      const seen = new Set(prev.map(s => s.url));
+      const next = [...prev];
+      entries.forEach(entry => {
+        const videoUrl = getVideoUrl(entry);
+        if (videoUrl && !seen.has(videoUrl)) {
+          seen.add(videoUrl);
+          next.push({ url: videoUrl, title: entry.title || 'Unknown', channel: entry.channel, thumbnail: entry.thumbnail, duration: entry.duration });
+        }
+      });
+      return next;
     });
   };
 
@@ -669,20 +686,12 @@ export default function Musica() {
   const handleSelectForLibrary = () => {
     if (!preview) return;
     const entries = getEntries(preview);
-
-    entries.forEach((entry, i) => {
-      addTrack({
-        title: entry.title,
-        artist: (entry.channel as string) || 'Artista Desconocido',
-        duration: entry.duration || 0,
-        source: 'youtube',
-        url: entry.webpage_url,
-        coverImage: entry.thumbnail,
-        isFavorite: false,
-        listenedTime: 0
-      });
-    });
-    addNotification(`Importado a biblioteca: ${entries.length} temas`, 'success');
+    const nuevos = autoImportTracks(entries);
+    if (nuevos === 0) {
+      addNotification('Esos temas ya estaban en tu biblioteca', 'info');
+    } else {
+      addNotification(`Importado a biblioteca: ${nuevos} tema${nuevos === 1 ? '' : 's'}`, 'success');
+    }
     setActiveTab('biblioteca');
   };
 
@@ -768,10 +777,11 @@ export default function Musica() {
 
   const weeklyListeningTime = useMemo(() => {
     const today = new Date();
-    const dayOfWeek = today.getDay();
+    // Semana que empieza el LUNES (getDay(): dom=0..sáb=6; antes mezclaba desde domingo)
+    const mondayOffset = (today.getDay() + 6) % 7;
     let total = 0;
-    for (let i = 0; i <= dayOfWeek; i++) {
-      const dateStr = format(addDays(subDays(today, dayOfWeek), i), 'yyyy-MM-dd');
+    for (let i = 0; i <= mondayOffset; i++) {
+      const dateStr = format(addDays(today, -mondayOffset + i), 'yyyy-MM-dd');
       total += dailyMusicTime[dateStr] || 0;
     }
     return total;
@@ -1359,9 +1369,9 @@ export default function Musica() {
                     {/* ── Scrollable Content ── */}
                     <div style={{ flex: 1, overflowY: 'auto', padding: '10px 16px' }} className="no-scrollbar">
 
-                      {/* EDIT MODE: Song list */}
+                      {/* EDIT MODE: Song list (respeta los mismos filtros que la creación) */}
                       {isEdit && (
-                        <SongPickerListInner items={tracks} />
+                        <SongPickerListInner items={filteredPLTracks} />
                       )}
 
                       {/* CREATE Step 1: Song selection */}
@@ -1381,10 +1391,10 @@ export default function Musica() {
                           </div>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>
-                              {selectedTrackIds.size} de {tracks.length}
+                              {selectedTrackIds.size} de {filteredPLTracks.length}
                             </span>
-                            <button onClick={() => setSelectedTrackIds(prev => prev.size === tracks.length ? new Set() : new Set(tracks.map(t => t.id)))} className="btn-ghost" style={{ fontSize: 10, color: 'var(--accent)', padding: '2px 8px', height: 22 }}>
-                              {selectedTrackIds.size === tracks.length ? 'Limpiar' : 'Seleccionar todo'}
+                            <button onClick={() => setSelectedTrackIds(prev => prev.size === filteredPLTracks.length ? new Set() : new Set(filteredPLTracks.map(t => t.id)))} className="btn-ghost" style={{ fontSize: 10, color: 'var(--accent)', padding: '2px 8px', height: 22 }}>
+                              {selectedTrackIds.size === filteredPLTracks.length ? 'Limpiar' : 'Seleccionar todo'}
                             </button>
                           </div>
                           <SongPickerListInner items={filteredPLTracks} />
@@ -1408,7 +1418,13 @@ export default function Musica() {
                         <button onClick={() => {
                           const name = newPlaylistName.trim();
                           if (!name) return;
-                          updatePlaylist(editingPlaylistId, { name, coverImage: playlistCoverData || undefined, trackIds: Array.from(selectedTrackIds) });
+                          // Conserva el orden original de la playlist (antes el Set movía
+                          // al final cualquier canción desmarcada y vuelta a marcar);
+                          // las canciones nuevas se añaden al final en orden de biblioteca.
+                          const pl = playlists.find(p => p.id === editingPlaylistId);
+                          const kept = (pl?.trackIds || []).filter(id => selectedTrackIds.has(id));
+                          const added = tracks.filter(t => selectedTrackIds.has(t.id) && !kept.includes(t.id)).map(t => t.id);
+                          updatePlaylist(editingPlaylistId, { name, coverImage: playlistCoverData || undefined, trackIds: [...kept, ...added] });
                           closePL();
                         }} className="btn-primary" style={{ height: 34, padding: '0 20px', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 5 }}>
                           <Check size={14} /> Guardar
@@ -1712,7 +1728,6 @@ export default function Musica() {
                   {([
                     { mode: 'link' as const, icon: Link, label: 'Pegar enlace' },
                     { mode: 'query' as const, icon: Search, label: 'Buscar en YouTube' },
-                    { mode: 'link' as const, icon: Music, label: 'Enlace' },
                   ]).map(({ mode, icon: Icon, label }) => (
                     <button key={mode} onClick={() => setSearchMode(mode)}
                       style={{
@@ -1747,9 +1762,10 @@ export default function Musica() {
                       style={{ border: 'none', background: 'transparent', height: 42, padding: 0, fontSize: 13, flex: 1, color: 'var(--text-primary)', outline: 'none', fontFamily: 'inherit' }}
                     />
                     {((searchMode === 'link' && url) || (searchMode === 'query' && searchQuery)) && (
-                      <button onClick={() => setUrl('')} style={{ padding: 4, background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', borderRadius: 4, transition: 'color 150ms' }}
+                      <button onClick={() => { if (searchMode === 'link') setUrl(''); else setSearchQuery(''); }} style={{ padding: 4, background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', borderRadius: 4, transition: 'color 150ms' }}
                         onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
-                        onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
+                        onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
+                        title="Limpiar búsqueda">
                         <X size={14} />
                       </button>
                     )}
@@ -1987,7 +2003,7 @@ export default function Musica() {
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                         {preview.entries.map((entry: YouTubeMetadata, i: number) => (
-                          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 7, transition: 'all 150ms', border: '1px solid transparent' }}
+                          <div key={entry.id || entry.webpage_url || `entry-${i}`} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 7, transition: 'all 150ms', border: '1px solid transparent' }}
                             onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.borderColor = 'var(--border-subtle)'; }}
                             onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'transparent'; }}>
                             <span style={{ fontSize: 10, color: 'var(--text-muted)', width: 20, textAlign: 'right', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{i + 1}</span>
@@ -2710,20 +2726,26 @@ export default function Musica() {
 
                 if (editingArtistId === 'new') {
                   if (!artistName) return;
-                  addArtist(artistName, editArtistImage || undefined);
+                  // Evita duplicados: si ya existe un artista con ese nombre, une las canciones al existente
+                  const existing = artists.find(a => a.name.toLowerCase() === artistName.toLowerCase());
+                  const targetName = existing ? existing.name : artistName;
+                  if (!existing) addArtist(artistName, editArtistImage || undefined);
                   artistSelectedTrackIds.forEach(trackId => {
                     const track = tracks.find(t => t.id === trackId);
-                    if (track && track.artist !== artistName) updateTrack(trackId, { artist: artistName });
+                    if (track && track.artist !== targetName) updateTrack(trackId, { artist: targetName });
                   });
+                  if (existing) addNotification(`El artista «${existing.name}» ya existía: se unieron las canciones seleccionadas`, 'info');
                 } else {
                   const oldName = artists.find(a => a.id === editingArtistId)?.name;
+                  // Un nombre vacío ya NO desvincula todas las canciones en silencio
+                  if (!artistName) { addNotification('El nombre del artista no puede quedar vacío', 'error'); return; }
                   updateArtist(editingArtistId, {
-                    name: artistName || undefined,
+                    name: artistName,
                     profileImage: editArtistImage || undefined
                   });
                   artistSelectedTrackIds.forEach(trackId => {
                     const track = tracks.find(t => t.id === trackId);
-                    if (track && track.artist !== (artistName || oldName)) updateTrack(trackId, { artist: artistName || oldName });
+                    if (track && track.artist !== artistName) updateTrack(trackId, { artist: artistName });
                   });
                   tracks.forEach(t => {
                     if (!artistSelectedTrackIds.includes(t.id) && (t.artist === oldName || t.artist === artistName)) {

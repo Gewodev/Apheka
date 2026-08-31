@@ -455,8 +455,11 @@ function compressImageForNote(dataUrl: string, maxSize = 1400): Promise<string> 
         c.height = Math.max(1, Math.round(img.height * scale));
         const ctx = c.getContext('2d');
         if (!ctx) { resolve(dataUrl); return; }
-        ctx.drawImage(img, 0, 0, c.width, c.height);
-        resolve(c.toDataURL('image/jpeg', 0.82));
+        // PNG conserva transparencia (antes se exportaba JPEG y el fondo quedaba negro)
+        const isPng = dataUrl.startsWith('data:image/png');
+        if (isPng) ctx.drawImage(img, 0, 0, c.width, c.height);
+        else { ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, c.width, c.height); ctx.drawImage(img, 0, 0, c.width, c.height); }
+        resolve(isPng ? c.toDataURL('image/png') : c.toDataURL('image/jpeg', 0.82));
       } catch { resolve(dataUrl); }
     };
     img.onerror = () => resolve(dataUrl);
@@ -1203,11 +1206,14 @@ const HIGHLIGHT_COLORS = [
 
 function EditorToolbar({ onFormat, onUndo, onRedo }: EditorToolbarProps) {
   const [showColorMenu, setShowColorMenu] = useState(false);
+  const [showHlMenu, setShowHlMenu] = useState(false);
   const [showTablePicker, setShowTablePicker] = useState(false);
   const [tableRows, setTableRows] = useState(3);
   const [tableCols, setTableCols] = useState(3);
   const colorMenuRef = useRef<HTMLDivElement>(null);
+  const highlightMenuRef = useRef<HTMLDivElement>(null);
   const tablePickerRef = useRef<HTMLDivElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   const trackCmds = ["bold", "italic", "underline", "strikeThrough", "insertUnorderedList", "insertOrderedList"];
   const [activeFormats, setActiveFormats] = useState<Record<string, boolean>>({});
@@ -1243,13 +1249,11 @@ function EditorToolbar({ onFormat, onUndo, onRedo }: EditorToolbarProps) {
     document.addEventListener("selectionchange", check);
     document.addEventListener("keyup", check);
     document.addEventListener("mouseup", check);
-    const id = setInterval(check, 300);
     check();
     return () => {
       document.removeEventListener("selectionchange", check);
       document.removeEventListener("keyup", check);
       document.removeEventListener("mouseup", check);
-      clearInterval(id);
     };
   }, []);
 
@@ -1257,6 +1261,9 @@ function EditorToolbar({ onFormat, onUndo, onRedo }: EditorToolbarProps) {
     function handleClickOutside(event: MouseEvent) {
       if (colorMenuRef.current && !colorMenuRef.current.contains(event.target as Node)) {
         setShowColorMenu(false);
+      }
+      if (highlightMenuRef.current && !highlightMenuRef.current.contains(event.target as Node)) {
+        setShowHlMenu(false);
       }
       if (tablePickerRef.current && !tablePickerRef.current.contains(event.target as Node)) {
         setShowTablePicker(false);
@@ -1339,11 +1346,72 @@ function EditorToolbar({ onFormat, onUndo, onRedo }: EditorToolbarProps) {
         className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
         <Strikethrough size={14} />
       </button>
-      <button onClick={() => onFormat("hiliteColor")} title="Resaltar"
-        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms", fontSize: 14, fontWeight: 700, lineHeight: 1 }}
+      {/* Resaltar — paleta legible sobre tema oscuro y claro */}
+      <div ref={highlightMenuRef} style={{ position: "relative" }}>
+        <button onClick={() => { setShowHlMenu(v => !v); setShowColorMenu(false); }} title="Resaltar"
+          style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms", fontSize: 14, fontWeight: 700, lineHeight: 1 }}
+          className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
+          <span style={{ background: "linear-gradient(135deg, #FBBF24, #F59E0B)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>A</span>
+        </button>
+        {showHlMenu && (
+          <div style={{ position: "absolute", top: "100%", left: 0, marginTop: 6, zIndex: 300, background: "var(--bg-elevated)", border: "1px solid var(--border-strong)", borderRadius: "var(--radius-md)", padding: 10, boxShadow: "var(--shadow-elevated)", display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
+            {HIGHLIGHT_COLORS.map(c => (
+              <button key={c.name} title={c.name} onClick={() => { onFormat("hiliteColor", c.value); setShowHlMenu(false); }}
+                style={{ width: 24, height: 24, borderRadius: 6, border: "1px solid var(--border-default)", cursor: "pointer", background: c.value === "transparent" ? "var(--bg-base)" : c.value, color: "var(--text-tertiary)", fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                {c.value === "transparent" ? "×" : ""}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      {/* Color de texto */}
+      <div ref={colorMenuRef} style={{ position: "relative" }}>
+        <button onClick={() => { setShowColorMenu(v => !v); setShowHlMenu(false); }} title="Color de texto"
+          style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
+          className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
+          <Palette size={14} />
+        </button>
+        {showColorMenu && (
+          <div style={{ position: "absolute", top: "100%", left: 0, marginTop: 6, zIndex: 300, background: "var(--bg-elevated)", border: "1px solid var(--border-strong)", borderRadius: "var(--radius-md)", padding: 10, boxShadow: "var(--shadow-elevated)", display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
+            {TEXT_COLORS.map(c => (
+              <button key={c.name} title={c.name} onClick={() => { onFormat("foreColor", c.value); setShowColorMenu(false); }}
+                style={{ width: 24, height: 24, borderRadius: 6, border: "1px solid var(--border-default)", cursor: "pointer", background: c.value === "var(--text-primary)" ? "var(--bg-base)" : c.value, color: "var(--text-tertiary)", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                {c.value === "var(--text-primary)" ? "A" : ""}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      {/* Enlaces e imagen */}
+      <button onClick={() => onFormat("createLinkPrompt")} title="Insertar enlace (Ctrl+K)"
+        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
         className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
-        <span style={{ background: "linear-gradient(135deg, #FFF176, #FFD54F)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>A</span>
+        <Link2 size={14} />
       </button>
+      <button onClick={() => onFormat("removeLink")} title="Quitar enlace"
+        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
+        className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
+        <Unlink size={14} />
+      </button>
+      <button onClick={() => imageInputRef.current?.click()} title="Insertar imagen"
+        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
+        className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
+        <ImageIcon size={14} />
+      </button>
+      <input ref={imageInputRef} type="file" accept="image/*" style={{ display: "none" }}
+        onChange={e => {
+          const f = e.target.files?.[0];
+          if (!f) return;
+          const reader = new FileReader();
+          reader.onload = async () => {
+            try {
+              const dataUrl = await compressImageForNote(String(reader.result || ""));
+              if (dataUrl) onFormat("insertImage", dataUrl);
+            } catch {}
+          };
+          reader.readAsDataURL(f);
+          e.target.value = "";
+        }} />
 
       <div style={{ width: 1, height: 16, background: "var(--border-default)", margin: "0 4px" }} />
 
@@ -1416,28 +1484,38 @@ function EditorToolbar({ onFormat, onUndo, onRedo }: EditorToolbarProps) {
               display: "grid", gridTemplateColumns: `repeat(${Math.max(tableCols, 1)}, 1fr)`, gap: 3, marginBottom: 10,
               background: "var(--bg-base)", padding: 8, borderRadius: 8,
             }}>
-              {Array.from({ length: Math.max(tableCols * tableRows, 1) }).map((_, i) => (
-                <div key={i} style={{
-                  width: 20, height: 16, borderRadius: 3,
-                  background: "var(--accent)", opacity: 0.25, border: "1px solid var(--accent)",
-                  transition: "all 100ms",
-                }}
-                  onMouseEnter={e => { e.currentTarget.style.opacity = '0.6'; e.currentTarget.style.transform = 'scale(1.1)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.opacity = '0.25'; e.currentTarget.style.transform = 'scale(1)'; }} />
-              ))}
+              {Array.from({ length: Math.max(tableCols * tableRows, 1) }).map((_, i) => {
+                const col = (i % Math.max(tableCols, 1)) + 1;
+                const row = Math.floor(i / Math.max(tableCols, 1)) + 1;
+                return (
+                  <div key={i} onClick={() => { onFormat("insertTable", `${col}x${row}`); setShowTablePicker(false); }}
+                    title={`Insertar tabla ${col}×${row}`}
+                    style={{
+                      width: 20, height: 16, borderRadius: 3, cursor: "pointer",
+                      background: "var(--accent)", opacity: 0.25, border: "1px solid var(--accent)",
+                      transition: "all 100ms",
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.opacity = '0.6'; e.currentTarget.style.transform = 'scale(1.1)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.opacity = '0.25'; e.currentTarget.style.transform = 'scale(1)'; }} />
+                );
+              })}
             </div>
-            <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary)", minWidth: 50, textAlign: "center" }}>{tableCols} × {tableRows}</span>
-              <div style={{ display: "flex", gap: 4 }}>
+            <div style={{ display: "flex", gap: 14, alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--text-tertiary)" }}>Cols</span>
                 <button onClick={() => { setTableCols(Math.max(1, tableCols - 1)); }}
-                  style={{ width: 22, height: 22, borderRadius: 4, border: "1px solid var(--border-soft)", background: "var(--bg-hover)", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, lineHeight: 1 }}>−</button>
-                <button onClick={() => { setTableRows(Math.max(1, tableRows - 1)); }}
                   style={{ width: 22, height: 22, borderRadius: 4, border: "1px solid var(--border-soft)", background: "var(--bg-hover)", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, lineHeight: 1 }}>−</button>
                 <button onClick={() => { setTableCols(Math.min(8, tableCols + 1)); }}
                   style={{ width: 22, height: 22, borderRadius: 4, border: "1px solid var(--border-soft)", background: "var(--bg-hover)", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, lineHeight: 1 }}>+</button>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--text-tertiary)" }}>Filas</span>
+                <button onClick={() => { setTableRows(Math.max(1, tableRows - 1)); }}
+                  style={{ width: 22, height: 22, borderRadius: 4, border: "1px solid var(--border-soft)", background: "var(--bg-hover)", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, lineHeight: 1 }}>−</button>
                 <button onClick={() => { setTableRows(Math.min(10, tableRows + 1)); }}
                   style={{ width: 22, height: 22, borderRadius: 4, border: "1px solid var(--border-soft)", background: "var(--bg-hover)", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, lineHeight: 1 }}>+</button>
               </div>
+              <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary)" }}>{tableCols} × {tableRows}</span>
             </div>
             <button onClick={() => { onFormat("insertTable", `${tableCols}x${tableRows}`); setShowTablePicker(false); }}
               style={{
@@ -1579,11 +1657,14 @@ export default function Notas() {
       const node = stored.startContainer;
       if (node.nodeType === Node.TEXT_NODE && node.textContent) {
         const start = stored.startOffset - 1;
-        const end = stored.startOffset + slashFilter.length;
+        // Solo borra el filtro si REALMENTE está contiguo al "/" en este nodo;
+        // antes se extendía a ciegas y podía comerse texto del usuario.
+        const actual = node.textContent.substring(stored.startOffset, stored.startOffset + slashFilter.length);
+        const end = actual === slashFilter ? stored.startOffset + slashFilter.length : stored.startOffset;
         if (start >= 0 && end <= node.textContent.length) {
           node.textContent = node.textContent.substring(0, start) + node.textContent.substring(end);
           const range = document.createRange();
-          range.setStart(node, start);
+          range.setStart(node, Math.min(start, node.textContent.length));
           range.collapse(true);
           const sel = window.getSelection();
           if (sel) { sel.removeAllRanges(); sel.addRange(range); }
@@ -1810,17 +1891,24 @@ const noteLiveAtts = useMemo(
   }, [cleanUpSlashText]);
 
   const lastContentRef = useRef("");
+  const lastSavedSigRef = useRef("");
   const handleSaveNote = useCallback(() => {
     if (!selectedNote) return;
     let content = selectedNote.content;
     let title = selectedNote.title;
-    
+
     if (editorRef.current) {
       content = editorRef.current.innerHTML;
     }
     if (titleRef.current) {
       title = titleRef.current.value || "Sin título";
     }
+
+    // Si nada cambió desde el último guardado, no re-escribe la nota
+    // (antes cada cleanup del effect de autosave disparaba updateNote y re-creaba el ciclo).
+    const sig = `${selectedNote.id}|${title}|${content}`;
+    if (sig === lastSavedSigRef.current) { setSaveStatus("saved"); return; }
+    lastSavedSigRef.current = sig;
 
     const plain = content.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\u00A0/g, " ").trim();
     if (plain !== lastContentRef.current && plain) {
@@ -2194,7 +2282,7 @@ const noteLiveAtts = useMemo(
         const range = sel.getRangeAt(0);
         const parent = range.startContainer.parentElement;
         const highlightSpan = parent?.closest('span[style*="background"]') || parent?.closest('span[style*="background-color"]');
-        if (highlightSpan) {
+        if (highlightSpan && (!value || value === "transparent")) {
           const text = highlightSpan.textContent || '';
           const p = highlightSpan.parentNode;
           if (p) {
@@ -2207,17 +2295,41 @@ const noteLiveAtts = useMemo(
             sel.addRange(newRange);
           }
         } else {
-          document.execCommand("hiliteColor", false, "#FFF9C4");
+          // Paleta translúcida legible sobre el tema (el #FFF9C4 fijo era ilegible con texto claro)
+          const color = value || "rgba(245, 158, 11, 0.25)";
+          document.execCommand("hiliteColor", false, color);
           if (sel.rangeCount > 0) {
             const a = (sel.getRangeAt(0).startContainer.parentElement?.closest('span[style*="background"]') || sel.getRangeAt(0).startContainer.parentElement?.closest('span[style*="background-color"]')) as HTMLElement | null;
-            if (a && a.style.backgroundColor) {
-              a.style.backgroundColor = '#FFF9C4';
+            if (a) {
+              a.style.backgroundColor = color;
               a.style.borderRadius = '3px';
-              a.style.padding = '1px 2px';
+              a.style.padding = '1px 3px';
             }
           }
         }
       }
+    } else if (cmd === "foreColor") {
+      const resolved = value && value.startsWith('var(')
+        ? (getComputedStyle(document.documentElement).getPropertyValue(value.slice(4, -1)).trim() || '#EAEAEA')
+        : (value || '#EAEAEA');
+      document.execCommand("styleWithCSS", false, "true");
+      document.execCommand("foreColor", false, resolved);
+      document.execCommand("styleWithCSS", false, "false");
+    } else if (cmd === "createLinkPrompt") {
+      const url = prompt("URL del enlace:", "https://");
+      if (url && url !== "https://") {
+        const sel2 = window.getSelection();
+        if (sel2 && sel2.rangeCount > 0 && !sel2.isCollapsed) {
+          document.execCommand("createLink", false, url);
+          const a = sel2.getRangeAt(0).startContainer.parentElement?.closest('a');
+          if (a) a.setAttribute('title', url);
+        } else if (sel2 && sel2.rangeCount > 0) {
+          // Sin selección: inserta la URL como texto clicable en el cursor
+          document.execCommand("insertHTML", false, `<a href="${url}" title="${url}" target="_blank" rel="noopener">${url}</a>&nbsp;`);
+        }
+      }
+    } else if (cmd === "insertImage" && value) {
+      document.execCommand("insertHTML", false, `<img src="${value}" alt="" style="max-width:100%;border-radius:10px;margin:6px 0;" /><br>`);
     } else {
       document.execCommand(cmd, false, value);
     }
@@ -4516,8 +4628,14 @@ const noteLiveAtts = useMemo(
                                               } else {
                                                 if (editorRef.current) {
                                                   editorRef.current.innerHTML = v.content!;
+                                                  // Reinicia el historial: antes un Ctrl+Z posterior
+                                                  // volvía al HTML previo con un caret de otro texto.
+                                                  histRef.current.reset();
+                                                  histRef.current.capture(false);
                                                 }
                                                 lastContentRef.current = v.content!.replace(/<[^>]+>/g, "").trim();
+                                                lastSavedSigRef.current = `${selectedNote.id}|${titleRef.current?.value || selectedNote.title}|${v.content!}`;
+                                                if (selectedNote) updateNote(selectedNote.id, { content: v.content! });
                                                 toast.success("Versión restaurada");
                                               }
                                               setSaveStatus("pending");
