@@ -3,6 +3,7 @@
  */
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import LiveClock from '../ui/LiveClock';
 import { createPortal } from 'react-dom';
 import {
   ChevronLeft, ChevronRight, ChevronUp, ChevronDown, FolderOpen, Plus, Minus, Calendar, Clock, X, Trash2, Check, CheckSquare, CheckCircle2, Pencil, BookOpen
@@ -195,7 +196,6 @@ export default function Planificacion() {
     catch { return 'week'; }
   });
   const [navDate, setNavDate]   = useState(new Date());
-  const [now, setNow]           = useState(new Date());
 
   const [events, setEvents]    = useState<PlanEvent[]>([]);
   const [classes, setClasses]  = useState<ScheduleClass[]>([]);
@@ -315,27 +315,8 @@ export default function Planificacion() {
   useEffect(() => { localStorage.setItem('owa_planner_view', planView); }, [planView]);
   useEffect(() => { localStorage.setItem('owa_show_schedule', String(showScheduleBuilder)); }, [showScheduleBuilder]);
   useEffect(() => { localStorage.setItem('owa_show_habits', String(showHabits)); }, [showHabits]);
-  useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t); }, []);
-  const timeStr = fmtClock(format(now, 'HH:mm'), settings?.timeFormat);
-  const secsStr = format(now, 'ss');
-  const dateStr = format(now, "EEEE d 'de' MMMM yyyy", { locale: es as any });
 
   useEffect(() => { const d = loadStore(); setEvents(d.events); setClasses(d.classes); }, []);
-
-  // Refresca en vivo los eventos creados/editados/eliminados por Charvis (owa-planner-external-change)
-  useEffect(() => {
-    const reload = () => {
-      const d = loadStore();
-      setEvents(prev => {
-        const storedIds = new Set(d.events.map(e => e.id));
-        const pending = prev.filter(e => !storedIds.has(e.id));
-        return [...d.events, ...pending];
-      });
-      setClasses(d.classes);
-    };
-    window.addEventListener('owa-planner-external-change', reload);
-    return () => window.removeEventListener('owa-planner-external-change', reload);
-  }, []);
 
   // Registra los eventos del planificador en el contexto para el sync con Google Calendar
   useEffect(() => {
@@ -654,7 +635,10 @@ export default function Planificacion() {
             Planificador
           </h1>
           <p style={{ fontSize:13, color:'var(--text-secondary)', marginTop:6, fontWeight:500, letterSpacing: '0.01em' }}>
-            {dateStr.charAt(0).toUpperCase() + dateStr.slice(1)}
+            <LiveClock>{now => {
+              const dateStr = format(now, "EEEE d 'de' MMMM yyyy", { locale: es as any });
+              return dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
+            }}</LiveClock>
           </p>
         </div>
 
@@ -662,7 +646,7 @@ export default function Planificacion() {
           <NotificationBell />
           <div style={{ textAlign:'right', paddingRight:2 }}>
             <div style={{ display:'flex', alignItems:'baseline', gap:3, justifyContent:'flex-end' }}>
-              <span style={{ fontFamily:"'Inter Tight', sans-serif", fontSize:68, fontWeight:200, lineHeight:0.9, color:'var(--accent)', textShadow:'0 0 32px var(--accent-glow)', letterSpacing:'0.02em' }}>{timeStr}</span>
+              <span style={{ fontFamily:"'Inter Tight', sans-serif", fontSize:68, fontWeight:200, lineHeight:0.9, color:'var(--accent)', textShadow:'0 0 32px var(--accent-glow)', letterSpacing:'0.02em' }}><LiveClock>{now => fmtClock(format(now, 'HH:mm'), settings?.timeFormat)}</LiveClock></span>
             </div>
           </div>
         </div>

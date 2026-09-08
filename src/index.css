@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Inter+Tight:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;600;700&family=Roboto:wght@300;400;500;700&family=Share+Tech+Mono&family=Orbitron:wght@400;500;600;700;800;900&family=Chakra+Petch:wght@500;600;700&family=Wallpoet&family=Digital+Numbers&display=swap');
+﻿@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Inter+Tight:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;600;700&family=Roboto:wght@300;400;500;700&family=Share+Tech+Mono&family=Orbitron:wght@400;500;600;700;800;900&family=Chakra+Petch:wght@500;600;700&family=Wallpoet&family=Digital+Numbers&display=swap');
 @import "tailwindcss";
 
 @theme {
@@ -29,7 +29,7 @@ select option:disabled {
 }
 
 :root {
-  /* ── DARK THEME (Default) ── */
+  /* â”€â”€ DARK THEME (Default) â”€â”€ */
   --bg-base: #0a0a0c;
   --bg-surface: #111114;
   --bg-elevated-raw: #18181b;
@@ -94,7 +94,7 @@ select option:disabled {
   --shadow-elevated: 0 8px 32px rgba(0, 0, 0, 0.4);
   --shadow-glow: 0 0 24px var(--accent-glow);
 
-  /* ── Variables para DIAGRAMAS VECTORIALES (SVG de Charvis / apuntes) ── */
+  /* â”€â”€ Variables para DIAGRAMAS VECTORIALES (SVG de Charvis / apuntes) â”€â”€ */
   --d-bg: #101016;
   --d-fg: #f4f4f5;
   --d-mut: #a1a1aa;
@@ -180,9 +180,9 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ══════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    LAYOUT
-   ══════════════════════════════════════════════════ */
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 .app-layout {
   display: flex;
   height: 100vh;
@@ -252,7 +252,7 @@ body {
   z-index: 1;
 }
 
-/* ── Background image active: panels get opacity-based translucency + blur ── */
+/* â”€â”€ Background image active: panels get opacity-based translucency + blur â”€â”€ */
 [data-has-bg] .page-container {
   background: color-mix(in srgb, var(--bg-base) calc(var(--ui-opacity, 0.85) * 100%), transparent);
   backdrop-filter: blur(var(--bg-blur, 0px));
@@ -309,7 +309,7 @@ body {
 [data-has-bg] .board-card {
   background: color-mix(in srgb, var(--bg-elevated-raw) calc(var(--ui-opacity, 0.85) * 100%), transparent) !important;
 }
-/* Modales que deben quedar 100% opacos aunque haya fondo de imagen (modal de sesión, etc.) */
+/* Modales que deben quedar 100% opacos aunque haya fondo de imagen (modal de sesiÃ³n, etc.) */
 [data-has-bg] .bento-card.modal-opaque {
   background: var(--bg-surface) !important;
   backdrop-filter: none !important;
@@ -350,7 +350,7 @@ body {
   );
 }
 
-/* ─── Sidebar Logo ─── */
+/* â”€â”€â”€ Sidebar Logo â”€â”€â”€ */
 .sidebar-logo {
   padding: 10px 0 0 0;
   height: 62px;
@@ -397,7 +397,7 @@ body {
   margin: 0 auto;
 }
 
-/* ─── Navigation ─── */
+/* â”€â”€â”€ Navigation â”€â”€â”€ */
 .sidebar-nav {
   padding: 4px 12px;
   display: flex;
@@ -467,7 +467,7 @@ body {
   white-space: nowrap;
 }
 
-/* ─── Mis Cursos ─── */
+/* â”€â”€â”€ Mis Cursos â”€â”€â”€ */
 .sidebar-cursos {
   padding: 0 10px;
   margin-top: 32px;
@@ -570,13 +570,13 @@ body {
   color: var(--text-primary);
 }
 
-/* ─── Spacer ─── */
+/* â”€â”€â”€ Spacer â”€â”€â”€ */
 .sidebar-spacer {
   flex: 1;
   min-height: 16px;
 }
 
-/* ─── Footer ─── */
+/* â”€â”€â”€ Footer â”€â”€â”€ */
 .sidebar-footer {
   padding: 8px 10px;
   display: flex;
@@ -587,7 +587,7 @@ body {
   padding-top: 12px;
 }
 
-/* ─── User Card ─── */
+/* â”€â”€â”€ User Card â”€â”€â”€ */
 .sidebar-user-card {
   display: flex;
   flex-direction: column;
@@ -667,9 +667,9 @@ body {
   padding: 20px 28px;
 }
 
-/* ══════════════════════════════════════════════════
-   BENTO CARD — Core Component
-   ══════════════════════════════════════════════════ */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   BENTO CARD â€” Core Component
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 .bento-card {
   background: color-mix(in srgb, var(--bg-surface) calc(var(--ui-opacity, 0.92) * 100%), var(--bg-base));
   border: 1px solid var(--border-default);
@@ -759,9 +759,9 @@ body {
 
 
 
-/* ══════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    BUTTONS
-   ══════════════════════════════════════════════════ */
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 .btn-ghost {
   background: transparent;
   border: none;
@@ -813,9 +813,9 @@ body {
   background: var(--bg-hover);
 }
 
-/* ══════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    INPUTS
-   ══════════════════════════════════════════════════ */
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 .input-base {
   width: 100%;
   padding: 8px 12px;
@@ -839,9 +839,9 @@ body {
   color: var(--text-muted);
 }
 
-/* ══════════════════════════════════════════════════
-   LED DISPLAY SYSTEM — Ultra Premium Digital Screen
-   ══════════════════════════════════════════════════ */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   LED DISPLAY SYSTEM â€” Ultra Premium Digital Screen
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 .digital-font {
   font-family: var(--font-mono);
   letter-spacing: 0.06em;
@@ -917,9 +917,9 @@ body {
   z-index: 1;
 }
 
-/* ══════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    HEATMAP
-   ══════════════════════════════════════════════════ */
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 .heatmap-cell {
   width: 14px;
   height: 14px;
@@ -927,9 +927,9 @@ body {
   transition: all 200ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* ══════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    METRIC CARD
-   ══════════════════════════════════════════════════ */
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 .metric-card {
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
@@ -945,9 +945,9 @@ body {
   border-color: var(--border-strong);
 }
 
-/* ══════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    PROGRESS
-   ══════════════════════════════════════════════════ */
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 .progress-track {
   height: 3px;
   background: var(--bg-hover);
@@ -962,9 +962,9 @@ body {
   transition: width 300ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* ══════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    TAGS / BADGES
-   ══════════════════════════════════════════════════ */
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 .tag {
   padding: 2px 8px;
   border-radius: var(--radius-sm);
@@ -993,9 +993,9 @@ body {
   color: var(--success);
 }
 
-/* ══════════════════════════════════════════════════
-   STAT LABEL — Standardized micro stat
-   ══════════════════════════════════════════════════ */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   STAT LABEL â€” Standardized micro stat
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 .stat-label {
   font-size: 9px;
   font-weight: 500;
@@ -1017,9 +1017,9 @@ body {
   color: var(--text-muted);
 }
 
-/* ══════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    SECTION HEADER
-   ══════════════════════════════════════════════════ */
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 .section-header {
   font-size: 10px;
   font-weight: 600;
@@ -1047,9 +1047,9 @@ body {
   opacity: 0.7;
 }
 
-/* ══════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    ANIMATIONS
-   ══════════════════════════════════════════════════ */
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 @keyframes blink {
 
   0%,
@@ -1101,7 +1101,7 @@ body {
 }
 
 /* Icono de carga girando (Charvis): sin esta clase el Loader2 se quedaba
-   estático aunque @keyframes spin existiera. */
+   estÃ¡tico aunque @keyframes spin existiera. */
 .spin {
   display: inline-block;
   animation: spin 1s linear infinite;
@@ -1118,8 +1118,8 @@ body {
   }
 }
 
-/* Cursos — divisores animados del bloque de métricas (2×2): pulso sutil de
-   brillo sobre las líneas divisorias, con la estética de los bloques de temas. */
+/* Cursos â€” divisores animados del bloque de mÃ©tricas (2Ã—2): pulso sutil de
+   brillo sobre las lÃ­neas divisorias, con la estÃ©tica de los bloques de temas. */
 @keyframes metricDividerPulse {
   0%, 100% {
     opacity: 0.32;
@@ -1129,63 +1129,7 @@ body {
   }
 }
 
-/* Voz en vivo (Alt+A): entrada suave del texto transcrito al cambiar. */
-@keyframes voiceLiveIn {
-  from {
-    opacity: 0;
-    transform: translateY(26px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* Voz en vivo (Alt+A): salida suave (fundido + ascenso ligero), no lateral. */
-@keyframes voiceLiveOut {
-  from {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  to {
-    opacity: 0;
-    transform: translateY(-18px);
-  }
-}
-
-@keyframes voiceLiveInCenter {
-  from {
-    opacity: 0;
-    transform: translate(-50%, 26px);
-  }
-  to {
-    opacity: 1;
-    transform: translate(-50%, 0);
-  }
-}
-
-@keyframes voiceLiveOutCenter {
-  from {
-    opacity: 1;
-    transform: translate(-50%, 0);
-  }
-  to {
-    opacity: 0;
-    transform: translate(-50%, -18px);
-  }
-}
-
-/* Voz en vivo: cursor de escritura mientras Charvis responde. */
-@keyframes voiceCaretBlink {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0;
-  }
-}
-
-/* Cursos — panel de sesión de estudio: los dos puntos de la hora (reloj digital)
+/* Cursos â€” panel de sesiÃ³n de estudio: los dos puntos de la hora (reloj digital)
    parpadean suavemente como un reloj real. */
 @keyframes clockColonBlink {
   0%, 100% {
@@ -1196,7 +1140,7 @@ body {
   }
 }
 
-/* Cursos — CTA "Iniciar sesión de estudio": respiración suave (elevación +
+/* Cursos â€” CTA "Iniciar sesiÃ³n de estudio": respiraciÃ³n suave (elevaciÃ³n +
    brillo) sin depender de colores, para que combine con cualquier curso. */
 @keyframes sessionCtaBreath {
   0%, 100% {
@@ -1209,8 +1153,8 @@ body {
   }
 }
 
-/* Cursos — barra de duración del panel de sesión: brillo deslizante que recorre
-   el relleno como una línea de vida. */
+/* Cursos â€” barra de duraciÃ³n del panel de sesiÃ³n: brillo deslizante que recorre
+   el relleno como una lÃ­nea de vida. */
 @keyframes sessionSheen {
   0% {
     transform: translateX(-100%);
@@ -1220,8 +1164,8 @@ body {
   }
 }
 
-/* Cursos — cronograma semanal: pulso del brillo del día seleccionado (glow
-   respirable con el color del curso vía var(--sel-glow)). */
+/* Cursos â€” cronograma semanal: pulso del brillo del dÃ­a seleccionado (glow
+   respirable con el color del curso vÃ­a var(--sel-glow)). */
 @keyframes plannerSelGlow {
   0%, 100% {
     box-shadow: 0 0 3px var(--sel-glow, transparent), 0 0 1px var(--sel-glow, transparent);
@@ -1231,8 +1175,8 @@ body {
   }
 }
 
-/* Cursos — estado vacío del cronograma semanal: respiración suave del botón
-   "haz clic para añadir sesión" (anillo punteado + icono). */
+/* Cursos â€” estado vacÃ­o del cronograma semanal: respiraciÃ³n suave del botÃ³n
+   "haz clic para aÃ±adir sesiÃ³n" (anillo punteado + icono). */
 @keyframes plannerPulse {
   0%, 100% {
     opacity: 0.55;
@@ -1244,7 +1188,7 @@ body {
   }
 }
 
-/* Cursos — bloque de sesiones de hoy: botón "+" que se revela al pasar el cursor */
+/* Cursos â€” bloque de sesiones de hoy: botÃ³n "+" que se revela al pasar el cursor */
 .crono-block .crono-add-btn {
   opacity: 0;
   transform: translateY(-3px);
@@ -1258,7 +1202,7 @@ body {
   border-color: rgba(255, 255, 255, 0.28) !important;
 }
 
-/* Modal de sesión: cae desde arriba con un suave rebote */
+/* Modal de sesiÃ³n: cae desde arriba con un suave rebote */
 @keyframes modalDrop {
   from {
     transform: translateY(-26px);
@@ -1302,196 +1246,6 @@ body {
   50% {
     text-shadow: 0 0 12px var(--led-glow), 0 0 30px var(--led-glow), 0 0 50px color-mix(in srgb, var(--led-color) 20%, transparent);
   }
-}
-
-@keyframes charvisPulse {
-  0%, 100% {
-    box-shadow: 0 0 5px rgba(52, 211, 153, 0.8), 0 0 12px rgba(52, 211, 153, 0.4);
-    transform: scale(1);
-  }
-  50% {
-    box-shadow: 0 0 10px rgba(52, 211, 153, 1), 0 0 22px rgba(52, 211, 153, 0.7), 0 0 34px rgba(52, 211, 153, 0.35);
-    transform: scale(1.12);
-  }
-}
-
-/* ─── Charvis modo profundo: aura arcoíris ambiental + contornos que laten suave ─── */
-.charvis-deep {
-  position: relative;
-  overflow: hidden;
-}
-
-/* Velo arcoíris difuminado que envuelve todo el panel y "se apodera" de él,
-   respirando despacio. Sustituye a las antiguas líneas en movimiento.
-   mix-blend: screen — SOLO ilumina, nunca oscurece el contenido. */
-.charvis-deep-aura {
-  position: absolute;
-  inset: -35%;
-  pointer-events: none;
-  z-index: 0;
-  mix-blend-mode: screen;
-  background: conic-gradient(
-    from 0deg,
-    rgba(255, 77, 77, 0.12),
-    rgba(255, 138, 77, 0.1),
-    rgba(255, 210, 77, 0.11),
-    rgba(77, 255, 77, 0.1),
-    rgba(77, 200, 255, 0.11),
-    rgba(77, 138, 255, 0.12),
-    rgba(166, 77, 255, 0.11),
-    rgba(255, 77, 210, 0.11),
-    rgba(255, 77, 77, 0.12)
-  );
-  animation: charvisAuraBreath 8s ease-in-out infinite;
-}
-
-@keyframes charvisAuraBreath {
-  0%, 100% {
-    opacity: 0.2;
-    transform: rotate(0deg) scale(1.02);
-    filter: blur(40px) hue-rotate(0deg);
-  }
-  50% {
-    opacity: 0.38;
-    transform: rotate(26deg) scale(1.12);
-    filter: blur(40px) hue-rotate(60deg);
-  }
-}
-
-/* Título CHARVIS: degradado arcoíris que fluye lentamente y vibra apenas */
-.charvis-deep-title {
-  background: linear-gradient(
-    90deg,
-    #ff4d4d,
-    #ffd24d,
-    #4dff9e,
-    #4dc2ff,
-    #a64dff,
-    #ff4dd2,
-    #ff4d4d
-  );
-  background-size: 300% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  color: transparent;
-  animation:
-    charvisTitleFlow 7s linear infinite,
-    charvisTitleVibrate 3.6s ease-in-out infinite;
-}
-
-@keyframes charvisTitleFlow {
-  to { background-position: 300% 0; }
-}
-
-@keyframes charvisTitleVibrate {
-  0%, 100% {
-    transform: translate(0, 0) rotate(0deg);
-    filter: drop-shadow(0 0 9px rgba(255, 77, 77, 0.6));
-  }
-  25% {
-    transform: translate(0.6px, -0.5px) rotate(-0.5deg);
-    filter: drop-shadow(0 0 12px rgba(77, 255, 210, 0.6));
-  }
-  50% {
-    transform: translate(-0.6px, 0.5px) rotate(0.5deg);
-    filter: drop-shadow(0 0 12px rgba(77, 138, 255, 0.6));
-  }
-  75% {
-    transform: translate(0.5px, 0.6px) rotate(-0.4deg);
-    filter: drop-shadow(0 0 12px rgba(166, 77, 255, 0.6));
-  }
-}
-
-/* Contornos de elementos internos (burbujas, composer, botones): borde arcoíris
-   PINTADO en el propio elemento. El color fluye a lo largo del borde animando el
-   ángulo del conic-gradient (registrado vía @property), sin capas superpuestas
-   que roten. Al activar el modo profundo los elementos se "pintan" suavemente
-   (fade + saturación) con charvisItemPaint. */
-@property --charvis-angle {
-  syntax: '<angle>';
-  initial-value: 0deg;
-  inherits: false;
-}
-
-.charvis-deep-item {
-  position: relative;
-  border: 1px solid transparent !important;
-  background-clip: padding-box;
-  animation:
-    charvisItemPaint 1.1s ease-out backwards,
-    charvisItemPulse 4.8s ease-in-out 1.2s infinite;
-}
-
-.charvis-deep-item::before {
-  content: '';
-  position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-  padding: 1px;
-  background: conic-gradient(
-    from var(--charvis-angle),
-    rgba(255, 77, 77, 0.55),
-    rgba(255, 210, 77, 0.55),
-    rgba(77, 255, 77, 0.55),
-    rgba(77, 200, 255, 0.55),
-    rgba(77, 138, 255, 0.55),
-    rgba(166, 77, 255, 0.55),
-    rgba(255, 77, 210, 0.55),
-    rgba(255, 77, 77, 0.55)
-  );
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  pointer-events: none;
-  opacity: 0.75;
-  animation: charvisBorderFlow 9s linear infinite;
-}
-
-/* El borde pinta su propio anillo con un desplazamiento de ángulo suave: la
-   mancha arcoíris "corre" por el contorno sin rotar ninguna capa. */
-@keyframes charvisBorderFlow {
-  to { --charvis-angle: 360deg; }
-}
-
-/* Aparición: los elementos entran en color al activar el modo profundo.
-   NUNCA parten de opacidad 0: el texto de las burbujas/composer debe
-   permanecer legible en todo momento, sin apagarse al activar el modo. */
-@keyframes charvisItemPaint {
-  0% { opacity: 0.92; }
-  100% { opacity: 1; }
-}
-
-@keyframes charvisItemPulse {
-  0%, 100% { filter: drop-shadow(0 0 4px rgba(255, 77, 77, 0.14)); }
-  25% { filter: drop-shadow(0 0 6px rgba(77, 255, 210, 0.18)); }
-  50% { filter: drop-shadow(0 0 6px rgba(77, 138, 255, 0.18)); }
-  75% { filter: drop-shadow(0 0 6px rgba(166, 77, 255, 0.18)); }
-}
-
-/* Botones del compositor/header: halo arcoíris suave al latir */
-.charvis-deep-btn {
-  animation: charvisBtnGlow 3.8s ease-in-out infinite;
-}
-
-@keyframes charvisBtnGlow {
-  0%, 100% { box-shadow: 0 0 4px rgba(255, 77, 77, 0.16) !important; }
-  25% { box-shadow: 0 0 7px rgba(77, 255, 210, 0.2) !important; }
-  50% { box-shadow: 0 0 7px rgba(77, 138, 255, 0.2) !important; }
-  75% { box-shadow: 0 0 7px rgba(166, 77, 255, 0.2) !important; }
-}
-
-/* Botón de modo profundo activo: corriente propia pero suave */
-.charvis-deep-btn-active {
-  background: linear-gradient(135deg, rgba(255, 77, 77, 0.14), rgba(77, 255, 77, 0.14), rgba(77, 138, 255, 0.14)) !important;
-  border: 1px solid rgba(255, 255, 255, 0.22) !important;
-  box-shadow: 0 0 10px rgba(167, 77, 255, 0.28), inset 0 0 6px rgba(255, 255, 255, 0.06);
-  animation: charvisBtnGlow 3.8s ease-in-out infinite;
-}
-
-/* Onda del micrófono: canvas por defecto transparente */
-.charvis-waveform {
-  background: transparent;
 }
 
 @keyframes waterWave {
@@ -1559,9 +1313,9 @@ body {
   animation: slideInUp 400ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-/* ══════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    SCROLLBAR
-   ══════════════════════════════════════════════════ */
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 ::-webkit-scrollbar {
   width: 5px;
   height: 5px;
@@ -1580,9 +1334,9 @@ body {
   background: var(--border-strong);
 }
 
-/* ══════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    TYPOGRAPHY
-   ══════════════════════════════════════════════════ */
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 h1,
 h2,
 h3,
@@ -1593,9 +1347,9 @@ h6,
   font-family: var(--font-heading);
 }
 
-/* ══════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    UTILITIES
-   ══════════════════════════════════════════════════ */
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 .text-accent {
   color: var(--accent);
 }
@@ -1630,7 +1384,7 @@ h6,
   border: 1px solid var(--border-subtle);
 }
 
-/* Gradient card — standard block with subtle gradient */
+/* Gradient card â€” standard block with subtle gradient */
 .card-grad {
   background: linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%);
   border: 1px solid var(--border-subtle);
@@ -1652,9 +1406,9 @@ h6,
   letter-spacing: 0.08em;
 }
 
-/* ══════════════════════════════════════════════════
-   SELECTION — Claude-style prominent, aesthetic
-   ══════════════════════════════════════════════════ */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   SELECTION â€” Claude-style prominent, aesthetic
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 ::selection {
   background: color-mix(in srgb, var(--accent) 30%, transparent);
   color: var(--text-primary);
@@ -1667,7 +1421,7 @@ h6,
   text-shadow: 0 0 0 color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
-/* Notes editor — extra prominent selection */
+/* Notes editor â€” extra prominent selection */
 .notes-editor-area::selection,
 .notes-editor-area *::selection {
   background: color-mix(in srgb, var(--accent) 35%, transparent);
@@ -1682,7 +1436,7 @@ h6,
   text-shadow: 0 0 1px color-mix(in srgb, var(--accent) 15%, transparent);
 }
 
-/* Notes preview — same treatment */
+/* Notes preview â€” same treatment */
 .notes-preview-area::selection,
 .notes-preview-area *::selection {
   background: color-mix(in srgb, var(--accent) 35%, transparent);
@@ -1697,9 +1451,9 @@ h6,
   text-shadow: 0 0 1px color-mix(in srgb, var(--accent) 15%, transparent);
 }
 
-/* ══════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    ACCESSIBILITY
-   ══════════════════════════════════════════════════ */
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
@@ -1789,9 +1543,9 @@ h6,
   display: none;
 }
 
-/* ══════════════════════════════════════════════════
-   NOTES MODULE — PREMIUM EDITOR
-   ══════════════════════════════════════════════════ */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   NOTES MODULE â€” PREMIUM EDITOR
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 /* Notes Layout */
 .notes-sidebar {
@@ -2246,7 +2000,7 @@ h6,
   flex-shrink: 0;
 }
 
-/* ── SCIENTIFIC CALCULATOR ── */
+/* â”€â”€ SCIENTIFIC CALCULATOR â”€â”€ */
 .calc-container {
   background: linear-gradient(145deg, #0c0c10, #111118);
   border-radius: 20px;
@@ -2382,7 +2136,7 @@ h6,
 }
 .calc-btn-mem:hover { background: rgba(16, 185, 129, 0.15); }
 
-/* ── WHITEBOARD / PIZARRA ── */
+/* â”€â”€ WHITEBOARD / PIZARRA â”€â”€ */
 .whiteboard-container {
   border-radius: 16px;
   overflow: hidden;
@@ -2433,7 +2187,7 @@ h6,
   touch-action: none;
 }
 
-/* ── FORMULA EDITOR ── */
+/* â”€â”€ FORMULA EDITOR â”€â”€ */
 .formula-container {
   background: var(--bg-elevated);
   border-radius: 16px;
@@ -2528,7 +2282,7 @@ h6,
   padding-left: 12px;
 }
 .formula-sqrt::before {
-  content: '√';
+  content: 'âˆš';
   position: absolute;
   left: 0;
   top: 50%;
@@ -2540,7 +2294,7 @@ h6,
   padding: 0 4px;
 }
 
-/* ── NOTES MODALS ── */
+/* â”€â”€ NOTES MODALS â”€â”€ */
 .notes-modal-overlay {
   position: fixed;
   inset: 0;
@@ -2571,7 +2325,7 @@ h6,
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
-/* ── TOOL PANEL (floating) ── */
+/* â”€â”€ TOOL PANEL (floating) â”€â”€ */
 .tool-panel {
   position: fixed;
   z-index: 900;
@@ -2582,7 +2336,7 @@ h6,
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-/* ── NOTES DRAG AND DROP ── */
+/* â”€â”€ NOTES DRAG AND DROP â”€â”€ */
 .note-drag-overlay {
   opacity: 0.8;
   cursor: grabbing;
@@ -2599,7 +2353,7 @@ h6,
   50% { opacity: 1; }
 }
 
-/* ── FOLDER COLOR PICKER ── */
+/* â”€â”€ FOLDER COLOR PICKER â”€â”€ */
 .folder-color-option {
   width: 28px;
   height: 28px;
@@ -2617,7 +2371,7 @@ h6,
   box-shadow: 0 0 12px rgba(255,255,255,0.2);
 }
 .folder-color-option.selected::after {
-  content: '✓';
+  content: 'âœ“';
   position: absolute;
   inset: 0;
   display: flex;
@@ -2629,7 +2383,7 @@ h6,
   text-shadow: 0 1px 2px rgba(0,0,0,0.5);
 }
 
-/* ── TAG CHIPS ── */
+/* â”€â”€ TAG CHIPS â”€â”€ */
 .tag-chip {
   display: inline-flex;
   align-items: center;
@@ -2655,7 +2409,7 @@ h6,
   border-color: var(--accent);
 }
 
-/* ── SIDEBAR SECTION ── */
+/* â”€â”€ SIDEBAR SECTION â”€â”€ */
 .notes-sidebar-section {
   padding: 0 4px;
 }
@@ -2710,7 +2464,7 @@ h6,
   color: var(--text-tertiary);
 }
 
-/* ── NOTES CONTEXT MENU ── */
+/* â”€â”€ NOTES CONTEXT MENU â”€â”€ */
 .notes-context-menu {
   position: fixed;
   z-index: 1100;
@@ -2759,7 +2513,7 @@ h6,
   margin: 4px 8px;
 }
 
-/* ── SAVED INDICATOR ── */
+/* â”€â”€ SAVED INDICATOR â”€â”€ */
 @keyframes savedPulse {
   0% { opacity: 0; transform: translateY(4px); }
   20% { opacity: 1; transform: translateY(0); }
@@ -2770,7 +2524,7 @@ h6,
   animation: savedPulse 1.5s ease-in-out forwards;
 }
 
-/* ── CALLOUT BLOCKS ── */
+/* â”€â”€ CALLOUT BLOCKS â”€â”€ */
 .note-callout {
   padding: 14px 18px;
   border-radius: 10px;
@@ -2784,7 +2538,7 @@ h6,
 .note-callout-success { background: rgba(16,185,129,0.08); border-left: 3px solid #10B981; }
 .note-callout-error { background: rgba(239,68,68,0.08); border-left: 3px solid #EF4444; }
 
-/* ── FLIP CARDS ── */
+/* â”€â”€ FLIP CARDS â”€â”€ */
 .flip-card {
   perspective: 1000px;
   width: 100%;
@@ -2827,7 +2581,7 @@ h6,
   transform: rotateY(180deg);
 }
 
-/* ── DRIVE EXPLORER ── */
+/* â”€â”€ DRIVE EXPLORER â”€â”€ */
 .drive-item-card {
   transition: all 150ms ease;
   border: 1px solid var(--border-subtle);
@@ -2840,7 +2594,7 @@ h6,
   box-shadow: 0 6px 20px rgba(0,0,0,0.15);
 }
 
-/* ── AETHER GLASS DESIGN (remapped to app theme) ── */
+/* â”€â”€ AETHER GLASS DESIGN (remapped to app theme) â”€â”€ */
 :root {
   --aether-primary: var(--accent, #758bfa);
   --aether-primary-hover: color-mix(in srgb, var(--accent, #758bfa) 80%, #000);
@@ -2916,124 +2670,9 @@ h6,
   transition-duration: 50ms;
 }
 
-/* ═══════════════════════════════════════════════════
-   Charvis — Renderizado de markdown en el chat
-   ═══════════════════════════════════════════════════ */
-.charvis-md {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 13px;
-  line-height: 1.7;
-  word-break: break-word;
-  color: var(--text-primary);
-}
-.charvis-md > *:first-child { margin-top: 0; }
-.charvis-md > *:last-child { margin-bottom: 0; }
-.charvis-md p { margin: 8px 0; }
-.charvis-md strong { color: var(--text-primary); font-weight: 700; }
-.charvis-md em { color: var(--text-secondary); }
-.charvis-md u { text-decoration: underline; text-underline-offset: 3px; }
-.charvis-md s { color: var(--text-muted); }
-.charvis-md a {
-  color: var(--accent);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  word-break: break-all;
-}
-.charvis-md a:hover { opacity: 0.8; }
-.charvis-md h1, .charvis-md h2, .charvis-md h3, .charvis-md h4 {
-  font-family: 'Inter Tight', sans-serif;
-  color: var(--text-primary);
-  margin: 16px 0 8px;
-  line-height: 1.3;
-}
-.charvis-md h1 { font-size: 19px; font-weight: 700; letter-spacing: -0.02em; }
-.charvis-md h2 { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
-.charvis-md h3 { font-size: 14px; font-weight: 600; }
-.charvis-md h4 { font-size: 13px; font-weight: 600; }
-.charvis-md ul, .charvis-md ol { margin: 8px 0; padding-left: 20px; }
-.charvis-md li { margin: 3px 0; }
-.charvis-md li > ul, .charvis-md li > ol { margin: 2px 0; }
-.charvis-md blockquote {
-  margin: 10px 0;
-  padding: 6px 14px;
-  border-left: 2px solid var(--accent);
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
-  border-radius: 0 8px 8px 0;
-  color: var(--text-secondary);
-}
-.charvis-md hr {
-  border: none;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--border-soft), transparent);
-  margin: 18px 0;
-}
-.charvis-md code {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 12px;
-  background: var(--bg-hover);
-  padding: 1.5px 6px;
-  border-radius: 5px;
-  color: var(--text-secondary);
-}
-.charvis-md pre {
-  background: var(--bg-deep);
-  border: 1px solid var(--border-soft);
-  border-radius: 10px;
-  padding: 12px 14px;
-  margin: 12px 0;
-  overflow-x: auto;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 12px;
-  line-height: 1.6;
-}
-.charvis-md pre code {
-  background: none;
-  padding: 0;
-  color: var(--text-primary);
-  font-size: 12px;
-}
-.charvis-md table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 12px 0;
-  font-size: 12.5px;
-}
-.charvis-md th, .charvis-md td {
-  padding: 7px 11px;
-  text-align: left;
-  border-bottom: 1px solid var(--border-soft);
-}
-.charvis-md th {
-  font-family: 'Inter Tight', sans-serif;
-  font-weight: 700;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-tertiary);
-}
-.charvis-md img {
-  max-width: 100%;
-  border-radius: 8px;
-  margin: 8px 0;
-}
-.charvis-md .katex-display {
-  margin: 12px 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding: 2px 0;
-}
-.charvis-md .katex {
-  font-size: 1.02em;
-}
-.charvis-md-math-error {
-  color: #fca5a5;
-  background: rgba(248, 113, 113, 0.08);
-  padding: 1px 6px;
-  border-radius: 5px;
-}
 
-/* PlanSelectDropdown popup (Cursos + Planificador) — superficies OPACAS vía clases,
-   inmunes a la regla [data-has-bg] .bento-card [style*="--bg-"] que volvía el popup transparente */
+/* PlanSelectDropdown popup (Cursos + Planificador) â€” superficies OPACAS vÃ­a clases,
+   inmunes a la regla [data-has-bg] .bento-card [style*="--bg-"] que volvÃ­a el popup transparente */
 .plan-select-popup {
   position: absolute;
   bottom: calc(100% + 5px);
@@ -3108,3 +2747,63 @@ h6,
 .course-tasks-scroll::-webkit-scrollbar { width: 6px; }
 .course-tasks-scroll::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: 3px; }
 .course-tasks-scroll::-webkit-scrollbar-track { background: transparent; }
+/* Mis apuntes (overview del curso): lista con scroll interno fijo, no crece en vertical */
+.course-notes-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-default) transparent;
+}
+.course-notes-scroll::-webkit-scrollbar { width: 6px; }
+.course-notes-scroll::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: 3px; }
+.course-notes-scroll::-webkit-scrollbar-track { background: transparent; }
+
+/* ── Modo ahorro de recursos (click derecho en la barra lateral) ──
+   Reduce SOLO el coste real de render: elimina blur/backdrop (GPU) en toda la app
+   y pausa las animaciones decorativas únicamente en la barra del reproductor.
+   Nada más se toca: toda la interfaz y la funcionalidad quedan intactas. */
+body.owa-resource-saver [style*="backdrop-filter"] {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+body.owa-resource-saver .owa-player-bar,
+body.owa-resource-saver .owa-player-bar * {
+  animation-play-state: paused !important;
+}
+
+/* ── Motor LaTeX de apuntes (render nativo de matemáticas pegadas) ── */
+.owa-math-inline {
+  font-family: 'Cambria Math', 'STIX Two Math', Georgia, serif;
+  font-style: italic;
+  color: var(--accent);
+  background: var(--bg-hover);
+  padding: 1px 7px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.owa-math-inline b, .owa-math-block b { font-style: normal; }
+.owa-math-block {
+  font-family: 'Cambria Math', 'STIX Two Math', Georgia, serif;
+  font-style: italic;
+  color: var(--accent);
+  background: var(--bg-deep);
+  border: 1px solid var(--border-subtle);
+  padding: 14px 18px;
+  border-radius: 10px;
+  margin: 10px 0;
+  text-align: center;
+  font-size: 15.5px;
+  overflow-x: auto;
+  line-height: 1.9;
+}
+.owa-frac {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  vertical-align: middle;
+  margin: 0 3px;
+  font-size: 0.82em;
+  line-height: 1.25;
+}
+.owa-frac-top { border-bottom: 1px solid currentColor; padding: 0 4px 1px; }
+.owa-frac-bot { padding: 1px 4px 0; }
+.owa-sqrt-in { border-top: 1px solid currentColor; padding: 0 3px; margin-left: -1px; }
+.owa-math-up { font-style: normal !important; }

@@ -1,26 +1,26 @@
 ﻿import React, { useEffect, useState, useRef, useMemo } from 'react';
+import LiveClock from '../ui/LiveClock';
 import {
   User, Palette, Brain, Download, Bell,
   Moon, Sun,
   Timer, Zap,
   RefreshCw, Shield, ShieldCheck,
   Sliders, Music,
-  Calendar, Database, Upload,
+  Database, Upload,
   Wifi, WifiOff, Image, Coffee, X, Trash2, Save,
   Monitor, Activity, Sparkles, LogOut, Eye, EyeOff, CalendarDays, Clock, ChevronDown,
   FolderOpen, Boxes, AppWindow, HardDrive, Copy, Check, RefreshCcw,
-  CheckSquare, GraduationCap, FileText, ExternalLink, Loader2, CalendarPlus, ListTodo, Keyboard, Mic, Square,
-  BookOpen
+  CheckSquare, GraduationCap, FileText, ExternalLink, Loader2, CalendarPlus, ListTodo,
+  BookOpen, Sprout, Star, Waves, Leaf, Circle
 } from 'lucide-react';
 import { GoogleCalendarIcon, GoogleTasksIcon, GoogleClassroomIcon, GoogleDriveIcon, GoogleDocsIcon, GoogleSheetsIcon } from '../ui/GoogleIcons';
 import { useApp, fmtClock } from '../../store/AppContext';
-import CharvisProviders from '../ui/CharvisProviders';
 import { del } from 'idb-keyval';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import NotificationBell from '../ui/NotificationBell';
-import { copyFile, mkdir, exists, readFile, writeFile, readTextFile } from '@tauri-apps/plugin-fs';
+import { copyFile, mkdir, exists, readFile, writeFile, writeTextFile, readTextFile } from '@tauri-apps/plugin-fs';
 import { appCacheDir, appConfigDir, appDataDir, appLocalDataDir, appLogDir, resourceDir, join, extname } from '@tauri-apps/api/path';
 import { getVersion, getName, getTauriVersion } from '@tauri-apps/api/app';
 import { openPath, openUrl } from '@tauri-apps/plugin-opener';
@@ -79,17 +79,6 @@ const THEME_PRESETS = [
 ];
 
 const ACCENT_COLORS = ['#E11D48', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#06B6D4', '#EC4899', '#F97316', '#84CC16', '#D946EF', '#14B8A6', '#6366F1'];
-
-const CHARVIS_COLORS = [
-  { name: 'Esmeralda', value: '#34d399' },
-  { name: 'Verde LED', value: '#22c55e' },
-  { name: 'Cian', value: '#22d3ee' },
-  { name: 'Azul', value: '#3b82f6' },
-  { name: 'Violeta', value: '#a78bfa' },
-  { name: 'Rosa', value: '#f472b6' },
-  { name: 'Ámbar', value: '#f59e0b' },
-  { name: 'Rojo', value: '#ef4444' },
-];
 
 const DocsSheetsIcon = ({ size = 17 }: { size?: number }) => (
   <span style={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -241,8 +230,9 @@ export default function Ajustes() {
     triggerDriveBackup, exportNotesToGoogleDoc, exportStatsToGoogleSheets,
     events, tasks, notes, clearAllMusicData, addNotification, deleteCompletedTasks,
     exportMusicLibrary, importMusicLibrary,
-    tracks, updateTrack,
+    tracks, updateTrack, courses, studySessions, plannedSessions, artists, playlists,
   } = useApp();
+  const [pesoTick, setPesoTick] = useState(0);
 
   const [activeTab, setActiveTab] = useState<SettingsTab>('perfil');
 
@@ -314,36 +304,52 @@ export default function Ajustes() {
     }
   }, []);
 
-  // ─── Charvis configuration state ───
-  const [capturingShortcut, setCapturingShortcut] = useState(false);
-
-  useEffect(() => {
-    if (!capturingShortcut) return;
-    document.body.dataset.capturingShortcut = '1';
-    const handler = (e: KeyboardEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const mods: string[] = [];
-      if (e.altKey) mods.push('Alt');
-      if (e.ctrlKey) mods.push('Ctrl');
-      if (e.shiftKey) mods.push('Shift');
-      if (e.metaKey) mods.push('Meta');
-      if (['Alt', 'Control', 'Shift', 'Meta'].includes(e.key)) return;
-      const combo = [...mods, e.code].join('+');
-      if (!mods.length) {
-        addNotification('Añade al menos un modificador (Alt, Ctrl, Shift o Meta)', 'error');
-        return;
+  // Peso de la app: se calcula una vez por cambio relevante (no en cada render).
+  const pesoStats = useMemo(() => {
+    const keys = Object.keys(localStorage);
+    let lsTotal = 0;
+    const entries: { key: string; size: number }[] = [];
+    for (const k of keys) {
+      const sz = new Blob([localStorage.getItem(k) || '']).size;
+      lsTotal += sz;
+      entries.push({ key: k, size: sz });
+    }
+    const idb = idbUsage ?? 0;
+    const grand = lsTotal + idb;
+    const KNOWN: [string, string, string][] = [
+      ['owa_studio', 'Datos de la app', '#6366F1'],
+      ['owa_course', 'Cursos', '#F59E0B'],
+      ['owa_planner', 'Planificador', '#3B82F6'],
+      ['owa_sched', 'Horario', '#06B6D4'],
+      ['owa_habit', 'Hábitos', '#10B981'],
+      ['owa_study', 'Estudio', '#EF4444'],
+      ['owa_estudio', 'Estudio', '#EF4444'],
+      ['owa_timer', 'Temporizador', '#EC4899'],
+      ['owa_task', 'Tareas', '#8B5CF6'],
+      ['owa_note', 'Notas', '#F472B6'],
+      ['owa_music', 'Música', '#10B981'],
+      ['owa_yt', 'Música', '#10B981'],
+      ['owa_google', 'Google', '#4285F4'],
+      ['owa_event', 'Eventos', '#3B82F6'],
+    ];
+    const groups = new Map<string, { size: number; color: string }>();
+    for (const [prefix, label, color] of KNOWN) {
+      const sum = entries.filter(e => e.key.startsWith(prefix)).reduce((a, e) => a + e.size, 0);
+      if (sum > 0) {
+        const g = groups.get(label) || { size: 0, color };
+        g.size += sum;
+        groups.set(label, g);
       }
-      updateSettings({ owaBrainShortcut: combo });
-      setCapturingShortcut(false);
-      addNotification(`Atajo actualizado: ${combo.replace('Key', ' ').replace('+', ' + ')}`, 'success');
-    };
-    window.addEventListener('keydown', handler, true);
-    return () => {
-      delete document.body.dataset.capturingShortcut;
-      window.removeEventListener('keydown', handler, true);
-    };
-  }, [capturingShortcut, updateSettings, addNotification]);
+    }
+    const other = entries.filter(e => !KNOWN.some(([p]) => e.key.startsWith(p))).reduce((a, e) => a + e.size, 0);
+    if (other > 0) groups.set('Otras claves', { size: other, color: '#6B7280' });
+    const rows: { label: string; size: number; color: string }[] = [];
+    for (const [label, g] of groups) rows.push({ label, size: g.size, color: g.color });
+    if (idb > 0) rows.push({ label: 'Base de datos (IndexedDB)', size: idb, color: '#9CA3AF' });
+    rows.sort((a, b) => b.size - a.size);
+    return { grand, rows, barMax: Math.max(1, rows.length ? rows[0].size : 1), keyCount: keys.length, idb };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pesoTick, idbUsage, tracks.length, tasks.length, notes.length, courses.length, events.length, studySessions.length, plannedSessions.length, artists.length, playlists.length]);
 
   const handleProfilePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -464,8 +470,14 @@ export default function Ajustes() {
         const [name, version, tauriVersion] = await Promise.all([getName(), getVersion(), getTauriVersion()]);
         setAppInfo({ name, version, tauriVersion });
         const [data, config, local, cache, log, res] = await Promise.all([appDataDir(), appConfigDir(), appLocalDataDir(), appCacheDir(), appLogDir(), resourceDir()]);
+        let music = '';
+        try {
+          const { getMusicDir } = await import('../../lib/musicDb');
+          music = await getMusicDir();
+        } catch { /* sin carpeta de música aún */ }
         setAppDirs([
           { label: 'Carpeta de datos', path: data },
+          ...(music ? [{ label: 'Carpeta de música', path: music }] : []),
           { label: 'Carpeta de configuración', path: config },
           { label: 'Carpeta local', path: local },
           { label: 'Carpeta de caché', path: cache },
@@ -493,17 +505,6 @@ export default function Ajustes() {
     }
   }, []);
 
-  // Real-time clock for header
-  const [currentTime, setCurrentTime] = useState(new Date());
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const timeStr = fmtClock(format(currentTime, 'HH:mm'), settings?.timeFormat);
-  const secondsStr = format(currentTime, 'ss');
-  const dateStr = format(currentTime, "EEEE, d 'de' MMMM, yyyy", { locale: es as any });
-  const dateStrCapitalized = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
 
   useEffect(() => {
     if (!GOOGLE_CLIENT_ID) return;
@@ -750,11 +751,18 @@ export default function Ajustes() {
               zIndex: 0
             }} />
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, justifyContent: 'flex-end', position: 'relative', zIndex: 1 }}>
-              <div className="led-display" style={{ fontSize: 25, lineHeight: 1, color: 'var(--accent)', textShadow: '0 0 15px var(--accent-glow)' }}>{timeStr}</div>
-              <div className="led-seconds" style={{ fontSize: 13, color: 'var(--accent)', opacity: 0.8 }}>{secondsStr}</div>
-            </div>
-            <div style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: 4, position: 'relative', zIndex: 1 }}>
-              {dateStrCapitalized}
+              <LiveClock>{now => {
+                const dateStr = format(now, "EEEE, d 'de' MMMM, yyyy", { locale: es as any });
+                return (
+                  <>
+                    <div className="led-display" style={{ fontSize: 25, lineHeight: 1, color: 'var(--accent)', textShadow: '0 0 15px var(--accent-glow)' }}>{format(now, 'HH:mm')}</div>
+                    <div className="led-seconds" style={{ fontSize: 13, color: 'var(--accent)', opacity: 0.8 }}>{format(now, 'ss')}</div>
+                    <div style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: 4, position: 'relative', zIndex: 1 }}>
+                      {dateStr.charAt(0).toUpperCase() + dateStr.slice(1)}
+                    </div>
+                  </>
+                );
+              }}</LiveClock>
             </div>
           </div>
         </div>
@@ -1596,7 +1604,7 @@ export default function Ajustes() {
                             {settings.shortBreakTime / 60}<span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>min</span>
                           </span>
                           <input type="range" min={1} max={30} value={settings.shortBreakTime / 60} onChange={e => updateSettings({ shortBreakTime: Number(e.target.value) * 60 })}
-                            style={{ flex: 1, height: 3, cursor: 'pointer', WebkitAppearance: 'none', appearance: 'none', outline: 'none', borderRadius: 2, background: `linear-gradient(90deg, #10B98160, #10B981 ${((settings.shortBreakTime / 60 - 1) / 29) * 100}%, var(--bg-hover) ${((settings.shortBreakTime / 60 - 1) / 29) * 100}%)` }}
+                            style={{ flex: 1, height: 6, cursor: 'pointer', WebkitAppearance: 'none', appearance: 'none', outline: 'none', borderRadius: 3, background: `linear-gradient(90deg, #10B98160, #10B981 ${((settings.shortBreakTime / 60 - 1) / 29) * 100}%, var(--bg-hover) ${((settings.shortBreakTime / 60 - 1) / 29) * 100}%)` }}
                             className="range-slider" />
                         </div>
                         <div style={{ fontSize: 8, color: 'var(--text-tertiary)', marginTop: 4 }}>×{settings.pomodoroGoal - 1 || 3} entre ciclos</div>
@@ -1612,7 +1620,7 @@ export default function Ajustes() {
                             {settings.longBreakTime / 60}<span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>min</span>
                           </span>
                           <input type="range" min={5} max={60} value={settings.longBreakTime / 60} onChange={e => updateSettings({ longBreakTime: Number(e.target.value) * 60 })}
-                            style={{ flex: 1, height: 3, cursor: 'pointer', WebkitAppearance: 'none', appearance: 'none', outline: 'none', borderRadius: 2, background: `linear-gradient(90deg, #F59E0B60, #F59E0B ${((settings.longBreakTime / 60 - 5) / 55) * 100}%, var(--bg-hover) ${((settings.longBreakTime / 60 - 5) / 55) * 100}%)` }}
+                            style={{ flex: 1, height: 6, cursor: 'pointer', WebkitAppearance: 'none', appearance: 'none', outline: 'none', borderRadius: 3, background: `linear-gradient(90deg, #F59E0B60, #F59E0B ${((settings.longBreakTime / 60 - 5) / 55) * 100}%, var(--bg-hover) ${((settings.longBreakTime / 60 - 5) / 55) * 100}%)` }}
                             className="range-slider" />
                         </div>
                         <div style={{ fontSize: 8, color: 'var(--text-tertiary)', marginTop: 4 }}>Cada {settings.pomodoroGoal} ciclos</div>
@@ -1627,7 +1635,7 @@ export default function Ajustes() {
                             {settings.pomodoroGoal}<span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>×</span>
                           </span>
                           <input type="range" min={1} max={20} value={settings.pomodoroGoal} onChange={e => updateSettings({ pomodoroGoal: Number(e.target.value) })}
-                            style={{ flex: 1, height: 3, cursor: 'pointer', WebkitAppearance: 'none', appearance: 'none', outline: 'none', borderRadius: 2, background: `linear-gradient(90deg, #6366F160, #6366F1 ${((settings.pomodoroGoal - 1) / 19) * 100}%, var(--bg-hover) ${((settings.pomodoroGoal - 1) / 19) * 100}%)` }}
+                            style={{ flex: 1, height: 6, cursor: 'pointer', WebkitAppearance: 'none', appearance: 'none', outline: 'none', borderRadius: 3, background: `linear-gradient(90deg, #6366F160, #6366F1 ${((settings.pomodoroGoal - 1) / 19) * 100}%, var(--bg-hover) ${((settings.pomodoroGoal - 1) / 19) * 100}%)` }}
                             className="range-slider" />
                         </div>
                         <div style={{ fontSize: 8, color: 'var(--text-tertiary)', marginTop: 4 }}>
@@ -1815,8 +1823,8 @@ export default function Ajustes() {
                                   cursor: 'pointer', transition: 'all 150ms',
                                   display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
                                 }}>
-                                <span style={{ fontSize: 14, lineHeight: 1, opacity: 0.7 }}>
-                                  {a.value === 'plant' ? '🌱' : a.value === 'books' ? '📚' : a.value === 'stars' ? '✨' : a.value === 'waves' ? '〰️' : a.value === 'leaves' ? '🍃' : '○'}
+                                <span style={{ lineHeight: 1, opacity: 0.8, display: 'flex' }}>
+                                  {a.value === 'plant' ? <Sprout size={15} /> : a.value === 'books' ? <BookOpen size={15} /> : a.value === 'stars' ? <Star size={15} /> : a.value === 'waves' ? <Waves size={15} /> : a.value === 'leaves' ? <Leaf size={15} /> : <Circle size={13} />}
                                 </span>
                                 <span style={{ fontSize: 10, fontWeight: 600 }}>{a.label}</span>
                                 <span style={{ fontSize: 7, fontWeight: 400, opacity: 0.6 }}>{a.desc}</span>
@@ -1954,8 +1962,8 @@ export default function Ajustes() {
                     Importar / Exportar Metadatos
                   </span>
                   <p style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.5, marginBottom: 14 }}>
-                    Exporta los metadatos y portadas de todas tus canciones a un archivo JSON.
-                    Al importar, se actualizan las canciones existentes usando su ID \u00fanico.
+                    Exporta nombre, portada y datos de todas tus canciones a un archivo JSON.
+                    Al importar, cada canción se reconoce por su ID, su ruta o su nombre.
                   </p>
                   <div style={{ display: 'flex', gap: 10 }}>
                     <button onClick={async () => {
@@ -1966,18 +1974,25 @@ export default function Ajustes() {
                           title: 'Exportar metadatos de música',
                         });
                         if (!dest) return;
+                        if (tracks.length === 0) {
+                          addNotification('No hay canciones en tu biblioteca para exportar', 'info');
+                          return;
+                        }
                         const metadata = tracks.map((t: any) => ({
                           id: t.id, title: t.title, artist: t.artist,
-                          coverImage: t.coverImage,
+                          coverImage: t.coverImage, coverUrl: t.coverUrl,
                           duration: t.duration, source: t.source,
-                          isFavorite: t.isFavorite,
+                          url: t.url, filePath: t.filePath,
+                          isFavorite: t.isFavorite, listenedTime: t.listenedTime ?? 0,
                         }));
-                        await writeFile(dest, new TextEncoder().encode(
+                        // writeTextFile (texto) en vez de writeFile (binario): el permiso
+                        // fs:allow-write-text-file ya cubre la ruta elegida en el diálogo.
+                        await writeTextFile(dest as string,
                           JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), tracks: metadata }, null, 2)
-                        ));
-                        addNotification(`Metadatos exportados: ${metadata.length} canciones`, 'success');
-                      } catch (e) {
-                        addNotification('Error al exportar metadatos', 'error');
+                        );
+                        addNotification(`Metadatos exportados: ${metadata.length} ${metadata.length === 1 ? 'canción' : 'canciones'}`, 'success');
+                      } catch (e: any) {
+                        addNotification(`Error al exportar metadatos: ${e?.message || 'revisa la carpeta elegida'}`, 'error');
                         console.error(e);
                       }
                     }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.15)', color: '#3B82F6' }}>
@@ -1994,20 +2009,52 @@ export default function Ajustes() {
                         const content = await readTextFile(src as string);
                         const data = JSON.parse(content);
                         const imported = data.tracks || [];
-                        let updated = 0;
+                        const norm = (s: any) =>
+                          String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+                        let byId = 0, byPath = 0, byName = 0, missing = 0;
                         for (const meta of imported) {
-                          const existing = tracks.find((t: any) => t.id === meta.id);
+                          // 1) ID único (exportado por esta misma app)
+                          let existing = tracks.find((t: any) => t.id === meta.id);
+                          let how = 'id';
+                          // 2) Ruta original o URL (misma canción, distinto ID; \ y / equivalen)
+                          if (!existing && (meta.filePath || meta.url)) {
+                            const p = String(meta.filePath || meta.url).replace(/\\/g, '/');
+                            existing = tracks.find((t: any) => String(t.filePath || t.url || '').replace(/\\/g, '/') === p);
+                            how = 'ruta';
+                          }
+                          // 3) Título + artista normalizados (tildes, mayúsculas y puntuación aparte)
+                          if (!existing && meta.title) {
+                            const k = `${norm(meta.title)}|${norm(meta.artist)}`;
+                            existing = tracks.find((t: any) => `${norm(t.title)}|${norm(t.artist)}` === k);
+                            how = 'nombre';
+                          }
                           if (existing) {
-                            updateTrack(meta.id, {
-                              title: meta.title,
-                              artist: meta.artist,
-                              coverImage: meta.coverImage,
-                              isFavorite: meta.isFavorite,
+                            updateTrack(existing.id, {
+                              title: meta.title ?? existing.title,
+                              artist: meta.artist ?? existing.artist,
+                              coverImage: meta.coverImage ?? (meta as any).coverUrl ?? existing.coverImage,
+                              isFavorite: meta.isFavorite ?? existing.isFavorite,
                             });
-                            updated++;
+                            if (how === 'id') byId++;
+                            else if (how === 'ruta') byPath++;
+                            else byName++;
+                          } else {
+                            missing++;
                           }
                         }
-                        addNotification(`Metadatos importados: ${updated} canciones actualizadas de ${imported.length}`, 'success');
+                        const updated = byId + byPath + byName;
+                        if (updated === 0) {
+                          addNotification(`No se reconoció ninguna canción de las ${imported.length} del archivo en tu biblioteca`, 'error');
+                        } else {
+                          const parts = [];
+                          if (byId > 0) parts.push(`${byId} por ID`);
+                          if (byPath > 0) parts.push(`${byPath} por ruta`);
+                          if (byName > 0) parts.push(`${byName} por nombre`);
+                          addNotification(
+                            `Metadatos importados: ${updated} de ${imported.length} (${parts.join(', ')})${missing > 0 ? `. ${missing} sin coincidencia` : ''}`,
+                            'success'
+                          );
+                        }
                       } catch (e) {
                         addNotification('Error al importar metadatos', 'error');
                         console.error(e);
@@ -2124,19 +2171,8 @@ export default function Ajustes() {
                       <button onClick={() => { addNotification('Notificación de prueba enviada', 'success'); }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)', transition: 'all 200ms' }}>
                         <Bell size={14} /> Probar Toast
                       </button>
-                      <button onClick={async () => {
-                        const { sendNativeNotification } = await import('../../lib/notifications');
-                        sendNativeNotification('Recordatorio de evento', 'Tu evento "Reunión de equipo" empieza en 1 hora');
-                      }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)', transition: 'all 200ms' }}>
-                        <Calendar size={14} /> Simular Recordatorio Evento
-                      </button>
-                      <button onClick={async () => {
-                        const { sendNativeNotification } = await import('../../lib/notifications');
-                        sendNativeNotification('Sesión de estudio', 'Tu sesión programada "Matemáticas" comienza en 10 minutos');
-                      }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)', transition: 'all 200ms' }}>
-                        <BookOpen size={14} /> Simular Sesión Estudio
-                      </button>
                     </div>
+                    <p style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.5 }}>Los recordatorios reales (tareas por vencer, tareas vencidas, eventos y sesiones de estudio) llegan solos cuando corresponde, una vez por ocurrencia.</p>
                   </div>
                 </div>
               </section>
@@ -2170,171 +2206,57 @@ export default function Ajustes() {
                 <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
                   <CardHeader icon={<Database size={14} />} title="Peso de la app" desc="En qué se gastan los datos guardados" />
                   {(() => {
-                    const keys = Object.keys(localStorage);
-                    let lsTotal = 0;
-                    const entries: { key: string; size: number }[] = [];
-                    for (const k of keys) {
-                      const sz = new Blob([localStorage.getItem(k) || '']).size;
-                      lsTotal += sz;
-                      entries.push({ key: k, size: sz });
-                    }
-                    const idb = idbUsage ?? 0;
-                    const grand = lsTotal + idb;
-                    const KNOWN: [string, string, string][] = [
-                      ['owa_studio', 'Datos de la app', '#6366F1'],
-                      ['owa_course', 'Cursos', '#F59E0B'],
-                      ['owa_planner', 'Planificador', '#3B82F6'],
-                      ['owa_sched', 'Horario', '#06B6D4'],
-                      ['owa_habit', 'Hábitos', '#10B981'],
-                      ['owa_study', 'Estudio', '#EF4444'],
-                      ['owa_estudio', 'Estudio', '#EF4444'],
-                      ['owa_timer', 'Temporizador', '#EC4899'],
-                      ['owa_task', 'Tareas', '#8B5CF6'],
-                      ['owa_note', 'Notas', '#F472B6'],
-                      ['owa_music', 'Música', '#10B981'],
-                      ['owa_yt', 'Música', '#10B981'],
-                      ['owa_brain', 'Charvis', '#22c55e'],
-                      ['owa_charvis', 'Charvis', '#22c55e'],
-                      ['owa_google', 'Google', '#4285F4'],
-                      ['owa_event', 'Eventos', '#3B82F6'],
-                    ];
-                    const groups = new Map<string, { size: number; color: string }>();
-                    for (const [prefix, label, color] of KNOWN) {
-                      const sum = entries.filter(e => e.key.startsWith(prefix)).reduce((a, e) => a + e.size, 0);
-                      if (sum > 0) {
-                        const g = groups.get(label) || { size: 0, color };
-                        g.size += sum;
-                        groups.set(label, g);
-                      }
-                    }
-                    const other = entries.filter(e => !KNOWN.some(([p]) => e.key.startsWith(p))).reduce((a, e) => a + e.size, 0);
-                    if (other > 0) groups.set('Otras claves', { size: other, color: '#6B7280' });
-                    const rows: { label: string; size: number; color: string }[] = [];
-                    for (const [label, g] of groups) rows.push({ label, size: g.size, color: g.color });
-                    if (idb > 0) rows.push({ label: 'Base de datos (IndexedDB)', size: idb, color: '#9CA3AF' });
-                    rows.sort((a, b) => b.size - a.size);
-                    const barMax = Math.max(1, rows.length ? rows[0].size : 1);
+                    const { grand, rows, barMax, keyCount, idb } = pesoStats;
+                    const quota = storageQuota && storageQuota > 0 ? storageQuota : 0;
+                    const totalPct = quota > 0 ? Math.min(100, (grand / quota) * 100) : 0;
+                    const totalColor = totalPct >= 80 ? '#EF4444' : totalPct >= 55 ? '#F59E0B' : '#10B981';
                     return (
                       <>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', paddingBottom: 10, borderBottom: '1px solid var(--border-subtle)', marginBottom: 12 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 10, borderBottom: '1px solid var(--border-subtle)', marginBottom: 12 }}>
                           <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)' }}>Peso total</span>
-                          <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Share Tech Mono', monospace" }}>{fmtBytes(grand)}</span>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Share Tech Mono', monospace" }}>{fmtBytes(grand)}</span>
+                            <button onClick={() => setPesoTick(t => t + 1)} title="Volver a medir" style={{ display: 'flex', alignItems: 'center', gap: 5, height: 26, padding: '0 10px', borderRadius: 7, fontSize: 10, fontWeight: 600, cursor: 'pointer', background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>
+                              <RefreshCw size={11} /> Actualizar
+                            </button>
+                          </span>
                         </div>
-                        {(() => {
-                          const quota = storageQuota && storageQuota > 0 ? storageQuota : 0;
-                          const totalPct = quota > 0 ? Math.min(100, (grand / quota) * 100) : 0;
-                          const totalColor = totalPct >= 80 ? '#EF4444' : totalPct >= 55 ? '#F59E0B' : '#10B981';
-                          return quota > 0 ? (
-                            <div style={{ marginBottom: 16 }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
-                                <span style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Uso de almacenamiento</span>
-                                <span style={{ fontSize: 9.5, fontFamily: "'Share Tech Mono', monospace", color: totalColor }}>{totalPct.toFixed(1)}% de {fmtBytes(quota)}</span>
-                              </div>
-                              <div style={{ height: 8, borderRadius: 6, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', overflow: 'hidden', boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.28)' }}>
-                                <div style={{ height: '100%', width: `${Math.max(0.6, totalPct)}%`, borderRadius: 6, background: `linear-gradient(90deg, ${totalColor}88, ${totalColor})`, boxShadow: `0 0 12px ${totalColor}55`, transition: 'width 400ms ease' }} />
-                              </div>
+                        {quota > 0 && (
+                          <div style={{ marginBottom: 16 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
+                              <span style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Uso de almacenamiento</span>
+                              <span style={{ fontSize: 9.5, fontFamily: "'Share Tech Mono', monospace", color: totalColor }}>{totalPct.toFixed(1)}% de {fmtBytes(quota)}</span>
                             </div>
-                          ) : null;
-                        })()}
+                            <div style={{ height: 8, borderRadius: 6, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
+                              <div style={{ height: '100%', width: `${Math.max(0.6, totalPct)}%`, borderRadius: 6, background: totalColor, transition: 'width 400ms ease' }} />
+                            </div>
+                          </div>
+                        )}
                         {rows.map(r => {
                           const pct = grand > 0 ? (r.size / grand) * 100 : 0;
                           return (
                             <div key={r.label} style={{ marginBottom: 12 }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5, gap: 10 }}>
                                 <span style={{ fontSize: 10.5, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                                  <span style={{ width: 9, height: 9, borderRadius: 3, background: `linear-gradient(135deg, ${r.color}, ${r.color}77)`, boxShadow: `0 0 6px ${r.color}55`, flexShrink: 0 }} />
+                                  <span style={{ width: 9, height: 9, borderRadius: 3, background: r.color, flexShrink: 0 }} />
                                   {r.label}
                                 </span>
                                 <span style={{ fontSize: 10, fontFamily: "'Share Tech Mono', monospace", color: 'var(--text-muted)', flexShrink: 0 }}>
                                   {fmtBytes(r.size)} <span style={{ color: r.color }}>· {pct.toFixed(1)}%</span>
                                 </span>
                               </div>
-                              <div style={{ height: 7, borderRadius: 5, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', overflow: 'hidden', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.28)' }}>
-                                <div style={{ height: '100%', width: `${Math.max(1.5, (r.size / barMax) * 100)}%`, borderRadius: 5, background: `linear-gradient(180deg, ${r.color}ee, ${r.color}77)`, boxShadow: `0 0 10px ${r.color}44`, transition: 'width 400ms ease', position: 'relative' }}>
-                                  <div style={{ position: 'absolute', inset: '0 0 50% 0', background: 'rgba(255,255,255,0.16)', borderRadius: 5 }} />
-                                </div>
+                              <div style={{ height: 7, borderRadius: 5, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
+                                <div style={{ height: '100%', width: `${Math.max(1.5, (r.size / barMax) * 100)}%`, borderRadius: 5, background: r.color, opacity: 0.85, transition: 'width 400ms ease' }} />
                               </div>
                             </div>
                           );
                         })}
                         <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.5 }}>
-                          {keys.length} claves en localStorage · {idb > 0 ? `la base de datos IndexedDB ocupa ${fmtBytes(idb)}` : 'la base de datos IndexedDB no está disponible en este navegador'}.
+                          {keyCount} claves en localStorage · {idb > 0 ? `la base de datos IndexedDB ocupa ${fmtBytes(idb)}` : 'la base de datos IndexedDB no está disponible en este navegador'}.
                         </p>
                       </>
                     );
                   })()}
-                </div>
-
-                {/* Charvis */}
-                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
-                  <CardHeader icon={<Brain size={14} />} title="Charvis" desc="Asistente de IA que controla tu aplicación" />
-
-                  {/* Motor siempre activo + atajo */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, padding: '13px 15px', borderRadius: 11, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', flexWrap: 'wrap' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
-                      <span style={{ position: 'relative', width: 13, height: 13, flexShrink: 0, display: 'inline-block' }}>
-                        <span style={{ position: 'absolute', inset: 1, borderRadius: '50%', background: '#10B981', boxShadow: '0 0 10px #10B981, 0 0 4px #10B981 inset' }} />
-                      </span>
-                      <div style={{ minWidth: 0 }}>
-                        <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)', display: 'block' }}>Motor de IA activo</span>
-                        <span style={{ fontSize: 10.5, color: 'var(--text-muted)', display: 'block', marginTop: 2, lineHeight: 1.4 }}>Chat lateral con herramientas que controlan toda la app</span>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => { setCapturingShortcut(true); addNotification('Pulsa la nueva combinación de teclas…', 'info'); }}
-                      title="Cambiar atajo de teclado"
-                      style={{
-                        height: 34, borderRadius: 9, cursor: 'pointer', padding: '0 12px',
-                        background: capturingShortcut ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'var(--bg-deep)',
-                        border: `1px solid ${capturingShortcut ? 'var(--accent)' : 'var(--border-default)'}`,
-                        color: capturingShortcut ? 'var(--accent)' : 'var(--text-secondary)',
-                        fontSize: 11.5, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace",
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-                        transition: 'all 150ms', flexShrink: 0,
-                      }}
-                    >
-                      {capturingShortcut ? <><Keyboard size={13} /> Pulsa la combinación…</> : <><Keyboard size={13} /> {(settings.owaBrainShortcut || 'Alt+KeyQ').replace(/Key/g, '').split('+').join(' + ')}</>}
-                    </button>
-                  </div>
-                  <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 8, lineHeight: 1.5 }}>El motor siempre está habilitado. Ábrelo con el atajo o pasando el ratón por el borde derecho.</p>
-
-                  {/* Voz en vivo (Alt+A) */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, padding: '13px 15px', borderRadius: 11, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', marginTop: 10, flexWrap: 'wrap' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
-                      <span style={{ width: 30, height: 30, borderRadius: 9, background: (settings.owaBrainColor || '#34d399') + '14', border: '1px solid ' + (settings.owaBrainColor || '#34d399') + '30', color: settings.owaBrainColor || '#34d399', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <Mic size={14} />
-                      </span>
-                      <div style={{ minWidth: 0 }}>
-                        <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)', display: 'block' }}>Voz en vivo</span>
-                        <span style={{ fontSize: 10.5, color: 'var(--text-muted)', display: 'block', marginTop: 2, lineHeight: 1.4 }}>Dicta con la esfera 3D (Alt+A): responde Charvis en voz por encima de la app</span>
-                      </div>
-                    </div>
-                    <label style={{ position: 'relative', width: 36, height: 20, borderRadius: 10, background: settings.owaBrainLiveVoice !== false ? (settings.owaBrainColor || '#34d399') : 'var(--bg-surface)', border: '1px solid var(--border-default)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', padding: 2, transition: 'all 200ms' }}>
-                      <div style={{ width: 14, height: 14, borderRadius: '50%', background: '#fff', transform: settings.owaBrainLiveVoice !== false ? 'translateX(16px)' : 'translateX(0)', transition: 'all 200ms', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
-                      <input type="checkbox" checked={settings.owaBrainLiveVoice !== false} onChange={e => updateSettings({ owaBrainLiveVoice: e.target.checked } as any)} style={{ display: 'none' }} />
-                    </label>
-                  </div>
-                  <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 8, lineHeight: 1.5 }}>La esfera se abre en cualquier ventana con la combinación Alt + A y se detiene sola en silencios.</p>
-
-                  {/* Proveedores de IA */}
-                  <CharvisProviders />
-
-                  {/* Charvis color */}
-                  <div style={{ marginTop: 18 }}>
-                    <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 8 }}>Color de Charvis</span>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(34px, 1fr))', gap: 8, marginBottom: 8 }}>
-                      {CHARVIS_COLORS.map(c => {
-                        const active = (settings.owaBrainColor || '#34d399').toLowerCase() === c.value;
-                        return (
-                          <button key={c.value} title={c.name} onClick={() => updateSettings({ owaBrainColor: c.value } as any)}
-                            style={{ height: 30, borderRadius: 9, background: c.value, border: active ? '2px solid #fff' : '1px solid var(--border-default)', cursor: 'pointer', position: 'relative', boxShadow: active ? `0 0 0 2px ${c.value}55, 0 0 14px ${c.value}66` : 'none', transition: 'all 150ms' }}>
-                            {active && <Check size={14} style={{ color: '#0b0b0f', position: 'absolute', inset: 0, margin: 'auto' }} />}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.5 }}>Color unicolor del acento de Charvis (LED, burbujas y glow). El efecto arcoíris solo se activa en modo profundo.</p>
-                  </div>
                 </div>
 
                 {/* App folders */}
@@ -2457,12 +2379,23 @@ export default function Ajustes() {
                     </button>
                   </div>
                   {dataFolder && (
-                    <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: "'Share Tech Mono', monospace", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={dataFolder}>
-                      {dataFolder}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: "'Share Tech Mono', monospace", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }} title={dataFolder}>
+                        {dataFolder}
+                      </div>
+                      {dataFolder && (
+                        <button onClick={() => openPath(dataFolder).catch(() => { })} title="Abrir la carpeta raíz de datos de OWA Studio en el explorador"
+                          style={{ height: 26, padding: '0 11px', borderRadius: 7, border: '1px solid var(--border-soft)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 10, fontWeight: 600, flexShrink: 0, fontFamily: "'Inter Tight', sans-serif" }}>
+                          Abrir carpeta
+                        </button>
+                      )}
                     </div>
                   )}
                   <input ref={backupFileRef} type="file" accept=".json,application/json" style={{ display: 'none' }} onChange={handleBackupFilePicked} />
                 </div>
+
+                {/* Zona de riesgo: desinstalación (fase de producción) */}
+                <UninstallSection />
 
                 {/* Hecho por */}
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, padding: '18px 0 6px' }}>
@@ -2991,6 +2924,57 @@ function SliderRow({ label, value, min, max, step, unit, onChange, accent, displ
           WebkitAppearance: 'none', appearance: 'none', accentColor: accent,
         }}
         className="slider-row" />
+    </div>
+  );
+}
+
+// ── Zona de riesgo: desinstalación con confirmación escrita ──────────────────
+function UninstallSection() {
+  const CONFIRM = 'DESINSTALAR OWA';
+  const [text, setText] = useState('');
+  const [wiping, setWiping] = useState(false);
+  const [status, setStatus] = useState('');
+  const confirmed = text.trim().toUpperCase() === CONFIRM;
+  const doWipe = () => {
+    setWiping(true);
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+      // Bases locales de OWA: datos principales (idb-keyval) y biblioteca de música
+      ['keyval-store', 'OwaMusicDB'].forEach(name => { try { indexedDB.deleteDatabase(name); } catch { } });
+      setStatus('Datos eliminados. La app se cerrará en unos segundos…');
+      setTimeout(() => { try { window.close(); } catch { } }, 1400);
+    } catch {
+      setWiping(false);
+      setStatus('No se pudieron borrar los datos por completo.');
+    }
+  };
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '16px 18px', borderRadius: 12, border: '1px solid rgba(239,68,68,0.22)', background: 'rgba(239,68,68,0.03)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <Trash2 size={14} style={{ color: '#EF4444', flexShrink: 0 }} />
+        <span style={{ fontSize: 13, fontWeight: 700, color: '#EF4444', fontFamily: "'Inter Tight', sans-serif" }}>Desinstalar OWA Studio</span>
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.6 }}>
+        Para desinstalar por completo: <b style={{ color: 'var(--text-secondary)' }}>1)</b> exporta tu respaldo arriba, <b style={{ color: 'var(--text-secondary)' }}>2)</b> escribe la confirmación y abre el desinstalador de Windows — elimina el programa y todos sus paquetes. Opcionalmente, borra también tus datos locales antes de salir.
+      </div>
+      <input value={text} onChange={e => setText(e.target.value)} placeholder={`Escribe "${CONFIRM}" para confirmar`}
+        style={{ width: '100%', boxSizing: 'border-box', height: 36, borderRadius: 9, border: `1px solid ${confirmed ? '#EF444455' : 'var(--border-soft)'}`, background: 'var(--bg-deep)', color: confirmed ? '#EF4444' : 'var(--text-primary)', padding: '0 12px', fontSize: 12, outline: 'none', fontFamily: "'JetBrains Mono', monospace" }} />
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button
+          onClick={() => { if (confirmed) { setStatus('Abriendo el desinstalador de Windows…'); openUrl('ms-settings:appsfeatures').catch(() => setStatus('No se pudo abrir Ajustes de Windows.')); } }}
+          disabled={!confirmed}
+          style={{ flex: 1, minWidth: 170, height: 36, borderRadius: 9, border: 'none', background: confirmed ? '#EF4444' : 'var(--border-subtle)', color: confirmed ? '#fff' : 'var(--text-muted)', fontSize: 11.5, fontWeight: 700, cursor: confirmed ? 'pointer' : 'default', opacity: confirmed ? 1 : 0.55, fontFamily: "'Inter Tight', sans-serif" }}>
+          Abrir desinstalador de Windows
+        </button>
+        <button
+          onClick={() => { if (confirmed && !wiping) doWipe(); }}
+          disabled={!confirmed || wiping}
+          style={{ flex: 1, minWidth: 170, height: 36, borderRadius: 9, border: '1px solid rgba(239,68,68,0.35)', background: 'transparent', color: confirmed ? '#EF4444' : 'var(--text-muted)', fontSize: 11.5, fontWeight: 600, cursor: confirmed && !wiping ? 'pointer' : 'default', opacity: confirmed && !wiping ? 1 : 0.55 }}>
+          Borrar mis datos y cerrar
+        </button>
+      </div>
+      {status && <div style={{ fontSize: 10.5, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{status}</div>}
     </div>
   );
 }

@@ -1,5 +1,4 @@
 import { readFile } from '@tauri-apps/plugin-fs';
-import { convertFileSrc } from '@tauri-apps/api/core';
 import * as mm from 'music-metadata-browser';
 
 function toDataUrl(mime: string, data: Uint8Array): string {
@@ -373,20 +372,18 @@ export async function extractAudioMetadata(
 
     const mimeType = mimeMap[ext] || 'audio/mpeg';
 
-    // Try music-metadata-browser first (AETHER approach)
+    // music-metadata-browser (silencioso: si falla se usa el parseo manual)
     let metadata: mm.IAudioMetadata | null = null;
     try {
       const audioFile = new File([data], fileName, { type: mimeType });
       metadata = await mm.parseBlob(audioFile);
-    } catch (err) {
-      console.warn('[Metadata] parseBlob(File) failed:', fileName);
+    } catch {
       metadata = null;
     }
     if (!metadata) {
       try {
         metadata = await mm.parseBuffer(data, mimeType);
       } catch {
-        console.warn('[Metadata] parseBuffer failed:', fileName);
         metadata = null;
       }
     }
@@ -395,22 +392,6 @@ export async function extractAudioMetadata(
         const blob = new Blob([data], { type: mimeType });
         metadata = await mm.parseBlob(blob);
       } catch {
-        console.warn('[Metadata] parseBlob(Blob) failed:', fileName);
-        metadata = null;
-      }
-    }
-
-    // Tier 4 — fetch via Tauri asset protocol (same mechanism playback uses)
-    if (!metadata) {
-      try {
-        const assetUrl = convertFileSrc(filePath);
-        const resp = await fetch(assetUrl);
-        const blob = await resp.blob();
-        if (blob.size > 100) {
-          metadata = await mm.parseBlob(blob);
-        }
-      } catch {
-        console.warn('[Metadata] fetch+parseBlob failed:', fileName);
         metadata = null;
       }
     }
@@ -421,26 +402,18 @@ export async function extractAudioMetadata(
       const artist = common.artist || 'Unknown Artist';
       const duration = format.duration || 0;
       const hasPics = !!(common.picture && common.picture.length > 0);
-      console.log('[Metadata] music-metadata-browser OK:', fileName, { title, artist, hasCover: hasPics });
 
       let coverUrl: string | undefined;
       if (hasPics) {
         const pic = common.picture![0];
         const format2 = pic.format;
-        console.log('[Metadata] Cover pic.format:', format2, 'pic.data.length:', (pic.data as any).length || (pic.data as any).byteLength || '?');
         const binary = Array.from(new Uint8Array(pic.data)).map(b => String.fromCharCode(b)).join('');
         coverUrl = `data:${format2};base64,${btoa(binary)}`;
-        console.log('[Metadata] Raw coverUrl length:', coverUrl.length, 'prefix:', coverUrl.substring(0, 50));
         try {
           coverUrl = await compressCover(coverUrl);
-          console.log('[Metadata] After compress, length:', coverUrl.length);
-        } catch (e) {
-          console.warn('[Metadata] compressCover failed, using original:', e);
-        }
+        } catch { /* usa la original */ }
       } else {
-        console.log('[Metadata] No cover art in metadata — trying manual APIC path...');
         const manual = parseId3v2Tags(data);
-        console.log('[Metadata] Manual APIC result:', { hasCover: !!manual?.coverUrl, coverLen: manual?.coverUrl?.length });
         if (manual?.coverUrl) {
           coverUrl = manual.coverUrl;
         }
@@ -448,8 +421,7 @@ export async function extractAudioMetadata(
       return { coverUrl, title, artist, duration: Math.round(duration) };
     }
 
-    // Manual fallback: format-specific byte-level parsers
-    console.log('[Metadata] Manual parsing for', fileName, 'ext:', ext, 'size:', data.length, 'firstBytes:', Array.from(data.slice(0, 16)).map(b => b.toString(16).padStart(2, '0')).join(' '));
+    // Manual fallback: format-specific byte-level parsers (sin ruido en consola)
     let title: string | undefined;
     let artist: string | undefined;
     let coverUrl: string | undefined;
@@ -459,7 +431,6 @@ export async function extractAudioMetadata(
       // ID3v2
       const id3v2 = parseId3v2Tags(data);
       if (id3v2) {
-        console.log('[Metadata] ID3v2 found:', { title: id3v2.title, artist: id3v2.artist, hasCover: !!id3v2.coverUrl });
         title = id3v2.title;
         artist = id3v2.artist;
         coverUrl = id3v2.coverUrl;
@@ -468,7 +439,6 @@ export async function extractAudioMetadata(
       if (!title || !artist) {
         const id3v1 = parseId3v1Tags(data);
         if (id3v1) {
-          console.log('[Metadata] ID3v1 found:', { title: id3v1.title, artist: id3v1.artist });
           title = title || id3v1.title;
           artist = artist || id3v1.artist;
         }
@@ -487,6 +457,13 @@ export async function extractAudioMetadata(
       duration = flac.duration;
     }
 
+    // Duración por elemento <audio> local (blob, sin red): cubre MP3 sin cabecera útil
+    if (!duration || duration <= 0) {
+      try {
+        duration = await probeDurationLocal(data, mimeType);
+      } catch { /* queda 0 */ }
+    }
+
     return {
       coverUrl,
       title,
@@ -497,4 +474,35 @@ export async function extractAudioMetadata(
     console.warn('[Metadata] extractAudioMetadata failed for', fileName, err);
     return { duration: 0 };
   }
+}
+
+// Duración real decodificando solo la cabecera con un <audio> sobre blob local.
+// Timeout de seguridad: nunca bloquea la importación.
+function probeDurationLocal(data: Uint8Array, mimeType: string): Promise<number> {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (v: number) => {
+      if (done) return;
+      done = true;
+      try { URL.revokeObjectURL(url); } catch { /* noop */ }
+      resolve(v);
+    };
+    let url = '';
+    try {
+      const blob = new Blob([data], { type: mimeType });
+      url = URL.createObjectURL(blob);
+      const el = document.createElement('audio');
+      el.preload = 'metadata';
+      const timer = setTimeout(() => finish(0), 6000);
+      el.onloadedmetadata = () => {
+        clearTimeout(timer);
+        const d = el.duration;
+        finish(Number.isFinite(d) && d > 0 ? d : 0);
+      };
+      el.onerror = () => { clearTimeout(timer); finish(0); };
+      el.src = url;
+    } catch {
+      finish(0);
+    }
+  });
 }

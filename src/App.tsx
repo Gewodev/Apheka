@@ -22,12 +22,9 @@ const CursosHub = lazy(() => import('./components/views/CursosHub'));
 import OAuthCallback from './components/OAuthCallback';
 import GlobalPlayer from './components/GlobalPlayer';
 import DownloadManager from './components/ui/DownloadManager';
-import AIBrainSidebar from './components/ui/AIBrainSidebar';
-import type { BrainAnchor } from './lib/brainDrop';
 import NowPlayingView from './components/NowPlayingView';
 import VideoPiP from './components/VideoPiP';
 import ImageContextMenu from './components/ui/ImageContextMenu';
-import VoiceLiveOverlay from './components/ui/VoiceLiveOverlay';
 
 type ViewId = 'inicio' | 'estudio' | 'tareas' | 'notas' | 'musica' | 'planificacion' | 'cursos' | 'ajustes' | 'curso_detalle';
 
@@ -37,6 +34,14 @@ interface AppContentProps {
 
 function AppContent() {
   const { settings, courses, addCourse, navigateTo, setNavigateTo, importState, updateSettings, toastMessage, deleteOldCompletedTasks, youtubeVideoUrl, setYoutubeVideoUrl, isPlayingMusic, musicVolume, musicProgress, musicDuration, setMusicDuration, setMusicProgressRaw, setIsPlayingMusic, playTrack, musicQueue, setMusicQueue, shuffleMode, repeatMode, tracks, currentTrackId, setRepeatMode, coverModalTrackId, showRestPrompt, handlePomodoroBannerClick, queueSource, pipUrl, pipTitle, pipAutoplay, setPipUrl, pipPlaying, setPipPlaying, pipAfterQueue, setPipAfterQueue, courseDeepLink, setCourseDeepLink } = useApp();
+  // Restablece el modo ahorro de recursos (retirado): la app vuelve a sus efectos normales
+  useEffect(() => {
+    try { localStorage.removeItem('owa_resource_saver'); } catch { }
+    document.body.classList.remove('owa-resource-saver');
+  }, []);
+  // Suspender Música: oculta el apartado sin borrar nada; el click derecho en la barra la devuelve
+  const [musicSuspended, setMusicSuspended] = useState<boolean>(() => { try { return localStorage.getItem('owa_music_suspended') === '1'; } catch { return false; } });
+  useEffect(() => { try { localStorage.setItem('owa_music_suspended', musicSuspended ? '1' : '0'); } catch { } }, [musicSuspended]);
   const [activeView, setActiveView] = useState<ViewId>(() => {
     try {
       const saved = localStorage.getItem('owa_active_view_v1');
@@ -317,79 +322,6 @@ function AppContent() {
   }, []);
   const [isOAuthCallback, setIsOAuthCallback] = useState(false);
 
-  // ─── Charvis: hotkey + trigger lateral ───
-  const [isBrainOpen, setIsBrainOpen] = useState(false);
-  const [voiceLiveOpen, setVoiceLiveOpen] = useState(false);
-  const [brainAnchor, setBrainAnchor] = useState<BrainAnchor | null>(null);
-
-  // Cualquier vista puede "anclar" un elemento arrastrado sobre Charvis
-  // disparando el evento owa-open-brain con un { kind, id }.
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent<BrainAnchor>).detail;
-      if (detail && detail.id) {
-        setBrainAnchor(detail);
-      }
-      setVoiceLiveOpen(false);
-      setIsBrainOpen(true);
-    };
-    window.addEventListener('owa-open-brain', handler);
-    return () => window.removeEventListener('owa-open-brain', handler);
-  }, []);
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (document.body.dataset.capturingShortcut) return;
-      const sc = settings.owaBrainShortcut || 'Alt+KeyQ';
-      const parts = sc.split('+');
-      const code = parts[parts.length - 1];
-      const hasAlt = parts.includes('Alt');
-      const hasCtrl = parts.includes('Ctrl') || parts.includes('Control');
-      const hasShift = parts.includes('Shift');
-      const hasMeta = parts.includes('Meta');
-      if (e.code === code && !!e.altKey === hasAlt && !!e.ctrlKey === hasCtrl && !!e.shiftKey === hasShift && !!e.metaKey === hasMeta) {
-        e.preventDefault();
-        setIsBrainOpen(o => {
-          const next = !o;
-          if (next) setVoiceLiveOpen(false);
-          return next;
-        });
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [settings.owaBrainShortcut]);
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (document.body.dataset.capturingShortcut) return;
-      if (e.altKey && e.code === 'KeyA' && (settings.owaBrainLiveVoice !== false)) {
-        e.preventDefault();
-        setVoiceLiveOpen(o => {
-          if (!o) setIsBrainOpen(false);
-          return !o;
-        });
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [settings.owaBrainLiveVoice]);
-
-  // Atajo GLOBAL (Rust): Alt+A funciona incluso cuando la ventana no tiene foco
-  useEffect(() => {
-    if (settings.owaBrainLiveVoice === false) return;
-    const handler = (e: CustomEvent) => {
-      if (e.detail === 'alt+a') {
-        setVoiceLiveOpen(o => {
-          if (!o) setIsBrainOpen(false);
-          return !o;
-        });
-      }
-    };
-    window.addEventListener('owa-global-shortcut', handler as EventListener);
-    return () => window.removeEventListener('owa-global-shortcut', handler as EventListener);
-  }, [settings.owaBrainLiveVoice]);
-
   useEffect(() => {
     const path = window.location.pathname;
     if (path.startsWith('/oauth/callback')) {
@@ -638,9 +570,14 @@ function AppContent() {
         </div>
 
         {/* ─── Navigation ─── */}
-        <nav className="sidebar-nav">
-          {NAV_ITEMS.map(item => (
-            <div key={item.id} style={{ position: 'relative' }}>
+        <nav className="sidebar-nav" onContextMenu={e => {
+          e.preventDefault();
+          // Si Música está suspendida, el click derecho en la barra la devuelve
+          if (musicSuspended) { setMusicSuspended(false); return; }
+        }}>
+          {NAV_ITEMS.filter(item => !(musicSuspended && item.id === 'musica')).map(item => (
+            <div key={item.id} style={{ position: 'relative' }}
+              onContextMenu={item.id === 'musica' ? (e => { e.preventDefault(); e.stopPropagation(); setMusicSuspended(true); if (activeView === 'musica') setNavigateTo('inicio'); }) : undefined}>
               {item.id === 'cursos' && isCollapsed ? (
                 <button
                   onPointerDown={handleCoursesPointerDown}
@@ -1105,12 +1042,6 @@ function AppContent() {
 
       {/* Menú contextual global de imágenes (copiar/descargar) */}
       <ImageContextMenu />
-
-      {/* ─── Charvis sidebar ─── */}
-      <AIBrainSidebar isOpen={isBrainOpen} onClose={() => setIsBrainOpen(false)} onOpen={() => { setVoiceLiveOpen(false); setIsBrainOpen(true); }} anchor={brainAnchor} />
-
-      {/* ─── Voz en vivo (Alt+A) ─── */}
-      <VoiceLiveOverlay open={voiceLiveOpen} onClose={() => setVoiceLiveOpen(false)} />
     </div>
   );
 }

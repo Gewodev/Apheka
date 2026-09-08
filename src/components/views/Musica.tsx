@@ -1,4 +1,5 @@
 ﻿import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import LiveClock from '../ui/LiveClock';
 import { createPortal } from 'react-dom';
 import {
   Play, Pause, SkipBack, SkipForward, Volume2, Search,
@@ -15,9 +16,9 @@ import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } 
 import { restrictToParentElement } from '@dnd-kit/modifiers';
 import { CSS } from '@dnd-kit/utilities';
 import { useApp, type Track } from '../../store/AppContext';
-import { open, save } from '@tauri-apps/plugin-dialog';
+import { open } from '@tauri-apps/plugin-dialog';
 import { readFile } from '@tauri-apps/plugin-fs';
-import { format, subDays, addDays } from 'date-fns';
+import { format, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { extractYouTubeId } from '../../lib/ytEngine';
 import { fuzzyMatch as sharedFuzzyMatch, normalizeSearch } from '../../lib/fuzzy';
@@ -26,7 +27,6 @@ import {
   getDownloadPath, setDownloadPath,
   onDownloadProgress, onDownloadComplete, onDownloadFile,
   detectUrlType, formatDuration, validateUrl,
-  exportToZip,
   isTauri,
   type YouTubePlaylist, type YouTubeMetadata, type SearchResult,
   type DownloadProgress, type DownloadComplete,
@@ -205,16 +205,10 @@ export default function Musica() {
     weeklyMusicTime, monthlyMusicTime,
     updateDownloadProgress, updateDownloadStatus, toggleTrackFavorite,
     downloadQueue, removeFromDownloadQueue, clearCompletedDownloads,
-    updateTrack, deleteTrack,
+    updateTrack, deleteTrack, importLocalZeroCopy, cleanupMissingLocalFiles, removeDuplicateTracks,
     trackHistory, playCounts, studySessions, artists, addArtist, deleteArtist, updateArtist,
     playlists, addPlaylist, updatePlaylist, deletePlaylist,
-    clearAllMusicData,
     addNotification,
-    importLocalTracks,
-    scanFolderForAudio,
-    checkLocalFileExists,
-    cleanupMissingLocalFiles,
-    importLocalZeroCopy,
     setCoverModalTrackId,
     downloadPath: persistentDownloadPath, setDownloadPathCtx,
     setPipUrl, pipPlaying, pipUrl, pipTitle, queuePipAfter,
@@ -238,9 +232,8 @@ export default function Musica() {
   const [showSearch, setShowSearch] = useState(() => loadUiState()?.showSearch ?? false);
   const [coverHover, setCoverHover] = useState(false);
   const [searchMode, setSearchMode] = useState<'link' | 'query'>(() => (loadExploreState()?.searchMode as 'link' | 'query' | undefined) || 'link');
-  const [currentTime, setCurrentTime] = useState(new Date());
   const [confirmDelete, setConfirmDelete] = useState<{ type: 'track' | 'artist' | 'playlist'; id: string; name: string } | null>(null);
-  const [showClearAllConfirm, setShowClearAllConfirm] = useState(false);
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [searchPerformed, setSearchPerformed] = useState(() => loadExploreState()?.searchPerformed || false);
   const [statsPeriod, setStatsPeriod] = useState<'week' | 'month'>(() => loadUiState()?.statsPeriod || 'week');
   const [chartTooltip, setChartTooltip] = useState<{ text: string; date: string; x: number; y: number } | null>(null);
@@ -314,7 +307,7 @@ export default function Musica() {
     queueDragEndedRef.current = true;
     setTimeout(() => { queueDragEndedRef.current = false; }, 250);
   }, [musicQueue, setMusicQueue]);
-  const [colocarTrackId, setColocarTrackId] = useState<string | null>(null);
+
 
   const [manualOrder, setManualOrder] = useState<string[] | null>(() => {
     try {
@@ -426,8 +419,7 @@ export default function Musica() {
   }, [activeTab, playTrack, pipUrl, setPipUrl]);
 
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
+
   }, []);
 
   useEffect(() => {
@@ -440,7 +432,7 @@ export default function Musica() {
 
   // Lock body scroll when any modal is open
   useEffect(() => {
-    const modalOpen = !!(editingArtistId || showCreatePlaylist || editingTrackId || confirmDelete || showClearAllConfirm);
+    const modalOpen = !!(editingArtistId || showCreatePlaylist || editingTrackId || confirmDelete);
     const html = document.documentElement;
     const pageContainer = document.querySelector('.page-container') as HTMLElement | null;
     if (modalOpen) {
@@ -457,12 +449,8 @@ export default function Musica() {
       html.style.overflow = '';
       if (pageContainer) pageContainer.style.overflow = '';
     };
-  }, [editingArtistId, showCreatePlaylist, editingTrackId, confirmDelete, showClearAllConfirm]);
+  }, [editingArtistId, showCreatePlaylist, editingTrackId, confirmDelete]);
 
-  const timeStr = format(currentTime, 'HH:mm');
-  const secondsStr = format(currentTime, 'ss');
-  const dateStr = format(currentTime, "EEEE, d 'de' MMMM, yyyy", { locale: es as any });
-  const dateStrCapitalized = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
 
 
   const formatTime = useCallback((secs: number) => {
@@ -821,19 +809,29 @@ export default function Musica() {
             position: 'relative'
           }}>
             <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#10B981', position: 'relative' }} />
-            <div style={{ textAlign: 'right' }}>
-              <div className="flex items-baseline gap-2 justify-end">
-                <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 54, fontWeight: 200, lineHeight: 0.9, color: 'var(--accent)', letterSpacing: '-0.01em' }}>
-                  {timeStr}
-                </span>
-                <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 18, fontWeight: 300, color: 'var(--text-tertiary)', letterSpacing: '0.01em' }}>
-                  {secondsStr}
-                </span>
-              </div>
-              <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.12em', marginTop: 6 }}>
-                {dateStrCapitalized}
-              </div>
-            </div>
+            <LiveClock>
+              {now => {
+                const timeStr = format(now, 'HH:mm');
+                const secondsStr = format(now, 'ss');
+                const dateStr = format(now, "EEEE, d 'de' MMMM, yyyy", { locale: es as any });
+                const dateStrCapitalized = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
+                return (
+                  <div style={{ textAlign: 'right' }}>
+                    <div className="flex items-baseline gap-2 justify-end">
+                      <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 54, fontWeight: 200, lineHeight: 0.9, color: 'var(--accent)', letterSpacing: '-0.01em' }}>
+                        {timeStr}
+                      </span>
+                      <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 18, fontWeight: 300, color: 'var(--text-tertiary)', letterSpacing: '0.01em' }}>
+                        {secondsStr}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.12em', marginTop: 6 }}>
+                      {dateStrCapitalized}
+                    </div>
+                  </div>
+                );
+              }}
+            </LiveClock>
           </div>
         </div>
       </header>
@@ -897,33 +895,50 @@ export default function Musica() {
             })()}
           </div>
 
-          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-            <button
-              onClick={async () => {
-                const selected = await open({
-                  multiple: true,
-                  filters: [{ name: 'Audio', extensions: ['mp3', 'wav', 'ogg', 'm4a', 'flac'] }]
-                });
-                if (selected && Array.isArray(selected)) {
-                  await importLocalTracks(selected);
-                } else if (selected && typeof selected === 'string') {
-                  await importLocalTracks([selected]);
-                }
-              }}
-              className="btn-secondary hover-glow"
-              style={{
-                display: 'flex', alignItems: 'center', gap: 8, height: 38, borderRadius: 10,
-                fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '0 18px',
-                border: '1px solid var(--border-subtle)',
-                color: 'var(--text-secondary)', transition: 'all 200ms'
-              }}
-            >
-              <Upload size={16} /> Subir
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0, position: 'relative' }}>
+            <button onClick={() => setAddMenuOpen(o => !o)} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 8, height: 38, borderRadius: 10, fontSize: 12, fontWeight: 600, padding: '0 18px' }}>
+              <Plus size={16} /> Añadir <ChevronDown size={12} style={{ marginLeft: 2, transform: addMenuOpen ? 'rotate(180deg)' : 'none', transition: 'transform 180ms' }} />
             </button>
-
-            <button onClick={() => setActiveTab('explorar')} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 8, height: 38, borderRadius: 10, fontSize: 12, fontWeight: 600, padding: '0 18px' }}>
-              <Plus size={16} /> Añadir <ChevronDown size={12} style={{ marginLeft: 2 }} />
-            </button>
+            {addMenuOpen && (
+              <>
+                <div style={{ position: 'fixed', inset: 0, zIndex: 99990 }} onClick={() => setAddMenuOpen(false)} />
+                <div style={{ position: 'absolute', right: 0, top: 44, zIndex: 99991, background: 'var(--bg-elevated)', border: '1px solid var(--border-soft)', borderRadius: 10, boxShadow: '0 14px 44px rgba(0,0,0,0.38)', padding: 6, width: 230 }}>
+                  <button onClick={async () => {
+                    setAddMenuOpen(false);
+                    try {
+                      const folder = await open({ directory: true, title: 'Seleccionar carpeta con música', multiple: false });
+                      if (folder) {
+                        const count = await importLocalZeroCopy([folder as string], true);
+                        if (count > 0) addNotification(`${count} ${count === 1 ? 'canción agregada' : 'canciones agregadas'} desde la carpeta`, 'success');
+                        else addNotification('No se encontraron canciones nuevas en esa carpeta', 'info');
+                      }
+                    } catch (e) {
+                      addNotification('Error al escanear la carpeta', 'error');
+                    }
+                  }} style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: '9px 10px', borderRadius: 7, border: 'none', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, cursor: 'pointer', textAlign: 'left' }}>
+                    <FolderOpen size={14} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                    <span>Carpeta de música<span style={{ display: 'block', fontSize: 10, color: 'var(--text-muted)' }}>Detecta todo el audio y lo guarda en tu biblioteca</span></span>
+                  </button>
+                  <button onClick={async () => {
+                    setAddMenuOpen(false);
+                    try {
+                      const files = await open({ filters: [{ name: 'Audio', extensions: ['mp3', 'wav', 'flac', 'ogg', 'm4a', 'aac', 'opus', 'mp4'] }], multiple: true, title: 'Seleccionar archivos de audio' });
+                      const list = Array.isArray(files) ? files : (files ? [files] : []);
+                      if (list.length > 0) {
+                        const count = await importLocalZeroCopy(list as string[], false);
+                        if (count > 0) addNotification(`${count} ${count === 1 ? 'canción agregada' : 'canciones agregadas'} a tu biblioteca`, 'success');
+                        else addNotification('Esos archivos ya estaban en tu biblioteca', 'info');
+                      }
+                    } catch (e) {
+                      addNotification('Error al agregar los archivos', 'error');
+                    }
+                  }} style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: '9px 10px', borderRadius: 7, border: 'none', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, cursor: 'pointer', textAlign: 'left' }}>
+                    <Upload size={14} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                    <span>Archivos de audio<span style={{ display: 'block', fontSize: 10, color: 'var(--text-muted)' }}>Se guardan en tu biblioteca</span></span>
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -1234,7 +1249,7 @@ export default function Musica() {
                     <div style={{ gridColumn: '1 / -1', padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
                       <Music size={32} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
                       <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)' }}>No hay canciones</div>
-                      <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>Añade Música desde Explorar o sube audio local</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>Añade música con el botón Añadir de arriba</div>
                       {searchQuery && (
                         <button onClick={() => { setActiveTab('explorar'); setSearchMode('query'); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 24px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'var(--accent)', color: '#fff', border: 'none', marginTop: 20, transition: 'all 200ms' }}>
                           <Globe size={14} /> Buscar &ldquo;{searchQuery}&rdquo; en internet
@@ -1498,36 +1513,16 @@ export default function Musica() {
                 </span>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                   <button onClick={async () => {
-                    try {
-                      const folder = await open({ directory: true, title: 'Seleccionar carpeta con música', multiple: false });
-                      if (folder) {
-                        const count = await importLocalZeroCopy([folder], true);
-                        if (count > 0) addNotification(`${count} canciones agregadas desde carpeta (zero-copy)`, 'success');
-                      }
-                    } catch (e) {
-                      addNotification('Error al escanear carpeta', 'error');
-                    }
-                  }} className="btn-ghost" style={{ height: 30, padding: '0 16px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, borderRadius: 15, fontWeight: 500 }}>
-                    <FolderOpen size={11} /> Añadir carpeta
-                  </button>
-                  <button onClick={async () => {
-                    try {
-                      const files = await open({ filters: [{ name: 'Audio', extensions: ['mp3', 'wav', 'flac', 'ogg', 'm4a', 'aac', 'opus', 'mp4'] }], multiple: true, title: 'Seleccionar archivos de audio' });
-                      if (files && files.length > 0) {
-                        const count = await importLocalZeroCopy(files as string[], false);
-                        if (count > 0) addNotification(`${count} archivo(s) agregado(s) (zero-copy)`, 'success');
-                      }
-                    } catch (e) {
-                      addNotification('Error al agregar archivo(s)', 'error');
-                    }
-                  }} className="btn-ghost" style={{ height: 30, padding: '0 16px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, borderRadius: 15, fontWeight: 500 }}>
-                    <Upload size={11} /> Añadir archivo
-                  </button>
-                  <button onClick={async () => {
                     const result = await cleanupMissingLocalFiles();
                     if (result.removed === 0) addNotification('No hay archivos faltantes', 'info');
                   }} className="btn-ghost" style={{ height: 30, padding: '0 16px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, borderRadius: 15, fontWeight: 500, color: 'var(--error)', borderColor: 'rgba(239,68,68,0.2)' }}>
                     <Trash2 size={11} /> Limpiar faltantes
+                  </button>
+                  <button onClick={async () => {
+                    const removed = await removeDuplicateTracks();
+                    if (removed === 0) addNotification('No hay canciones duplicadas', 'info');
+                  }} className="btn-ghost" style={{ height: 30, padding: '0 16px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, borderRadius: 15, fontWeight: 500 }}>
+                    <Copy size={11} /> Borrar duplicados
                   </button>
                   {activeTab === 'favoritas' && displayTracks.length > 0 && (
                     <button
@@ -1616,7 +1611,7 @@ export default function Musica() {
                       <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
                         <Music size={32} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
                         <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)' }}>No hay canciones</div>
-                        <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>Añade Música desde Explorar o sube audio local</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>Añade música con el botón Añadir de arriba</div>
                         {searchQuery && (
                           <button onClick={() => { setActiveTab('explorar'); setSearchMode('query'); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 24px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'var(--accent)', color: '#fff', border: 'none', marginTop: 20, transition: 'all 200ms' }}>
                             <Globe size={14} /> Buscar &ldquo;{searchQuery}&rdquo; en internet
@@ -1694,7 +1689,7 @@ export default function Musica() {
                     <div style={{ gridColumn: '1 / -1', padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
                       <Music size={32} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
                       <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)' }}>No hay canciones</div>
-                      <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>Añade Música desde Explorar o sube audio local</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>Añade música con el botón Añadir de arriba</div>
                     </div>
                   )}
                 </div>
@@ -1970,8 +1965,11 @@ export default function Musica() {
                       <h3 style={{ fontSize: 17, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4, lineHeight: 1.3, fontFamily: "'Inter Tight', sans-serif" }}>{preview.title || 'Sin título'}</h3>
                       <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 14 }}>{preview.channel}</div>
                       <div style={{ display: 'flex', gap: 8 }}>
-                        <button onClick={handleDownloadAll} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, height: 36, padding: '0 20px', whiteSpace: 'nowrap' }}>
-                          <Download size={14} /> {isPlaylist(preview) ? 'Descargar Playlist' : 'Descargar Audio'}
+                        <button onClick={handleSelectForLibrary} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, height: 36, padding: '0 20px', whiteSpace: 'nowrap' }}>
+                          <ListPlus size={14} /> Importar a biblioteca
+                        </button>
+                        <button onClick={handleDownloadAll} className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, height: 36, padding: '0 20px', whiteSpace: 'nowrap' }}>
+                          <Download size={14} /> Añadir a descargas
                         </button>
                         <button onClick={handleSelectFolder} className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, height: 36, padding: '0 14px', whiteSpace: 'nowrap' }}>
                           <FolderOpen size={14} /> Carpeta
@@ -2817,7 +2815,7 @@ export default function Musica() {
             )}
             <button onClick={() => ctxPlayNext(ctxMenu.trackId)} style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: '8px 10px', borderRadius: 7, border: 'none', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, cursor: 'pointer', textAlign: 'left' }}>
               <CornerDownRight size={14} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
-              Reproducir a continuación
+              A continuación (cola general)
             </button>
           </div>
         </div>,
@@ -2832,7 +2830,7 @@ export default function Musica() {
             </div>
             <button onClick={() => ctxSearchAddToLibrary(ctxSearchMenu.result)} style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: '8px 10px', borderRadius: 7, border: 'none', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, cursor: 'pointer', textAlign: 'left' }}>
               <ListPlus size={14} style={{ color: 'var(--accent)', flexShrink: 0 }} />
-              Agregar a lista de música
+              Agregar a la biblioteca
             </button>
             <button
               onClick={() => ctxSearchPlayNext(ctxSearchMenu.result)}
@@ -2841,7 +2839,7 @@ export default function Musica() {
               title={currentTrackId ? undefined : 'No hay ninguna canción reproduciéndose en este momento'}
             >
               <CornerDownRight size={14} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
-              Reproducir después de la actual
+              Después de la actual (emergente)
             </button>
           </div>
         </div>,

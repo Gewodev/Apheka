@@ -104,6 +104,59 @@ export function notifyBreakOver(): void {
   );
 }
 
+// ─── Formato de tiempo restante / transcurrido (preciso, no genérico) ───
+
+const DAY_MS = 86_400_000;
+
+function sameDay(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+function fmtHour(ms: number): string {
+  const d = new Date(ms);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+function fmtDayShort(ms: number): string {
+  return new Date(ms).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+}
+
+// "hoy a las 18:30" · "mañana a las 09:00" · "el 12 ene a las 10:00"
+function fmtWhenFuture(targetMs: number, nowMs: number): string {
+  const t = new Date(targetMs);
+  const now = new Date(nowMs);
+  const tomorrow = new Date(nowMs + DAY_MS);
+  if (sameDay(t, now)) return `hoy a las ${fmtHour(targetMs)}`;
+  if (sameDay(t, tomorrow)) return `mañana a las ${fmtHour(targetMs)}`;
+  return `el ${fmtDayShort(targetMs)} a las ${fmtHour(targetMs)}`;
+}
+
+// "en 25 minutos" · "en 3 horas" · "mañana" · "en 4 días"
+function fmtCountdown(diffMs: number): string {
+  const mins = Math.round(diffMs / 60_000);
+  if (mins < 60) return mins <= 1 ? 'en 1 minuto' : `en ${mins} minutos`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return hours === 1 ? 'en 1 hora' : `en ${hours} horas`;
+  const days = Math.round(diffMs / DAY_MS);
+  return days === 1 ? 'mañana' : `en ${days} días`;
+}
+
+// "hace 2 horas" · "ayer" · "hace 5 días"
+function fmtOverdue(agoMs: number): string {
+  const mins = Math.round(agoMs / 60_000);
+  if (mins < 60) return mins <= 1 ? 'hace 1 minuto' : `hace ${mins} minutos`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return hours === 1 ? 'hace 1 hora' : `hace ${hours} horas`;
+  const days = Math.round(agoMs / DAY_MS);
+  return days === 1 ? 'ayer' : `hace ${days} días`;
+}
+
+function occurrenceKey(prefix: string, id: string, targetMs: number): string {
+  const d = new Date(targetMs);
+  const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return `${prefix}_${id}_${day}`;
+}
+
 // ─── Notificaciones de tareas ───
 
 export function notifyAllTasksComplete(): void {
@@ -113,32 +166,70 @@ export function notifyAllTasksComplete(): void {
   );
 }
 
-export function notifyTaskDueSoon(title: string, dueDateStr: string, taskId: string): void {
-  if (!canNotifyItem('task_' + taskId, 4 * 3_600_000)) return;
+// Tarea que aún no vence: mensaje distinto según falte poco o varios días.
+export function notifyTaskDueSoon(title: string, dueMs: number, taskId: string): void {
+  const now = Date.now();
+  const diff = dueMs - now;
+  if (!(diff > 0)) return;
+  if (!canNotifyItem(occurrenceKey('task', taskId, dueMs), 20 * 3_600_000)) return;
 
+  const urgent = diff <= 3 * 3_600_000;
   sendNativeNotification(
-    `Tarea pendiente: ${title}`,
-    `Vence el ${dueDateStr}. ${pick(TASK_PHRASES)}`
+    urgent ? `Tarea por vencer: ${title}` : `Recordatorio: ${title}`,
+    urgent
+      ? `Vence ${fmtWhenFuture(dueMs, now)} (${fmtCountdown(diff)}). ${pick(TASK_PHRASES)}`
+      : `Vence ${fmtWhenFuture(dueMs, now)}. ${pick(TASK_PHRASES)}`
   );
 }
 
-export function notifyTaskOverdue(title: string, taskId: string): void {
-  if (!canNotifyItem('overdue_' + taskId, 6 * 3_600_000)) return;
+// Tarea ya vencida: mensaje distinto según lleve horas o días.
+export function notifyTaskOverdue(title: string, dueMs: number, taskId: string): void {
+  const now = Date.now();
+  const ago = now - dueMs;
+  if (!(ago > 0)) return;
+  const today = new Date();
+  const dayId = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  if (!canNotifyItem(`overdue_${taskId}_${dayId}`, 20 * 3_600_000)) return;
 
   sendNativeNotification(
     'Tarea vencida',
-    `"${title}" requiere tu atencion. ${pick(TASK_PHRASES)}`
+    `"${title}" venció ${fmtOverdue(ago)}. ${pick(TASK_PHRASES)}`
   );
 }
 
 // ─── Notificaciones de eventos ───
 
-export function notifyUpcomingEvent(title: string, timeStr: string, eventId: string): void {
-  if (!canNotifyItem('event_' + eventId, 2 * 3_600_000)) return;
+// Aviso de 1 hora: solo contexto de preparación.
+export function notifyEventReminder1h(title: string, eventMs: number, eventId: string): void {
+  if (!canNotifyItem(occurrenceKey('ev1h', eventId, eventMs), 20 * 3_600_000)) return;
+  sendNativeNotification(
+    `Evento en una hora: ${title}`,
+    `Empieza a las ${fmtHour(eventMs)}. ${pick(EVENT_PHRASES)}`
+  );
+}
+
+// Aviso de 30 minutos: hora exacta + cuenta atrás.
+export function notifyUpcomingEvent(title: string, eventMs: number, eventId: string): void {
+  const diff = eventMs - Date.now();
+  if (!(diff > 0)) return;
+  if (!canNotifyItem(occurrenceKey('ev30', eventId, eventMs), 20 * 3_600_000)) return;
 
   sendNativeNotification(
-    `Proximo evento: ${title}`,
-    `Programado para las ${timeStr}. ${pick(EVENT_PHRASES)}`
+    `Próximo evento: ${title}`,
+    `Hoy a las ${fmtHour(eventMs)} (${fmtCountdown(diff)}). ${pick(EVENT_PHRASES)}`
+  );
+}
+
+// ─── Notificaciones de sesiones de estudio ───
+
+export function notifyStudySessionSoon(title: string, sessionMs: number, sessionId: string): void {
+  const diff = sessionMs - Date.now();
+  if (!(diff > 0)) return;
+  if (!canNotifyItem(occurrenceKey('ps10', sessionId, sessionMs), 20 * 3_600_000)) return;
+
+  sendNativeNotification(
+    'Sesión de estudio en 10 minutos',
+    `"${title}" empieza a las ${fmtHour(sessionMs)}. Prepara tu espacio y tu mente.`
   );
 }
 

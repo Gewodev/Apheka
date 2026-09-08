@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Copy, FolderOpen, FolderSearch, ChevronRight, ExternalLink, Check } from 'lucide-react';
+import { Copy, FolderOpen, FolderSearch, ChevronRight, ExternalLink, Check, Palette } from 'lucide-react';
 import { isTauri, convertFileSrc } from '@tauri-apps/api/core';
 import { revealItemInDir, openPath, openUrl as openUrlSystem } from '@tauri-apps/plugin-opener';
 import { openFileSmart, resolveLocalPath } from '../../lib/openFileSmart';
@@ -23,6 +23,9 @@ export interface MatMenuEntry {
   courseId?: string;
   onMoveToGroup?: () => void;
   onRemoveFromGroup?: () => void;
+  // Acciones por lote sobre TODAS las herramientas/archivos del tema
+  onBatchColor?: (color: string) => void;
+  onOpenAll?: () => void;
 }
 
 interface MenuState {
@@ -113,6 +116,25 @@ function DefaultBrowserModal({ browserName, courseName, onPick, onCancel }: {
         </div>
       </div>
     </>
+  );
+}
+
+const BATCH_COLORS = ['#E11D48', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16', '#F4F4F5'];
+
+function BatchColorRow({ onPick }: { onPick: (color: string) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ position: 'relative' }}>
+      <Item icon={<Palette size={13} />} label="Color para todas…" accent="#3B82F6" onClick={() => setOpen(o => !o)} />
+      {open && (
+        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', padding: '6px 10px 8px', background: 'var(--bg-deep)', borderRadius: 8, margin: '2px 6px' }}>
+          {BATCH_COLORS.map(c => (
+            <button key={c} onClick={() => onPick(c)} title={c}
+              style={{ width: 18, height: 18, borderRadius: 6, background: c, border: '1px solid var(--border-subtle)', cursor: 'pointer', padding: 0 }} />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -306,6 +328,10 @@ function MenuPanel(props: {
         )}
         {inTauri && isLocal && !isPdf && (
           <Item icon={<FolderSearch size={13} />} label="Mostrar en carpeta" onClick={runReveal} />
+        )}
+        {entry.onBatchColor && <BatchColorRow onPick={c => { close(); entry.onBatchColor!(c); }} />}
+        {entry.onOpenAll && (
+          <Item icon={<FolderOpen size={13} />} label="Abrir todos los recursos" accent="#10B981" onClick={() => { close(); entry.onOpenAll!(); }} />
         )}
         {entry.onMoveToGroup && (
           <Item icon={<FolderOpen size={13} />} label="Mover a grupo" accent="#8B5CF6" onClick={() => { close(); entry.onMoveToGroup!(); }} />

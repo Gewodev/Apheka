@@ -31,13 +31,13 @@ import { isTauri } from '@tauri-apps/api/core';
 import { format, addDays, startOfWeek, endOfWeek } from "date-fns";
 import { es } from "date-fns/locale";
 import toast from 'react-hot-toast';
-import { openBrainWithAnchor, isOverBrainZone, getLastPointer, setBrainDragState } from '../../lib/brainDrop';
 import { createEditorHistory } from '../../lib/editorHistory';
+import { latexTextToHtml, upgradeLatexInText } from '../../lib/latexRender';
 import { fuzzyMatch } from '../../lib/fuzzy';
 import { usePlannerDay } from '../../lib/plannerDay';
 import { useMaterialMenu } from '../ui/MaterialContextMenu';
 import ImageEditorModal from '../ui/ImageEditorModal';
-import StudySets, { type SetCard, type StudySetsMode } from './cursos/StudySets';
+import { DeckEditorModal, DeckRunner, DECK_META, type ToolDeckMode } from './cursos/ToolDecks';
 
 export const MATERIAL_META = {
   resource: { label: 'Recurso', icon: File },
@@ -417,6 +417,8 @@ function MaterialCard({ mat, dragAttributes, dragListeners, onEdit, onDelete, on
   const meta = MATERIAL_META[mat.type];
   const typeColors: Record<string, string> = { formula: '#8B5CF6', concept: '#3B82F6', 'key-data': '#F59E0B', meaning: '#10B981', quiz: '#EF4444', procedure: '#EC4899', resource: '#6366F1' };
   const toolMeta = mat.toolMode ? TOOL_CREATOR_META[mat.toolMode as ToolCreatorMode] : undefined;
+  // Nodos de herramienta especializados (Flashcards / Prueba / Emparejar)
+  const deckMeta = mat.toolMode ? (DECK_META as any)[mat.toolMode] as { icon: any; label: string; color: string } | undefined : undefined;
   // Detección de TIPO REAL del recurso (idéntica a Materiales de curso)
   const _url = mat.dataUrl || '';
   const _nm = (mat.name || '').toLowerCase();
@@ -437,9 +439,9 @@ function MaterialCard({ mat, dragAttributes, dragListeners, onEdit, onDelete, on
   const _isVid = ['mp4', 'webm', 'avi', 'mov', 'mkv'].includes(_ext) || _url.startsWith('data:video');
   const _isImgE = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'].includes(_ext) || _url.startsWith('data:image');
   const _isWeb = _lk && !_isYT && !_isDrive && !_isClassroom && !_isGDocs && !_isGSheets && !_isGSlides && !_isGForms;
-  let Icon: any = toolMeta ? toolMeta.icon : meta.icon;
-  let accent: string = toolMeta?.color || typeColors[mat.type] || 'var(--accent)';
-  let cardLabel = toolMeta?.name || meta.label;
+  let Icon: any = deckMeta ? deckMeta.icon : toolMeta ? toolMeta.icon : meta.icon;
+  let accent: string = (mat as any).color || deckMeta?.color || toolMeta?.color || typeColors[mat.type] || 'var(--accent)';
+  let cardLabel = deckMeta?.label || toolMeta?.name || meta.label;
   if (!toolMeta && mat.type === 'resource') {
     if (_isYT) { Icon = (p: any) => (<svg viewBox="0 0 24 24" width={p.size || 17} height={p.size || 17} fill="#EF4444" style={{ display: 'block', flexShrink: 0 }}><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>); accent = '#EF4444'; cardLabel = 'YouTube'; }
     else if (_isPdf) { Icon = (p: any) => (<svg viewBox="0 0 24 24" width={p.size || 17} height={p.size || 17} fill="#EF4444" style={{ display: 'block', flexShrink: 0 }}><path d="M23.63 15.3c-.71-.745-2.166-1.17-4.224-1.17-1.1 0-2.377.106-3.761.354a19.443 19.443 0 0 1-2.307-2.661c-.532-.71-.994-1.49-1.42-2.236.817-2.484 1.207-4.507 1.207-5.962 0-1.632-.603-3.336-2.342-3.336-.532 0-1.065.32-1.349.781-.78 1.384-.425 4.4.923 7.381a60.277 60.277 0 0 1-1.703 4.507c-.568 1.349-1.207 2.733-1.917 4.01C2.834 18.53.314 20.34.03 21.758c-.106.533.071 1.03.462 1.42.142.107.639.533 1.49.533 2.59 0 5.323-4.188 6.707-6.707 1.065-.355 2.13-.71 3.194-.994a34.963 34.963 0 0 1 3.407-.745c2.732 2.448 5.145 2.839 6.352 2.839 1.49 0 2.023-.604 2.2-1.1.32-.64.106-1.349-.213-1.704z"/></svg>); accent = '#EF4444'; cardLabel = 'PDF'; }
@@ -467,7 +469,7 @@ function MaterialCard({ mat, dragAttributes, dragListeners, onEdit, onDelete, on
     else if (_url && !_lk) { Icon = File; accent = '#64748B'; cardLabel = 'Archivo'; }
   }
   const title = mat.name || mat.title || mat.word || mat.question || 'Sin título';
-  const practice = toolMeta && onPractice;
+  const practice = (deckMeta || toolMeta) && onPractice;
   const canOpen = !!mat.dataUrl && !practice;
   return (
     <div {...dragAttributes} {...dragListeners}
@@ -513,7 +515,7 @@ function MaterialCard({ mat, dragAttributes, dragListeners, onEdit, onDelete, on
 
 // --- Tool row (Herramientas panel) · long-press to reorder ---
 // Tarjeta de carpeta arrastrable-destino (drop de materiales dentro de ella)
-function FolderTile({ g, color, count, onOpen, onRename, onDelete }: { g: string; color: string; count: number; onOpen: () => void; onRename: () => void; onDelete: () => void }) {
+function FolderTile({ g, color, onOpen, onRename, onDelete }: { g: string; color: string; count?: number; onOpen: () => void; onRename: () => void; onDelete: () => void }) {
   const { setNodeRef, isOver } = useDroppable({ id: 'grp-' + g });
   const [hovered, setHovered] = useState(false);
   const folderName = g.split('/').pop() || g;
@@ -522,16 +524,16 @@ function FolderTile({ g, color, count, onOpen, onRename, onDelete }: { g: string
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        minHeight: 124, borderRadius: 16, position: 'relative',
-        border: isOver ? `2px solid ${color}` : hovered ? `1px solid ${color}60` : `1px solid ${color}30`,
-        background: isOver ? `linear-gradient(140deg, ${color}26 0%, var(--bg-surface) 100%)` : `linear-gradient(140deg, ${color}12 0%, var(--bg-surface) 100%)`,
+        minHeight: 108, borderRadius: 14, position: 'relative',
+        border: isOver ? `1.5px solid ${color}` : `1px solid var(--border-subtle)`,
+        background: isOver ? `color-mix(in srgb, ${color} 10%, var(--bg-elevated))` : 'var(--bg-elevated)',
         cursor: 'pointer', display: 'flex', flexDirection: 'column', padding: '16px 16px 14px',
-        justifyContent: 'space-between', transition: 'all 220ms cubic-bezier(0.16,1,0.3,1)',
-        transform: isOver ? 'scale(1.03)' : hovered ? 'translateY(-3px)' : 'none',
-        boxShadow: isOver ? `0 0 0 4px ${color}20` : hovered ? `0 12px 32px ${color}22` : '0 1px 3px rgba(0,0,0,0.04)',
+        justifyContent: 'space-between', transition: 'all 200ms cubic-bezier(0.16,1,0.3,1)',
+        transform: hovered && !isOver ? 'translateY(-2px)' : 'none',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
       }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
-        <div style={{ width: 40, height: 40, borderRadius: 12, background: `${color}18`, border: `1px solid ${color}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <div style={{ width: 40, height: 40, borderRadius: 11, background: `color-mix(in srgb, ${color} 10%, transparent)`, border: `1px solid ${color}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
           <FolderOpen size={19} style={{ color, opacity: isOver ? 1 : 0.9 }} />
         </div>
         <div style={{ display: 'flex', gap: 4, opacity: hovered ? 1 : 0, transition: 'opacity 180ms ease' }}>
@@ -546,14 +548,8 @@ function FolderTile({ g, color, count, onOpen, onRename, onDelete }: { g: string
         </div>
       </div>
       <div style={{ marginTop: 12, minWidth: 0 }}>
-        <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {folderName}
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
-          <span style={{ fontSize: 10, fontWeight: 600, color: color, background: `${color}14`, padding: '2px 8px', borderRadius: 99, letterSpacing: '0.04em' }}>
-            {count} {count === 1 ? 'elemento' : 'elementos'}
-          </span>
-          <span style={{ fontSize: 9.5, color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif" }}>Grupo</span>
         </div>
       </div>
     </div>
@@ -1191,7 +1187,7 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
       temp.innerHTML = html;
       const all = temp.querySelectorAll('*');
       for (const el of all) {
-        // Los SVG vectoriales (diagramas de Charvis u otros) se conservan INTEGROS:
+        // Los SVG vectoriales (diagramas pegados u otros) se conservan INTEGROS:
         // sus atributos (viewBox, fill, stroke, d, x, y…) son su contenido.
         if (el.closest('svg')) continue;
         const st = (el as HTMLElement).style;
@@ -1226,8 +1222,8 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
         .replace(/<span[^>]*>/gi, '<span>')
         .replace(/<div([^>]*)>/gi, '<p$1>')
         .replace(/<\/div>/gi, '</p>');
-      document.execCommand('insertHTML', false, cleaned);
-    } else {
+            document.execCommand('insertHTML', false, upgradeLatexInText(cleaned));
+      } else {
       const text = e.clipboardData.getData('text/plain');
       const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\r\n/g, '\n');
       document.execCommand('insertHTML', false, escaped.split('\n').map(l => l.trim() === '' ? '<p><br></p>' : `<p>${l}</p>`).join(''));
@@ -1548,8 +1544,16 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
 
   // Per-course route persistence · each course remembers the tab/view/topic/group it was left open in
   const routeRestoredForRef = useRef<string | null>(null);
+  const lastCourseRef = useRef<string | null>(null);
   useEffect(() => {
     if (!selectedCourseId || routeRestoredForRef.current === selectedCourseId) return;
+    // Snapshot: al cambiar de curso, guarda la ruta del curso que SE SALE
+    // con el estado todavía vigente (antes de que cualquier reset lo toque)
+    const prevCourse = lastCourseRef.current;
+    if (prevCourse && prevCourse !== selectedCourseId) {
+      try { localStorage.setItem(`owa_course_route_${prevCourse}`, JSON.stringify({ tab: activeTab, view: currentView, topicId: activeTopicId, groupId: selectedGroupId, toolGroup: activeToolGroup, overviewMode })); } catch { }
+    }
+    lastCourseRef.current = selectedCourseId;
     routeRestoredForRef.current = selectedCourseId;
     try {
       const raw = localStorage.getItem(`owa_course_route_${selectedCourseId}`);
@@ -1557,9 +1561,19 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
       const r = JSON.parse(raw);
       if (!r || typeof r !== 'object') return;
       if ((r.tab === 'tareas' || r.tab === 'notas' || r.tab === 'archivos' || r.tab === 'overview')) setActiveTab(r.tab);
+      // El modo (Tareas/Notas vs Estudio) también se restaura POR CURSO
+      if (r.overviewMode === 'tareas_notas' || r.overviewMode === 'temas_archivos') setOverviewMode(r.overviewMode);
       if (r.view === 'topic' && r.topicId && parsedTopics.some(t => t.id === r.topicId)) {
         setActiveTopicId(r.topicId);
         setCurrentView('topic');
+        // Restaura también el grupo de herramientas activo dentro del tema (si aún existe)
+        const rtp = parsedTopics.find(t => t.id === r.topicId);
+        const rGroups = (((rtp as any)?.toolGroups || []) as string[]);
+        if (typeof r.toolGroup === 'string' && (r.toolGroup === 'todos' || rGroups.includes(r.toolGroup) || rGroups.some(g => r.toolGroup.startsWith(g + '/')))) {
+          setActiveToolGroup(r.toolGroup);
+        } else {
+          setActiveToolGroup('todos');
+        }
       } else if (r.view === 'group' && r.groupId && groups.some(g => g.id === r.groupId)) {
         setSelectedGroupId(r.groupId);
         setCurrentView('group');
@@ -1627,7 +1641,11 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const clozeRef = useRef<HTMLTextAreaElement>(null);
   // Practice modal (per-tool review of created materials)
   const [practiceMat, setPracticeMat] = useState<SubjectMaterial | null>(null);
-  const openPractice = (mat: SubjectMaterial) => setPracticeMat(mat);
+  const openPractice = (mat: SubjectMaterial) => {
+    // Los nodos de herramienta especializados se ejecutan DENTRO del panel del tema
+    if (mat.toolMode === 'flashcardsDeck' || mat.toolMode === 'quizDeck' || mat.toolMode === 'matchDeck' || mat.toolMode === 'clozeDeck' || mat.toolMode === 'feynmanDeck' || mat.toolMode === 'vfDeck' || mat.toolMode === 'seqDeck' || mat.toolMode === 'catDeck') { setDeckRunner(mat); return; }
+    setPracticeMat(mat);
+  };
   const closePractice = () => setPracticeMat(null);
   const viewMaterial = (mat: SubjectMaterial) => setViewingMat(mat);
   // Herramientas reorder (long-press drag), persisted
@@ -1981,7 +1999,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   };
 
   const startReview = () => {
-    const allFcs = safeArr(activeTopic?.flashcards) as SetCard[];
+    const allFcs = safeArr(activeTopic?.flashcards);
     // El repaso respeta el grupo activo: si estás dentro de una carpeta, solo repasa ese set
     const fcs = activeToolGroup !== 'todos'
       ? allFcs.filter(f => { const gn = ((f as any).groupName || '') as string; return gn === activeToolGroup || gn.startsWith(activeToolGroup + '/'); })
@@ -2094,14 +2112,6 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
       }
     }
   }, [selectedGroupId, selectedCourseId]);
-
-  // Persist per-course route (tab/view/topic/group) so each course reopens where it was left
-  useEffect(() => {
-    if (!selectedCourseId) return;
-    try {
-      localStorage.setItem(`owa_course_route_${selectedCourseId}`, JSON.stringify({ tab: activeTab, view: currentView, topicId: activeTopicId, groupId: selectedGroupId }));
-    } catch { /* ignore */ }
-  }, [selectedCourseId, activeTab, currentView, activeTopicId, selectedGroupId]);
 
   // Persist study view state per course
   useEffect(() => {
@@ -2358,8 +2368,36 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const [confirmDelGroup, setConfirmDelGroup] = useState<string | null>(null);
   const [newGroupName, setNewGroupName] = useState('');
   const [activeToolGroup, setActiveToolGroup] = useState<string>('todos');
-  // Sets de estudio estilo Quizlet (Tarjetas/Prueba/Emparejar) por grupo del tema
-  const [studySets, setStudySets] = useState<{ mode: StudySetsMode } | null>(null);
+
+  // Persist per-course route (tab/view/topic/group) so each course reopens where it was left
+  useEffect(() => {
+    if (!selectedCourseId) return;
+    // No guardar hasta que la restauración de ESTE curso se haya aplicado
+    // (evita escribir estado mezclado del curso anterior sobre la clave del nuevo)
+    if (routeRestoredForRef.current !== selectedCourseId || lastCourseRef.current !== selectedCourseId) return;
+    try {
+        localStorage.setItem(`owa_course_route_${selectedCourseId}`, JSON.stringify({ tab: activeTab, view: currentView, topicId: activeTopicId, groupId: selectedGroupId, toolGroup: activeToolGroup, overviewMode }));
+    } catch { /* ignore */ }
+  }, [selectedCourseId, activeTab, currentView, activeTopicId, selectedGroupId, activeToolGroup, overviewMode]);
+  // Nodos de herramienta especializados: cada herramienta es UN bloque del tema
+  // (SubjectMaterial con toolMode) cuyo content es JSON con todo su interior.
+  const [deckEditor, setDeckEditor] = useState<{ mode: ToolDeckMode; mat?: SubjectMaterial } | null>(null);
+  // Ejecución de una herramienta: SIEMPRE dentro del panel del tema (reemplaza la cuadrícula)
+  const [deckRunner, setDeckRunner] = useState<SubjectMaterial | null>(null);
+  const closeDeckRunner = () => setDeckRunner(null);
+  const saveDeck = (mode: ToolDeckMode, name: string, color: string, content: string) => {
+    const editing = deckEditor?.mat;
+    if (editing) {
+      updateCourse(course.id, { studyTopics: (safeArr(course.studyTopics)).map(t => t.id === activeTopic?.id ? { ...t, materials: (safeArr(t.materials)).map(m => m.id === editing.id ? { ...m, name, title: name, color, content } : m) } : t) } as any);
+      toast.success('Bloque actualizado');
+    } else {
+      const meta = DECK_META[mode];
+      const newMat = { id: Math.random().toString(36).slice(2), type: mode === 'quizDeck' ? 'quiz' : 'concept', name, title: name, color, content, toolMode: mode, ...(pendingGroupNameRef.current ? { groupName: pendingGroupNameRef.current } : {}) } as any;
+      updateCourse(course.id, { studyTopics: (safeArr(course.studyTopics)).map(t => t.id === activeTopic?.id ? { ...t, materials: [...(safeArr(t.materials)), newMat] } : t) } as any);
+      toast.success(`${meta.label} añadido: vive como un bloque del tema`);
+    }
+    setDeckEditor(null);
+  };
 
   // Refs
   const courseCoverInputRef = useRef<HTMLInputElement>(null);
@@ -2409,7 +2447,8 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
       if (e.key === 'Escape') {
         if (noteMenuTarget) { setNoteMenuTarget(null); return; }
         if (notasTabMenuTarget) { setNotasTabMenuTarget(null); return; }
-        if (studySets) { setStudySets(null); return; }
+        if (deckEditor) { setDeckEditor(null); return; }
+        if (deckRunner) { closeDeckRunner(); return; }
         if (topicGroupModal) { setTopicGroupModal(null); return; }
         if (moveToGroupMat) { setMoveToGroupMat(null); return; }
         if (confirmDelToolMat) { setConfirmDelToolMat(null); return; }
@@ -2425,7 +2464,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [showMaterialModal, showFlashcardModal, showGroupModal, showTopicModal, showEditCourse, noteMenuTarget, notasTabMenuTarget, reviewing, studySets, topicGroupModal, moveToGroupMat, confirmDelToolMat, confirmDelGroup, showAddLinkModal]);
+  }, [showMaterialModal, showFlashcardModal, showGroupModal, showTopicModal, showEditCourse, noteMenuTarget, notasTabMenuTarget, reviewing, deckEditor, deckRunner, topicGroupModal, moveToGroupMat, confirmDelToolMat, confirmDelGroup, showAddLinkModal]);
 
   // Close note menus on click outside
   useEffect(() => {
@@ -2653,6 +2692,9 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
 
   // Info-first: al pulsar una técnica se abre su Teoría (qué es · cómo · evidencia)
   const startEditToolMaterial = (mat: SubjectMaterial) => {
+    // Los nodos de herramienta especializados se editan en SU propio asistente (con su contenido cargado)
+    const dm = mat.toolMode as ToolDeckMode | undefined;
+    if (dm && (DECK_META as any)[dm]) { setDeckEditor({ mode: dm, mat }); return; }
     const mode = mat.toolMode as ToolCreatorMode | undefined;
     if (mode && TOOL_CREATOR_META[mode]) {
       const f: Record<string, string> = {};
@@ -2845,11 +2887,6 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     updateCourse(course.id, { studyTopics: (safeArr(course.studyTopics)).map(tp => tp.id === activeTopic?.id ? { ...tp, materials: (safeArr(tp.materials)).map(m => m.id === matId ? ({ ...m, groupName: undefined } as any) : m) } : tp) } as any);
     toast.success('Movido al tema principal');
   };
-  // StudySets (modal Quizlet): persiste el array COMPLETO de flashcards del tema
-  const handleStudySetsChange = useCallback((next: SetCard[]) => {
-    if (!activeTopic) return;
-    updateCourse(course.id, { studyTopics: (safeArr(course.studyTopics)).map(t => t.id === activeTopic.id ? { ...t, flashcards: next } : t) });
-  }, [activeTopic, course.id, course.studyTopics, updateCourse]);
   const handleDeleteResourceFromOverview = (matId: string) => {
     updateCourse(course.id, { studyTopics: (safeArr(course.studyTopics)).map(t => ({ ...t, materials: (safeArr(t.materials)).filter(m => m.id !== matId) })) });
     toast.success('Material eliminado');
@@ -2905,16 +2942,9 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const studySensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const planSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { delay: 300, tolerance: 8 } }));
 
-  // Mantiene el overlay "Suelta aquí" de Charvis en síncrono con la posición del
-  // puntero durante los drags de @dnd-kit (que no disparan eventos nativos de drop).
-  const syncBrainDragOverlay = () => {
-    const p = getLastPointer();
-    setBrainDragState(isOverBrainZone(p.x), 'Suelta para anclar en Charvis');
-  };
-  const clearBrainDragOverlay = () => setBrainDragState(false);
+
 
   const handleTopicGridDragEnd = useCallback((event: DragEndEvent) => {
-    clearBrainDragOverlay();
     setActiveTopicDragId(null);
     const { active, over } = event;
     // Soltar sobre una carpeta → mover el material O herramienta dentro de ella
@@ -2935,7 +2965,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
         updateCourse(course.id, { studyTopics: (safeArr(course.studyTopics)).map(tp => tp.id === activeTopic?.id ? { ...tp, recordings: (safeArr(tp.recordings)).map(r => r.id === activeId ? ({ ...r, groupName: gName } as any) : r) } : tp) } as any);
         toast.success('Grabación movida a ' + gName.split('/').pop());
       }
-      clearBrainDragOverlay(); setActiveTopicDragId(null); return;
+      setActiveTopicDragId(null); return;
     }
     if (active.id === over?.id) return;
     const visible = topicFiltered;
@@ -2962,13 +2992,10 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     const d = event.delta ?? { x: 0, y: 0 };
     matDragSuppressRef.current = Math.abs(d.x) + Math.abs(d.y) > 4;
     setTimeout(() => { matDragSuppressRef.current = false; }, 200);
-    clearBrainDragOverlay();
     setActiveMatDragId(null);
     const { active, over } = event;
     if (!over) {
-      // Soltado fuera de cualquier destino: si fue sobre Charvis, se ancla; si no, al final de la lista.
-      const p = getLastPointer();
-      if (isOverBrainZone(p.x)) { openBrainWithAnchor({ kind: 'material', id: active.id as string }); return; }
+      // Soltado fuera de cualquier destino: mover al final de la lista.
       const matIds = allCourseMaterials.filter(m => !!m).map(m => m.id);
       const oldIdx = matIds.indexOf(active.id as string);
       if (oldIdx < 0 || oldIdx === matIds.length - 1) return;
@@ -3002,12 +3029,9 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   }, [allCourseMaterials, activeTopic, course?.id, updateCourse]);
 
   const handleGroupDragEnd = useCallback((event: DragEndEvent) => {
-    clearBrainDragOverlay();
     setActiveGroupDragId(null);
     const { active, over } = event;
     if (!over) {
-      const p = getLastPointer();
-      if (isOverBrainZone(p.x)) { openBrainWithAnchor({ kind: 'group', id: active.id as string }); return; }
       const currentGroups = safeArr(course.groups);
       const ids = currentGroups.map(g => g.id);
       const oldIdx = ids.indexOf(active.id as string);
@@ -3036,7 +3060,6 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
 
   // Long-press drag & drop de los bloques de tema dentro de una agrupación
   const handleGroupTopicDragEnd = useCallback((event: DragEndEvent) => {
-    clearBrainDragOverlay();
     setActiveTopicDragId(null);
     const { active, over } = event;
     if (active.id === over?.id) return;
@@ -3356,8 +3379,21 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
             {/* Content: viewer (left/center) + create sidebar (right) */}
             <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
               <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-              {/* Toolbar: buscador limpio con efecto de foco */}
+              {/* Toolbar: buscador con efecto de foco · al ejecutarse, barra de ejecución */}
               <div style={{ flexShrink: 0, padding: '16px 28px 8px' }}>
+                {deckRunner && deckRunner.toolMode && ['flashcardsDeck', 'quizDeck', 'matchDeck', 'clozeDeck', 'feynmanDeck', 'vfDeck', 'seqDeck', 'catDeck'].includes(deckRunner.toolMode) ? (() => {
+                  return (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, height: 46, borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', padding: '0 8px 0 16px' }}>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {deckRunner.name || deckRunner.title}
+                    </span>
+                    <button onClick={closeDeckRunner} title="Terminar ejecución"
+                      style={{ width: 30, height: 30, borderRadius: 8, border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.07)', color: '#EF4444', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <X size={13} />
+                    </button>
+                  </div>
+                  );
+                })() : (
                 <div style={{ position: 'relative', width: '100%', borderRadius: 12, boxShadow: searchFocused ? `0 0 0 3px ${course.color}12` : 'none', transition: 'box-shadow 250ms ' + EASE }}>
                   <Search size={14} style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', color: topicSearch || searchFocused ? course.color : 'var(--text-muted)', transition: 'color 200ms', zIndex: 1 }} />
                   <input value={topicSearch} onChange={e => setTopicSearch(e.target.value)} onFocus={() => setSearchFocused(true)} onBlur={() => setSearchFocused(false)} placeholder="Buscar en el tema…"
@@ -3369,10 +3405,16 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                     <button onClick={() => setTopicSearch('')} style={{ position: 'absolute', right: 7, top: '50%', transform: 'translateY(-50%)', width: 22, height: 22, borderRadius: 7, border: 'none', background: `${course.color}16`, cursor: 'pointer', color: course.color, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 150ms' }} title="Limpiar búsqueda"><X size={11} /></button>
                   )}
                 </div>
+                )}
               </div>
+              {deckRunner ? (
+                <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', padding: '6px 20px 14px', display: 'flex', flexDirection: 'column' }}>
+                  <DeckRunner mat={deckRunner} accent={(deckRunner as any).color || course.color} onClose={closeDeckRunner} />
+                </div>
+              ) : (
               <div style={{ flex: 1, overflowY: 'auto', padding: '20px 28px 60px' }} className="no-scrollbar">
-              {(() => {
-                const typeMeta: Record<string, { icon: React.ComponentType<{ size?: number; style?: React.CSSProperties }>; color: string }> = {
+                {(() => {
+                  const typeMeta: Record<string, { icon: React.ComponentType<{ size?: number; style?: React.CSSProperties }>; color: string }> = {
                   concept: { icon: Lightbulb, color: '#3B82F6' },
                   meaning: { icon: Type, color: '#10B981' },
                   formula: { icon: Sigma, color: '#8B5CF6' },
@@ -3478,7 +3520,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                     <button onClick={() => { setTopicSearch(''); setActiveTagFilter(null); }} style={{ height: 28, padding: '0 14px', borderRadius: 8, border: `1px solid ${course.color}40`, background: `${course.color}0d`, cursor: 'pointer', color: course.color, fontSize: 10, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}><X size={11} /> Limpiar filtros</button>
                   </div>
                 ) : (
-                  <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={e => { setActiveTopicDragId(e.active.id as string); syncBrainDragOverlay(); }} onDragMove={syncBrainDragOverlay} onDragCancel={clearBrainDragOverlay} onDragEnd={handleTopicGridDragEnd}>
+                  <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={e => { setActiveTopicDragId(e.active.id as string); }} onDragEnd={handleTopicGridDragEnd}>
                     <SortableContext items={filtered.map(e => e.id)} strategy={rectSortingStrategy}>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(235px, 1fr))', gap: 14, alignItems: 'start' }}>
                 {activeToolGroup === 'todos' && ((activeTopic as any)?.toolGroups || []).filter((g: string) => !g.includes('/')).map((g: string) => (
@@ -3552,7 +3594,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                             <SortableWrapper key={mat.id} id={mat.id}>
                               {({ attributes, listeners, isDragging }) => (
                                 <div style={{ opacity: isDragging ? 0.55 : 1 }}>
-                                  <MaterialCard mat={mat} dragAttributes={attributes} dragListeners={listeners} onEdit={startEditToolMaterial} onDelete={handleDeleteMaterial} onOpenResource={handleOpenResource} onPractice={openPractice} onView={viewMaterial} clickSuppressed={() => matDragSuppressRef.current} groupName={(mat as any).groupName} onUngroup={() => ungroupMaterial(mat.id)} onContextMenu={(e, m) => matMenu.openMenu(e, { url: m.dataUrl || '', name: m.name || m.title || 'Material', color: course.color, onMoveToGroup: () => setMoveToGroupMat({ id: m.id, name: m.name || m.title || 'Material' }), onRemoveFromGroup: (m as any).groupName ? () => ungroupMaterial(m.id) : undefined })} />
+                                  <MaterialCard mat={mat} dragAttributes={attributes} dragListeners={listeners} onEdit={startEditToolMaterial} onDelete={handleDeleteMaterial} onOpenResource={handleOpenResource} onPractice={openPractice} onView={viewMaterial} clickSuppressed={() => matDragSuppressRef.current} groupName={(mat as any).groupName} onUngroup={() => ungroupMaterial(mat.id)} onContextMenu={(e, m) => matMenu.openMenu(e, { url: m.dataUrl || '', name: m.name || m.title || 'Material', color: course.color, onMoveToGroup: () => setMoveToGroupMat({ id: m.id, name: m.name || m.title || 'Material' }), onRemoveFromGroup: (m as any).groupName ? () => ungroupMaterial(m.id) : undefined, onBatchColor: (c) => { updateCourse(course.id, { studyTopics: (safeArr(course.studyTopics)).map(t => t.id === activeTopic?.id ? { ...t, materials: (safeArr(t.materials)).map(mm => ({ ...mm, color: c })) } : t) } as any); toast.success('Color aplicado a todas las herramientas del tema'); }, onOpenAll: () => { const withUrl = (safeArr(activeTopic?.materials)).filter(mm => mm.dataUrl); if (withUrl.length === 0) { toast.error('No hay recursos con archivo o enlace para abrir'); return; } withUrl.forEach(mm => handleOpenResource(mm)); toast.success(`Abriendo ${withUrl.length} recurso(s)`); } })} />
                                 </div>
                               )}
                             </SortableWrapper>
@@ -3565,6 +3607,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
               })()}
               <input type="file" ref={resourceInputRef} style={{ display: 'none' }} onChange={handleFileUpload} />
               </div>
+              )}
               </div>
               {/* Right lateral: Herramientas — tool blocks */}
               {(() => {
@@ -3600,14 +3643,17 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '14px 14px 0', flexShrink: 0 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '14px 14px 14px', flex: 1, minHeight: 0, overflowY: 'auto' }} className="no-scrollbar">
                       {(() => {
                         const toolsList = [
-                          { mode: 'flashcards' as const, icon: BookOpen, label: 'FLASHCARDS', color: '#8B5CF6', action: () => openFlashcardModal() },
-                          { mode: 'cornell' as const, icon: NotebookPen, label: 'NOTAS CORNELL', color: '#3B82F6', action: () => openToolCreator('cornell' as any) },
-                          { mode: 'quizzes' as const, icon: HelpCircle, label: 'CUESTIONARIOS', color: '#EC4899', action: () => openToolCreator('quizzes' as any) },
-                          { mode: 'feynman' as const, icon: Sigma, label: 'CONCEPTOS CLAVE', color: '#F59E0B', action: () => openToolCreator('feynman' as any) },
-                          { mode: 'spacedRep' as const, icon: Timer, label: 'REPASO ESPACIADO', color: '#10B981', action: () => openToolCreator('spacedRep' as any) },
+                          { mode: 'flashcardsDeck' as const, icon: LI.Layers, label: 'FLASHCARDS', color: '#8B5CF6', action: () => setDeckEditor({ mode: 'flashcardsDeck' }) },
+                          { mode: 'quizDeck' as const, icon: HelpCircle, label: 'PRUEBA', color: '#F59E0B', action: () => setDeckEditor({ mode: 'quizDeck' }) },
+                          { mode: 'matchDeck' as const, icon: Shuffle, label: 'EMPAREJAR', color: '#10B981', action: () => setDeckEditor({ mode: 'matchDeck' }) },
+                          { mode: 'vfDeck' as const, icon: LI.CheckSquare, label: 'VERDADERO O FALSO', color: '#06B6D4', action: () => setDeckEditor({ mode: 'vfDeck' }) },
+                          { mode: 'clozeDeck' as const, icon: LI.Pencil, label: 'COMPLETAR', color: '#3B82F6', action: () => setDeckEditor({ mode: 'clozeDeck' }) },
+                          { mode: 'feynmanDeck' as const, icon: LI.Lightbulb, label: 'FEYNMAN', color: '#EC4899', action: () => setDeckEditor({ mode: 'feynmanDeck' }) },
+                          { mode: 'seqDeck' as const, icon: LI.ListOrdered, label: 'SECUENCIAS', color: '#F97316', action: () => setDeckEditor({ mode: 'seqDeck' }) },
+                          { mode: 'catDeck' as const, icon: LI.Shapes, label: 'CATEGORIZAR', color: '#A855F7', action: () => setDeckEditor({ mode: 'catDeck' }) },
                         ];
                         return toolsList.map(t => (
                           <button key={t.mode}
@@ -3615,27 +3661,28 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                             title={`Agregar ${t.label}`}
                             style={{
                               display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderRadius: 14,
-                              border: `1px solid ${t.color}40`,
-                              background: `linear-gradient(135deg, ${t.color}14 0%, var(--bg-surface) 100%)`,
-                              boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+                              border: '1px solid var(--border-subtle)',
+                              background: 'var(--bg-elevated)',
+                              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
                               cursor: 'pointer', transition: 'all 200ms ' + EASE, textAlign: 'left', width: '100%',
                             }}
-                            onMouseEnter={e => { e.currentTarget.style.borderColor = `${t.color}80`; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 8px 26px ${t.color}22`; }}
-                            onMouseLeave={e => { e.currentTarget.style.borderColor = `${t.color}40`; e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.03)'; }}
+                            onMouseEnter={e => { e.currentTarget.style.borderColor = `${t.color}60`; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.transform = 'none'; }}
                           >
-                            <div style={{ width: 38, height: 38, borderRadius: 11, background: `${t.color}18`, border: `1px solid ${t.color}35`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <div style={{ width: 38, height: 38, borderRadius: 11, background: `color-mix(in srgb, ${t.color} 10%, transparent)`, border: `1px solid ${t.color}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                               <t.icon size={19} style={{ color: t.color }} />
                             </div>
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.07em', color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.label}</div>
+                              <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.05em', color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.label}</div>
                             </div>
-                            <div style={{ width: 24, height: 24, borderRadius: 8, background: `${t.color}20`, color: t.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <div style={{ width: 24, height: 24, borderRadius: 8, background: `color-mix(in srgb, ${t.color} 12%, transparent)`, color: t.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                               <Plus size={14} />
                             </div>
                           </button>
                         ));
                       })()}
                     </div>
+
                   </div>
                 );
               })()}
@@ -3659,8 +3706,16 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                     const activeGrp = groups.find(g => g.id === selectedGroupId);
                     return activeGrp ? (
                       <>
-                        <h1 style={{ fontSize: 40, fontWeight: 200, color: '#fff', margin: '0 0 10px', letterSpacing: '-0.03em', fontFamily: "'Inter Tight', sans-serif", textShadow: '0 2px 20px rgba(0,0,0,0.6)' }}>{activeGrp.name}</h1>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                          <div style={{ width: 46, height: 46, borderRadius: 13, background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <LI.Folder size={22} style={{ color: '#fff' }} />
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.16em', color: 'rgba(255,255,255,0.55)', fontFamily: "'Inter Tight', sans-serif", marginBottom: 4 }}>Grupo</div>
+                            <h1 style={{ fontSize: 38, fontWeight: 200, color: '#fff', margin: 0, letterSpacing: '-0.03em', fontFamily: "'Inter Tight', sans-serif", textShadow: '0 2px 20px rgba(0,0,0,0.6)' }}>{activeGrp.name}</h1>
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10 }}>
                           <span style={{ fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.01em', borderBottom: '1px solid rgba(255,255,255,0.15)', paddingBottom: 2 }}>{course.name}</span>
                         </div>
                       </>
@@ -3889,7 +3944,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                   {filteredCourseNotes.length > 0 ? (
                     <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={() => { notesDragRef.current = true; }} onDragEnd={handleOverviewNoteDragEnd}>
                       <SortableContext items={sortedIds} strategy={rectSortingStrategy}>
-                        <div ref={overviewNoteContainerRef} style={{ display: 'flex', flexDirection: 'column', gap: 14, position: 'relative', zIndex: 2, padding: '0 12px' }}>
+                        <div ref={overviewNoteContainerRef} style={{ display: 'flex', flexDirection: 'column', gap: 14, position: 'relative', zIndex: 2, padding: '0 12px 8px', maxHeight: 'clamp(300px, 52vh, 640px)', overflowY: 'auto', overscrollBehavior: 'contain' }} className="course-notes-scroll">
                           {expandedFirst.map(n => {
                             const isHighlighted = overviewNoteHighlights.includes(n.id);
                             const isCourseNote = !n.isCoursePrivate;
@@ -4026,7 +4081,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                             </div>
                           </div>
                         ) : (
-                          <DndContext sensors={studySensors} collisionDetection={closestCorners} onDragStart={e => { setActiveTopicDragId(e.active.id as string); syncBrainDragOverlay(); }} onDragMove={syncBrainDragOverlay} onDragCancel={clearBrainDragOverlay} onDragEnd={handleGroupTopicDragEnd}>
+                          <DndContext sensors={studySensors} collisionDetection={closestCorners} onDragStart={e => { setActiveTopicDragId(e.active.id as string); }} onDragEnd={handleGroupTopicDragEnd}>
                             <SortableContext items={grpTopics.map(t => t.id)} strategy={rectSortingStrategy}>
                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
                             {grpTopics.map(topic => {
@@ -4216,9 +4271,8 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                             </div>
                           ) : (
                           <DndContext sensors={studySensors} collisionDetection={closestCorners}
-                            onDragStart={e => { setActiveMatDragId(e.active.id as string); matLinkDragRef.current = true; syncBrainDragOverlay(); }}
-                            onDragMove={syncBrainDragOverlay}
-                            onDragCancel={() => { clearBrainDragOverlay(); setActiveMatDragId(null); setTimeout(() => { matLinkDragRef.current = false; }, 250); }}
+                            onDragStart={e => { setActiveMatDragId(e.active.id as string); matLinkDragRef.current = true; }}
+                            onDragCancel={() => { setActiveMatDragId(null); setTimeout(() => { matLinkDragRef.current = false; }, 250); }}
                             onDragEnd={(e) => { handleStudyMatDragEnd(e); setActiveMatDragId(null); setTimeout(() => { matLinkDragRef.current = false; }, 250); }}>
                           <SortableContext items={allCourseMaterials.filter(m => !!m).map(m => m.id)} strategy={verticalListSortingStrategy}>
                           {allCourseMaterials.filter(m => !!m && typeof m === 'object').map((mat, idx) => {
@@ -5277,7 +5331,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                           <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0 }}>Sin agrupaciones</p>
                         </div>
                       ) : (
-                      <DndContext sensors={studySensors} collisionDetection={closestCorners} onDragStart={e => { setActiveGroupDragId(e.active.id as string); syncBrainDragOverlay(); }} onDragMove={syncBrainDragOverlay} onDragCancel={clearBrainDragOverlay} onDragEnd={handleGroupDragEnd}>
+                      <DndContext sensors={studySensors} collisionDetection={closestCorners} onDragStart={e => { setActiveGroupDragId(e.active.id as string); }} onDragEnd={handleGroupDragEnd}>
                       <SortableContext items={groups.map(g => g.id)} strategy={verticalListSortingStrategy}>
                       {groups.map(group => {
                         return (
@@ -5309,7 +5363,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                               </div>
                             ) : (
                               <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10, position: 'relative' }}>
-                                <div style={{ width: 38, height: 38, borderRadius: 10, background: `linear-gradient(135deg, ${course.color}18, ${course.color}08)`, border: `1px solid ${course.color}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 200ms ' + EASE }}>
+                                <div style={{ width: 38, height: 38, borderRadius: 10, background: `color-mix(in srgb, ${course.color} 10%, transparent)`, border: `1px solid ${course.color}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 200ms ' + EASE }}>
                                   <Layers size={16} style={{ color: course.color }} />
                                 </div>
                                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -7474,15 +7528,14 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
         </div>
         );
       })()}
-      <StudySets
-        open={!!studySets}
-        topicTitle={activeTopic?.title || ''}
-        groupName={activeToolGroup !== 'todos' ? activeToolGroup : null}
-        accent={course.color}
-        flashcards={(safeArr(activeTopic?.flashcards)) as SetCard[]}
-        onChange={handleStudySetsChange}
-        onClose={() => setStudySets(null)}
-      />
+      {deckEditor && (
+        <DeckEditorModal mode={deckEditor.mode} accent={course.color}
+          initialName={deckEditor.mat ? (deckEditor.mat.name || deckEditor.mat.title) : undefined}
+          initialColor={deckEditor.mat ? (deckEditor.mat as any).color : undefined}
+          initialContent={deckEditor.mat?.content}
+          onClose={() => setDeckEditor(null)}
+          onSave={(name, color, content) => saveDeck(deckEditor.mode, name, color, content)} />
+      )}
       {confirmDelToolMat && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 2003, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }} onClick={() => setConfirmDelToolMat(null)}>
           <div className="bento-card" style={{ width: 380, padding: 22, borderRadius: 14, background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }} onClick={e => e.stopPropagation()}>

@@ -466,15 +466,6 @@ export interface Settings {
   audioQuality?: string;
   includeCover?: boolean;
   autoRetryOnError?: boolean;
-  // Owa Brain AI Engine settings
-  owaBrainEnabled?: boolean;
-  owaBrainShortcut?: string;
-  owaBrainLiveVoice?: boolean;
-  owaBrainApiKey?: string;
-  owaBrainBaseUrl?: string;
-  owaBrainModel?: string;
-  owaBrainColor?: string;
-  owaBrainProvider?: string;
 }
 
 export interface AppNotification {
@@ -561,6 +552,7 @@ interface AppContextType extends AppState {
   checkLocalFileExists: (track: Track) => Promise<boolean>;
   cleanupMissingLocalFiles: () => Promise<{ removed: number }>;
   importLocalZeroCopy: (paths: string[], isFolder?: boolean) => Promise<number>;
+  removeDuplicateTracks: () => Promise<number>;
   setCoverModalTrackId: Dispatch<SetStateAction<string | null>>;
   isAudioLoading: boolean;
   currentTrackId: string | null;
@@ -787,14 +779,6 @@ const defaultSettings: Settings = {
   audioQuality: '3',
   includeCover: true,
   autoRetryOnError: true,
-  owaBrainEnabled: true,
-  owaBrainShortcut: 'Alt+KeyQ',
-  owaBrainLiveVoice: true,
-  owaBrainApiKey: '',
-  owaBrainBaseUrl: 'https://opencode.ai/zen/v1',
-  owaBrainModel: 'big-pickle',
-  owaBrainColor: '#34d399',
-  owaBrainProvider: 'opencode',
 };
 
 const defaultFolders: NoteFolder[] = [];
@@ -1952,46 +1936,51 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => { unlistenSettings.then(fn => fn()); unlistenTimer.then(fn => fn()); };
   }, [settings.floatingBgMode, settings.floatingBgColor, settings.floatingFont, settings.floatingHideInFocus, settings.floatingAnimationType, settings.timerFocusColor, settings.timerBreakColor, settings.timerLongBreakColor, settings.timerChronoColor, settings.longBreakTime, settings.theme, settings.useThreeColors, settings.surfaceColor]);
 
-  // Programador de notificaciones nativas: recordatorios de eventos y sesiones de estudio
+  // Programador ÚNICO de recordatorios nativos (cada 60 s).
+  // El anti-spam vive en lib/notifications (canNotifyItem con clave id+fecha
+  // de la ocurrencia): no repite aunque el efecto se re-monte, sin Sets en memoria.
+  // Respeta el interruptor maestro (Ajustes → Sonidos y Alertas → Notificaciones)
+  // y el toggle de tareas por vencer (event_task).
   useEffect(() => {
-    if (!hydrated) return;
-    let notifiedEvents = new Set<string>();
-    let notifiedSessions = new Set<string>();
+    if (!hydrated || settings.notifications === false) return;
     const checkReminders = async () => {
       try {
-        const { requestNativePermission, sendNativeNotification } = await import('../lib/notifications');
-        const hasPerm = await requestNativePermission();
-        if (!hasPerm) return;
-        const now = new Date();
-        const nowMs = now.getTime();
-        const oneHourMs = 60 * 60 * 1000;
-        const tenMinMs = 10 * 60 * 1000;
+        const { requestNativePermission, notifyEventReminder1h, notifyUpcomingEvent, notifyStudySessionSoon, notifyTaskDueSoon, notifyTaskOverdue } = await import('../lib/notifications');
+        if (!(await requestNativePermission())) return;
+        const nowMs = Date.now();
+        const H = 3_600_000;
+        const DAY = 86_400_000;
         for (const ev of events) {
-          if (!ev.startTime) continue;
+          if (!ev.startTime || !ev.date) continue;
           const evStart = new Date(`${ev.date}T${ev.startTime}`).getTime();
+          if (isNaN(evStart)) continue;
           const diff = evStart - nowMs;
-          if (diff > 0 && diff <= oneHourMs && !notifiedEvents.has(ev.id)) {
-            sendNativeNotification('Recordatorio de evento', `${ev.title} empieza en menos de 1 hora`);
-            notifiedEvents.add(ev.id);
-          }
+          if (diff > 30 * 60_000 && diff <= H) notifyEventReminder1h(ev.title, evStart, ev.id);
+          else if (diff > 0 && diff <= 30 * 60_000) notifyUpcomingEvent(ev.title, evStart, ev.id);
         }
-        notifiedEvents = new Set([...notifiedEvents].filter(id => events.some(e => e.id === id)));
         for (const ps of plannedSessions) {
           if (!ps.startTime || !ps.date) continue;
           const psStart = new Date(`${ps.date}T${ps.startTime}`).getTime();
+          if (isNaN(psStart)) continue;
           const diff = psStart - nowMs;
-          if (diff > 0 && diff <= tenMinMs && !notifiedSessions.has(ps.id)) {
-            sendNativeNotification('Sesión de estudio', `Tu sesión "${ps.title}" comienza en 10 minutos`);
-            notifiedSessions.add(ps.id);
+          if (diff > 0 && diff <= 10 * 60_000) notifyStudySessionSoon(ps.title, psStart, ps.id);
+        }
+        if ((settings as any).event_task !== false) {
+          for (const t of tasks) {
+            if ((t as any).status === 'completado' || !t.dueDate) continue;
+            const due = new Date(t.dueDate).getTime();
+            if (isNaN(due)) continue;
+            const diff = due - nowMs;
+            if (diff > 0 && diff <= DAY) notifyTaskDueSoon(t.title, due, t.id);
+            else if (diff < 0 && Math.abs(diff) < 7 * DAY) notifyTaskOverdue(t.title, due, t.id);
           }
         }
-        notifiedSessions = new Set([...notifiedSessions].filter(id => plannedSessions.some(s => s.id === id)));
       } catch { }
     };
     checkReminders();
     const timer = setInterval(checkReminders, 60000);
     return () => clearInterval(timer);
-  }, [hydrated, events, plannedSessions]);
+  }, [hydrated, settings.notifications, (settings as any).event_task, events, plannedSessions, tasks]);
 
   // Pause audio when closing window
   useEffect(() => {
@@ -2373,7 +2362,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Ã¢â€â‚¬Ã¢â€â‚¬ MUSIC Ã¢â€â‚¬Ã¢â€â‚¬
+  // Alta unificada: evita duplicados por ruta original (filePath) o URL.
+  // Sin efectos secundarios dentro del updater (StrictMode lo ejecuta dos veces).
   const addTrack = useCallback((track: Omit<Track, 'id'>) => {
+    const key = track.filePath || track.url || '';
+    if (key) {
+      const existing = tracksRef.current.find(t => (t.filePath || t.url || '') === key);
+      if (existing) return existing.id;
+    }
     const id = crypto.randomUUID();
     const newTrack: Track = { ...track, id };
     setTracks(prev => [...prev, newTrack]);
@@ -2382,14 +2378,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const updateTrack = useCallback((id: string, updates: Partial<Track>) => {
-    setTracks(prev => {
-      const updatedList = prev.map(t => t.id === id ? { ...t, ...updates } : t);
-      const updated = updatedList.find(t => t.id === id);
-      if (updated) {
-        saveTrackMetadata(updated).catch((e: any) => console.error('Error saving track metadata:', e));
-      }
-      return updatedList;
-    });
+    const current = tracksRef.current.find(t => t.id === id);
+    if (!current) return;
+    const updated = { ...current, ...updates };
+    setTracks(prev => prev.map(t => t.id === id ? updated : t));
+    saveTrackMetadata(updated).catch((e: any) => console.error('Error saving track metadata:', e));
   }, []);
 
   const deleteTrack = useCallback((id: string) => {
@@ -2407,14 +2400,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [currentTrackId]);
 
   const toggleTrackFavorite = useCallback((id: string) => {
-    setTracks(prev => {
-      const updatedList = prev.map(t => t.id === id ? { ...t, isFavorite: !t.isFavorite } : t);
-      const updated = updatedList.find(t => t.id === id);
-      if (updated) {
-        saveTrackMetadata(updated).catch((e: any) => console.error('Error saving track metadata:', e));
-      }
-      return updatedList;
-    });
+    const current = tracksRef.current.find(t => t.id === id);
+    if (!current) return;
+    const updated = { ...current, isFavorite: !current.isFavorite };
+    setTracks(prev => prev.map(t => t.id === id ? updated : t));
+    saveTrackMetadata(updated).catch((e: any) => console.error('Error saving track metadata:', e));
   }, []);
 
   const clearAllMusicData = useCallback(() => {
@@ -2603,147 +2593,253 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addNotification(`${imported} cancion(es) importada(s) correctamente`, 'success');
   }, []);
 
+  // Normaliza rutas Windows ("C:\x\y.mp3" -> "C:/x/y.mp3"): el asset protocol
+  // y el reproductor fallan con backslashes codificados (%5C).
+  const normalizeLocalPath = (p: string): string => p.replace(/\\/g, '/');
+
   // --- Zero-copy: folder scan for audio files ---
+  // Devuelve tracks SIN guardar (el llamador persiste una sola vez).
+  // Límites anti-cuelgue: profundidad 8, máximo 2000 archivos.
   const scanFolderForAudio = useCallback(async (folderPath: string): Promise<Track[]> => {
-    const { readDir, stat } = await import('@tauri-apps/plugin-fs');
+    const { readDir } = await import('@tauri-apps/plugin-fs');
     const AUDIO_EXTS = new Set(['mp3', 'wav', 'flac', 'ogg', 'm4a', 'aac', 'wma', 'opus', 'mp4', 'aiff', 'ape']);
     const found: Track[] = [];
+    const seenPaths = new Set(tracksRef.current.map(t => normalizeLocalPath(t.filePath || t.url || '')));
+    const MAX_FILES = 2000;
+    const MAX_DEPTH = 8;
 
-    async function scan(dir: string) {
+    async function scan(dir: string, depth: number) {
+      if (depth > MAX_DEPTH || found.length >= MAX_FILES) return;
+      let entries;
       try {
-        const entries = await readDir(dir);
-        for (const entry of entries) {
-          const fullPath = `${dir}/${entry.name}`;
-          if (entry.isDirectory) {
-            await scan(fullPath);
-          } else if (entry.isFile) {
-            const ext = fullPath.split('.').pop()?.toLowerCase();
-            if (ext && AUDIO_EXTS.has(ext)) {
-              try {
-                const meta = await extractAudioMetadata(fullPath);
-                const name = fullPath.split(/[/\\]/).pop() || 'Unknown';
-                const trackId = crypto.randomUUID();
-                const newTrack: Track = {
-                  id: crypto.randomUUID(),
-                  title: meta.title || fullPath.split(/[/\\]/).pop()?.replace(/\.[^/.]+$/, '') || 'Unknown',
-                  artist: meta.artist || '',
-                  duration: Math.round(meta.duration || 0),
-                  source: 'local',
-                  url: fullPath,
-                  coverImage: meta.coverUrl || undefined,
-                  isFavorite: false,
-                  listenedTime: 0,
-                  filePath: fullPath,
-                };
-                // Save metadata to IndexedDB for persistence
-                await saveTrackMetadata({ ...newTrack, id: trackId });
-                found.push({ ...newTrack, id: trackId });
-              } catch {
-                // Skip files that can't be read
-              }
+        entries = await readDir(dir);
+      } catch { return; /* ignore read errors */ }
+      for (const entry of entries) {
+        if (found.length >= MAX_FILES) return;
+        const fullPath = normalizeLocalPath(`${dir}/${entry.name}`);
+        if (entry.isDirectory) {
+          await scan(fullPath, depth + 1);
+        } else if (entry.isFile) {
+          const ext = fullPath.split('.').pop()?.toLowerCase();
+          if (ext && AUDIO_EXTS.has(ext) && !seenPaths.has(fullPath)) {
+            seenPaths.add(fullPath);
+            try {
+              const meta = await extractAudioMetadata(fullPath);
+              found.push({
+                id: crypto.randomUUID(),
+                title: meta.title || fullPath.split('/').pop()?.replace(/\.[^/.]+$/, '') || 'Unknown',
+                artist: meta.artist || '',
+                duration: Math.round(meta.duration || 0),
+                source: 'local',
+                url: fullPath,
+                coverImage: meta.coverUrl || undefined,
+                isFavorite: false,
+                listenedTime: 0,
+                filePath: fullPath,
+              });
+            } catch {
+              // Skip files that can't be read
             }
           }
         }
-      } catch { /* ignore read errors */ }
+      }
     }
 
-    await scan(folderPath);
+    await scan(normalizeLocalPath(folderPath), 0);
     return found;
+  }, []);
+
+  // Recorrido RÁPIDO (sin metadata) para saber el total antes de importar:
+  // alimenta la pantalla de carga con el número real de canciones.
+  const collectAudioFiles = useCallback(async (folderPath: string): Promise<string[]> => {
+    const { readDir } = await import('@tauri-apps/plugin-fs');
+    const AUDIO_EXTS = new Set(['mp3', 'wav', 'flac', 'ogg', 'm4a', 'aac', 'wma', 'opus', 'mp4', 'aiff', 'ape']);
+    const out: string[] = [];
+    const MAX_FILES = 2000;
+    const MAX_DEPTH = 8;
+    async function walk(dir: string, depth: number) {
+      if (depth > MAX_DEPTH || out.length >= MAX_FILES) return;
+      let entries;
+      try {
+        entries = await readDir(dir);
+      } catch { return; }
+      for (const entry of entries) {
+        if (out.length >= MAX_FILES) return;
+        const fullPath = normalizeLocalPath(`${dir}/${entry.name}`);
+        if (entry.isDirectory) await walk(fullPath, depth + 1);
+        else if (entry.isFile && AUDIO_EXTS.has(fullPath.split('.').pop()?.toLowerCase() || '')) out.push(fullPath);
+      }
+    }
+    await walk(normalizeLocalPath(folderPath), 0);
+    return out;
   }, []);
 
   // --- Zero-copy: check if local file still exists ---
   const checkLocalFileExists = useCallback(async (track: Track): Promise<boolean> => {
-    if (!track.filePath) return false;
+    const p = track.filePath || track.url;
+    if (!p || track.source !== 'local') return track.source !== 'local';
     try {
       const { stat } = await import('@tauri-apps/plugin-fs');
-      await stat(track.filePath);
+      await stat(normalizeLocalPath(p));
       return true;
     } catch {
       return false;
     }
   }, []);
 
-  // --- Zero-copy: cleanup missing files ---
+  // --- Borrar duplicados: misma ruta/URL o mismo título+artista+duración ---
+  // Conserva la primera aparición (la más antigua en la biblioteca).
+  const removeDuplicateTracks = useCallback(async (): Promise<number> => {
+    const all = tracksRef.current;
+    if (all.length < 2) return 0;
+    const normStr = (s: string) =>
+      s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+    const seenPath = new Set<string>();
+    const seenContent = new Set<string>();
+    const dupIds = new Set<string>();
+    for (const t of all) {
+      const pathKey = normalizeLocalPath(t.filePath || t.url || '').toLowerCase();
+      const contentKey = `${normStr(t.title || '')}|${normStr(t.artist || '')}|${Math.round((t.duration || 0) / 2)}`;
+      if ((pathKey && seenPath.has(pathKey)) || (t.title && seenContent.has(contentKey))) {
+        dupIds.add(t.id);
+        continue;
+      }
+      if (pathKey) seenPath.add(pathKey);
+      if (t.title) seenContent.add(contentKey);
+    }
+    if (dupIds.size === 0) return 0;
+    setTracks(prev => prev.filter(t => !dupIds.has(t.id)));
+    setMusicQueue(prev => prev.filter(id => !dupIds.has(id)));
+    for (const id of dupIds) {
+      deleteTrackMetadata(id).catch(() => {});
+      deleteTrackFileFromDB(id).catch(() => {});
+    }
+    addNotification(`${dupIds.size} ${dupIds.size === 1 ? 'duplicado eliminado' : 'duplicados eliminados'}`, 'success');
+    return dupIds.size;
+  }, []);
+
+  // --- Limpieza de faltantes: verifica la ruta REPRODUCIBLE (url = copia gestionada) ---
+  // Usa tracksRef (siempre fresco) en vez del closure: evita purgas con datos viejos.
+  // No se mira filePath (el original puede haberse movido sin que importe: la copia sigue).
   const cleanupMissingLocalFiles = useCallback(async () => {
-    const localTracks = tracks.filter(t => t.source === 'local' && t.filePath);
+    const all = tracksRef.current;
+    const localTracks = all.filter(t => t.source === 'local' && t.url);
     if (localTracks.length === 0) return { removed: 0 };
-    
-    let removed = 0;
-    const stillExist: Track[] = [];
-    
+
+    const goneIds = new Set<string>();
     for (const track of localTracks) {
-      const exists = await checkLocalFileExists(track);
-      if (exists) {
-        stillExist.push(track);
-      } else {
-        removed++;
+      try {
+        const { stat } = await import('@tauri-apps/plugin-fs');
+        await stat(normalizeLocalPath(track.url!));
+      } catch {
+        goneIds.add(track.id);
       }
     }
-    
-    if (removed > 0) {
-      const allTracks = tracks.filter(t => t.source !== 'local' || !t.filePath);
-      const newTracks = [...allTracks, ...stillExist];
-      setTracks(newTracks);
-      addNotification(`${removed} canciones eliminadas (archivo no encontrado)`, 'info');
-    }
-    
-    return { removed };
-  }, [tracks, checkLocalFileExists, setTracks, addNotification]);
 
-  // --- Zero-copy: import single file or folder (zero-copy, follows path) ---
+    if (goneIds.size > 0) {
+      setTracks(prev => prev.filter(t => !goneIds.has(t.id)));
+      for (const id of goneIds) {
+        deleteTrackMetadata(id).catch(() => {});
+      }
+      addNotification(`${goneIds.size} ${goneIds.size === 1 ? 'canción eliminada (archivo no encontrado)' : 'canciones eliminadas (archivo no encontrado)'}`, 'info');
+    }
+
+    return { removed: goneIds.size };
+  }, [checkLocalFileExists]);
+
+  // --- Alta local con COPIA a la carpeta propia (máxima fiabilidad) ---
+  // Cada archivo se lee UNA vez a RAM y con ese mismo buffer se extrae metadata,
+  // se copia a la carpeta de música de la app y se guarda el blob en IndexedDB.
+  // La reproducción NUNCA depende del asset protocol ni de que el original siga
+  // existiendo: `url` apunta siempre a la copia gestionada. `filePath` conserva
+  // la ruta original como referencia (dedup + metadatos). Si la copia falla, se
+  // conserva la referencia zero-copy como fallback para no perder la canción.
+  // Reporta progreso a importState para la pantalla de carga.
   const importLocalZeroCopy = useCallback(async (paths: string[], isFolder = false): Promise<number> => {
     if (!paths || paths.length === 0) return 0;
-    
-    let imported = 0;
+
+    const norm = paths.map(p => normalizeLocalPath(p));
+    // Lista plana de archivos: en carpetas se recorre primero (rápido, sin metadata)
+    // para conocer el total real y mostrar la pantalla de carga.
+    let fileList: string[] = [];
+    if (isFolder) {
+      for (const folder of norm) {
+        const found = await collectAudioFiles(folder);
+        fileList.push(...found);
+      }
+    } else {
+      fileList = norm;
+    }
+    if (fileList.length === 0) return 0;
+
+    const known = new Set(tracksRef.current.map(t => normalizeLocalPath(t.filePath || t.url || '')));
+    const fresh = fileList.filter(p => !known.has(p));
+    // Archivos ya conocidos: se marcan como vistos para no reimportarlos.
+    fresh.forEach(p => known.add(p));
+    const total = fresh.length;
+
+    setImportState({ active: true, current: 0, total, fileName: '', phase: 'loading_file', phaseProgress: 0, overallProgress: 0 });
     const newTracks: Track[] = [];
-    
-    for (const path of paths) {
-      try {
-        // Check if already in library
-        const exists = tracks.some(t => t.filePath === path);
-        if (exists) continue;
-        
-        // For folders, scan recursively
-        if (isFolder) {
-          const found = await scanFolderForAudio(path);
-          for (const track of found) {
-            newTracks.push(track);
+    try {
+      for (let i = 0; i < fresh.length; i++) {
+        const path = fresh[i];
+        const name = path.split('/').pop() || 'Unknown';
+        const pct = Math.round((i / Math.max(1, total)) * 100);
+        setImportState(prev => ({ ...prev, current: i + 1, fileName: name, phase: 'extracting_metadata', phaseProgress: pct, overallProgress: pct }));
+        try {
+          // 1) Leer UNA vez (con reintento: Windows Defender puede bloquear el 1er intento)
+          let fileData: Uint8Array | undefined;
+          for (let attempt = 0; attempt < 2 && !fileData; attempt++) {
+            try {
+              const raw = await readFile(path);
+              if (raw && raw.length > 0) fileData = raw instanceof Uint8Array ? raw : new Uint8Array(raw as any);
+            } catch {
+              if (attempt === 0) await new Promise(r => setTimeout(r, 400));
+            }
           }
-        } else {
-          // Single file - extract metadata and add
-          const meta = await extractAudioMetadata(path);
-          const name = path.split(/[/\\]/).pop() || 'Unknown';
-          const trackId = crypto.randomUUID();
-          const newTrack: Track = {
-            id: trackId,
+          if (!fileData) throw new Error('No se pudo leer el archivo');
+          // 2) Metadata con el buffer ya leído (sin re-leer ni fetch en cascada)
+          const meta = await extractAudioMetadata(path, fileData);
+          const id = crypto.randomUUID();
+          // 3) Copia gestionada a la carpeta propia (esta es la que se reproduce)
+          let storedPath = path;
+          try {
+            storedPath = await copyAudioToStorage(path, id, fileData);
+          } catch {
+            storedPath = path; // fallback: referencia al original
+          }
+          // 4) Blob en IndexedDB para reproducción instantánea
+          try {
+            await storeTrackFileInDB(id, path, fileData);
+          } catch { /* el blob es optimización, no crítico */ }
+          newTracks.push({
+            id,
             title: meta.title || name.replace(/\.[^/.]+$/, ''),
             artist: meta.artist || '',
             duration: Math.round(meta.duration || 0),
             source: 'local',
-            url: path,
+            url: storedPath,
             coverImage: meta.coverUrl || undefined,
             isFavorite: false,
             listenedTime: 0,
             filePath: path,
-          };
-          await saveTrackMetadata({ ...newTrack, id: trackId });
-          newTracks.push(newTrack);
+          });
+        } catch (err) {
+          console.error('Error importing:', path, err);
         }
-      } catch (err) {
-        console.error('Error importing:', path, err);
       }
-    }
-    
-    if (newTracks.length > 0) {
-      setTracks(prev => [...prev, ...newTracks]);
-      for (const track of newTracks) {
-        await saveTrackMetadata(track).catch(() => {});
+      if (newTracks.length > 0) {
+        setImportState(prev => ({ ...prev, phase: 'saving_to_db', phaseProgress: 50, overallProgress: 95 }));
+        setTracks(prev => [...prev, ...newTracks]);
+        for (const track of newTracks) {
+          await saveTrackMetadata(track).catch(() => {});
+        }
       }
-      addNotification(`${newTracks.length} cancion(es) agregadas (zero-copy)`, 'success');
       return newTracks.length;
+    } finally {
+      setImportState({ active: false, current: total, total, fileName: '', phase: 'finished', phaseProgress: 100, overallProgress: 100 });
     }
-    return 0;
-  }, [tracks, setTracks, addNotification]);
+  }, [collectAudioFiles]);
 
    const playTrack = useCallback((id: string) => {
     repeatOnePlayedRef.current = false;
@@ -2906,20 +3002,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
             srcUrl = null;
           }
 
-          // Strategy 2: convertFileSrc (streaming)
+          // Strategy 2: readFile + Blob URL (fiable: no depende del asset
+          // protocol; la copia gestionada siempre existe en la carpeta propia).
+          const localPath = normalizeLocalPath(track.url);
           if (!srcUrl) {
             try {
-              srcUrl = convertFileSrc(track.url);
-              if (!srcUrl) srcUrl = null;
-            } catch {
-              srcUrl = null;
-            }
-          }
-
-          // Strategy 3: readFile + Blob URL
-          if (!srcUrl) {
-            try {
-              const data = await readFile(track.url);
+              const data = await readFile(localPath);
               if (loadingTrackIdRef.current !== id) {
                 if (srcUrl?.startsWith('blob:')) URL.revokeObjectURL(srcUrl);
                 return;
@@ -2937,7 +3025,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 currentBlobUrlRef.current = srcUrl;
               }
             } catch (readErr) {
-              console.warn('[Audio] readFile also failed:', readErr);
+              console.warn('[Audio] readFile failed:', readErr);
+            }
+          }
+
+          // Strategy 3 (último recurso): convertFileSrc (streaming). La ruta se
+          // normaliza a slashes: los backslashes de Windows rompen el asset protocol.
+          if (!srcUrl) {
+            try {
+              srcUrl = convertFileSrc(localPath);
+              if (!srcUrl) srcUrl = null;
+            } catch {
+              srcUrl = null;
             }
           }
 
@@ -4010,47 +4109,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (e) { console.error('Firebase init failed:', e); return null; }
   }, []);
 
-  // ─── Task & Event deadline notifications (con Anti-Spam y Tiempos Inteligentes) ───
-  useEffect(() => {
-    const check = () => {
-      if (!settings.notifications) return;
-      const now = Date.now();
-      const oneDayMs = 86_400_000;
-      
-      // Chequeo de tareas
-      tasks.forEach(t => {
-        if (t.status === 'completado' || !t.dueDate) return;
-        const due = new Date(t.dueDate).getTime();
-        if (isNaN(due)) return;
-        const diff = due - now;
-
-        // Vence dentro de las próximas 24h
-        if (diff > 0 && diff <= oneDayMs) {
-          const dueStr = new Date(t.dueDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
-          import('../lib/notifications').then(m => m.notifyTaskDueSoon(t.title, dueStr, t.id));
-        } else if (diff < 0 && Math.abs(diff) < 7 * oneDayMs) {
-          // Tarea ya vencida (vencida en los últimos 7 días) -> aviso reflexivo cada 6h max
-          import('../lib/notifications').then(m => m.notifyTaskOverdue(t.title, t.id));
-        }
-      });
-
-      // Chequeo de eventos próximos (próximos 30 min)
-      events.forEach(e => {
-        if (!e.date) return;
-        const evTime = new Date(`${e.date}T${e.startTime || '00:00'}`).getTime();
-        if (isNaN(evTime)) return;
-        const diff = evTime - now;
-        if (diff > 0 && diff <= 30 * 60 * 1000) {
-          import('../lib/notifications').then(m => m.notifyUpcomingEvent(e.title, e.startTime || 'pronto', e.id));
-        }
-      });
-    };
-
-    check();
-    const interval = setInterval(check, 1_800_000); // Chequea cada 30 minutos sin saturar
-    return () => clearInterval(interval);
-  }, [tasks, events, settings.notifications]);
-
   const value: AppContextType = {
     tasks, habits, notes, noteFolders, courses, events, tracks, studySessions, plannedSessions,
     settings, sessionTime, sessionType, weeklyStudyTime, dailyStudyTime, pomodoroSessions,
@@ -4068,7 +4126,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addEvent, updateEvent, deleteEvent,
     addHabit, updateHabit, deleteHabit, setHabits,
     addTrack, updateTrack, deleteTrack, toggleTrackFavorite, importLocalTracks,
-    scanFolderForAudio, checkLocalFileExists, cleanupMissingLocalFiles, importLocalZeroCopy,
+    scanFolderForAudio, checkLocalFileExists, cleanupMissingLocalFiles, importLocalZeroCopy, removeDuplicateTracks,
     playTrack, toggleMusicPlayback, setIsPlayingMusic, clearCurrentTrack, setMusicVolume: setMusicVolumeCb, setMusicProgress: setMusicProgressCb, setMusicProgressRaw: setMusicProgress,
     setShuffleMode, setRepeatMode, setMusicQueue, setQueueSource, clearAllMusicData,
     exportMusicLibrary, importMusicLibrary,

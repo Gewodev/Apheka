@@ -255,7 +255,7 @@ export default function GlobalPlayer({ sidebarCollapsed }: { sidebarCollapsed: b
       </div>
 
       {/* Player panel */}
-      <div style={{
+      <div className="owa-player-bar" style={{
         position: 'fixed', bottom: 0, left: sidebarWidth - 12, right: 0,
         zIndex: 9996,
         transform: expanded ? 'translateY(0)' : 'translateY(100%)',

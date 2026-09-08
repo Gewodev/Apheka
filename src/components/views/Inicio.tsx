@@ -259,8 +259,7 @@ export default function Inicio() {
     const up = setInterval(() => setUpcomingEvents(computeUpcoming()), 5000);
     setUpcomingEvents(computeUpcoming());
     window.addEventListener('storage', updateGoalFromStorage);
-    window.addEventListener('owa-planner-external-change', updateGoalFromStorage);
-    return () => { clearInterval(ti); clearInterval(cd); clearInterval(up); window.removeEventListener('storage', updateGoalFromStorage); window.removeEventListener('owa-planner-external-change', updateGoalFromStorage); };
+    return () => { clearInterval(ti); clearInterval(cd); clearInterval(up); window.removeEventListener('storage', updateGoalFromStorage); };
   }, [goalEvent, updateGoalFromStorage, computeUpcoming]);
 
   const timeStr = fmtClock(format(ct, 'HH:mm'), settings?.timeFormat);

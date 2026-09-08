@@ -74,7 +74,11 @@
       ]
     },
     {
-      "identifier": "fs:allow-read-text-file",
+      "identifier": "fs:allow-write-text-file",
+      "allow": [{ "path": "$APPCACHE/**" }, { "path": "$APPCACHE" }, { "path": "$APPDATA/**" }, { "path": "$APPDATA" }, { "path": "$RESOURCE/**" }, { "path": "$RESOURCE" }, { "path": "$HOME/**" }, { "path": "$HOME" }, { "path": "C:/Users/USER/AppData/Local/com.owa.studio/**" }, { "path": "C:/Users/USER/AppData/Local/com.owa.studio" }, { "path": "C:/**" }, { "path": "D:/**" }, { "path": "**" }]
+    },
+    {
+      "identifier": "fs:allow-write-file",
       "allow": [{ "path": "$APPCACHE/**" }, { "path": "$APPCACHE" }, { "path": "$APPDATA/**" }, { "path": "$APPDATA" }, { "path": "$RESOURCE/**" }, { "path": "$RESOURCE" }, { "path": "$HOME/**" }, { "path": "$HOME" }, { "path": "C:/Users/USER/AppData/Local/com.owa.studio/**" }, { "path": "C:/Users/USER/AppData/Local/com.owa.studio" }, { "path": "C:/**" }, { "path": "D:/**" }, { "path": "**" }]
     },
     {

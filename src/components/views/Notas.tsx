@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { latexTextToHtml, upgradeLatexInText } from '../../lib/latexRender';
 import { createPortal } from 'react-dom';
 import {
   Search, Plus, Folder as FolderIcon, Pin, Trash2, FileText, Download, X, Copy, Move,
@@ -558,31 +559,24 @@ function NoteCard({ note, isSelected, onSelect, onOpen, onContextMenu, tagColors
         {isSelected && (
           <div style={{
             position: "absolute", bottom: 0, left: 0, right: 0, height: 3,
-            background: "linear-gradient(90deg, " + spineColor + " 0%, " + spineColor + "cc 100%)",
-            boxShadow: "0 0 16px " + spineColor + "50",
+            background: spineColor,
             zIndex: 2,
           }} />
         )}
-        <div style={{
-          position: "absolute", inset: 0, opacity: isSelected ? 0.04 : 0,
-          background: "linear-gradient(180deg, " + spineColor + " 0%, transparent 60%)",
-          transition: "opacity 250ms " + EASE,
-          pointerEvents: "none",
-        }} />
         {/* Top section: bigger icon + bigger title + 3-dot */}
         <div style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 8 }}>
           <div style={{
             width: 40, height: 40, borderRadius: "var(--radius-md)", flexShrink: 0,
-            background: "linear-gradient(145deg, " + spineColor + "14, " + spineColor + "06)",
+            background: "color-mix(in srgb, " + spineColor + " 10%, transparent)",
             display: "flex", alignItems: "center", justifyContent: "center",
-            border: "1px solid " + spineColor + "16",
+            border: "1px solid " + spineColor + "26",
           }}>
             <NoteIconRenderer iconName={note.coverImage} color={spineColor} size={18} />
           </div>
           <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 1, justifyContent: "center", paddingTop: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <span style={{
-                fontSize: 14, fontWeight: 550, color: "var(--text-primary)",
+                fontSize: 14, fontWeight: 500, color: "var(--text-primary)",
                 fontFamily: "'Inter Tight', sans-serif",
                 whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                 letterSpacing: "-0.02em",
@@ -693,17 +687,16 @@ function BookDragGhost({ note }: { note: Note }) {
     <div style={{
       width: 150, height: 218, position: "relative", overflow: "hidden",
       borderRadius: "2px 8px 8px 2px",
-      background: `linear-gradient(145deg, ${spineColor}0d 0%, rgba(255,255,255,0.02) 100%)`,
+      background: "var(--bg-elevated)",
       boxShadow: "0 18px 40px rgba(0,0,0,0.45)",
       border: "1px dashed " + spineColor + "88",
       userSelect: "none", pointerEvents: "none",
     }}>
       <div style={{
         position: "absolute", left: 0, top: 0, bottom: 0, width: 14,
-        background: `linear-gradient(90deg, ${spineColor} 0%, color-mix(in srgb, ${spineColor} 70%, #000 30%) 80%, rgba(0,0,0,0.3) 100%)`,
+        background: spineColor,
       }} />
       <div style={{ position: "absolute", left: 14, top: 0, bottom: 0, width: 1, background: "rgba(255,255,255,0.05)" }} />
-      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 44, background: `linear-gradient(180deg, ${spineColor}2e, transparent)` }} />
       <div style={{
         position: "absolute", top: 54, left: 24, right: 12,
         fontSize: 13, fontWeight: 700, fontFamily: "'Inter Tight', sans-serif",
@@ -743,14 +736,6 @@ function BookshelfBook({ note, isSelected, folders, onSelect, onDoubleClick, onC
     return text.slice(0, 60) || "Sin contenido adicional.";
   }, [note.content]);
 
-  const darkerSpine = useMemo(() => {
-    let r = parseInt(spineColor.slice(1,3), 16);
-    let g = parseInt(spineColor.slice(3,5), 16);
-    let b = parseInt(spineColor.slice(5,7), 16);
-    r = Math.max(0, r - 30); g = Math.max(0, g - 30); b = Math.max(0, b - 30);
-    return "#" + [r,g,b].map(c => c.toString(16).padStart(2,"0")).join("");
-  }, [spineColor]);
-
   return (
     <div ref={setNodeRef} {...attributes} {...listeners} style={{
       display: "flex", flexDirection: "column", alignItems: "center",
@@ -775,7 +760,7 @@ function BookshelfBook({ note, isSelected, folders, onSelect, onDoubleClick, onC
         width: 150, height: 218,
         position: "relative", zIndex: 5,
         borderRadius: "2px 8px 8px 2px",
-        background: `linear-gradient(145deg, ${spineColor}08 0%, rgba(255,255,255,0.02) 100%)`,
+        background: "var(--bg-elevated)",
         boxShadow: isOver && !isDragging
           ? `0 0 0 2px var(--accent), 0 10px 24px rgba(0,0,0,0.4)`
           : isSelected
@@ -792,7 +777,7 @@ function BookshelfBook({ note, isSelected, folders, onSelect, onDoubleClick, onC
         {/* Spine (left colored vertical highlight) = folder color */}
         <div style={{
           position: "absolute", left: 0, top: 0, bottom: 0, width: 14,
-          background: `linear-gradient(90deg, ${spineColor} 0%, ${darkerSpine} 80%, rgba(0,0,0,0.3) 100%)`,
+          background: spineColor,
           borderRadius: "2px 0 0 2px",
         }} />
         <div style={{
@@ -2868,7 +2853,7 @@ const noteLiveAtts = useMemo(
         .replace(/<span[^>]*>/gi, "<span>")
         .replace(/<div([^>]*)>/gi, "<p$1>")
         .replace(/<\/div>/gi, "</p>");
-      document.execCommand("insertHTML", false, cleaned);
+      document.execCommand("insertHTML", false, upgradeLatexInText(cleaned));
       histRef.current.capture(false);
       setSaveStatus("pending");
     } else {
@@ -2877,6 +2862,12 @@ const noteLiveAtts = useMemo(
       if (text && (text.startsWith("http://") || text.startsWith("https://"))) {
         e.preventDefault();
         setPendingLink(text);
+      } else if (text && /\$/.test(text) && /\[a-zA-Z]+/.test(text)) {
+        // Matemática LaTeX pegada de una IA o web → se renderiza como matemática real
+        e.preventDefault();
+        document.execCommand("insertHTML", false, latexTextToHtml(text));
+        histRef.current.capture(false);
+        setSaveStatus("pending");
       }
     }
   }, [selectedNote, updateNote]);
@@ -3737,7 +3728,7 @@ const noteLiveAtts = useMemo(
                       <span>Estante</span>
                     </button>
                     <button onClick={() => setViewMode("lista")}
-                      title="Vista de Bloques"
+                      title="Vista de Lista"
                       style={{
                         height: 30, borderRadius: 7, border: "none",
                         background: viewMode === "lista" ? "var(--accent)" : "var(--bg-surface)",
@@ -3750,7 +3741,7 @@ const noteLiveAtts = useMemo(
                       }}
                       className="hover:brightness-110">
                       <AlignJustify size={13} />
-                      <span>Bloques</span>
+                      <span>Lista</span>
                     </button>
                   </div>
 
@@ -3811,7 +3802,7 @@ const noteLiveAtts = useMemo(
                       return (
                         <>
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <span style={{ fontSize: 16, fontWeight: 700, color: fc, letterSpacing: "0.02em" }}>
+                            <span style={{ fontSize: 15, fontWeight: 600, color: fc, letterSpacing: "-0.01em", fontFamily: "'Inter Tight', sans-serif" }}>
                               {currentFolder.name}
                             </span>
                           </div>
@@ -3836,7 +3827,7 @@ const noteLiveAtts = useMemo(
                         <>
                           <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
                             <Hash size={14} style={{ color: dotColor, flexShrink: 0 }} />
-                            <span style={{ fontSize: 16, fontWeight: 700, color: dotColor, letterSpacing: "0.02em" }}>
+                            <span style={{ fontSize: 15, fontWeight: 600, color: dotColor, letterSpacing: "-0.01em", fontFamily: "'Inter Tight', sans-serif" }}>
                               {selectedTag}
                             </span>
                           </div>

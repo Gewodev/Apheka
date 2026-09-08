@@ -9,7 +9,7 @@ import type { TopicFlashcard } from '../../../store/AppContext';
 
 // Tarjeta de estudio: TopicFlashcard + groupName (carpeta/set dentro del tema, persistido como campo extra)
 export type SetCard = TopicFlashcard & { groupName?: string };
-export type StudySetsMode = 'cards' | 'test' | 'match';
+export type StudySetsMode = 'cards' | 'test' | 'match' | 'rush';
 
 interface StudySetsProps {
   open: boolean;
@@ -21,7 +21,7 @@ interface StudySetsProps {
   onClose: () => void;
 }
 
-type Phase = 'home' | 'cards' | 'test' | 'match';
+type Phase = 'home' | 'cards' | 'test' | 'match' | 'rush';
 
 const CARD_COLOR = '#8B5CF6';
 const TEST_COLOR = '#F59E0B';
@@ -112,6 +112,17 @@ export default function StudySets({ open, topicTitle, groupName, accent, flashca
   const [matchFails, setMatchFails] = useState(0);
   const [matchDone, setMatchDone] = useState(false);
 
+  // --- contrarreloj (estilo Quizizz) ---
+  const [rushQs, setRushQs] = useState<TestQ[]>([]);
+  const [rushIdx, setRushIdx] = useState(0);
+  const [rushTime, setRushTime] = useState(60);
+  const [rushScore, setRushScore] = useState(0);
+  const [rushStreak, setRushStreak] = useState(0);
+  const [rushRight, setRushRight] = useState(0);
+  const [rushOver, setRushOver] = useState(false);
+  const rushBestKey = `owa_sets_rush_best::${topicTitle}::${groupName || 'todas'}`;
+  const [rushBest, setRushBest] = useState<number>(() => { try { return Number(localStorage.getItem(rushBestKey)) || 0; } catch { return 0; } });
+
   // --- CRUD ---
   const [query, setQuery] = useState('');
   const [formOpen, setFormOpen] = useState(false);
@@ -128,6 +139,7 @@ export default function StudySets({ open, topicTitle, groupName, accent, flashca
     setTestQs([]); setTestIdx(0); setTestDone(false); setTestWrongIds([]);
     setMatched(new Set()); setPicked(null); setWrongPair([]); setMatchStart(null);
     setMatchTime(0); setMatchFails(0); setMatchDone(false);
+    setRushQs([]); setRushIdx(0); setRushTime(60); setRushScore(0); setRushStreak(0); setRushRight(0); setRushOver(false);
   }, []);
 
   // Al abrir: siempre entra al resumen; si piden test/match sin tarjetas, el botón correspondiente se deshabilita.
@@ -221,21 +233,70 @@ export default function StudySets({ open, topicTitle, groupName, accent, flashca
   };
 
   // ---------- Test ----------
+  // Genera una pregunta de opción múltiple desde una tarjeta (distractores del resto del set)
+  const makeMcq = (card: SetCard, pool: SetCard[]): TestQ => {
+    const others = shuffle(pool.filter(c => c.id !== card.id)).map(c => c.answer);
+    const distractors: string[] = [];
+    for (const o of others) {
+      if (distractors.length >= 3) break;
+      if (!distractors.includes(o) && o !== card.answer) distractors.push(o);
+    }
+    return { card, options: shuffle([card.answer, ...distractors]), correct: card.answer, picked: null };
+  };
+
   const buildTest = (source?: SetCard[]) => {
     const pool = (source && source.length > 0 ? source : cards);
     if (pool.length < 2) { toast.error('Necesitas al menos 2 tarjetas'); return; }
     const picked = shuffle(pool).slice(0, Math.min(8, pool.length));
-    const qs: TestQ[] = picked.map(card => {
-      const others = shuffle(pool.filter(c => c.id !== card.id)).map(c => c.answer);
-      const distractors: string[] = [];
-      for (const o of others) {
-        if (distractors.length >= 3) break;
-        if (!distractors.includes(o) && o !== card.answer) distractors.push(o);
+    setTestQs(picked.map(card => makeMcq(card, pool)));
+    setTestIdx(0); setTestDone(false); setTestWrongIds([]); setPhase('test');
+  };
+
+  // ---------- Contrarreloj ----------
+  const startRush = () => {
+    if (cards.length < 2) { toast.error('Necesitas al menos 2 tarjetas'); return; }
+    setRushQs(shuffle(cards).slice(0, Math.min(8, cards.length)).map(card => makeMcq(card, cards)));
+    setRushIdx(0); setRushTime(60); setRushScore(0); setRushStreak(0); setRushRight(0); setRushOver(false);
+    setRushBest(() => { try { return Number(localStorage.getItem(rushBestKey)) || 0; } catch { return 0; } });
+    setPhase('rush');
+  };
+
+  // Cuenta atrás + registro del récord
+  useEffect(() => {
+    if (phase !== 'rush' || rushOver) return;
+    if (rushTime <= 0) {
+      setRushOver(true);
+      try {
+        const prev = Number(localStorage.getItem(rushBestKey)) || 0;
+        if (rushScore > prev) localStorage.setItem(rushBestKey, String(rushScore));
+      } catch {}
+      return;
+    }
+    const iv = setTimeout(() => setRushTime(t => t - 1), 1000);
+    return () => clearTimeout(iv);
+  }, [phase, rushTime, rushOver, rushScore, rushBestKey]);
+
+  const pickRush = (q: TestQ, opt: string) => {
+    if (q.picked || rushOver) return;
+    const isRight = opt === q.correct;
+    setRushQs(prev => prev.map((x, i) => i === rushIdx ? { ...x, picked: opt } : x));
+    if (isRight) {
+      setRushStreak(s => Math.min(5, s + 1));
+      setRushScore(sc => sc + 100 * Math.min(5, rushStreak + 1));
+      setRushRight(r => r + 1);
+    } else {
+      setRushStreak(0);
+      setRushTime(t => Math.max(1, t - 3));
+    }
+    setTimeout(() => {
+      if (rushIdx + 1 >= rushQs.length) {
+        // Ronda extra con nuevas preguntas mientras quede tiempo
+        setRushQs(prev => [...prev, ...shuffle(cards.filter(c => c.id !== q.card.id)).slice(0, Math.min(8, cards.length)).map(card => makeMcq(card, cards))]);
+        setRushIdx(i => i + 1);
+      } else {
+        setRushIdx(i => i + 1);
       }
-      const options = shuffle([card.answer, ...distractors]);
-      return { card, options, correct: card.answer, picked: null };
-    });
-    setTestQs(qs); setTestIdx(0); setTestDone(false); setTestWrongIds([]); setPhase('test');
+    }, isRight ? 240 : 500);
   };
 
   const pickOption = (q: TestQ, opt: string) => {
@@ -308,12 +369,13 @@ export default function StudySets({ open, topicTitle, groupName, accent, flashca
           )}
           <div style={{ width: 34, height: 34, borderRadius: 10, background: `${accent}14`, border: `1px solid ${accent}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             {phase === 'match' ? <Shuffle size={15} style={{ color: MATCH_COLOR }} />
+              : phase === 'rush' ? <Timer size={15} style={{ color: '#E11D48' }} />
               : phase === 'test' ? <ClipboardCheck size={15} style={{ color: TEST_COLOR }} />
               : <BookOpen size={15} style={{ color: CARD_COLOR }} />}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 8.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-tertiary)' }}>
-              {phase === 'cards' ? 'Estudiando' : phase === 'test' ? 'Prueba' : phase === 'match' ? 'Emparejar' : 'Set de estudio'} · {topicTitle}
+              {phase === 'cards' ? 'Estudiando' : phase === 'test' ? 'Prueba' : phase === 'match' ? 'Emparejar' : phase === 'rush' ? 'Contrarreloj' : 'Set de estudio'} · {topicTitle}
             </div>
             <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{setLabel}</div>
           </div>
@@ -339,6 +401,7 @@ export default function StudySets({ open, topicTitle, groupName, accent, flashca
                 <ToolButton icon={BookOpen} label="Estudiar" sub="Tarjetas con repetición espaciada" color={CARD_COLOR} onClick={startCards} disabled={cards.length === 0} />
                 <ToolButton icon={ClipboardCheck} label="Prueba" sub="Opción múltiple generada del set" color={TEST_COLOR} onClick={() => buildTest()} disabled={cards.length < 2} />
                 <ToolButton icon={Shuffle} label="Emparejar" sub="Une término con definición contra reloj" color={MATCH_COLOR} onClick={startMatch} disabled={cards.length < 2} />
+                <ToolButton icon={Timer} label="Contrarreloj" sub="60s · racha x5 · récord guardado" color="#E11D48" onClick={startRush} disabled={cards.length < 2} />
               </div>
 
               {/* Lista + CRUD */}
@@ -624,6 +687,56 @@ export default function StudySets({ open, topicTitle, groupName, accent, flashca
               </div>
             )
           )}
+          {/* ===== CONTRARRELOJ ===== */}
+          {phase === 'rush' && !rushOver && rushQs[rushIdx] && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#E11D48', fontFamily: "'Inter Tight', sans-serif", fontVariantNumeric: 'tabular-nums' }}>{rushScore} pts</span>
+                <div style={{ flex: 1, height: 5, borderRadius: 99, background: 'var(--border-subtle)', overflow: 'hidden' }}>
+                  <div style={{ width: `${(rushTime / 60) * 100}%`, height: '100%', borderRadius: 99, background: rushTime <= 10 ? '#EF4444' : 'var(--accent)', transition: 'width 900ms linear' }} />
+                </div>
+                {rushStreak > 0 && (
+                  <span style={{ fontSize: 10.5, fontWeight: 700, color: '#F59E0B', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.25)', padding: '3px 9px', borderRadius: 99 }}>x{rushStreak} racha</span>
+                )}
+                <span style={{ fontSize: 13, fontWeight: 700, color: rushTime <= 10 ? '#EF4444' : 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", fontVariantNumeric: 'tabular-nums' }}>{rushTime}s</span>
+              </div>
+              <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.5, textAlign: 'center', padding: '6px 10px 0' }}>{rushQs[rushIdx].card.question}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, maxWidth: 640, width: '100%', margin: '0 auto' }}>
+                {rushQs[rushIdx].options.map(opt => {
+                  const q = rushQs[rushIdx];
+                  const isPicked = q.picked === opt;
+                  const isCorrect = opt === q.correct;
+                  const reveal = q.picked !== null;
+                  return (
+                    <button key={opt} onClick={() => pickRush(q, opt)} disabled={reveal}
+                      style={{
+                        padding: '11px 14px', borderRadius: 11, textAlign: 'left',
+                        border: `1px solid ${reveal && isCorrect ? MATCH_COLOR + '50' : isPicked ? '#EF444450' : 'var(--border-subtle)'}`,
+                        background: reveal && isCorrect ? `${MATCH_COLOR}0e` : isPicked ? '#EF44440c' : 'var(--bg-elevated)',
+                        cursor: reveal ? 'default' : 'pointer', transition: 'all 140ms', fontSize: 12, fontWeight: 500,
+                        color: reveal && isCorrect ? MATCH_COLOR : isPicked ? '#EF4444' : 'var(--text-primary)', minHeight: 44,
+                      }}>
+                      {opt}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {phase === 'rush' && rushOver && (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '36px 0', gap: 10 }}>
+              <div style={{ fontSize: 36, fontWeight: 700, color: '#E11D48', fontFamily: "'Inter Tight', sans-serif" }}>{rushScore} pts</div>
+              <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{rushRight} aciertos · récord: {Math.max(rushBest, rushScore)} pts {rushScore >= rushBest && rushScore > 0 ? '· ¡Nuevo récord!' : ''}</div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <button onClick={startRush} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 10, border: '1px solid rgba(225,29,72,0.4)', background: 'rgba(225,29,72,0.12)', color: '#E11D48', cursor: 'pointer', fontSize: 11.5, fontWeight: 700 }}>
+                  <RotateCcw size={13} /> Otra ronda
+                </button>
+                <button onClick={() => { setPhase('home'); resetSession(); }} style={{ padding: '9px 16px', borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 11.5, fontWeight: 600 }}>Volver al set</button>
+              </div>
+            </div>
+          )}
+
         </div>
 
         {/* footer info */}

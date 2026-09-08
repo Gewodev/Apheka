@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import LiveClock from '../ui/LiveClock';
 import { createPortal } from 'react-dom';
 import {
   Plus, Search, Check, Trash2,
@@ -21,7 +22,6 @@ import { openFileSmart, pickAndPersistFile } from '../../lib/openFileSmart';
 import { fuzzyMatch } from '../../lib/fuzzy';
 import { useMaterialMenu } from '../ui/MaterialContextMenu';
 import { isTauri, convertFileSrc } from '@tauri-apps/api/core';
-import { BRAIN_DROP_MIME, writeBrainAnchor } from '../../lib/brainDrop';
 import { GoogleClassroomIcon, GoogleDriveIcon, GoogleDocsIcon, GoogleSheetsIcon, GoogleSlidesIcon, GoogleFormsIcon, WordIcon, ExcelIcon, PowerPointIcon } from '../ui/GoogleIcons';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, isToday, addMonths, subMonths, addWeeks, subWeeks, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -156,7 +156,6 @@ export default function Tareas() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scheme = th === 'claro' ? 'light' : 'dark';
-  const [currentTime, setCurrentTime] = useState(new Date());
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [showNewModal, setShowNewModal] = useState(false);
@@ -268,7 +267,6 @@ export default function Tareas() {
 
   const notificationCount = useMemo(() => tasks.filter(t => t.dueDate && localDate(t.dueDate).getTime() < Date.now() && t.status !== 'completado').length, [tasks]);
 
-  useEffect(() => { const timer = setInterval(() => setCurrentTime(new Date()), 1000); return () => clearInterval(timer); }, []);
 
   useEffect(() => {
     if (showNewModal && newTaskPrefillDate) {
@@ -418,7 +416,6 @@ export default function Tareas() {
 
   const handleDragStart = (e: React.DragEvent, taskId: string) => {
     e.dataTransfer.setData('text/plain', taskId);
-    e.dataTransfer.setData(BRAIN_DROP_MIME, writeBrainAnchor('task', taskId));
     setDraggingTaskId(taskId);
     if (e.currentTarget instanceof HTMLElement) {
       e.dataTransfer.effectAllowed = 'move';
@@ -577,10 +574,6 @@ export default function Tareas() {
     for (let i = 0; i < calendarDays.length; i += 7) weekRows.push(calendarDays.slice(i, i + 7));
   }
 
-  const timeStr = fmtClock(format(currentTime, 'HH:mm'), settings?.timeFormat);
-  const secondsStr = format(currentTime, 'ss');
-  const dateStr = format(currentTime, "EEEE, d 'de' MMMM", { locale: es });
-  const dateStrCap = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
 
   const courseDistribution = useMemo(() => {
     const map: Record<string, { count: number; color: string }> = {};
@@ -614,10 +607,14 @@ export default function Tareas() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, position: 'relative' }}>
           <NotificationBell />
           <div style={{ position: 'relative', zIndex: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 3, justifyContent: 'flex-end' }}>
-              <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 68, fontWeight: 200, lineHeight: 0.9, color: 'var(--accent)', letterSpacing: '0.02em', textShadow: '0 0 20px var(--accent-glow)' }}>{timeStr}</span>
-              <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 22, fontWeight: 200, color: 'var(--accent)', opacity: 0.6, letterSpacing: '0.02em' }}>{secondsStr}</span>
-            </div>
+            <LiveClock>
+              {now => (
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 3, justifyContent: 'flex-end' }}>
+                  <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 68, fontWeight: 200, lineHeight: 0.9, color: 'var(--accent)', letterSpacing: '0.02em', textShadow: '0 0 20px var(--accent-glow)' }}>{fmtClock(format(now, 'HH:mm'), settings?.timeFormat)}</span>
+                  <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 22, fontWeight: 200, color: 'var(--accent)', opacity: 0.6, letterSpacing: '0.02em' }}>{format(now, 'ss')}</span>
+                </div>
+              )}
+            </LiveClock>
           </div>
         </div>
       </header>

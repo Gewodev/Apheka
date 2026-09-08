@@ -7,7 +7,6 @@ import { DndContext, closestCorners, useSensor, useSensors, PointerSensor, DragE
 import { SortableContext, rectSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useApp, Course } from '../../store/AppContext';
-import { openBrainWithAnchor, isOverBrainZone, setBrainDragState, getLastPointer } from '../../lib/brainDrop';
 import NotificationBell from '../ui/NotificationBell';
 import ImageEditorModal from '../ui/ImageEditorModal';
 import toast from 'react-hot-toast';
@@ -97,18 +96,9 @@ export default function CursosHub({ onSelectCourse, onTabSelect }: CursosHubProp
 
   const handleHubDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
-    setBrainDragState(false);
     setDragActive(false);
     setTimeout(() => { hubDragRef.current = false; }, 80);
     if (!over) return;
-    // Si se suelta sobre la franja derecha (panel de Charvis), se ancla el
-    // curso en el chat en lugar de reordenar.
-    const ptr = getLastPointer();
-    if (isOverBrainZone(ptr.x)) {
-      const course = coursesRef.current.find(c => c.id === active.id);
-      if (course) openBrainWithAnchor({ kind: 'course', id: course.id });
-      return;
-    }
     const ids = coursesRef.current.map(c => c.id);
     const fromIdx = ids.indexOf(String(active.id));
     const toIdx = ids.indexOf(String(over.id));
@@ -122,12 +112,9 @@ export default function CursosHub({ onSelectCourse, onTabSelect }: CursosHubProp
   }, []);
 
   const endDrag = useCallback(() => {
-    setBrainDragState(false);
     setDragActive(false);
     setTimeout(() => { hubDragRef.current = false; }, 80);
   }, []);
-
-  useEffect(() => () => { setBrainDragState(false); }, []);
 
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -213,7 +200,6 @@ export default function CursosHub({ onSelectCourse, onTabSelect }: CursosHubProp
           <>
           <DndContext sensors={sensors} collisionDetection={closestCorners}
             onDragStart={startDrag}
-            onDragMove={() => setBrainDragState(isOverBrainZone(getLastPointer().x), 'Suelta para anclar en Charvis')}
             onDragEnd={handleHubDragEnd}
             onDragCancel={endDrag}
           >

@@ -4,6 +4,8 @@ import { readTextFile, writeTextFile } from '@tauri-apps/plugin-fs';
 import { appDataDir, join } from '@tauri-apps/api/path';
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import { isTauri } from './tauri';
+import { getAllTracksMetadata, saveTrackMetadata } from './musicDb';
+import type { Track } from '../store/AppContext';
 
 const STATE_KEY = 'owa_studio_data';
 const SECRET_RE = /token|secret|credential|google|supabase/i;
@@ -15,6 +17,10 @@ export interface OwaBackupFile {
   appVersion: string;
   localStorage: Record<string, string>;
   idb: { key: string; value: unknown } | null;
+  // Biblioteca de música completa (metadatos + portadas + nombres personalizados).
+  // Los audios viven en la carpeta de música (misma PC); al restaurar en otra
+  // PC usa "Limpiar faltantes" y vuelve a añadir los archivos.
+  musicTracks: Track[] | null;
 }
 
 export interface BackupResult {
@@ -40,6 +46,11 @@ export async function collectBackup(): Promise<OwaBackupFile> {
   try {
     idbValue = await get(STATE_KEY);
   } catch { /* noop */ }
+  let musicTracks: Track[] | null = null;
+  try {
+    const all = await getAllTracksMetadata();
+    if (Array.isArray(all) && all.length > 0) musicTracks = all;
+  } catch { /* sin biblioteca */ }
   return {
     format: 'owa-studio-backup',
     version: 1,
@@ -47,6 +58,7 @@ export async function collectBackup(): Promise<OwaBackupFile> {
     appVersion: '6.7',
     localStorage: lsEntries(),
     idb: idbValue !== null && idbValue !== undefined ? { key: STATE_KEY, value: idbValue } : null,
+    musicTracks,
   };
 }
 
@@ -88,6 +100,21 @@ export async function applyBackup(backup: OwaBackupFile): Promise<{ ok: boolean;
   if (backup.idb) {
     try { await set(backup.idb.key, backup.idb.value); } catch { /* noop */ }
   }
+  // Música: fusiona por ID (no duplica, no borra lo nuevo). Respaldos viejos
+  // sin musicTracks se saltan este paso sin errores.
+  let musicAdded = 0;
+  if (Array.isArray(backup.musicTracks) && backup.musicTracks.length > 0) {
+    try {
+      const current = await getAllTracksMetadata().catch(() => [] as Track[]);
+      const currentIds = new Set((current || []).map(t => t.id));
+      for (const t of backup.musicTracks) {
+        if (!t || typeof t !== 'object' || !t.id || currentIds.has(t.id)) continue;
+        await saveTrackMetadata(t as Track).catch(() => {});
+        currentIds.add(t.id);
+        musicAdded++;
+      }
+    } catch { /* noop */ }
+  }
   if (isTauri()) {
     try {
       const diskPath = await join(await appDataDir(), 'owa_studio_data.json');
@@ -95,7 +122,7 @@ export async function applyBackup(backup: OwaBackupFile): Promise<{ ok: boolean;
       if (rawState) await writeTextFile(diskPath, rawState);
     } catch { /* noop */ }
   }
-  return { ok: true, message: 'Datos restaurados. La app se recargará...' };
+  return { ok: true, message: musicAdded > 0 ? `Datos restaurados (${musicAdded} ${musicAdded === 1 ? 'canción recuperada' : 'canciones recuperadas'}). La app se recargará...` : 'Datos restaurados. La app se recargará...' };
 }
 
 export async function pickAndImportOwaBackup(): Promise<BackupResult> {

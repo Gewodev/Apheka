@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import LiveClock from '../ui/LiveClock';
 import {
   Play, Pause, RotateCcw, Zap, Clock,
   CheckCircle, Trophy, Sparkles, Flame,
@@ -118,19 +119,28 @@ function detectPerformanceSuggestion(opts: {
   plannedIntensity?: number;
   scale: 10 | 20;
 }): number {
+  const scale = opts.scale;
   const ratio = opts.targetSec > 0 ? opts.durationSec / opts.targetSec : 1;
-  let score: number;
+  // 1) Base por cumplimiento del objetivo con curva suave: antes con la mitad del
+  //    tiempo ya se saturaba la escala y todo daba el máximo (datos falsos).
+  //    25% suelo por asistir; cumplir el objetivo llega a ~93%; el exceso cuenta poco.
+  const eff = Math.min(1.15, ratio);
+  let score = scale * (0.25 + 0.68 * eff);
+  if (ratio >= 1.1) score += scale * 0.07;
+  // 2) Distracciones: penalización progresiva y proporcional a la escala
+  const dist = opts.distractionCount || 0;
+  score -= Math.min(scale * 0.35, dist * scale * 0.06);
+  // 3) Pausas largas dentro de la sesión
+  const pauseMin = (opts.pauseDurationSec || 0) / 60;
+  if (pauseMin > 5) score -= Math.min(scale * 0.15, Math.floor((pauseMin - 5) / 5) * scale * 0.04);
+  // 4) Intensidad planificada: mezcla 40% cumplimiento real + 60% expectativa;
+  //    antes ignoraba las distracciones de la sesión planificada.
   if (opts.plannedIntensity && opts.plannedIntensity >= 1) {
-    const expected = opts.scale === 10 ? opts.plannedIntensity : Math.min(20, opts.plannedIntensity * 2);
-    score = expected * Math.max(0.5, Math.min(1, ratio));
-  } else {
-    score = 5 + 10 * Math.min(1, ratio) + (ratio >= 1 ? 1 : 0);
-    const dist = opts.distractionCount || 0;
-    if (dist > 1) score -= Math.min(8, (dist - 1) * 2);
-    const pauseMin = (opts.pauseDurationSec || 0) / 60;
-    if (pauseMin > 5) score -= Math.min(5, Math.floor((pauseMin - 5) / 5));
+    const expected = scale === 10 ? opts.plannedIntensity : Math.min(scale, opts.plannedIntensity * 2);
+    const distPen = Math.min(scale * 0.35, dist * scale * 0.06);
+    score = (score - distPen * 0.5) * 0.4 + expected * Math.max(0.45, Math.min(1.05, ratio)) * 0.6;
   }
-  return Math.max(1, Math.min(opts.scale, Math.round(score)));
+  return Math.max(1, Math.min(scale, Math.round(score)));
 }
 
 
@@ -174,7 +184,6 @@ export default function Estudio() {
   const [evalStudyMode, setEvalStudyMode] = useState<'free' | 'task'>('free');
   const [evalLinkedTaskId, setEvalLinkedTaskId] = useState<string | null>(null);
   const [evalFreeText, setEvalFreeText] = useState('');
-  const [currentTime, setCurrentTime] = useState(new Date());
   const [planBlockHover, setPlanBlockHover] = useState(false);
   const [taskBlockHover, setTaskBlockHover] = useState(false);
   const [winW, setWinW] = useState(window.innerWidth);
@@ -297,10 +306,6 @@ export default function Estudio() {
     }).reverse();
   }, [weeklyStudyTime]);
 
-  useEffect(() => {
-    const t = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(t);
-  }, []);
 
   const fmt = (sec: number) => {
     const m = Math.floor(sec / 60);
@@ -320,8 +325,10 @@ export default function Estudio() {
     if (isTimerActive && !isRest && sessionTime >= settings.pomodoroTime && !hasTriggeredRef.current && sessionType === 'pomodoro') {
       hasTriggeredRef.current = true;
       setIsTimerActive(false);
-      sendNativeNotification('Sesión completada', 'Buen trabajo. Evalúa tu sesión.');
-      notifySessionComplete(settings.pomodoroTime / 60);
+      if (settings.notifications !== false && (settings as any).event_pomodoro !== false) {
+        sendNativeNotification('Sesión completada', 'Buen trabajo. Evalúa tu sesión.');
+        notifySessionComplete(settings.pomodoroTime / 60);
+      }
       pendingSessionRef.current = {
         type: 'pomodoro',
         startedAt: new Date(Date.now() - sessionTime * 1000).toISOString(),
@@ -426,7 +433,9 @@ export default function Estudio() {
       setIsRest(false);
       setSessionTime(0);
       setIsTimerActive(false);
-      notifyBreakOver();
+      if (settings.notifications !== false && (settings as any).event_break !== false) {
+        notifyBreakOver();
+      }
       addNotification(isLongBreak ? 'Descanso largo completado' : 'Descanso completado', 'success');
     }
     if (!isRest) breakNotifiedRef.current = false;
@@ -771,14 +780,14 @@ export default function Estudio() {
             <div style={{ textAlign: 'right', position: 'relative', zIndex: 1 }}>
               <div className="flex items-baseline gap-2 justify-end">
                 <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 'clamp(32px, 6vw, 68px)', fontWeight: 200, lineHeight: 0.9, color: 'var(--text-secondary)', letterSpacing: '0.02em', transition: 'color 300ms' }}>
-                  {fmtClock(format(currentTime, 'HH:mm'), settings?.timeFormat)}
+                  <LiveClock>{now => fmtClock(format(now, 'HH:mm'), settings?.timeFormat)}</LiveClock>
                 </span>
                 <span className="hidden lg:inline" style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 'clamp(14px, 2vw, 22px)', fontWeight: 200, color: 'var(--text-tertiary)', opacity: 0.7, letterSpacing: '0.02em', transition: 'color 300ms' }}>
-                  {format(currentTime, 'ss')}
+                  <LiveClock>{now => format(now, 'ss')}</LiveClock>
                 </span>
               </div>
               <div className="hidden lg:block" style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.12em', marginTop: 6 }}>
-                {format(currentTime, "EEEE, d 'de' MMMM", { locale: es })}
+                <LiveClock>{now => format(now, "EEEE, d 'de' MMMM", { locale: es })}</LiveClock>
               </div>
             </div>
           </div>
