@@ -205,7 +205,7 @@ export default function Musica() {
     weeklyMusicTime, monthlyMusicTime,
     updateDownloadProgress, updateDownloadStatus, toggleTrackFavorite,
     downloadQueue, removeFromDownloadQueue, clearCompletedDownloads,
-    updateTrack, deleteTrack, importLocalZeroCopy, cleanupMissingLocalFiles, removeDuplicateTracks,
+    updateTrack, deleteTrack, importLocalZeroCopy, cleanupMissingLocalFiles, removeDuplicateTracks, normalizeMusicFilenames,
     trackHistory, playCounts, studySessions, artists, addArtist, deleteArtist, updateArtist,
     playlists, addPlaylist, updatePlaylist, deletePlaylist,
     addNotification,
@@ -1523,6 +1523,12 @@ export default function Musica() {
                     if (removed === 0) addNotification('No hay canciones duplicadas', 'info');
                   }} className="btn-ghost" style={{ height: 30, padding: '0 16px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, borderRadius: 15, fontWeight: 500 }}>
                     <Copy size={11} /> Borrar duplicados
+                  </button>
+                  <button onClick={async () => {
+                    const fixed = await normalizeMusicFilenames();
+                    if (fixed === 0) addNotification('Nombres ya correctos ("Artista - Título")', 'info');
+                  }} className="btn-ghost" style={{ height: 30, padding: '0 16px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, borderRadius: 15, fontWeight: 500 }}>
+                    <Edit2 size={11} /> Normalizar nombres
                   </button>
                   {activeTab === 'favoritas' && displayTracks.length > 0 && (
                     <button

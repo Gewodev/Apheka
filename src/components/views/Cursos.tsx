@@ -3345,14 +3345,6 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                     {(() => { const g = groups.find(gr => gr.id === activeTopic.groupId); return g ? <><span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>/</span><span style={{ fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.7)', letterSpacing: '0.01em', borderBottom: '1px solid rgba(255,255,255,0.2)', paddingBottom: 2 }}>{g.name}</span></> : null; })()}
                   </div>
                 </div>
-                {activeToolGroup !== 'todos' && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
-                    <LI.FolderOpen size={36} style={{ color: 'rgba(255,255,255,0.40)' }} />
-                    <span style={{ fontSize: 38, fontWeight: 250, letterSpacing: '-0.02em', color: 'rgba(255,255,255,0.65)', textShadow: '0 2px 18px rgba(0,0,0,0.55)', fontFamily: "'Inter Tight', sans-serif", maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {activeToolGroup.includes('/') ? activeToolGroup.split('/').pop() : activeToolGroup}
-                    </span>
-                  </div>
-                )}
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   {activeToolGroup === 'todos' ? (
                   <>
@@ -3706,15 +3698,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                     const activeGrp = groups.find(g => g.id === selectedGroupId);
                     return activeGrp ? (
                       <>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                          <div style={{ width: 46, height: 46, borderRadius: 13, background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                            <LI.Folder size={22} style={{ color: '#fff' }} />
-                          </div>
-                          <div>
-                            <div style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.16em', color: 'rgba(255,255,255,0.55)', fontFamily: "'Inter Tight', sans-serif", marginBottom: 4 }}>Grupo</div>
-                            <h1 style={{ fontSize: 38, fontWeight: 200, color: '#fff', margin: 0, letterSpacing: '-0.03em', fontFamily: "'Inter Tight', sans-serif", textShadow: '0 2px 20px rgba(0,0,0,0.6)' }}>{activeGrp.name}</h1>
-                          </div>
-                        </div>
+                        <h1 style={{ fontSize: 40, fontWeight: 200, color: '#fff', margin: '0 0 10px', letterSpacing: '-0.03em', fontFamily: "'Inter Tight', sans-serif", textShadow: '0 2px 20px rgba(0,0,0,0.6)' }}>{activeGrp.name}</h1>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10 }}>
                           <span style={{ fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.01em', borderBottom: '1px solid rgba(255,255,255,0.15)', paddingBottom: 2 }}>{course.name}</span>
                         </div>
@@ -4246,14 +4230,14 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '24px 20px 10px', flexShrink: 0 }}>
                           <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: "'Inter Tight', sans-serif" }}>Materiales</h3>
                           <div style={{ display: 'flex', gap: 6 }}>
-                            <button onClick={() => { topicOnlyRef.current = false; handleAddFileBtn(parsedTopics[0]?.id); }}
+                            <button onClick={() => { topicOnlyRef.current = false; handleAddFileBtn(activeTopic?.id ?? parsedTopics[0]?.id); }}
                               style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${course.color}30`, background: `${course.color}10`, cursor: 'pointer', color: course.color, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms ' + EASE }}
                               onMouseEnter={e => { e.currentTarget.style.background = `${course.color}22`; e.currentTarget.style.borderColor = `${course.color}50`; }}
                               onMouseLeave={e => { e.currentTarget.style.background = `${course.color}10`; e.currentTarget.style.borderColor = `${course.color}30`; }}
                               title="Subir archivo">
                               <Upload size={15} />
                             </button>
-                            <button onClick={() => { topicOnlyRef.current = false; setAddLinkTargetTopic(undefined); setShowAddLinkModal(true); setAddLinkUrl(''); setAddLinkName(''); }}
+                            <button onClick={() => { topicOnlyRef.current = false; setAddLinkTargetTopic(activeTopic?.id ?? parsedTopics[0]?.id); setShowAddLinkModal(true); setAddLinkUrl(''); setAddLinkName(''); }}
                               style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${course.color}30`, background: `${course.color}10`, cursor: 'pointer', color: course.color, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms ' + EASE }}
                               onMouseEnter={e => { e.currentTarget.style.background = `${course.color}22`; e.currentTarget.style.borderColor = `${course.color}50`; }}
                               onMouseLeave={e => { e.currentTarget.style.background = `${course.color}10`; e.currentTarget.style.borderColor = `${course.color}30`; }}
@@ -4262,7 +4246,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                             </button>
                           </div>
                         </div>
-                        <input type="file" ref={estudioFileInputRef} style={{ display: 'none' }} onChange={e => handleFileUpload(e, parsedTopics[0]?.id)} />
+                        <input type="file" ref={estudioFileInputRef} style={{ display: 'none' }} onChange={e => handleFileUpload(e, activeTopic?.id ?? parsedTopics[0]?.id)} />
                         <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '10px 14px 40px', display: 'flex', flexDirection: 'column', gap: 12 }} className="no-scrollbar">
                           {allCourseMaterials.length === 0 ? (
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 120, borderRadius: 12, border: '1px dashed var(--border-subtle)', background: 'var(--bg-surface)', gap: 8 }}>
@@ -5389,152 +5373,6 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                     </div>
                   </div>
                 </div>
-
-                {/* -- DELETE MATERIAL CONFIRMATION -- */}
-                {confirmDeleteMatId && (() => {
-                  const delMat = allCourseMaterials.find(m => m.id === confirmDeleteMatId);
-                  return (
-                    <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                      onClick={e => { if (e.target === e.currentTarget) setConfirmDeleteMatId(null); }}>
-                      <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)' }} />
-                      <div style={{ position: 'relative', width: 380, background: 'var(--bg-surface)', borderRadius: 16, border: '1px solid var(--border-subtle)', boxShadow: '0 24px 64px rgba(0,0,0,0.5)', overflow: 'hidden' }} className="bento-card">
-                        <div style={{ padding: '24px 24px 16px', textAlign: 'center' }}>
-                          <div style={{ width: 48, height: 48, borderRadius: 14, background: 'rgba(239,68,68,0.1)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
-                            <AlertTriangle size={24} style={{ color: '#EF4444' }} />
-                          </div>
-                          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>Eliminar material</h3>
-                          {delMat && <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--text-secondary)', fontFamily: "'Inter', sans-serif" }}>"{delMat.name || 'Sin nombre'}" sera eliminado</p>}
-                        </div>
-                        <div style={{ padding: '12px 24px 24px', display: 'flex', gap: 10, justifyContent: 'center' }}>
-                          <button onClick={() => setConfirmDeleteMatId(null)}
-                            style={{ height: 38, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 13, fontWeight: 500, cursor: 'pointer', padding: '0 20px', transition: 'all 150ms', fontFamily: "'Inter', sans-serif" }}
-                            onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
-                            Cancelar
-                          </button>
-                          <button onClick={() => { handleDeleteResourceFromOverview(confirmDeleteMatId); }}
-                            style={{ height: 38, borderRadius: 8, border: 'none', background: '#EF4444', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: '0 20px', transition: 'all 150ms', fontFamily: "'Inter', sans-serif" }}
-                            onMouseEnter={e => { e.currentTarget.style.opacity = '0.9'; }}
-                            onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
-                            Eliminar
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* -- ADD LINK MODAL -- */}
-                {showAddLinkModal && (
-                  <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                    onClick={e => { if (e.target === e.currentTarget) setShowAddLinkModal(false); }}>
-                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)' }} />
-                    <div style={{ position: 'relative', width: 400, background: 'var(--bg-surface)', borderRadius: 16, border: '1px solid var(--border-subtle)', boxShadow: '0 24px 64px rgba(0,0,0,0.5)', overflow: 'hidden' }} className="bento-card">
-                      <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>Agregar enlace</h3>
-                        <button onClick={() => setShowAddLinkModal(false)}
-                          style={{ width: 28, height: 28, borderRadius: 7, border: 'none', background: 'var(--bg-hover)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
-                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#EF4444'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
-                          <X size={14} />
-                        </button>
-                      </div>
-                      <div style={{ padding: '18px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-                        <div>
-                          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6, letterSpacing: '0.02em' }}>URL del enlace</label>
-                          <input value={addLinkUrl} onChange={e => setAddLinkUrl(e.target.value)}
-                            placeholder="https://..."
-                            onKeyDown={e => { if (e.key === 'Enter') handleAddLink(); }}
-                            autoFocus
-                            style={{ width: '100%', height: 40, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 12px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif" }}
-                            className="input-base" />
-                        </div>
-                        <div>
-                          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6, letterSpacing: '0.02em' }}>Nombre <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(opcional)</span></label>
-                          <input value={addLinkName} onChange={e => setAddLinkName(e.target.value)}
-                            placeholder="Mi enlace"
-                            onKeyDown={e => { if (e.key === 'Enter') handleAddLink(); }}
-                            style={{ width: '100%', height: 40, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 12px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif" }}
-                            className="input-base" />
-                        </div>
-                      </div>
-                      <div style={{ padding: '12px 24px 18px', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-                        <button onClick={() => setShowAddLinkModal(false)}
-                          style={{ height: 36, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '0 16px', transition: 'all 150ms' }}
-                          onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
-                          Cancelar
-                        </button>
-                        <button onClick={handleAddLink}
-                          style={{ height: 36, borderRadius: 8, border: 'none', background: course.color, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '0 20px', transition: 'all 150ms' }}
-                          onMouseEnter={e => { e.currentTarget.style.opacity = '0.9'; }}
-                          onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
-                          Agregar
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* -- EDIT LINK MODAL -- */}
-                {editLinkId && (
-                  <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                    onClick={e => { if (e.target === e.currentTarget) setEditLinkId(null); }}>
-                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)' }} />
-                    <div style={{ position: 'relative', width: 400, background: 'var(--bg-surface)', borderRadius: 16, border: '1px solid var(--border-subtle)', boxShadow: '0 24px 64px rgba(0,0,0,0.5)', overflow: 'hidden' }} className="bento-card">
-                      <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>Editar enlace</h3>
-                        <button onClick={() => setEditLinkId(null)}
-                          style={{ width: 28, height: 28, borderRadius: 7, border: 'none', background: 'var(--bg-hover)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
-                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#EF4444'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
-                          <X size={14} />
-                        </button>
-                      </div>
-                      <div style={{ padding: '18px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-                        <div>
-                          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6, letterSpacing: '0.02em' }}>URL del enlace</label>
-                          <input value={editLinkUrl} onChange={e => setEditLinkUrl(e.target.value)}
-                            placeholder="https://..."
-                            onKeyDown={e => { if (e.key === 'Enter') handleSaveEditLink(); }}
-                            autoFocus
-                            style={{ width: '100%', height: 40, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 12px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif" }}
-                            className="input-base" />
-                        </div>
-                        <div>
-                          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6, letterSpacing: '0.02em' }}>Nombre</label>
-                          <input value={editLinkName} onChange={e => setEditLinkName(e.target.value)}
-                            placeholder="Nombre del enlace"
-                            onKeyDown={e => { if (e.key === 'Enter') handleSaveEditLink(); }}
-                            style={{ width: '100%', height: 40, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 12px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif" }}
-                            className="input-base" />
-                        </div>
-                      </div>
-                      <div style={{ padding: '12px 24px 18px', display: 'flex', gap: 10, justifyContent: 'space-between' }}>
-                        <button onClick={() => { setConfirmDeleteMatId(editLinkId); setEditLinkId(null); }}
-                          style={{ height: 36, borderRadius: 8, border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.08)', color: '#EF4444', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '0 16px', transition: 'all 150ms' }}
-                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.15)'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; }}>
-                          Eliminar
-                        </button>
-                        <div style={{ display: 'flex', gap: 10 }}>
-                          <button onClick={() => setEditLinkId(null)}
-                            style={{ height: 36, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '0 16px', transition: 'all 150ms' }}
-                            onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
-                            Cancelar
-                          </button>
-                          <button onClick={handleSaveEditLink}
-                            style={{ height: 36, borderRadius: 8, border: 'none', background: course.color, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '0 20px', transition: 'all 150ms' }}
-                            onMouseEnter={e => { e.currentTarget.style.opacity = '0.9'; }}
-                            onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
-                            Guardar
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
 
                 {/* -- PLAN SESSION MODAL -- */}
                 {showPlanModal && (
@@ -7397,6 +7235,161 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
         </div>
         );
       })()}
+
+                {/* ===== ENLACE / MATERIAL (nivel raiz: se ven desde cualquier vista/tema) ===== */}
+                {/* -- DELETE MATERIAL CONFIRMATION -- */}
+                {confirmDeleteMatId && (() => {
+                  const delMat = allCourseMaterials.find(m => m.id === confirmDeleteMatId);
+                  return (
+                    <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      onClick={e => { if (e.target === e.currentTarget) setConfirmDeleteMatId(null); }}>
+                      <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)' }} />
+                      <div style={{ position: 'relative', width: 380, background: 'var(--bg-surface)', borderRadius: 16, border: '1px solid var(--border-subtle)', boxShadow: '0 24px 64px rgba(0,0,0,0.5)', overflow: 'hidden' }} className="bento-card">
+                        <div style={{ padding: '24px 24px 16px', textAlign: 'center' }}>
+                          <div style={{ width: 48, height: 48, borderRadius: 14, background: 'rgba(239,68,68,0.1)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
+                            <AlertTriangle size={24} style={{ color: '#EF4444' }} />
+                          </div>
+                          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>Eliminar material</h3>
+                          {delMat && <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--text-secondary)', fontFamily: "'Inter', sans-serif" }}>"{delMat.name || 'Sin nombre'}" sera eliminado</p>}
+                        </div>
+                        <div style={{ padding: '12px 24px 24px', display: 'flex', gap: 10, justifyContent: 'center' }}>
+                          <button onClick={() => setConfirmDeleteMatId(null)}
+                            style={{ height: 38, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 13, fontWeight: 500, cursor: 'pointer', padding: '0 20px', transition: 'all 150ms', fontFamily: "'Inter', sans-serif" }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
+                            Cancelar
+                          </button>
+                          <button onClick={() => { handleDeleteResourceFromOverview(confirmDeleteMatId); }}
+                            style={{ height: 38, borderRadius: 8, border: 'none', background: '#EF4444', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: '0 20px', transition: 'all 150ms', fontFamily: "'Inter', sans-serif" }}
+                            onMouseEnter={e => { e.currentTarget.style.opacity = '0.9'; }}
+                            onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
+                            Eliminar
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* -- ADD LINK MODAL -- */}
+                {showAddLinkModal && (
+                  <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    onClick={e => { if (e.target === e.currentTarget) setShowAddLinkModal(false); }}>
+                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)' }} />
+                    <div style={{ position: 'relative', width: 400, background: 'var(--bg-surface)', borderRadius: 16, border: '1px solid var(--border-subtle)', boxShadow: '0 24px 64px rgba(0,0,0,0.5)', overflow: 'hidden' }} className="bento-card">
+                      <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div>
+                          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>Agregar enlace</h3>
+                          {(() => {
+                            const target = parsedTopics.find(t => t.id === addLinkTargetTopic);
+                            return target ? (
+                              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>Se guardará en el tema: <span style={{ color: course.color, fontWeight: 600 }}>{target.title}</span></div>
+                            ) : null;
+                          })()}
+                        </div>
+                        <button onClick={() => setShowAddLinkModal(false)}
+                          style={{ width: 28, height: 28, borderRadius: 7, border: 'none', background: 'var(--bg-hover)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#EF4444'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
+                          <X size={14} />
+                        </button>
+                      </div>
+                      <div style={{ padding: '18px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6, letterSpacing: '0.02em' }}>URL del enlace</label>
+                          <input value={addLinkUrl} onChange={e => setAddLinkUrl(e.target.value)}
+                            placeholder="https://..."
+                            onKeyDown={e => { if (e.key === 'Enter') handleAddLink(); }}
+                            autoFocus
+                            style={{ width: '100%', height: 40, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 12px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif" }}
+                            className="input-base" />
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6, letterSpacing: '0.02em' }}>Nombre <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(opcional)</span></label>
+                          <input value={addLinkName} onChange={e => setAddLinkName(e.target.value)}
+                            placeholder="Mi enlace"
+                            onKeyDown={e => { if (e.key === 'Enter') handleAddLink(); }}
+                            style={{ width: '100%', height: 40, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 12px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif" }}
+                            className="input-base" />
+                        </div>
+                      </div>
+                      <div style={{ padding: '12px 24px 18px', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                        <button onClick={() => setShowAddLinkModal(false)}
+                          style={{ height: 36, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '0 16px', transition: 'all 150ms' }}
+                          onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
+                          Cancelar
+                        </button>
+                        <button onClick={handleAddLink}
+                          style={{ height: 36, borderRadius: 8, border: 'none', background: course.color, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '0 20px', transition: 'all 150ms' }}
+                          onMouseEnter={e => { e.currentTarget.style.opacity = '0.9'; }}
+                          onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
+                          Agregar
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* -- EDIT LINK MODAL -- */}
+                {editLinkId && (
+                  <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    onClick={e => { if (e.target === e.currentTarget) setEditLinkId(null); }}>
+                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)' }} />
+                    <div style={{ position: 'relative', width: 400, background: 'var(--bg-surface)', borderRadius: 16, border: '1px solid var(--border-subtle)', boxShadow: '0 24px 64px rgba(0,0,0,0.5)', overflow: 'hidden' }} className="bento-card">
+                      <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>Editar enlace</h3>
+                        <button onClick={() => setEditLinkId(null)}
+                          style={{ width: 28, height: 28, borderRadius: 7, border: 'none', background: 'var(--bg-hover)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#EF4444'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
+                          <X size={14} />
+                        </button>
+                      </div>
+                      <div style={{ padding: '18px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6, letterSpacing: '0.02em' }}>URL del enlace</label>
+                          <input value={editLinkUrl} onChange={e => setEditLinkUrl(e.target.value)}
+                            placeholder="https://..."
+                            onKeyDown={e => { if (e.key === 'Enter') handleSaveEditLink(); }}
+                            autoFocus
+                            style={{ width: '100%', height: 40, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 12px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif" }}
+                            className="input-base" />
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6, letterSpacing: '0.02em' }}>Nombre</label>
+                          <input value={editLinkName} onChange={e => setEditLinkName(e.target.value)}
+                            placeholder="Nombre del enlace"
+                            onKeyDown={e => { if (e.key === 'Enter') handleSaveEditLink(); }}
+                            style={{ width: '100%', height: 40, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 12px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif" }}
+                            className="input-base" />
+                        </div>
+                      </div>
+                      <div style={{ padding: '12px 24px 18px', display: 'flex', gap: 10, justifyContent: 'space-between' }}>
+                        <button onClick={() => { setConfirmDeleteMatId(editLinkId); setEditLinkId(null); }}
+                          style={{ height: 36, borderRadius: 8, border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.08)', color: '#EF4444', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '0 16px', transition: 'all 150ms' }}
+                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.15)'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; }}>
+                          Eliminar
+                        </button>
+                        <div style={{ display: 'flex', gap: 10 }}>
+                          <button onClick={() => setEditLinkId(null)}
+                            style={{ height: 36, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '0 16px', transition: 'all 150ms' }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
+                            Cancelar
+                          </button>
+                          <button onClick={handleSaveEditLink}
+                            style={{ height: 36, borderRadius: 8, border: 'none', background: course.color, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '0 20px', transition: 'all 150ms' }}
+                            onMouseEnter={e => { e.currentTarget.style.opacity = '0.9'; }}
+                            onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
+                            Guardar
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
       {/* ===== MOVER A GRUPO (ventana emergente) ===== */}
       {moveToGroupMat && (

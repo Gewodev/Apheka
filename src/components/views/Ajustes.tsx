@@ -1982,7 +1982,7 @@ export default function Ajustes() {
                           id: t.id, title: t.title, artist: t.artist,
                           coverImage: t.coverImage, coverUrl: t.coverUrl,
                           duration: t.duration, source: t.source,
-                          url: t.url, filePath: t.filePath,
+                          url: t.url, filePath: t.filePath, audioFile: t.audioFile,
                           isFavorite: t.isFavorite, listenedTime: t.listenedTime ?? 0,
                         }));
                         // writeTextFile (texto) en vez de writeFile (binario): el permiso

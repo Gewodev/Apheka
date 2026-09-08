@@ -6,7 +6,7 @@ import { get, set, del } from 'idb-keyval';
 import { extractAudioMetadata } from '../lib/audioMetadata';
 import { format, parseISO, subDays, addDays } from 'date-fns';
 import { appDataDir, appCacheDir, join, extname } from '@tauri-apps/api/path';
-import { saveAllTracks, loadAllTracks, copyAudioToStorage, removeAudioFromStorage, clearAllAudioFiles, exportMusicLibrary as exportMusicToDir, importMusicLibrary as importMusicFromDir, saveTrackMetadata, getAllTracksMetadata, deleteTrackMetadata, clearAllTracksMetadata, addTrackFileToDB, getTrackFileFromDB, deleteTrackFileFromDB, clearAllTrackFiles, storeTrackFileInDB } from '../lib/musicDb';
+import { saveAllTracks, loadAllTracks, copyAudioToStorage, removeAudioFromStorage, clearAllAudioFiles, exportMusicLibrary as exportMusicToDir, importMusicLibrary as importMusicFromDir, saveTrackMetadata, getAllTracksMetadata, deleteTrackMetadata, clearAllTracksMetadata, addTrackFileToDB, getTrackFileFromDB, deleteTrackFileFromDB, clearAllTrackFiles, storeTrackFileInDB, buildAudioFileName, toDisplayName, renameAudioInStorage, getMusicDir } from '../lib/musicDb';
 import { generalYtControl } from '../lib/ytEngine';
 
 export const globalAudio = new Audio();
@@ -311,7 +311,8 @@ export interface Track {
   coverUrl?: string;
   isFavorite: boolean;
   listenedTime: number; // seconds
-  filePath?: string;  // original file path for zero-copy (not copied to app storage)
+  filePath?: string;  // ruta original de donde se importó (referencia/dedup)
+  audioFile?: string; // nombre del archivo dentro de la carpeta de música propia
 }
 
 export interface Playlist {
@@ -553,6 +554,7 @@ interface AppContextType extends AppState {
   cleanupMissingLocalFiles: () => Promise<{ removed: number }>;
   importLocalZeroCopy: (paths: string[], isFolder?: boolean) => Promise<number>;
   removeDuplicateTracks: () => Promise<number>;
+  normalizeMusicFilenames: () => Promise<number>;
   setCoverModalTrackId: Dispatch<SetStateAction<string | null>>;
   isAudioLoading: boolean;
   currentTrackId: string | null;
@@ -2377,15 +2379,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return id;
   }, []);
 
-  const updateTrack = useCallback((id: string, updates: Partial<Track>) => {
+  // Si cambia título/artista de una canción local, su archivo en la carpeta
+  // propia se renombra igual ("Artista - Título.ext") para que la carpeta
+  // siempre refleje los datos. Si el renombrado falla, se conserva la ruta
+  // anterior (la canción sigue sonando).
+  const updateTrack = useCallback(async (id: string, updates: Partial<Track>) => {
     const current = tracksRef.current.find(t => t.id === id);
     if (!current) return;
-    const updated = { ...current, ...updates };
+    let updated: Track = { ...current, ...updates };
+    const nameChanged =
+      current.source === 'local' &&
+      (updates.title !== undefined || updates.artist !== undefined) &&
+      (updated.title !== current.title || updated.artist !== current.artist);
+    if (nameChanged && isTauri()) {
+      try {
+        const ext = (updated.url || current.url || 'mp3').split('.').pop() || 'mp3';
+        const taken = new Set(
+          tracksRef.current.filter(t => t.id !== id).map(t => (t.audioFile || '').toLowerCase()).filter(Boolean)
+        );
+        const fileName = buildAudioFileName(updated.artist, updated.title, ext, taken);
+        const oldBase = current.audioFile || (current.url || '').split('/').pop() || '';
+        if (fileName && fileName !== oldBase) {
+          const newFull = await renameAudioInStorage(oldBase, fileName);
+          updated = { ...updated, url: newFull, audioFile: fileName };
+        }
+      } catch { /* se conserva la ruta anterior */ }
+    }
     setTracks(prev => prev.map(t => t.id === id ? updated : t));
     saveTrackMetadata(updated).catch((e: any) => console.error('Error saving track metadata:', e));
   }, []);
 
   const deleteTrack = useCallback((id: string) => {
+    const doomed = tracksRef.current.find(t => t.id === id);
     if (currentTrackId === id) {
       setCurrentTrackId(null);
       setIsPlayingMusic(false);
@@ -2396,7 +2421,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setTracks(prev => prev.filter(t => t.id !== id));
     deleteTrackMetadata(id).catch((e: any) => console.error('Error deleting track metadata:', e));
     deleteTrackFileFromDB(id).catch(() => {});
-    removeAudioFromStorage(id).catch(() => {});
+    removeAudioFromStorage(id, doomed?.audioFile).catch(() => {});
   }, [currentTrackId]);
 
   const toggleTrackFavorite = useCallback((id: string) => {
@@ -2780,6 +2805,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     setImportState({ active: true, current: 0, total, fileName: '', phase: 'loading_file', phaseProgress: 0, overallProgress: 0 });
     const newTracks: Track[] = [];
+    // Nombres ocupados en la carpeta propia (evita choques "Artista - Título").
+    const takenNames = new Set(
+      tracksRef.current.map(t => (t.audioFile || (t.url || '').split('/').pop() || '').toLowerCase()).filter(Boolean)
+    );
     try {
       for (let i = 0; i < fresh.length; i++) {
         const path = fresh[i];
@@ -2798,13 +2827,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
             }
           }
           if (!fileData) throw new Error('No se pudo leer el archivo');
-          // 2) Metadata con el buffer ya leído (sin re-leer ni fetch en cascada)
+          // 2) Metadata con el buffer ya leído (sin re-leer ni fetch en cascada).
+          // Títulos/artistas normalizados: sin espacios dobles, primera letra en mayúscula.
           const meta = await extractAudioMetadata(path, fileData);
+          const title = toDisplayName(meta.title || name.replace(/\.[^/.]+$/, '')) || 'Sin título';
+          const artist = toDisplayName(meta.artist || '');
           const id = crypto.randomUUID();
-          // 3) Copia gestionada a la carpeta propia (esta es la que se reproduce)
+          // 3) Copia gestionada a la carpeta propia con nombre legible
+          // "Artista - Título.ext" (esta es la que se reproduce).
+          const ext = (path.split('.').pop() || 'mp3').toLowerCase();
+          const fileName = buildAudioFileName(artist, title, ext, takenNames);
           let storedPath = path;
+          let storedFile: string | undefined;
           try {
-            storedPath = await copyAudioToStorage(path, id, fileData);
+            storedPath = await copyAudioToStorage(path, id, fileData, fileName);
+            storedFile = fileName;
           } catch {
             storedPath = path; // fallback: referencia al original
           }
@@ -2814,8 +2851,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           } catch { /* el blob es optimización, no crítico */ }
           newTracks.push({
             id,
-            title: meta.title || name.replace(/\.[^/.]+$/, ''),
-            artist: meta.artist || '',
+            title,
+            artist,
             duration: Math.round(meta.duration || 0),
             source: 'local',
             url: storedPath,
@@ -2823,6 +2860,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             isFavorite: false,
             listenedTime: 0,
             filePath: path,
+            audioFile: storedFile,
           });
         } catch (err) {
           console.error('Error importing:', path, err);
@@ -2840,6 +2878,79 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setImportState({ active: false, current: total, total, fileName: '', phase: 'finished', phaseProgress: 100, overallProgress: 100 });
     }
   }, [collectAudioFiles]);
+
+  // --- Normaliza nombres de la carpeta propia a "Artista - Título.ext" ---
+  // Una sola vez (flag local): renombra copias legacy `<id>.ext` o con nombre
+  // distinto a los datos actuales. Nunca borra audio: si el renombrado falla,
+  // la canción conserva su ruta anterior y sigue sonando.
+  const normalizeMusicFilenames = useCallback(async (): Promise<number> => {
+    if (!isTauri()) return 0;
+    let fixed = 0;
+    try {
+      const musicDir = await getMusicDir();
+      const taken = new Set(
+        tracksRef.current.map(t => (t.audioFile || (t.url || '').split('/').pop() || '').toLowerCase()).filter(Boolean)
+      );
+      for (const t of tracksRef.current) {
+        if (t.source !== 'local' || !t.url) continue;
+        // Mayúsculas/minúsculas donde corresponden (solo si viene todo en un caso).
+        const newTitle = toDisplayName(t.title) || t.title;
+        const newArtist = toDisplayName(t.artist);
+        const normUrl = normalizeLocalPath(t.url);
+        const normDir = normalizeLocalPath(musicDir);
+        if (!normUrl.toLowerCase().startsWith(normDir.toLowerCase() + '/')) {
+          // Fuera de la carpeta propia: solo corrige el casing de los datos.
+          if (newTitle !== t.title || newArtist !== t.artist) {
+            const updated: Track = { ...t, title: newTitle, artist: newArtist };
+            setTracks(prev => prev.map(x => x.id === t.id ? updated : x));
+            await saveTrackMetadata(updated).catch(() => {});
+            fixed++;
+          }
+          continue;
+        }
+        const currentBase = normUrl.split('/').pop() || '';
+        if (!currentBase) continue;
+        const ext = (currentBase.split('.').pop() || 'mp3').toLowerCase();
+        const takenWithoutSelf = new Set([...taken].filter(x => x !== currentBase.toLowerCase()));
+        const wanted = buildAudioFileName(newArtist, newTitle, ext, takenWithoutSelf);
+        const casingChanged = newTitle !== t.title || newArtist !== t.artist;
+        if (wanted.toLowerCase() === currentBase.toLowerCase()) {
+          if (!t.audioFile || casingChanged) {
+            const updated: Track = { ...t, title: newTitle, artist: newArtist, audioFile: currentBase };
+            setTracks(prev => prev.map(x => x.id === t.id ? updated : x));
+            saveTrackMetadata(updated).catch(() => {});
+            if (casingChanged) fixed++;
+          }
+          continue;
+        }
+        try {
+          const newFull = await renameAudioInStorage(currentBase, wanted);
+          taken.delete(currentBase.toLowerCase());
+          taken.add(wanted.toLowerCase());
+          const updated: Track = { ...t, title: newTitle, artist: newArtist, url: newFull, audioFile: wanted };
+          setTracks(prev => prev.map(x => x.id === t.id ? updated : x));
+          await saveTrackMetadata(updated).catch(() => {});
+          fixed++;
+        } catch { /* conserva la ruta anterior */ }
+      }
+    } catch { /* noop */ }
+    return fixed;
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated || !isTauri()) return;
+    try {
+      if (localStorage.getItem('owa_music_filenames_v1') === '1') return;
+    } catch { return; }
+    normalizeMusicFilenames()
+      .then(n => {
+        try { localStorage.setItem('owa_music_filenames_v1', '1'); } catch { /* noop */ }
+        if (n > 0) addNotification(`${n} ${n === 1 ? 'archivo de música renombrado' : 'archivos de música renombrados'} a "Artista - Título"`, 'success');
+      })
+      .catch(() => {
+        try { localStorage.setItem('owa_music_filenames_v1', '1'); } catch { /* noop */ }
+      });
+  }, [hydrated, normalizeMusicFilenames]);
 
    const playTrack = useCallback((id: string) => {
     repeatOnePlayedRef.current = false;
@@ -4126,7 +4237,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addEvent, updateEvent, deleteEvent,
     addHabit, updateHabit, deleteHabit, setHabits,
     addTrack, updateTrack, deleteTrack, toggleTrackFavorite, importLocalTracks,
-    scanFolderForAudio, checkLocalFileExists, cleanupMissingLocalFiles, importLocalZeroCopy, removeDuplicateTracks,
+    scanFolderForAudio, checkLocalFileExists, cleanupMissingLocalFiles, importLocalZeroCopy, removeDuplicateTracks, normalizeMusicFilenames,
     playTrack, toggleMusicPlayback, setIsPlayingMusic, clearCurrentTrack, setMusicVolume: setMusicVolumeCb, setMusicProgress: setMusicProgressCb, setMusicProgressRaw: setMusicProgress,
     setShuffleMode, setRepeatMode, setMusicQueue, setQueueSource, clearAllMusicData,
     exportMusicLibrary, importMusicLibrary,

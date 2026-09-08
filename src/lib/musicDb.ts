@@ -1,6 +1,76 @@
 import type { Track } from '../store/AppContext';
-import { readFile, writeFile, mkdir, exists, remove } from '@tauri-apps/plugin-fs';
+import { readFile, writeFile, mkdir, exists, remove, copyFile } from '@tauri-apps/plugin-fs';
 import { appDataDir, join } from '@tauri-apps/api/path';
+
+// --- Nombres de archivo legibles: "Artista - Título.ext" ---
+// Sin caracteres prohibidos en Windows, sin puntos/espacios al final,
+// longitud acotada y primera letra en mayúscula (el resto se respeta tal cual
+// para no romper nombres como AC/DC o will.i.am).
+
+export function sanitizeFileName(s: string): string {
+  const clean = String(s || '')
+    .replace(/[<>:"/\\|?*\u0000-\u001F]/g, '')
+    .replace(/[. ]+$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 100);
+  return clean;
+}
+
+const MINOR_WORDS_ES = new Set([
+  'de', 'la', 'el', 'los', 'las', 'y', 'e', 'o', 'u', 'en', 'con', 'por',
+  'para', 'sin', 'sobre', 'entre', 'del', 'al', 'un', 'una', 'unos', 'unas',
+  'lo', 'le', 'les', 'se', 'su', 'sus', 'mi', 'tu', 'que', 'como', 'más', 'mas',
+]);
+
+// Mayúsculas tipo título en español: primera letra de cada palabra en
+// mayúscula salvo artículos/preposiciones/conjunciones (que van en minúscula
+// excepto al inicio o tras signo). SOLO se aplica si el texto viene TODO en
+// mayúsculas o TODO en minúsculas; si ya mezcla (AC/DC, Dj Tiësto, will.i.am),
+// se respeta tal cual.
+export function toTitleCaseEs(s: string): string {
+  const clean = String(s || '').replace(/\s+/g, ' ').trim();
+  if (!clean) return clean;
+  const letters = clean.replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/g, '');
+  if (!letters) return clean;
+  const hasUpper = /[A-ZÁÉÍÓÚÜÑ]/.test(letters);
+  const hasLower = /[a-záéíóúüñ]/.test(letters);
+  if (hasUpper && hasLower) return clean;
+  const lower = clean.toLowerCase();
+  const parts = lower.split(' ');
+  return parts
+    .map((w, i) => {
+      if (!w) return w;
+      if (i > 0 && MINOR_WORDS_ES.has(w) && !/[¿¡("'.…!?:\-]$/.test(parts[i - 1])) {
+        return w;
+      }
+      return w.charAt(0).toUpperCase() + w.slice(1);
+    })
+    .join(' ');
+}
+
+export function toDisplayName(s: string): string {
+  return toTitleCaseEs(s);
+}
+
+// Devuelve un nombre único dentro de `taken` (agrega " (2)", " (3)"... si choca).
+export function buildAudioFileName(artist: string, title: string, ext: string, taken?: Set<string>): string {
+  const a = sanitizeFileName(artist) || 'Desconocido';
+  const t = sanitizeFileName(title) || 'Sin título';
+  const e = (ext || 'mp3').toLowerCase().replace(/[^a-z0-9]/g, '') || 'mp3';
+  let base = `${a} - ${t}`.slice(0, 100);
+  let name = `${base}.${e}`;
+  if (taken) {
+    let n = 2;
+    const lower = new Set([...taken].map(x => x.toLowerCase()));
+    while (lower.has(name.toLowerCase())) {
+      const suff = ` (${n++})`;
+      name = `${base.slice(0, 100 - suff.length - e.length - 1)}${suff}.${e}`;
+    }
+    taken.add(name);
+  }
+  return name;
+}
 
 const DB_NAME = 'OwaMusicDB';
 const METADATA_STORE_NAME = 'tracks_metadata';
@@ -204,17 +274,40 @@ export async function ensureMusicDir(): Promise<string> {
   return dir;
 }
 
-export async function copyAudioToStorage(sourcePath: string, trackId: string, preloadedData?: Uint8Array): Promise<string> {
+export async function copyAudioToStorage(sourcePath: string, trackId: string, preloadedData?: Uint8Array, fileName?: string): Promise<string> {
   const musicDir = await ensureMusicDir();
   const ext = (sourcePath.split('.').pop() || 'mp3').toLowerCase();
-  const destPath = await join(musicDir, `${trackId}.${ext}`);
+  const destPath = await join(musicDir, fileName || `${trackId}.${ext}`);
   const data = preloadedData || await readFile(sourcePath);
   await writeFile(destPath, data);
   return destPath;
 }
 
-export async function removeAudioFromStorage(trackId: string): Promise<void> {
+// Renombra dentro de la carpeta propia (copy+delete: no requiere permiso rename).
+// Devuelve la ruta nueva o lanza si falla (el llamador conserva la anterior).
+export async function renameAudioInStorage(oldFileName: string, newFileName: string): Promise<string> {
+  if (!oldFileName || !newFileName || oldFileName === newFileName) {
+    throw new Error('Nada que renombrar');
+  }
   const musicDir = await getMusicDir();
+  const oldPath = await join(musicDir, oldFileName);
+  const newPath = await join(musicDir, newFileName);
+  if (!(await exists(oldPath))) throw new Error('El archivo original ya no existe');
+  if (await exists(newPath)) throw new Error('Ya existe un archivo con ese nombre');
+  await copyFile(oldPath, newPath);
+  await remove(oldPath).catch(() => {});
+  return newPath;
+}
+
+export async function removeAudioFromStorage(trackId: string, fileName?: string): Promise<void> {
+  const musicDir = await getMusicDir();
+  if (fileName) {
+    try {
+      const p = await join(musicDir, fileName);
+      if (await exists(p)) await remove(p);
+      return;
+    } catch { /* cae al modo legacy */ }
+  }
   const exts = ['mp3', 'wav', 'flac', 'ogg', 'm4a', 'aac', 'wma', 'opus', 'mp4'];
   for (const ext of exts) {
     const p = await join(musicDir, `${trackId}.${ext}`);
