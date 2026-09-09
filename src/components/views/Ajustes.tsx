@@ -2012,13 +2012,24 @@ export default function Ajustes() {
                         const norm = (s: any) =>
                           String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
                         let byId = 0, byPath = 0, byName = 0, missing = 0;
-                        for (const meta of imported) {
+                        for (const raw of imported) {
+                          // Claves tolerantes: acepta el JSON de corrección (title/url/filePath/id/artist)
+                          // y variantes con mayúscula o en español (Title/Titulo/File/ruta/Artista).
+                          const meta = {
+                            id: (raw as any).id ?? (raw as any).Id ?? (raw as any).ID,
+                            filePath: (raw as any).filePath ?? (raw as any).url ?? (raw as any).File ?? (raw as any).ruta ?? (raw as any).path,
+                            title: (raw as any).title ?? (raw as any).Title ?? (raw as any).titulo ?? (raw as any).Titulo ?? (raw as any)['título'],
+                            artist: (raw as any).artist ?? (raw as any).Artist ?? (raw as any).artista ?? (raw as any).Artista,
+                            coverImage: (raw as any).coverImage,
+                            coverUrl: (raw as any).coverUrl,
+                            isFavorite: (raw as any).isFavorite,
+                          };
                           // 1) ID único (exportado por esta misma app)
                           let existing = tracks.find((t: any) => t.id === meta.id);
                           let how = 'id';
                           // 2) Ruta original o URL (misma canción, distinto ID; \ y / equivalen)
-                          if (!existing && (meta.filePath || meta.url)) {
-                            const p = String(meta.filePath || meta.url).replace(/\\/g, '/');
+                          if (!existing && meta.filePath) {
+                            const p = String(meta.filePath).replace(/\\/g, '/');
                             existing = tracks.find((t: any) => String(t.filePath || t.url || '').replace(/\\/g, '/') === p);
                             how = 'ruta';
                           }
@@ -2029,12 +2040,17 @@ export default function Ajustes() {
                             how = 'nombre';
                           }
                           if (existing) {
+                            // skipRename: los archivos se renombran después, de una sola
+                            // vez, con el botón "Normalizar nombres" de Música.
+                            // toDisplayName deja título/artista con mayúsculas y tildes
+                            // donde corresponden (solo si vienen planos).
+                            const { toDisplayName: toDN } = await import('../../lib/musicDb');
                             updateTrack(existing.id, {
-                              title: meta.title ?? existing.title,
-                              artist: meta.artist ?? existing.artist,
+                              title: meta.title ? toDN(meta.title) : existing.title,
+                              artist: meta.artist || meta.artist === '' ? toDN(meta.artist) : existing.artist,
                               coverImage: meta.coverImage ?? (meta as any).coverUrl ?? existing.coverImage,
                               isFavorite: meta.isFavorite ?? existing.isFavorite,
-                            });
+                            }, true);
                             if (how === 'id') byId++;
                             else if (how === 'ruta') byPath++;
                             else byName++;

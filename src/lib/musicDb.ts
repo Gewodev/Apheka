@@ -49,8 +49,55 @@ export function toTitleCaseEs(s: string): string {
     .join(' ');
 }
 
+// Tildes que se pueden restaurar con seguridad: la forma sin tilde casi
+// nunca es correcta en títulos/nombres (se excluyen ambiguas como
+// esta/solo/papa/tu/mi/si/para/como/martin/torres/etc.).
+const ACCENT_DICT: Record<string, string> = {
+  cancion: 'canci\u00F3n', corazon: 'coraz\u00F3n', adios: 'adi\u00F3s',
+  limon: 'lim\u00F3n', frances: 'franc\u00E9s', avion: 'avi\u00F3n',
+  arbol: '\u00E1rbol', angel: '\u00E1ngel', pasion: 'pasi\u00F3n',
+  ilusion: 'ilusi\u00F3n', musica: 'm\u00FAsica', camara: 'c\u00E1mara',
+  telefono: 'tel\u00E9fono', lapiz: 'l\u00E1piz', album: '\u00E1lbum',
+  heroe: 'h\u00E9roe', dia: 'd\u00EDa', mia: 'm\u00EDa', tio: 't\u00EDo',
+  rio: 'r\u00EDo', duo: 'd\u00FAo', facil: 'f\u00E1cil', dificil: 'dif\u00EDcil',
+  mas: 'm\u00E1s', atras: 'atr\u00E1s', despues: 'despu\u00E9s',
+  tambien: 'tambi\u00E9n', jamas: 'jam\u00E1s', ademas: 'adem\u00E1s',
+  exito: '\u00E9xito', exitos: '\u00E9xitos', ultimo: '\u00FAltimo',
+  ultimos: '\u00FAltimos', proximo: 'pr\u00F3ximo',
+  jose: 'Jos\u00E9', maria: 'Mar\u00EDa', jesus: 'Jes\u00FAs',
+  ramon: 'Ram\u00F3n', ruben: 'Rub\u00E9n', nino: 'Ni\u00F1o',
+  suarez: 'Su\u00E1rez', lopez: 'L\u00F3pez', perez: 'P\u00E9rez',
+  garcia: 'Garc\u00EDa', sanchez: 'S\u00E1nchez', diaz: 'D\u00EDaz',
+  gomez: 'G\u00F3mez', hernandez: 'Hern\u00E1ndez', alvarez: '\u00C1lvarez',
+  rodriguez: 'Rodr\u00EDguez', fernandez: 'Fern\u00E1ndez',
+  jimenez: 'Jim\u00E9nez', nunez: 'N\u00FA\u00F1ez', ibanez: 'Ib\u00E1\u00F1ez',
+  ramirez: 'Ram\u00EDrez', gonzalez: 'Gonz\u00E1lez', cardenas: 'C\u00E1rdenas',
+  roman: 'Rom\u00E1n', simon: 'Sim\u00F3n', tomas: 'Tom\u00E1s',
+  nicolas: 'Nicol\u00E1s', andres: 'Andr\u00E9s', sebastian: 'Sebasti\u00E1n',
+  victor: 'V\u00EDctor', oscar: '\u00D3scar', cesar: 'C\u00E9sar',
+  hector: 'H\u00E9ctor', adrian: 'Adri\u00E1n', ivan: 'Iv\u00E1n',
+  raul: 'Ra\u00FAl', saul: 'Sa\u00FAl',
+};
+
+// Restaura tildes palabra por palabra (solo ASCII puro sin diacríticos;
+// si la palabra ya trae tildes u otro formato intencional, se respeta).
+export function restoreAccents(s: string): string {
+  return String(s || '').split(/(\s+)/).map(tok => {
+    if (/^\s*$/.test(tok)) return tok;
+    const m = tok.match(/^([^A-Za-z]*)([A-Za-z]+)([^A-Za-z]*)$/);
+    if (!m) return tok;
+    const [, pre, core, post] = m;
+    if (/[^\x00-\x7F]/.test(core)) return tok;
+    const hit = ACCENT_DICT[core.toLowerCase()];
+    if (!hit) return tok;
+    if (core === core.toUpperCase() && core.length > 1) return pre + hit.toUpperCase() + post;
+    if (core === core.toLowerCase()) return pre + hit.toLowerCase() + post;
+    return pre + hit + post;
+  }).join('');
+}
+
 export function toDisplayName(s: string): string {
-  return toTitleCaseEs(s);
+  return restoreAccents(toTitleCaseEs(s));
 }
 
 // Devuelve un nombre único dentro de `taken` (agrega " (2)", " (3)"... si choca).

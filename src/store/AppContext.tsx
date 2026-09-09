@@ -545,7 +545,7 @@ interface AppContextType extends AppState {
   deleteHabit: (id: string) => void;
   setHabits: Dispatch<SetStateAction<Habit[]>>;
   addTrack: (track: Omit<Track, 'id'>) => string;
-  updateTrack: (id: string, updates: Partial<Track>) => void;
+  updateTrack: (id: string, updates: Partial<Track>, skipRename?: boolean) => void;
   deleteTrack: (id: string) => void;
   toggleTrackFavorite: (id: string) => void;
   importLocalTracks: (paths: string[]) => Promise<void>;
@@ -2382,12 +2382,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Si cambia título/artista de una canción local, su archivo en la carpeta
   // propia se renombra igual ("Artista - Título.ext") para que la carpeta
   // siempre refleje los datos. Si el renombrado falla, se conserva la ruta
-  // anterior (la canción sigue sonando).
-  const updateTrack = useCallback(async (id: string, updates: Partial<Track>) => {
+  // anterior (la canción sigue sonando). `skipRename` es para importaciones
+  // masivas: los renombres los hace después "Normalizar nombres" de una vez.
+  const updateTrack = useCallback(async (id: string, updates: Partial<Track>, skipRename = false) => {
     const current = tracksRef.current.find(t => t.id === id);
     if (!current) return;
     let updated: Track = { ...current, ...updates };
     const nameChanged =
+      !skipRename &&
       current.source === 'local' &&
       (updates.title !== undefined || updates.artist !== undefined) &&
       (updated.title !== current.title || updated.artist !== current.artist);
