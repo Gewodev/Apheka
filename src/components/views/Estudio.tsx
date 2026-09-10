@@ -23,7 +23,7 @@ const REVIEW_LEVEL_COLORS = ['#EF4444', '#F97316', '#F59E0B', '#FBBF24', '#EAB30
 
 /** Convert a UTC ISO timestamp to local YYYY-MM-DD (avoids UTC vs local date mismatch) */
 function toLocalDate(iso: string): string {
-  try { return format(new Date(iso), 'yyyy-MM-dd'); } catch { return iso.slice(0, 10); }
+  try { return format(new Date(iso), 'yyyy-MM-dd'); } catch { return String(iso || '').slice(0, 10); }
 }
 
 function getGoalForDay(dayStr: string, currentGoal: number, dailyGoalHistory?: Record<string, number>, initialDailyGoal?: number): number {
@@ -516,14 +516,18 @@ export default function Estudio() {
   const studyFormatted = studyH > 0 ? `${studyH}h ${studyM}m` : `${studyM}m`;
 
   const efficiencyPct = useMemo(() => {
-    const weekSessions = studySessions.filter(s => toLocalDate(s.startedAt) >= weekStartStr);
+    const weekAll = (studySessions || []).filter(s => s && toLocalDate(s.startedAt) >= weekStartStr);
+    // Las sesiones marcadas como distracción NO son estudio: se excluyen del
+    // foco/flujo y se miden aparte (antes inflaban la meta y los bloques).
+    const weekSessions = weekAll.filter(s => !s.isDistraction && s.type !== 'break');
+    const distSessions = weekAll.filter(s => s.isDistraction);
     const clamp = (v: number, mn: number, mx: number) => Math.max(mn, Math.min(v, mx));
 
-    const focusSecs = weekSessions.reduce((acc, s) => acc + s.duration, 0);
+    const focusSecs = weekSessions.reduce((acc, s) => acc + (s.duration || 0), 0);
     const pauseSecs = weekSessions.reduce((acc, s) => acc + (s.pauseDuration || 0), 0);
-    const distractions = weekSessions.reduce((acc, s) => acc + (s.pauseCount || 0), 0);
-    const breakSecs = studySessions.filter(s => toLocalDate(s.startedAt) >= weekStartStr && s.type === 'break')
-      .reduce((acc, s) => acc + s.duration, 0);
+    const distSecs = distSessions.reduce((acc, s) => acc + (s.duration || 0), 0);
+    const breakSecs = weekAll.filter(s => s.type === 'break')
+      .reduce((acc, s) => acc + (s.duration || 0), 0);
 
     if (focusSecs <= 0 && weekSessions.length === 0) return 0;
 
@@ -535,11 +539,12 @@ export default function Estudio() {
       ? clamp(focusSecs / (dailyGoalSecs * 0.95), 0, 1)
       : 0.8;
 
-    // ScoreEnfoque = eficiencia × penalización por distracciones
-    const totalOp = focusSecs + pauseSecs + distractions * 60;
+    // ScoreEnfoque = eficiencia × penalización por distracciones REALES
+    // (sesiones isDistraction con su duración verdadera, no clicks de pausa).
+    const totalOp = focusSecs + pauseSecs + distSecs;
     const eficiencia = totalOp > 0 ? focusSecs / totalOp : 1;
     const hoursStudy = focusMin / 60;
-    const distPerHour = hoursStudy > 0 ? distractions / hoursStudy : 0;
+    const distPerHour = hoursStudy > 0 ? distSessions.length / hoursStudy : 0;
     const scoreEnfoque = clamp(eficiencia * Math.exp(-0.05 * distPerHour), 0, 1);
 
     // ScoreFlujo según duración promedio de bloques de estudio
@@ -564,9 +569,10 @@ export default function Estudio() {
       : 0.5;
 
     // ScorePercepcion — user's 1-20 self-rating blended in (sesiones planificadas usan 1-10)
+    // (?? y NO ||: un velocímetro en 0 es un cero real, no un 10 por defecto)
     const evaluatedSessions = weekSessions.filter(s => s.volmeter !== undefined && s.volmeter !== null);
     const scorePercepcion = evaluatedSessions.length > 0
-      ? evaluatedSessions.reduce((sum, s) => sum + ((s.volmeter || 10) / (s.plannedSessionId ? 10 : 20)), 0) / evaluatedSessions.length
+      ? evaluatedSessions.reduce((sum, s) => sum + ((s.volmeter ?? 10) / (s.plannedSessionId ? 10 : 20)), 0) / evaluatedSessions.length
       : 0.5;
 
     // IRE compuesto — percepcion weighs in when user has rated sessions
@@ -636,11 +642,13 @@ export default function Estudio() {
           : 100,
         sessionIre: (() => {
           const clamp = (v: number, mn: number, mx: number) => Math.max(mn, Math.min(v, mx));
-          const focusMin = s.duration / 60;
-          const eff = s.duration + s.pauseDuration + (s.pauseCount || 0) * 60 > 0
-            ? s.duration / (s.duration + s.pauseDuration + (s.pauseCount || 0) * 60) : 1;
+          const dur = s.duration || 0;
+          const focusMin = dur / 60;
+          const eff = dur + s.pauseDuration + (s.pauseCount || 0) * 60 > 0
+            ? dur / (dur + s.pauseDuration + (s.pauseCount || 0) * 60) : 1;
           const distPerHour = focusMin > 0 ? ((s.pauseCount || 0) / (focusMin / 60)) : 0;
-          const sm = pomGoal > 0 ? clamp(s.duration / (pomGoal * 0.95), 0, 1) : 0.5;
+          const pomGoal = settings.pomodoroTime;
+          const sm = pomGoal > 0 ? clamp(dur / (pomGoal * 0.95), 0, 1) : 0.5;
           const se = clamp(eff * Math.exp(-0.05 * distPerHour), 0, 1);
           let sf = 0;
           if (focusMin < 5) sf = clamp(focusMin / 10, 0, 0.5);
@@ -649,7 +657,7 @@ export default function Estudio() {
           else if (focusMin <= 90) sf = 0.9;
           else sf = 0.7;
           const hasVol = s.volmeter !== undefined && s.volmeter !== null;
-          const sp = hasVol ? (s.volmeter || 10) / (s.plannedSessionId ? 10 : 20) : 0.5;
+          const sp = hasVol ? ((s.volmeter ?? 10) / (s.plannedSessionId ? 10 : 20)) : 0.5;
           return Math.round(100 *
             Math.pow(sm, hasVol ? 0.30 : 0.40) *
             Math.pow(se, hasVol ? 0.28 : 0.35) *

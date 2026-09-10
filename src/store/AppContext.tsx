@@ -1448,6 +1448,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setDownloadPathState(prev => prev || rustPath);
         }
       } catch { /* not in Tauri */ }
+      // Restauración recién aplicada: ya se cargó lo restaurado, se retira el
+      // marcador anti-pisado para que el auto-guardado vuelva a funcionar.
+      try { sessionStorage.removeItem('owa_restore_pending'); } catch { /* noop */ }
       setHydrated(true);
     }
     loadData();
@@ -1743,6 +1746,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Debounced save
   useEffect(() => {
     if (!hydrated) return;
+    try {
+      // Restauración pendiente de recarga: no pisar lo restaurado.
+      if (sessionStorage.getItem('owa_restore_pending')) return;
+    } catch { /* noop */ }
     const json = JSON.stringify({
       tasks, habits, notes, noteFolders, courses, events, studySessions, plannedSessions,
         settings, sessionTime, sessionType, isRest, isTimerActive, weeklyStudyTime, dailyStudyTime, dailyStudyDate, pomodoroSessions,
@@ -1775,14 +1782,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     const t = setTimeout(() => {
       set(STORAGE_KEY, json).catch((e: any) => console.error("Error saving data:", e));
-      // Backup throttled en localStorage (copia de seguridad adicional)
+      // Backup throttled en localStorage (copia de seguridad adicional).
+      // Tope 1 MB (antes 5 MB): el espejo grande llenaba la cuota y tumbaba
+      // vistas con QuotaExceededError. IDB + disco siguen guardando todo.
       try {
-        if (json.length <= 5_000_000) {
+        if (json.length <= 1_000_000) {
           const now = Date.now();
           if (now - lastBackupTsRef.current > 60000) {
             localStorage.setItem('owa_studio_data_backup', json);
             lastBackupTsRef.current = now;
           }
+        } else if (localStorage.getItem('owa_studio_data_backup') !== null) {
+          try { localStorage.removeItem('owa_studio_data_backup'); } catch { /* noop */ }
         }
       } catch { /* noop */ }
       // Espejo en disco ($APPDATA/owa_studio_data.json): puente dev↔release y capa
@@ -1973,6 +1984,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // por "frescura" lo restaura — así las sesiones de estudio nunca se pierden.
   useEffect(() => {
     const flush = () => {
+      try {
+        if (sessionStorage.getItem('owa_restore_pending')) return;
+      } catch { /* noop */ }
       if (latestJsonRef.current) {
         try { localStorage.setItem(STORAGE_KEY, latestJsonRef.current); } catch { /* noop */ }
       }
@@ -2185,7 +2199,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const json = JSON.stringify(data);
       latestJsonRef.current = json;
       try { localStorage.setItem(STORAGE_KEY, json); } catch { }
-      try { if (json.length <= 5_000_000) localStorage.setItem('owa_studio_data_backup', json); } catch { }
+      try { if (json.length <= 1_000_000) localStorage.setItem('owa_studio_data_backup', json); } catch { }
     } catch { }
   }, []);
 
@@ -2348,11 +2362,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return id;
   }, []);
 
-  // Si cambia título/artista de una canción local, su archivo en la carpeta
-  // propia se renombra igual ("Artista - Título.ext") para que la carpeta
-  // siempre refleje los datos. Si el renombrado falla, se conserva la ruta
-  // anterior (la canción sigue sonando). `skipRename` es para importaciones
-  // masivas: los renombres los hace después "Normalizar nombres" de una vez.
+  // Si cambia el título de una canción local, su archivo en la carpeta propia
+  // se renombra igual (solo el título) para que la carpeta siempre refleje
+  // los datos. Si el renombrado falla, se conserva la ruta anterior
+  // (la canción sigue sonando). `skipRename` es para importaciones masivas:
+  // los renombres los hace después "Normalizar nombres" de una vez.
   const updateTrack = useCallback(async (id: string, updates: Partial<Track>, skipRename = false) => {
     const current = tracksRef.current.find(t => t.id === id);
     if (!current) return;
@@ -2911,15 +2925,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!hydrated || !isTauri()) return;
     try {
-      if (localStorage.getItem('owa_music_filenames_v1') === '1') return;
+      // v2 = convención solo-Título (v1 era "Artista - Título").
+      if (localStorage.getItem('owa_music_filenames_v2') === '1') return;
     } catch { return; }
     normalizeMusicFilenames()
       .then(n => {
-        try { localStorage.setItem('owa_music_filenames_v1', '1'); } catch { /* noop */ }
-        if (n > 0) addNotification(`${n} ${n === 1 ? 'archivo de música renombrado' : 'archivos de música renombrados'} a "Artista - Título"`, 'success');
+        try { localStorage.setItem('owa_music_filenames_v2', '1'); } catch { /* noop */ }
+        if (n > 0) addNotification(`${n} ${n === 1 ? 'archivo de música renombrado' : 'archivos de música renombrados'} a solo título`, 'success');
       })
       .catch(() => {
-        try { localStorage.setItem('owa_music_filenames_v1', '1'); } catch { /* noop */ }
+        try { localStorage.setItem('owa_music_filenames_v2', '1'); } catch { /* noop */ }
       });
   }, [hydrated, normalizeMusicFilenames]);
 

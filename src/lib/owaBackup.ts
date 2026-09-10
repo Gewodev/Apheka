@@ -89,10 +89,16 @@ export async function exportOwaBackup(): Promise<BackupResult> {
   return { ok: true, message: `Respaldo descargado (${Math.round(json.length / 1024)} KB)` };
 }
 
+export const RESTORE_MARKER = 'owa_restore_pending';
+
 export async function applyBackup(backup: OwaBackupFile): Promise<{ ok: boolean; message: string }> {
   if (!backup || backup.format !== 'owa-studio-backup') {
     return { ok: false, message: 'El archivo no es un respaldo válido de Owa Studio' };
   }
+  // Marcador anti-pisado: el auto-guardado (cada segundo por el temporizador)
+  // NO debe sobrescribir lo restaurado antes de la recarga. Se limpia al
+  // terminar loadData tras recargar (sessionStorage sobrevive al reload).
+  try { sessionStorage.setItem(RESTORE_MARKER, '1'); } catch { /* noop */ }
   const ls = backup.localStorage || {};
   for (const [k, v] of Object.entries(ls)) {
     try { localStorage.setItem(k, v); } catch { /* skip oversized */ }
@@ -100,17 +106,22 @@ export async function applyBackup(backup: OwaBackupFile): Promise<{ ok: boolean;
   if (backup.idb) {
     try { await set(backup.idb.key, backup.idb.value); } catch { /* noop */ }
   }
-  // Música: fusiona por ID (no duplica, no borra lo nuevo). Respaldos viejos
-  // sin musicTracks se saltan este paso sin errores.
+  // Música: UPSERT por ID (el respaldo manda: actualiza nombre/artista/portada
+  // si el ID ya existe, agrega si es nuevo; nunca borra ni duplica).
+  // Respaldos viejos sin musicTracks se saltan este paso sin errores.
   let musicAdded = 0;
   if (Array.isArray(backup.musicTracks) && backup.musicTracks.length > 0) {
     try {
       const current = await getAllTracksMetadata().catch(() => [] as Track[]);
-      const currentIds = new Set((current || []).map(t => t.id));
+      const currentById = new Map((current || []).filter(t => t && t.id).map(t => [t.id, t]));
       for (const t of backup.musicTracks) {
-        if (!t || typeof t !== 'object' || !t.id || currentIds.has(t.id)) continue;
-        await saveTrackMetadata(t as Track).catch(() => {});
-        currentIds.add(t.id);
+        if (!t || typeof t !== 'object' || !t.id) continue;
+        const prev = currentById.get(t.id);
+        const merged = prev
+          ? { ...prev, title: t.title ?? prev.title, artist: t.artist ?? prev.artist, coverImage: (t as any).coverImage ?? (t as any).coverUrl ?? prev.coverImage, isFavorite: t.isFavorite ?? prev.isFavorite }
+          : (t as Track);
+        await saveTrackMetadata(merged as Track).catch(() => {});
+        if (!prev) currentById.set(t.id, merged as Track);
         musicAdded++;
       }
     } catch { /* noop */ }

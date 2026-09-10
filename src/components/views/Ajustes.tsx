@@ -230,7 +230,7 @@ export default function Ajustes() {
     triggerDriveBackup, exportNotesToGoogleDoc, exportStatsToGoogleSheets,
     events, tasks, notes, clearAllMusicData, addNotification, deleteCompletedTasks,
     exportMusicLibrary, importMusicLibrary,
-    tracks, updateTrack, courses, studySessions, plannedSessions, artists, playlists,
+    tracks, updateTrack, addTrack, courses, studySessions, plannedSessions, artists, playlists,
   } = useApp();
   const [pesoTick, setPesoTick] = useState(0);
 
@@ -2077,6 +2077,110 @@ export default function Ajustes() {
                       }
                     }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.15)', color: '#10B981' }}>
                       <Download size={14} /> Importar metadatos
+                    </button>
+                  </div>
+                </div>
+
+                {/* Biblioteca completa: audios + nombres idénticos */}
+                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
+                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>
+                    Biblioteca completa de música
+                  </span>
+                  <p style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.5, marginBottom: 14 }}>
+                    Descarga TODA tu música (audios + nombres) a una carpeta. Al importarla en otro
+                    entorno, cada canción se detecta y queda con su nombre idéntico al exportado.
+                  </p>
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    <button onClick={async () => {
+                      if (!isTauri()) { addNotification('Disponible en la app instalada', 'info'); return; }
+                      try {
+                        const dir = await open({ directory: true, title: 'Carpeta para descargar toda la música' });
+                        if (!dir || Array.isArray(dir)) return;
+                        const { getTrackFileFromDB, buildAudioFileName, toDisplayName } = await import('../../lib/musicDb');
+                        const { readFile, writeFile, writeTextFile } = await import('@tauri-apps/plugin-fs');
+                        const { join } = await import('@tauri-apps/api/path');
+                        const locals = tracks.filter((t: any) => t.source === 'local');
+                        if (locals.length === 0) { addNotification('No hay canciones locales para descargar', 'info'); return; }
+                        const taken = new Set<string>();
+                        const manifest: any[] = [];
+                        let ok = 0, skipped = 0;
+                        for (const t of locals) {
+                          try {
+                            let bytes: Uint8Array | null = null;
+                            try { const f = await getTrackFileFromDB(t.id); if (f) bytes = new Uint8Array(await f.arrayBuffer()); } catch { /* sin blob */ }
+                            if (!bytes) {
+                              const p = t.filePath || t.url || '';
+                              if (p && !p.startsWith('http') && !p.startsWith('blob:')) { try { bytes = await readFile(p); } catch { /* sin archivo */ } }
+                            }
+                            if (!bytes) { skipped++; continue; }
+                            const ext = ((t.audioFile || t.url || 'mp3').split('.').pop() || 'mp3').toLowerCase().replace(/[^a-z0-9]/g, '') || 'mp3';
+                            const file = buildAudioFileName('', toDisplayName(t.title) || t.title, ext, taken);
+                            await writeFile(await join(dir as string, file), bytes);
+                            manifest.push({ file, id: t.id, title: t.title, artist: t.artist, coverImage: t.coverImage, isFavorite: !!t.isFavorite, duration: t.duration || 0 });
+                            ok++;
+                          } catch { skipped++; }
+                        }
+                        await writeTextFile(
+                          await join(dir as string, 'owa-musica-biblioteca.json'),
+                          JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), tracks: manifest }, null, 2)
+                        );
+                        addNotification(`Música descargada: ${ok} de ${locals.length}${skipped > 0 ? ` (${skipped} sin audio disponible)` : ''}`, ok > 0 ? 'success' : 'info');
+                      } catch (e) {
+                        addNotification('No se pudo descargar la música', 'error');
+                        console.error(e);
+                      }
+                    }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.15)', color: '#3B82F6' }}>
+                      <Download size={14} /> Descargar toda la música
+                    </button>
+                    <button onClick={async () => {
+                      if (!isTauri()) { addNotification('Disponible en la app instalada', 'info'); return; }
+                      try {
+                        const dir = await open({ directory: true, title: 'Carpeta con la música a importar' });
+                        if (!dir || Array.isArray(dir)) return;
+                        const { readDir, readTextFile } = await import('@tauri-apps/plugin-fs');
+                        const { join } = await import('@tauri-apps/api/path');
+                        const { toDisplayName } = await import('../../lib/musicDb');
+                        const entries = await readDir(dir as string);
+                        const audios = entries.filter(e => !(e as any).isDirectory && /\.(mp3|m4a|aac|mp4|flac|ogg|opus|wav|wma)$/i.test((e as any).name || ''));
+                        if (audios.length === 0) { addNotification('No se encontraron audios en esa carpeta', 'info'); return; }
+                        const manifest: Record<string, any> = {};
+                        try {
+                          const man = JSON.parse(await readTextFile(await join(dir as string, 'owa-musica-biblioteca.json')));
+                          for (const m of (man.tracks || [])) {
+                            if (m && m.file) manifest[String(m.file).toLowerCase()] = m;
+                          }
+                        } catch { /* sin manifiesto: se detecta por nombre de archivo */ }
+                        let added = 0, named = 0;
+                        for (const a of audios) {
+                          const fname = (a as any).name as string;
+                          const full = await join(dir as string, fname);
+                          const meta = manifest[fname.toLowerCase()];
+                          const title = meta?.title || toDisplayName(fname.replace(/\.[^.]+$/, ''));
+                          const artist = meta?.artist || '';
+                          const id = addTrack({
+                            title, artist, duration: meta?.duration ?? 0, source: 'local',
+                            url: full, filePath: full, coverImage: meta?.coverImage,
+                            isFavorite: !!meta?.isFavorite, listenedTime: 0, audioFile: fname,
+                          });
+                          if (meta && (meta.title || meta.artist)) {
+                            await updateTrack(id, {
+                              title: meta.title || title, artist: meta.artist || '',
+                              coverImage: meta.coverImage, isFavorite: !!meta.isFavorite,
+                            }, true);
+                            named++;
+                          }
+                          added++;
+                        }
+                        addNotification(
+                          `Música importada: ${added} ${added === 1 ? 'canción' : 'canciones'}${named > 0 ? ` (${named} con sus nombres originales)` : ''}`,
+                          'success'
+                        );
+                      } catch (e) {
+                        addNotification('No se pudo importar la música', 'error');
+                        console.error(e);
+                      }
+                    }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.15)', color: '#10B981' }}>
+                      <Upload size={14} /> Importar toda la música
                     </button>
                   </div>
                 </div>

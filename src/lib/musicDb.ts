@@ -2,10 +2,9 @@ import type { Track } from '../store/AppContext';
 import { readFile, writeFile, mkdir, exists, remove, copyFile } from '@tauri-apps/plugin-fs';
 import { appDataDir, join } from '@tauri-apps/api/path';
 
-// --- Nombres de archivo legibles: "Artista - Título.ext" ---
-// Sin caracteres prohibidos en Windows, sin puntos/espacios al final,
-// longitud acotada y primera letra en mayúscula (el resto se respeta tal cual
-// para no romper nombres como AC/DC o will.i.am).
+// --- Nombres de archivo legibles: solo el título ("Título.ext") ---
+// El artista vive en los metadatos, no en el nombre. Sin caracteres
+// prohibidos en Windows, sin puntos/espacios al final, longitud acotada.
 
 export function sanitizeFileName(s: string): string {
   const clean = String(s || '')
@@ -100,12 +99,13 @@ export function toDisplayName(s: string): string {
   return restoreAccents(toTitleCaseEs(s));
 }
 
-// Devuelve un nombre único dentro de `taken` (agrega " (2)", " (3)"... si choca).
-export function buildAudioFileName(artist: string, title: string, ext: string, taken?: Set<string>): string {
-  const a = sanitizeFileName(artist) || 'Desconocido';
+// Nombre de archivo = SOLO el título (el artista vive en los metadatos, no en
+// el nombre). Único dentro de `taken` (agrega " (2)", " (3)"... si choca).
+// El parámetro `artist` se conserva por compatibilidad pero ya no se usa.
+export function buildAudioFileName(_artist: string, title: string, ext: string, taken?: Set<string>): string {
   const t = sanitizeFileName(title) || 'Sin título';
   const e = (ext || 'mp3').toLowerCase().replace(/[^a-z0-9]/g, '') || 'mp3';
-  let base = `${a} - ${t}`.slice(0, 100);
+  let base = t.slice(0, 100);
   let name = `${base}.${e}`;
   if (taken) {
     let n = 2;

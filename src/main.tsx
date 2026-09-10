@@ -7,6 +7,34 @@ import YouTubeFloatingPlayer from "./components/YouTubeFloatingPlayer";
 import "./index.css";
 import ErrorBoundary from "./components/ErrorBoundary";
 
+// Parche global anti-cuota: NINGÚN localStorage.setItem de la app puede volver
+// a tumbar una vista ("exceeded the quota"). Ante cuota llena se libera lastre
+// (timestamps de notificaciones, log de errores, historiales de notas) y se
+// reintenta una vez; si ni así cabe, el guardado se omite en silencio.
+try {
+  const rawSet = Storage.prototype.setItem;
+  Storage.prototype.setItem = function (k: string, v: string) {
+    try {
+      rawSet.call(this, k, v);
+      return;
+    } catch { /* cuota u otro fallo: liberar lastre y reintentar */ }
+    try {
+      for (let i = this.length - 1; i >= 0; i--) {
+        const key = this.key(i);
+        if (key && key.indexOf('owa_notif_ts_') === 0) { try { this.removeItem(key); } catch { /* noop */ } }
+      }
+      try {
+        const raw = this.getItem('owa_error_log_v1');
+        const arr = JSON.parse(raw || '[]');
+        if (Array.isArray(arr) && arr.length > 3) rawSet.call(this, 'owa_error_log_v1', JSON.stringify(arr.slice(-3)));
+      } catch { try { this.removeItem('owa_error_log_v1'); } catch { /* noop */ } }
+    } catch { /* noop */ }
+    try {
+      rawSet.call(this, k, v);
+    } catch { /* sin espacio: se omite el guardado, la app sigue viva */ }
+  };
+} catch { /* noop */ }
+
 function getWindowLabel(): string {
   try {
     const i = (window as any).__TAURI_INTERNALS__;

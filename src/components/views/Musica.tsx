@@ -1526,7 +1526,7 @@ export default function Musica() {
                   </button>
                   <button onClick={async () => {
                     const fixed = await normalizeMusicFilenames();
-                    if (fixed === 0) addNotification('Nombres ya correctos ("Artista - Título")', 'info');
+                    if (fixed === 0) addNotification('Nombres ya correctos (solo título)', 'info');
                   }} className="btn-ghost" style={{ height: 30, padding: '0 16px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, borderRadius: 15, fontWeight: 500 }}>
                     <Edit2 size={11} /> Normalizar nombres
                   </button>
