@@ -150,13 +150,26 @@ export class ErrorBoundary extends React.Component<Props, State> {
               )}
             </div>
 
-            <button
-              onClick={() => window.location.reload()}
-              className="btn-primary"
-              style={{ width: '100%', padding: '14px' }}
-            >
-              Reiniciar Aplicación
-            </button>
+            <div style={{ display: 'flex', gap: 10, width: '100%' }}>
+              <button
+                onClick={() => {
+                  try {
+                    const txt = `OWA Studio error\n${this.state.error?.message || ''}\n${this.state.stack || this.state.error?.stack || ''}`;
+                    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(txt);
+                  } catch { /* noop */ }
+                }}
+                style={{ flex: 1, padding: '14px', borderRadius: 10, border: '1px solid var(--border-default)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+              >
+                Copiar detalles
+              </button>
+              <button
+                onClick={() => window.location.reload()}
+                className="btn-primary"
+                style={{ flex: 1, padding: '14px' }}
+              >
+                Reiniciar Aplicación
+              </button>
+            </div>
           </div>
         </div>
       );

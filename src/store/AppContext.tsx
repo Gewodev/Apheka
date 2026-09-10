@@ -1246,6 +1246,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
           // Sanitize: drop corrupt entries (undefined items crash renders with "reading 'id'")
           const cleanArr = (arr: any) => (Array.isArray(arr) ? arr : []).filter((x: any) => x && typeof x === 'object');
           ['tasks', 'notes', 'noteFolders', 'events', 'studySessions', 'plannedSessions'].forEach(k => { if (data[k] !== undefined) data[k] = cleanArr(data[k]); });
+          // Backfill: tareas legacy sin arreglos rompen el panel (files/subtasks .length/.map)
+          if (data.tasks) data.tasks = (data.tasks as any[]).map((t: any) => ({
+            ...t,
+            status: t.status || 'inicio',
+            subtasks: Array.isArray(t.subtasks) ? t.subtasks.filter((s: any) => s && typeof s === 'object') : [],
+            files: Array.isArray(t.files) ? t.files.filter((f: any) => f && typeof f === 'object') : [],
+          }));
           if (data.tasks) setTasks(data.tasks);
           if (data.habits) setHabits(data.habits);
           if (data.notes) setNotes(data.notes);
@@ -1698,10 +1705,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // Active -> Paused
         setPauseStartTime(Date.now());
       } else {
-        // Paused -> Active
+        // Paused -> Active: solo cuenta si se reanuda a MITAD de sesión
+        // (sessionTime > 0). Si el temporizador estaba en cero, el "hueco" era
+        // simple inactividad entre sesiones, no una pausa: no es distracción.
         if (pauseStartTime) {
           const pauseSecs = Math.floor((Date.now() - pauseStartTime) / 1000);
-          if (pauseSecs > 0) {
+          if (pauseSecs > 0 && sessionTimeRef.current > 0) {
             setAccumulatedPauseTime(prev => prev + pauseSecs);
             if (pauseSecs > 600) {
               setDistractionCount(prev => prev + 1);
@@ -1727,49 +1736,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [isTimerActive, pauseStartTime, addNotification, isRest]);
 
-  // Detect pauses while the window/tab is hidden or unfocused and the timer is running
-  const hiddenPauseStartRef = useRef<number | null>(null);
-  const endHiddenPause = useCallback(() => {
-    if (!hiddenPauseStartRef.current) return;
-    const pauseSecs = Math.floor((Date.now() - hiddenPauseStartRef.current) / 1000);
-    hiddenPauseStartRef.current = null;
-    if (pauseSecs > 0) {
-      setAccumulatedPauseTime(prev => prev + pauseSecs);
-      if (pauseSecs > 600) {
-        setDistractionCount(prev => prev + 1);
-        addNotification('Distracción detectada: estuviste ausente más de 10 min', 'info');
-        addStudySessionRef.current({
-          type: sessionTypeRef.current || 'pomodoro',
-          startedAt: new Date(Date.now() - pauseSecs * 1000).toISOString(),
-          endedAt: new Date().toISOString(),
-          duration: pauseSecs,
-          taskId: activeTaskIdRef.current ?? undefined,
-          plannedSessionId: activePlannedSessionIdRef.current ?? undefined,
-          courseId: undefined,
-          pauseCount: 0,
-          pauseDuration: 0,
-          isDistraction: true,
-        });
-      }
-    }
-  }, [addNotification]);
-  useEffect(() => {
-    const syncPause = () => {
-      if ((document.hidden || !document.hasFocus()) && isTimerActiveRef.current && !isRestRef.current) {
-        if (!hiddenPauseStartRef.current) hiddenPauseStartRef.current = Date.now();
-      } else if (hiddenPauseStartRef.current) {
-        endHiddenPause();
-      }
-    };
-    document.addEventListener('visibilitychange', syncPause);
-    window.addEventListener('blur', syncPause);
-    window.addEventListener('focus', syncPause);
-    return () => {
-      document.removeEventListener('visibilitychange', syncPause);
-      window.removeEventListener('blur', syncPause);
-      window.removeEventListener('focus', syncPause);
-    };
-  }, [endHiddenPause]);
+  // Distracción SOLO por pausa manual: el detector de ventana oculta/blur se
+  // eliminó a pedido (contaba distracción por usar otra ventana sin pausar).
+  // Regla vigente: pausa manual + reanudar tras >10 min a mitad de sesión.
 
   // Debounced save
   useEffect(() => {
@@ -3814,7 +3783,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setIsRest(false);
     setAccumulatedPauseTime(0);
     setPauseStartTime(null);
-    if (hiddenPauseStartRef.current) hiddenPauseStartRef.current = null;
     setDistractionCount(0);
   }, []);
 

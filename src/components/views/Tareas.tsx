@@ -1677,8 +1677,14 @@ export default function Tareas() {
                             />
                             {!st.done && (
                               <button onClick={() => {
-                                localStorage.setItem('owa_study_task_id', selectedTask.id);
-                                localStorage.setItem('owa_study_task_title', `${selectedTask.title} — ${st.title}`);
+                                try {
+                                  localStorage.setItem('owa_study_task_id', selectedTask.id);
+                                  localStorage.setItem('owa_study_task_title', `${selectedTask.title} — ${st.title}`);
+                                } catch (e) {
+                                  addNotification('No se pudo vincular la subtarea (almacenamiento lleno).', 'error');
+                                  console.error(e);
+                                  return;
+                                }
                                 setSelectedTaskId(null);
                                 setNavigateTo('estudio');
                               }}
@@ -1968,8 +1974,14 @@ export default function Tareas() {
                       addNotification('Ya hay otra tarea vinculada al temporizador. Desvincula esa tarea primero.', 'info');
                       return;
                     }
-                    localStorage.setItem('owa_study_task_id', selectedTask.id);
-                    localStorage.setItem('owa_study_task_title', selectedTask.title);
+                    try {
+                      localStorage.setItem('owa_study_task_id', selectedTask.id);
+                      localStorage.setItem('owa_study_task_title', selectedTask.title);
+                    } catch (e) {
+                      addNotification('No se pudo vincular la tarea (almacenamiento lleno). Libera espacio e inténtalo de nuevo.', 'error');
+                      console.error(e);
+                      return;
+                    }
                     setSelectedTaskId(null);
                     setNavigateTo('estudio');
                   }}

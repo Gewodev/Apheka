@@ -403,17 +403,23 @@ export default function Estudio() {
 
   // Read linked task from localStorage (set by Tareas "Estudiar esta tarea" button)
   useEffect(() => {
-    const taskId = localStorage.getItem('owa_study_task_id');
-    if (taskId) {
-      const found = tasks.find(t => t.id === taskId);
-      if (found && !activePlannedSessionId) {
-        setActiveTaskId(taskId);
-        addNotification(`Estudiando: ${found.title}`, 'success');
-      } else if (found && activePlannedSessionId) {
-        addNotification('Hay una sesión de estudio vinculada. Desvincúlala para estudiar esta tarea.', 'info');
+    try {
+      const taskId = localStorage.getItem('owa_study_task_id');
+      if (taskId) {
+        const found = (tasks || []).find(t => t && t.id === taskId);
+        if (found && !activePlannedSessionId) {
+          setActiveTaskId(taskId);
+          addNotification(`Estudiando: ${found.title}`, 'success');
+        } else if (found && activePlannedSessionId) {
+          addNotification('Hay una sesión de estudio vinculada. Desvincúlala para estudiar esta tarea.', 'info');
+        } else if (!found) {
+          addNotification('La tarea vinculada ya no existe.', 'info');
+        }
+        localStorage.removeItem('owa_study_task_id');
+        localStorage.removeItem('owa_study_task_title');
       }
-      localStorage.removeItem('owa_study_task_id');
-      localStorage.removeItem('owa_study_task_title');
+    } catch (e) {
+      console.error(e);
     }
   }, []);
 

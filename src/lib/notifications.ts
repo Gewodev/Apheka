@@ -18,19 +18,63 @@ export async function requestNativePermission(): Promise<boolean> {
   return granted;
 }
 
-// ─── Anti-spam: timestamps en localStorage para limitar frecuencia ───
+// ─── Anti-spam: timestamps en localStorage + memoria para limitar frecuencia ───
+// Doble capa: si localStorage falla por cuota, el Map en memoria evita el
+// bucle de "a cada rato" durante la sesión.
 const NOTIF_KEY_PREFIX = 'owa_notif_ts_';
+const memNotif = new Map<string, number>();
 
 export function canNotifyItem(itemId: string, minIntervalMs: number = 3_600_000): boolean {
+  const now = Date.now();
+  const mem = memNotif.get(itemId);
+  if (mem !== undefined && now - mem < minIntervalMs) return false;
   try {
     const raw = localStorage.getItem(NOTIF_KEY_PREFIX + itemId);
     if (raw) {
       const last = parseInt(raw, 10);
-      if (!isNaN(last) && Date.now() - last < minIntervalMs) {
+      if (!isNaN(last) && now - last < minIntervalMs) {
+        memNotif.set(itemId, last);
         return false;
       }
     }
-    localStorage.setItem(NOTIF_KEY_PREFIX + itemId, Date.now().toString());
+    try {
+      localStorage.setItem(NOTIF_KEY_PREFIX + itemId, now.toString());
+    } catch { /* cuota llena: la capa en memoria sigue protegiendo */ }
+    memNotif.set(itemId, now);
+    return true;
+  } catch {
+    memNotif.set(itemId, now);
+    return true;
+  }
+}
+
+// ─── Candado COMPARTIDO entre dev y producción (1 hora) ───
+// Ambas apps leen/escriben el mismo identifier (com.owa.studio), así que sin
+// este candado cada aviso salía DOS veces (una por app). El archivo vive en
+// %APPDATA%/com.owa.studio y guarda el último aviso por clave: si la otra app
+// ya avisó hace menos de 1 h, esta no repite. Fail-open: si no se puede
+// leer/escribir, se permite avisar (igual que antes).
+const SHARED_SLOT_FILE = 'com.owa.studio/notif_slots.json';
+
+export async function claimSharedSlot(key: string, cooldownMs: number = 3_600_000): Promise<boolean> {
+  const now = Date.now();
+  try {
+    const fs = await import('@tauri-apps/plugin-fs');
+    let slots: Record<string, number> = {};
+    try {
+      const raw = await fs.readTextFile(SHARED_SLOT_FILE, { baseDir: (fs as any).BaseDirectory?.AppData });
+      slots = JSON.parse(raw || '{}');
+    } catch { slots = {}; }
+    const last = slots[key];
+    if (typeof last === 'number' && now - last < cooldownMs) return false;
+    slots[key] = now;
+    // Poda: no guardar claves de hace más de 24 h.
+    for (const k of Object.keys(slots)) {
+      if (typeof slots[k] !== 'number' || now - slots[k] > 86_400_000) delete slots[k];
+    }
+    try {
+      await fs.writeTextFile(SHARED_SLOT_FILE, JSON.stringify(slots), { baseDir: (fs as any).BaseDirectory?.AppData });
+    } catch { /* no se pudo persistir: igual se avisa esta vez */ }
     return true;
   } catch {
     return true;
@@ -167,11 +211,13 @@ export function notifyAllTasksComplete(): void {
 }
 
 // Tarea que aún no vence: mensaje distinto según falte poco o varios días.
-export function notifyTaskDueSoon(title: string, dueMs: number, taskId: string): void {
+export async function notifyTaskDueSoon(title: string, dueMs: number, taskId: string): Promise<void> {
   const now = Date.now();
   const diff = dueMs - now;
   if (!(diff > 0)) return;
-  if (!canNotifyItem(occurrenceKey('task', taskId, dueMs), 20 * 3_600_000)) return;
+  const key = occurrenceKey('task', taskId, dueMs);
+  if (!canNotifyItem(key, 20 * 3_600_000)) return;
+  if (!(await claimSharedSlot(key))) return;
 
   const urgent = diff <= 3 * 3_600_000;
   sendNativeNotification(
@@ -183,13 +229,15 @@ export function notifyTaskDueSoon(title: string, dueMs: number, taskId: string):
 }
 
 // Tarea ya vencida: mensaje distinto según lleve horas o días.
-export function notifyTaskOverdue(title: string, dueMs: number, taskId: string): void {
+export async function notifyTaskOverdue(title: string, dueMs: number, taskId: string): Promise<void> {
   const now = Date.now();
   const ago = now - dueMs;
   if (!(ago > 0)) return;
   const today = new Date();
   const dayId = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-  if (!canNotifyItem(`overdue_${taskId}_${dayId}`, 20 * 3_600_000)) return;
+  const key = `overdue_${taskId}_${dayId}`;
+  if (!canNotifyItem(key, 20 * 3_600_000)) return;
+  if (!(await claimSharedSlot(key))) return;
 
   sendNativeNotification(
     'Tarea vencida',
@@ -200,8 +248,10 @@ export function notifyTaskOverdue(title: string, dueMs: number, taskId: string):
 // ─── Notificaciones de eventos ───
 
 // Aviso de 1 hora: solo contexto de preparación.
-export function notifyEventReminder1h(title: string, eventMs: number, eventId: string): void {
-  if (!canNotifyItem(occurrenceKey('ev1h', eventId, eventMs), 20 * 3_600_000)) return;
+export async function notifyEventReminder1h(title: string, eventMs: number, eventId: string): Promise<void> {
+  const key = occurrenceKey('ev1h', eventId, eventMs);
+  if (!canNotifyItem(key, 20 * 3_600_000)) return;
+  if (!(await claimSharedSlot(key))) return;
   sendNativeNotification(
     `Evento en una hora: ${title}`,
     `Empieza a las ${fmtHour(eventMs)}. ${pick(EVENT_PHRASES)}`
@@ -209,10 +259,12 @@ export function notifyEventReminder1h(title: string, eventMs: number, eventId: s
 }
 
 // Aviso de 30 minutos: hora exacta + cuenta atrás.
-export function notifyUpcomingEvent(title: string, eventMs: number, eventId: string): void {
+export async function notifyUpcomingEvent(title: string, eventMs: number, eventId: string): Promise<void> {
   const diff = eventMs - Date.now();
   if (!(diff > 0)) return;
-  if (!canNotifyItem(occurrenceKey('ev30', eventId, eventMs), 20 * 3_600_000)) return;
+  const key = occurrenceKey('ev30', eventId, eventMs);
+  if (!canNotifyItem(key, 20 * 3_600_000)) return;
+  if (!(await claimSharedSlot(key))) return;
 
   sendNativeNotification(
     `Próximo evento: ${title}`,
@@ -222,10 +274,12 @@ export function notifyUpcomingEvent(title: string, eventMs: number, eventId: str
 
 // ─── Notificaciones de sesiones de estudio ───
 
-export function notifyStudySessionSoon(title: string, sessionMs: number, sessionId: string): void {
+export async function notifyStudySessionSoon(title: string, sessionMs: number, sessionId: string): Promise<void> {
   const diff = sessionMs - Date.now();
   if (!(diff > 0)) return;
-  if (!canNotifyItem(occurrenceKey('ps10', sessionId, sessionMs), 20 * 3_600_000)) return;
+  const key = occurrenceKey('ps10', sessionId, sessionMs);
+  if (!canNotifyItem(key, 20 * 3_600_000)) return;
+  if (!(await claimSharedSlot(key))) return;
 
   sendNativeNotification(
     'Sesión de estudio en 10 minutos',
