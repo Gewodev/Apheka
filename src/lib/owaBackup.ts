@@ -5,6 +5,7 @@ import { appDataDir, join } from '@tauri-apps/api/path';
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import { isTauri } from './tauri';
 import { getAllTracksMetadata, saveTrackMetadata } from './musicDb';
+import { safeSet } from './safeStorage';
 import type { Track } from '../store/AppContext';
 
 const STATE_KEY = 'owa_studio_data';
@@ -12,15 +13,19 @@ const SECRET_RE = /token|secret|credential|google|supabase/i;
 
 export interface OwaBackupFile {
   format: 'owa-studio-backup';
-  version: 1;
+  version: 2;
   exportedAt: string;
   appVersion: string;
   localStorage: Record<string, string>;
   idb: { key: string; value: unknown } | null;
-  // Biblioteca de música completa (metadatos + portadas + nombres personalizados).
-  // Los audios viven en la carpeta de música (misma PC); al restaurar en otra
-  // PC usa "Limpiar faltantes" y vuelve a añadir los archivos.
-  musicTracks: Track[] | null;
+  // Eventos EXPLÍCITOS (todos los que el usuario colocó, incluidos los del
+  // planificador): se restauran sí o sí aunque el estado genérico falle.
+  plannerV3: string | null;
+  stateEvents: any[] | null;
+  // v1 incluía la música aquí; desde v2 la música tiene su propio
+  // export ("Biblioteca completa") y el respaldo del sistema NO la trae.
+  // Se conserva el campo solo para leer respaldos viejos.
+  musicTracks?: Track[] | null;
 }
 
 export interface BackupResult {
@@ -46,19 +51,33 @@ export async function collectBackup(): Promise<OwaBackupFile> {
   try {
     idbValue = await get(STATE_KEY);
   } catch { /* noop */ }
-  let musicTracks: Track[] | null = null;
+  // Eventos explícitos: del estado IDB o, en su defecto, del espejo local.
+  // Así el JSON trae TODOS los eventos colocados, garantizado.
+  let stateEvents: any[] | null = null;
   try {
-    const all = await getAllTracksMetadata();
-    if (Array.isArray(all) && all.length > 0) musicTracks = all;
-  } catch { /* sin biblioteca */ }
+    const rawState: any =
+      (idbValue !== null && idbValue !== undefined)
+        ? idbValue
+        : JSON.parse(localStorage.getItem(STATE_KEY) || 'null');
+    const evs = rawState && Array.isArray(rawState.events) ? rawState.events : null;
+    if (evs && evs.length > 0) stateEvents = evs;
+  } catch { /* noop */ }
+  // Planificador explícito (eventos con repetición, clases, etc.).
+  let plannerV3: string | null = null;
+  try {
+    plannerV3 = localStorage.getItem('owa_planner_v3');
+    if (!plannerV3) plannerV3 = null;
+  } catch { /* noop */ }
   return {
     format: 'owa-studio-backup',
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     appVersion: '6.7',
     localStorage: lsEntries(),
     idb: idbValue !== null && idbValue !== undefined ? { key: STATE_KEY, value: idbValue } : null,
-    musicTracks,
+    plannerV3,
+    stateEvents,
+    musicTracks: null,
   };
 }
 
@@ -101,9 +120,37 @@ export async function applyBackup(backup: OwaBackupFile): Promise<{ ok: boolean;
   try { sessionStorage.setItem(RESTORE_MARKER, '1'); } catch { /* noop */ }
   const ls = backup.localStorage || {};
   for (const [k, v] of Object.entries(ls)) {
-    try { localStorage.setItem(k, v); } catch { /* skip oversized */ }
+    // safeSet con auto-liberación: con la cuota llena el setItem crudo fallaba
+    // en silencio y el planificador quedaba sin sus eventos (solo se veían
+    // las tareas, que viajan por IDB). Compat v1: misma lectura.
+    safeSet(k, v);
   }
-  if (backup.idb) {
+  // Planificador explícito: TODOS los eventos colocados (incluidos los que se
+  // repiten semana tras semana) quedan restaurados sí o sí.
+  if (typeof (backup as any).plannerV3 === 'string' && (backup as any).plannerV3) {
+    safeSet('owa_planner_v3', (backup as any).plannerV3);
+  } else if (typeof ls['owa_planner_v3'] === 'string' && ls['owa_planner_v3']) {
+    // Respaldos v1: la clave ya vino en el barrido genérico, pero se fuerza
+    // de nuevo con liberación de cuota por si el bucle la saltó.
+    safeSet('owa_planner_v3', ls['owa_planner_v3']);
+  }
+  // Estado fusionado: el respaldo manda sus eventos explícitos dentro del
+  // estado (local + IDB + disco), para que aparezcan al recargar.
+  let mergedState: any = (backup as any).idb ? (backup as any).idb.value : null;
+  if ((mergedState === null || mergedState === undefined) && ls[STATE_KEY]) {
+    try { mergedState = JSON.parse(ls[STATE_KEY]); } catch { mergedState = null; }
+  }
+  if (Array.isArray((backup as any).stateEvents) && (backup as any).stateEvents.length > 0) {
+    try {
+      const base = (mergedState && typeof mergedState === 'object') ? { ...(mergedState as any) } : {};
+      base.events = (backup as any).stateEvents;
+      mergedState = base;
+    } catch { /* noop */ }
+  }
+  if (mergedState !== null && mergedState !== undefined) {
+    try { await set(STATE_KEY, mergedState); } catch { /* noop */ }
+    try { localStorage.setItem(STATE_KEY, typeof mergedState === 'string' ? mergedState : JSON.stringify(mergedState)); } catch { /* noop */ }
+  } else if (backup.idb) {
     try { await set(backup.idb.key, backup.idb.value); } catch { /* noop */ }
   }
   // Música: UPSERT por ID (el respaldo manda: actualiza nombre/artista/portada
@@ -129,7 +176,10 @@ export async function applyBackup(backup: OwaBackupFile): Promise<{ ok: boolean;
   if (isTauri()) {
     try {
       const diskPath = await join(await appDataDir(), 'owa_studio_data.json');
-      const rawState = ls[STATE_KEY] || (backup.idb ? JSON.stringify(backup.idb.value) : '');
+      const mergedRaw = (mergedState !== null && mergedState !== undefined)
+        ? (typeof mergedState === 'string' ? mergedState : JSON.stringify(mergedState))
+        : '';
+      const rawState = mergedRaw || ls[STATE_KEY] || (backup.idb ? JSON.stringify(backup.idb.value) : '');
       if (rawState) await writeTextFile(diskPath, rawState);
     } catch { /* noop */ }
   }

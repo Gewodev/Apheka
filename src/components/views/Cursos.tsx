@@ -1531,6 +1531,12 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
 
   useEffect(() => {
     if (initialCourseId && initialCourseId !== selectedCourseId) {
+      // Snapshot ÚNICO al salir: guarda la ruta del curso actual con el estado
+      // VIGENTE (antes de los resets de abajo). Escribir después pisaría la
+      // agrupación con overview/null y al volver no redirigiría a ella.
+      if (selectedCourseId) {
+        try { localStorage.setItem(`owa_course_route_${selectedCourseId}`, JSON.stringify({ tab: activeTab, view: currentView, topicId: activeTopicId, groupId: selectedGroupId, toolGroup: activeToolGroup, overviewMode })); } catch { }
+      }
       setSelectedCourseId(initialCourseId);
       setActiveTab('overview');
       setSelectedOverviewNoteId(null);
@@ -1544,16 +1550,8 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
 
   // Per-course route persistence · each course remembers the tab/view/topic/group it was left open in
   const routeRestoredForRef = useRef<string | null>(null);
-  const lastCourseRef = useRef<string | null>(null);
   useEffect(() => {
     if (!selectedCourseId || routeRestoredForRef.current === selectedCourseId) return;
-    // Snapshot: al cambiar de curso, guarda la ruta del curso que SE SALE
-    // con el estado todavía vigente (antes de que cualquier reset lo toque)
-    const prevCourse = lastCourseRef.current;
-    if (prevCourse && prevCourse !== selectedCourseId) {
-      try { localStorage.setItem(`owa_course_route_${prevCourse}`, JSON.stringify({ tab: activeTab, view: currentView, topicId: activeTopicId, groupId: selectedGroupId, toolGroup: activeToolGroup, overviewMode })); } catch { }
-    }
-    lastCourseRef.current = selectedCourseId;
     routeRestoredForRef.current = selectedCourseId;
     try {
       const raw = localStorage.getItem(`owa_course_route_${selectedCourseId}`);
@@ -1577,6 +1575,11 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
       } else if (r.view === 'group' && r.groupId && groups.some(g => g.id === r.groupId)) {
         setSelectedGroupId(r.groupId);
         setCurrentView('group');
+        // Subcarpeta: si el último tema visto pertenece a esta agrupación,
+        // queda seleccionado también (mismo JSON, misma lógica).
+        if (r.topicId && parsedTopics.some(t => t.id === r.topicId && (t as any).groupId === r.groupId)) {
+          setActiveTopicId(r.topicId);
+        }
       }
       setTopicSearch('');
       setActiveTagFilter(null);
@@ -2125,27 +2128,9 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     }
   }, [activeTopicId, selectedCourseId]);
 
-  // Restore study state on mount and when course/mode changes
-  useEffect(() => {
-    if (!selectedCourseId || overviewMode !== 'temas_archivos') return;
-    const savedView = localStorage.getItem(`owa_study_view_${selectedCourseId}`);
-    if (savedView === 'topic' || savedView === 'group' || savedView === 'overview') {
-      setCurrentView(savedView);
-      if (savedView === 'topic') {
-        const savedTopic = localStorage.getItem(`owa_study_topic_${selectedCourseId}`);
-        if (savedTopic) setActiveTopicId(savedTopic);
-      }
-      if (savedView === 'group') {
-        const savedGroup = localStorage.getItem(`owa_estudio_last_group_${selectedCourseId}`);
-        if (savedGroup && groups.some(g => g.id === savedGroup)) {
-          setSelectedGroupId(savedGroup);
-        }
-      }
-    } else {
-      setCurrentView('overview');
-      setSelectedGroupId(null);
-    }
-  }, [selectedCourseId, overviewMode]);
+  // La ruta por curso (owa_course_route_*) es la ÚNICA fuente de restauración
+  // (vista + agrupación + tema). El bloque anterior que leía owa_study_view_*
+  // competía con ella y reseteaba a overview al volver de otro curso.
 
   // Consume course deep links · navigate straight to the group/topic of a planned session
   useEffect(() => {
@@ -2374,7 +2359,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     if (!selectedCourseId) return;
     // No guardar hasta que la restauración de ESTE curso se haya aplicado
     // (evita escribir estado mezclado del curso anterior sobre la clave del nuevo)
-    if (routeRestoredForRef.current !== selectedCourseId || lastCourseRef.current !== selectedCourseId) return;
+    if (routeRestoredForRef.current !== selectedCourseId) return;
     try {
         localStorage.setItem(`owa_course_route_${selectedCourseId}`, JSON.stringify({ tab: activeTab, view: currentView, topicId: activeTopicId, groupId: selectedGroupId, toolGroup: activeToolGroup, overviewMode }));
     } catch { /* ignore */ }

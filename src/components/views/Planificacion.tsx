@@ -28,6 +28,7 @@ import ScheduleBuilder, { ScheduleClass } from './planificacion/ScheduleBuilder'
 import HabitsView from './planificacion/HabitsView';
 import LateralPanel, { SelectedItem } from './planificacion/LateralPanel';
 import { fuzzyMatch } from '../../lib/fuzzy';
+import { safeSet } from '../../lib/safeStorage';
 
 const H_START = 0;
 const H_END   = 23;
@@ -113,7 +114,9 @@ function loadStore(): { events: PlanEvent[]; classes: ScheduleClass[] } {
   catch { return { events: [], classes: [] }; }
 }
 function saveStore(events: PlanEvent[], classes: ScheduleClass[]) {
-  localStorage.setItem(STORE_KEY, JSON.stringify({ events, classes }));
+  // safeSet: con la cuota llena el setItem crudo lanzaba y el evento creado
+  // se perdía en silencio ("creo un evento y no se ve").
+  safeSet(STORE_KEY, JSON.stringify({ events, classes }));
 }
 
 function getLayout(events: (PlanEvent | ScheduleClass)[]) {
