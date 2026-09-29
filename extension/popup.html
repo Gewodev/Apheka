@@ -4,89 +4,115 @@
   <meta charset="UTF-8" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { width: 400px; background: #020203; color: #EAEAEA; font-family: 'Inter', 'Segoe UI', system-ui, sans-serif; }
-    h1, h2, .tab .tl, .grp .name, .brow .d, .stat .s-n { font-family: 'Inter Tight', 'Inter', sans-serif; }
+    :root {
+      --bg: #020203; --panel: #0b0c0f; --panel-2: #101114;
+      --line: #1c1c20; --line-2: #26262b; --line-3: #2c2c31;
+      --txt: #EAEAEA; --txt-2: #b9b9bf; --txt-3: #99999f; --txt-4: #77777d; --txt-5: #55555b;
+      --accent: #E11D48; --ok: #10B981; --r-lg: 15px; --r-md: 12px; --r-sm: 9px;
+    }
+    body { width: 410px; background: var(--bg); color: var(--txt); font-family: 'Inter', 'Segoe UI', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+    h1, h2, .tl, .grp .name, .brow .d, .stat .s-n, .btn { font-family: 'Inter Tight', 'Inter', sans-serif; }
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-thumb { background: #2a2a2e; border-radius: 4px; }
+
     /* ── Marca ── */
-    .logo { display: flex; align-items: center; gap: 11px; padding: 16px 18px 13px; }
-    .logo img { width: 32px; height: 32px; border-radius: 9px; border: 1px solid #26262b; background: #0b0c0f; padding: 2px; }
+    .logo { display: flex; align-items: center; gap: 11px; padding: 16px 18px 14px; }
+    .logo img { width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--panel); padding: 2px; display: block; }
     .logo-name { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
-    .logo-name span { color: #E11D48; }
-    .logo-sub { font-size: 8.5px; letter-spacing: 0.16em; text-transform: uppercase; color: #666; font-weight: 600; margin-top: 1px; }
-    .logo .ver { margin-left: auto; font-size: 9px; color: #4a4a50; font-weight: 600; }
+    .logo-name span { color: var(--accent); }
+    .logo-sub { font-size: 8px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--txt-5); font-weight: 700; margin-top: 2px; }
+    .logo .ver { margin-left: auto; font-size: 8.5px; color: var(--txt-5); font-weight: 700; background: var(--panel); border: 1px solid var(--line); padding: 3px 8px; border-radius: 99px; }
+
     /* ── Navegación ── */
-    .tabs { display: flex; border-bottom: 1px solid #1c1c20; }
-    .tab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0 9px; background: none; border: none; border-bottom: 2px solid transparent; color: #77777d; cursor: pointer; transition: all 150ms; }
-    .tab:hover { color: #b9b9bf; }
-    .tab.on { color: #E11D48; border-bottom-color: #E11D48; }
-    .tab .tl { font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+    .tabs { display: flex; gap: 4px; padding: 0 14px 10px; border-bottom: 1px solid var(--line); }
+    .tab { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; height: 34px; background: none; border: 1px solid transparent; border-radius: 10px; color: var(--txt-4); cursor: pointer; transition: all 150ms; font-family: inherit; }
+    .tab:hover { color: var(--txt-2); background: var(--panel); }
+    .tab.on { color: var(--accent); background: rgba(225,29,72,0.08); border-color: rgba(225,29,72,0.22); }
+    .tab .tl { font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; }
+
     /* ── Vistas ── */
-    .view { padding: 14px 18px 16px; display: none; }
-    .view.on { display: block; }
-    .v-head { margin-bottom: 12px; }
-    .v-head h2 { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
-    .v-head p { font-size: 10.5px; color: #77777d; line-height: 1.55; margin-top: 3px; }
-    /* Botones */
-    .btn { cursor: pointer; border-radius: 11px; font-family: inherit; font-weight: 700; transition: all 150ms; }
-    .btn-primary { height: 40px; background: #E11D48; color: #fff; font-size: 12px; border: none; display: flex; align-items: center; justify-content: center; gap: 7px; }
+    .view { padding: 15px 18px 17px; display: none; }
+    .view.on { display: block; animation: viewIn 170ms cubic-bezier(0.16,1,0.3,1); }
+    @keyframes viewIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+    .v-head { margin-bottom: 14px; }
+    .v-head h2 { font-size: 17px; font-weight: 700; letter-spacing: -0.015em; }
+    .v-head p { font-size: 10.5px; color: var(--txt-4); line-height: 1.6; margin-top: 4px; }
+
+    /* ── Botones ── */
+    .btn { cursor: pointer; border-radius: 11px; font-weight: 700; transition: all 150ms; }
+    .btn-primary { height: 42px; background: var(--accent); color: #fff; font-size: 12px; border: none; display: flex; align-items: center; justify-content: center; gap: 7px; }
     .btn-primary:hover { filter: brightness(1.12); }
-    .btn-ghost { height: 40px; background: transparent; color: #b9b9bf; font-size: 12px; border: 1px solid #2a2a2e; display: flex; align-items: center; justify-content: center; gap: 7px; }
-    .btn-ghost:hover { border-color: #3a3a40; background: #101114; }
-    .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 13px; }
-    /* Crear grupo */
-    .newrow { display: flex; gap: 8px; margin-bottom: 13px; }
-    .newrow input { flex: 1; height: 40px; background: #0b0c0f; border: 1px solid #2a2a2e; border-radius: 11px; color: #EAEAEA; outline: none; padding: 0 13px; font-size: 12.5px; font-weight: 600; font-family: inherit; transition: border-color 150ms, box-shadow 150ms; }
-    .newrow input:focus { border-color: #E11D48; box-shadow: 0 0 0 3px rgba(225,29,72,0.1); }
-    .newrow .btn { height: 40px; padding: 0 16px; flex-shrink: 0; }
-    /* Filas de grupo */
-    .groups { display: flex; flex-direction: column; gap: 8px; max-height: 330px; overflow-y: auto; }
-    .groups::-webkit-scrollbar { width: 4px; }
-    .groups::-webkit-scrollbar-thumb { background: #2a2a2e; border-radius: 4px; }
-    .grp { border: 1px solid #1e1e22; background: #0b0c0f; border-radius: 14px; padding: 12px 13px; transition: border-color 140ms; }
-    .grp:hover { border-color: #2c2c31; }
-    .grp.open { border-color: rgba(16,185,129,0.35); background: rgba(16,185,129,0.03); }
+    .btn-primary:active { transform: scale(0.985); }
+    .btn-ghost { height: 42px; background: transparent; color: var(--txt-2); font-size: 12px; border: 1px solid var(--line-2); display: flex; align-items: center; justify-content: center; gap: 7px; }
+    .btn-ghost:hover { border-color: #3a3a40; background: var(--panel-2); }
+    .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+
+    /* ── Crear grupo ── */
+    .newrow { display: flex; gap: 8px; margin-bottom: 14px; }
+    .newrow input { flex: 1; height: 42px; background: var(--panel); border: 1px solid var(--line-2); border-radius: 11px; color: var(--txt); outline: none; padding: 0 14px; font-size: 12.5px; font-weight: 600; font-family: inherit; transition: border-color 150ms, box-shadow 150ms; }
+    .newrow input::placeholder { color: var(--txt-5); font-weight: 500; }
+    .newrow input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(225,29,72,0.1); }
+    .newrow .btn { height: 42px; padding: 0 18px; flex-shrink: 0; }
+
+    /* ── Filas de grupo ── */
+    .groups { display: flex; flex-direction: column; gap: 9px; max-height: 330px; overflow-y: auto; padding-right: 2px; }
+    .grp { border: 1px solid var(--line); background: var(--panel); border-radius: var(--r-lg); padding: 13px 14px 12px; transition: border-color 140ms, background 140ms; }
+    .grp:hover { border-color: var(--line-3); background: var(--panel-2); }
+    .grp.open { border-color: rgba(16,185,129,0.35); background: rgba(16,185,129,0.035); }
     .grp-top { display: flex; align-items: center; gap: 10px; }
     .grp .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
-    .grp .name { flex: 1; min-width: 0; font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .grp .badge { font-size: 8.5px; color: #10B981; font-weight: 700; letter-spacing: 0.06em; border: 1px solid rgba(16,185,129,0.35); background: rgba(16,185,129,0.08); padding: 2px 8px; border-radius: 99px; flex-shrink: 0; }
-    .grp .cnt { font-size: 9.5px; color: #999; font-weight: 700; background: #1a1a1e; padding: 2px 8px; border-radius: 99px; flex-shrink: 0; }
-    .grp-actions { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
-    .grp-actions button { display: flex; align-items: center; gap: 5px; height: 27px; padding: 0 10px; border-radius: 8px; border: 1px solid #26262b; background: transparent; color: #999; font-size: 10px; font-weight: 600; font-family: inherit; cursor: pointer; transition: all 130ms; }
-    .grp-actions button:hover { border-color: #3a3a40; color: #EAEAEA; background: #141418; }
-    .grp-actions button.openb { color: #E11D48; border-color: rgba(225,29,72,0.3); }
-    .grp-actions button.openb:hover { background: rgba(225,29,72,0.1); }
+    .grp .name { flex: 1; min-width: 0; font-size: 13px; font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .grp .badge { font-size: 8px; color: var(--ok); font-weight: 700; letter-spacing: 0.08em; border: 1px solid rgba(16,185,129,0.35); background: rgba(16,185,129,0.08); padding: 2.5px 8px; border-radius: 99px; flex-shrink: 0; }
+    .grp .cnt { font-size: 9.5px; color: var(--txt-3); font-weight: 700; background: #1a1a1e; padding: 2.5px 9px; border-radius: 99px; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+    .grp-actions { display: flex; gap: 6px; margin-top: 11px; flex-wrap: wrap; }
+    .grp-actions button { display: flex; align-items: center; gap: 5px; height: 28px; padding: 0 11px; border-radius: 8px; border: 1px solid var(--line-2); background: transparent; color: var(--txt-3); font-size: 10px; font-weight: 600; font-family: inherit; cursor: pointer; transition: all 130ms; }
+    .grp-actions button:hover { border-color: #3a3a40; color: var(--txt); background: #16161a; }
+    .grp-actions button.openb { color: var(--accent); border-color: rgba(225,29,72,0.3); }
+    .grp-actions button.openb:hover { background: rgba(225,29,72,0.1); border-color: rgba(225,29,72,0.5); }
     .grp-actions button.danger:hover { border-color: rgba(239,68,68,0.4); color: #EF4444; background: rgba(239,68,68,0.08); }
-    .empty { text-align: center; color: #666; font-size: 11px; padding: 26px 14px; line-height: 1.65; border: 1.5px dashed #222226; border-radius: 14px; }
-    /* Bloqueos */
-    .form { border: 1px solid #1e1e22; background: #0b0c0f; border-radius: 14px; padding: 14px; margin-bottom: 14px; }
-    .form .f-label { font-size: 8.5px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #66666c; margin-bottom: 6px; display: block; }
-    .form input[type="text"] { width: 100%; height: 40px; background: #0b0c0f; border: 1px solid #2a2a2e; border-radius: 10px; color: #EAEAEA; outline: none; padding: 0 13px; font-size: 13.5px; font-weight: 600; font-family: inherit; transition: border-color 150ms, box-shadow 150ms; }
-    .form input[type="text"]:focus { border-color: #E11D48; box-shadow: 0 0 0 3px rgba(225,29,72,0.1); }
-    .form .f-row { display: flex; gap: 8px; margin-top: 9px; align-items: center; }
-    .form input[type="time"] { flex: 1; height: 36px; background: #0b0c0f; border: 1px solid #2a2a2e; border-radius: 10px; color: #EAEAEA; outline: none; padding: 0 10px; font-size: 12px; font-weight: 600; color-scheme: dark; font-variant-numeric: tabular-nums; font-family: inherit; }
-    .form .f-sep { color: #55555b; font-size: 11px; font-weight: 600; }
-    .brow { display: flex; align-items: center; gap: 10px; padding: 12px 13px; border-radius: 13px; border: 1px solid #1e1e22; background: #0b0c0f; margin-bottom: 7px; transition: opacity 200ms; }
+    .empty { text-align: center; color: var(--txt-4); font-size: 11px; padding: 28px 16px; line-height: 1.7; border: 1.5px dashed #222226; border-radius: var(--r-lg); }
+
+    /* ── Formulario de bloqueos ── */
+    .form { border: 1px solid var(--line); background: var(--panel); border-radius: var(--r-lg); padding: 15px; margin-bottom: 15px; }
+    .form .f-label { font-size: 8.5px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--txt-4); margin-bottom: 8px; display: block; }
+    .form input[type="text"] { width: 100%; height: 42px; background: var(--bg); border: 1px solid var(--line-2); border-radius: 10px; color: var(--txt); outline: none; padding: 0 14px; font-size: 13.5px; font-weight: 600; font-family: inherit; transition: border-color 150ms, box-shadow 150ms; }
+    .form input[type="text"]::placeholder { color: var(--txt-5); font-weight: 500; }
+    .form input[type="text"]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(225,29,72,0.1); }
+    .form .f-row { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
+    .form input[type="time"] { flex: 1; height: 38px; background: var(--bg); border: 1px solid var(--line-2); border-radius: 10px; color: var(--txt); outline: none; padding: 0 11px; font-size: 12px; font-weight: 600; color-scheme: dark; font-variant-numeric: tabular-nums; font-family: inherit; transition: border-color 150ms; }
+    .form input[type="time"]:focus { border-color: var(--accent); }
+    .form .f-sep { color: var(--txt-5); font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+
+    /* ── Filas de bloqueo ── */
+    .brow { display: flex; align-items: center; gap: 11px; padding: 12px 14px; border-radius: var(--r-lg); border: 1px solid var(--line); background: var(--panel); margin-bottom: 8px; transition: opacity 200ms, border-color 140ms; }
+    .brow:hover { border-color: var(--line-3); }
     .brow.off { opacity: 0.45; }
     .brow .info { flex: 1; min-width: 0; }
-    .brow .d { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .brow .h { font-size: 10px; color: #77777d; font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; }
-    .brow .active { color: #EF4444; font-weight: 700; letter-spacing: 0.05em; }
-    .brow .iconbtn { width: 26px; height: 26px; border-radius: 8px; border: none; background: transparent; color: #77777d; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 130ms; flex-shrink: 0; }
+    .brow .d { font-size: 13px; font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .brow .h { font-size: 10px; color: var(--txt-4); font-weight: 600; margin-top: 2.5px; font-variant-numeric: tabular-nums; }
+    .brow .active { color: #EF4444; font-weight: 700; letter-spacing: 0.06em; }
+    .brow .iconbtn { width: 28px; height: 28px; border-radius: 8px; border: none; background: transparent; color: var(--txt-4); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 130ms; flex-shrink: 0; }
     .brow .iconbtn:hover { background: rgba(239,68,68,0.12); color: #EF4444; }
-    .sw { width: 38px; height: 21px; border-radius: 99px; background: #26262b; border: none; cursor: pointer; position: relative; transition: background 200ms; flex-shrink: 0; }
-    .sw.on { background: #10B981; }
+
+    /* ── Toggle ── */
+    .sw { width: 38px; height: 21px; border-radius: 99px; background: var(--line-2); border: none; cursor: pointer; position: relative; transition: background 200ms; flex-shrink: 0; }
+    .sw.on { background: var(--ok); }
     .sw .k { width: 15px; height: 15px; border-radius: 99px; background: #fff; position: absolute; top: 3px; left: 3px; transition: left 200ms; box-shadow: 0 1px 3px rgba(0,0,0,0.4); }
     .sw.on .k { left: 20px; }
-    /* Rendimiento */
-    .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 13px; }
-    .stat { border: 1px solid #1e1e22; background: #0b0c0f; border-radius: 13px; padding: 14px 8px; text-align: center; }
-    .stat .s-n { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
-    .stat .s-l { font-size: 8px; letter-spacing: 0.1em; text-transform: uppercase; color: #66666c; font-weight: 700; margin-top: 3px; }
-    select.min { height: 34px; background: #0b0c0f; border: 1px solid #2a2a2e; border-radius: 9px; color: #EAEAEA; font-size: 11px; font-weight: 600; padding: 0 8px; outline: none; color-scheme: dark; font-family: inherit; }
-    .perf-row { display: flex; align-items: center; gap: 10px; padding: 12px 2px; border-top: 1px solid #1c1c20; }
+
+    /* ── Rendimiento ── */
+    .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-bottom: 15px; }
+    .stat { border: 1px solid var(--line); background: var(--panel); border-radius: var(--r-lg); padding: 15px 8px 13px; text-align: center; }
+    .stat .s-n { font-size: 23px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+    .stat .s-l { font-size: 7.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--txt-4); font-weight: 700; margin-top: 4px; }
+    select.min { height: 34px; background: var(--panel); border: 1px solid var(--line-2); border-radius: 9px; color: var(--txt); font-size: 11px; font-weight: 600; padding: 0 9px; outline: none; color-scheme: dark; font-family: inherit; cursor: pointer; }
+    .perf-row { display: flex; align-items: center; gap: 11px; padding: 13px 2px; border-top: 1px solid var(--line); }
     .perf-row .p-txt { flex: 1; }
     .perf-row .p-t { font-size: 12px; font-weight: 600; }
-    .perf-row .p-s { font-size: 9.5px; color: #77777d; margin-top: 1px; line-height: 1.5; }
-    .toast { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); background: #1a1a1e; color: #fff; font-size: 11px; font-weight: 600; padding: 9px 15px; border-radius: 99px; z-index: 99; white-space: nowrap; box-shadow: 0 4px 18px rgba(0,0,0,0.5); border: 1px solid #2a2a2e; }
+    .perf-row .p-s { font-size: 9.5px; color: var(--txt-4); margin-top: 2px; line-height: 1.55; }
+
+    /* ── Toast ── */
+    .toast { position: fixed; bottom: 15px; left: 50%; transform: translateX(-50%); background: #1a1a1e; color: #fff; font-size: 11px; font-weight: 600; padding: 9px 16px; border-radius: 99px; z-index: 99; white-space: nowrap; box-shadow: 0 4px 18px rgba(0,0,0,0.5); border: 1px solid var(--line-2); animation: viewIn 160ms ease; }
     #toast { display: none; }
   </style>
 </head>
@@ -97,20 +123,20 @@
       <div class="logo-name">OWA <span>Ventanas</span></div>
       <div class="logo-sub">Gestor del navegador</div>
     </div>
-    <span class="ver">v2.0.0</span>
+    <span class="ver">v2.0.1</span>
   </div>
 
   <div class="tabs">
     <button class="tab on" data-tab="grupos">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
       <span class="tl">Grupos</span>
     </button>
     <button class="tab" data-tab="bloqueos">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
       <span class="tl">Bloqueos</span>
     </button>
     <button class="tab" data-tab="rendimiento">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 19v-3"/><path d="M10 19v-6"/><path d="M14 19v-9"/><path d="M18 19V5"/><path d="M3 22h18"/></svg>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 19v-3"/><path d="M10 19v-6"/><path d="M14 19v-9"/><path d="M18 19V5"/><path d="M3 22h18"/></svg>
       <span class="tl">Rendimiento</span>
     </button>
   </div>
@@ -127,7 +153,7 @@
     </div>
     <div class="newrow">
       <input id="newGroupName" placeholder="Nombre del nuevo grupo…" autocomplete="off" spellcheck="false" />
-      <button class="btn btn-primary" id="createGroupBtn" style="height:40px">+ Crear</button>
+      <button class="btn btn-primary" id="createGroupBtn">+ Crear</button>
     </div>
     <div id="groups" class="groups"></div>
   </div>
@@ -145,11 +171,11 @@
         <input type="time" id="bFrom" value="08:00" />
         <span class="f-sep">hasta</span>
         <input type="time" id="bTo" value="18:00" />
-        <button class="btn btn-primary" id="addBlockBtn" style="height:36px; padding: 0 16px; flex-shrink:0">Bloquear</button>
+        <button class="btn btn-primary" id="addBlockBtn" style="height:38px; padding: 0 17px; flex-shrink:0">Bloquear</button>
       </div>
     </div>
     <div id="blocks"></div>
-    <div class="perf-row" style="border-top:1px solid #1c1c20">
+    <div class="perf-row">
       <div class="p-txt">
         <div class="p-t">Bloqueador de anuncios</div>
         <div class="p-s" id="adblockSub">100 reglas contra anuncios y rastreadores</div>
@@ -166,8 +192,8 @@
     </div>
     <div class="stats">
       <div class="stat"><div class="s-n" id="statTabs">—</div><div class="s-l">Pestañas abiertas</div></div>
-      <div class="stat"><div class="s-n" id="statSuspended" style="color:#10B981">0</div><div class="s-l">Suspendidas</div></div>
-      <div class="stat" style="grid-column: 1 / -1"><div class="s-n" id="statSaved" style="color:#E11D48">0</div><div class="s-l">MB aproximados liberados</div></div>
+      <div class="stat"><div class="s-n" id="statSuspended" style="color:var(--ok)">0</div><div class="s-l">Suspendidas</div></div>
+      <div class="stat" style="grid-column: 1 / -1"><div class="s-n" id="statSaved" style="color:var(--accent)">0</div><div class="s-l">MB aproximados liberados</div></div>
     </div>
     <div class="actions">
       <button class="btn btn-primary" id="suspendNowBtn">Suspender inactivas</button>
