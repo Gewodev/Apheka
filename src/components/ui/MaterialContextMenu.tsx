@@ -13,6 +13,8 @@ import {
   getDefaultBrowserId,
   getSelectedCourseName,
   setDefaultBrowser,
+  getDefaultPdfAppId,
+  setDefaultPdfApp,
   openUrlInBrowser,
 } from '../../lib/browsers';
 
@@ -26,6 +28,9 @@ export interface MatMenuEntry {
   // Acciones por lote sobre TODAS las herramientas/archivos del tema
   onBatchColor?: (color: string) => void;
   onOpenAll?: () => void;
+  // Selección por presión larga: abre los materiales marcados
+  onOpenSelected?: () => void;
+  selectedCount?: number;
 }
 
 interface MenuState {
@@ -63,12 +68,13 @@ function Item({ icon, label, onClick, danger, accent, trailing }: {
 
 const Divider = () => <div style={{ height: 1, margin: '4px 6px', background: 'var(--border-subtle)' }} />;
 
-// Ventana de confirmación de predeterminado (long-press en un navegador)
-function DefaultBrowserModal({ browserName, courseName, onPick, onCancel }: {
-  browserName: string; courseName?: string;
+// Ventana de confirmación de predeterminado (long-press en navegador o app PDF)
+function DefaultBrowserModal({ browserName, courseName, kind, onPick, onCancel }: {
+  browserName: string; courseName?: string; kind: 'browser' | 'pdf';
   onPick: (scope: 'course' | 'global') => void; onCancel: () => void;
 }) {
   const hasCourse = !!courseName;
+  const isPdf = kind === 'pdf';
   return (
     <>
       <div onClick={onCancel} onContextMenu={e => { e.preventDefault(); onCancel(); }} onMouseDown={e => e.stopPropagation()}
@@ -89,7 +95,9 @@ function DefaultBrowserModal({ browserName, courseName, onPick, onCancel }: {
           ¿Cambiar a {browserName} como predeterminado?
         </div>
         <div style={{ fontSize: 10, color: 'var(--text-tertiary)', lineHeight: 1.45, marginBottom: 13 }}>
-          Los enlaces se abrirán con este navegador{hasCourse ? `. Elige si solo para ${courseName} o en todos los cursos.` : ' en todos los cursos.'}
+          {isPdf
+            ? `Los PDF se abrirán con esta aplicación${hasCourse ? `. Elige si solo para ${courseName} o en todos los cursos.` : ' en todos los cursos.'}`
+            : `Los enlaces se abrirán con este navegador${hasCourse ? `. Elige si solo para ${courseName} o en todos los cursos.` : ' en todos los cursos.'}`}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {hasCourse && (
@@ -147,8 +155,9 @@ function MenuPanel(props: {
   runOpenAppPdf: () => void;
   openPdfWithApp: (exe: string) => void;
   resolveToOpenable: (url: string) => Promise<string>;
+  notify?: (msg: string) => void;
 }) {
-  const { state, close, runOpen, runReveal, runCopy, runOpenAppPdf, openPdfWithApp, resolveToOpenable } = props;
+  const { state, close, runOpen, runReveal, runCopy, runOpenAppPdf, openPdfWithApp, resolveToOpenable, notify } = props;
   const { x, y, entry } = state;
   const inTauri = isTauri();
   const isLink = /^https?:\/\//i.test(entry.url);
@@ -161,9 +170,16 @@ function MenuPanel(props: {
   const [browsers, setBrowsers] = useState<DetectedBrowser[]>([]);
   const [pdfApps, setPdfApps] = useState<PdfApp[]>([]);
   const [defaultId, setDefaultId] = useState<string | null>(null);
-  const [defaultModal, setDefaultModal] = useState<DetectedBrowser | null>(null);
+  const [defaultPdfId, setDefaultPdfId] = useState<string | null>(null);
+  const [defaultModal, setDefaultModal] = useState<{ id: string; name: string; kind: 'browser' | 'pdf'; exe?: string } | null>(null);
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressedRef = useRef(false);
+  const armDefaultPress = (item: { id: string; name: string; kind: 'browser' | 'pdf'; exe?: string }) => {
+    longPressedRef.current = false;
+    if (pressTimer.current) clearTimeout(pressTimer.current);
+    pressTimer.current = setTimeout(() => { longPressedRef.current = true; setDefaultModal(item); }, 500);
+  };
+  const disarmDefaultPress = () => { if (pressTimer.current) clearTimeout(pressTimer.current); };
 
   const selCourseId = (): string | undefined => {
     try { return entry.courseId ?? (localStorage.getItem('owa_selected_course_id') || undefined); } catch { return undefined; }
@@ -183,6 +199,7 @@ function MenuPanel(props: {
         setPdfApps(apps);
       }
       setDefaultId(getDefaultBrowserId(selCourseId()));
+      setDefaultPdfId(getDefaultPdfAppId(selCourseId()));
       setCourseName(getSelectedCourseName());
     })();
     return () => { alive = false; };
@@ -203,11 +220,31 @@ function MenuPanel(props: {
     catch (e) { console.warn(e); }
   };
 
+  // Guarda el predeterminado, lo VERIFICA releyendo y lo ejecuta al instante
+  // con este material. Así "queda guardado" y "se ejecuta como tal".
   const pickDefault = (scope: 'course' | 'global') => {
     if (!defaultModal) return;
-    setDefaultBrowser(defaultModal.id, scope === 'course' ? selCourseId() : undefined);
-    setDefaultId(getDefaultBrowserId(selCourseId()));
-    setDefaultModal(null);
+    const picked = defaultModal;
+    const cid = scope === 'course' ? selCourseId() : undefined;
+    const where = scope === 'course' ? 'este curso' : 'toda la app';
+    if (picked.kind === 'pdf') {
+      setDefaultPdfApp(picked.id, cid);
+      const check = getDefaultPdfAppId(cid ?? selCourseId());
+      setDefaultPdfId(getDefaultPdfAppId(selCourseId()));
+      setDefaultModal(null);
+      if (check !== picked.id) { notify?.('No se pudo guardar el predeterminado'); return; }
+      notify?.(`PDF predeterminado: ${picked.name} (${where})`);
+      if (picked.exe) openPdfWithApp(picked.exe);
+      else runOpenAppPdf();
+    } else {
+      setDefaultBrowser(picked.id, cid);
+      const check = getDefaultBrowserId(cid ?? selCourseId());
+      setDefaultId(getDefaultBrowserId(selCourseId()));
+      setDefaultModal(null);
+      if (check !== picked.id) { notify?.('No se pudo guardar el predeterminado'); return; }
+      notify?.(`Navegador predeterminado: ${picked.name} (${where})`);
+      if (picked.exe) openWith({ id: picked.id, name: picked.name, exe: picked.exe });
+    }
   };
 
   const showSubmenu = subOpen && browsers.length > 0;
@@ -236,6 +273,7 @@ function MenuPanel(props: {
         <DefaultBrowserModal
           browserName={defaultModal.name}
           courseName={selCourseId() ? (courseName || 'este curso') : undefined}
+          kind={defaultModal.kind}
           onPick={pickDefault}
           onCancel={() => setDefaultModal(null)}
         />
@@ -282,39 +320,41 @@ function MenuPanel(props: {
             {isPdf && pdfApps.length === 0 && (
               <div
                 onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
-                onClick={() => runOpenAppPdf()}
-                title="Abrir con la aplicación de PDF del sistema"
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; disarmDefaultPress(); }}
+                onMouseDown={() => armDefaultPress({ id: 'sys', name: 'App de PDF del sistema', kind: 'pdf' })}
+                onMouseUp={disarmDefaultPress}
+                onClick={() => { if (longPressedRef.current) { longPressedRef.current = false; return; } runOpenAppPdf(); }}
+                title={`App de PDF del sistema${defaultPdfId === 'sys' ? ' · predeterminado' : ''} — mantén pulsado para predeterminar`}
                 style={{ ...itemBase, height: 28 }}
               >
                 <span style={{ display: 'flex', width: 17, justifyContent: 'center' }}><PdfAppIcon id="sys" size={15} /></span>
                 <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>App de PDF del sistema</span>
+                {defaultPdfId === 'sys' && <Check size={11} style={{ color: 'var(--accent)' }} />}
               </div>
             )}
             {isPdf && pdfApps.map(a => (
               <div
                 key={a.id}
                 onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
-                onClick={() => openWithExe(a.exe)}
-                title={`Abrir con ${a.name}`}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; disarmDefaultPress(); }}
+                onMouseDown={() => armDefaultPress({ id: a.id, name: a.name, kind: 'pdf', exe: a.exe })}
+                onMouseUp={disarmDefaultPress}
+                onClick={() => { if (longPressedRef.current) { longPressedRef.current = false; return; } openWithExe(a.exe); }}
+                title={`Abrir con ${a.name}${defaultPdfId === a.id ? ' · predeterminado' : ''} — mantén pulsado para predeterminar`}
                 style={{ ...itemBase, height: 28 }}
               >
                 <span style={{ display: 'flex', width: 17, justifyContent: 'center' }}><PdfAppIcon id={a.id} size={15} /></span>
                 <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</span>
+                {defaultPdfId === a.id && <Check size={11} style={{ color: 'var(--accent)' }} />}
               </div>
             ))}
             {browsers.map(b => (
               <div
                 key={b.id}
                 onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; if (pressTimer.current) clearTimeout(pressTimer.current); }}
-                onMouseDown={() => {
-                  longPressedRef.current = false;
-                  if (pressTimer.current) clearTimeout(pressTimer.current);
-                  pressTimer.current = setTimeout(() => { longPressedRef.current = true; setDefaultModal(b); }, 500);
-                }}
-                onMouseUp={() => { if (pressTimer.current) clearTimeout(pressTimer.current); }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; disarmDefaultPress(); }}
+                onMouseDown={() => armDefaultPress({ id: b.id, name: b.name, kind: 'browser', exe: b.exe })}
+                onMouseUp={disarmDefaultPress}
                 onClick={() => { if (longPressedRef.current) { longPressedRef.current = false; return; } openWith(b); }}
                 title={`${b.name}${getDefaultBrowserId(entry.courseId) === b.id ? ' · predeterminado' : ''} — mantén pulsado para predeterminar`}
                 style={{ ...itemBase, height: 28 }}
@@ -329,6 +369,15 @@ function MenuPanel(props: {
         {inTauri && isLocal && !isPdf && (
           <Item icon={<FolderSearch size={13} />} label="Mostrar en carpeta" onClick={runReveal} />
         )}
+        {entry.onOpenSelected && (
+          <Item
+            icon={<Check size={13} />}
+            label={`Abrir seleccionados (${entry.selectedCount ?? 0})`}
+            accent="#E11D48"
+            onClick={() => { close(); entry.onOpenSelected!(); }}
+          />
+        )}
+        {entry.onOpenSelected && <Divider />}
         {entry.onBatchColor && <BatchColorRow onPick={c => { close(); entry.onBatchColor!(c); }} />}
         {entry.onOpenAll && (
           <Item icon={<FolderOpen size={13} />} label="Abrir todos los recursos" accent="#10B981" onClick={() => { close(); entry.onOpenAll!(); }} />
@@ -417,6 +466,7 @@ export function useMaterialMenu(notify?: (msg: string) => void) {
           runOpenAppPdf={runOpenAppPdf}
           openPdfWithApp={openPdfWithApp}
           resolveToOpenable={resolveToOpenable}
+          notify={notify}
         />
       );
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -467,7 +517,8 @@ export function useMaterialMenu(notify?: (msg: string) => void) {
       const loc = toLocal(s.entry.url);
       if (loc) {
         const resolved = await resolveOrDirect(loc, s.entry.name);
-        await openPath(resolved);
+        // Con la app ELEGIDA (no la del sistema): se abre vía asset URL.
+        await openUrlInBrowser(exe, convertFileSrc(resolved));
         return;
       }
       await openUrlInBrowser(exe, s.entry.url);
@@ -490,7 +541,36 @@ export function useMaterialMenu(notify?: (msg: string) => void) {
         }
       } catch { /* cae al flujo normal */ }
     }
+    // PDF local: si hay app PDF predeterminada (curso > global), úsala
+    if (isTauri() && /\.pdf($|[?#])/i.test(url)) {
+      try {
+        const { resolveDefaultPdfAppExe } = await import('../../lib/browsers');
+        const exe = await resolveDefaultPdfAppExe(s.entry.courseId ?? readCourseId());
+        if (exe === 'sys') {
+          await runOpenAppPdfInner(url, name);
+          return;
+        }
+        if (exe) {
+          const loc = toLocal(url);
+          const target = loc ? convertFileSrc(await resolveOrDirect(loc, name)) : url;
+          await openUrlInBrowser(exe, target);
+          return;
+        }
+      } catch { /* cae al flujo normal */ }
+    }
     await openFileSmart(url, name, { onError: (m) => notify?.(m) });
+  };
+
+  const runOpenAppPdfInner = async (url: string, name: string) => {
+    try {
+      const loc = toLocal(url);
+      if (loc) {
+        const resolved = await resolveOrDirect(loc, name);
+        await openPath(resolved);
+      } else {
+        await openFileSmart(url, name, { onError: (m) => notify?.(m) });
+      }
+    } catch { notify?.('No se pudo abrir con una aplicación'); }
   };
 
   const runOpenAppPdf = async () => {

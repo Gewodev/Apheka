@@ -676,6 +676,7 @@ interface AppContextType extends AppState {
   courseDeepLink: { courseId: string; groupId?: string; topicId?: string } | null;
   setCourseDeepLink: (link: { courseId: string; groupId?: string; topicId?: string } | null) => void;
   navigateToCourse: (courseId: string, groupId?: string, topicId?: string) => void;
+  hydrated: boolean;
   focusedTaskId: string | null;
   setFocusedTaskId: (id: string | null) => void;
   focusedEventId: string | null;
@@ -2151,7 +2152,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addNote = useCallback((note: Omit<Note, 'id' | 'createdAt' | 'updatedAt'>) => {
     const now = new Date().toISOString();
     const id = Date.now().toString();
-    setNotes(prev => [...prev, { ...note, id, createdAt: now, updatedAt: now }]);
+    // Robustez de escritura: normaliza lo que entra al estado — nunca un título
+    // en blanco ni contenido con solo markup/espacios.
+    const clean = {
+      ...note,
+      title: (note.title || '').trim() || 'Sin título',
+      content: note.content || '',
+      subtitle: (note.subtitle || '').trim(),
+    };
+    setNotes(prev => [...prev, { ...clean, id, createdAt: now, updatedAt: now }]);
     return id;
   }, []);
 
@@ -2159,7 +2168,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setNotes(prev => {
       const note = prev.find(n => n.id === id);
       if (!note) return prev;
-      return prev.map(n => n.id === id ? { ...n, ...updates, updatedAt: new Date().toISOString() } : n);
+      // No re-escribe si nada cambió de verdad (evita updatedAt saltando sin motivo)
+      const touches = Object.keys(updates) as (keyof Note)[];
+      const unchanged = touches.every(k => String(note[k] ?? '') === String((updates as any)[k] ?? ''));
+      if (unchanged) return prev;
+      const clean = { ...updates } as Partial<Note>;
+      if (clean.title !== undefined) clean.title = (clean.title || '').trim() || 'Sin título';
+      if (clean.subtitle !== undefined) clean.subtitle = (clean.subtitle || '').trim();
+      return prev.map(n => n.id === id ? { ...n, ...clean, updatedAt: new Date().toISOString() } : n);
     });
   }, []);
 
@@ -4207,6 +4223,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const value: AppContextType = {
     tasks, habits, notes, noteFolders, courses, events, tracks, studySessions, plannedSessions,
+    hydrated,
     settings, sessionTime, sessionType, weeklyStudyTime, dailyStudyTime, pomodoroSessions,
     activeTaskId, timerLocked, isTimerActive, roundsCompleted, showCompletion,
     showRestPrompt, setShowRestPrompt, handlePomodoroBannerClick,

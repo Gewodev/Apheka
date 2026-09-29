@@ -1886,8 +1886,14 @@ const noteLiveAtts = useMemo(
       content = editorRef.current.innerHTML;
     }
     if (titleRef.current) {
-      title = titleRef.current.value || "Sin título";
+      title = titleRef.current.value;
     }
+    // Robustez de escritura: título en blanco → "Sin título"; y un contenido que
+    // solo tiene espacios o markup vacío (<p><br></p>, &nbsp;) se guarda REALMENTE
+    // vacío, para que nunca existan notas fantasma que "se ven vacías pero pesan".
+    title = (title || '').trim() || 'Sin título';
+    const plainProbe = content.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/\u00A0/g, ' ').trim();
+    if (!plainProbe) content = '';
 
     // Si nada cambió desde el último guardado, no re-escribe la nota
     // (antes cada cleanup del effect de autosave disparaba updateNote y re-creaba el ciclo).

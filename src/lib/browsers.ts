@@ -51,12 +51,61 @@ export async function openUrlInBrowser(exe: string, url: string): Promise<void> 
   await invoke('open_url_in_browser', { exe, url });
 }
 
-/** Resuelve el navegador predeterminado (curso > global) y devuelve su exe */
+async function exeAlive(exe: string): Promise<boolean> {
+  try {
+    const { exists } = await import('@tauri-apps/plugin-fs');
+    return await exists(exe);
+  } catch { return true; }
+}
+
+/** Resuelve el navegador predeterminado (curso > global) y devuelve su exe.
+ * Verifica que el exe siga existiendo (si el navegador se actualizó o
+ * desinstaló, devuelve null y se usa el flujo normal en vez de fallar). */
 export async function resolveDefaultBrowserExe(courseId?: string): Promise<string | null> {
   const id = getDefaultBrowserId(courseId ?? readSelectedCourse());
   if (!id) return null;
   const list = await getInstalledBrowsers();
-  return list.find(b => b.id === id)?.exe || null;
+  const exe = list.find(b => b.id === id)?.exe || null;
+  if (exe && !(await exeAlive(exe))) return null;
+  return exe;
+}
+
+// ---------- App predeterminada para PDF (curso > global; 'sys' = sistema) ----------
+
+const PDF_GLOBAL_KEY = 'owa_default_pdfapp_global_v1';
+const pdfCourseKey = (courseId: string) => `owa_default_pdfapp_course_${courseId}`;
+
+export function getDefaultPdfAppId(courseId?: string): string | null {
+  try {
+    if (courseId) {
+      const v = localStorage.getItem(pdfCourseKey(courseId));
+      if (v) return v;
+    }
+    return localStorage.getItem(PDF_GLOBAL_KEY);
+  } catch { return null; }
+}
+
+export function setDefaultPdfApp(appId: string | null, courseId?: string): void {
+  try {
+    if (!appId) {
+      if (courseId) localStorage.removeItem(pdfCourseKey(courseId));
+      else localStorage.removeItem(PDF_GLOBAL_KEY);
+      return;
+    }
+    if (courseId) localStorage.setItem(pdfCourseKey(courseId), appId);
+    else localStorage.setItem(PDF_GLOBAL_KEY, appId);
+  } catch { /* noop */ }
+}
+
+/** Devuelve el exe de la app PDF predeterminada, 'sys' para la del sistema, o null si no hay */
+export async function resolveDefaultPdfAppExe(courseId?: string): Promise<string | null> {
+  const id = getDefaultPdfAppId(courseId ?? readSelectedCourse());
+  if (!id) return null;
+  if (id === 'sys') return 'sys';
+  const list = await getPdfApps();
+  const exe = list.find(a => a.id === id)?.exe || null;
+  if (exe && !(await exeAlive(exe))) return null;
+  return exe;
 }
 
 // ---------- Apps nativas que abren PDF (detección por rutas conocidas) ----------

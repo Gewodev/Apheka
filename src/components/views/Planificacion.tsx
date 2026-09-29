@@ -3,6 +3,7 @@
  */
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import toast from 'react-hot-toast';
 import LiveClock from '../ui/LiveClock';
 import { createPortal } from 'react-dom';
 import {
@@ -29,6 +30,7 @@ import HabitsView from './planificacion/HabitsView';
 import LateralPanel, { SelectedItem } from './planificacion/LateralPanel';
 import { fuzzyMatch } from '../../lib/fuzzy';
 import { safeSet } from '../../lib/safeStorage';
+import { get as idbGet, set as idbSet } from 'idb-keyval';
 
 const H_START = 0;
 const H_END   = 23;
@@ -109,14 +111,44 @@ const HOURS = Array.from({ length: H_END - H_START + 1 }, (_, i) => H_START + i)
 
 const STORE_KEY = 'owa_planner_v3';
 
-function loadStore(): { events: PlanEvent[]; classes: ScheduleClass[] } {
-  try { const d = JSON.parse(localStorage.getItem(STORE_KEY) || '{}'); return { events: d.events || [], classes: d.classes || [] }; }
-  catch { return { events: [], classes: [] }; }
+const IDB_KEY = 'owa_planner_v3';
+
+// Fuente de verdad: IndexedDB (sin cuota de 5MB). El espejo en localStorage
+// alimenta al puente de Google (AppContext) y sirve de arranque rápido.
+function parseStore(json: string | null): { events: PlanEvent[]; classes: ScheduleClass[] } {
+  try {
+    const d = JSON.parse(json || '{}');
+    return { events: Array.isArray(d.events) ? d.events : [], classes: Array.isArray(d.classes) ? d.classes : [] };
+  } catch { return { events: [], classes: [] }; }
 }
-function saveStore(events: PlanEvent[], classes: ScheduleClass[]) {
-  // safeSet: con la cuota llena el setItem crudo lanzaba y el evento creado
-  // se perdía en silencio ("creo un evento y no se ve").
-  safeSet(STORE_KEY, JSON.stringify({ events, classes }));
+function loadStoreSync(): { events: PlanEvent[]; classes: ScheduleClass[] } {
+  return parseStore(localStorage.getItem(STORE_KEY));
+}
+async function loadStore(): Promise<{ events: PlanEvent[]; classes: ScheduleClass[] }> {
+  // Carrera con timeout: si IndexedDB no responde (conexión bloqueada, disco lento),
+  // caemos al espejo de localStorage en vez de quedarnos colgados con estado vacío.
+  const idbJson = await new Promise<string | null>(res => {
+    let done = false;
+    const t = setTimeout(() => { if (!done) { done = true; res(null); } }, 2500);
+    idbGet(IDB_KEY).then(v => { if (!done) { done = true; clearTimeout(t); res(v as string | null); } })
+      .catch(() => { if (!done) { done = true; clearTimeout(t); res(null); } });
+  });
+  try {
+    if (idbJson !== null) {
+      const idb = parseStore(idbJson);
+      const ls = loadStoreSync();
+      // Gana la fuente con más eventos (IDB debería ser el superset)
+      return idb.events.length >= ls.events.length ? idb : ls;
+    }
+    return loadStoreSync();
+  } catch { return loadStoreSync(); }
+}
+function saveStore(events: PlanEvent[], classes: ScheduleClass[]): boolean {
+  const json = JSON.stringify({ events, classes });
+  let ok = true;
+  try { void idbSet(IDB_KEY, json); } catch { ok = false; }
+  try { localStorage.setItem(STORE_KEY, json); } catch { /* espejo best-effort */ }
+  return ok;
 }
 
 function getLayout(events: (PlanEvent | ScheduleClass)[]) {
@@ -222,6 +254,9 @@ export default function Planificacion() {
   const [planType, setPlanType] = useState('estudio');
   const [planDuration, setPlanDuration] = useState(30);
   const [planIntensity, setPlanIntensity] = useState(5);
+  const [planRepeat, setPlanRepeat] = useState<'none' | 'daily' | 'weekly' | 'custom_days'>('none');
+  const [planRepeatDays, setPlanRepeatDays] = useState<number[]>([]);
+  const [planRepeatUntil, setPlanRepeatUntil] = useState('');
   const [planTimeEdit, setPlanTimeEdit] = useState<'h' | 'm' | null>(null);
   const [planTimeEditVal, setPlanTimeEditVal] = useState('');
   const [planOccurrenceDate, setPlanOccurrenceDate] = useState<string | null>(null);
@@ -275,6 +310,9 @@ export default function Planificacion() {
     setPlanType('estudio');
     setPlanDuration(30);
     setPlanIntensity(5);
+    setPlanRepeat('none');
+    setPlanRepeatDays([]);
+    setPlanRepeatUntil('');
     setPlanTimeEdit(null);
     setPlanOccurrenceDate(null);
     setPlanScope('all');
@@ -293,6 +331,9 @@ export default function Planificacion() {
     setPlanType(ps.type || 'estudio');
     setPlanDuration(ps.durationMinutes || 30);
     setPlanIntensity(ps.intensity || 5);
+    setPlanRepeat(ps.repeat || 'none');
+    setPlanRepeatDays(Array.isArray(ps.repeatDays) ? ps.repeatDays : []);
+    setPlanRepeatUntil(ps.repeatUntil || '');
     setPlanTimeEdit(null);
     setPlanScope('all');
     setConfirmDeleteSession(false);
@@ -319,7 +360,21 @@ export default function Planificacion() {
   useEffect(() => { localStorage.setItem('owa_show_schedule', String(showScheduleBuilder)); }, [showScheduleBuilder]);
   useEffect(() => { localStorage.setItem('owa_show_habits', String(showHabits)); }, [showHabits]);
 
-  useEffect(() => { const d = loadStore(); setEvents(d.events); setClasses(d.classes); }, []);
+  // Compuerta anti-borrado: bloquea todo guardado hasta que la primera carga
+  // termina. Sin esto, el estado inicial vacío podía pisar el almacén real
+  // cuando IndexedDB tardaba más que el retardo de guardado (400 ms).
+  const loadedRef = useRef(false);
+
+  useEffect(() => {
+    let alive = true;
+    void loadStore().then(d => {
+      if (!alive) return;
+      setEvents(d.events);
+      setClasses(d.classes);
+      loadedRef.current = true;
+    });
+    return () => { alive = false; };
+  }, []);
 
   // Registra los eventos del planificador en el contexto para el sync con Google Calendar
   useEffect(() => {
@@ -364,7 +419,14 @@ export default function Planificacion() {
     }
     setFocusedEventId(null);
   }, [focusedEventId, events]);
-  useEffect(() => { const t = setTimeout(() => saveStore(events, classes), 400); return () => clearTimeout(t); }, [events, classes]);
+  useEffect(() => {
+    if (!loadedRef.current) return; // nada se guarda antes de la primera carga
+    const t = setTimeout(() => {
+      const ok = saveStore(events, classes);
+      if (!ok) toast.error('No se pudo guardar el planificador: almacenamiento lleno. Exporta un respaldo y libera espacio.');
+    }, 400);
+    return () => clearTimeout(t);
+  }, [events, classes]);
 
   const weekStart = startOfWeek(navDate, { weekStartsOn: 1 });
   const weekDays  = eachDayOfInterval({ start: weekStart, end: addDays(weekStart, 6) });
@@ -1674,7 +1736,42 @@ export default function Planificacion() {
                     )}
                   </div>
 
-                  
+                  {/* ── Repetir (misma lógica que los eventos) ── */}
+                  <div style={{ borderRadius: 11, border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', padding: '13px 14px', display: 'flex', flexDirection: 'column', gap: 9 }}>
+                    <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Repetir</label>
+                    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                      {([['none', 'No repite'], ['daily', 'Cada día'], ['weekly', 'Cada semana'], ['custom_days', 'Días propios']] as const).map(([v, lbl]) => (
+                        <button key={v} onClick={() => setPlanRepeat(v)}
+                          style={{ flex: 1, minWidth: 78, padding: '6px 0', borderRadius: 8, fontSize: 10, fontWeight: 700, fontFamily: "'Inter Tight', sans-serif", cursor: 'pointer', border: planRepeat === v ? '1px solid color-mix(in srgb, ' + courseColor + ' 45%, transparent)' : '1px solid var(--border-subtle)', background: planRepeat === v ? 'color-mix(in srgb, ' + courseColor + ' 8%, transparent)' : 'transparent', color: planRepeat === v ? courseColor : 'var(--text-muted)', transition: 'all 150ms' }}>
+                          {lbl}
+                        </button>
+                      ))}
+                    </div>
+                    {planRepeat === 'custom_days' && (
+                      <div style={{ display: 'flex', gap: 4, animation: 'fadeIn 200ms ease' }}>
+                        {['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((d, i) => {
+                          const on = planRepeatDays.includes(i);
+                          return (
+                            <button key={d} onClick={() => setPlanRepeatDays(prev => prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i])}
+                              title={['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'][i]}
+                              style={{ flex: 1, height: 30, borderRadius: 8, fontSize: 10.5, fontWeight: 700, fontFamily: "'Inter Tight', sans-serif", cursor: 'pointer', border: on ? 'none' : '1px solid var(--border-subtle)', background: on ? courseColor : 'transparent', color: on ? '#fff' : 'var(--text-muted)', transition: 'all 150ms' }}>
+                              {d}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {planRepeat !== 'none' && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, animation: 'fadeIn 200ms ease' }}>
+                        <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>Hasta</span>
+                        <input type="date" value={planRepeatUntil}
+                          onChange={e => setPlanRepeatUntil(e.target.value)}
+                          style={{ flex: 1, height: 32, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', fontSize: 11, padding: '0 10px', outline: 'none', colorScheme: 'dark', fontFamily: "'JetBrains Mono', monospace" }} />
+                      </div>
+                    )}
+                  </div>
+
+
                 </div>
 
                 <div style={{ padding: '14px 24px 20px', borderTop: '1px solid var(--border-subtle)', display: 'flex', gap: 10, justifyContent: 'flex-end', alignItems: 'center', flexShrink: 0 }}>
@@ -1694,11 +1791,13 @@ export default function Planificacion() {
                   </button>
                   <button onClick={() => {
                       if (!modalDate || !planTitle.trim()) { addNotification('Ponle un título a la sesión.', 'info'); return; }
-                      const payload = { courseId: planCourseId || '', date: modalDate, startTime: planStartTime || undefined, title: planTitle.trim(), groupId: planGroupId || undefined, topicId: planTopicId || undefined, durationMinutes: planDuration, type: planType, intensity: planIntensity, completed: false };
+                      if (planRepeat === 'custom_days' && planRepeatDays.length === 0) { addNotification('Elige al menos un día para la repetición.', 'info'); return; }
+                      const payload = { courseId: planCourseId || '', date: modalDate, startTime: planStartTime || undefined, title: planTitle.trim(), groupId: planGroupId || undefined, topicId: planTopicId || undefined, durationMinutes: planDuration, type: planType, intensity: planIntensity, completed: false, repeat: planRepeat, repeatDays: planRepeat === 'custom_days' && planRepeatDays.length ? [...planRepeatDays].sort() : undefined, repeatUntil: planRepeat !== 'none' && planRepeatUntil ? planRepeatUntil : undefined };
                       if (planEditId) {
+                        // "Para todos": la serie comparte un solo registro — editar aquí
+                        // actualiza la definición y la expansión la aplica en todas las fechas.
                         const orig = (plannedSessions || []).find(s => s.id === planEditId);
-                        const repeatPatch = orig?.repeat && orig.repeat !== 'none' ? { repeat: orig.repeat, repeatDays: orig.repeatDays, repeatUntil: orig.repeatUntil } : {};
-                        updatePlannedSession(planEditId, { ...payload, ...repeatPatch, exceptions: orig?.exceptions });
+                        updatePlannedSession(planEditId, { ...payload, exceptions: orig?.exceptions });
                       } else addPlannedSession(payload);
                       // La sesión guardada debe verse AL INSTANTE: si la vista no la
                       // muestra (mes/año no renderizan sesiones), saltar a la semana

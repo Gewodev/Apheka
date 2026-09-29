@@ -7,15 +7,14 @@ import {
   Clock, List as ListIcon, FileText,
   Link, Video, File, X, Upload, Link2,
   ExternalLink,   Eye, EyeOff, Filter,
-  ClipboardList, ChevronLeft, Timer,
-  Paperclip, StickyNote,
+  ChevronLeft, Timer,
+  Paperclip,
   Zap, Circle, CheckCircle, Loader,
   AlertTriangle,
   ArrowUp, ArrowDown, CheckSquare,
   LayoutGrid, Calendar, Play, Activity,
   TrendingUp, Flame, ListTodo, Image, Music, FileSpreadsheet,
   Star, Pencil, ChevronDown, Globe,
-  BookOpen, Bookmark, Minus,
 } from 'lucide-react';
 import { useApp, Task, fmtClock } from '../../store/AppContext';
 import { openFileSmart, pickAndPersistFile } from '../../lib/openFileSmart';
@@ -182,7 +181,6 @@ export default function Tareas() {
   const [googleConnected, setGoogleConnected] = useState(isSignedIn());
   const [syncing, setSyncing] = useState<'classroom' | 'tasks' | null>(null);
 
-  const [showApuntesEditor, setShowApuntesEditor] = useState(false);
 
   function donutGradient(segments: { value: number; color: string }[], gapDeg = 2): string {
     const total = segments.reduce((a, s) => a + s.value, 0);
@@ -480,7 +478,7 @@ export default function Tareas() {
     if (dueDateInput?.value) {
       dueDate = includeTime && dueTimeInput?.value ? `${dueDateInput.value}T${dueTimeInput.value}` : dueDateInput.value;
     }
-    addTask({ title, course: courseName, courseColor: course?.color || (courseName === 'Sin curso' ? 'var(--text-muted)' : '#E11D48'), priority: (prioritySelect?.value as any) || 'none', urgent: (prioritySelect?.value as any) === 'high', important: (prioritySelect?.value as any) === 'high', dueDate, estimatedMinutes: estimatedInput?.value ? parseInt(estimatedInput.value) : 60 });
+    addTask({ title, course: courseName, courseColor: course?.color || (courseName === 'Sin curso' ? 'var(--text-muted)' : '#E11D48'), priority: (prioritySelect?.value as any) || 'none', urgent: (prioritySelect?.value as any) === 'high', important: (prioritySelect?.value as any) === 'high', dueDate, estimatedMinutes: estimatedInput?.value ? parseInt(estimatedInput.value) : 60, notes: (document.getElementById('new-task-notes') as HTMLTextAreaElement)?.value?.trim() || '' });
     setShowNewModal(false);
   }, [addTask, courses, includeTime]);
 
@@ -1385,6 +1383,10 @@ export default function Tareas() {
                 <label style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 4 }}>Título</label>
                 <input id="new-task-title" type="text" name="nueva-tarea" autoComplete="off" placeholder="Ej. Resolver problemas de física..." style={{ width: '100%', padding: '10px 14px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12, color: 'var(--text-primary)', outline: 'none', fontFamily: "'Inter Tight', sans-serif" }} autoFocus />
               </div>
+              <div>
+                <label style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 4 }}>Descripción (opcional)</label>
+                <textarea id="new-task-notes" placeholder="Detalles, consigna, qué incluye la entrega..." rows={2} style={{ width: '100%', padding: '10px 14px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12, color: 'var(--text-primary)', outline: 'none', resize: 'vertical', minHeight: 52, lineHeight: 1.6, fontFamily: "'Inter', sans-serif" }} />
+              </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
                   <label style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 4 }}>Curso</label>
@@ -1443,22 +1445,16 @@ export default function Tareas() {
           <div style={{ position: 'fixed', inset: 0, zIndex: 99990, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)' }} onClick={() => { setSelectedTaskId(null); setShowAddMaterial(false); setPdfPreviewUrl(null); setPreviewModalUrl(null); }}>
             <div className="bento-card" style={{ position: 'fixed', right: 0, top: 0, bottom: 0, width: 520, maxWidth: '94vw', padding: 0, display: 'flex', flexDirection: 'column', background: 'var(--bg-primary)', overflow: 'hidden', border: 'none', borderLeft: '1px solid var(--border-default)', boxShadow: '-20px 0 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.03) inset' }} onClick={e => e.stopPropagation()}>
 
-              {/* ── Panel Header ── */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 22px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0, gap: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-                  <button onClick={() => setSelectedTaskId(null)}
-                    title="Cerrar"
-                    style={{ width: 32, height: 32, borderRadius: 9, background: 'var(--bg-hover)', border: '1px solid var(--border-soft)', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms', flexShrink: 0 }}
-                    onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.borderColor = 'var(--border-hover)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'var(--border-soft)'; }}>
-                    <X size={14} />
-                  </button>
-                  <div style={{ width: 34, height: 34, borderRadius: 11, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `linear-gradient(135deg, ${taskColor}1c, ${taskColor}08)`, border: `1px solid ${taskColor}30` }}>
-                    <ClipboardList size={15} style={{ color: taskColor }} />
-                  </div>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: taskColor, textTransform: 'uppercase', letterSpacing: '0.14em', fontFamily: "'Inter Tight', sans-serif" }}>Detalle de tarea</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+              {/* ── Panel Header (mínimo: cerrar · estado · eliminar) ── */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0, gap: 10 }}>
+                <button onClick={() => setSelectedTaskId(null)}
+                  title="Cerrar"
+                  style={{ width: 30, height: 30, borderRadius: 9, background: 'var(--bg-hover)', border: '1px solid var(--border-soft)', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms', flexShrink: 0 }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.borderColor = 'var(--border-hover)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'var(--border-soft)'; }}>
+                  <X size={14} />
+                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                   <span onClick={() => toggleTaskStatus(selectedTask.id)}
                     title="Cambiar estado"
                     style={{ cursor: 'pointer', fontSize: 10, fontWeight: 600, color: taskColor, letterSpacing: '0.06em', fontFamily: "'Inter Tight', sans-serif", padding: '6px 13px', borderRadius: 999, background: `${taskColor}10`, display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', transition: 'all 150ms', border: `1px solid ${taskColor}18` }}
@@ -1469,7 +1465,7 @@ export default function Tareas() {
                   </span>
                   <button onClick={() => setConfirmDeleteTask(selectedTask.id)}
                     title="Eliminar tarea"
-                    style={{ width: 32, height: 32, borderRadius: 9, background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms', opacity: 0.6, flexShrink: 0 }}
+                    style={{ width: 30, height: 30, borderRadius: 9, background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms', opacity: 0.6, flexShrink: 0 }}
                     onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.12)'; e.currentTarget.style.color = '#EF4444'; e.currentTarget.style.opacity = '1'; }}
                     onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.opacity = '0.6'; }}>
                     <Trash2 size={14} />
@@ -1478,154 +1474,135 @@ export default function Tareas() {
               </div>
 
               {/* ── Scrollable Content ── */}
-              <div style={{ flex: 1, overflowY: 'auto', padding: '24px 26px 28px', display: 'flex', flexDirection: 'column', gap: 18 }} className="no-scrollbar">
+              <div style={{ flex: 1, overflowY: 'auto', padding: '26px 28px 30px', display: 'flex', flexDirection: 'column', gap: 22 }} className="no-scrollbar">
 
                 {/* ── Title ── */}
-                <div style={{ padding: '4px 4px 12px' }}>
+                <div style={{ padding: '2px 2px 4px' }}>
                   <input
                     id="task-title-input"
                     name="titulo-tarea"
                     autoComplete="off"
                     value={selectedTask.title}
                     onChange={e => updateTask(selectedTask.id, { title: e.target.value })}
-                    style={{ width: '100%', background: 'transparent', border: 'none', fontSize: 24, fontWeight: 300, letterSpacing: '-0.01em', color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", outline: 'none', padding: 0, lineHeight: 1.3 }}
+                    style={{ width: '100%', background: 'transparent', border: 'none', fontSize: 26, fontWeight: 300, letterSpacing: '-0.02em', color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", outline: 'none', padding: 0, lineHeight: 1.25, caretColor: taskColor }}
                     placeholder="Título de la tarea..."
                   />
-                  <div style={{ width: 56, height: 2, borderRadius: 1, background: `linear-gradient(90deg, ${taskColor}, transparent)`, marginTop: 12, boxShadow: `0 0 10px ${taskColor}45` }} />
+                  <div style={{ width: 64, height: 2, borderRadius: 1, background: `linear-gradient(90deg, ${taskColor}, transparent)`, marginTop: 12, boxShadow: `0 0 12px ${taskColor}40` }} />
                 </div>
 
-                {/* ── Info Grid 2×2 ── */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
-                  {/* Curso */}
-                  <div style={{ padding: '14px 14px', display: 'flex', flexDirection: 'column', gap: 10, background: 'var(--bg-surface)', border: '1px solid var(--border-soft)', borderRadius: 12, position: 'relative', overflow: 'hidden', transition: 'all 180ms' }}
-                    onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-hover)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; }}>
-                    {selectedTask.course !== 'Sin curso' && <BookOpen size={72} strokeWidth={1} style={{ position: 'absolute', right: -12, bottom: -12, color: selectedCourseColor, opacity: 0.045, pointerEvents: 'none' }} />}
-                    <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.12em', fontFamily: "'Inter Tight', sans-serif" }}>Curso</span>
-                    <select value={selectedTask.course}
-                      onChange={e => updateTask(selectedTask.id, { course: e.target.value, courseColor: e.target.value === 'Sin curso' ? '#888' : (courses.find(c => c.name === e.target.value)?.color || '#E11D48') })}
-                      style={{ width: '100%', height: 36, padding: '0 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border-soft)', borderRadius: 9, fontSize: 12, fontWeight: 500, color: selectedTask.course !== 'Sin curso' ? selectedCourseColor : 'var(--text-primary)', outline: 'none', cursor: 'pointer', colorScheme: 'dark', fontFamily: "'Inter Tight', sans-serif", transition: 'all 150ms' }}>
-                      <option value="Sin curso" style={{ background: '#18181b', color: '#e4e4e7' }}>Sin curso</option>
-                      {courses.map(c => (
-                        <option key={c.id} value={c.name} style={{ background: '#18181b', color: c.color }}>{c.name}</option>
-                      ))}
-                    </select>
-                  </div>
+                {/* ── Descripción (justo bajo el título) ── */}
+                <div style={{ padding: '0 2px', marginTop: -4 }}>
+                  <textarea
+                    value={selectedTask.notes || selectedTask.apuntes || ''}
+                    onChange={e => updateTask(selectedTask.id, { notes: e.target.value })}
+                    placeholder="Añadir descripción..."
+                    rows={Math.min(6, Math.max(1, (selectedTask.notes || selectedTask.apuntes || '').split('\n').length))}
+                    style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', resize: 'none', fontSize: 13, lineHeight: 1.7, color: 'var(--text-secondary)', fontFamily: "'Inter', sans-serif", padding: 0, minHeight: 26, overflow: 'hidden', transition: 'color 150ms' }}
+                    onInput={e => { const el = e.currentTarget; el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; }}
+                    onFocus={e => { e.currentTarget.style.color = 'var(--text-primary)'; }}
+                    onBlur={e => {
+                      e.currentTarget.style.color = 'var(--text-secondary)';
+                      // Solo espacios → se guarda realmente vacío (sin notas fantasma)
+                      if (!e.currentTarget.value.trim() && (selectedTask.notes || '').trim()) updateTask(selectedTask.id, { notes: '' });
+                    }}
+                  />
+                </div>
 
-                  {/* Prioridad */}
-                  <div style={{ padding: '14px 14px', display: 'flex', flexDirection: 'column', gap: 10, background: 'var(--bg-surface)', border: '1px solid var(--border-soft)', borderRadius: 12, position: 'relative', overflow: 'hidden', transition: 'all 180ms' }}
-                    onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-hover)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; }}>
-                    {selectedTask.priority && selectedTask.priority !== 'none' && <Bookmark size={72} strokeWidth={1} style={{ position: 'absolute', right: -12, bottom: -12, color: priorityColor, opacity: 0.045, pointerEvents: 'none' }} />}
-                    <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.12em', fontFamily: "'Inter Tight', sans-serif" }}>Prioridad</span>
-                    <select value={selectedTask.priority || 'none'} onChange={e => updateTask(selectedTask.id, { priority: e.target.value as any })}
-                      style={{ width: '100%', height: 36, padding: '0 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border-soft)', borderRadius: 9, fontSize: 12, fontWeight: 500, color: selectedTask.priority && selectedTask.priority !== 'none' ? priorityColor : 'var(--text-primary)', outline: 'none', cursor: 'pointer', colorScheme: 'dark', fontFamily: "'Inter Tight', sans-serif", transition: 'all 150ms' }}>
-                      <option value="none" style={{ background: '#18181b', color: '#e4e4e7' }}>Ninguna</option>
-                      <option value="low" style={{ background: '#18181b', color: '#10B981' }}>Baja</option>
-                      <option value="medium" style={{ background: '#18181b', color: '#F59E0B' }}>Media</option>
-                      <option value="high" style={{ background: '#18181b', color: '#EF4444' }}>Alta</option>
-                    </select>
-                  </div>
-
-                  {/* Fecha Límite */}
-                  {(() => {
-                    const tr = selectedTask.dueDate ? getTimeRemaining(selectedTask.dueDate) : null;
-                    const dateColor = tr?.overdue ? '#EF4444' : tr?.urgent ? '#F59E0B' : 'var(--text-secondary)';
-                    const dateVal = selectedTask.dueDate ? selectedTask.dueDate.slice(0, 10) : '';
-                    const hasTime = selectedTask.dueDate && selectedTask.dueDate.length > 10;
-                    const timeVal = hasTime ? selectedTask.dueDate!.slice(11, 16) : '23:59';
-                    return (
-                      <div style={{ padding: '16px', gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 10, background: 'var(--bg-surface)', border: '1px solid var(--border-soft)', borderRadius: 12, position: 'relative', overflow: 'hidden', transition: 'all 180ms' }}
-                        onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-hover)'; }}
-                        onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; }}>
-                        <CalendarDays size={72} strokeWidth={1} style={{ position: 'absolute', right: -12, bottom: -12, color: dateColor, opacity: 0.045, pointerEvents: 'none' }} />
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                          <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.12em', fontFamily: "'Inter Tight', sans-serif" }}>Fecha</span>
-                          {tr && (
-                            <span style={{ fontSize: 8.5, fontWeight: 500, color: dateColor, display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
-                              {tr.overdue && <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#EF4444', flexShrink: 0 }} />}
-                              {tr.text}
-                            </span>
-                          )}
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                          <input type="date"
-                            value={dateVal}
-                            onChange={e => {
-                              if (!e.target.value) { updateTask(selectedTask.id, { dueDate: undefined }); return; }
-                              updateTask(selectedTask.id, { dueDate: hasTime ? `${e.target.value}T${timeVal}` : `${e.target.value}T23:59` });
-                            }}
-                            style={{ width: '100%', height: 34, padding: '0 10px', background: 'var(--bg-elevated)', border: '1px solid var(--border-soft)', borderRadius: 9, fontSize: 11.5, fontWeight: 500, color: 'var(--text-primary)', outline: 'none', fontFamily: "'JetBrains Mono',monospace", minWidth: 0, cursor: 'text', colorScheme: scheme, transition: 'border-color 150ms' }}
+                {/* ── Meta compacta: curso · prioridad · fecha ── */}
+                {(() => {
+                  const tr = selectedTask.dueDate ? getTimeRemaining(selectedTask.dueDate) : null;
+                  const dateColor = tr?.overdue ? '#EF4444' : tr?.urgent ? '#F59E0B' : 'var(--text-secondary)';
+                  const dateVal = selectedTask.dueDate ? selectedTask.dueDate.slice(0, 10) : '';
+                  const hasTime = selectedTask.dueDate && selectedTask.dueDate.length > 10;
+                  const timeVal = hasTime ? selectedTask.dueDate!.slice(11, 16) : '23:59';
+                  const courseIsSet = selectedTask.course !== 'Sin curso';
+                  const courseHex = courseIsSet && selectedCourseColor.startsWith('#') ? selectedCourseColor : null;
+                  const prioritySet = !!selectedTask.priority && selectedTask.priority !== 'none';
+                  const pillBase = { display: 'flex', alignItems: 'center', gap: 8, height: 30, padding: '0 13px', borderRadius: 999, transition: 'border-color 150ms, background 150ms' } as React.CSSProperties;
+                  return (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, padding: '2px 2px 0' }}>
+                      {/* Curso */}
+                      <div style={{ ...pillBase, background: courseHex ? `${courseHex}0d` : 'var(--bg-elevated)', border: `1px solid ${courseHex ? `${courseHex}30` : 'var(--border-soft)'}` }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = courseHex ? `${courseHex}55` : 'var(--border-hover)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = courseHex ? `${courseHex}30` : 'var(--border-soft)'; }}>
+                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: selectedCourseColor, flexShrink: 0, opacity: courseIsSet ? 1 : 0.4 }} />
+                        <select value={selectedTask.course}
+                          onChange={e => updateTask(selectedTask.id, { course: e.target.value, courseColor: e.target.value === 'Sin curso' ? '#888888' : (courses.find(c => c.name === e.target.value)?.color || '#E11D48') })}
+                          style={{ background: 'transparent', border: 'none', outline: 'none', fontSize: 11, fontWeight: 600, color: courseHex ? courseHex : 'var(--text-secondary)', cursor: 'pointer', colorScheme: 'dark', fontFamily: "'Inter Tight', sans-serif", padding: 0, maxWidth: 128 }}>
+                          <option value="Sin curso" style={{ background: '#18181b', color: '#e4e4e7' }}>Sin curso</option>
+                          {courses.map(c => (
+                            <option key={c.id} value={c.name} style={{ background: '#18181b', color: c.color }}>{c.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      {/* Prioridad */}
+                      <div style={{ ...pillBase, background: prioritySet ? `${priorityColor}0d` : 'var(--bg-elevated)', border: `1px solid ${prioritySet ? `${priorityColor}30` : 'var(--border-soft)'}` }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = prioritySet ? `${priorityColor}55` : 'var(--border-hover)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = prioritySet ? `${priorityColor}30` : 'var(--border-soft)'; }}>
+                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: priorityColor, flexShrink: 0, opacity: prioritySet ? 1 : 0.35 }} />
+                        <select value={selectedTask.priority || 'none'} onChange={e => updateTask(selectedTask.id, { priority: e.target.value as any })}
+                          style={{ background: 'transparent', border: 'none', outline: 'none', fontSize: 11, fontWeight: 600, color: prioritySet ? priorityColor : 'var(--text-secondary)', cursor: 'pointer', colorScheme: 'dark', fontFamily: "'Inter Tight', sans-serif", padding: 0 }}>
+                          <option value="none" style={{ background: '#18181b', color: '#e4e4e7' }}>Prioridad</option>
+                          <option value="low" style={{ background: '#18181b', color: '#10B981' }}>Baja</option>
+                          <option value="medium" style={{ background: '#18181b', color: '#F59E0B' }}>Media</option>
+                          <option value="high" style={{ background: '#18181b', color: '#EF4444' }}>Alta</option>
+                        </select>
+                      </div>
+                      {/* Fecha (solo día) */}
+                      <div style={{ ...pillBase, gap: 7, background: tr?.overdue ? 'rgba(239,68,68,0.06)' : 'var(--bg-elevated)', border: `1px solid ${tr?.overdue ? 'rgba(239,68,68,0.35)' : 'var(--border-soft)'}` }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = tr?.overdue ? 'rgba(239,68,68,0.6)' : 'var(--border-hover)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = tr?.overdue ? 'rgba(239,68,68,0.35)' : 'var(--border-soft)'; }}>
+                        <CalendarDays size={12} style={{ color: dateColor, flexShrink: 0, opacity: dateVal ? 1 : 0.4 }} />
+                        <input type="date"
+                          value={dateVal}
+                          onChange={e => {
+                            if (!e.target.value) { updateTask(selectedTask.id, { dueDate: undefined }); return; }
+                            updateTask(selectedTask.id, { dueDate: hasTime ? `${e.target.value}T${timeVal}` : e.target.value });
+                          }}
+                          style={{ background: 'transparent', border: 'none', outline: 'none', fontSize: 10.5, fontWeight: 600, color: dateColor, cursor: 'text', colorScheme: scheme, fontFamily: "'JetBrains Mono', monospace", padding: 0, width: dateVal ? 94 : 84 }}
+                        />
+                      </div>
+                      {/* Hora (pastilla propia, activa al elegir fecha) */}
+                      {dateVal && (
+                        <div style={{ ...pillBase, gap: 7, background: hasTime ? 'var(--bg-surface)' : 'var(--bg-elevated)', border: `1px solid ${hasTime ? `${taskColor}30` : 'var(--border-soft)'}` }}
+                          onMouseEnter={e => { e.currentTarget.style.borderColor = hasTime ? `${taskColor}55` : 'var(--border-hover)'; }}
+                          onMouseLeave={e => { e.currentTarget.style.borderColor = hasTime ? `${taskColor}30` : 'var(--border-soft)'; }}>
+                          <Clock size={12} style={{ color: hasTime ? taskColor : 'var(--text-muted)', flexShrink: 0 }} />
+                          <input type="time"
+                            value={timeVal}
+                            onChange={e => updateTask(selectedTask.id, { dueDate: `${dateVal}T${e.target.value}` })}
+                            title={hasTime ? 'Cambiar hora límite' : 'Definir hora límite'}
+                            style={{ background: 'transparent', border: 'none', outline: 'none', fontSize: 10.5, fontWeight: 600, color: hasTime ? 'var(--text-primary)' : 'var(--text-muted)', cursor: 'text', colorScheme: scheme, fontFamily: "'JetBrains Mono', monospace", padding: 0, width: 60 }}
                           />
-                          {selectedTask.dueDate && (
-                            <>
-                              <div style={{ display: 'flex', gap: 6 }}>
-                                <input type="time"
-                                  value={timeVal}
-                                  onChange={e => updateTask(selectedTask.id, { dueDate: `${dateVal}T${e.target.value}` })}
-                                  style={{ flex: 1, height: 34, padding: '0 10px', background: 'var(--bg-elevated)', border: '1px solid var(--border-soft)', borderRadius: 9, fontSize: 11.5, fontWeight: 500, color: hasTime ? 'var(--text-primary)' : 'var(--text-muted)', outline: 'none', fontFamily: "'JetBrains Mono',monospace", minWidth: 0, cursor: 'text', colorScheme: scheme, transition: 'border-color 150ms' }}
-                                />
-                                <button onClick={() => updateTask(selectedTask.id, { dueDate: hasTime ? dateVal : `${dateVal}T${timeVal}` })}
-                                  title={hasTime ? "Quitar hora" : "Añadir hora"}
-                                  style={{ width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', background: hasTime ? `${taskColor}10` : 'transparent', border: `1px solid ${hasTime ? `${taskColor}30` : 'var(--border-soft)'}`, borderRadius: 9, color: hasTime ? taskColor : 'var(--text-muted)', cursor: 'pointer', padding: 0, outline: 'none', flexShrink: 0, transition: 'all 150ms' }}
-                                  onMouseEnter={e => { e.currentTarget.style.background = `${taskColor}18`; e.currentTarget.style.color = taskColor; e.currentTarget.style.borderColor = `${taskColor}50`; }}
-                                  onMouseLeave={e => { e.currentTarget.style.background = hasTime ? `${taskColor}10` : 'transparent'; e.currentTarget.style.color = hasTime ? taskColor : 'var(--text-muted)'; e.currentTarget.style.borderColor = hasTime ? `${taskColor}30` : 'var(--border-soft)'; }}>
-                                  <Clock size={12} />
-                                </button>
-                              </div>
-                            </>
-                          )}
                         </div>
-                      </div>
-                    );
-                  })()}
+                      )}
+                      {/* Estado (vence en / atrasado) — chip aparte */}
+                      {tr && (
+                        <div style={{ ...pillBase, gap: 6, height: 30, padding: '0 11px', background: tr.overdue ? 'rgba(239,68,68,0.08)' : tr.urgent ? 'rgba(245,158,11,0.08)' : 'var(--bg-elevated)', border: `1px solid ${tr.overdue ? 'rgba(239,68,68,0.3)' : tr.urgent ? 'rgba(245,158,11,0.3)' : 'var(--border-soft)'}` }}>
+                          {tr.overdue && <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#EF4444', flexShrink: 0, boxShadow: '0 0 6px rgba(239,68,68,0.5)' }} />}
+                          <span style={{ fontSize: 10, fontWeight: 700, color: dateColor, whiteSpace: 'nowrap' }}>{tr.text}</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
 
-                  {/* Tiempo + Progreso */}
-                  {(() => {
-                    const studyMins = Math.round((selectedTask.studyTime || 0) / 60);
-                    const estMins = selectedTask.estimatedMinutes || 60;
-                    const pct = Math.min(100, Math.round((studyMins / estMins) * 100));
-                    const progressColor = pct >= 100 ? '#10B981' : taskColor;
-                    const setEst = (v: number) => updateTask(selectedTask.id, { estimatedMinutes: Math.max(5, v) });
-                    return (
-                      <div style={{ padding: '16px', gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 10, background: 'var(--bg-surface)', border: '1px solid var(--border-soft)', borderRadius: 12, position: 'relative', overflow: 'hidden', transition: 'all 180ms' }}
-                        onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-hover)'; }}
-                        onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; }}>
-                        <Clock size={72} strokeWidth={1} style={{ position: 'absolute', right: -12, bottom: -12, color: progressColor, opacity: 0.045, pointerEvents: 'none' }} />
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                          <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.12em', fontFamily: "'Inter Tight', sans-serif" }}>Tiempo</span>
-                          <span style={{ fontSize: 19, fontWeight: 400, color: progressColor, fontFamily: "'Inter Tight', sans-serif", lineHeight: 1, marginTop: -1 }}>{pct}%</span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                          <button onClick={() => setEst(estMins - 5)} title="Restar 5 min"
-                            style={{ width: 34, height: 34, borderRadius: 9, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-elevated)', border: '1px solid var(--border-soft)', color: 'var(--text-secondary)', cursor: 'pointer', padding: 0, transition: 'all 150ms' }}
-                            onMouseEnter={e => { e.currentTarget.style.background = `${taskColor}12`; e.currentTarget.style.color = taskColor; e.currentTarget.style.borderColor = `${taskColor}40`; }}
-                            onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.borderColor = 'var(--border-soft)'; }}>
-                            <Minus size={14} />
-                          </button>
-                          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border-soft)', borderRadius: 9, minWidth: 0 }}>
-                            <input type="number" min="5" step="5" value={estMins}
-                              onChange={e => setEst(parseInt(e.target.value) || 5)}
-                              style={{ flex: 1, background: 'transparent', border: 'none', fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', outline: 'none', padding: 0, width: '100%', minWidth: 0, fontFamily: "'Inter Tight', sans-serif" }} />
-                            <span style={{ color: 'var(--text-muted)', fontSize: 9.5, flexShrink: 0, fontWeight: 500 }}>min</span>
-                          </div>
-                          <button onClick={() => setEst(estMins + 5)} title="Sumar 5 min"
-                            style={{ width: 34, height: 34, borderRadius: 9, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `${taskColor}10`, border: `1px solid ${taskColor}30`, color: taskColor, cursor: 'pointer', padding: 0, transition: 'all 150ms' }}
-                            onMouseEnter={e => { e.currentTarget.style.background = `${taskColor}1c`; e.currentTarget.style.borderColor = `${taskColor}55`; }}
-                            onMouseLeave={e => { e.currentTarget.style.background = `${taskColor}10`; e.currentTarget.style.borderColor = `${taskColor}30`; }}>
-                            <Plus size={14} />
-                          </button>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <div style={{ flex: 1, height: 4, borderRadius: 2, background: 'var(--border-soft)', overflow: 'hidden' }}>
-                            <div style={{ width: `${pct}%`, height: '100%', background: progressColor, borderRadius: 2, transition: 'width 0.4s ease', boxShadow: `0 0 8px ${progressColor}60` }} />
-                          </div>
-                          <span style={{ fontSize: 9, color: 'var(--text-secondary)', fontWeight: 500, whiteSpace: 'nowrap', fontFamily: "'JetBrains Mono', monospace", lineHeight: 1 }}>{studyMins}m estudiados</span>
-                        </div>
+                {/* ── Progreso de estudio (barra fina, solo si hay tiempo) ── */}
+                {(() => {
+                  const studyMins = Math.round((selectedTask.studyTime || 0) / 60);
+                  const estMins = selectedTask.estimatedMinutes || 60;
+                  if (studyMins <= 0) return null;
+                  const pct = Math.min(100, Math.round((studyMins / estMins) * 100));
+                  const progressColor = pct >= 100 ? '#10B981' : taskColor;
+                  return (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '2px 2px 0' }}>
+                      <div style={{ flex: 1, height: 3, borderRadius: 2, background: 'var(--border-soft)', overflow: 'hidden' }}>
+                        <div style={{ width: `${pct}%`, height: '100%', background: progressColor, borderRadius: 2, transition: 'width 0.4s ease', boxShadow: `0 0 8px ${progressColor}60` }} />
                       </div>
-                    );
-                  })()}
-                </div>
+                      <span style={{ fontSize: 9.5, color: 'var(--text-secondary)', fontWeight: 600, whiteSpace: 'nowrap', fontFamily: "'JetBrains Mono', monospace" }}>{pct}% · {studyMins}m / {estMins}m</span>
+                    </div>
+                  );
+                })()}
 
                 {/* ── Subtareas ── */}
                 <div className="bento-card" style={{ padding: 0, background: 'var(--bg-surface)' }}>
@@ -1744,37 +1721,16 @@ export default function Tareas() {
                       <Paperclip size={12} style={{ color: taskColor }} />
                     </div>
                     <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-primary)', letterSpacing: '0.1em', fontFamily: "'Inter Tight', sans-serif", flex: 1 }}>Materiales</span>
-                    <div onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                      <button onClick={() => { setShowAddMaterial(true); setSectionCollapsed(prev => ({ ...prev, materiales: false })); }}
-                        title="Añadir enlace"
-                        style={{ width: 30, height: 26, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `${taskColor}0d`, border: `1px solid ${taskColor}40`, color: taskColor, cursor: 'pointer', padding: 0, transition: 'all 150ms' }}
-                        onMouseEnter={e => { e.currentTarget.style.background = `${taskColor}1a`; e.currentTarget.style.borderColor = `${taskColor}60`; }}
-                        onMouseLeave={e => { e.currentTarget.style.background = `${taskColor}0d`; e.currentTarget.style.borderColor = `${taskColor}40`; }}>
-                        <Link2 size={12} />
-                      </button>
-                      <button onClick={() => { setSectionCollapsed(prev => ({ ...prev, materiales: false })); handleAddFileBtn(); }}
-                        title="Subir archivo"
-                        style={{ width: 30, height: 26, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `${taskColor}0d`, border: `1px solid ${taskColor}40`, color: taskColor, cursor: 'pointer', padding: 0, transition: 'all 150ms' }}
-                        onMouseEnter={e => { e.currentTarget.style.background = `${taskColor}1a`; e.currentTarget.style.borderColor = `${taskColor}60`; }}
-                        onMouseLeave={e => { e.currentTarget.style.background = `${taskColor}0d`; e.currentTarget.style.borderColor = `${taskColor}40`; }}>
-                        <Upload size={12} />
-                      </button>
-                    </div>
                     {selectedTask.files.length > 0 && (
-                      <span style={{ fontSize: 8.5, color: 'var(--text-secondary)', fontWeight: 600, background: 'var(--bg-hover)', padding: '1px 9px', borderRadius: 4 }}>{selectedTask.files.length} archivos</span>
+                      <span style={{ fontSize: 8.5, color: 'var(--text-secondary)', fontWeight: 600, background: 'var(--bg-hover)', padding: '1px 9px', borderRadius: 4 }}>{selectedTask.files.length} {selectedTask.files.length === 1 ? 'material' : 'materiales'}</span>
                     )}
                   </div>
 
                   {!sectionCollapsed.materiales && (
                     <div style={{ padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }}>
 
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 5, paddingTop: 10 }}>
-                        {selectedTask.files.length === 0 && !showAddMaterial && (
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 60, borderRadius: 7, border: '1px dashed var(--border-soft)', background: 'var(--bg-surface)', color: 'var(--text-muted)', fontSize: 10.5, fontWeight: 500, gap: 2 }}>
-                            <Paperclip size={14} style={{ opacity: 0.15 }} />
-                            <span style={{ opacity: 0.3 }}>Añade recursos de estudio</span>
-                          </div>
-                        )}
+                      {/* Tira de iconos: un tile por material, clic abre, clic derecho menú */}
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, paddingTop: 10 }}>
                         {selectedTask.files.map(f => {
                           const ext = (f.name || '').split('.').pop()?.toLowerCase() || '';
                           const isLink = f.type === 'link' || (typeof f.path === 'string' && f.path.startsWith('http'));
@@ -1793,9 +1749,8 @@ export default function Tareas() {
                           const isVideo = f.type === 'video' && !isYouTube;
                           const isImage = f.type === 'image' || (f.type === 'other' && ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'bmp'].includes(ext));
                           const isWeb = isLink && !isYouTube && !isDrive && !isClassroom && !isGoogleDocs && !isGoogleSheets && !isGoogleSlides && !isGoogleForms;
-                          const isLocal = !f.path.startsWith('http') && !f.path.startsWith('blob:') && !f.path.startsWith('data:');
-                          const localSrc = isLocal ? (isTauri() ? convertFileSrc(f.path) : f.path) : f.path;
-                          const handleCardClick = async () => {
+
+                          const handleTileClick = async () => {
                             try {
                               await openFileSmart(f.path, f.name, {
                                 onMedia: (u, n) => setPipUrl(u, n),
@@ -1808,7 +1763,7 @@ export default function Tareas() {
                             } catch { /* noop */ }
                           };
 
-                          const s = (d: string, c: string) => <svg viewBox="0 0 24 24" width={17} height={17} fill={c} style={{ flexShrink: 0, display: 'block' }}><path d={d} /></svg>;
+                          const s = (d: string, c: string) => <svg viewBox="0 0 24 24" width={15} height={15} fill={c} style={{ flexShrink: 0, display: 'block' }}><path d={d} /></svg>;
                           let iconEl: React.ReactNode;
                           let badgeColor = '#888';
                           let domain = '';
@@ -1823,52 +1778,57 @@ export default function Tareas() {
                           else if (isClassroom) { badgeColor = '#0F9D58'; iconEl = <GoogleClassroomIcon />; }
                           else if (isDrive) { badgeColor = '#4285F4'; iconEl = <GoogleDriveIcon />; }
                           else if (isGoogleForms) { badgeColor = '#7C3AED'; iconEl = <GoogleFormsIcon />; }
-                          else if (isAudio) { badgeColor = '#8B5CF6'; iconEl = <Music size={13} />; }
-                          else if (isImage) { badgeColor = '#F59E0B'; iconEl = <Image size={13} />; }
-                          else if (isVideo) { badgeColor = '#EC4899'; iconEl = <File size={13} />; }
+                          else if (isAudio) { badgeColor = '#8B5CF6'; iconEl = <Music size={12} />; }
+                          else if (isImage) { badgeColor = '#F59E0B'; iconEl = <Image size={12} />; }
+                          else if (isVideo) { badgeColor = '#EC4899'; iconEl = <File size={12} />; }
                           else if (isWeb) {
                             badgeColor = '#10B981';
                             try { domain = new URL(f.path).hostname; } catch {}
                             iconEl = (
-                              <span style={{ position: 'relative', width: 17, height: 17, display: 'inline-flex', flexShrink: 0 }}>
+                              <span style={{ position: 'relative', width: 15, height: 15, display: 'inline-flex', flexShrink: 0 }}>
                                 <img src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`}
-                                  alt="" style={{ width: 17, height: 17, borderRadius: 3, position: 'absolute', inset: 0 }}
+                                  alt="" style={{ width: 15, height: 15, borderRadius: 3, position: 'absolute', inset: 0 }}
                                   onError={e => { e.currentTarget.style.display = 'none'; const fb = e.currentTarget.parentElement?.querySelector('.link-fb') as HTMLElement; if (fb) fb.style.display = 'flex'; }} />
-                                <span className="link-fb" style={{ display: 'none', position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center', color: '#10B981' }}><Link size={12} /></span>
+                                <span className="link-fb" style={{ display: 'none', position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center', color: '#10B981' }}><Link size={11} /></span>
                               </span>
                             );
                           }
-                          else { iconEl = <File size={13} />; }
+                          else { iconEl = <File size={12} />; }
 
                           const subtitleText = isYouTube ? 'YouTube' : isClassroom ? 'Classroom' : isDrive ? 'Google Drive' : isWeb ? domain : isPdf ? 'PDF' : isDoc ? 'Word' : isGoogleDocs ? 'Google Docs' : isXls ? 'Excel' : isGoogleSheets ? 'Google Sheets' : isPpt ? 'PowerPoint' : isGoogleSlides ? 'Google Slides' : isGoogleForms ? 'Google Forms' : isAudio ? 'Audio' : isImage ? 'Imagen' : isVideo ? 'Video' : f.size ? `${(f.size / 1024).toFixed(0)} KB` : 'Enlace';
 
                           return (
-                            <div key={f.id} onClick={handleCardClick}
+                            <div key={f.id} onClick={handleTileClick}
                               onContextMenu={(e) => matMenu.openMenu(e, { url: f.path, name: f.name, color: badgeColor })}
-                              style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 7, background: 'var(--bg-elevated)', border: '1px solid var(--border-soft)', cursor: 'pointer', transition: 'all 150ms' }}
-                              onMouseEnter={e => { e.currentTarget.style.borderColor = `${badgeColor}40`; e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.background = 'var(--bg-elevated)'; }}>
-                              <div style={{ width: 30, height: 30, borderRadius: 7, background: `${badgeColor}14`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: badgeColor, position: 'relative' }}>
-                                {iconEl}
-                              </div>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3 }}>
-                                  {f.name}
-                                </span>
-                                <span style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 500, display: 'block', marginTop: 2 }}>
-                                  {subtitleText}
-                                </span>
-                              </div>
-                              <button onClick={(e) => { e.stopPropagation(); setConfirmDeleteMaterial({ taskId: selectedTask.id, fileId: f.id }); }}
-                                style={{ width: 24, height: 24, borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, transition: 'all 150ms', opacity: 0 }}
-                                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#EF4444'; e.currentTarget.style.opacity = '1'; }}
-                                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.opacity = '0'; }}
+                              title={`${f.name}${subtitleText ? ` · ${subtitleText}` : ''}`}
+                              style={{ position: 'relative', width: 38, height: 38, borderRadius: 10, background: `${badgeColor}0d`, border: `1px solid ${badgeColor}22`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 140ms', flexShrink: 0 }}
+                              onMouseEnter={e => { e.currentTarget.style.borderColor = `${badgeColor}55`; e.currentTarget.style.transform = 'translateY(-1px)'; const del = e.currentTarget.querySelector('.mat-del') as HTMLElement; if (del) del.style.opacity = '1'; }}
+                              onMouseLeave={e => { e.currentTarget.style.borderColor = `${badgeColor}22`; e.currentTarget.style.transform = 'none'; const del = e.currentTarget.querySelector('.mat-del') as HTMLElement; if (del) del.style.opacity = '0'; }}>
+                              <span style={{ color: badgeColor, display: 'flex' }}>{iconEl}</span>
+                              <button className="mat-del" onClick={(e) => { e.stopPropagation(); setConfirmDeleteMaterial({ taskId: selectedTask.id, fileId: f.id }); }}
+                                style={{ position: 'absolute', top: -5, right: -5, width: 15, height: 15, borderRadius: '50%', background: '#EF4444', border: '1.5px solid var(--bg-primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', opacity: 0, transition: 'opacity 140ms', padding: 0 }}
                                 title="Eliminar">
-                                <X size={11} />
+                                <X size={8} strokeWidth={3} />
                               </button>
                             </div>
                           );
                         })}
+                        {/* Tile + : añadir enlace o subir archivo */}
+                        <div onClick={() => { setShowAddMaterial(true); setSectionCollapsed(prev => ({ ...prev, materiales: false })); }}
+                          title="Añadir enlace"
+                          style={{ width: 38, height: 38, borderRadius: 10, border: '1px dashed var(--border-strong)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 140ms', color: 'var(--text-muted)', flexShrink: 0, background: 'transparent' }}
+                          onMouseEnter={e => { e.currentTarget.style.borderColor = taskColor; e.currentTarget.style.color = taskColor; e.currentTarget.style.background = `${taskColor}08`; }}
+                          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-strong)'; e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'transparent'; }}>
+                          <Plus size={14} />
+                        </div>
+                        <div onClick={() => { setSectionCollapsed(prev => ({ ...prev, materiales: false })); handleAddFileBtn(); }}
+                          title="Subir archivo"
+                          style={{ width: 38, height: 38, borderRadius: 10, border: '1px dashed var(--border-strong)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 140ms', color: 'var(--text-muted)', flexShrink: 0, background: 'transparent' }}
+                          onMouseEnter={e => { e.currentTarget.style.borderColor = taskColor; e.currentTarget.style.color = taskColor; e.currentTarget.style.background = `${taskColor}08`; }}
+                          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-strong)'; e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'transparent'; }}>
+                          <Upload size={13} />
+                        </div>
+                        <input type="file" ref={fileInputRef} onChange={handleFileSelected} style={{ display: 'none' }} />
                       </div>
 
                       {showAddMaterial && (
@@ -1902,59 +1862,18 @@ export default function Tareas() {
                             style={{ height: 34, borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: 'none', background: taskColor, color: '#fff', opacity: newMaterialPath.trim() ? 1 : 0.35, transition: 'all 150ms', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                             <Link2 size={12} /> Añadir enlace
                           </button>
-                          <input type="file" ref={fileInputRef} onChange={handleFileSelected} style={{ display: 'none' }} />
+                          <button type="button" onClick={() => fileInputRef.current?.click()}
+                            style={{ height: 30, borderRadius: 8, fontSize: 10.5, fontWeight: 600, cursor: 'pointer', border: 'none', background: 'transparent', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, transition: 'color 150ms' }}
+                            onMouseEnter={e => { e.currentTarget.style.color = taskColor; }}
+                            onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-secondary)'; }}>
+                            <Upload size={11} /> o subir un archivo
+                          </button>
                         </div>
                       )}
                     </div>
                   )}
                 </div>
 
-                {/* ── Apuntes ── */}
-                <div className="bento-card" style={{ padding: 0, background: 'var(--bg-surface)' }}>
-                  <div onClick={() => setSectionCollapsed(prev => ({ ...prev, apuntes: !prev.apuntes }))}
-                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', cursor: 'pointer', transition: 'background 150ms', userSelect: 'none' }}
-                    onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                    <div style={{ transform: `rotate(${sectionCollapsed.apuntes ? -90 : 0}deg)`, transition: 'transform 200ms', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-                      <ChevronDown size={13} style={{ color: taskColor }} />
-                    </div>
-                    <div style={{ width: 26, height: 26, borderRadius: 8, background: `${taskColor}10`, border: `1px solid ${taskColor}1a`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <StickyNote size={12} style={{ color: taskColor }} />
-                    </div>
-                    <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-primary)', letterSpacing: '0.1em', fontFamily: "'Inter Tight', sans-serif", flex: 1 }}>Apuntes</span>
-                    {selectedTask.apuntes && selectedTask.apuntes.trim().length > 0 && (
-                      <span style={{ fontSize: 8.5, color: 'var(--text-secondary)', fontWeight: 600, background: 'var(--bg-hover)', padding: '1px 9px', borderRadius: 4 }}>{selectedTask.apuntes.split(/\s+/).filter(Boolean).length} palabras</span>
-                    )}
-                  </div>
-
-                  {!sectionCollapsed.apuntes && (
-                    <div style={{ padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: 10, borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }}>
-                      {(selectedTask.apuntes?.trim() || showApuntesEditor) ? (
-                        <textarea
-                          value={selectedTask.apuntes || ''}
-                          onChange={e => updateTask(selectedTask.id, { apuntes: e.target.value })}
-                          placeholder="Escribe tus apuntes aquí..."
-                          style={{ width: '100%', background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 10, color: 'var(--text-primary)', fontSize: 13, outline: 'none', padding: '16px 18px', resize: 'vertical', minHeight: 120, lineHeight: 1.75, fontFamily: "'Inter', sans-serif", transition: 'all 150ms', marginTop: 10 }}
-                          onInput={e => {
-                            e.currentTarget.style.height = 'auto';
-                            e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`;
-                          }}
-                          onFocus={e => { e.currentTarget.style.borderColor = taskColor; e.currentTarget.style.boxShadow = `0 0 0 2px ${taskColor}12`; }}
-                          onBlur={e => { if (!e.currentTarget.value.trim()) setShowApuntesEditor(false); e.currentTarget.style.borderColor = 'var(--border-default)'; e.currentTarget.style.boxShadow = 'none'; }}
-                        />
-                      ) : (
-                        <div
-                          onClick={() => setShowApuntesEditor(true)}
-                          style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 90, marginTop: 10, borderRadius: 10, border: '1px dashed var(--border-soft)', background: 'var(--bg-surface)', color: 'var(--text-muted)', fontSize: 12, fontWeight: 500, gap: 6, cursor: 'pointer', transition: 'all 150ms' }}
-                          onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-hover)'; e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.background = 'var(--bg-surface)'; }}>
-                          <StickyNote size={20} style={{ opacity: 0.2 }} />
-                          <span style={{ opacity: 0.4 }}>Añadir apuntes</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
 
               </div>
 

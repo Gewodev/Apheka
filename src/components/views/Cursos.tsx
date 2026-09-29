@@ -412,8 +412,28 @@ function SortableWrapper({ id, children, style }: { id: string; style?: React.CS
   return <div ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition, zIndex: isDragging ? 100 : 1, opacity: isDragging ? 0.5 : 1, position: 'relative' as const, ...style }}>{children({ attributes, listeners, isDragging })}</div>;
 }
 
-function MaterialCard({ mat, dragAttributes, dragListeners, onEdit, onDelete, onOpenResource, onPractice, onView, clickSuppressed, onContextMenu, groupName, onUngroup }: {
-  mat: SubjectMaterial; dragAttributes?: any; dragListeners?: any; onEdit: (m: SubjectMaterial) => void; onDelete: (m: SubjectMaterial) => void; onOpenResource: (m: SubjectMaterial) => void; onPractice?: (m: SubjectMaterial) => void; onView?: (m: SubjectMaterial) => void; clickSuppressed?: () => boolean; onContextMenu?: (e: React.MouseEvent, m: SubjectMaterial) => void; groupName?: string; onUngroup?: () => void }) {
+// Iconos elegibles para enlaces (solo links): 'auto' = el original detectado.
+const LINK_ICON_CHOICES = [
+  { id: 'auto', label: 'Original', Icon: LI.Sparkles },
+  { id: 'link', label: 'Enlace', Icon: LI.Link2 },
+  { id: 'globe', label: 'Web', Icon: LI.Globe },
+  { id: 'bookmark', label: 'Marcador', Icon: LI.Bookmark },
+  { id: 'star', label: 'Destacado', Icon: LI.Star },
+  { id: 'play', label: 'Video', Icon: LI.Play },
+  { id: 'music', label: 'Música', Icon: LI.Music },
+  { id: 'doc', label: 'Documento', Icon: LI.FileText },
+  { id: 'news', label: 'Noticia', Icon: LI.Newspaper },
+  { id: 'study', label: 'Estudio', Icon: LI.GraduationCap },
+];
+function renderLinkChoiceIcon(iconId: string | undefined, size: number, color: string) {
+  const found = LINK_ICON_CHOICES.find(c => c.id === iconId);
+  if (!found || found.id === 'auto') return null;
+  const Cmp = found.Icon;
+  return <Cmp size={size} style={{ color, display: 'block', flexShrink: 0 }} />;
+}
+
+function MaterialCard({ mat, dragAttributes, dragListeners, onEdit, onDelete, onOpenResource, onPractice, onView, clickSuppressed, onContextMenu, groupName, onUngroup, onPickIcon, selected }: {
+  mat: SubjectMaterial; dragAttributes?: any; dragListeners?: any; onEdit: (m: SubjectMaterial) => void; onDelete: (m: SubjectMaterial) => void; onOpenResource: (m: SubjectMaterial) => void; onPractice?: (m: SubjectMaterial) => void; onView?: (m: SubjectMaterial) => void; clickSuppressed?: () => boolean; onContextMenu?: (e: React.MouseEvent, m: SubjectMaterial) => void; groupName?: string; onUngroup?: () => void; onPickIcon?: (m: SubjectMaterial, x: number, y: number) => void; selected?: boolean; }) {
   const meta = MATERIAL_META[mat.type];
   const typeColors: Record<string, string> = { formula: '#8B5CF6', concept: '#3B82F6', 'key-data': '#F59E0B', meaning: '#10B981', quiz: '#EF4444', procedure: '#EC4899', resource: '#6366F1' };
   const toolMeta = mat.toolMode ? TOOL_CREATOR_META[mat.toolMode as ToolCreatorMode] : undefined;
@@ -441,6 +461,8 @@ function MaterialCard({ mat, dragAttributes, dragListeners, onEdit, onDelete, on
   const _isWeb = _lk && !_isYT && !_isDrive && !_isClassroom && !_isGDocs && !_isGSheets && !_isGSlides && !_isGForms;
   let Icon: any = deckMeta ? deckMeta.icon : toolMeta ? toolMeta.icon : meta.icon;
   let accent: string = (mat as any).color || deckMeta?.color || toolMeta?.color || typeColors[mat.type] || 'var(--accent)';
+  // Icono personalizado del enlace (persistente en el material; 'auto' = detectado)
+  const customLinkIcon = mat.type === 'resource' && (mat as any).icon && (mat as any).icon !== 'auto';
   let cardLabel = deckMeta?.label || toolMeta?.name || meta.label;
   if (!toolMeta && mat.type === 'resource') {
     if (_isYT) { Icon = (p: any) => (<svg viewBox="0 0 24 24" width={p.size || 17} height={p.size || 17} fill="#EF4444" style={{ display: 'block', flexShrink: 0 }}><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>); accent = '#EF4444'; cardLabel = 'YouTube'; }
@@ -468,11 +490,15 @@ function MaterialCard({ mat, dragAttributes, dragListeners, onEdit, onDelete, on
     }
     else if (_url && !_lk) { Icon = File; accent = '#64748B'; cardLabel = 'Archivo'; }
   }
+  // El color personalizado (clic derecho → Color para todas…) SIEMPRE gana:
+  // la detección de tipo de arriba solo fija el color cuando no hay uno elegido.
+  if ((mat as any).color) accent = (mat as any).color;
   const title = mat.name || mat.title || mat.word || mat.question || 'Sin título';
   const practice = (deckMeta || toolMeta) && onPractice;
   const canOpen = !!mat.dataUrl && !practice;
   return (
     <div {...dragAttributes} {...dragListeners}
+      className={selected ? 'owa-mat-selected' : undefined}
       onContextMenu={onContextMenu ? (e) => onContextMenu(e, mat) : undefined}
       title={practice ? 'mantén pulsado para arrastrar · Toca para practicar' : canOpen ? 'mantén pulsado para arrastrar · Toca para abrir' : 'mantén pulsado para arrastrar'}
       onClick={practice ? () => onPractice(mat) : canOpen ? () => { if (clickSuppressed && clickSuppressed()) return; onOpenResource(mat); } : () => { if (clickSuppressed && clickSuppressed()) return; onView?.(mat); }}
@@ -480,8 +506,13 @@ function MaterialCard({ mat, dragAttributes, dragListeners, onEdit, onDelete, on
       onMouseEnter={e => { e.currentTarget.style.borderColor = `${accent}50`; e.currentTarget.style.background = 'var(--bg-surface)'; e.currentTarget.style.boxShadow = `0 8px 24px ${accent}12`; }}
       onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.04)'; }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 14px 8px' }}>
-        <div style={{ width: 38, height: 38, borderRadius: 11, background: `${accent}10`, border: `1px solid ${accent}1a`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          <Icon size={17} style={{ color: accent }} />
+        <div
+          onPointerDown={e => e.stopPropagation()}
+          onClick={_lk && onPickIcon ? (e) => { e.stopPropagation(); if (clickSuppressed && clickSuppressed()) return; onPickIcon(mat, e.clientX, e.clientY); } : undefined}
+          title={_lk ? 'Cambiar icono del enlace' : undefined}
+          style={{ width: 38, height: 38, borderRadius: 11, background: `${accent}10`, border: `1px solid ${accent}1a`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: _lk && onPickIcon ? 'pointer' : undefined }}
+        >
+          {customLinkIcon ? renderLinkChoiceIcon((mat as any).icon, 17, accent) : <Icon size={17} style={{ color: accent }} />}
         </div>
         <span style={{ flex: 1, fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: accent, fontFamily: "'Inter Tight', sans-serif" }}>{cardLabel}</span>
         {(practice || _lk) && (
@@ -1699,6 +1730,25 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   // Tema destino del enlace: undefined = comportamiento clásico (primer tema);
   // cuando se abre desde Herramientas apunta AL TEMA ACTIVO de la agrupación.
   const [addLinkTargetTopic, setAddLinkTargetTopic] = useState<string | undefined>(undefined);
+  // Selector de icono de enlace (solo links): { matId, x, y } del click
+  const [linkIconPick, setLinkIconPick] = useState<{ matId: string; x: number; y: number } | null>(null);
+  const setMaterialIcon = (matId: string, icon: string | null) => {
+    if (!course) return;
+    updateCourse(course.id, {
+      studyTopics: (safeArr(course.studyTopics)).map(t => ({
+        ...t,
+        materials: (safeArr((t as any).materials)).map((m: any) => {
+          if (!m || m.id !== matId) return m;
+          const nm = { ...m };
+          if (!icon || icon === 'auto') delete nm.icon;
+          else nm.icon = icon;
+          return nm;
+        }),
+      })),
+    } as any);
+    setLinkIconPick(null);
+    toast.success(!icon || icon === 'auto' ? 'Icono original restaurado' : 'Icono actualizado');
+  };
   const [addLinkUrl, setAddLinkUrl] = useState('');
   const [addLinkName, setAddLinkName] = useState('');
 
@@ -2406,6 +2456,54 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
 
   const matMenu = useMaterialMenu((m) => toast.error(m));
 
+  // ── Selección de materiales por presión larga (clic derecho sostenido ≥550ms) ──
+  // Sostener = seleccionar (borde animado). Clic derecho normal tras seleccionar
+  // = menú con "Abrir seleccionados". Esc o abrir un material limpia la selección.
+  const [selMats, setSelMats] = useState<Set<string>>(new Set());
+  const rmbPressRef = useRef<{ id: string; t: number } | null>(null);
+  const matKey = (m: SubjectMaterial) => m.id || m.dataUrl || m.name || '';
+  const clearSelMats = useCallback(() => setSelMats(new Set()), []);
+  useEffect(() => {
+    const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') clearSelMats(); };
+    window.addEventListener('keydown', onEsc);
+    return () => window.removeEventListener('keydown', onEsc);
+  }, [clearSelMats]);
+  const openSelectedMats = useCallback(() => {
+    if (!course) return;
+    const all: SubjectMaterial[] = [];
+    (safeArr(course.studyTopics)).forEach((t: any) => safeArr(t.materials).forEach((mm: any) => all.push(mm)));
+    const targets = all.filter(mm => selMats.has(matKey(mm)) && !!mm.dataUrl);
+    if (targets.length === 0) { toast.error('Ninguno de los seleccionados tiene archivo o enlace'); return; }
+    targets.forEach(mm => handleOpenResource(mm));
+    toast.success(`Abriendo ${targets.length} recurso(s) seleccionado(s)`);
+    clearSelMats();
+  }, [course, selMats, clearSelMats]);
+  const matRmb = useCallback((e: React.MouseEvent, m: SubjectMaterial, buildMenu: () => Parameters<ReturnType<typeof useMaterialMenu>['openMenu']>[1]) => {
+    const id = matKey(m);
+    const downAt = Date.now();
+    const prev = rmbPressRef.current;
+    rmbPressRef.current = { id, t: downAt };
+    // Clic derecho rápido sobre un material YA seleccionado → menú de selección
+    if (prev && prev.id === id && downAt - prev.t < 1500 && selMats.size > 0) {
+      matMenu.openMenu(e, { url: m.dataUrl || '', name: m.name || 'Material', color: course?.color, onOpenSelected: openSelectedMats, selectedCount: selMats.size });
+      return;
+    }
+    const onUp = (ev: MouseEvent) => {
+      window.removeEventListener('mouseup', onUp);
+      if (ev.button !== 2) return;
+      const held = Date.now() - downAt;
+      if (held >= 550) {
+        // presión larga → alterna la selección (borde animado); sin menú
+        setSelMats(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
+      } else {
+        // clic derecho normal → menú habitual (+ Abrir seleccionados si hay)
+        const extra: Parameters<ReturnType<typeof useMaterialMenu>['openMenu']>[1] = buildMenu();
+        matMenu.openMenu(e, selMats.size > 0 ? { ...extra, onOpenSelected: openSelectedMats, selectedCount: selMats.size } : extra);
+      }
+    };
+    window.addEventListener('mouseup', onUp);
+  }, [matMenu, course, selMats, openSelectedMats, matKey]);
+
   useEffect(() => {
     if (course) {
       setEditCourseName(course.name);
@@ -2470,9 +2568,11 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     return (safeArr(course.studyTopics)).find(t => t.id === activeTopicId) || null;
   }, [course, activeTopicId]);
 
-  // Topic content items (flashcards + materials + recordings) for search/filter
+  // Topic content items (flashcards + materials + recordings) for search/filter.
+  // Los recursos marcados generalOnly viven en la vista general del modo
+  // estudio: dentro de un tema NO se muestran (aunque estén hospedados en él).
   const topicItems = useMemo(() => {
-    const mats = safeArr(activeTopic?.materials);
+    const mats = safeArr(activeTopic?.materials).filter(m => !(m as any)?.generalOnly);
     const fcs = safeArr(activeTopic?.flashcards);
     const recs = safeArr(activeTopic?.recordings);
     return [
@@ -2665,7 +2765,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
 
   // --- Materials ---
   const handleAddMaterialClick = (type: MaterialType, colIdx: number) => {
-    if (type === 'resource') { setMaterialColIndex(colIdx); handleAddFileBtn(undefined, colIdx); return; }
+    if (type === 'resource') { setMaterialColIndex(colIdx); generalOnlyRef.current = false; handleAddFileBtn(undefined, colIdx); return; }
     setMaterialType(type); setMaterialColIndex(colIdx); setEditingMaterial(null); resetForm(); setShowMaterialModal(true);
   };
 
@@ -2755,16 +2855,20 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   }, [course, selectedGroupId]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, overrideTopicId?: string) => {
-    const file = e.target.files?.[0]; if (!file) return;
-    const tid = overrideTopicId || activeTopic?.id;
+    const file = e.target.files?.[0]; if (!file) { generalOnlyRef.current = false; return; }
+    // En vista general (generalOnlyRef) se IGNORA el tema activo aunque exista
+    // (puede ser obsoleto): el material va al apartado general, no a un tema.
+    const tid = generalOnlyRef.current ? undefined : (overrideTopicId || activeTopic?.id);
     const url = await new Promise<string>((resolve, reject) => {
       const r = new FileReader();
       r.onload = () => resolve(r.result as string);
       r.onerror = () => reject(r.error);
       r.readAsDataURL(file);
     });
-    const newMat: SubjectMaterial = { id: Math.random().toString(), type: 'resource', createdAt: Date.now(), columnIndex: materialColIndex, name: file.name, fileType: file.type, dataUrl: url, ...(topicOnlyRef.current ? { topicOnly: true } : {}) } as SubjectMaterial;
+    const newMat: SubjectMaterial = { id: Math.random().toString(), type: 'resource', createdAt: Date.now(), columnIndex: materialColIndex, name: file.name, fileType: file.type, dataUrl: url, ...(topicOnlyRef.current ? { topicOnly: true } : {}), ...(generalOnlyRef.current ? { generalOnly: true } : {}) } as unknown as SubjectMaterial;
     topicOnlyRef.current = false;
+    generalOnlyRef.current = false;
+    pendingGroupNameRef.current = undefined;
     updateCourse(course.id, { studyTopics: withMaterial(tid, newMat, materialColIndex) });
     toast.success('Archivo subido');
     if (e.target) e.target.value = '';
@@ -2774,11 +2878,12 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     if (isTauri()) {
       let r: { path: string; name: string } | null;
       try { r = await pickAndPersistFile(); }
-      catch { toast.error('No se pudo abrir el selector de archivos'); return; }
-      if (!r) return;
-      const tid = topicId || activeTopic?.id;
-      const newMat: SubjectMaterial = { id: Math.random().toString(), type: 'resource', createdAt: Date.now(), columnIndex: colIndex ?? materialColIndex, name: r.name, dataUrl: r.path, ...(topicOnlyRef.current ? { topicOnly: true } : {}), ...(pendingGroupNameRef.current ? { groupName: pendingGroupNameRef.current } : {}) } as SubjectMaterial;
+      catch { generalOnlyRef.current = false; toast.error('No se pudo abrir el selector de archivos'); return; }
+      if (!r) { generalOnlyRef.current = false; return; }
+      const tid = generalOnlyRef.current ? undefined : (topicId || activeTopic?.id);
+      const newMat: SubjectMaterial = { id: Math.random().toString(), type: 'resource', createdAt: Date.now(), columnIndex: colIndex ?? materialColIndex, name: r.name, dataUrl: r.path, ...(topicOnlyRef.current ? { topicOnly: true } : {}), ...(generalOnlyRef.current ? { generalOnly: true } : {}), ...(pendingGroupNameRef.current ? { groupName: pendingGroupNameRef.current } : {}) } as unknown as SubjectMaterial;
       topicOnlyRef.current = false;
+      generalOnlyRef.current = false;
       pendingGroupNameRef.current = undefined;
       updateCourse(course.id, { studyTopics: withMaterial(tid, newMat, colIndex ?? materialColIndex) });
       toast.success('Archivo subido');
@@ -2792,7 +2897,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     if (!addLinkUrl.trim()) return;
     const url = addLinkUrl.trim();
     const name = addLinkName.trim() || url;
-    const newMat: SubjectMaterial = { id: Math.random().toString(), type: 'resource', createdAt: Date.now(), columnIndex: 0, name, dataUrl: url, ...(addLinkTargetTopic ? { topicOnly: true } : {}), ...(addLinkTargetTopic && pendingGroupNameRef.current ? { groupName: pendingGroupNameRef.current } : {}) } as SubjectMaterial;
+    const newMat: SubjectMaterial = { id: Math.random().toString(), type: 'resource', createdAt: Date.now(), columnIndex: 0, name, dataUrl: url, ...(addLinkTargetTopic ? { topicOnly: true } : { generalOnly: true }), ...(addLinkTargetTopic && pendingGroupNameRef.current ? { groupName: pendingGroupNameRef.current } : {}) } as unknown as SubjectMaterial;
     pendingGroupNameRef.current = undefined;
     updateCourse(course.id, { studyTopics: withMaterial(addLinkTargetTopic, newMat, 0) });
     setAddLinkUrl(''); setAddLinkName(''); setAddLinkTargetTopic(undefined); setShowAddLinkModal(false);
@@ -2888,7 +2993,8 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     if (!mat.dataUrl) return;
     // Idéntico a Materiales de curso: openFileSmart resuelve nativo (ruta real,
     // editable), http → navegador del sistema, media → PiP. Sin visor interno,
-    // sin copias asset. Los enlaces con predeterminado usan ESE navegador.
+    // sin copias asset. Los enlaces con predeterminado usan ESE navegador y los
+    // PDF con app predeterminada usan ESA app (curso > global). Sin errores.
     if (/^https?:\/\//i.test(mat.dataUrl)) {
       const url = mat.dataUrl;
       const name = mat.name || 'Archivo';
@@ -2900,6 +3006,32 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
           if (exe) { await openUrlInBrowser(exe, url); return; }
         } catch { /* cae al flujo normal */ }
         openFileSmart(url, name, { onMedia: (u, n) => setPipUrl(u, n), onError: (m) => toast.error(m), onMoved: (np) => handleMatMoved(id, np) }).catch(() => toast.error('No se pudo abrir el recurso'));
+      })();
+      return;
+    }
+    if (/\.pdf($|[?#])/i.test(mat.dataUrl)) {
+      const id = mat.id;
+      const name = mat.name || 'Archivo';
+      const pdfUrl: string = mat.dataUrl;
+      (async () => {
+        try {
+          const { resolveDefaultPdfAppExe, openUrlInBrowser } = await import('../../lib/browsers');
+          const { convertFileSrc } = await import('@tauri-apps/api/core');
+          const exe = await resolveDefaultPdfAppExe(course.id);
+          if (exe && exe !== 'sys') {
+            const { resolveLocalPath } = await import('../../lib/openFileSmart');
+            const { stat } = await import('@tauri-apps/plugin-fs');
+            try {
+              const st = await stat(pdfUrl);
+              if (st && st.isFile !== false) { await openUrlInBrowser(exe, convertFileSrc(pdfUrl)); return; }
+            } catch { /* ruta no directa: intenta resolver por nombre */ }
+            try {
+              const found = await resolveLocalPath(pdfUrl, name);
+              if (found) { await openUrlInBrowser(exe, convertFileSrc(found)); return; }
+            } catch { /* cae al flujo normal */ }
+          }
+        } catch { /* cae al flujo normal */ }
+        openFileSmart(pdfUrl, name, { onMedia: (u, n) => setPipUrl(u, n), onError: (m) => toast.error(m), onMoved: (np) => handleMatMoved(id, np) }).catch(() => toast.error('No se pudo abrir el recurso'));
       })();
       return;
     }
@@ -2917,6 +3049,9 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   // Los materiales añadidos desde Herramientas (dentro de un tema) son de ecosistema
   // "tema": viven SOLO en su tema y NO aparecen en el panel Materiales del curso.
   const topicOnlyRef = useRef(false);
+  // true = el alta viene de la vista GENERAL (overview modo estudio): el
+  // material va al apartado general, no dentro de ningún tema.
+  const generalOnlyRef = useRef(false);
   // Grupo destino para el siguiente material creado desde Herramientas
   const pendingGroupNameRef = useRef<string | undefined>(undefined);
   // Guard anti click-fantasma para la lista de materiales del tema: si hubo un
@@ -3571,7 +3706,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                             <SortableWrapper key={mat.id} id={mat.id}>
                               {({ attributes, listeners, isDragging }) => (
                                 <div style={{ opacity: isDragging ? 0.55 : 1 }}>
-                                  <MaterialCard mat={mat} dragAttributes={attributes} dragListeners={listeners} onEdit={startEditToolMaterial} onDelete={handleDeleteMaterial} onOpenResource={handleOpenResource} onPractice={openPractice} onView={viewMaterial} clickSuppressed={() => matDragSuppressRef.current} groupName={(mat as any).groupName} onUngroup={() => ungroupMaterial(mat.id)} onContextMenu={(e, m) => matMenu.openMenu(e, { url: m.dataUrl || '', name: m.name || m.title || 'Material', color: course.color, onMoveToGroup: () => setMoveToGroupMat({ id: m.id, name: m.name || m.title || 'Material' }), onRemoveFromGroup: (m as any).groupName ? () => ungroupMaterial(m.id) : undefined, onBatchColor: (c) => { updateCourse(course.id, { studyTopics: (safeArr(course.studyTopics)).map(t => t.id === activeTopic?.id ? { ...t, materials: (safeArr(t.materials)).map(mm => ({ ...mm, color: c })) } : t) } as any); toast.success('Color aplicado a todas las herramientas del tema'); }, onOpenAll: () => { const withUrl = (safeArr(activeTopic?.materials)).filter(mm => mm.dataUrl); if (withUrl.length === 0) { toast.error('No hay recursos con archivo o enlace para abrir'); return; } withUrl.forEach(mm => handleOpenResource(mm)); toast.success(`Abriendo ${withUrl.length} recurso(s)`); } })} />
+                                  <MaterialCard mat={mat} dragAttributes={attributes} dragListeners={listeners} onEdit={startEditToolMaterial} onDelete={handleDeleteMaterial} onOpenResource={handleOpenResource} onPractice={openPractice} onView={viewMaterial} clickSuppressed={() => matDragSuppressRef.current} groupName={(mat as any).groupName} onUngroup={() => ungroupMaterial(mat.id)} onPickIcon={(m, x, y) => setLinkIconPick({ matId: m.id, x, y })} onContextMenu={(e, m) => matRmb(e, m, () => ({ url: m.dataUrl || '', name: m.name || m.title || 'Material', color: course.color, onMoveToGroup: () => setMoveToGroupMat({ id: m.id, name: m.name || m.title || 'Material' }), onRemoveFromGroup: (m as any).groupName ? () => ungroupMaterial(m.id) : undefined, onBatchColor: (c) => { updateCourse(course.id, { studyTopics: (safeArr(course.studyTopics)).map(t => t.id === activeTopic?.id ? { ...t, materials: (safeArr(t.materials)).map(mm => ({ ...mm, color: c })) } : t) } as any); toast.success('Color aplicado a todas las herramientas del tema'); }, onOpenAll: () => { const withUrl = (safeArr(activeTopic?.materials)).filter(mm => mm.dataUrl); if (withUrl.length === 0) { toast.error('No hay recursos con archivo o enlace para abrir'); return; } withUrl.forEach(mm => handleOpenResource(mm)); toast.success(`Abriendo ${withUrl.length} recurso(s)`); } }))} selected={selMats.has(matKey(mat))} />
                                 </div>
                               )}
                             </SortableWrapper>
@@ -3603,14 +3738,14 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                           <LI.FolderPlus size={15} />
                         </button>
                         )}
-                        <button onClick={() => { topicOnlyRef.current = true; pendingGroupNameRef.current = activeToolGroup !== 'todos' ? activeToolGroup : undefined; handleAddFileBtn(activeTopic?.id); }}
+                        <button onClick={() => { topicOnlyRef.current = true; generalOnlyRef.current = false; pendingGroupNameRef.current = activeToolGroup !== 'todos' ? activeToolGroup : undefined; handleAddFileBtn(activeTopic?.id); }}
                           style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${course.color}30`, background: `${course.color}10`, cursor: 'pointer', color: course.color, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms ' + EASE }}
                           onMouseEnter={e => { e.currentTarget.style.background = `${course.color}22`; e.currentTarget.style.borderColor = `${course.color}50`; }}
                           onMouseLeave={e => { e.currentTarget.style.background = `${course.color}10`; e.currentTarget.style.borderColor = `${course.color}30`; }}
                           title="Subir archivo al tema activo">
                           <Upload size={15} />
                         </button>
-                        <button onClick={() => { setAddLinkTargetTopic(activeTopic?.id); pendingGroupNameRef.current = activeToolGroup !== 'todos' ? activeToolGroup : undefined; setShowAddLinkModal(true); setAddLinkUrl(''); setAddLinkName(''); }}
+                        <button onClick={() => { generalOnlyRef.current = false; setAddLinkTargetTopic(activeTopic?.id); pendingGroupNameRef.current = activeToolGroup !== 'todos' ? activeToolGroup : undefined; setShowAddLinkModal(true); setAddLinkUrl(''); setAddLinkName(''); }}
                           style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${course.color}30`, background: `${course.color}10`, cursor: 'pointer', color: course.color, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms ' + EASE }}
                           onMouseEnter={e => { e.currentTarget.style.background = `${course.color}22`; e.currentTarget.style.borderColor = `${course.color}50`; }}
                           onMouseLeave={e => { e.currentTarget.style.background = `${course.color}10`; e.currentTarget.style.borderColor = `${course.color}30`; }}
@@ -3917,6 +4052,9 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                           {expandedFirst.map(n => {
                             const isHighlighted = overviewNoteHighlights.includes(n.id);
                             const isCourseNote = !n.isCoursePrivate;
+                            // En "Mi conocimiento" las notas NO se editan; los apuntes
+                            // propios (isCoursePrivate) sí se pueden editar/borrar.
+                            const canModifyNote = !showCourseNotesInOverview || n.isCoursePrivate;
                             const isExpanded = selectedOverviewNoteId === n.id;
                             return (
                               <SortableWrapper key={n.id} id={n.id}>
@@ -3931,7 +4069,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                     cursor: isExpanded ? 'default' : 'grab',
                                     opacity: isDragging ? 0.4 : 1,
                                   }}
-                                    {...(!isExpanded ? { ...attributes, ...listeners } : {})}
+                                    {...(!isExpanded && canModifyNote ? { ...attributes, ...listeners } : {})}
                                     onClick={() => { if (!isExpanded && !notesDragRef.current) { setSelectedOverviewNoteId(n.id); setOverviewNoteEditMode(false); } }}
                                     onMouseEnter={e => { if (!isExpanded) { e.currentTarget.style.background = isHighlighted ? 'rgba(212,160,23,0.09)' : isCourseNote ? `linear-gradient(135deg, var(--bg-surface), ${course.color}06)` : 'var(--bg-surface)'; } }}
                                     onMouseLeave={e => { if (!isExpanded) { e.currentTarget.style.background = isHighlighted ? `linear-gradient(135deg, rgba(212,160,23,0.06), rgba(212,160,23,0.015))` : isCourseNote ? `linear-gradient(135deg, var(--bg-elevated), ${course.color}03)` : 'var(--bg-elevated)'; } }}
@@ -3940,7 +4078,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                       <>
                                         {/* -- EXPANDED -- */}
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0, padding: '4px 10px', borderBottom: '1px solid var(--border-subtle)', background: `${course.color}05`, flexWrap: 'wrap', minHeight: 32 }}>
-                                          {overviewNoteEditMode && (
+                                          {overviewNoteEditMode && canModifyNote && (
                                             <>
                                               <FormatToolbar onFormat={(cmd, val) => { document.execCommand(cmd, false, val); document.dispatchEvent(new Event('selectionchange')); }} color={course.color}
                                                 toolbarItems={['bold','italic','underline','strikethrough','list','orderedList']} activeFormats={overviewActiveFormats} />
@@ -3960,7 +4098,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                                             <Star size={11} fill={isHighlighted ? '#D4A017' : 'none'} />
                                           </button>
-                                          {!overviewNoteEditMode && !showCourseNotesInOverview && (
+                                          {!overviewNoteEditMode && canModifyNote && (
                                             <button onClick={() => { setOverviewNoteEditMode(true); setOverviewActiveFormats({}); }}
                                               title="Editar"
                                               style={{ width: 24, height: 24, borderRadius: 5, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
@@ -3969,7 +4107,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                               <Pencil size={11} />
                                             </button>
                                           )}
-                                          {!showCourseNotesInOverview && (
+                                          {canModifyNote && (
                                             <button onClick={() => setConfirmDeleteNoteId(n.id)}
                                               title="Eliminar"
                                               style={{ width: 24, height: 24, borderRadius: 5, border: 'none', background: 'transparent', cursor: 'pointer', color: 'rgba(239,68,68,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
@@ -3991,7 +4129,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                             note={n}
                                             courseColor={course.color}
                                             onSave={(id, data) => saveCourseNoteContent(id, data?.content ?? '')}
-                                            editable={overviewNoteEditMode}
+                                            editable={overviewNoteEditMode && canModifyNote}
                                             hideToolbar
                                             onActiveFormatsChange={setOverviewActiveFormats}
                                             onImageClick={(src) => { setPreviewImageSrc(src); setShowImagePreview(true); }}
@@ -4215,14 +4353,14 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '24px 20px 10px', flexShrink: 0 }}>
                           <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: "'Inter Tight', sans-serif" }}>Materiales</h3>
                           <div style={{ display: 'flex', gap: 6 }}>
-                            <button onClick={() => { topicOnlyRef.current = false; handleAddFileBtn(activeTopic?.id ?? parsedTopics[0]?.id); }}
+                            <button onClick={() => { topicOnlyRef.current = false; generalOnlyRef.current = true; handleAddFileBtn(undefined); }}
                               style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${course.color}30`, background: `${course.color}10`, cursor: 'pointer', color: course.color, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms ' + EASE }}
                               onMouseEnter={e => { e.currentTarget.style.background = `${course.color}22`; e.currentTarget.style.borderColor = `${course.color}50`; }}
                               onMouseLeave={e => { e.currentTarget.style.background = `${course.color}10`; e.currentTarget.style.borderColor = `${course.color}30`; }}
                               title="Subir archivo">
                               <Upload size={15} />
                             </button>
-                            <button onClick={() => { topicOnlyRef.current = false; setAddLinkTargetTopic(activeTopic?.id ?? parsedTopics[0]?.id); setShowAddLinkModal(true); setAddLinkUrl(''); setAddLinkName(''); }}
+                            <button onClick={() => { topicOnlyRef.current = false; setAddLinkTargetTopic(undefined); setShowAddLinkModal(true); setAddLinkUrl(''); setAddLinkName(''); }}
                               style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${course.color}30`, background: `${course.color}10`, cursor: 'pointer', color: course.color, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms ' + EASE }}
                               onMouseEnter={e => { e.currentTarget.style.background = `${course.color}22`; e.currentTarget.style.borderColor = `${course.color}50`; }}
                               onMouseLeave={e => { e.currentTarget.style.background = `${course.color}10`; e.currentTarget.style.borderColor = `${course.color}30`; }}
@@ -4231,7 +4369,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                             </button>
                           </div>
                         </div>
-                        <input type="file" ref={estudioFileInputRef} style={{ display: 'none' }} onChange={e => handleFileUpload(e, activeTopic?.id ?? parsedTopics[0]?.id)} />
+                        <input type="file" ref={estudioFileInputRef} style={{ display: 'none' }} onChange={e => { generalOnlyRef.current = true; handleFileUpload(e, undefined); }} />
                         <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '10px 14px 40px', display: 'flex', flexDirection: 'column', gap: 12 }} className="no-scrollbar">
                           {allCourseMaterials.length === 0 ? (
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 120, borderRadius: 12, border: '1px dashed var(--border-subtle)', background: 'var(--bg-surface)', gap: 8 }}>
@@ -4267,6 +4405,14 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                             const isLocal = dataUrl && !dataUrl.startsWith('http') && !dataUrl.startsWith('data:') && !dataUrl.startsWith('blob:');
 
                             const handleMatClick = async () => {
+                              // Enlaces y PDF pasan por handleOpenResource para
+                              // respetar el navegador/app predeterminados.
+                              if (isLink || isPdf) {
+                                setLoadingMatId(mat.id || `idx_${idx}`);
+                                try { handleOpenResource(mat); } catch { /* noop */ }
+                                setTimeout(() => setLoadingMatId(null), 400);
+                                return;
+                              }
                               setLoadingMatId(mat.id || `idx_${idx}`);
                               try {
                                 await openFileSmart(dataUrl, matName, { onMedia: (u, n) => setPipUrl(u, n), onError: (m) => toast.error(m), onMoved: (np) => handleMatMoved(mat.id, np) });
@@ -4307,10 +4453,11 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                             return (
                               <SortableWrapper key={mat.id || idx} id={String(mat.id || idx)}>
                               {({ attributes, listeners, isDragging }) => (
-                              <div {...attributes} {...listeners} onContextMenu={(e) => matMenu.openMenu(e, { url: mat.dataUrl || '', name: mat.name || 'Material', color: badgeColor })} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 7, background: loadingMatId === (mat.id || `idx_${idx}`) ? `${badgeColor}15` : isAudio && playingAudioId === mat.id ? `${badgeColor}08` : 'var(--bg-elevated)', border: `1px solid ${loadingMatId === (mat.id || `idx_${idx}`) ? `${badgeColor}50` : isAudio && playingAudioId === mat.id ? `${badgeColor}30` : 'var(--border-soft)'}`, cursor: loadingMatId === (mat.id || `idx_${idx}`) ? 'default' : 'pointer', transition: 'all 150ms', opacity: isDragging ? 0.5 : 1 }}
+                              <div {...attributes} {...listeners} onContextMenu={(e) => matRmb(e, mat, () => ({ url: mat.dataUrl || '', name: mat.name || 'Material', color: badgeColor }))} className={selMats.has(matKey(mat)) ? 'owa-mat-selected' : undefined} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 7, background: loadingMatId === (mat.id || `idx_${idx}`) ? `${badgeColor}15` : isAudio && playingAudioId === mat.id ? `${badgeColor}08` : 'var(--bg-elevated)', border: `1px solid ${loadingMatId === (mat.id || `idx_${idx}`) ? `${badgeColor}50` : isAudio && playingAudioId === mat.id ? `${badgeColor}30` : 'var(--border-soft)'}`, cursor: loadingMatId === (mat.id || `idx_${idx}`) ? 'default' : 'pointer', transition: 'all 150ms', opacity: isDragging ? 0.5 : 1 }}
                                   onMouseEnter={e => { if (loadingMatId !== (mat.id || `idx_${idx}`)) { e.currentTarget.style.borderColor = `${badgeColor}40`; e.currentTarget.style.background = 'var(--bg-hover)'; } }}
                                   onMouseLeave={e => { if (loadingMatId !== (mat.id || `idx_${idx}`)) { e.currentTarget.style.borderColor = isAudio && playingAudioId === mat.id ? `${badgeColor}30` : 'var(--border-soft)'; e.currentTarget.style.background = isAudio && playingAudioId === mat.id ? `${badgeColor}08` : 'var(--bg-elevated)'; } }}>
-                                  <div onClick={() => {
+                                  <div onClick={(e) => {
+                                    if (isLink) { e.stopPropagation(); setLinkIconPick({ matId: mat.id, x: e.clientX, y: e.clientY }); return; }
                                     if (matLinkDragRef.current) return;
                                     if (isAudio) {
                                       if (playingAudioId === mat.id && audioRef.current) {
@@ -4320,8 +4467,8 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
                                         setTimeout(() => { if (audioRef.current) { audioRef.current.src = dataUrl; audioRef.current.play().catch(() => {}); } }, 50);
                                       }
                                     } else { handleMatClick(); }
-                                  }} style={{ width: 30, height: 30, borderRadius: 7, background: `${badgeColor}14`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 150ms', color: badgeColor, position: 'relative' }}>
-                                    {iconEl}
+                                  }} title={isLink ? 'Cambiar icono del enlace' : undefined} style={{ width: 30, height: 30, borderRadius: 7, background: `${badgeColor}14`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 150ms', color: badgeColor, position: 'relative', cursor: isLink ? 'pointer' : undefined }}>
+                                    {(isLink && (mat as any).icon && (mat as any).icon !== 'auto') ? renderLinkChoiceIcon((mat as any).icon, 15, badgeColor) : iconEl}
                                   </div>
                                   <div onClick={() => {
                                     if (matLinkDragRef.current) return;
@@ -6299,7 +6446,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
             {allCourseMaterials.filter(m => !!m && m.type === 'resource').length > 0 ? (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
                 {allCourseMaterials.filter(m => !!m && m.type === 'resource').map(mat => (
-                  <div key={mat.id} onContextMenu={(e) => matMenu.openMenu(e, { url: mat.dataUrl || '', name: mat.name || 'Archivo', color: course.color })} style={{ padding: '12px 14px', borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', display: 'flex', alignItems: 'center', gap: 10, cursor: 'context-menu' }}>
+                  <div key={mat.id} onContextMenu={(e) => matRmb(e, mat, () => ({ url: mat.dataUrl || '', name: mat.name || 'Archivo', color: course.color }))} className={selMats.has(matKey(mat)) ? 'owa-mat-selected' : undefined} style={{ padding: '12px 14px', borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', display: 'flex', alignItems: 'center', gap: 10, cursor: 'context-menu' }}>
                     <div style={{ width: 36, height: 36, borderRadius: 8, background: `${course.color}12`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                       <File size={16} style={{ color: course.color }} />
                     </div>
@@ -7315,6 +7462,39 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                     </div>
                   </div>
                 )}
+
+                {/* -- SELECTOR DE ICONO DE ENLACE -- */}
+                {linkIconPick && (() => {
+                  const px = Math.max(8, Math.min(linkIconPick.x - 110, window.innerWidth - 240));
+                  const py = Math.max(8, Math.min(linkIconPick.y + 12, window.innerHeight - 190));
+                  let current: string = 'auto';
+                  try {
+                    outer: for (const t of (safeArr(course?.studyTopics))) {
+                      for (const m of (safeArr((t as any)?.materials))) {
+                        if (m && (m as any).id === linkIconPick.matId) { current = (m as any).icon || 'auto'; break outer; }
+                      }
+                    }
+                  } catch { /* noop */ }
+                  return (
+                    <div style={{ position: 'fixed', inset: 0, zIndex: 10000 }} onClick={() => setLinkIconPick(null)} onContextMenu={e => { e.preventDefault(); setLinkIconPick(null); }}>
+                      <div onClick={e => e.stopPropagation()} style={{ position: 'fixed', left: px, top: py, width: 220, borderRadius: 12, padding: 10, background: 'color-mix(in srgb, var(--bg-elevated) 96%, transparent)', backdropFilter: 'blur(16px)', border: '1px solid var(--border-soft)', boxShadow: '0 18px 50px rgba(0,0,0,0.42)', animation: 'fadeInScale 160ms ease' }}>
+                        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-tertiary)', padding: '2px 6px 8px', fontFamily: "'Inter Tight', sans-serif" }}>Icono del enlace</div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 4 }}>
+                          {LINK_ICON_CHOICES.map(c => {
+                            const active = (current || 'auto') === c.id;
+                            const Cmp = c.Icon;
+                            return (
+                              <button key={c.id} onClick={() => setMaterialIcon(linkIconPick.matId, c.id === 'auto' ? null : c.id)} title={c.id === 'auto' ? 'Original' : c.label}
+                                style={{ height: 34, borderRadius: 8, border: active ? `1.5px solid ${course?.color || 'var(--accent)'}` : '1px solid var(--border-subtle)', background: active ? `${course?.color || 'var(--accent)'}12` : 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: active ? (course?.color || 'var(--accent)') : 'var(--text-secondary)' }}>
+                                <Cmp size={15} />
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* -- EDIT LINK MODAL -- */}
                 {editLinkId && (

@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "OWA Studio — Ventanas",
+  "version": "2.0.0",
+  "description": "Gestor autónomo del navegador: grupos de pestañas, bloqueo de páginas con horario, bloqueador de anuncios y rendimiento. Sin depender de ninguna app.",
+  "permissions": ["storage", "tabs", "tabGroups", "alarms", "declarativeNetRequest"],
+  "background": { "service_worker": "background.js" },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "OWA Studio — Ventanas",
+    "default_icon": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "128": "icons/icon128.png" }
+  },
+  "icons": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "128": "icons/icon128.png" },
+  "declarative_net_request": {
+    "rule_resources": [
+      { "id": "owa_ads", "enabled": false, "path": "rules.json" }
+    ]
+  }
+}

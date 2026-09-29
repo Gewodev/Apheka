@@ -18,6 +18,7 @@ import { useApp, fmtClock } from '../../store/AppContext';
 import { del } from 'idb-keyval';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { invoke } from '@tauri-apps/api/core';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import NotificationBell from '../ui/NotificationBell';
 import { copyFile, mkdir, exists, readFile, writeFile, writeTextFile, readTextFile } from '@tauri-apps/plugin-fs';
@@ -1772,68 +1773,7 @@ export default function Ajustes() {
                       </div>
                     </div>
 
-                    {/* Hide time + animation */}
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                          <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)' }}>Ocultar tiempo en enfoque</span>
-                          <span style={{ fontSize: 9, fontWeight: 400, color: 'var(--text-tertiary)' }}>Al activarse, el reloj se reemplaza por una animación</span>
-                        </div>
-                        <button onClick={() => {
-                          if (!settings.floatingHideInFocus) {
-                            updateSettings({ floatingHideInFocus: true, floatingAnimationType: settings.floatingAnimationType || 'plant' });
-                          } else {
-                            updateSettings({ floatingHideInFocus: false });
-                          }
-                        }}
-                          style={{
-                            width: 40, height: 22, borderRadius: 11, border: 'none', cursor: 'pointer', position: 'relative',
-                            background: settings.floatingHideInFocus ? 'var(--accent)' : 'var(--bg-deep)',
-                            transition: 'background 200ms', boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.2)',
-                          }}>
-                          <div style={{
-                            width: 16, height: 16, borderRadius: '50%', background: '#fff',
-                            position: 'absolute', top: 3, transition: 'left 200ms',
-                            left: settings.floatingHideInFocus ? 21 : 3,
-                            boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
-                          }} />
-                        </button>
-                      </div>
-                      {settings.floatingHideInFocus && (
-                        <div style={{ marginTop: 10 }}>
-                          <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-primary)', display: 'block', marginBottom: 8 }}>
-                            Tipo de animación
-                            <span style={{ fontSize: 8, fontWeight: 400, color: 'var(--text-tertiary)', marginLeft: 6 }}>Solo visible en Pomodoro</span>
-                          </span>
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
-                            {[
-                              { value: 'plant', label: 'Planta', desc: 'Crece lentamente' },
-                              { value: 'books', label: 'Libros', desc: 'Se apilan solos' },
-                              { value: 'stars', label: 'Estrellas', desc: 'Brillan suavemente' },
-                              { value: 'waves', label: 'Ondas', desc: 'Fluyen en calma' },
-                              { value: 'leaves', label: 'Hojas', desc: 'Caen al viento' },
-                              { value: 'breathing', label: 'Respiración', desc: 'Círculo que inspira' },
-                            ].map(a => (
-                              <button key={a.value} onClick={() => updateSettings({ floatingAnimationType: a.value })}
-                                style={{
-                                  padding: '10px 6px', borderRadius: 8, fontSize: 10,
-                                  border: (settings.floatingAnimationType || 'plant') === a.value ? '1px solid var(--accent)' : '1px solid var(--border-default)',
-                                  background: (settings.floatingAnimationType || 'plant') === a.value ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : 'var(--bg-deep)',
-                                  color: (settings.floatingAnimationType || 'plant') === a.value ? 'var(--accent)' : 'var(--text-secondary)',
-                                  cursor: 'pointer', transition: 'all 150ms',
-                                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
-                                }}>
-                                <span style={{ lineHeight: 1, opacity: 0.8, display: 'flex' }}>
-                                  {a.value === 'plant' ? <Sprout size={15} /> : a.value === 'books' ? <BookOpen size={15} /> : a.value === 'stars' ? <Star size={15} /> : a.value === 'waves' ? <Waves size={15} /> : a.value === 'leaves' ? <Leaf size={15} /> : <Circle size={13} />}
-                                </span>
-                                <span style={{ fontSize: 10, fontWeight: 600 }}>{a.label}</span>
-                                <span style={{ fontSize: 7, fontWeight: 400, opacity: 0.6 }}>{a.desc}</span>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                    {/* Ventanas: retirado — la gestión vive en la extensión del navegador (v2.0) */}
                   </div>
                 </div>
               </section>

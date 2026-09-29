@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import toast from 'react-hot-toast';
 import LiveClock from '../ui/LiveClock';
 import {
   Play, Pause, RotateCcw, Zap, Clock,
@@ -146,7 +147,7 @@ function detectPerformanceSuggestion(opts: {
 
 export default function Estudio() {
   const {
-    tasks, courses, addSubTask, settings, dailyStudyTime, activeTaskId, setActiveTaskId,
+    tasks, hydrated, courses, addSubTask, settings, updateSettings, dailyStudyTime, activeTaskId, setActiveTaskId,
     pomodoroSessions, incrementPomodoroSessions, studySessions,
     addStudySession, updateStudySession, weeklyStudyTime,
     dailyPerformances,
@@ -171,6 +172,16 @@ export default function Estudio() {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showSessionEval, setShowSessionEval] = useState(false);
   const [showFreeStudyPrompt, setShowFreeStudyPrompt] = useState(false);
+  const [headerMenu, setHeaderMenu] = useState<{ x: number; y: number } | null>(null);
+  const [customMinutes, setCustomMinutes] = useState<number>(() => Math.round((settings.pomodoroTime || 1500) / 60));
+  const [targetTime, setTargetTime] = useState('');
+  useEffect(() => {
+    if (!headerMenu) return;
+    const close = () => setHeaderMenu(null);
+    window.addEventListener('click', close);
+    window.addEventListener('wheel', close, { passive: true });
+    return () => { window.removeEventListener('click', close); window.removeEventListener('wheel', close); };
+  }, [headerMenu]);
   const [evalSessionId, setEvalSessionId] = useState<string | null>(null);
   const [showSessionDetail, setShowSessionDetail] = useState(false);
   const [detailSession, setDetailSession] = useState<StudySession | null>(null);
@@ -307,6 +318,29 @@ export default function Estudio() {
   }, [weeklyStudyTime]);
 
 
+  const applyPomodoroMinutes = (mins: number) => {
+    const m = Math.max(1, Math.min(120, Math.round(mins)));
+    setCustomMinutes(m);
+    updateSettings({ pomodoroTime: m * 60 });
+    setSessionTime(0);
+    toast.success(`Pomodoro ajustado a ${m} min`);
+  };
+  const applyTargetTime = () => {
+    if (!targetTime) return;
+    const [h, m] = targetTime.split(':').map(Number);
+    if (isNaN(h) || isNaN(m)) return;
+    const now = new Date();
+    const target = new Date();
+    target.setHours(h, m, 0, 0);
+    let diffSec = Math.round((target.getTime() - now.getTime()) / 1000);
+    if (diffSec <= 0) { toast.error('Esa hora ya pasó — elige una hora futura'); return; }
+    if (diffSec > 2 * 3600) { toast.error('Máximo 2 horas de diferencia con la hora actual'); return; }
+    const mins = Math.max(1, Math.round(diffSec / 60));
+    updateSettings({ pomodoroTime: mins * 60 });
+    setSessionTime(0);
+    setHeaderMenu(null);
+    toast.success(`Pomodoro de ${mins} min (hasta las ${targetTime})`);
+  };
   const fmt = (sec: number) => {
     const m = Math.floor(sec / 60);
     const s = sec % 60;
@@ -401,27 +435,37 @@ export default function Estudio() {
     if (sessionType === 'chrono' && !isTimerActive && sessionTime === 0) { lastChronoRoundRef.current = 0; saveChronoRound(0); }
   }, [sessionType, isTimerActive, sessionTime]);
 
-  // Read linked task from localStorage (set by Tareas "Estudiar esta tarea" button)
+  // Read linked task from localStorage (set by Tareas "Estudiar esta tarea" button).
+  // CORRECCIÓN: antes corría UNA vez al montar, cuando `tasks` todavía no se había
+  // hidratado → la búsqueda fallaba ("la tarea ya no existe") y se perdía el vínculo.
+  // Ahora espera a `hydrated` y consume el ID una sola vez, con datos reales.
+  const consumedTaskLinkRef = useRef(false);
   useEffect(() => {
+    if (consumedTaskLinkRef.current || !hydrated) return;
     try {
       const taskId = localStorage.getItem('owa_study_task_id');
-      if (taskId) {
-        const found = (tasks || []).find(t => t && t.id === taskId);
-        if (found && !activePlannedSessionId) {
-          setActiveTaskId(taskId);
-          addNotification(`Estudiando: ${found.title}`, 'success');
-        } else if (found && activePlannedSessionId) {
-          addNotification('Hay una sesión de estudio vinculada. Desvincúlala para estudiar esta tarea.', 'info');
-        } else if (!found) {
-          addNotification('La tarea vinculada ya no existe.', 'info');
-        }
+      if (!taskId) return;
+      const found = (tasks || []).find(t => t && t.id === taskId);
+      if (found && !activePlannedSessionId) {
+        consumedTaskLinkRef.current = true;
+        setActiveTaskId(taskId);
+        addNotification(`Estudiando: ${found.title}`, 'success');
+        localStorage.removeItem('owa_study_task_id');
+        localStorage.removeItem('owa_study_task_title');
+      } else if (found && activePlannedSessionId) {
+        // sesión planificada activa: NO consumir el ID — se vinculará al desvincular
+        addNotification('Hay una sesión de estudio vinculada. Desvincúlala para estudiar esta tarea.', 'info');
+      } else if (!found) {
+        // tareas ya hidratadas y la tarea no existe → consumir y avisar
+        consumedTaskLinkRef.current = true;
+        addNotification('La tarea vinculada ya no existe.', 'info');
         localStorage.removeItem('owa_study_task_id');
         localStorage.removeItem('owa_study_task_title');
       }
     } catch (e) {
       console.error(e);
     }
-  }, []);
+  }, [hydrated, tasks, activePlannedSessionId]);
 
   useEffect(() => {
     if (isRest && restElapsed >= currentBreakLimit && !breakNotifiedRef.current) {
@@ -744,8 +788,12 @@ export default function Estudio() {
     <div className="page-container h-full flex flex-col" style={{ position: 'relative', overflow: 'hidden' }}>
       <div className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', gap: 0, padding: '0 0 16px 0' }}>
 
-      {/* HEADER */}
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, paddingTop: 8 }}>
+      {/* HEADER — click derecho: ajustar duración del Pomodoro */}
+      <header onContextMenu={e => {
+        if (sessionType !== 'pomodoro' || isRest || isTimerActive) return;
+        e.preventDefault();
+        setHeaderMenu({ x: Math.min(e.clientX, window.innerWidth - 270), y: Math.min(e.clientY, window.innerHeight - 300) });
+      }} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, paddingTop: 8, cursor: sessionType === 'pomodoro' && !isRest && !isTimerActive ? 'context-menu' : undefined }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <h1 style={{ fontSize: 'clamp(28px, 4vw, 40px)', fontWeight: 200, color: 'var(--text-primary)', lineHeight: 1, letterSpacing: '-0.03em', fontFamily: "'Inter Tight', sans-serif", textShadow: '0 0 20px var(--accent-glow)' }}>Estudio</h1>
@@ -806,6 +854,92 @@ export default function Estudio() {
             </div>
           </div>
         </div>
+        {headerMenu && (
+          <div onClick={e => e.stopPropagation()}
+            style={{ position: 'fixed', left: headerMenu.x, top: headerMenu.y, zIndex: 100050, width: 268, borderRadius: 16, overflow: 'hidden', background: 'var(--bg-surface)', border: '1px solid var(--border-default)', boxShadow: '0 26px 70px rgba(0,0,0,0.55)', animation: 'owaHeaderMenuIn 170ms cubic-bezier(0.16,1,0.3,1)' }}>
+            <style>{`@keyframes owaHeaderMenuIn { from { opacity: 0; transform: scale(0.96) translateY(-5px); } to { opacity: 1; transform: none; } }`}</style>
+            {/* Cabecera con icono */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '13px 15px 11px', borderBottom: '1px solid var(--border-subtle)', background: 'linear-gradient(180deg, color-mix(in srgb, var(--accent) 5%, transparent), transparent)' }}>
+              <div style={{ width: 30, height: 30, borderRadius: 9, background: 'color-mix(in srgb, var(--accent) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Timer size={14} style={{ color: 'var(--accent)' }} />
+              </div>
+              <div>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em' }}>Duración del Pomodoro</div>
+                <div style={{ fontSize: 9, color: 'var(--text-tertiary)', marginTop: 1 }}>Ajusta tu próxima sesión</div>
+              </div>
+            </div>
+
+            {/* Personalizado: stepper grande */}
+            <div style={{ padding: '13px 15px 11px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 9 }}>
+                <span style={{ fontSize: 8.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--text-tertiary)' }}>Personalizado</span>
+                <span style={{ fontSize: 9, color: 'var(--text-tertiary)' }}>±5 min</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <button onClick={() => applyPomodoroMinutes(customMinutes - 5)} title="-5 min"
+                  style={{ width: 38, height: 38, borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 140ms' }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-primary)'; }}>
+                  <Minus size={15} />
+                </button>
+                <div style={{ flex: 1, textAlign: 'center', padding: '6px 0', borderRadius: 11, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)' }}>
+                  <span style={{ fontSize: 26, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>{customMinutes}</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-tertiary)', marginLeft: 5, fontWeight: 500 }}>min</span>
+                </div>
+                <button onClick={() => applyPomodoroMinutes(customMinutes + 5)} title="+5 min"
+                  style={{ width: 38, height: 38, borderRadius: 12, border: '1px solid color-mix(in srgb, var(--accent) 35%, transparent)', background: 'color-mix(in srgb, var(--accent) 8%, transparent)', color: 'var(--accent)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 140ms' }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 15%, transparent)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--accent) 35%, transparent)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 8%, transparent)'; }}>
+                  <Plus size={15} />
+                </button>
+              </div>
+              <div style={{ display: 'flex', gap: 5, marginTop: 9, flexWrap: 'wrap' }}>
+                {[10, 25, 30, 45, 50, 60].map(m => (
+                  <button key={m} onClick={() => applyPomodoroMinutes(m)}
+                    style={{
+                      flex: '1 1 auto', padding: '5px 0', borderRadius: 8, fontSize: 10, fontWeight: 700, cursor: 'pointer', transition: 'all 130ms',
+                      border: m === customMinutes ? '1px solid color-mix(in srgb, var(--accent) 50%, transparent)' : '1px solid var(--border-subtle)',
+                      background: m === customMinutes ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : 'var(--bg-deep)',
+                      color: m === customMinutes ? 'var(--accent)' : 'var(--text-secondary)',
+                    }}>
+                    {m}m
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ height: 1, background: 'var(--border-subtle)', margin: '0 15px' }} />
+
+            {/* Por hora: termina a la hora elegida */}
+            <div style={{ padding: '12px 15px 14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 9 }}>
+                <span style={{ fontSize: 8.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--text-tertiary)' }}>Terminar a las…</span>
+                {targetTime && (() => {
+                  const [h, m] = targetTime.split(':').map(Number);
+                  const t = new Date(); t.setHours(h, m, 0, 0);
+                  const diff = Math.round((t.getTime() - Date.now()) / 60000);
+                  const tooLong = diff > 120;
+                  return (
+                    <span style={{ fontSize: 9.5, fontWeight: 700, color: diff <= 0 ? '#EF4444' : tooLong ? '#EF4444' : '#10B981', fontVariantNumeric: 'tabular-nums' }}>
+                      {diff <= 0 ? 'hora pasada' : tooLong ? 'más de 2 h' : '= ' + diff + ' min'}
+                    </span>
+                  );
+                })()}
+              </div>
+              <div style={{ display: 'flex', gap: 7, alignItems: 'center' }}>
+                <input type="time" value={targetTime} onChange={e => setTargetTime(e.target.value)}
+                  style={{ flex: 1, height: 34, borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', fontSize: 13, padding: '0 10px', outline: 'none', colorScheme: 'dark', fontFamily: "'JetBrains Mono', monospace" }} />
+                <button onClick={applyTargetTime} disabled={!targetTime}
+                  style={{ height: 34, padding: '0 15px', borderRadius: 10, border: 'none', background: targetTime ? 'var(--accent)' : 'var(--border-subtle)', color: targetTime ? '#fff' : 'var(--text-muted)', cursor: targetTime ? 'pointer' : 'default', fontSize: 11, fontWeight: 700, opacity: targetTime ? 1 : 0.55, fontFamily: "'Inter Tight', sans-serif" }}>
+                  Fijar
+                </button>
+              </div>
+              <div style={{ fontSize: 9, color: 'var(--text-tertiary)', marginTop: 7, lineHeight: 1.5, display: 'flex', alignItems: 'center', gap: 5 }}>
+                <Clock size={9} style={{ flexShrink: 0 }} /> La sesión dura hasta esa hora · máx. 2 h
+              </div>
+            </div>
+          </div>
+        )}
       </header>
 
       {/* MAIN TWO-COLUMN DASHBOARD LAYOUT */}

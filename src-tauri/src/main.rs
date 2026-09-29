@@ -1,5 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod windows_server;
+
 use std::collections::HashMap;
 use std::io::{BufRead, Write};
 use std::process::{Command, Stdio};
@@ -9,6 +11,21 @@ use tauri::{Emitter, Manager};
 use tauri_plugin_shell::ShellExt;
 use reqwest;
 use tokio::time::sleep;
+
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
+/// CREATE_NO_WINDOW: sin esta flag, cada binario de consola (yt-dlp, where) abre
+/// una ventana de terminal visible en la build de producción (windows_subsystem).
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+fn quiet(cmd: &mut Command) -> &mut Command {
+    #[cfg(windows)]
+    { cmd.creation_flags(CREATE_NO_WINDOW) }
+    #[cfg(not(windows))]
+    { cmd }
+}
 
 struct DownloadState {
     active: Mutex<HashMap<String, std::process::Child>>,
@@ -35,8 +52,21 @@ fn resolve_binary(app: &tauri::AppHandle, name: &str) -> Result<std::path::PathB
             return Ok(without_triple);
         }
     }
+    // PATH del sistema: el usuario puede tener yt-dlp/ffmpeg ya instalados
+    // (winget, scoop, chocolatey, Python Scripts…) — no duplicar descargas.
+    if let Ok(out) = quiet(Command::new("where").arg(name)).output() {
+        if out.status.success() {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            if let Some(first) = stdout.lines().map(str::trim).find(|l| !l.is_empty()) {
+                let p = std::path::PathBuf::from(first);
+                if p.exists() {
+                    return Ok(p);
+                }
+            }
+        }
+    }
     Err(format!(
-        "{} no encontrado (Windows Defender pudo eliminarlo). Buscado en {:?}, {:?} y {:?}.",
+        "{} no encontrado (Windows Defender pudo eliminarlo). Buscado en {:?}, {:?}, {:?} y PATH.",
         name, candidates[0], candidates[1], candidates[2],
     ))
 }
@@ -44,6 +74,16 @@ fn resolve_binary(app: &tauri::AppHandle, name: &str) -> Result<std::path::PathB
 /// Download yt-dlp from GitHub releases to app data dir
 #[tauri::command]
 async fn download_yt_dlp(app_handle: tauri::AppHandle) -> Result<String, String> {
+    // Si ya hay un yt-dlp funcional (app, bundle o PATH del sistema), no re-descargar
+    if let Ok(bin) = resolve_binary(&app_handle, "yt-dlp") {
+        if let Ok(out) = quiet(Command::new(&bin).args(["--version"])).output() {
+            if out.status.success() {
+                let version = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                return Ok(format!("yt-dlp ya estaba instalado en {}. Versión: {}", bin.display(), version));
+            }
+        }
+    }
+
     let app_data = app_handle.path().app_data_dir().map_err(|e| e.to_string())?;
     let bin_dir = app_data.join("bin");
     std::fs::create_dir_all(&bin_dir).map_err(|e| format!("No se pudo crear directorio bin: {e}"))?;
@@ -83,7 +123,7 @@ async fn download_yt_dlp(app_handle: tauri::AppHandle) -> Result<String, String>
     }
 
     // Verify it works
-    let output = Command::new(&dest).args(["--version"]).output().map_err(|e| format!("Error ejecutando yt-dlp: {e}"))?;
+    let output = quiet(Command::new(&dest).args(["--version"])).output().map_err(|e| format!("Error ejecutando yt-dlp: {e}"))?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let _ = std::fs::remove_file(&dest);
@@ -135,7 +175,7 @@ async fn download_yt_dlp_internal(app_handle: &tauri::AppHandle) -> Result<(), S
     }
 
     // Verify it works
-    let output = Command::new(&dest).args(["--version"]).output().map_err(|e| format!("Error ejecutando yt-dlp: {e}"))?;
+    let output = quiet(Command::new(&dest).args(["--version"])).output().map_err(|e| format!("Error ejecutando yt-dlp: {e}"))?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let _ = std::fs::remove_file(&dest);
@@ -148,10 +188,7 @@ async fn download_yt_dlp_internal(app_handle: &tauri::AppHandle) -> Result<(), S
 
 fn run_ytdlp(app: &tauri::AppHandle, args: &[&str]) -> Result<String, String> {
     let bin = resolve_binary(app, "yt-dlp")?;
-    let output = Command::new(&bin)
-        .args(args)
-        .output()
-        .map_err(|e| format!("Failed to execute yt-dlp: {e}"))?;
+    let output = quiet(Command::new(&bin).args(args)).output().map_err(|e| format!("Failed to execute yt-dlp: {e}"))?;
 
     let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
     if !stdout.is_empty() {
@@ -265,8 +302,7 @@ async fn start_download(
 
     args.push(&url);
 
-    let mut child = Command::new(&yt_bin)
-        .args(&args)
+    let mut child = quiet(Command::new(&yt_bin).args(&args))
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -745,22 +781,29 @@ fn main() {
             detect_installed_browsers,
             open_url_in_browser,
             download_yt_dlp,
+            windows_server::windows_server_start,
+            windows_server::windows_server_register_code,
+            windows_server::windows_server_status,
+            windows_server::windows_server_set_state,
+            windows_server::windows_server_get_state,
         ])
         .setup(|app| {
             ensure_simple_binaries(app.handle());
 
-            // Auto-download yt-dlp if missing on startup
+            // Ventanas v2.0: la extensión del navegador es autónoma (chrome.storage),
+            // sin emparejamiento ni servidor local. El módulo windows_server queda
+            // compilado pero ya no se arranca en el setup.
+
+            // Auto-download yt-dlp only if truly missing (app dirs AND system PATH)
             let app_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 // Wait a bit for app to fully initialize
                 sleep(Duration::from_secs(2)).await;
-                
-                if let Ok(app_data) = app_handle.path().app_data_dir() {
-                    let bin_dir = app_data.join("bin");
-                    let yt_dlp_path = bin_dir.join("yt-dlp.exe");
-                    
-                    if !yt_dlp_path.exists() {
-                        eprintln!("yt-dlp no encontrado, descargando automáticamente...");
+
+                match resolve_binary(&app_handle, "yt-dlp") {
+                    Ok(p) => eprintln!("yt-dlp ya disponible en {}", p.display()),
+                    Err(_) => {
+                        eprintln!("yt-dlp no encontrado (ni en PATH), descargando automáticamente...");
                         if let Err(e) = download_yt_dlp_internal(&app_handle).await {
                             eprintln!("Error auto-descargando yt-dlp: {}", e);
                         }

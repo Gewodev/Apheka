@@ -2807,3 +2807,10 @@ body.owa-resource-saver .owa-player-bar * {
 .owa-frac-bot { padding: 1px 4px 0; }
 .owa-sqrt-in { border-top: 1px solid currentColor; padding: 0 3px; margin-left: -1px; }
 .owa-math-up { font-style: normal !important; }
+
+/* ── Cursos: selección de materiales por presión larga (clic derecho sostenido) ── */
+@keyframes owaSelPulse {
+  0%, 100% { border-color: rgba(225, 29, 72, 0.9); box-shadow: 0 0 0 3px rgba(225, 29, 72, 0.18); }
+  50% { border-color: rgba(225, 29, 72, 0.45); box-shadow: 0 0 0 5px rgba(225, 29, 72, 0.08); }
+}
+.owa-mat-selected { border: 1.5px solid #E11D48 !important; animation: owaSelPulse 1.2s ease-in-out infinite; }

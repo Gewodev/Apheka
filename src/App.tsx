@@ -5,8 +5,9 @@ import {
   Calendar, Layers, Plus, GraduationCap, X, Image as ImageIcon,
   Loader2,
 } from 'lucide-react';
+import { invoke } from '@tauri-apps/api/core';
 import { AppProvider, useApp } from './store/AppContext';
-import toast from 'react-hot-toast';
+import toast, { Toaster } from 'react-hot-toast';
 import ErrorBoundary from './components/ErrorBoundary';
 import { ensureYouTubeApi, extractYouTubeId, extractPlaylistId, generalYtControl } from './lib/ytEngine';
 
@@ -33,7 +34,7 @@ interface AppContentProps {
 }
 
 function AppContent() {
-  const { settings, courses, addCourse, navigateTo, setNavigateTo, importState, updateSettings, toastMessage, deleteOldCompletedTasks, youtubeVideoUrl, setYoutubeVideoUrl, isPlayingMusic, musicVolume, musicProgress, musicDuration, setMusicDuration, setMusicProgressRaw, setIsPlayingMusic, playTrack, musicQueue, setMusicQueue, shuffleMode, repeatMode, tracks, currentTrackId, setRepeatMode, coverModalTrackId, showRestPrompt, handlePomodoroBannerClick, queueSource, pipUrl, pipTitle, pipAutoplay, setPipUrl, pipPlaying, setPipPlaying, pipAfterQueue, setPipAfterQueue, courseDeepLink, setCourseDeepLink } = useApp();
+  const { settings, courses, addCourse, navigateTo, setNavigateTo, importState, updateSettings, toastMessage, deleteOldCompletedTasks, youtubeVideoUrl, setYoutubeVideoUrl, isPlayingMusic, musicVolume, musicProgress, musicDuration, setMusicDuration, setMusicProgressRaw, setIsPlayingMusic, playTrack, musicQueue, setMusicQueue, shuffleMode, repeatMode, tracks, currentTrackId, setRepeatMode, coverModalTrackId, showRestPrompt, handlePomodoroBannerClick, queueSource, pipUrl, pipTitle, pipAutoplay, setPipUrl, pipPlaying, setPipPlaying, pipAfterQueue, setPipAfterQueue, courseDeepLink, setCourseDeepLink, addNotification } = useApp();
   // Restablece el modo ahorro de recursos (retirado): la app vuelve a sus efectos normales
   useEffect(() => {
     try { localStorage.removeItem('owa_resource_saver'); } catch { }
@@ -42,6 +43,8 @@ function AppContent() {
   // Suspender Música: oculta el apartado sin borrar nada; el click derecho en la barra la devuelve
   const [musicSuspended, setMusicSuspended] = useState<boolean>(() => { try { return localStorage.getItem('owa_music_suspended') === '1'; } catch { return false; } });
   useEffect(() => { try { localStorage.setItem('owa_music_suspended', musicSuspended ? '1' : '0'); } catch { } }, [musicSuspended]);
+  // Ventanas: la gestión vive íntegramente en la extensión v2.0 (independiente
+  // de la app). El servidor local y la barra lateral de la app se retiraron.
   const [activeView, setActiveView] = useState<ViewId>(() => {
     try {
       const saved = localStorage.getItem('owa_active_view_v1');
@@ -713,6 +716,29 @@ function AppContent() {
         )}
         <GlobalPlayer sidebarCollapsed={isCollapsed} />
         <NowPlayingView sidebarCollapsed={isCollapsed} activeView={activeView} />
+
+        {/* Contenedor global de avisos (react-hot-toast) — sin esto ningún toast() se muestra */}
+        <Toaster
+          position="bottom-right"
+          gutter={8}
+          toastOptions={{
+            duration: 2800,
+            style: {
+              background: '#0b0c0f',
+              color: '#EAEAEA',
+              border: '1px solid #26262b',
+              borderRadius: 11,
+              fontSize: 12,
+              fontWeight: 500,
+              fontFamily: "'Inter', sans-serif",
+              padding: '10px 14px',
+              boxShadow: '0 8px 30px rgba(0,0,0,0.45)',
+              maxWidth: 360,
+            },
+            success: { iconTheme: { primary: '#10B981', secondary: '#0b0c0f' } },
+            error: { iconTheme: { primary: '#EF4444', secondary: '#0b0c0f' } },
+          }}
+        />
       </main>
 
       {importState.active && (
