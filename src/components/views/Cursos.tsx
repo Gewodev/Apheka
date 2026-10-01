@@ -498,7 +498,7 @@ function MaterialCard({ mat, dragAttributes, dragListeners, onEdit, onDelete, on
   const practice = (deckMeta || toolMeta) && onPractice;
   const canOpen = !!mat.dataUrl && !practice;
   return (
-    <div {...dragAttributes} {...dragListeners}
+    <div {...dragAttributes} {...(dragListeners ? { ...dragListeners, onPointerDown: (e: React.PointerEvent) => { if (e.button !== 0) return; (dragListeners as any).onPointerDown?.(e); } } : {})}
       className={selected ? 'owa-mat-selected' : undefined}
       onContextMenu={onContextMenu ? (e) => onContextMenu(e, mat) : undefined}
       title={practice ? 'mantén pulsado para arrastrar · Toca para practicar' : canOpen ? 'mantén pulsado para arrastrar · Toca para abrir' : 'mantén pulsado para arrastrar'}
@@ -2556,8 +2556,12 @@ const saveCourseNoteContent = (id: string, html: string) => {
     e.stopPropagation();
     const id = matKey(m);
     const downAt = Date.now();
+    const el = e.currentTarget as HTMLElement;
+    // feedback continuo mientras mantienes pulsado: el borde se enciende
+    el.classList.add('owa-mat-pressing');
     const onUp = (ev: MouseEvent) => {
       window.removeEventListener('mouseup', onUp);
+      el.classList.remove('owa-mat-pressing');
       if (ev.button !== 2) return;
       const held = Date.now() - downAt;
       if (held >= 500) {
@@ -3514,31 +3518,9 @@ const saveCourseNoteContent = (id: string, html: string) => {
   const topicTagDefs = course.topicTagDefs || [];
 
   // --- RENDER ---
-  // Barra flotante de seleccion: hace VISIBLE lo seleccionado y da acciones claras
-  const selectionBar = selMats.size > 0 ? createPortal(
-    <div style={{ position: 'fixed', bottom: 22, left: '50%', transform: 'translateX(-50%)', zIndex: 99980, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 999, background: 'color-mix(in srgb, var(--bg-elevated) 96%, transparent)', border: '1px solid var(--border-default)', boxShadow: '0 12px 40px rgba(0,0,0,0.55)', animation: 'fadeIn 180ms ease' }}>
-      <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#E11D48', boxShadow: '0 0 8px rgba(225,29,72,0.6)' }} />
-        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>{selMats.size} seleccionado{selMats.size === 1 ? '' : 's'}</span>
-      </span>
-      <span style={{ width: 1, height: 16, background: 'var(--border-default)' }} />
-      <button onClick={openSelectedMats}
-        style={{ height: 30, padding: '0 14px', borderRadius: 8, border: 'none', background: '#E11D48', color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: "'Inter Tight', sans-serif", transition: 'filter 130ms' }}
-        onMouseEnter={e => { e.currentTarget.style.filter = 'brightness(1.12)'; }}
-        onMouseLeave={e => { e.currentTarget.style.filter = 'none'; }}>
-        Abrir
-      </button>
-      <button onClick={clearSelMats}
-        style={{ height: 30, padding: '0 12px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter Tight', sans-serif" }}>
-        Limpiar
-      </button>
-    </div>,
-    document.body
-  ) : null;
 
   return (
     <div className="cursos-root-view" style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg-base)', overflow: 'hidden' }}>
-      {selectionBar}
       {/* Content */}
       <div style={{ flex: 1, height: '100%', display: 'flex', flexDirection: 'column', overflowY: currentView === 'overview' ? 'hidden' : 'auto', overflowX: 'hidden' }}>
         {currentView === 'topic' && activeTopic ? (
@@ -4549,7 +4531,7 @@ const saveCourseNoteContent = (id: string, html: string) => {
                             return (
                               <SortableWrapper key={mat.id || idx} id={String(mat.id || idx)}>
                               {({ attributes, listeners, isDragging }) => (
-                              <div {...attributes} {...listeners} onContextMenu={(e) => matRmb(e, mat, () => ({ url: mat.dataUrl || '', name: mat.name || 'Material', color: badgeColor }))} className={selMats.has(matKey(mat)) ? 'owa-mat-selected' : undefined} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 7, background: loadingMatId === (mat.id || `idx_${idx}`) ? `${badgeColor}15` : isAudio && playingAudioId === mat.id ? `${badgeColor}08` : 'var(--bg-elevated)', border: `1px solid ${loadingMatId === (mat.id || `idx_${idx}`) ? `${badgeColor}50` : isAudio && playingAudioId === mat.id ? `${badgeColor}30` : 'var(--border-soft)'}`, cursor: loadingMatId === (mat.id || `idx_${idx}`) ? 'default' : 'pointer', transition: 'all 150ms', opacity: isDragging ? 0.5 : 1 }}
+                              <div {...attributes} {...(listeners ? { ...listeners, onPointerDown: (e: React.PointerEvent) => { if (e.button !== 0) return; (listeners as any).onPointerDown?.(e); } } : {})} onContextMenu={(e) => matRmb(e, mat, () => ({ url: mat.dataUrl || '', name: mat.name || 'Material', color: badgeColor }))} className={selMats.has(matKey(mat)) ? 'owa-mat-selected' : undefined} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 7, background: loadingMatId === (mat.id || `idx_${idx}`) ? `${badgeColor}15` : isAudio && playingAudioId === mat.id ? `${badgeColor}08` : 'var(--bg-elevated)', border: `1px solid ${loadingMatId === (mat.id || `idx_${idx}`) ? `${badgeColor}50` : isAudio && playingAudioId === mat.id ? `${badgeColor}30` : 'var(--border-soft)'}`, cursor: loadingMatId === (mat.id || `idx_${idx}`) ? 'default' : 'pointer', transition: 'all 150ms', opacity: isDragging ? 0.5 : 1 }}
                                   onMouseEnter={e => { if (loadingMatId !== (mat.id || `idx_${idx}`)) { e.currentTarget.style.borderColor = `${badgeColor}40`; e.currentTarget.style.background = 'var(--bg-hover)'; } }}
                                   onMouseLeave={e => { if (loadingMatId !== (mat.id || `idx_${idx}`)) { e.currentTarget.style.borderColor = isAudio && playingAudioId === mat.id ? `${badgeColor}30` : 'var(--border-soft)'; e.currentTarget.style.background = isAudio && playingAudioId === mat.id ? `${badgeColor}08` : 'var(--bg-elevated)'; } }}>
                                   <div onClick={(e) => {
