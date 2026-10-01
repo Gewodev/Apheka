@@ -356,7 +356,7 @@ export default function Planificacion() {
     try { return localStorage.getItem('owa_show_habits') === 'true'; } catch { return false; }
   });
 
-  useEffect(() => { localStorage.setItem('owa_planner_view', planView); }, [planView]);
+  try { useEffect(() => { localStorage.setItem('owa_planner_view', planView); }, [planView]); } catch { /* cuota */ }
   useEffect(() => { localStorage.setItem('owa_show_schedule', String(showScheduleBuilder)); }, [showScheduleBuilder]);
   useEffect(() => { localStorage.setItem('owa_show_habits', String(showHabits)); }, [showHabits]);
 

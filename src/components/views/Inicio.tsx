@@ -277,7 +277,7 @@ export default function Inicio() {
   const handleSavePhrase = useCallback(() => {
     const trimmed = phraseDraft.trim();
     if (trimmed) {
-      localStorage.setItem('owa_phrase_custom', trimmed);
+      try { localStorage.setItem('owa_phrase_custom', trimmed); } catch { /* cuota */ }
       setPhraseCustom(trimmed);
     } else {
       localStorage.removeItem('owa_phrase_custom');
@@ -292,7 +292,7 @@ export default function Inicio() {
   const togglePhraseLock = useCallback(() => {
     const next = !phraseLocked;
     setPhraseLocked(next);
-    localStorage.setItem('owa_phrase_locked', String(next));
+    try { localStorage.setItem('owa_phrase_locked', String(next)); } catch { /* cuota */ }
   }, [phraseLocked]);
   useEffect(() => {
     if (settings && !settings.heatmapStartDate && updateSettings) {

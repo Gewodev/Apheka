@@ -175,7 +175,7 @@ function saveNoteVersion(noteId: string, content: string): void {
               const pruned = arr.slice(0, 3).map((v: NoteVersion, idx: number) =>
                 idx === 0 ? v : { timestamp: v.timestamp, preview: v.preview, wordCount: v.wordCount }
               );
-              localStorage.setItem(key, JSON.stringify(pruned));
+              try { localStorage.setItem(key, JSON.stringify(pruned)); } catch { /* cuota */ }
             }
           } catch {}
         }
@@ -1758,10 +1758,10 @@ export default function Notas() {
   }, [customTagColors]);
 
   useEffect(() => {
-    localStorage.setItem("owa_deleted_folder_ids", JSON.stringify([...deletedFolderIds]));
+    try { localStorage.setItem("owa_deleted_folder_ids", JSON.stringify([...deletedFolderIds])); } catch { /* cuota */ }
   }, [deletedFolderIds]);
 
-  useEffect(() => { localStorage.setItem("owa_notes_folder_id", selectedFolderId || ""); }, [selectedFolderId]);
+  try { useEffect(() => { localStorage.setItem("owa_notes_folder_id", selectedFolderId || ""); }, [selectedFolderId]); } catch { /* cuota */ }
   useEffect(() => { localStorage.setItem("owa_notes_tag", selectedTag || ""); }, [selectedTag]);
   useEffect(() => { localStorage.setItem("owa_notes_view_mode", viewMode); }, [viewMode]);
 
@@ -3115,11 +3115,11 @@ const noteLiveAtts = useMemo(
   const handleCreateTag = useCallback((name: string, color: string) => {
     const updatedColors = { ...customTagColors, [name]: color };
     setCustomTagColors(updatedColors);
-    localStorage.setItem("owa_custom_tag_colors", JSON.stringify(updatedColors));
+    try { localStorage.setItem("owa_custom_tag_colors", JSON.stringify(updatedColors)); } catch { /* cuota */ }
     const existing = JSON.parse(localStorage.getItem("owa_created_tags") || "[]");
     if (!existing.includes(name)) {
       existing.push(name);
-      localStorage.setItem("owa_created_tags", JSON.stringify(existing));
+      try { localStorage.setItem("owa_created_tags", JSON.stringify(existing)); } catch { /* cuota */ }
     }
     setShowNewTagModal(false);
     toast.success("Etiqueta creada");
@@ -3800,10 +3800,10 @@ const noteLiveAtts = useMemo(
                   mergedTagColors={mergedTagColors}
                   onTagColorsChange={(colors) => {
                     setCustomTagColors(colors);
-                    localStorage.setItem("owa_custom_tag_colors", JSON.stringify(colors));
+                    try { localStorage.setItem("owa_custom_tag_colors", JSON.stringify(colors)); } catch { /* cuota */ }
                   }}
                   onTagReorder={(tags) => {
-                    localStorage.setItem("owa_tag_order", JSON.stringify(tags));
+                    try { localStorage.setItem("owa_tag_order", JSON.stringify(tags)); } catch { /* cuota */ }
                   }}
                 />
               </div>
@@ -5442,7 +5442,7 @@ function LibrarySidebar({
         setActiveTagDragId(null); return;
       }
       setLocalTagOrder(newOrder);
-      localStorage.setItem("owa_tag_order", JSON.stringify(newOrder));
+      try { localStorage.setItem("owa_tag_order", JSON.stringify(newOrder)); } catch { /* cuota */ }
       onTagReorder(newOrder);
     }
     setActiveTagDragId(null);
@@ -5702,7 +5702,7 @@ const trashCount = notes.filter(n => n.deletedAt).length;
                 {SPINE_COLORS.map(c => (
                   <button key={c} onClick={() => {
                     const colors = { ...tagColors, [tagColorEdit]: c };
-                    localStorage.setItem("owa_custom_tag_colors", JSON.stringify(colors));
+                    try { localStorage.setItem("owa_custom_tag_colors", JSON.stringify(colors)); } catch { /* cuota */ }
                     onTagColorsChange(colors);
                   }}
                     style={{
@@ -5743,19 +5743,19 @@ const trashCount = notes.filter(n => n.deletedAt).length;
                     colors[newName] = colors[oldName];
                     delete colors[oldName];
                   }
-                  localStorage.setItem("owa_custom_tag_colors", JSON.stringify(colors));
+                  try { localStorage.setItem("owa_custom_tag_colors", JSON.stringify(colors)); } catch { /* cuota */ }
                   onTagColorsChange(colors);
                   // Migrate created tags list
                   try {
                     const created = JSON.parse(localStorage.getItem("owa_created_tags") || "[]");
                     const newCreated = created.map((t: string) => t === oldName ? newName : t);
-                    localStorage.setItem("owa_created_tags", JSON.stringify(newCreated));
+                    try { localStorage.setItem("owa_created_tags", JSON.stringify(newCreated)); } catch { /* cuota */ }
                   } catch {}
                   // Migrate tag order
                   try {
                     const order = JSON.parse(localStorage.getItem("owa_tag_order") || "[]");
                     const newOrder = order.map((t: string) => t === oldName ? newName : t);
-                    localStorage.setItem("owa_tag_order", JSON.stringify(newOrder));
+                    try { localStorage.setItem("owa_tag_order", JSON.stringify(newOrder)); } catch { /* cuota */ }
                   } catch {}
                   // If the renamed tag was selected, update selection
                   if (selectedTag === oldName) {
@@ -5802,12 +5802,12 @@ const trashCount = notes.filter(n => n.deletedAt).length;
                   updateNote(n.id, { tags: (n.tags || []).filter(t => t !== tagColorEdit) });
                 });
                 const created = JSON.parse(localStorage.getItem("owa_created_tags") || "[]");
-                localStorage.setItem("owa_created_tags", JSON.stringify(created.filter((t: string) => t !== tagColorEdit)));
+                try { localStorage.setItem("owa_created_tags", JSON.stringify(created.filter((t: string) => t !== tagColorEdit))); } catch { /* cuota */ }
                 const order = JSON.parse(localStorage.getItem("owa_tag_order") || "[]");
                 localStorage.setItem("owa_tag_order", JSON.stringify(order.filter((t: string) => t !== tagColorEdit)));
                 const colors = JSON.parse(localStorage.getItem("owa_custom_tag_colors") || "{}");
                 delete colors[tagColorEdit];
-                localStorage.setItem("owa_custom_tag_colors", JSON.stringify(colors));
+                try { localStorage.setItem("owa_custom_tag_colors", JSON.stringify(colors)); } catch { /* cuota */ }
                 onTagColorsChange(colors);
                 if (selectedTag === tagColorEdit) onSelectTag(null);
                 setShowTagDeleteConfirm(false);

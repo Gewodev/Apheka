@@ -37,13 +37,13 @@ const GOOGLE_CLIENT_SECRET = import.meta.env.VITE_GOOGLE_CLIENT_SECRET || '';
 
 type SettingsTab = 'perfil' | 'apariencia' | 'estudio' | 'musica' | 'sistema' | 'notificaciones';
 
-const TABS: { id: SettingsTab; label: string; icon: React.ComponentType<{ size?: number; style?: React.CSSProperties }> }[] = [
-  { id: 'perfil', label: 'Perfil', icon: User },
-  { id: 'apariencia', label: 'Apariencia', icon: Palette },
-  { id: 'estudio', label: 'Estudio', icon: Brain },
-  { id: 'musica', label: 'Música', icon: Music },
-  { id: 'sistema', label: 'Sistema', icon: Shield },
-  { id: 'notificaciones', label: 'Sonidos y Alertas', icon: Bell },
+const TABS: { id: SettingsTab; label: string; desc: string; icon: React.ComponentType<{ size?: number; style?: React.CSSProperties }> }[] = [
+  { id: 'perfil', label: 'Perfil', desc: 'Tu nombre, portada y cuenta', icon: User },
+  { id: 'apariencia', label: 'Apariencia', desc: 'Tema, tipografía y estilo', icon: Palette },
+  { id: 'estudio', label: 'Estudio', desc: 'Pomodoro, metas y enfoque', icon: Brain },
+  { id: 'musica', label: 'Música', desc: 'Reproductor, biblioteca y yt-dlp', icon: Music },
+  { id: 'sistema', label: 'Sistema', desc: 'Datos, respaldos y herramientas', icon: Shield },
+  { id: 'notificaciones', label: 'Sonidos y Alertas', desc: 'Tonos y avisos por sección', icon: Bell },
 ];
 
 const FONTS = [
@@ -821,9 +821,16 @@ export default function Ajustes() {
       {/* MAIN CONTENT AREA (SIDEBAR + SETTINGS PANELS) */}
       <div style={{ display: 'flex', flex: 1, gap: 24, minHeight: 600, alignItems: 'flex-start' }}>
         
-        {/* INNER SIDEBAR */}
-        <aside className="bento-card" style={{ width: 240, padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8, padding: '0 8px' }}>
+        {/* INNER SIDEBAR — navegación con tiles, descripciones y flechas ↑↓ */}
+        <aside className="bento-card" style={{ width: 250, padding: '18px 12px', display: 'flex', flexDirection: 'column', gap: 4, flexShrink: 0, alignSelf: 'stretch', position: 'sticky', top: 0 }}
+          onKeyDown={e => {
+            if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+            e.preventDefault();
+            const i = TABS.findIndex(t => t.id === activeTab);
+            const next = e.key === 'ArrowDown' ? (i + 1) % TABS.length : (i - 1 + TABS.length) % TABS.length;
+            setActiveTab(TABS[next].id);
+          }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 10, padding: '0 10px' }}>
             Categorías
           </div>
           {TABS.map(tab => {
@@ -831,18 +838,29 @@ export default function Ajustes() {
             const active = activeTab === tab.id;
             return (
               <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                onMouseEnter={e => { if (activeTab !== tab.id) { e.currentTarget.style.background = 'var(--bg-hover)'; } }}
-                onMouseLeave={e => { if (activeTab !== tab.id) { e.currentTarget.style.background = 'transparent'; } }}
+                onMouseEnter={e => { if (activeTab !== tab.id) { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.borderColor = 'var(--border-subtle)'; } }}
+                onMouseLeave={e => { if (activeTab !== tab.id) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'transparent'; } }}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', borderRadius: 10, position: 'relative',
-                  background: active ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : 'transparent',
-                  border: `1px solid ${active ? 'color-mix(in srgb, var(--accent) 28%, transparent)' : 'transparent'}`,
-                  color: active ? 'var(--accent)' : 'var(--text-secondary)',
-                  fontSize: 13, fontWeight: 600, cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'all 200ms'
+                  display: 'flex', alignItems: 'center', gap: 11, padding: '9px 10px', borderRadius: 12,
+                  background: active ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'transparent',
+                  border: `1px solid ${active ? 'color-mix(in srgb, var(--accent) 26%, transparent)' : 'transparent'}`,
+                  color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'all 180ms',
                 }}>
-                {active && <span style={{ position: 'absolute', left: -16, top: '50%', transform: 'translateY(-50%)', width: 3, height: 22, borderRadius: 2, background: 'var(--accent)', boxShadow: '0 0 8px var(--accent)' }} />}
-                <Icon size={17} style={{ opacity: active ? 1 : 0.85 }} />
-                <span>{tab.label}</span>
+                <span style={{
+                  width: 30, height: 30, borderRadius: 9, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: active ? 'var(--accent)' : 'var(--bg-deep)',
+                  border: `1px solid ${active ? 'var(--accent)' : 'var(--border-subtle)'}`,
+                  color: active ? '#fff' : 'var(--text-tertiary)',
+                  boxShadow: active ? '0 3px 10px color-mix(in srgb, var(--accent) 30%, transparent)' : 'none',
+                  transition: 'all 180ms',
+                }}>
+                  <Icon size={15} />
+                </span>
+                <span style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 700, fontFamily: "'Inter Tight', sans-serif" }}>{tab.label}</span>
+                  <span style={{ fontSize: 9, color: active ? 'var(--text-tertiary)' : 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tab.desc}</span>
+                </span>
               </button>
             );
           })}
@@ -851,6 +869,7 @@ export default function Ajustes() {
         {/* MAIN AREA */}
         <main className="bento-card" style={{ flex: 1, padding: '32px 40px', minHeight: 600 }}>
           <div style={{ maxWidth: 680, margin: '0 auto' }}>
+          <div key={activeTab} style={{ animation: 'fadeInUp 240ms cubic-bezier(0.16,1,0.3,1)' }}>
 
             {/* â•â•â•â•â•â•â•â•â•â•â• PERFIL â•â•â•â•â•â•â•â•â•â•â• */}
             {activeTab === 'perfil' && (
@@ -2514,6 +2533,7 @@ export default function Ajustes() {
 
               </section>
             )}
+          </div>
 
           </div>
         </main>

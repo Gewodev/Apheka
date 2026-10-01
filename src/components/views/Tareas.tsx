@@ -209,7 +209,7 @@ export default function Tareas() {
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   useEffect(() => { const t = setTimeout(() => setIsInitialLoading(false), 650); return () => clearTimeout(t); }, []);
-  useEffect(() => { localStorage.setItem('owa_tasks_view', viewMode); }, [viewMode]);
+  try { useEffect(() => { localStorage.setItem('owa_tasks_view', viewMode); }, [viewMode]); } catch { /* cuota */ }
   useEffect(() => {
     const pendingId = localStorage.getItem('owa_pending_task_id');
     if (pendingId && tasks.some(t => t.id === pendingId)) {

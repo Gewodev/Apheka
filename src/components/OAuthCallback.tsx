@@ -16,7 +16,7 @@ export default function OAuthCallback() {
           );
           const ok = await exchangeCode(code);
           if (ok) {
-            localStorage.setItem('owa_auth_success', 'google');
+            try { localStorage.setItem('owa_auth_success', 'google'); } catch { /* cuota */ }
           } else {
             localStorage.setItem('owa_auth_error', 'google');
           }
@@ -24,7 +24,7 @@ export default function OAuthCallback() {
           window.location.href = window.location.origin;
         });
       } else if (error) {
-        localStorage.setItem('owa_auth_error', error);
+        try { localStorage.setItem('owa_auth_error', error); } catch { /* cuota */ }
         localStorage.removeItem('owa_auth_pending');
         window.location.href = window.location.origin;
       } else {

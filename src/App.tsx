@@ -347,8 +347,10 @@ function AppContent() {
   });
   const [selectedCourseTab, setSelectedCourseTab] = useState<string>('overview');
   useEffect(() => {
-    if (selectedCourseId) localStorage.setItem('owa_selected_course_id', selectedCourseId);
-    else localStorage.removeItem('owa_selected_course_id');
+    try {
+      if (selectedCourseId) localStorage.setItem('owa_selected_course_id', selectedCourseId);
+      else localStorage.removeItem('owa_selected_course_id');
+    } catch { /* cuota */ }
   }, [selectedCourseId]);
   useEffect(() => {
     // Solo expulsar de la vista del curso cuando la carga de datos ya terminó

@@ -287,7 +287,7 @@ function EventDetails({ item, onEdit, onDelete, timeFormat, tasks, onViewTask, o
       localStorage.removeItem(GOAL_KEY);
       setGoalId('');
     } else {
-      localStorage.setItem(GOAL_KEY, event.id);
+      try { localStorage.setItem(GOAL_KEY, event.id); } catch { /* cuota */ }
       setGoalId(event.id);
     }
   };

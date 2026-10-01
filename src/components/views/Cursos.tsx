@@ -1694,7 +1694,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
     [...stored, ...TOOL_DEFAULT_ORDER].forEach(m => { if (!merged.includes(m)) merged.push(m); });
     return merged;
   });
-  useEffect(() => { try { localStorage.setItem('owa_tools_order', JSON.stringify(toolOrder)); } catch { /* ignore */ } }, [toolOrder]);
+  try { useEffect(() => { try { localStorage.setItem('owa_tools_order', JSON.stringify(toolOrder)); } catch { /* ignore */ } }, [toolOrder]); } catch { /* cuota */ }
   const toolSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { delay: 350, tolerance: 6 } }));
   const handleToolDragStart = () => { toolDragRef.current = true; };
   const handleToolDragEnd = (e: DragEndEvent) => {
@@ -2159,7 +2159,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   useEffect(() => {
     if (overviewMode === 'temas_archivos' && selectedCourseId) {
       if (selectedGroupId) {
-        localStorage.setItem(`owa_estudio_last_group_${selectedCourseId}`, selectedGroupId);
+        try { localStorage.setItem(`owa_estudio_last_group_${selectedCourseId}`, selectedGroupId); } catch { /* cuota */ }
       } else {
         localStorage.removeItem(`owa_estudio_last_group_${selectedCourseId}`);
       }
@@ -2169,12 +2169,12 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   // Persist study view state per course
   useEffect(() => {
     if (selectedCourseId && overviewMode === 'temas_archivos') {
-      localStorage.setItem(`owa_study_view_${selectedCourseId}`, currentView);
+      try { localStorage.setItem(`owa_study_view_${selectedCourseId}`, currentView); } catch { /* cuota */ }
     }
   }, [currentView, selectedCourseId]);
   useEffect(() => {
     if (selectedCourseId && activeTopicId && overviewMode === 'temas_archivos') {
-      localStorage.setItem(`owa_study_topic_${selectedCourseId}`, activeTopicId);
+      try { localStorage.setItem(`owa_study_topic_${selectedCourseId}`, activeTopicId); } catch { /* cuota */ }
     }
   }, [activeTopicId, selectedCourseId]);
 
@@ -2321,7 +2321,7 @@ const saveCourseNoteContent = (id: string, html: string) => {
   });
 
   useEffect(() => {
-    localStorage.setItem('owa_course_tasks_show_completed_v1', showCompletedTasks ? '1' : '0');
+    try { localStorage.setItem('owa_course_tasks_show_completed_v1', showCompletedTasks ? '1' : '0'); } catch { /* cuota */ }
   }, [showCompletedTasks]);
 
   // Escape key closes expanded overview note or editing mode
@@ -2391,7 +2391,7 @@ const saveCourseNoteContent = (id: string, html: string) => {
   }, [selectedOverviewNoteId, overviewNoteEditMode, confirmDeleteNoteId, confirmDeleteTaskId]);
 
   useEffect(() => {
-    localStorage.setItem('owa_course_note_highlights', JSON.stringify(overviewNoteHighlights));
+    try { localStorage.setItem('owa_course_note_highlights', JSON.stringify(overviewNoteHighlights)); } catch { /* cuota */ }
   }, [overviewNoteHighlights]);
 
   const toggleHighlight = (id: string) => {
@@ -2525,7 +2525,6 @@ const saveCourseNoteContent = (id: string, html: string) => {
   // Sostener = seleccionar (borde animado). Clic derecho normal tras seleccionar
   // = menú con "Abrir seleccionados". Esc o abrir un material limpia la selección.
   const [selMats, setSelMats] = useState<Set<string>>(new Set());
-  const rmbPressRef = useRef<{ id: string; t: number } | null>(null);
   const matKey = (m: SubjectMaterial) => m.id || m.dataUrl || m.name || '';
   const clearSelMats = useCallback(() => setSelMats(new Set()), []);
   useEffect(() => {
@@ -2543,31 +2542,39 @@ const saveCourseNoteContent = (id: string, html: string) => {
     toast.success(`Abriendo ${targets.length} recurso(s) seleccionado(s)`);
     clearSelMats();
   }, [course, selMats, clearSelMats]);
+  const toggleSelMat = useCallback((id: string) => {
+    setSelMats(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }, []);
+  // Clic derecho sobre materiales — SIEMPRE igual:
+  //  · clic corto → menú con "Seleccionar / Quitar de la selección" y, si hay
+  //    selección, "Abrir seleccionados (N)" arriba del todo.
+  //  · mantener pulsado ≥500ms → alterna la selección (borde animado, sin menú).
+  // preventDefault SIEMPRE: el menú nativo del navegador no interfiere nunca.
   const matRmb = useCallback((e: React.MouseEvent, m: SubjectMaterial, buildMenu: () => Parameters<ReturnType<typeof useMaterialMenu>['openMenu']>[1]) => {
+    e.preventDefault();
+    e.stopPropagation();
     const id = matKey(m);
     const downAt = Date.now();
-    const prev = rmbPressRef.current;
-    rmbPressRef.current = { id, t: downAt };
-    // Clic derecho rápido sobre un material YA seleccionado → menú de selección
-    if (prev && prev.id === id && downAt - prev.t < 1500 && selMats.size > 0) {
-      matMenu.openMenu(e, { url: m.dataUrl || '', name: m.name || 'Material', color: course?.color, onOpenSelected: openSelectedMats, selectedCount: selMats.size });
-      return;
-    }
     const onUp = (ev: MouseEvent) => {
       window.removeEventListener('mouseup', onUp);
       if (ev.button !== 2) return;
       const held = Date.now() - downAt;
-      if (held >= 550) {
-        // presión larga → alterna la selección (borde animado); sin menú
-        setSelMats(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
-      } else {
-        // clic derecho normal → menú habitual (+ Abrir seleccionados si hay)
-        const extra: Parameters<ReturnType<typeof useMaterialMenu>['openMenu']>[1] = buildMenu();
-        matMenu.openMenu(e, selMats.size > 0 ? { ...extra, onOpenSelected: openSelectedMats, selectedCount: selMats.size } : extra);
+      if (held >= 500) {
+        toggleSelMat(id); // presión larga → seleccionar/quitar (el borde animado lo confirma)
+        return;
       }
+      // clic corto → menú (con acciones de selección integradas)
+      const extra: Parameters<ReturnType<typeof useMaterialMenu>['openMenu']>[1] = buildMenu();
+      matMenu.openMenu(e, {
+        ...extra,
+        onToggleSelect: () => toggleSelMat(id),
+        isSel: selMats.has(id),
+        onOpenSelected: selMats.size > 0 ? openSelectedMats : undefined,
+        selectedCount: selMats.size,
+      });
     };
     window.addEventListener('mouseup', onUp);
-  }, [matMenu, course, selMats, openSelectedMats, matKey]);
+  }, [matMenu, selMats, openSelectedMats, toggleSelMat, matKey]);
 
   useEffect(() => {
     if (course) {
@@ -2584,7 +2591,7 @@ const saveCourseNoteContent = (id: string, html: string) => {
         const raw = localStorage.getItem('owa_last_course_tab') || '{}';
         const map = JSON.parse(raw);
         map[selectedCourseId] = activeTab;
-        localStorage.setItem('owa_last_course_tab', JSON.stringify(map));
+        try { localStorage.setItem('owa_last_course_tab', JSON.stringify(map)); } catch { /* cuota */ }
       } catch {}
     }
   }, [selectedCourseId, activeTab]);
@@ -3506,8 +3513,31 @@ const saveCourseNoteContent = (id: string, html: string) => {
   const topicTagDefs = course.topicTagDefs || [];
 
   // --- RENDER ---
+  // Barra flotante de seleccion: hace VISIBLE lo seleccionado y da acciones claras
+  const selectionBar = selMats.size > 0 ? createPortal(
+    <div style={{ position: 'fixed', bottom: 22, left: '50%', transform: 'translateX(-50%)', zIndex: 99980, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 999, background: 'color-mix(in srgb, var(--bg-elevated) 96%, transparent)', border: '1px solid var(--border-default)', boxShadow: '0 12px 40px rgba(0,0,0,0.55)', animation: 'fadeIn 180ms ease' }}>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#E11D48', boxShadow: '0 0 8px rgba(225,29,72,0.6)' }} />
+        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>{selMats.size} seleccionado{selMats.size === 1 ? '' : 's'}</span>
+      </span>
+      <span style={{ width: 1, height: 16, background: 'var(--border-default)' }} />
+      <button onClick={openSelectedMats}
+        style={{ height: 30, padding: '0 14px', borderRadius: 8, border: 'none', background: '#E11D48', color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: "'Inter Tight', sans-serif", transition: 'filter 130ms' }}
+        onMouseEnter={e => { e.currentTarget.style.filter = 'brightness(1.12)'; }}
+        onMouseLeave={e => { e.currentTarget.style.filter = 'none'; }}>
+        Abrir
+      </button>
+      <button onClick={clearSelMats}
+        style={{ height: 30, padding: '0 12px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter Tight', sans-serif" }}>
+        Limpiar
+      </button>
+    </div>,
+    document.body
+  ) : null;
+
   return (
     <div className="cursos-root-view" style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg-base)', overflow: 'hidden' }}>
+      {selectionBar}
       {/* Content */}
       <div style={{ flex: 1, height: '100%', display: 'flex', flexDirection: 'column', overflowY: currentView === 'overview' ? 'hidden' : 'auto', overflowX: 'hidden' }}>
         {currentView === 'topic' && activeTopic ? (

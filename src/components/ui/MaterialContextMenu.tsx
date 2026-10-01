@@ -28,9 +28,11 @@ export interface MatMenuEntry {
   // Acciones por lote sobre TODAS las herramientas/archivos del tema
   onBatchColor?: (color: string) => void;
   onOpenAll?: () => void;
-  // Selección por presión larga: abre los materiales marcados
+  // Selección de materiales (clic corto o presión larga): abre/marca los elegidos
   onOpenSelected?: () => void;
   selectedCount?: number;
+  onToggleSelect?: () => void;
+  isSel?: boolean;
 }
 
 interface MenuState {
@@ -378,6 +380,14 @@ function MenuPanel(props: {
           />
         )}
         {entry.onOpenSelected && <Divider />}
+        {entry.onToggleSelect && (
+          <Item
+            icon={<Check size={13} />}
+            label={entry.isSel ? 'Quitar de la selección' : 'Seleccionar'}
+            accent={entry.isSel ? '#EF4444' : '#E11D48'}
+            onClick={() => { close(); entry.onToggleSelect!(); }}
+          />
+        )}
         {entry.onBatchColor && <BatchColorRow onPick={c => { close(); entry.onBatchColor!(c); }} />}
         {entry.onOpenAll && (
           <Item icon={<FolderOpen size={13} />} label="Abrir todos los recursos" accent="#10B981" onClick={() => { close(); entry.onOpenAll!(); }} />
