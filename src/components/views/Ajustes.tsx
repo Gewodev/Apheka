@@ -1643,6 +1643,9 @@ export default function Ajustes() {
                     <RangeSlider label="Enfoque" value={settings.pomodoroTime / 60} min={10} max={120} unit="min" onChange={v => updateSettings({ pomodoroTime: v * 60 })} color="#E11D48" />
                     <RangeSlider label="Cronómetro (meta por ronda)" value={(settings.chronoGoal || 1500) / 60} min={25} max={180} unit="min" onChange={v => updateSettings({ chronoGoal: v * 60 })} color="#3B82F6" />
                     <RangeSlider label="Meta Diaria" value={settings.dailyGoal} min={30} max={600} unit="min" onChange={v => updateSettings({ dailyGoal: v })} color="#8B5CF6" />
+                    <p style={{ fontSize: 9.5, color: 'var(--text-muted)', lineHeight: 1.5, marginTop: -2 }}>
+                      Consejo: usa las flechas ↑↓ del teclado para ajustar, con Shift saltas de 5 en 5, o mantén pulsados los botones −/+.
+                    </p>
                   </div>
 
                   {/* Break section with visual cycle indicator */}

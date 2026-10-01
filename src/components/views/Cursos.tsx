@@ -36,6 +36,7 @@ import { latexTextToHtml, upgradeLatexInText } from '../../lib/latexRender';
 import { fuzzyMatch } from '../../lib/fuzzy';
 import { usePlannerDay } from '../../lib/plannerDay';
 import { useMaterialMenu } from '../ui/MaterialContextMenu';
+import { normalizeEditorHtml, sanitizePastedHtml, plainTextToHtml } from '../../lib/editorHtml';
 import ImageEditorModal from '../ui/ImageEditorModal';
 import { DeckEditorModal, DeckRunner, DECK_META, type ToolDeckMode } from './cursos/ToolDecks';
 
@@ -2306,7 +2307,7 @@ function enterEndHeading(e: KeyboardEvent, ed: HTMLElement | null): boolean {
 }
 
 const saveCourseNoteContent = (id: string, html: string) => {
-    updateNote(id, { content: html || '' });
+    updateNote(id, { content: normalizeEditorHtml(html || '') });
   };
   const flushOverviewEditors = () => {
     for (const [id, read] of Array.from(liveNoteEditors.entries())) {
@@ -6476,8 +6477,12 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                               ) : (
                                 /* -- EDITING -- */
                                 <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                  <div style={{ position: 'sticky', top: 0, zIndex: 6, background: 'var(--bg-elevated)', borderBottom: '1px solid var(--border-subtle)', borderRadius: '15px 15px 0 0' }}>
                                   <FormatToolbar onFormat={handleNoteFormat} color={course.color} activeFormats={noteActiveFormats} />
+                                  </div>
                                   <div ref={editContentRef}
+                                    className="owa-native-editor"
+                                    data-placeholder="Escribe tus apuntes…"
                                     contentEditable
                                     suppressContentEditableWarning
                                     dangerouslySetInnerHTML={{ __html: editContent }}
@@ -6485,10 +6490,22 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                                       if ((e.ctrlKey || e.metaKey) && !e.altKey) { const uk = e.key.toLowerCase(); if (uk === 'z' && !e.shiftKey) { e.preventDefault(); topicHistRef.current.undo(); } else if (uk === 'y' || (uk === 'z' && e.shiftKey)) { e.preventDefault(); topicHistRef.current.redo(); } return; }
                                       if (e.key === 'Enter' && !e.shiftKey && enterEndHeading(e.nativeEvent, editContentRef.current)) { topicHistRef.current.capture(true); }
                                     }}
-                                    onInput={(e: React.FormEvent<HTMLDivElement>) => { const html = (e.target as HTMLDivElement).innerHTML; setEditContent(html); topicHistRef.current.capture(true); if (saveTimerRef.current) clearTimeout(saveTimerRef.current); saveTimerRef.current = setTimeout(() => saveCourseNoteContent(n.id, html), 800); }}
+                                    onPaste={(e) => {
+                                      const html = e.clipboardData.getData('text/html');
+                                      e.preventDefault();
+                                      const clean = html ? sanitizePastedHtml(html) : plainTextToHtml(e.clipboardData.getData('text/plain'));
+                                      document.execCommand('insertHTML', false, clean || ' ');
+                                      const ed2 = editContentRef.current;
+                                      if (ed2) { fixEmptyHeadingCaret(ed2); }
+                                      const html2 = editContentRef.current?.innerHTML ?? clean;
+                                      topicHistRef.current.capture(true);
+                                      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+                                      saveTimerRef.current = setTimeout(() => saveCourseNoteContent(n.id, html2), 800);
+                                    }}
+                                    onInput={(e: React.FormEvent<HTMLDivElement>) => { const ed = e.currentTarget; fixEmptyHeadingCaret(ed); const html = ed.innerHTML; topicHistRef.current.capture(true); if (saveTimerRef.current) clearTimeout(saveTimerRef.current); saveTimerRef.current = setTimeout(() => saveCourseNoteContent(n.id, html), 800); }}
                                     onBlur={() => { saveCourseNoteContent(n.id, editContentRef.current?.innerHTML ?? editContent); }}
                                     onMouseUp={scheduleNoteTrack}
-                                    style={{ padding: '16px 20px 12px', minHeight: 80, maxHeight: 'calc(100vh - 240px)', overflowY: 'auto', fontSize: 15, lineHeight: 1.9, color: 'var(--text-primary)', background: 'transparent', outline: 'none', fontFamily: "'Atkinson Hyperlegible', system-ui, serif", wordBreak: 'break-word' }} />
+                                    style={{ padding: '18px 20px 16px', minHeight: 240, fontSize: 15, lineHeight: 1.9, color: 'var(--text-primary)', background: 'transparent', outline: 'none', fontFamily: "'Atkinson Hyperlegible', system-ui, serif", wordBreak: 'break-word', caretColor: course.color }} />
                                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 14px 10px', borderTop: '1px solid var(--border-subtle)', background: `${course.color}04` }}>
                                     <button onClick={() => handleTogglePinNote(n.id)}
                                       style={{ width: 30, height: 30, borderRadius: 6, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: n.isPinned ? '#F59E0B' : 'var(--text-muted)', transition: 'color 150ms ' + EASE }}

@@ -59,6 +59,7 @@ import { restrictToParentElement, snapCenterToCursor } from '@dnd-kit/modifiers'
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import toast from "react-hot-toast";
+import { normalizeEditorHtml, sanitizePastedHtml, plainTextToHtml } from "../../lib/editorHtml";
 import NotificationBell from '../ui/NotificationBell';
 
 type ViewMode = "estante" | "lista";
@@ -83,46 +84,6 @@ type NoteVersion = { timestamp: string; preview: string; wordCount: number; cont
  * antiguas y se reduce el número de versiones) hasta que quepa; si ni así, se
  * descarta el historial de esa nota (la nota en sí nunca se pierde).
  */
-
-// Normaliza el HTML del editor al guardarlo, como haría un editor nativo:
-// 1) los encabezados/citas/code vacíos SE ELIMINAN (ruido y herencia de estilo),
-// 2) los bloques vacíos consecutivos se colapsan a UNA línea en blanco,
-// 3) no quedan bloques vacíos al inicio ni al final de la nota,
-// 4) los &nbsp; sueltos en bloques sin texto se vuelven un <br> limpio.
-// Los adjuntos (img/video/audio) nunca cuentan como "vacío".
-function normalizeEditorHtml(raw: string): string {
-  try {
-    if (!raw || !raw.trim()) return "";
-    const doc = new DOMParser().parseFromString(`<body>${raw}</body>`, "text/html");
-    const body = doc.body;
-    const isBlockish = (el: Element) => /^(P|DIV|H[1-4]|BLOCKQUOTE|PRE|UL|OL)$/.test(el.tagName);
-    const isEmptyBlock = (el: Element) =>
-      isBlockish(el) &&
-      !(el.textContent || "").replace(/\u00A0/g, " ").trim() &&
-      !el.querySelector("img, video, audio, iframe");
-    const isRichEmpty = (el: Element) =>
-      /^(H[1-4]|BLOCKQUOTE|PRE|UL|OL)$/.test(el.tagName) && isEmptyBlock(el);
-    Array.from(body.children).forEach(el => {
-      if (isRichEmpty(el)) { el.remove(); return; }
-      if (isEmptyBlock(el) && el.tagName !== "UL" && el.tagName !== "OL") el.innerHTML = "<br>";
-    });
-    // colapsa 2+ bloques vacíos consecutivos a uno solo
-    let prevEmpty = false;
-    const drop: Element[] = [];
-    Array.from(body.children).forEach(el => {
-      const empty = isEmptyBlock(el);
-      if (empty && prevEmpty) drop.push(el);
-      prevEmpty = empty;
-    });
-    drop.forEach(el => el.remove());
-    // recorta bloques vacíos en los extremos
-    while (body.firstElementChild && isEmptyBlock(body.firstElementChild)) body.firstElementChild.remove();
-    while (body.lastElementChild && isEmptyBlock(body.lastElementChild)) body.lastElementChild.remove();
-    return body.innerHTML;
-  } catch {
-    return raw;
-  }
-}
 
 function saveNoteVersion(noteId: string, content: string): void {
   try {
@@ -2908,69 +2869,11 @@ const noteLiveAtts = useMemo(
         }
       }
     }
-    // Rich text paste: preserve structure, strip ALL external styling
+    // Rich text paste: sanitizado estricto (estructura sí, estilos/scripts no)
     const htmlData = e.clipboardData.getData("text/html");
     if (htmlData) {
       e.preventDefault();
-      const temp = document.createElement("div");
-      temp.innerHTML = htmlData;
-      const all = temp.querySelectorAll("*");
-      for (const el of all) {
-        const style = (el as HTMLElement).style;
-        style.removeProperty("background-color");
-        style.removeProperty("background");
-        style.removeProperty("color");
-        style.removeProperty("font-family");
-        style.removeProperty("font-size");
-        style.removeProperty("font-weight");
-        style.removeProperty("font-style");
-        style.removeProperty("line-height");
-        style.removeProperty("letter-spacing");
-        style.removeProperty("text-align");
-        style.removeProperty("text-decoration");
-        style.removeProperty("text-transform");
-        style.removeProperty("text-indent");
-        style.removeProperty("margin");
-        style.removeProperty("padding");
-        style.removeProperty("border");
-        style.removeProperty("border-color");
-        style.removeProperty("border-style");
-        style.removeProperty("border-width");
-        style.removeProperty("box-shadow");
-        style.removeProperty("width");
-        style.removeProperty("height");
-        style.removeProperty("max-width");
-        style.removeProperty("max-height");
-        style.removeProperty("min-width");
-        style.removeProperty("min-height");
-        style.removeProperty("position");
-        style.removeProperty("top");
-        style.removeProperty("left");
-        style.removeProperty("right");
-        style.removeProperty("bottom");
-        style.removeProperty("float");
-        style.removeProperty("clear");
-        style.removeProperty("display");
-        style.removeProperty("vertical-align");
-        style.removeProperty("white-space");
-        style.removeProperty("word-spacing");
-        style.removeProperty("opacity");
-        el.removeAttribute("bgcolor");
-        el.removeAttribute("face");
-        el.removeAttribute("class");
-        el.removeAttribute("style");
-      }
-      const cleaned = temp.innerHTML
-        .replace(/<meta[^>]*>/gi, "")
-        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
-        .replace(/<!--[\s\S]*?-->/g, "")
-        .replace(/<o:p[^>]*>[\s\S]*?<\/o:p>/gi, "")
-        .replace(/<xml[^>]*>[\s\S]*?<\/xml>/gi, "")
-        .replace(/<head[^>]*>[\s\S]*?<\/head>/gi, "")
-        .replace(/<title[^>]*>[\s\S]*?<\/title>/gi, "")
-        .replace(/<span[^>]*>/gi, "<span>")
-        .replace(/<div([^>]*)>/gi, "<p$1>")
-        .replace(/<\/div>/gi, "</p>");
+      const cleaned = sanitizePastedHtml(htmlData);
       document.execCommand("insertHTML", false, upgradeLatexInText(cleaned));
       histRef.current.capture(false);
       setSaveStatus("pending");
@@ -3453,7 +3356,6 @@ const noteLiveAtts = useMemo(
                     }}
                     onKeyDown={handleEditorKeyDown}
                     onPaste={handleEditorPaste}
-                    onInput={handleEditorInput}
                     onBlur={handleSaveNote}
                   />
                 </div>
