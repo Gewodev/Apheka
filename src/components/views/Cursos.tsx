@@ -2240,7 +2240,72 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const [overviewAddingNote, setOverviewAddingNote] = useState(false);
   const [overviewEditContent, setOverviewEditContent] = useState('');
   const [overviewNotesSort, setOverviewNotesSort] = useState<'date' | 'title'>('date');
-  const saveCourseNoteContent = (id: string, html: string) => {
+  // Comportamiento nativo en editores de apuntes: si el encabezado/cita donde está
+// el cursor queda vacío (borraste su texto), se convierte en párrafo limpio para
+// que el siguiente texto NO herede el estilo del título borrado.
+function fixEmptyHeadingCaret(ed: HTMLElement | null) {
+  try {
+    if (!ed) return;
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    let node: Node | null = sel.getRangeAt(0).startContainer;
+    let block: HTMLElement | null = null;
+    while (node && node !== ed) {
+      if (node.nodeType === 1) { block = node as HTMLElement; break; }
+      node = node.parentNode;
+    }
+    if (!block || !ed.contains(block)) return;
+    if (!/^(H[1-4]|BLOCKQUOTE|PRE)$/.test(block.tagName)) return;
+    if ((block.textContent || '').replace(/ /g, '').trim()) return;
+    if (block.querySelector('img, video, audio, iframe')) return;
+    const p = document.createElement('p');
+    p.innerHTML = '<br>';
+    block.replaceWith(p);
+    const r = document.createRange();
+    r.setStart(p, 0);
+    r.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(r);
+  } catch { /* noop */ }
+}
+
+// Comportamiento nativo: Enter al FINAL de un encabezado/cita crea un párrafo
+// nuevo (no repite el estilo). Devuelve true si consumió el evento.
+function enterEndHeading(e: KeyboardEvent, ed: HTMLElement | null): boolean {
+  try {
+    if (!ed) return false;
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return false;
+    const range = sel.getRangeAt(0);
+    let node: Node | null = range.startContainer;
+    let block: HTMLElement | null = null;
+    while (node && node !== ed) {
+      if (node.nodeType === 1) { block = node as HTMLElement; break; }
+      node = node.parentNode;
+    }
+    if (!block || !ed.contains(block) || !/^(H[1-4]|BLOCKQUOTE)$/.test(block.tagName)) return false;
+    const pre = document.createRange();
+    pre.selectNodeContents(block);
+    pre.setEnd(range.endContainer, range.endOffset);
+    const beforeLen = pre.toString().length;
+    const totalLen = (block.textContent || '').length;
+    if (range.collapsed && beforeLen >= totalLen && beforeLen > 0) {
+      e.preventDefault();
+      const p = document.createElement('p');
+      p.innerHTML = '<br>';
+      block.insertAdjacentElement('afterend', p);
+      const r = document.createRange();
+      r.setStart(p, 0);
+      r.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(r);
+      return true;
+    }
+    return false;
+  } catch { return false; }
+}
+
+const saveCourseNoteContent = (id: string, html: string) => {
     updateNote(id, { content: html || '' });
   };
   const flushOverviewEditors = () => {
@@ -6358,8 +6423,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                         }
                       };
                       const handleDoneEditing = () => {
-                        saveCourseNoteContent(n.id, editContent);
-
+                        saveCourseNoteContent(n.id, editContentRef.current?.innerHTML ?? editContent);
                         setEditingNoteId(null);
                       };
                       return (
@@ -6387,7 +6451,10 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                                     contentEditable
                                     suppressContentEditableWarning
                                     dangerouslySetInnerHTML={{ __html: editContent }}
-                                    onKeyDown={(e) => { if ((e.ctrlKey || e.metaKey) && !e.altKey) { const uk = e.key.toLowerCase(); if (uk === 'z' && !e.shiftKey) { e.preventDefault(); topicHistRef.current.undo(); } else if (uk === 'y' || (uk === 'z' && e.shiftKey)) { e.preventDefault(); topicHistRef.current.redo(); } } }}
+                                    onKeyDown={(e) => {
+                                      if ((e.ctrlKey || e.metaKey) && !e.altKey) { const uk = e.key.toLowerCase(); if (uk === 'z' && !e.shiftKey) { e.preventDefault(); topicHistRef.current.undo(); } else if (uk === 'y' || (uk === 'z' && e.shiftKey)) { e.preventDefault(); topicHistRef.current.redo(); } return; }
+                                      if (e.key === 'Enter' && !e.shiftKey && enterEndHeading(e.nativeEvent, editContentRef.current)) { topicHistRef.current.capture(true); }
+                                    }}
                                     onInput={(e: React.FormEvent<HTMLDivElement>) => { const html = (e.target as HTMLDivElement).innerHTML; setEditContent(html); topicHistRef.current.capture(true); if (saveTimerRef.current) clearTimeout(saveTimerRef.current); saveTimerRef.current = setTimeout(() => saveCourseNoteContent(n.id, html), 800); }}
                                     onBlur={() => { saveCourseNoteContent(n.id, editContentRef.current?.innerHTML ?? editContent); }}
                                     onMouseUp={scheduleNoteTrack}

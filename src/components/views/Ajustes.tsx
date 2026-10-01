@@ -10,7 +10,7 @@ import {
   Wifi, WifiOff, Image, Coffee, X, Trash2, Save,
   Monitor, Activity, Sparkles, LogOut, Eye, EyeOff, CalendarDays, Clock, ChevronDown,
   FolderOpen, Boxes, AppWindow, HardDrive, Copy, Check, RefreshCcw,
-  CheckSquare, GraduationCap, FileText, ExternalLink, Loader2, CalendarPlus, ListTodo,
+  CheckSquare, GraduationCap, FileText, ExternalLink, Loader2, CalendarPlus, ListTodo, Minus, Plus,
   BookOpen, Sprout, Star, Waves, Leaf, Circle
 } from 'lucide-react';
 import { GoogleCalendarIcon, GoogleTasksIcon, GoogleClassroomIcon, GoogleDriveIcon, GoogleDocsIcon, GoogleSheetsIcon } from '../ui/GoogleIcons';
@@ -118,23 +118,72 @@ function Toggle({ checked, onChange, label, desc }: { checked: boolean; onChange
   );
 }
 
+// Slider dinámico: botones −/+ (mantener pulsado repite) y teclado completo —
+// ↑/↓ y ←/→ ajustan ±step, con Shift saltan ×5, Inicio/Fin van a los extremos,
+// RePág/AvPág dan saltos grandes. Todo con clamp y aria.
 function RangeSlider({ label, value, min, max, step = 1, unit, onChange, color }: {
   label: string; value: number; min: number; max: number; step?: number; unit: string;
   onChange: (v: number) => void; color: string;
 }) {
+  const clamp = (v: number) => Math.max(min, Math.min(max, v));
+  const apply = (v: number) => onChange(clamp(v));
+  const holdRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const valRef = useRef(value);
+  valRef.current = value;
+  const startHold = (dir: 1 | -1) => {
+    apply(valRef.current + dir * step);
+    holdRef.current = setInterval(() => apply(valRef.current + dir * step), 110);
+  };
+  const stopHold = () => { if (holdRef.current) { clearInterval(holdRef.current); holdRef.current = null; } };
+  const pct = ((value - min) / (max - min)) * 100;
+  const btnBase = { width: 26, height: 26, borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 130ms', padding: 0 } as React.CSSProperties;
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+    <div
+      tabIndex={0}
+      role="slider"
+      aria-label={label}
+      aria-valuemin={min} aria-valuemax={max} aria-valuenow={value}
+      onKeyDown={e => {
+        const jump = e.shiftKey || e.key === 'PageUp' || e.key === 'PageDown';
+        const d = jump ? step * 5 : step;
+        if (e.key === 'ArrowUp' || e.key === 'ArrowRight') { e.preventDefault(); apply(value + d); }
+        else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') { e.preventDefault(); apply(value - d); }
+        else if (e.key === 'Home') { e.preventDefault(); apply(min); }
+        else if (e.key === 'End') { e.preventDefault(); apply(max); }
+      }}
+      style={{ display: 'flex', flexDirection: 'column', gap: 6, outline: 'none', borderRadius: 10, padding: '4px 2px', transition: 'box-shadow 150ms' }}
+      onFocus={e => { e.currentTarget.style.boxShadow = `0 0 0 2px ${color}33`; }}
+      onBlur={e => { e.currentTarget.style.boxShadow = 'none'; stopHold(); }}
+    >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.03em' }}>{label}</span>
-        <span style={{ fontSize: 11, fontWeight: 700, color }}>{value}{unit}</span>
+        <span style={{ fontSize: 12, fontWeight: 700, color, fontVariantNumeric: 'tabular-nums' }}>{value}{unit}</span>
       </div>
-      <input type="range" min={min} max={max} step={step} value={value} onChange={e => onChange(Number(e.target.value))}
-        style={{
-          width: '100%', height: 4, borderRadius: 2, outline: 'none', cursor: 'pointer',
-          background: `linear-gradient(90deg, ${color}60, ${color} ${((value - min) / (max - min)) * 100}%, var(--bg-deep) ${((value - min) / (max - min)) * 100}%)`,
-          WebkitAppearance: 'none', appearance: 'none', accentColor: color,
-        }}
-        className="range-slider" />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button
+          onPointerDown={() => startHold(-1)} onPointerUp={stopHold} onPointerLeave={stopHold}
+          onClick={() => apply(valRef.current - step)} aria-label={`${label}: menos`} title="Menos (mantén pulsado para repetir)"
+          style={{ ...btnBase, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-secondary)' }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = `${color}55`; e.currentTarget.style.color = color; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
+          <Minus size={12} />
+        </button>
+        <input type="range" min={min} max={max} step={step} value={value} onChange={e => onChange(Number(e.target.value))}
+          style={{
+            flex: 1, height: 4, borderRadius: 2, outline: 'none', cursor: 'pointer',
+            background: `linear-gradient(90deg, ${color}60, ${color} ${pct}%, var(--bg-deep) ${pct}%)`,
+            WebkitAppearance: 'none', appearance: 'none', accentColor: color,
+          }}
+          className="range-slider" />
+        <button
+          onPointerDown={() => startHold(1)} onPointerUp={stopHold} onPointerLeave={stopHold}
+          onClick={() => apply(valRef.current + step)} aria-label={`${label}: más`} title="Más (mantén pulsado para repetir)"
+          style={{ ...btnBase, border: `1px solid ${color}45`, background: `${color}0d`, color }}
+          onMouseEnter={e => { e.currentTarget.style.background = `${color}1a`; e.currentTarget.style.borderColor = `${color}70`; }}
+          onMouseLeave={e => { e.currentTarget.style.background = `${color}0d`; e.currentTarget.style.borderColor = `${color}45`; }}>
+          <Plus size={12} />
+        </button>
+      </div>
     </div>
   );
 }

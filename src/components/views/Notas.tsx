@@ -83,6 +83,47 @@ type NoteVersion = { timestamp: string; preview: string; wordCount: number; cont
  * antiguas y se reduce el número de versiones) hasta que quepa; si ni así, se
  * descarta el historial de esa nota (la nota en sí nunca se pierde).
  */
+
+// Normaliza el HTML del editor al guardarlo, como haría un editor nativo:
+// 1) los encabezados/citas/code vacíos SE ELIMINAN (ruido y herencia de estilo),
+// 2) los bloques vacíos consecutivos se colapsan a UNA línea en blanco,
+// 3) no quedan bloques vacíos al inicio ni al final de la nota,
+// 4) los &nbsp; sueltos en bloques sin texto se vuelven un <br> limpio.
+// Los adjuntos (img/video/audio) nunca cuentan como "vacío".
+function normalizeEditorHtml(raw: string): string {
+  try {
+    if (!raw || !raw.trim()) return "";
+    const doc = new DOMParser().parseFromString(`<body>${raw}</body>`, "text/html");
+    const body = doc.body;
+    const isBlockish = (el: Element) => /^(P|DIV|H[1-4]|BLOCKQUOTE|PRE|UL|OL)$/.test(el.tagName);
+    const isEmptyBlock = (el: Element) =>
+      isBlockish(el) &&
+      !(el.textContent || "").replace(/\u00A0/g, " ").trim() &&
+      !el.querySelector("img, video, audio, iframe");
+    const isRichEmpty = (el: Element) =>
+      /^(H[1-4]|BLOCKQUOTE|PRE|UL|OL)$/.test(el.tagName) && isEmptyBlock(el);
+    Array.from(body.children).forEach(el => {
+      if (isRichEmpty(el)) { el.remove(); return; }
+      if (isEmptyBlock(el) && el.tagName !== "UL" && el.tagName !== "OL") el.innerHTML = "<br>";
+    });
+    // colapsa 2+ bloques vacíos consecutivos a uno solo
+    let prevEmpty = false;
+    const drop: Element[] = [];
+    Array.from(body.children).forEach(el => {
+      const empty = isEmptyBlock(el);
+      if (empty && prevEmpty) drop.push(el);
+      prevEmpty = empty;
+    });
+    drop.forEach(el => el.remove());
+    // recorta bloques vacíos en los extremos
+    while (body.firstElementChild && isEmptyBlock(body.firstElementChild)) body.firstElementChild.remove();
+    while (body.lastElementChild && isEmptyBlock(body.lastElementChild)) body.lastElementChild.remove();
+    return body.innerHTML;
+  } catch {
+    return raw;
+  }
+}
+
 function saveNoteVersion(noteId: string, content: string): void {
   try {
     const plain = content.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\u00A0/g, " ").trim();
@@ -1883,7 +1924,7 @@ const noteLiveAtts = useMemo(
     let title = selectedNote.title;
 
     if (editorRef.current) {
-      content = editorRef.current.innerHTML;
+      content = normalizeEditorHtml(editorRef.current.innerHTML);
     }
     if (titleRef.current) {
       title = titleRef.current.value;
@@ -2161,11 +2202,42 @@ const noteLiveAtts = useMemo(
     } catch { /* noop */ }
   }, []);
 
+  // Comportamiento nativo: si el encabezado/cita donde está el cursor queda VACÍO
+  // (p. ej. borraste su texto), se convierte en un párrafo limpio en vez de dejar
+  // un bloque vacío que heredaría el estilo al siguiente texto que escribas.
+  const fixEmptyHeadingAtCaret = useCallback(() => {
+    const ed = editorRef.current;
+    const sel = window.getSelection();
+    if (!ed || !sel || sel.rangeCount === 0) return;
+    let node: Node | null = sel.getRangeAt(0).startContainer;
+    let block: HTMLElement | null = null;
+    while (node && node !== ed) {
+      if (node.nodeType === 1) {
+        block = node as HTMLElement;
+        break;
+      }
+      node = node.parentNode;
+    }
+    if (!block || !ed.contains(block)) return;
+    if (!/^(H[1-4]|BLOCKQUOTE|PRE)$/.test(block.tagName)) return;
+    if ((block.textContent || '').replace(/\u00A0/g, '').trim()) return; // tiene texto real
+    if (block.querySelector('img, video, audio, iframe')) return;
+    const p = document.createElement('p');
+    p.innerHTML = '<br>';
+    block.replaceWith(p);
+    const r = document.createRange();
+    r.setStart(p, 0);
+    r.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(r);
+  }, []);
+
   const handleEditorInput = useCallback((e?: React.FormEvent<HTMLDivElement>) => {
     const data = e ? ((e.nativeEvent as InputEvent | undefined)?.data ?? null) : null;
     setSaveStatus("pending");
     histRef.current.capture(true);
     if (data === "$") tryFormatMathAtCaret();
+    fixEmptyHeadingAtCaret();
     if (editorRef.current && selectedNote) {
       const html = editorRef.current.innerHTML;
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -2173,7 +2245,7 @@ const noteLiveAtts = useMemo(
         updateNote(selectedNote.id, { content: html });
       }, 600);
     }
-  }, [selectedNote, updateNote, tryFormatMathAtCaret]);
+  }, [selectedNote, updateNote, tryFormatMathAtCaret, fixEmptyHeadingAtCaret]);
 
   const handleFormat = useCallback((cmd: string, value?: string) => {
     if (cmd === "codeBlock") {
@@ -2345,6 +2417,46 @@ const noteLiveAtts = useMemo(
         e.preventDefault();
         if (histRef.current.redo()) setSaveStatus("pending");
         return;
+      }
+    }
+
+    // 0.5 Comportamiento nativo: Enter al FINAL de un encabezado/cita crea un
+    // PÁRRAFO nuevo (no repite el estilo). Enter en medio mantiene el estilo.
+    if (e.key === "Enter" && !e.shiftKey && editorRef.current) {
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        const range = sel.getRangeAt(0);
+        let node: Node | null = range.startContainer;
+        let block: HTMLElement | null = null;
+        while (node && node !== editorRef.current) {
+          if (node.nodeType === 1) { block = node as HTMLElement; break; }
+          node = node.parentNode;
+        }
+        if (block && /^(H[1-4]|BLOCKQUOTE)$/.test(block.tagName) && editorRef.current.contains(block)) {
+          // posición del cursor dentro del bloque: longitud de texto antes del cursor
+          const pre = document.createRange();
+          pre.selectNodeContents(block);
+          pre.setEnd(range.endContainer, range.endOffset);
+          const beforeLen = pre.toString().length;
+          const totalLen = (block.textContent || "").length;
+          const atEnd = range.collapsed && beforeLen >= totalLen;
+          const atStart = range.collapsed && beforeLen === 0;
+          // solo al final del bloque (y que no esté vacío: vacío lo maneja fixEmptyHeadingAtCaret)
+          if (atEnd && !atStart && (block.textContent || "").trim()) {
+            e.preventDefault();
+            const p = document.createElement("p");
+            p.innerHTML = "<br>";
+            block!.insertAdjacentElement("afterend", p);
+            const r = document.createRange();
+            r.setStart(p, 0);
+            r.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(r);
+            setSaveStatus("pending");
+            histRef.current.capture(true);
+            return;
+          }
+        }
       }
     }
 
