@@ -1,6 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod windows_server;
 
 use std::collections::HashMap;
 use std::io::{BufRead, Write};
@@ -781,18 +780,12 @@ fn main() {
             detect_installed_browsers,
             open_url_in_browser,
             download_yt_dlp,
-            windows_server::windows_server_start,
-            windows_server::windows_server_register_code,
-            windows_server::windows_server_status,
-            windows_server::windows_server_set_state,
-            windows_server::windows_server_get_state,
         ])
         .setup(|app| {
             ensure_simple_binaries(app.handle());
 
             // Ventanas v2.0: la extensión del navegador es autónoma (chrome.storage),
-            // sin emparejamiento ni servidor local. El módulo windows_server queda
-            // compilado pero ya no se arranca en el setup.
+            // sin emparejamiento ni servidor local.
 
             // Auto-download yt-dlp only if truly missing (app dirs AND system PATH)
             let app_handle = app.handle().clone();

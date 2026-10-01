@@ -8,6 +8,7 @@ import { format, parseISO, subDays, addDays } from 'date-fns';
 import { appDataDir, appCacheDir, join, extname } from '@tauri-apps/api/path';
 import { saveAllTracks, loadAllTracks, copyAudioToStorage, removeAudioFromStorage, clearAllAudioFiles, exportMusicLibrary as exportMusicToDir, importMusicLibrary as importMusicFromDir, saveTrackMetadata, getAllTracksMetadata, deleteTrackMetadata, clearAllTracksMetadata, addTrackFileToDB, getTrackFileFromDB, deleteTrackFileFromDB, clearAllTrackFiles, storeTrackFileInDB, buildAudioFileName, toDisplayName, renameAudioInStorage, getMusicDir } from '../lib/musicDb';
 import { generalYtControl } from '../lib/ytEngine';
+import { normalizeEditorHtml } from '../lib/editorHtml';
 
 export const globalAudio = new Audio();
 globalAudio.volume = 0.7;
@@ -2201,7 +2202,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const flushNoteContent = useCallback((noteId: string, content: string, title?: string) => {
     const stamp = new Date().toISOString();
-    setNotes(prev => prev.some(n => n.id === noteId) ? prev.map(n => n.id === noteId ? { ...n, content, ...(typeof title === 'string' ? { title } : {}), updatedAt: stamp } : n) : prev);
+    const clean = normalizeEditorHtml(content || '');
+    setNotes(prev => prev.some(n => n.id === noteId) ? prev.map(n => n.id === noteId ? { ...n, content: clean, ...(typeof title === 'string' ? { title: (title || '').trim() || 'Sin título' } : {}), updatedAt: stamp } : n) : prev);
     try {
       const raw = latestJsonRef.current;
       if (!raw) return;
@@ -2209,7 +2211,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!Array.isArray(data.notes)) return;
       const idx = data.notes.findIndex((n: any) => n && n.id === noteId);
       if (idx === -1) return;
-      const updated = { ...data.notes[idx], content, updatedAt: stamp };
+      const updated = { ...data.notes[idx], content: clean, updatedAt: stamp };
       if (typeof title === 'string') updated.title = title;
       data.notes[idx] = updated;
       const json = JSON.stringify(data);

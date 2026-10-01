@@ -1543,7 +1543,7 @@ function ShelfPlank() {
 }
 
 export default function Notas() {
-  const { notes, noteFolders: folders, addNote, updateNote, updateNoteVisual, deleteNote, restoreNote, permanentlyDeleteNote, addNoteFolder, duplicateNote, reorderNotes, settings, addNotification, setPipUrl, flushNoteContent } = useApp();
+  const { notes, noteFolders: folders, addNote, updateNote, updateNoteVisual, deleteNote, restoreNote, permanentlyDeleteNote, addNoteFolder, duplicateNote, reorderNotes, settings, addNotification, setPipUrl } = useApp();
 
   const matMenu = useMaterialMenu((m) => addNotification(m, 'error'));
 
@@ -1879,13 +1879,18 @@ const noteLiveAtts = useMemo(
 
   const lastContentRef = useRef("");
   const lastSavedSigRef = useRef("");
-  const handleSaveNote = useCallback(() => {
+  // ÚNICO punto de guardado de la nota abierta: autosave (20s), debounce de
+  // escritura, blur, botón, acciones de formato y flush de salida pasan TODOS
+  // por aquí. Normaliza, evita notas fantasma, firma y versiona.
+  const handleSaveNote = useCallback((rawHtml?: string) => {
     if (!selectedNote) return;
-    let content = selectedNote.content;
+    let content = typeof rawHtml === 'string' && rawHtml
+      ? rawHtml
+      : selectedNote.content;
     let title = selectedNote.title;
 
     if (editorRef.current) {
-      content = normalizeEditorHtml(editorRef.current.innerHTML);
+      content = normalizeEditorHtml(typeof rawHtml === 'string' && rawHtml ? rawHtml : editorRef.current.innerHTML);
     }
     if (titleRef.current) {
       title = titleRef.current.value;
@@ -1981,8 +1986,7 @@ const noteLiveAtts = useMemo(
   const handleSelectNote = useCallback((noteId: string) => {    setSelectedNoteId(noteId);
   }, []);
 
-  const openFloatingNote = useCallback(async (note: Note) => {
-  }, []);
+
 
   const handleOpenNote = useCallback(() => {
     if (selectedNote) {
@@ -2092,10 +2096,8 @@ const noteLiveAtts = useMemo(
   useEffect(() => {
     const flushNow = () => {
       if (saveTimeoutRef.current) { clearTimeout(saveTimeoutRef.current); saveTimeoutRef.current = null; }
-      if (!selectedNote || !editorRef.current || !flushNoteContent) return;
-      const html = editorRef.current.innerHTML ?? '';
-      const title = titleRef.current?.value;
-      flushNoteContent(selectedNote.id, html, typeof title === 'string' ? title : undefined);
+      if (!selectedNote || !editorRef.current) return;
+      handleSaveNote(editorRef.current.innerHTML ?? '');
     };
     const onVis = () => { if (document.visibilityState === 'hidden') flushNow(); };
     window.addEventListener('beforeunload', flushNow);
@@ -2106,7 +2108,7 @@ const noteLiveAtts = useMemo(
       window.removeEventListener('pagehide', flushNow);
       document.removeEventListener('visibilitychange', onVis);
     };
-  }, [selectedNote, flushNoteContent]);
+  }, [selectedNote, handleSaveNote]);
 
   // Detección de fórmulas en vivo: al teclear el "$" que cierra, envuelve
   // $f$ (inline) o $$f$$ (bloque) con el mismo estilo de la vista previa,
@@ -2202,11 +2204,9 @@ const noteLiveAtts = useMemo(
     if (editorRef.current && selectedNote) {
       const html = editorRef.current.innerHTML;
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-      saveTimeoutRef.current = setTimeout(() => {
-        updateNote(selectedNote.id, { content: html });
-      }, 600);
+      saveTimeoutRef.current = setTimeout(() => { handleSaveNote(html); }, 600);
     }
-  }, [selectedNote, updateNote, tryFormatMathAtCaret, fixEmptyHeadingAtCaret]);
+  }, [selectedNote, updateNote, tryFormatMathAtCaret, fixEmptyHeadingAtCaret, handleSaveNote]);
 
   const handleFormat = useCallback((cmd: string, value?: string) => {
     if (cmd === "codeBlock") {
@@ -2361,7 +2361,7 @@ const noteLiveAtts = useMemo(
     setSaveStatus("pending");
     histRef.current.capture(false);
     if (editorRef.current && selectedNote) {
-      updateNote(selectedNote.id, { content: editorRef.current.innerHTML });
+      handleSaveNote(editorRef.current?.innerHTML);
     }
   }, [selectedNote, updateNote]);
 
@@ -2482,7 +2482,7 @@ const noteLiveAtts = useMemo(
             }
             setSaveStatus("pending");
             if (editorRef.current && selectedNote) {
-              updateNote(selectedNote.id, { content: editorRef.current.innerHTML });
+              handleSaveNote(editorRef.current?.innerHTML);
             }
           }
         }
@@ -2496,7 +2496,7 @@ const noteLiveAtts = useMemo(
           setSaveStatus("pending");
           histRef.current.capture(false);
           if (editorRef.current && selectedNote) {
-            updateNote(selectedNote.id, { content: editorRef.current.innerHTML });
+            handleSaveNote(editorRef.current?.innerHTML);
           }
         } else {
           handleFormat("codeBlock");
@@ -2861,7 +2861,7 @@ const noteLiveAtts = useMemo(
               document.execCommand("insertHTML", false, html);
               setSaveStatus("pending");
               histRef.current.capture(false);
-              updateNote(selectedNote.id, { content: editorRef.current.innerHTML });
+              handleSaveNote(editorRef.current?.innerHTML);
             });
           };
           reader.readAsDataURL(file);
@@ -3269,7 +3269,7 @@ const noteLiveAtts = useMemo(
                       letterSpacing: "-0.03em",
                       margin: "0 0 24px",
                     }}
-                    onBlur={handleSaveNote}
+                    onBlur={() => handleSaveNote()}
                   />
 
                   {/* Content editor — adaptive width, professional reading experience */}
@@ -3356,7 +3356,7 @@ const noteLiveAtts = useMemo(
                     }}
                     onKeyDown={handleEditorKeyDown}
                     onPaste={handleEditorPaste}
-                    onBlur={handleSaveNote}
+                    onBlur={() => handleSaveNote()}
                   />
                 </div>
               </div>
@@ -5046,7 +5046,7 @@ const noteLiveAtts = useMemo(
                   document.execCommand("insertHTML", false,
                     `<div class="notes-attachment"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg><a href="${pendingLink}" target="_blank">${pendingLink}</a><span class="att-meta">Enlace</span></div>`);
                   setSaveStatus("pending");
-                  if (selectedNote) updateNote(selectedNote.id, { content: editorRef.current.innerHTML });
+                  if (selectedNote) handleSaveNote(editorRef.current?.innerHTML);
                 }
                 setPendingLink(null);
               }}
