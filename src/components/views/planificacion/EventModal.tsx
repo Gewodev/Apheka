@@ -438,21 +438,15 @@ export default function EventModal({
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <div>
                   <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 8 }}>Inicio</label>
-                  <div style={{ position: 'relative' }}>
-                    <Clock size={15} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
-                    <select value={start} onChange={e => setStart(e.target.value)} style={{ width: '100%', fontSize: 14, height: 44, background: 'var(--surface-elevated)', border: selectBorder, borderRadius: 10, padding: '0 16px 0 40px', color: 'var(--text-primary)', outline: 'none', appearance: 'none' }}>
-                      {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
-                    </select>
-                  </div>
+                  <input type="time" value={start}
+                    onChange={e => setStart(e.target.value)}
+                    style={{ width: '100%', fontSize: 15, height: 44, background: 'var(--surface-elevated)', border: selectBorder, borderRadius: 10, padding: '0 14px', color: 'var(--text-primary)', outline: 'none', colorScheme: 'dark', fontVariantNumeric: 'tabular-nums', fontFamily: "'JetBrains Mono', monospace" }} />
                 </div>
                 <div>
                   <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 8 }}>Fin</label>
-                  <div style={{ position: 'relative' }}>
-                    <Clock size={15} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
-                    <select value={end} onChange={e => setEnd(e.target.value)} style={{ width: '100%', fontSize: 14, height: 44, background: 'var(--surface-elevated)', border: selectBorder, borderRadius: 10, padding: '0 16px 0 40px', color: 'var(--text-primary)', outline: 'none', appearance: 'none' }}>
-                      {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
-                    </select>
-                  </div>
+                  <input type="time" value={end}
+                    onChange={e => setEnd(e.target.value)}
+                    style={{ width: '100%', fontSize: 15, height: 44, background: 'var(--surface-elevated)', border: selectBorder, borderRadius: 10, padding: '0 14px', color: 'var(--text-primary)', outline: 'none', colorScheme: 'dark', fontVariantNumeric: 'tabular-nums', fontFamily: "'JetBrains Mono', monospace" }} />
                 </div>
               </div>
             )}

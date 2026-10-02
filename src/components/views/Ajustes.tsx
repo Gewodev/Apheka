@@ -857,10 +857,7 @@ export default function Ajustes() {
                 }}>
                   <Icon size={15} />
                 </span>
-                <span style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
-                  <span style={{ fontSize: 12.5, fontWeight: 700, fontFamily: "'Inter Tight', sans-serif" }}>{tab.label}</span>
-                  <span style={{ fontSize: 9, color: active ? 'var(--text-tertiary)' : 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tab.desc}</span>
-                </span>
+                <span style={{ fontSize: 12.5, fontWeight: 700, fontFamily: "'Inter Tight', sans-serif" }}>{tab.label}</span>
               </button>
             );
           })}
@@ -1953,7 +1950,7 @@ export default function Ajustes() {
                       }}
                       style={{
                         height: 36, padding: '0 16px', borderRadius: 8,
-                        background: 'linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 70%, #000))',
+                        background: 'var(--accent)',
                         border: 'none', color: '#fff', fontSize: 11, fontWeight: 600,
                         cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
                         boxShadow: '0 4px 14px color-mix(in srgb, var(--accent) 35%, transparent)',

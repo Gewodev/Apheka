@@ -1791,6 +1791,9 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const [planType, setPlanType] = useState<string>('estudio');
   const [planDuration, setPlanDuration] = useState(30);
   const [planIntensity, setPlanIntensity] = useState(5);
+  const [planRepeat, setPlanRepeat] = useState<'none' | 'daily' | 'weekly' | 'custom_days'>('none');
+  const [planRepeatDays, setPlanRepeatDays] = useState<number[]>([]);
+  const [planRepeatUntil, setPlanRepeatUntil] = useState('');
   const [planTimeEdit, setPlanTimeEdit] = useState<'h' | 'm' | null>(null);
   const [planTimeEditVal, setPlanTimeEditVal] = useState('');
   const parsePlanTime = (t: string) => {
@@ -2546,39 +2549,21 @@ const saveCourseNoteContent = (id: string, html: string) => {
   const toggleSelMat = useCallback((id: string) => {
     setSelMats(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
   }, []);
-  // Clic derecho sobre materiales — SIEMPRE igual:
-  //  · clic corto → menú con "Seleccionar / Quitar de la selección" y, si hay
-  //    selección, "Abrir seleccionados (N)" arriba del todo.
-  //  · mantener pulsado ≥500ms → alterna la selección (borde animado, sin menú).
-  // preventDefault SIEMPRE: el menú nativo del navegador no interfiere nunca.
+  // Clic derecho sobre materiales: UNA sola interacción. El menú abre al
+  // instante con "Seleccionar / Quitar de la selección" y, si hay selección,
+  // "Abrir seleccionados (N)". preventDefault siempre: el menú nativo del
+  // navegador no interfiere nunca.
   const matRmb = useCallback((e: React.MouseEvent, m: SubjectMaterial, buildMenu: () => Parameters<ReturnType<typeof useMaterialMenu>['openMenu']>[1]) => {
     e.preventDefault();
     e.stopPropagation();
-    const id = matKey(m);
-    const downAt = Date.now();
-    const el = e.currentTarget as HTMLElement;
-    // feedback continuo mientras mantienes pulsado: el borde se enciende
-    el.classList.add('owa-mat-pressing');
-    const onUp = (ev: MouseEvent) => {
-      window.removeEventListener('mouseup', onUp);
-      el.classList.remove('owa-mat-pressing');
-      if (ev.button !== 2) return;
-      const held = Date.now() - downAt;
-      if (held >= 500) {
-        toggleSelMat(id); // presión larga → seleccionar/quitar (el borde animado lo confirma)
-        return;
-      }
-      // clic corto → menú (con acciones de selección integradas)
-      const extra: Parameters<ReturnType<typeof useMaterialMenu>['openMenu']>[1] = buildMenu();
-      matMenu.openMenu(e, {
-        ...extra,
-        onToggleSelect: () => toggleSelMat(id),
-        isSel: selMats.has(id),
-        onOpenSelected: selMats.size > 0 ? openSelectedMats : undefined,
-        selectedCount: selMats.size,
-      });
-    };
-    window.addEventListener('mouseup', onUp);
+    const extra: Parameters<ReturnType<typeof useMaterialMenu>['openMenu']>[1] = buildMenu();
+    matMenu.openMenu(e, {
+      ...extra,
+      onToggleSelect: () => toggleSelMat(matKey(m)),
+      isSel: selMats.has(matKey(m)),
+      onOpenSelected: selMats.size > 0 ? openSelectedMats : undefined,
+      selectedCount: selMats.size,
+    });
   }, [matMenu, selMats, openSelectedMats, toggleSelMat, matKey]);
 
   useEffect(() => {
@@ -4622,7 +4607,8 @@ const saveCourseNoteContent = (id: string, html: string) => {
                             return (a.startTime || '99:99').localeCompare(b.startTime || '99:99');
                           });
                           const fmtTime = (s?: string) => s ? s.slice(0, 5) : '';
-                          const openAddSession = () => { setPlanEditId(null); setPlanDate(plannerDate); setPlanStartTime('09:00'); setPlanTitle(''); setPlanGroupId(''); setPlanTopicId(''); setPlanType('estudio'); setPlanDuration(30); setPlanIntensity(5); setShowPlanModal(true); };
+                          const openAddSession = () => { setPlanEditId(null); setPlanDate(plannerDate); setPlanStartTime('09:00'); setPlanTitle(''); setPlanGroupId(''); setPlanTopicId(''); setPlanType('estudio'); setPlanDuration(30); setPlanIntensity(5);
+                            setPlanRepeat('none'); setPlanRepeatDays([]); setPlanRepeatUntil(''); setShowPlanModal(true); };
                           const handlePlanDragEnd = (e: DragEndEvent) => {
                             const { active, over } = e;
                             if (!over || active.id === over.id) return;
@@ -5745,6 +5731,41 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                           </div>
                         </div>
 
+                        {/* ── Repetir (misma lógica que eventos/sesiones del Planificador) ── */}
+                        <div style={{ borderRadius: 11, border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', padding: '13px 14px', display: 'flex', flexDirection: 'column', gap: 9 }}>
+                          <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Repetir</label>
+                          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                            {([['none', 'No repite'], ['daily', 'Cada día'], ['weekly', 'Cada semana'], ['custom_days', 'Días propios']] as const).map(([v, lbl]) => (
+                              <button key={v} onClick={() => setPlanRepeat(v)}
+                                style={{ flex: 1, minWidth: 78, padding: '6px 0', borderRadius: 8, fontSize: 10, fontWeight: 700, fontFamily: "'Inter Tight', sans-serif", cursor: 'pointer', border: planRepeat === v ? '1px solid color-mix(in srgb, ' + course.color + ' 45%, transparent)' : '1px solid var(--border-subtle)', background: planRepeat === v ? 'color-mix(in srgb, ' + course.color + ' 8%, transparent)' : 'transparent', color: planRepeat === v ? course.color : 'var(--text-muted)', transition: 'all 150ms' }}>
+                                {lbl}
+                              </button>
+                            ))}
+                          </div>
+                          {planRepeat === 'custom_days' && (
+                            <div style={{ display: 'flex', gap: 4, animation: 'fadeIn 200ms ease' }}>
+                              {['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((d, i) => {
+                                const on = planRepeatDays.includes(i);
+                                return (
+                                  <button key={d} onClick={() => setPlanRepeatDays(prev => prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i])}
+                                    title={['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'][i]}
+                                    style={{ flex: 1, height: 30, borderRadius: 8, fontSize: 10.5, fontWeight: 700, fontFamily: "'Inter Tight', sans-serif", cursor: 'pointer', border: on ? 'none' : '1px solid var(--border-subtle)', background: on ? course.color : 'transparent', color: on ? '#fff' : 'var(--text-muted)', transition: 'all 150ms' }}>
+                                    {d}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                          {planRepeat !== 'none' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, animation: 'fadeIn 200ms ease' }}>
+                              <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>Hasta</span>
+                              <input type="date" value={planRepeatUntil}
+                                onChange={e => setPlanRepeatUntil(e.target.value)}
+                                style={{ flex: 1, height: 32, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', fontSize: 11, padding: '0 10px', outline: 'none', colorScheme: 'dark', fontFamily: "'JetBrains Mono', monospace" }} />
+                            </div>
+                          )}
+                        </div>
+
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
                           <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Vincular a (opcional)</label>
                           <PlanSelectDropdown value={planGroupId}
@@ -5780,7 +5801,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                         </button>
                         <button onClick={() => {
                             if (!planDate || !planTitle.trim()) return;
-                            const payload: Omit<PlannedSession, 'id' | 'createdAt'> = { courseId: course.id, date: planDate, startTime: planStartTime || undefined, title: planTitle.trim(), groupId: planGroupId || undefined, topicId: planTopicId || undefined, durationMinutes: planDuration, type: planType, intensity: planIntensity, completed: false };
+                            const payload: Omit<PlannedSession, 'id' | 'createdAt'> = { courseId: course.id, date: planDate, startTime: planStartTime || undefined, title: planTitle.trim(), groupId: planGroupId || undefined, topicId: planTopicId || undefined, durationMinutes: planDuration, type: planType, intensity: planIntensity, completed: false, repeat: planRepeat, repeatDays: planRepeat === 'custom_days' && planRepeatDays.length ? [...planRepeatDays].sort() : undefined, repeatUntil: planRepeat !== 'none' && planRepeatUntil ? planRepeatUntil : undefined };
                             if (planEditId) { const { completed: _c, ...rest } = payload; updatePlannedSession(planEditId, rest); }
                             else addPlannedSession(payload);
                             setShowPlanModal(false);
@@ -5806,7 +5827,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                       {(() => {
                         const daySessions = (plannedSessions || [])
                           .filter(s => !!s)
-                          .filter(s => s.courseId === course.id && s.date === dayDetailDate)
+                          .filter(s => s.courseId === course.id && expandsToDate(s, dayDetailDate))
                           .sort((a, b) => (a.startTime || '99:99').localeCompare(b.startTime || '99:99'))
                           .sort((a, b) => Number(a.completed) - Number(b.completed));
                         const pending = daySessions.filter(s => !s.completed);

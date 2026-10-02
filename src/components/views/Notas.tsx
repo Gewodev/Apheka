@@ -36,8 +36,7 @@ import {
   Umbrella, Undo, User, Users, Utensils,
   Verified, Video, Volume,
   Wallet, Wand, Waves, Webcam, Weight, Wine,
-  ZoomIn, ZoomOut, Link2
-} from "lucide-react";
+  ZoomIn, ZoomOut, Link2, FolderInput } from 'lucide-react';
 import { useApp, Note, NoteFolder, NoteAttachment, fmtClock } from "../../store/AppContext";
 import { openFileSmart, pickAndPersistFile } from '../../lib/openFileSmart';
 import { createEditorHistory } from '../../lib/editorHistory';
@@ -4728,7 +4727,7 @@ const noteLiveAtts = useMemo(
       {contextMenu && (
         <div style={{
           position: "fixed", top: contextMenu.y, left: contextMenu.x, zIndex: 10000,
-          background: "linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-base) 100%)",
+          background: "var(--bg-surface)",
           border: "1px solid var(--border-default)",
           borderRadius: "var(--radius-md)", padding: 4, minWidth: 164,
           boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
@@ -4763,12 +4762,44 @@ const noteLiveAtts = useMemo(
             { type: "divider" as const },
             { label: "Editar icono", icon: ImageIcon, action: () => { const target = notes.find(n => n.id === contextMenu.noteId); if (target) { setIconPickerTarget(contextMenu.noteId); setShowIconPicker(true); } } },
             { label: "Duplicar", icon: Copy, action: handleDuplicate },
+            ...(folders.length > 0 ? [{ label: "Mover a…", icon: FolderInput, sub: folders.map(f => ({ label: f.name, action: () => { updateNote(contextMenu.noteId, { folderId: f.id }); toast.success("Nota movida a " + f.name); } })) }] : [{ label: "Quitar de la carpeta", icon: FolderInput, action: () => { updateNote(contextMenu.noteId, { folderId: undefined }); toast.success("Nota fuera de la carpeta"); } }]),
             { type: "divider" as const },
             { label: "Exportar PDF", icon: Download, action: handleExportPDF },
             { type: "divider" as const },
             { label: "Eliminar", icon: Trash2, action: () => { if (contextMenu) setDeleteConfirmNoteId(contextMenu.noteId); }, danger: true },
-          ].map((item, i) => {
+          ].map((item: any, i) => {
             if ("type" in item) return <div key={i} style={{ height: 1, background: "var(--border-default)", margin: "4px 6px" }} />;
+            if ("sub" in item && Array.isArray(item.sub)) {
+              return (
+                <div key={i} style={{ position: 'relative' }}>
+                  <button data-move-toggle style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%",
+                    padding: "7px 10px", background: "none", border: "none",
+                    borderRadius: "var(--radius-sm)", color: "var(--text-secondary)",
+                    cursor: "pointer", fontSize: 12.5, textAlign: "left", transition: "all 150ms",
+                  }} className="hover:bg-[var(--bg-hover)]"
+                    onClick={(ev) => {
+                      const host = (ev.currentTarget.parentElement as HTMLElement);
+                      const panel = host.querySelector('[data-move-panel]') as HTMLElement;
+                      if (panel) panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+                    }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}><item.icon size={13} /> {item.label}</span>
+                    <ChevronRight size={12} />
+                  </button>
+                  <div data-move-panel style={{ display: 'none', maxHeight: 180, overflowY: 'auto', margin: '2px 4px 4px', background: 'var(--bg-deep)', borderRadius: 8, padding: 4 }}>
+                    {item.sub.map((s: any, si: number) => (
+                      <button key={si} onClick={() => { s.action(); setContextMenu(null); }}
+                        style={{ display: 'block', width: '100%', padding: '6px 9px', background: 'none', border: 'none', borderRadius: 6, color: 'var(--text-secondary)', fontSize: 11.5, textAlign: 'left', cursor: 'pointer', transition: 'all 130ms' }}
+                        className="hover:bg-[var(--bg-hover)]"
+                        onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-primary)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-secondary)'; }}>
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            }
             const Icon = item.icon;
             return (
               <button key={i} onClick={() => { item.action(); setContextMenu(null); }}
