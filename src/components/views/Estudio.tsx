@@ -446,15 +446,14 @@ export default function Estudio() {
       const taskId = localStorage.getItem('owa_study_task_id');
       if (!taskId) return;
       const found = (tasks || []).find(t => t && t.id === taskId);
-      if (found && !activePlannedSessionId) {
+      if (found) {
+        // Vincula SIEMPRE, aunque haya sesión planificada activa: el crédito de
+        // tiempo de la tarea y la sesión planificada son sistemas independientes.
         consumedTaskLinkRef.current = true;
         setActiveTaskId(taskId);
         addNotification(`Estudiando: ${found.title}`, 'success');
         localStorage.removeItem('owa_study_task_id');
         localStorage.removeItem('owa_study_task_title');
-      } else if (found && activePlannedSessionId) {
-        // sesión planificada activa: NO consumir el ID — se vinculará al desvincular
-        addNotification('Hay una sesión de estudio vinculada. Desvincúlala para estudiar esta tarea.', 'info');
       } else if (!found) {
         // tareas ya hidratadas y la tarea no existe → consumir y avisar
         consumedTaskLinkRef.current = true;

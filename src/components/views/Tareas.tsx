@@ -1880,19 +1880,13 @@ export default function Tareas() {
               {/* ── Footer: Estudiar CTA (fijo, siempre visible) ── */}
               <div style={{ flexShrink: 0, padding: '14px 22px 18px', borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-primary)', display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {(() => {
-                  const otherTaskLinked = !!activeTaskId && activeTaskId !== selectedTask.id;
-                  const blocked = !!activePlannedSessionId || otherTaskLinked;
+                  const replacing = !!activeTaskId && activeTaskId !== selectedTask.id;
                   return (
                 <button
                   onClick={() => {
-                    if (activePlannedSessionId) {
-                      addNotification('Hay una sesión de estudio vinculada al temporizador. Desvincula esa sesión primero.', 'info');
-                      return;
-                    }
-                    if (otherTaskLinked) {
-                      addNotification('Ya hay otra tarea vinculada al temporizador. Desvincula esa tarea primero.', 'info');
-                      return;
-                    }
+                    // Vincular SIEMPRE funciona: si había otra tarea (o sesión)
+                    // vinculada, esta la REEMPLAZA. Cero dependencias invisibles.
+                    if (replacing) addNotification('Tarea anterior desvinculada — ahora estudias esta.', 'info');
                     try {
                       localStorage.setItem('owa_study_task_id', selectedTask.id);
                       localStorage.setItem('owa_study_task_title', selectedTask.title);
@@ -1904,24 +1898,24 @@ export default function Tareas() {
                     setSelectedTaskId(null);
                     setNavigateTo('estudio');
                   }}
-                  title={activePlannedSessionId ? 'Hay una sesión de estudio vinculada al temporizador' : (otherTaskLinked ? 'Hay otra tarea vinculada al temporizador' : 'Estudiar esta tarea')}
+                  title={replacing ? 'Reemplaza la tarea vinculada actual' : 'Estudiar esta tarea'}
                   style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px 0', borderRadius: 9, fontSize: 11.5, fontWeight: 500,
-                    cursor: blocked ? 'not-allowed' : 'pointer',
-                    border: `1px solid ${blocked ? 'var(--border-subtle)' : taskColor + '26'}`,
-                    background: blocked ? 'var(--bg-deep)' : `${taskColor}06`,
-                    color: blocked ? 'var(--text-muted)' : taskColor,
+                    cursor: 'pointer',
+                    border: `1px solid ${taskColor}26`,
+                    background: `${taskColor}06`,
+                    color: taskColor,
                     transition: 'all 200ms',
                     width: '100%',
                     fontFamily: "'Inter Tight', sans-serif",
                     letterSpacing: '0.08em',
                     textTransform: 'uppercase',
-                    opacity: blocked ? 0.6 : 1,
+                    opacity: 1,
                   }}
-                  onMouseEnter={e => { if (!blocked) { e.currentTarget.style.background = `${taskColor}10`; e.currentTarget.style.borderColor = `${taskColor}40`; e.currentTarget.style.transform = 'scale(1.01)'; } }}
-                  onMouseLeave={e => { if (!blocked) { e.currentTarget.style.background = `${taskColor}06`; e.currentTarget.style.borderColor = `${taskColor}26`; e.currentTarget.style.transform = 'scale(1)'; } }}>
-                  <Play size={13} fill={blocked ? 'var(--text-muted)' : taskColor} style={{ color: blocked ? 'var(--text-muted)' : taskColor }} />
-                  {activePlannedSessionId ? 'Sesión vinculada activa' : (otherTaskLinked ? 'Tarea vinculada activa' : 'Estudiar')}
+                  onMouseEnter={e => { e.currentTarget.style.background = `${taskColor}10`; e.currentTarget.style.borderColor = `${taskColor}40`; e.currentTarget.style.transform = 'scale(1.01)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = `${taskColor}06`; e.currentTarget.style.borderColor = `${taskColor}26`; e.currentTarget.style.transform = 'scale(1)'; }}>
+                  <Play size={13} fill={taskColor} style={{ color: taskColor }} />
+                  {replacing ? 'Cambiar a esta tarea' : 'Estudiar'}
                 </button>
                   );
                 })()}
