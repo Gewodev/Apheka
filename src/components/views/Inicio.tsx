@@ -109,6 +109,46 @@ interface GoalEvent {
 
 const GOAL_KEY = 'owa_planned_goal';
 
+// Proyecta el evento destacado (Destacado) sobre la fecha de SU PRÓXIMA
+// ocurrencia, buscando en TODO el conjunto — no en la lista acotada de
+// "Siguientes" (si el evento queda fuera de los primeros 5, igual sigue
+// destacado). Devuelve null si el evento no existe o ya expiró sin repetición.
+function projectGoal(events: any[], gid: string | null, courses: any[] = []): GoalEvent | null {
+  if (!gid) return null;
+  const e = events.find(x => x && x.id === gid);
+  if (!e || !e.date) return null;
+  const today = format(new Date(), 'yyyy-MM-dd');
+  const applyOv = (ee: any, d: string) => {
+    const ov = ee.occurrenceOverrides?.[d];
+    if (!ov) return ee;
+    return { ...ee, ...ov, occurrenceOverrides: ee.occurrenceOverrides };
+  };
+  if (!e.repeat || e.repeat === 'none') {
+    if (e.date < today) return null; // expiró sin repetición → fuera
+    return applyOv(e, e.date);
+  }
+  if (e.repeatUntil && e.repeatUntil < today) return null;
+  if (e.date >= today) return applyOv(e, e.date);
+  const base = new Date(e.date + 'T12:00:00');
+  const tgt = new Date(today + 'T12:00:00');
+  const isExcepted = (d: Date) => (e.exceptions || []).includes(format(d, 'yyyy-MM-dd'));
+  const isOvMoved = (d: Date) => {
+    const ov = e.occurrenceOverrides?.[format(d, 'yyyy-MM-dd')];
+    return ov && ov.date && ov.date !== format(d, 'yyyy-MM-dd');
+  };
+  let next: Date | null = null;
+  if (e.repeat === 'daily') {
+    for (let i = 0; i < 7; i++) { const d = addDays(tgt, i); if (!isExcepted(d) && !isOvMoved(d)) { next = d; break; } }
+  } else if (e.repeat === 'weekly') {
+    for (let i = 0; i < 7; i++) { const d = addDays(tgt, i); if (d.getDay() === base.getDay() && !isExcepted(d) && !isOvMoved(d)) { next = d; break; } }
+  } else if (e.repeat === 'custom_days' && e.repeatDays?.length) {
+    const jsToday = (tgt.getDay() + 6) % 7;
+    for (let i = 0; i < 7; i++) { const d = addDays(tgt, i); if (e.repeatDays.includes((jsToday + i) % 7) && !isExcepted(d) && !isOvMoved(d)) { next = d; break; } }
+  }
+  if (!next) return null;
+  return applyOv({ ...e, date: format(next, 'yyyy-MM-dd') }, format(next, 'yyyy-MM-dd'));
+}
+
 // Fuente de verdad del planificador: IndexedDB. El espejo localStorage puede
 // quedarse viejo (cuota) — para "Siguientes" y el Destacado se lee IDB y se
 // gana el superset, igual que hace Planificacion.
@@ -266,14 +306,13 @@ export default function Inicio() {
       if (!alive) return;
       const list = computeUpcomingFrom(evs, plannedSessions);
       setUpcomingEvents(list);
-      // Destacado: SOLO cuenta si su OCURRENCIA está en la lista futura.
-      // Un evento pasado o borrado ya no re-ancla el destacado (esa era la
-      // condicional que lo desactivaba/pegaba en el pasado).
+      // Destacado: se proyecta sobre TODO el conjunto de eventos (la lista de
+      // "Siguientes" está acotada a 5 y no decide si el destacado vive o muere)
       try {
         const gid = localStorage.getItem(GOAL_KEY);
         if (gid) {
-          const found = list.find(e => e.id === gid);
-          if (found) setGoalEvent(found);
+          const projected = projectGoal(evs, gid);
+          if (projected) setGoalEvent(projected);
           else { localStorage.removeItem(GOAL_KEY); setGoalEvent(null); }
         }
       } catch { }
@@ -288,9 +327,9 @@ export default function Inicio() {
       const t = new Date(goalEvent.date + 'T' + (goalEvent.startTime || '23:59'));
       const diff = t.getTime() - Date.now();
       if (diff <= 0) {
-        // Expiró → AUTO-AVANCE inmediato al siguiente de la lista
+        // Expiró → AUTO-AVANCE al siguiente de la lista futura
         localStorage.removeItem(GOAL_KEY);
-        const next = upcomingEvents.find(u => u.id !== goalEvent.id) || null;
+        const next = upcomingEvents.find(u => u.id !== goalEvent.id && u.date >= format(new Date(), 'yyyy-MM-dd')) || null;
         if (next) {
           try { localStorage.setItem(GOAL_KEY, next.id); } catch { }
           setGoalEvent(next);

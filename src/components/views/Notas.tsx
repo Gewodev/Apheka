@@ -5491,13 +5491,16 @@ const trashCount = notes.filter(n => n.deletedAt).length;
   return (
     <div style={{
       width: 260, minWidth: 260, display: "flex", flexDirection: "column",
-      padding: "20px 14px 14px 20px", overflow: "hidden",
+      padding: "18px 12px 14px 14px", overflow: "hidden",
       borderRight: "1px solid var(--border-subtle)",
+      background: "var(--bg-surface)",
       flex: 1, minHeight: 0,
-    }}>
+    }} className="owa-nsidebar">
       <style dangerouslySetInnerHTML={{__html: `
         .sidebar-scroll-notas::-webkit-scrollbar { display: none; }
         .sidebar-scroll-notas { scrollbar-width: none; -ms-overflow-style: none; }
+        .owa-nsidebar button { transition: background 140ms, color 140ms, border-color 140ms; }
+        .owa-nsidebar input[type="text"] { transition: border-color 150ms, box-shadow 150ms; }
       `}} />
       <div className="sidebar-scroll-notas" style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }}>
 
@@ -5508,8 +5511,8 @@ const trashCount = notes.filter(n => n.deletedAt).length;
             marginBottom: 8, paddingLeft: 4,
           }}>
             <span style={{
-              fontSize: 13, fontWeight: 700, color: "var(--text-primary)",
-              letterSpacing: "0.06em", textTransform: "uppercase",
+              fontSize: 10, fontWeight: 700, color: "var(--text-tertiary)",
+              letterSpacing: "0.1em", textTransform: "uppercase",
             }}>Carpetas</span>
             <button onClick={onNewFolder} title="Nueva carpeta"
               style={{
@@ -5587,8 +5590,8 @@ const trashCount = notes.filter(n => n.deletedAt).length;
             marginBottom: 8, paddingLeft: 4,
           }}>
             <span style={{
-              fontSize: 13, fontWeight: 700, color: "var(--text-primary)",
-              letterSpacing: "0.06em", textTransform: "uppercase",
+              fontSize: 10, fontWeight: 700, color: "var(--text-tertiary)",
+              letterSpacing: "0.1em", textTransform: "uppercase",
             }}>Etiquetas</span>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <button onClick={() => setShowTagSection(!showTagSection)}
