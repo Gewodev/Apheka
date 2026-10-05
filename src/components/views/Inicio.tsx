@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useMemo, useCallback } from 'react';
+﻿import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   Music, CheckSquare, FileText, Flame,
   Target, Star, Lock, Check, X, Calendar, Timer } from 'lucide-react';
@@ -223,6 +223,10 @@ export default function Inicio() {
   const [goalCountdown, setGoalCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
   const [goalExpired, setGoalExpired] = useState(false);
   const [upcomingEvents, setUpcomingEvents] = useState<GoalEvent[]>([]);
+  // Tolerancia del Destacado: una lectura IDB stale NO desancla. Solo 3
+  // fallos consecutivos (evento realmente inexistente) limpian el anclaje.
+  const goalMissRef = useRef(0);
+  const lastGoalRef = useRef<GoalEvent | null>(null);
 
   const updateGoalFromStorage = useCallback(() => setGoalEvent(loadGoalEvent()), []);
 
@@ -307,13 +311,26 @@ export default function Inicio() {
       const list = computeUpcomingFrom(evs, plannedSessions);
       setUpcomingEvents(list);
       // Destacado: se proyecta sobre TODO el conjunto de eventos (la lista de
-      // "Siguientes" está acotada a 5 y no decide si el destacado vive o muere)
+      // "Siguientes" está acotada a 5 y no decide si el destacado vive o muere).
+      // Una lectura stale de IDB no desancla: se toleran hasta 3 fallos
+      // consecutivos mostrando el último estado conocido.
       try {
         const gid = localStorage.getItem(GOAL_KEY);
         if (gid) {
           const projected = projectGoal(evs, gid);
-          if (projected) setGoalEvent(projected);
-          else { localStorage.removeItem(GOAL_KEY); setGoalEvent(null); }
+          if (projected) {
+            goalMissRef.current = 0;
+            lastGoalRef.current = projected;
+            setGoalEvent(projected);
+          } else {
+            goalMissRef.current += 1;
+            if (goalMissRef.current >= 3) {
+              localStorage.removeItem(GOAL_KEY);
+              setGoalEvent(null);
+            } else if (lastGoalRef.current) {
+              setGoalEvent(lastGoalRef.current);
+            }
+          }
         }
       } catch { }
     };
