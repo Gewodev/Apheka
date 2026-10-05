@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { useApp, fmtClock } from '../../store/AppContext';
 import { format, subDays, subWeeks, addDays, addWeeks, startOfWeek, parseISO, isBefore } from 'date-fns';
+import { get as idbGet } from 'idb-keyval';
 import { es } from 'date-fns/locale';
 import { getWeeklyPhrase } from '../../data/phrases';
 import NotificationBell from '../ui/NotificationBell';
@@ -106,6 +107,20 @@ interface GoalEvent {
 }
 
 const GOAL_KEY = 'owa_planned_goal';
+
+// Fuente de verdad del planificador: IndexedDB. El espejo localStorage puede
+// quedarse viejo (cuota) — para "Siguientes" y el Destacado se lee IDB y se
+// gana el superset, igual que hace Planificacion.
+async function loadPlannerEvents(): Promise<any[]> {
+  try {
+    const idbJson = await idbGet('owa_planner_v3') as string | null;
+    const ls = (() => { try { return localStorage.getItem('owa_planner_v3'); } catch { return null; } })();
+    const parse = (raw: string | null) => { try { const d = JSON.parse(raw || '{}'); return Array.isArray(d.events) ? d.events : []; } catch { return []; } };
+    const a = parse(idbJson); const b = parse(ls);
+    return a.length >= b.length ? a : b;
+  } catch { return []; }
+}
+
 const STORE_KEY = 'owa_planner_v3';
 
 function loadGoalEvent(): GoalEvent | null {
@@ -158,6 +173,8 @@ export default function Inicio() {
     setNavigateTo,
     setFocusedEventId,
     setFocusedTaskId,
+    plannedSessions = [],
+    courses = [],
   } = app || {};
   const [ct, setCt] = useState(new Date());
 
@@ -168,33 +185,24 @@ export default function Inicio() {
 
   const updateGoalFromStorage = useCallback(() => setGoalEvent(loadGoalEvent()), []);
 
-  const computeUpcoming = useCallback(() => {
+  const computeUpcomingFrom = useCallback((events: any[], sessions: any[]) => {
     try {
-      const raw = localStorage.getItem(STORE_KEY);
-      if (!raw) return [];
-      const data = JSON.parse(raw);
-      const seen = new Set<string>();
-      const all: GoalEvent[] = (data.events || []).filter((e: any) => {
-        if (seen.has(e.id)) return false;
-        seen.add(e.id);
-        return true;
-      }).map((e: any) => ({
-        id: e.id, title: e.title, date: e.date, startTime: e.startTime, allDay: e.allDay, color: e.color,
-        repeat: e.repeat, repeatDays: e.repeatDays, repeatUntil: e.repeatUntil, exceptions: e.exceptions,
-        occurrenceOverrides: e.occurrenceOverrides,
-      }));
       const today = format(new Date(), 'yyyy-MM-dd');
-      const future = all.filter(e => {
-        if (!e.repeat || e.repeat === 'none') return e.date >= today;
-        if (e.repeatUntil && e.repeatUntil < today) return false;
-        return true;
-      }).map(e => {
-        const applyOv = (ee: any, d: string) => {
-          const ov = ee.occurrenceOverrides?.[d];
-          if (!ov) return ee;
-          return { ...ee, ...ov, occurrenceOverrides: ee.occurrenceOverrides };
-        };
-        if (!e.repeat || e.repeat === 'none' || e.date >= today) return applyOv(e, e.date);
+      const applyOv = (ee: any, d: string) => {
+        const ov = ee.occurrenceOverrides?.[d];
+        if (!ov) return ee;
+        return { ...ee, ...ov, occurrenceOverrides: ee.occurrenceOverrides };
+      };
+      const out: any[] = [];
+      // EVENTOS (misma lógica de ocurrencias que antes)
+      (events || []).forEach((e: any) => {
+        if (!e || !e.date) return;
+        if (!e.repeat || e.repeat === 'none') {
+          if (e.date >= today) out.push(applyOv(e, e.date));
+          return;
+        }
+        if (e.repeatUntil && e.repeatUntil < today) return;
+        if (e.date >= today) { out.push(applyOv(e, e.date)); return; }
         const base = new Date(e.date + 'T12:00:00');
         const tgt = new Date(today + 'T12:00:00');
         const isExcepted = (d: Date) => (e.exceptions || []).includes(format(d, 'yyyy-MM-dd'));
@@ -206,46 +214,90 @@ export default function Inicio() {
         if (e.repeat === 'daily') {
           for (let i = 0; i < 7; i++) { const d = addDays(tgt, i); if (!isExcepted(d) && !isOvMoved(d)) { next = d; break; } }
         } else if (e.repeat === 'weekly') {
-          for (let i = 0; i < 7; i++) {
-            const d = addDays(tgt, i);
-            if (d.getDay() === base.getDay() && !isExcepted(d) && !isOvMoved(d)) { next = d; break; }
-          }
+          for (let i = 0; i < 7; i++) { const d = addDays(tgt, i); if (d.getDay() === base.getDay() && !isExcepted(d) && !isOvMoved(d)) { next = d; break; } }
         } else if (e.repeat === 'custom_days' && e.repeatDays?.length) {
           const jsToday = (tgt.getDay() + 6) % 7;
-          for (let i = 0; i < 7; i++) {
-            const d = addDays(tgt, i);
-            if (e.repeatDays.includes((jsToday + i) % 7) && !isExcepted(d) && !isOvMoved(d)) { next = d; break; }
-          }
+          for (let i = 0; i < 7; i++) { const d = addDays(tgt, i); if (e.repeatDays.includes((jsToday + i) % 7) && !isExcepted(d) && !isOvMoved(d)) { next = d; break; } }
         }
-        if (!next) next = tgt;
-        return applyOv({ ...e, date: format(next, 'yyyy-MM-dd') }, format(next, 'yyyy-MM-dd'));
-      }).sort((a, b) => a.date.localeCompare(b.date) || (a.startTime || '').localeCompare(b.startTime || ''));
-      if (!goalEvent) return future.slice(0, 4);
-      const afterGoal = future.filter(e => e.id !== goalEvent.id);
-      return afterGoal.slice(0, 1);
+        if (next) out.push(applyOv({ ...e, date: format(next, 'yyyy-MM-dd') }, format(next, 'yyyy-MM-dd')));
+      });
+      // SESIONES DE ESTUDIO PROGRAMADAS (misma lógica; color del curso)
+      const courseColorOf = (cid: string) => courses.find(c => c.id === cid)?.color || '#8B5CF6';
+      (sessions || []).forEach((s: any) => {
+        if (!s || !s.date || s.completed) return;
+        const mapped = (date: string) => ({
+          id: s.id, title: s.title, date, startTime: s.startTime || undefined, allDay: false,
+          color: courseColorOf(s.courseId), repeat: s.repeat, repeatDays: s.repeatDays,
+          repeatUntil: s.repeatUntil, exceptions: s.exceptions, occurrenceOverrides: undefined,
+          _session: true, durationMinutes: s.durationMinutes,
+        });
+        if (!s.repeat || s.repeat === 'none') {
+          if (s.date >= today) out.push(mapped(s.date));
+          return;
+        }
+        if (s.repeatUntil && s.repeatUntil < today) return;
+        const base = new Date(s.date + 'T12:00:00');
+        const tgt = new Date(today + 'T12:00:00');
+        const isExcepted = (d: Date) => (s.exceptions || []).includes(format(d, 'yyyy-MM-dd'));
+        let next: Date | null = null;
+        if (s.repeat === 'daily') {
+          for (let i = 0; i < 7; i++) { const d = addDays(tgt, i); if (!isExcepted(d)) { next = d; break; } }
+        } else if (s.repeat === 'weekly') {
+          for (let i = 0; i < 7; i++) { const d = addDays(tgt, i); if (d.getDay() === base.getDay() && !isExcepted(d)) { next = d; break; } }
+        } else if (s.repeat === 'custom_days' && s.repeatDays?.length) {
+          const jsToday = (tgt.getDay() + 6) % 7;
+          for (let i = 0; i < 7; i++) { const d = addDays(tgt, i); if (s.repeatDays.includes((jsToday + i) % 7) && !isExcepted(d)) { next = d; break; } }
+        }
+        if (next) out.push(mapped(format(next, 'yyyy-MM-dd')));
+      });
+      return out.sort((a, b) => a.date.localeCompare(b.date) || (a.startTime || '').localeCompare(b.startTime || '')).slice(0, 5);
     } catch { return []; }
-  }, [goalEvent]);
+  }, [courses]);
 
+  // Reloj + Destacado + Siguientes: TODO lee IDB (fuente de verdad) con la
+  // lógica unificada. El Destacado se AUTO-AVANZA: cuando su fecha/hora pasa,
+  // se despega y apunta al siguiente elemento de la lista (sin quedarse
+  // pegado en el pasado, sin vínculos vacíos).
   useEffect(() => {
+    let alive = true;
+    const refresh = async () => {
+      const evs = await loadPlannerEvents();
+      if (!alive) return;
+      const list = computeUpcomingFrom(evs, plannedSessions);
+      setUpcomingEvents(list);
+      // Destacado: resincroniza contra los datos reales (si el evento se
+      // borró o ya no existe, el vínculo vacío se limpia solo)
+      try {
+        const gid = localStorage.getItem(GOAL_KEY);
+        if (gid) {
+          const found = list.find(e => e.id === gid) || evs.find(e => e && e.id === gid);
+          if (found) setGoalEvent(found);
+          else { localStorage.removeItem(GOAL_KEY); setGoalEvent(null); }
+        }
+      } catch { }
+    };
     const ti = setInterval(() => {
       setCt(new Date());
-      const g = loadGoalEvent();
-      if (g?.id !== goalEvent?.id) setGoalEvent(g);
+      void refresh();
     }, 1000);
+    void refresh();
     const cd = setInterval(() => {
       if (!goalEvent) { setGoalCountdown({ days: 0, hours: 0, minutes: 0, seconds: 0 }); setGoalExpired(false); return; }
       const t = new Date(goalEvent.date + 'T' + (goalEvent.startTime || '23:59'));
       const diff = t.getTime() - Date.now();
       if (diff <= 0) {
-        setGoalCountdown({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-        setGoalExpired(true);
-        // Auto-unpin after 12h
-        const hoursSince = Math.abs(diff) / 3600000;
-        if (hoursSince >= 12) {
-          localStorage.removeItem(GOAL_KEY);
+        // Expiró → AUTO-AVANCE inmediato al siguiente de la lista
+        localStorage.removeItem(GOAL_KEY);
+        const next = upcomingEvents.find(u => u.id !== goalEvent.id) || null;
+        if (next) {
+          try { localStorage.setItem(GOAL_KEY, next.id); } catch { }
+          setGoalEvent(next);
+          setGoalExpired(false);
+        } else {
           setGoalEvent(null);
           setGoalExpired(false);
         }
+        setGoalCountdown({ days: 0, hours: 0, minutes: 0, seconds: 0 });
         return;
       }
       setGoalExpired(false);
@@ -256,11 +308,10 @@ export default function Inicio() {
         seconds: Math.floor((diff % 60000) / 1000),
       });
     }, 1000);
-    const up = setInterval(() => setUpcomingEvents(computeUpcoming()), 5000);
-    setUpcomingEvents(computeUpcoming());
+    const up = setInterval(() => { void refresh(); }, 5000);
     window.addEventListener('storage', updateGoalFromStorage);
-    return () => { clearInterval(ti); clearInterval(cd); clearInterval(up); window.removeEventListener('storage', updateGoalFromStorage); };
-  }, [goalEvent, updateGoalFromStorage, computeUpcoming]);
+    return () => { alive = false; clearInterval(ti); clearInterval(cd); clearInterval(up); window.removeEventListener('storage', updateGoalFromStorage); };
+  }, [goalEvent, upcomingEvents, plannedSessions, updateGoalFromStorage, computeUpcomingFrom]);
 
   const timeStr = fmtClock(format(ct, 'HH:mm'), settings?.timeFormat);
   const secStr = format(ct, 'ss');

@@ -1594,7 +1594,17 @@ export default function Planificacion() {
                   <div style={{ display: 'flex', gap: 14 }}>
                     <div style={{ flex: 1 }}>
                       <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', marginBottom: 7, letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Hora de inicio</label>
-                      <div style={{ display: 'flex', alignItems: 'stretch', borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', overflow: 'hidden' }}>
+                      <div tabIndex={0}
+                        onKeyDown={e => {
+                          if (e.key === 'ArrowUp') { e.preventDefault(); shiftPlanTime('h', 1); }
+                          else if (e.key === 'ArrowDown') { e.preventDefault(); shiftPlanTime('h', -1); }
+                          else if (e.key === 'ArrowRight') { e.preventDefault(); shiftPlanTime('m', 1); }
+                          else if (e.key === 'ArrowLeft') { e.preventDefault(); shiftPlanTime('m', -1); }
+                        }}
+                        title="Flechas: ↑↓ horas, ←→ minutos"
+                        style={{ display: 'flex', alignItems: 'stretch', borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', overflow: 'hidden', outline: 'none' }}
+                        onFocus={e => { e.currentTarget.style.borderColor = 'color-mix(in srgb, ' + courseColor + ' 50%, transparent)'; }}
+                        onBlur={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; }}>
                         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '2px 0' }}>
                           <button onClick={() => shiftPlanTime('h', 1)} title="Subir hora (+1h)"
                             style={{ width: '100%', height: 16, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'color 150ms' }}
@@ -1652,6 +1662,10 @@ export default function Planificacion() {
                             <ChevronDown size={14} />
                           </button>
                         </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 8, padding: '6px 0', borderRadius: 8, background: 'color-mix(in srgb, ' + courseColor + ' 7%, transparent)', border: '1px solid color-mix(in srgb, ' + courseColor + ' 22%, transparent)' }}>
+                        <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Termina</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: courseColor, fontFamily: "'JetBrains Mono', monospace", fontVariantNumeric: 'tabular-nums' }}>{(() => { const { h, m } = parsePlanTime(planStartTime); const t = h * 60 + m + planDuration; return String(Math.floor(t / 60) % 24).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0'); })()}</span>
                       </div>
                     </div>
                     <div style={{ width: 158 }}>
