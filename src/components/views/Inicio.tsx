@@ -1,8 +1,7 @@
 ﻿import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Music, CheckSquare, FileText, Flame,
-  Target, Star, Lock, Check, X, Calendar
-} from 'lucide-react';
+  Target, Star, Lock, Check, X, Calendar, Timer } from 'lucide-react';
 import { useApp, fmtClock } from '../../store/AppContext';
 import { format, subDays, subWeeks, addDays, addWeeks, startOfWeek, parseISO, isBefore } from 'date-fns';
 import { get as idbGet } from 'idb-keyval';
@@ -104,6 +103,8 @@ interface GoalEvent {
   repeatUntil?: string;
   exceptions?: string[];
   occurrenceOverrides?: Record<string, Partial<GoalEvent>>;
+  _session?: boolean;
+  durationMinutes?: number;
 }
 
 const GOAL_KEY = 'owa_planned_goal';
@@ -265,12 +266,13 @@ export default function Inicio() {
       if (!alive) return;
       const list = computeUpcomingFrom(evs, plannedSessions);
       setUpcomingEvents(list);
-      // Destacado: resincroniza contra los datos reales (si el evento se
-      // borró o ya no existe, el vínculo vacío se limpia solo)
+      // Destacado: SOLO cuenta si su OCURRENCIA está en la lista futura.
+      // Un evento pasado o borrado ya no re-ancla el destacado (esa era la
+      // condicional que lo desactivaba/pegaba en el pasado).
       try {
         const gid = localStorage.getItem(GOAL_KEY);
         if (gid) {
-          const found = list.find(e => e.id === gid) || evs.find(e => e && e.id === gid);
+          const found = list.find(e => e.id === gid);
           if (found) setGoalEvent(found);
           else { localStorage.removeItem(GOAL_KEY); setGoalEvent(null); }
         }
@@ -827,6 +829,27 @@ export default function Inicio() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {upcomingEvents.map(ev => {
                       const evDate = (() => { try { return new Date(ev.date + 'T' + (ev.startTime || '12:00')); } catch { return null; } })();
+                      if ((ev as any)._session) return (
+                        <div key={ev.id} style={{
+                          display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 10,
+                          background: `${ev.color}0a`, border: `1px solid ${ev.color}30`,
+                          transition: 'all 200ms ease', cursor: 'pointer',
+                        }}
+                          onClick={() => { setNavigateTo('flujo'); }}
+                          onMouseEnter={e => { e.currentTarget.style.borderColor = `${ev.color}60`; e.currentTarget.style.background = `${ev.color}14`; }}
+                          onMouseLeave={e => { e.currentTarget.style.borderColor = `${ev.color}30`; e.currentTarget.style.background = `${ev.color}0a`; }}>
+                          <span style={{ width: 28, height: 28, borderRadius: 8, background: `${ev.color}16`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <Timer size={13} style={{ color: ev.color }} />
+                          </span>
+                          <span style={{ flex: 1, minWidth: 0 }}>
+                            <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-primary)', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.title}</span>
+                            <span style={{ fontSize: 8.5, fontWeight: 700, color: ev.color, letterSpacing: '0.07em', textTransform: 'uppercase' }}>
+                              Sesión{ev.durationMinutes ? ` · ${ev.durationMinutes} min` : ''}
+                            </span>
+                          </span>
+                          <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', fontFamily: "'JetBrains Mono', monospace", flexShrink: 0 }}>{ev.startTime}</span>
+                        </div>
+                      );
                       return (
                         <div key={ev.id} style={{
                           display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 10,
@@ -880,6 +903,30 @@ export default function Inicio() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {upcomingEvents.map(ev => {
                     const evDate = (() => { try { return new Date(ev.date + 'T' + (ev.startTime || '12:00')); } catch { return null; } })();
+                    if ((ev as any)._session) return (
+                        <div key={ev.id} style={{
+                          display: 'flex', alignItems: 'center', gap: 11, padding: '10px 13px', borderRadius: 11,
+                          background: `${ev.color}0a`, border: `1px solid ${ev.color}30`,
+                          transition: 'all 200ms ease', cursor: 'pointer',
+                        }}
+                          onClick={() => { setNavigateTo('flujo'); }}
+                          onMouseEnter={e => { e.currentTarget.style.borderColor = `${ev.color}60`; e.currentTarget.style.background = `${ev.color}14`; }}
+                          onMouseLeave={e => { e.currentTarget.style.borderColor = `${ev.color}30`; e.currentTarget.style.background = `${ev.color}0a`; }}>
+                          <span style={{ width: 30, height: 30, borderRadius: 9, background: `${ev.color}16`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <Timer size={14} style={{ color: ev.color }} />
+                          </span>
+                          <span style={{ flex: 1, minWidth: 0 }}>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.title}</span>
+                            <span style={{ fontSize: 8.5, fontWeight: 700, color: ev.color, letterSpacing: '0.07em', textTransform: 'uppercase' }}>
+                              Sesión de estudio{ev.durationMinutes ? ` · ${ev.durationMinutes} min` : ''}
+                            </span>
+                          </span>
+                          <span style={{ textAlign: 'right', flexShrink: 0 }}>
+                            <span style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', fontFamily: "'JetBrains Mono', monospace" }}>{ev.startTime}</span>
+                            <span style={{ display: 'block', fontSize: 8.5, color: 'var(--text-muted)' }}>{evDate ? format(evDate, 'd MMM', { locale: es as any }) : ''}</span>
+                          </span>
+                        </div>
+                    );
                     return (
                         <div key={ev.id} style={{
                           display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 10,

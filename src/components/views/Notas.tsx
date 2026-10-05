@@ -36,7 +36,7 @@ import {
   Umbrella, Undo, User, Users, Utensils,
   Verified, Video, Volume,
   Wallet, Wand, Waves, Webcam, Weight, Wine,
-  ZoomIn, ZoomOut, Link2, FolderInput } from 'lucide-react';
+  ZoomIn, ZoomOut, Link2, FolderInput, PictureInPicture2 } from 'lucide-react';
 import { useApp, Note, NoteFolder, NoteAttachment, fmtClock } from "../../store/AppContext";
 import { openFileSmart, pickAndPersistFile } from '../../lib/openFileSmart';
 import { createEditorHistory } from '../../lib/editorHistory';
@@ -1681,10 +1681,19 @@ export default function Notas() {
     return () => document.removeEventListener("keydown", onKey);
   }, []);
 
-  // Expanded View Drawer state
-  const [isMaximized, setIsMaximized] = useState(false);
+  // Expanded View Drawer state (persistente: si lo dejaste expandido, se queda así)
+  const [isMaximized, setIsMaximized] = useState<boolean>(() => { try { return localStorage.getItem('owa_note_drawer_max') === '1'; } catch { return false; } });
+  useEffect(() => { try { localStorage.setItem('owa_note_drawer_max', isMaximized ? '1' : '0'); } catch { } }, [isMaximized]);
   const [showIconPicker, setShowIconPicker] = useState(false);
   const [iconPickerTarget, setIconPickerTarget] = useState<string | null>(null);
+
+  // ── Lector flotante de nota (anclado a la derecha; solo lectura) ──
+  const [floatNoteId, setFloatNoteId] = useState<string | null>(() => { try { return localStorage.getItem('owa_float_note') || null; } catch { return null; } });
+  const [floatWide, setFloatWide] = useState<boolean>(() => { try { return localStorage.getItem('owa_float_wide') === '1'; } catch { return false; } });
+  const [floatMin, setFloatMin] = useState<boolean>(false);
+  useEffect(() => { try { localStorage.setItem('owa_float_note', floatNoteId || ''); } catch { } }, [floatNoteId]);
+  useEffect(() => { try { localStorage.setItem('owa_float_wide', floatWide ? '1' : '0'); } catch { } }, [floatWide]);
+  const floatNote = floatNoteId ? notes.find(n => n.id === floatNoteId) || null : null;
 
   // Library views navigation
   const [activeSidebarTab, setActiveSidebarTab] = useState("all");
@@ -3097,6 +3106,14 @@ const noteLiveAtts = useMemo(
         .notes-preview-area ul { padding-left: 20px; margin: 6px 0; list-style: disc; }
         .notes-preview-area ol { padding-left: 20px; margin: 6px 0; list-style: decimal; }
         .notes-preview-area li { margin: 2px 0; line-height: 1.6; }
+        .notes-preview-area table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+        .notes-preview-area th { padding: 8px; background: var(--bg-hover); font-weight: 600; border: 1px solid var(--border-default); font-size: 12.5px; }
+        .notes-preview-area td { padding: 8px; border: 1px solid var(--border-default); font-size: 12px; }
+        .notes-preview-area pre { background: var(--bg-deep); border: 1px solid var(--border-default); border-radius: 10px; padding: 14px 16px; overflow-x: auto; margin: 12px 0; line-height: 1.55; }
+        .notes-preview-area code { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+        .notes-preview-area p { margin: 6px 0; }
+        .notes-preview-area h1, .notes-preview-area h2, .notes-preview-area h3 { margin: 20px 0 10px; line-height: 1.3; }
+        .notes-preview-area blockquote { margin: 12px 0; padding: 10px 16px; border-left: 3px solid var(--accent); background: var(--bg-hover); border-radius: 8px; }
         .notes-editor-area .notes-attachment,
         .notes-preview-area .notes-attachment {
           display: flex; align-items: center; gap: 10px;
@@ -4237,6 +4254,16 @@ const noteLiveAtts = useMemo(
                             </span>
 
                             {/* Maximize Toggle button */}
+                            <button onClick={() => { if (selectedNote) { setFloatNoteId(selectedNote.id); setFloatMin(false); } }}
+                              title="Leer en panel flotante (anclado a la derecha)"
+                              style={{
+                                background: floatNoteId === selectedNote.id ? "var(--accent-dim)" : "none",
+                                border: "1px solid " + (floatNoteId === selectedNote.id ? "var(--accent)" : "var(--border-default)"),
+                                color: floatNoteId === selectedNote.id ? "var(--accent)" : "var(--text-secondary)",
+                                padding: 6, borderRadius: 6, display: "flex", cursor: "pointer", flexShrink: 0,
+                              }}>
+                              <PictureInPicture2 size={13} />
+                            </button>
                             <button onClick={() => setIsMaximized(!isMaximized)}
                               style={{
                                 background: "none", border: "1px solid var(--border-default)",
@@ -4957,6 +4984,52 @@ const noteLiveAtts = useMemo(
             </div>
           </div>
         </div>,
+        document.body
+      )}
+      {floatNote && createPortal(
+        <div style={{ position: 'fixed', top: 0, right: floatMin ? -400 : 0, bottom: 0, width: floatWide ? '50vw' : 480, maxWidth: '96vw', zIndex: 98500, background: 'var(--bg-primary)', borderLeft: '1px solid var(--border-default)', boxShadow: '-20px 0 60px rgba(0,0,0,0.5)', display: floatMin ? 'none' : 'flex', flexDirection: 'column', transition: 'right 260ms cubic-bezier(0.16,1,0.3,1), width 220ms cubic-bezier(0.16,1,0.3,1)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '14px 16px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: (floatNote.folderId && folders.find(f => f.id === floatNote.folderId)?.color) || 'var(--accent)', flexShrink: 0 }} />
+            <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {floatNote.title || 'Nota sin título'}
+            </span>
+            <button onClick={() => { setFloatNoteId(null); setSelectedNoteId(floatNote.id); setIsEditing(true); }}
+              title="Editar en el editor real"
+              style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid rgba(225,29,72,0.35)', background: 'rgba(225,29,72,0.08)', color: 'var(--accent)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Edit3 size={13} />
+            </button>
+            <button onClick={() => setFloatWide(v => !v)}
+              title={floatWide ? 'Reducir a ancho normal' : 'Expandir a media pantalla'}
+              style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid var(--border-default)', background: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              {floatWide ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+            </button>
+            <button onClick={() => setFloatMin(true)}
+              title="Minimizar"
+              style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid var(--border-default)', background: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Minus size={13} />
+            </button>
+            <button onClick={() => setFloatNoteId(null)}
+              title="Cerrar"
+              style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid var(--border-default)', background: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <X size={13} />
+            </button>
+          </div>
+          <div className="notes-preview-area" style={{ flex: 1, overflowY: 'auto', padding: '20px 22px 30px', fontSize: 14.5, lineHeight: 1.8, color: 'var(--text-primary)', fontFamily: "'Arial Narrow', Arial, system-ui, sans-serif", wordBreak: 'break-word' }}
+            dangerouslySetInnerHTML={{ __html: floatNote.content || '<p style="color:var(--text-muted);font-style:italic">Nota vacía</p>' }} />
+        </div>,
+        document.body
+      )}
+
+      {floatMin && floatNote && createPortal(
+        <button onClick={() => setFloatMin(false)}
+          title={'Restaurar: ' + (floatNote.title || 'Nota')}
+          style={{ position: 'fixed', bottom: 18, right: 18, zIndex: 98500, display: 'flex', alignItems: 'center', gap: 8, padding: '9px 15px', borderRadius: 999, background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', boxShadow: '0 8px 30px rgba(0,0,0,0.4)', cursor: 'pointer', maxWidth: 300 }}>
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: (floatNote.folderId && folders.find(f => f.id === floatNote.folderId)?.color) || 'var(--accent)', flexShrink: 0 }} />
+          <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {floatNote.title || 'Nota sin título'}
+          </span>
+          <Maximize2 size={11} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
+        </button>,
         document.body
       )}
 
