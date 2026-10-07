@@ -435,36 +435,29 @@ export default function Estudio() {
     if (sessionType === 'chrono' && !isTimerActive && sessionTime === 0) { lastChronoRoundRef.current = 0; saveChronoRound(0); }
   }, [sessionType, isTimerActive, sessionTime]);
 
-  // Read linked task from localStorage (set by Tareas "Estudiar esta tarea" button).
-  // CORRECCIÓN: antes corría UNA vez al montar, cuando `tasks` todavía no se había
-  // hidratado → la búsqueda fallaba ("la tarea ya no existe") y se perdía el vínculo.
-  // Ahora espera a `hydrated` y consume el ID una sola vez, con datos reales.
-  const consumedTaskLinkRef = useRef(false);
+  // Read linked task from localStorage (set by Tareas "Estudiar esta tarea").
+  // Espera a la hidratación y consume el ID SIEMPRE que exista: sin ref de
+  // "ya consumido" — ese ref era la dependencia invisible que impedía
+  // vincular otra tarea después de desvincular con la X. La propia clave se
+  // autolimpia al consumirla, así que no hay doble procesamiento posible.
   useEffect(() => {
-    if (consumedTaskLinkRef.current || !hydrated) return;
+    if (!hydrated) return;
     try {
       const taskId = localStorage.getItem('owa_study_task_id');
       if (!taskId) return;
       const found = (tasks || []).find(t => t && t.id === taskId);
       if (found) {
-        // Vincula SIEMPRE, aunque haya sesión planificada activa: el crédito de
-        // tiempo de la tarea y la sesión planificada son sistemas independientes.
-        consumedTaskLinkRef.current = true;
         setActiveTaskId(taskId);
         addNotification(`Estudiando: ${found.title}`, 'success');
-        localStorage.removeItem('owa_study_task_id');
-        localStorage.removeItem('owa_study_task_title');
-      } else if (!found) {
-        // tareas ya hidratadas y la tarea no existe → consumir y avisar
-        consumedTaskLinkRef.current = true;
+      } else {
         addNotification('La tarea vinculada ya no existe.', 'info');
-        localStorage.removeItem('owa_study_task_id');
-        localStorage.removeItem('owa_study_task_title');
       }
+      localStorage.removeItem('owa_study_task_id');
+      localStorage.removeItem('owa_study_task_title');
     } catch (e) {
       console.error(e);
     }
-  }, [hydrated, tasks, activePlannedSessionId]);
+  }, [hydrated, tasks]);
 
   useEffect(() => {
     if (isRest && restElapsed >= currentBreakLimit && !breakNotifiedRef.current) {

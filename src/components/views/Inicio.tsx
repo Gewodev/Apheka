@@ -109,6 +109,18 @@ interface GoalEvent {
 
 const GOAL_KEY = 'owa_planned_goal';
 
+// Mapea una sesión de estudio planificada al shape de GoalEvent (para
+// "Siguientes" y para que el Destacado pueda apuntar a una sesión).
+function mapSessionToGoal(s: any, courses: any[]): GoalEvent | null {
+  if (!s || !s.date) return null;
+  const color = courses.find((c: any) => c.id === s.courseId)?.color || '#8B5CF6';
+  return {
+    id: s.id, title: s.title, date: s.date, startTime: s.startTime || undefined, allDay: false,
+    color, repeat: s.repeat, repeatDays: s.repeatDays, repeatUntil: s.repeatUntil,
+    exceptions: s.exceptions, _session: true, durationMinutes: s.durationMinutes,
+  };
+}
+
 // Proyecta el evento destacado (Destacado) sobre la fecha de SU PRÓXIMA
 // ocurrencia, buscando en TODO el conjunto — no en la lista acotada de
 // "Siguientes" (si el evento queda fuera de los primeros 5, igual sigue
@@ -309,6 +321,7 @@ export default function Inicio() {
       const evs = await loadPlannerEvents();
       if (!alive) return;
       const list = computeUpcomingFrom(evs, plannedSessions);
+      const sessMapped = (plannedSessions || []).map((s: any) => mapSessionToGoal(s, courses)).filter(Boolean);
       setUpcomingEvents(list);
       // Destacado: se proyecta sobre TODO el conjunto de eventos (la lista de
       // "Siguientes" está acotada a 5 y no decide si el destacado vive o muere).
@@ -317,7 +330,7 @@ export default function Inicio() {
       try {
         const gid = localStorage.getItem(GOAL_KEY);
         if (gid) {
-          const projected = projectGoal(evs, gid);
+          const projected = projectGoal([...evs, ...sessMapped], gid);
           if (projected) {
             goalMissRef.current = 0;
             lastGoalRef.current = projected;
