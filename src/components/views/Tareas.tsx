@@ -128,7 +128,7 @@ function SortableCalendarTask({ task, children }: { task: Task; children: (dragP
 }
 
 export default function Tareas() {
-  const { tasks, courses, notes, addTask, updateTask, toggleTaskStatus, deleteTask, addSubTask, toggleSubTask, deleteSubTask, addTaskFile, removeTaskFile, clearAllTasks, addNotification, setNavigateTo, focusedTaskId, setFocusedTaskId, settings, addNote, updateNote, activePlannedSessionId, activeTaskId, setPipUrl } = useApp();
+  const { tasks, courses, notes, addTask, updateTask, toggleTaskStatus, deleteTask, addSubTask, toggleSubTask, deleteSubTask, addTaskFile, removeTaskFile, clearAllTasks, addNotification, setNavigateTo, focusedTaskId, setFocusedTaskId, settings, addNote, updateNote, activePlannedSessionId, activeTaskId, setPipUrl, linkTaskToTimer } = useApp();
   const th = document.documentElement.getAttribute('data-theme');
   const isDarkSelect = !th || th === 'oscuro' || th === 'vibrante';
   const selectBorder = isDarkSelect ? '1px solid rgba(255,255,255,0.12)' : '1px solid rgba(0,0,0,0.12)';
@@ -1676,8 +1676,7 @@ export default function Tareas() {
                             {!st.done && (
                               <button onClick={() => {
                                 try {
-                                  localStorage.setItem('owa_study_task_id', selectedTask.id);
-                                  localStorage.setItem('owa_study_task_title', `${selectedTask.title} — ${st.title}`);
+                                  linkTaskToTimer(selectedTask.id);
                                 } catch (e) {
                                   addNotification('No se pudo vincular la subtarea (almacenamiento lleno).', 'error');
                                   console.error(e);
@@ -1905,17 +1904,9 @@ export default function Tareas() {
                   return (
                 <button
                   onClick={() => {
-                    // Vincular SIEMPRE funciona: si había otra tarea (o sesión)
-                    // vinculada, esta la REEMPLAZA. Cero dependencias invisibles.
-                    if (replacing) addNotification('Tarea anterior desvinculada — ahora estudias esta.', 'info');
-                    try {
-                      localStorage.setItem('owa_study_task_id', selectedTask.id);
-                      localStorage.setItem('owa_study_task_title', selectedTask.title);
-                    } catch (e) {
-                      addNotification('No se pudo vincular la tarea (almacenamiento lleno). Libera espacio e inténtalo de nuevo.', 'error');
-                      console.error(e);
-                      return;
-                    }
+                    // Vinculación DIRECTA por contexto: reemplaza lo que haya
+                    // (tarea o sesión) sin puente por localStorage.
+                    linkTaskToTimer(selectedTask.id);
                     setSelectedTaskId(null);
                     setNavigateTo('estudio');
                   }}

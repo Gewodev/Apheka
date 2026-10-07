@@ -3774,9 +3774,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const linkTaskToTimer = useCallback((taskId: string) => {
+    // Reemplazo total: si hay sesión planificada vinculada, se libera primero.
+    // Nunca se niega un vínculo nuevo.
     if (activePlannedSessionIdRef.current) {
-      addNotification('Ya hay una sesión de estudio vinculada al temporizador. Desvincula esa sesión para estudiar esta tarea.', 'info');
-      return;
+      setActivePlannedSessionId(null);
+      addNotification('Sesión planificada desvinculada — ahora estudias esta tarea.', 'info');
     }
     setActiveTaskId(taskId);
     setTimerLocked(true);
@@ -3788,9 +3790,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const linkPlannedSessionToTimer = useCallback((id: string) => {
+    // Reemplazo total simétrico: si hay tarea vinculada, se libera primero.
     if (activeTaskIdRef.current) {
-      addNotification('Ya hay una tarea vinculada al temporizador. Desvincula esa tarea para iniciar esta sesión.', 'info');
-      return;
+      setActiveTaskId(null);
+      addNotification('Tarea anterior desvinculada — ahora corresponde esta sesión.', 'info');
     }
     setActivePlannedSessionId(id);
     setTimerLocked(true);

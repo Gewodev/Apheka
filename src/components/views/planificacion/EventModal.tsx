@@ -463,7 +463,8 @@ export default function EventModal({
                 </button>
               );
               return (
-                <div style={{ display: 'flex', gap: 14 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <div style={{ display: 'flex', gap: 14, alignItems: 'stretch' }}>
                   <div style={{ flex: 1 }}>
                     <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 8 }}>Hora de inicio</label>
                     <div tabIndex={0}
@@ -494,39 +495,40 @@ export default function EventModal({
                       </div>
                     </div>
                   </div>
-                  <div style={{ width: 150 }}>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 8 }}>Durará</label>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                      <button onClick={() => setDuration(Math.max(5, duration - 5))} title="-5 min"
-                        style={{ width: 32, height: 44, borderRadius: 10, border: '1px solid var(--border-soft)', background: 'var(--surface-elevated)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, transition: 'all 150ms' }}
-                        onMouseEnter={e => { e.currentTarget.style.color = color; e.currentTarget.style.borderColor = color; }}
-                        onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.borderColor = 'var(--border-soft)'; }}>
-                        <Minus size={13} />
-                      </button>
-                      <div style={{ flex: 1, height: 44, borderRadius: 10, border: '1px solid var(--border-soft)', background: 'var(--surface-elevated)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                        <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'JetBrains Mono', monospace", lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{duration}</span>
-                        <span style={{ fontSize: 8, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', marginTop: 2 }}>MIN</span>
-                      </div>
-                      <button onClick={() => setDuration(Math.min(720, duration + 5))} title="+5 min"
-                        style={{ width: 32, height: 44, borderRadius: 10, border: '1px solid var(--border-soft)', background: 'var(--surface-elevated)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, transition: 'all 150ms' }}
-                        onMouseEnter={e => { e.currentTarget.style.color = color; e.currentTarget.style.borderColor = color; }}
-                        onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.borderColor = 'var(--border-soft)'; }}>
-                        <Plus size={13} />
-                      </button>
-                    </div>
-                    <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
-                      {[15, 30, 60, 90].map((mins: number) => (
-                        <button key={mins} onClick={() => setDuration(mins)}
-                          style={{ flex: 1, padding: '3px 0', borderRadius: 6, fontSize: 9.5, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", cursor: 'pointer', border: duration === mins ? '1px solid ' + color : '1px solid var(--border-soft)', background: duration === mins ? color + '14' : 'transparent', color: duration === mins ? color : 'var(--text-muted)', transition: 'all 130ms' }}>
-                          {mins}
-                        </button>
-                      ))}
-                    </div>
+                  <div style={{ width: 118, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 5, borderRadius: 10, border: '1px solid var(--border-soft)', background: color + '0a' }}>
+                    <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Termina</span>
+                    <span style={{ fontSize: 20, fontWeight: 700, color, fontFamily: "'JetBrains Mono', monospace", fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{end}</span>
                   </div>
-                  <div style={{ width: 118, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Termina</span>
-                    <span style={{ fontSize: 19, fontWeight: 700, color, fontFamily: "'JetBrains Mono', monospace", fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{end}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>Durará</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <button onClick={() => setDuration(Math.max(5, duration - 5))} title="-5 min"
+                      style={{ width: 30, height: 38, borderRadius: 9, border: '1px solid var(--border-soft)', background: 'var(--surface-elevated)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, transition: 'all 150ms' }}
+                      onMouseEnter={e => { e.currentTarget.style.color = color; e.currentTarget.style.borderColor = color; }}
+                      onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.borderColor = 'var(--border-soft)'; }}>
+                      <Minus size={13} />
+                    </button>
+                    <div style={{ width: 66, height: 38, borderRadius: 9, border: '1px solid var(--border-soft)', background: 'var(--surface-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'JetBrains Mono', monospace", fontVariantNumeric: 'tabular-nums' }}>{duration}</span>
+                      <span style={{ fontSize: 8, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.06em' }}>MIN</span>
+                    </div>
+                    <button onClick={() => setDuration(Math.min(720, duration + 5))} title="+5 min"
+                      style={{ width: 30, height: 38, borderRadius: 9, border: '1px solid var(--border-soft)', background: 'var(--surface-elevated)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, transition: 'all 150ms' }}
+                      onMouseEnter={e => { e.currentTarget.style.color = color; e.currentTarget.style.borderColor = color; }}
+                      onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.borderColor = 'var(--border-soft)'; }}>
+                      <Plus size={13} />
+                    </button>
                   </div>
+                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                    {[15, 30, 45, 60, 90, 120].map((mins: number) => (
+                      <button key={mins} onClick={() => setDuration(mins)}
+                        style={{ padding: '5px 9px', borderRadius: 7, fontSize: 10, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", cursor: 'pointer', border: duration === mins ? '1px solid ' + color : '1px solid var(--border-soft)', background: duration === mins ? color + '14' : 'transparent', color: duration === mins ? color : 'var(--text-muted)', transition: 'all 130ms' }}>
+                        {mins}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 </div>
               );
             })()}

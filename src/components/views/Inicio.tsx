@@ -357,11 +357,16 @@ export default function Inicio() {
       const t = new Date(goalEvent.date + 'T' + (goalEvent.startTime || '23:59'));
       const diff = t.getTime() - Date.now();
       if (diff <= 0) {
-        // Expiró → el destacado se libera LIMPIO. Sin re-anclar otros eventos
-        // por su cuenta (eso competía con lo que el usuario ancla).
-        try { localStorage.removeItem(GOAL_KEY); } catch { }
-        setGoalEvent(null);
-        setGoalExpired(false);
+        // La HORA pasó hoy → se queda anclado (estado expirado visible);
+        // solo cuando la FECHA es estrictamente anterior se libera del todo.
+        const todayStr = format(new Date(), 'yyyy-MM-dd');
+        if (goalEvent.date < todayStr) {
+          try { localStorage.removeItem(GOAL_KEY); } catch { }
+          setGoalEvent(null);
+          setGoalExpired(false);
+        } else {
+          setGoalExpired(true);
+        }
         setGoalCountdown({ days: 0, hours: 0, minutes: 0, seconds: 0 });
         return;
       }
