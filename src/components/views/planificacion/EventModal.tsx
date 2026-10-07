@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Calendar, CalendarClock, Clock, Plus, Trash2, Repeat, Check, Music, Image, File, Globe, Upload, Link2 } from 'lucide-react';
+import { X, Calendar, CalendarClock, Clock, Plus, Trash2, Repeat, Check, Music, Image, File, Globe, Upload, Link2, ChevronUp, ChevronDown, Minus } from 'lucide-react';
 import { format } from 'date-fns';
 
 import { GoogleClassroomIcon, GoogleDriveIcon, GoogleDocsIcon, GoogleSheetsIcon, GoogleSlidesIcon, GoogleFormsIcon, WordIcon, ExcelIcon, PowerPointIcon } from '../../ui/GoogleIcons';
@@ -131,7 +131,27 @@ export default function EventModal({
   const [allDay, setAllDay] = useState(event?.allDay ?? defaults.allDay ?? false);
   const [date, setDate] = useState(occurrenceDate || event?.date || defaults.date || format(new Date(), 'yyyy-MM-dd'));
   const [start, setStart] = useState(event?.startTime || defaults.startTime || '09:00');
-  const [end, setEnd] = useState(event?.endTime || defaults.endTime || '10:00');
+  // Duración en minutos (la hora de FIN se CALCULA: inicio + duración)
+  const [duration, setDuration] = useState<number>(() => {
+    if (event?.startTime && event?.endTime) {
+      const [sh, sm] = event.startTime.split(':').map(Number);
+      const [eh, em] = event.endTime.split(':').map(Number);
+      const d = (eh * 60 + em) - (sh * 60 + sm);
+      if (d > 0) return d;
+    }
+    return 60;
+  });
+  const computeEnd = (s: string, mins: number): string => {
+    const [h, m] = s.split(':').map(Number);
+    const t = ((h * 60 + m + mins) % 1440 + 1440) % 1440;
+    return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+  };
+  const end = computeEnd(start, duration);
+  const shiftStart = (unit: 'h' | 'm', dir: number) => {
+    const [h, m] = start.split(':').map(Number);
+    if (unit === 'h') { const nh = (h + dir + 24) % 24; setStart(`${String(nh).padStart(2, '0')}:${String(m).padStart(2, '0')}`); }
+    else { const nm = (m + dir * 5 + 60) % 60; setStart(`${String(h).padStart(2, '0')}:${String(nm).padStart(2, '0')}`); }
+  };
   const [courseId, setCourseId] = useState(event?.courseId || defaults.courseId || '');
   const [color, setColor] = useState(event?.color || (defaults.courseId ? courses.find(c => c.id === defaults.courseId)?.color || '#E11D48' : '#E11D48'));
   const [desc, setDesc] = useState(event?.description || '');
@@ -170,8 +190,6 @@ export default function EventModal({
     if (taskMismatch.hasTime && taskMismatch.taskTime) {
       if (allDay) setAllDay(false);
       setStart(taskMismatch.taskTime);
-      const [h, m] = taskMismatch.taskTime.split(':').map(Number);
-      setEnd(`${String(Math.min(h + 1, 23)).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
     }
   };
 
@@ -209,7 +227,7 @@ export default function EventModal({
       date,
       allDay,
       startTime: allDay ? '00:00' : start,
-      endTime: allDay ? '23:59' : end,
+      endTime: allDay ? '23:59' : computeEnd(start, duration),
       courseId: courseId || undefined,
       color,
       description: desc || undefined,
@@ -228,7 +246,7 @@ export default function EventModal({
       const hasOtherChanges = event.title !== title.trim() ||
         event.allDay !== allDay ||
         (allDay ? '00:00' : start) !== event.startTime ||
-        (allDay ? '23:59' : end) !== event.endTime ||
+        (allDay ? '23:59' : computeEnd(start, duration)) !== event.endTime ||
         event.color !== color ||
         (event.description || '') !== desc ||
         (event.taskId || '') !== taskId ||
@@ -433,23 +451,85 @@ export default function EventModal({
               </div>
             </div>
 
-            {/* Time */}
-            {!allDay && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 8 }}>Inicio</label>
-                  <input type="time" value={start}
-                    onChange={e => setStart(e.target.value)}
-                    style={{ width: '100%', fontSize: 15, height: 44, background: 'var(--surface-elevated)', border: selectBorder, borderRadius: 10, padding: '0 14px', color: 'var(--text-primary)', outline: 'none', colorScheme: 'dark', fontVariantNumeric: 'tabular-nums', fontFamily: "'JetBrains Mono', monospace" }} />
+            {/* Hora de inicio (stepper dinámico) + Durará → fin calculado */}
+            {!allDay && (() => {
+              const ChevBtn = ({ dir, unit }: { dir: 1 | -1; unit: 'h' | 'm' }) => (
+                <button onClick={() => shiftStart(unit, dir)} tabIndex={-1}
+                  title={unit === 'h' ? (dir > 0 ? '+1 hora' : '-1 hora') : (dir > 0 ? '+5 minutos' : '-5 minutos')}
+                  style={{ width: '100%', height: 18, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, transition: 'color 150ms' }}
+                  onMouseEnter={e => { e.currentTarget.style.color = color; }}
+                  onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; }}>
+                  {dir > 0 ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </button>
+              );
+              return (
+                <div style={{ display: 'flex', gap: 14 }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 8 }}>Hora de inicio</label>
+                    <div tabIndex={0}
+                      onKeyDown={e => {
+                        if (e.key === 'ArrowUp') { e.preventDefault(); shiftStart('h', 1); }
+                        else if (e.key === 'ArrowDown') { e.preventDefault(); shiftStart('h', -1); }
+                        else if (e.key === 'ArrowRight') { e.preventDefault(); shiftStart('m', 1); }
+                        else if (e.key === 'ArrowLeft') { e.preventDefault(); shiftStart('m', -1); }
+                      }}
+                      title="Flechas: arriba/abajo horas, izquierda/derecha minutos"
+                      style={{ display: 'flex', alignItems: 'stretch', borderRadius: 10, border: selectBorder, background: 'var(--surface-elevated)', overflow: 'hidden', outline: 'none' }}
+                      onFocus={e => { e.currentTarget.style.borderColor = color; }}
+                      onBlur={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; }}>
+                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '2px 0' }}>
+                        <ChevBtn dir={1} unit="h" />
+                        <span style={{ height: 34, display: 'flex', alignItems: 'center', fontFamily: "'JetBrains Mono', monospace", fontSize: 17, fontWeight: 700, color, fontVariantNumeric: 'tabular-nums' }}>
+                          {String(Number(start.split(':')[0])).padStart(2, '0')}
+                        </span>
+                        <ChevBtn dir={-1} unit="h" />
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', width: 16, justifyContent: 'center', fontSize: 16, fontWeight: 700, color: 'var(--text-tertiary)', fontFamily: "'JetBrains Mono', monospace" }}>:</div>
+                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '2px 0' }}>
+                        <ChevBtn dir={1} unit="m" />
+                        <span style={{ height: 34, display: 'flex', alignItems: 'center', fontFamily: "'JetBrains Mono', monospace", fontSize: 17, fontWeight: 700, color, fontVariantNumeric: 'tabular-nums' }}>
+                          {String(Number(start.split(':')[1])).padStart(2, '0')}
+                        </span>
+                        <ChevBtn dir={-1} unit="m" />
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ width: 150 }}>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 8 }}>Durará</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <button onClick={() => setDuration(Math.max(5, duration - 5))} title="-5 min"
+                        style={{ width: 32, height: 44, borderRadius: 10, border: '1px solid var(--border-soft)', background: 'var(--surface-elevated)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, transition: 'all 150ms' }}
+                        onMouseEnter={e => { e.currentTarget.style.color = color; e.currentTarget.style.borderColor = color; }}
+                        onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.borderColor = 'var(--border-soft)'; }}>
+                        <Minus size={13} />
+                      </button>
+                      <div style={{ flex: 1, height: 44, borderRadius: 10, border: '1px solid var(--border-soft)', background: 'var(--surface-elevated)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                        <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'JetBrains Mono', monospace", lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{duration}</span>
+                        <span style={{ fontSize: 8, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', marginTop: 2 }}>MIN</span>
+                      </div>
+                      <button onClick={() => setDuration(Math.min(720, duration + 5))} title="+5 min"
+                        style={{ width: 32, height: 44, borderRadius: 10, border: '1px solid var(--border-soft)', background: 'var(--surface-elevated)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, transition: 'all 150ms' }}
+                        onMouseEnter={e => { e.currentTarget.style.color = color; e.currentTarget.style.borderColor = color; }}
+                        onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.borderColor = 'var(--border-soft)'; }}>
+                        <Plus size={13} />
+                      </button>
+                    </div>
+                    <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
+                      {[15, 30, 60, 90].map((mins: number) => (
+                        <button key={mins} onClick={() => setDuration(mins)}
+                          style={{ flex: 1, padding: '3px 0', borderRadius: 6, fontSize: 9.5, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", cursor: 'pointer', border: duration === mins ? '1px solid ' + color : '1px solid var(--border-soft)', background: duration === mins ? color + '14' : 'transparent', color: duration === mins ? color : 'var(--text-muted)', transition: 'all 130ms' }}>
+                          {mins}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div style={{ width: 118, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Termina</span>
+                    <span style={{ fontSize: 19, fontWeight: 700, color, fontFamily: "'JetBrains Mono', monospace", fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{end}</span>
+                  </div>
                 </div>
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 8 }}>Fin</label>
-                  <input type="time" value={end}
-                    onChange={e => setEnd(e.target.value)}
-                    style={{ width: '100%', fontSize: 15, height: 44, background: 'var(--surface-elevated)', border: selectBorder, borderRadius: 10, padding: '0 14px', color: 'var(--text-primary)', outline: 'none', colorScheme: 'dark', fontVariantNumeric: 'tabular-nums', fontFamily: "'JetBrains Mono', monospace" }} />
-                </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
 
           {/* Repeat */}

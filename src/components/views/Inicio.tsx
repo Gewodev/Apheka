@@ -357,17 +357,11 @@ export default function Inicio() {
       const t = new Date(goalEvent.date + 'T' + (goalEvent.startTime || '23:59'));
       const diff = t.getTime() - Date.now();
       if (diff <= 0) {
-        // Expiró → AUTO-AVANCE al siguiente de la lista futura
-        localStorage.removeItem(GOAL_KEY);
-        const next = upcomingEvents.find(u => u.id !== goalEvent.id && u.date >= format(new Date(), 'yyyy-MM-dd')) || null;
-        if (next) {
-          try { localStorage.setItem(GOAL_KEY, next.id); } catch { }
-          setGoalEvent(next);
-          setGoalExpired(false);
-        } else {
-          setGoalEvent(null);
-          setGoalExpired(false);
-        }
+        // Expiró → el destacado se libera LIMPIO. Sin re-anclar otros eventos
+        // por su cuenta (eso competía con lo que el usuario ancla).
+        try { localStorage.removeItem(GOAL_KEY); } catch { }
+        setGoalEvent(null);
+        setGoalExpired(false);
         setGoalCountdown({ days: 0, hours: 0, minutes: 0, seconds: 0 });
         return;
       }

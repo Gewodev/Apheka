@@ -3,7 +3,7 @@ import LiveClock from '../ui/LiveClock';
 import { createPortal } from 'react-dom';
 import {
   Plus, Search, Check, Trash2,
-  ChevronRight, CalendarDays,
+  ChevronRight, CalendarDays, ChevronUp,
   Clock, List as ListIcon, FileText,
   Link, Video, File, X, Upload, Link2,
   ExternalLink,   Eye, EyeOff, Filter,
@@ -1562,20 +1562,41 @@ export default function Tareas() {
                           style={{ background: 'transparent', border: 'none', outline: 'none', fontSize: 10.5, fontWeight: 600, color: dateColor, cursor: 'text', colorScheme: scheme, fontFamily: "'JetBrains Mono', monospace", padding: 0, width: dateVal ? 94 : 84 }}
                         />
                       </div>
-                      {/* Hora (pastilla propia, activa al elegir fecha) */}
-                      {dateVal && (
-                        <div style={{ ...pillBase, gap: 7, background: hasTime ? 'var(--bg-surface)' : 'var(--bg-elevated)', border: `1px solid ${hasTime ? `${taskColor}30` : 'var(--border-soft)'}` }}
-                          onMouseEnter={e => { e.currentTarget.style.borderColor = hasTime ? `${taskColor}55` : 'var(--border-hover)'; }}
-                          onMouseLeave={e => { e.currentTarget.style.borderColor = hasTime ? `${taskColor}30` : 'var(--border-soft)'; }}>
-                          <Clock size={12} style={{ color: hasTime ? taskColor : 'var(--text-muted)', flexShrink: 0 }} />
-                          <input type="time"
-                            value={timeVal}
-                            onChange={e => updateTask(selectedTask.id, { dueDate: `${dateVal}T${e.target.value}` })}
-                            title={hasTime ? 'Cambiar hora límite' : 'Definir hora límite'}
-                            style={{ background: 'transparent', border: 'none', outline: 'none', fontSize: 10.5, fontWeight: 600, color: hasTime ? 'var(--text-primary)' : 'var(--text-muted)', cursor: 'text', colorScheme: scheme, fontFamily: "'JetBrains Mono', monospace", padding: 0, width: 60 }}
-                          />
-                        </div>
-                      )}
+                      {/* Hora: flechas dinámicas ±15 min · clic en el reloj para quitar/poner hora */}
+                      {dateVal && (() => {
+                        const shiftTime = (mins: number) => {
+                          const base = hasTime ? timeVal : '18:00';
+                          const [h, m] = base.split(':').map(Number);
+                          const t = ((h * 60 + m + mins) % 1440 + 1440) % 1440;
+                          const hh = String(Math.floor(t / 60)).padStart(2, '0');
+                          const mm = String(t % 60).padStart(2, '0');
+                          updateTask(selectedTask.id, { dueDate: `${dateVal}T${hh}:${mm}` });
+                        };
+                        return (
+                          <div style={{ ...pillBase, gap: 5, padding: '0 7px', background: hasTime ? 'var(--bg-surface)' : 'var(--bg-elevated)', border: `1px solid ${hasTime ? `${taskColor}30` : 'var(--border-soft)'}` }}>
+                            <button onClick={() => shiftTime(15)} title="Subir hora (+15 min)" tabIndex={-1}
+                              style={{ width: 16, height: 16, borderRadius: 4, border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
+                              onMouseEnter={e => { e.currentTarget.style.color = taskColor; }}
+                              onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; }}>
+                              <ChevronUp size={11} />
+                            </button>
+                            <span style={{ display: 'flex', flexShrink: 0, cursor: 'pointer' }}
+                              onClick={() => updateTask(selectedTask.id, { dueDate: hasTime ? dateVal : `${dateVal}T18:00` })}
+                              title={hasTime ? 'Quitar hora (solo fecha)' : 'Añadir hora límite (18:00)'}>
+                              <Clock size={12} style={{ color: hasTime ? taskColor : 'var(--text-muted)' }} />
+                            </span>
+                            <span style={{ fontSize: 10.5, fontWeight: 600, color: hasTime ? 'var(--text-primary)' : 'var(--text-muted)', fontFamily: "'JetBrains Mono', monospace", fontVariantNumeric: 'tabular-nums', minWidth: 38, textAlign: 'center' }}>
+                              {hasTime ? timeVal : '--:--'}
+                            </span>
+                            <button onClick={() => shiftTime(-15)} title="Bajar hora (−15 min)" tabIndex={-1}
+                              style={{ width: 16, height: 16, borderRadius: 4, border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
+                              onMouseEnter={e => { e.currentTarget.style.color = taskColor; }}
+                              onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; }}>
+                              <ChevronDown size={11} />
+                            </button>
+                          </div>
+                        );
+                      })()}
                       {/* Estado (vence en / atrasado) — chip aparte */}
                       {tr && (
                         <div style={{ ...pillBase, gap: 6, height: 30, padding: '0 11px', background: tr.overdue ? 'rgba(239,68,68,0.08)' : tr.urgent ? 'rgba(245,158,11,0.08)' : 'var(--bg-elevated)', border: `1px solid ${tr.overdue ? 'rgba(239,68,68,0.3)' : tr.urgent ? 'rgba(245,158,11,0.3)' : 'var(--border-soft)'}` }}>
