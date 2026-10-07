@@ -142,7 +142,14 @@ function buildPrompt(mode: ToolDeckMode, tema: string, nivel: string, n: number,
     seqDeck: `${n} secuencias ordenadas de pasos, etapas o eventos (entre 3 y 6 pasos cada una)`,
     catDeck: `${n} elementos con su categoría correcta, usando entre 2 y 4 categorías en total`,
   };
-  let p = `Actúa como creador experto de material de estudio. Genera exactamente ${objetivo[mode]} sobre "${tema}" (nivel ${nivel}), en español.\n\n`;
+  const auto = n <= 0;
+  const objetivoTxt = auto
+    ? objetivo[mode].replace(/^\d+/, '').trim()
+    : objetivo[mode];
+  const cant = auto
+    ? `todas las entradas que consideres necesarias para cubrir bien "${tema}" (juzga tú la cantidad según la amplitud del tema; mínimo 5)`
+    : `exactamente ${objetivoTxt}`;
+  let p = `Actúa como creador experto de material de estudio. Genera ${cant} sobre "${tema}" (nivel ${nivel}), en español.\n\n`;
   p += `REGLA DE ALCANCE: aborda EXCLUSIVAMENTE el tema "${tema}" tal como se nombra. No des historia, contexto previo ni temas relacionados que el título no pida directamente. Sé exacto, amplio únicamente dentro del tema y responde de frente a lo que el tema plantea.\n\n`;
   p += `FORMATO DE RESPUESTA OBLIGATORIO — una entrada por línea, exactamente así:\n${fmt[mode]}\n\n`;
   p += 'Reglas: sin numeración, sin viñetas, sin markdown, sin títulos, sin explicaciones adicionales. Responde SOLO con las líneas en el formato indicado.';
@@ -154,9 +161,10 @@ function PromptPanel({ mode, accent, defaults, exclude }: { mode: ToolDeckMode; 
   const [tema, setTema] = useState(defaults.tema);
   const [nivel, setNivel] = useState('intermedio');
   const [n, setN] = useState(10);
+  const [autoN, setAutoN] = useState(false);
   const [useExclude, setUseExclude] = useState(exclude.length > 0);
   const [copied, setCopied] = useState(false);
-  const prompt = buildPrompt(mode, tema.trim() || defaults.tema, nivel, n, useExclude ? exclude : []);
+  const prompt = buildPrompt(mode, tema.trim() || defaults.tema, nivel, autoN ? 0 : n, useExclude ? exclude : []);
   const copy = () => {
     navigator.clipboard.writeText(prompt)
       .then(() => { setCopied(true); setTimeout(() => setCopied(false), 1700); })
@@ -176,10 +184,14 @@ function PromptPanel({ mode, accent, defaults, exclude }: { mode: ToolDeckMode; 
           <option value="intermedio">Intermedio</option>
           <option value="avanzado">Avanzado</option>
         </select>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, height: 34, borderRadius: 9, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', padding: '0 6px' }}>
-          <button onClick={() => setN(v => Math.max(3, v - 1))} style={{ width: 24, height: 24, borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 13 }}>−</button>
-          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', minWidth: 22, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>{n}</span>
-          <button onClick={() => setN(v => Math.min(30, v + 1))} style={{ width: 24, height: 24, borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 13 }}>+</button>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+          <input type="checkbox" checked={autoN} onChange={e => setAutoN(e.target.checked)} style={{ accentColor: accent }} />
+          Según considere
+        </label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, height: 34, borderRadius: 9, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', padding: '0 6px', opacity: autoN ? 0.4 : 1, transition: 'opacity 150ms' }}>
+          <button onClick={() => setN(v => Math.max(3, v - 1))} disabled={autoN} style={{ width: 24, height: 24, borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: autoN ? 'default' : 'pointer', fontSize: 13 }}>−</button>
+          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', minWidth: 22, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>{autoN ? 'auto' : n}</span>
+          <button onClick={() => setN(v => Math.min(30, v + 1))} disabled={autoN} style={{ width: 24, height: 24, borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: autoN ? 'default' : 'pointer', fontSize: 13 }}>+</button>
         </div>
       </div>
       {exclude.length > 0 && (
