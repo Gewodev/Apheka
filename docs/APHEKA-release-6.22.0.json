@@ -1,0 +1,41 @@
+{
+  "version": "6.22.0",
+  "artifact": {
+    "product": "APHEKA",
+    "version": "6.22.0",
+    "identifier": "com.owa.studio",
+    "file": "apheka_FINAL.exe",
+    "bytes": 80308034,
+    "sha256": "F046EB00E591DD41096051FAE2A092B1C2AEFB1A3599EDBE93AF1657B5D0EDA9",
+    "modifiedAtUtc": "2026-10-31T02:38:21.1440078Z",
+    "sourceLatestEditUtc": "2026-10-31T02:28:28.7576279Z",
+    "manifestRewrittenBeforeFrontend": true,
+    "buildCommand": "pnpm tauri build --config src-tauri/tauri.prod.conf.json --bundles nsis",
+    "embeddedFrontendAssets": [
+      "assets/index-BU5dDjAF.js",
+      "assets/charts-DQ4Dkqgr.js",
+      "assets/anim-DmwEpK7h.js",
+      "assets/tauri-n5oGK82Q.js",
+      "assets/storage-DwnyWBFG.js",
+      "assets/audio-meta-CT9Hv6Ta.js",
+      "assets/date-COeAPjBE.js",
+      "assets/markdown-DGHZfuZo.js",
+      "assets/index-DmMsX83J.css"
+    ],
+    "legacyUpgrade": "Exact NSIS product identities and MSI upgrade GUIDs; /UPDATE preserves AppData",
+    "dataDirectory": "com.owa.studio (existing desktop data directory retained)"
+  },
+  "embeddedViews": 9,
+  "toolCopies": 3,
+  "nativeTests": {
+    "passed": 28,
+    "failed": 0
+  },
+  "frontend": "TypeScript and production build passed",
+  "tasks": "long/short tasks, inline steps, editable per-step times, retained custom durations, total calculation, real timer links; list, board and urgency regression passed",
+  "notes": "selection border and tag styling; card/editor and note/task connection regression passed",
+  "music": "five-row queue with thumbnail drag, exact prior queue through discovery, scoped filters, artwork, natural lyric follow, seek and full-cover return passed",
+  "course": "preview, saved edit, recurring totals, delete cancellation and timer link passed on production at 1366/900/420",
+  "charvis": "controlled provider responses exercised actual task read/update, cancellation, approval, safety backup, durable save, history, audio transport and 1366/420 layout",
+  "limitations": "Provider credentials were not available for live account chat/transcription verification. Existing external MCP client connection is not asserted. Tests used isolated profiles and controlled network fixtures."
+}

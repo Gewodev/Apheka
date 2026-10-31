@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useApp } from '../store/AppContext';
+import { useAppSlice } from '../store/AppContext';
 
 /**
  * Hook encapsulating the timer logic for the Estudio view.
@@ -36,7 +36,7 @@ export function useTimer() {
     addNotification,
     distractionCount,
     accumulatedPauseTime,
-  } = useApp();
+  } = useAppSlice(["settings","incrementPomodoroSessions","addStudySession","isTimerActive","setIsTimerActive","sessionTime","setSessionTime","dailyStudyTime","setDailyStudyTime","weeklyStudyTime","setWeeklyStudyTime","activeTaskId","tasks","setTasks","isRest","setIsRest","sessionType","setSessionType","pomodoroSessions","setPomodoroSessions","showCompletion","setShowCompletion","resetTimer","addNotification","distractionCount","accumulatedPauseTime"]);
 
   // Local UI state
   const [chronoRoundCounted, setChronoRoundCounted] = useState(false);
@@ -54,6 +54,7 @@ export function useTimer() {
     if (
       isTimerActive &&
       sessionType === 'chrono' &&
+      chronoGoal > 0 &&
       sessionTime >= chronoGoal &&
       !chronoRoundCounted
     ) {

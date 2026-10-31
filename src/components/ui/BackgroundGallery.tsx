@@ -1,0 +1,7 @@
+import React from 'react';
+import {Check,ImageOff} from 'lucide-react';
+import {useAppSlice} from '../../store/AppContext';
+const scenes=[['bruma','Bruma','Un horizonte tranquilo'],['dunas','Dunas','Arena y luz cálida'],['bosque','Bosque','Verdes de baja intensidad'],['orbita','Órbita','Geometría y noche']];
+function BackgroundGallery(){const {settings,updateSettings}=useAppSlice(['settings','updateSettings']);return <section className="background-gallery" aria-label="Galería de fondos"><div><h4>Un fondo para tu espacio</h4><p>Escenas locales, sin descargas ni animaciones continuas. Puedes seguir usando tu propia imagen.</p></div><div className="background-scene-strip">{scenes.map(([id,name,description])=>{const src='/wallpapers/'+id+'.svg',selected=settings.backgroundImage===src;return <button key={id} aria-pressed={selected} onClick={()=>updateSettings({backgroundImage:src,backgroundImagePath:undefined,appearanceMode:'image',paletteImageKey:undefined})}><img src={src} alt=""/><span><strong>{name}</strong><small>{description}</small></span>{selected&&<Check size={16}/>}</button>;})}<button className="background-none" aria-pressed={!settings.backgroundImage} onClick={()=>updateSettings({backgroundImage:undefined,backgroundImagePath:undefined})}><ImageOff size={28}/><span><strong>Sin fondo</strong><small>Superficie limpia</small></span></button></div></section>;}
+
+export default React.memo(BackgroundGallery);

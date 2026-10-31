@@ -1,3 +1,4 @@
+import {useAppSlice} from "../../../store/AppContext";
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Plus, Trash2, Pencil, Archive, RefreshCcw, ArchiveRestore, Check, X } from 'lucide-react';
 import { useApp, Habit } from '../../../store/AppContext';
@@ -6,7 +7,7 @@ import { startOfWeek, addDays, startOfToday, isBefore, format } from 'date-fns';
 const DAYS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 
 export default function HabitsView() {
-  const { habits, addHabit, updateHabit, deleteHabit } = useApp();
+  const { habits, addHabit, updateHabit, deleteHabit } = useAppSlice(["habits","addHabit","updateHabit","deleteHabit"]);
   const [isEditing, setIsEditing] = useState(false);
   const [isStreakView, setIsStreakView] = useState(false);
   const [isArchiveMode, setIsArchiveMode] = useState(false);

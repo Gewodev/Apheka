@@ -1,0 +1,27 @@
+import assert from 'node:assert/strict';
+import {assessTasks,chooseStudyTask,taskDeadline} from '../src/lib/taskIntelligence.ts';
+import type {Task} from '../src/store/AppContext.tsx';
+const now=new Date(2026,9,29,12).getTime();
+const make=(id:string,patch:Partial<Task>={}):Task=>({id,title:id,course:'Física',courseColor:'#78968c',status:'inicio',priority:'none',urgent:false,important:false,createdAt:new Date(now-86400000).toISOString(),estimatedMinutes:60,subtasks:[],files:[],notes:'',apuntes:'',studyTime:0,...patch});
+const tasks=[make('high-due',{priority:'high',dueDate:'2026-10-30'}),make('high-far',{priority:'high',dueDate:'2026-12-01'}),make('low-due',{priority:'low',dueDate:'2026-10-30'}),make('low-far',{priority:'low',dueDate:'2026-12-01'}),make('medium-due',{priority:'medium',dueDate:'2026-10-30'}),make('medium-far',{priority:'medium',dueDate:'2026-12-01'}),make('invalid',{priority:'high',dueDate:'2026-02-30'}),make('overdue',{dueDate:'2026-10-28'}),make('done',{priority:'high',status:'completado',dueDate:'2026-10-29'}),make('undated')];
+const result=assessTasks(tasks,{now});
+for(const [id,quadrant]of [['high-due','do'],['high-far','plan'],['low-due','resolve'],['low-far','later'],['medium-due','do'],['medium-far','later']] as const)assert.equal(result.get(id)?.quadrant,quadrant,id);
+assert.equal(result.get('invalid')?.invalidDate,true);assert.equal(result.get('invalid')?.urgent,false);
+assert.equal(result.get('overdue')?.urgency,100);assert.equal(result.get('done')?.urgent,false);assert.equal(result.get('done')?.remainingMinutes,0);
+assert.equal(result.get('undated')?.urgent,false);
+assert.equal(taskDeadline('2026-10-29'),new Date(2026,9,29,23,59,59,999).getTime());
+for(const bad of ['bad','2026-02-30','2026-13-01','2026-10-29T25:00','2026-10-29T10:90'])assert.equal(taskDeadline(bad),null,bad);
+assert.equal(taskDeadline('2026-10-29T15:00:00Z'),Date.parse('2026-10-29T15:00:00Z'));
+const progress=make('progress',{estimatedMinutes:120,studyTime:1800,subtasks:[{id:'a',title:'Primero',done:true},{id:'b',title:'Después',done:false}]});
+assert.equal(assessTasks([progress],{now,studySessions:[{id:'s',taskId:'progress',type:'pomodoro',duration:1800,startedAt:new Date(now-3600000).toISOString(),pauseCount:0,pauseDuration:0}]}).get('progress')?.remainingMinutes,60,'do not double count study logs or completed subtasks');
+assert.equal(assessTasks([make('infer',{title:'Investigar proyecto de 20 páginas',estimatedMinutes:undefined,files:[{id:'f',name:'Consigna.pdf',path:'C:/never-open-this.pdf',type:'pdf'}]})],{now}).get('infer')?.estimated,true);
+const only=make('alone',{dueDate:'2026-11-10',estimatedMinutes:120});const alone=assessTasks([only],{now,dailyGoal:60}).get('alone')!;
+const loaded=assessTasks([only,...Array.from({length:20},(_,i)=>make('work'+i,{dueDate:'2026-11-10',estimatedMinutes:120}))],{now,dailyGoal:60}).get('alone')!;
+assert.ok(loaded.urgency>alone.urgency,'workload compared to the other active tasks');
+for(let draw=0;draw<1;draw+=.05){const chosen=chooseStudyTask(tasks,result,()=>draw,now);assert.ok(['high-due','medium-due'].includes(chosen!),String(chosen));}
+assert.equal(chooseStudyTask([tasks[8]],result,()=>0,now),null);
+assert.equal(chooseStudyTask([tasks[7]],result,()=>0,now),null);
+assert.equal(chooseStudyTask([tasks[6]],result,()=>0,now),null);
+assert.equal(chooseStudyTask([make('today',{dueDate:'2026-10-29'})],assessTasks([make('today',{dueDate:'2026-10-29'})],{now}),()=>0,now),'today');
+const batch=Array.from({length:1000},(_,i)=>make('scale'+i,{dueDate:'2026-11-10'})),start=performance.now();assessTasks(batch,{now});
+console.log(`PASS task quadrants, priority semantics, local deadlines, invalid dates, progress reconciliation, inferred work, relative workload, bounded weighted choice and completed/expired exclusions; 1000 tasks: ${(performance.now()-start).toFixed(1)} ms`);

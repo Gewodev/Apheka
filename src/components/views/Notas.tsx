@@ -1,5 +1,17 @@
+import {NoteMetadata,NoteHistory} from '../ui/NoteInspector';
+import {applyEditorHighlight} from '../../lib/editorHighlight';
+import NoteEditorToolbar from '../ui/NoteEditorToolbar';
+import NoteReaderHeader from '../ui/NoteReaderHeader';
+import 'katex/dist/katex.min.css';
+import {useNotePreviewClick} from '../../hooks/useNotePreviewClick';
+import NoteDetailsPanel from '../ui/NoteDetailsPanel';
+import {useAppSlice} from "../../store/AppContext";
+import WorkspaceHeader from '../ui/WorkspaceHeader';
+import {usePanelWidth,PanelResizeHandle} from '../../hooks/usePanelWidth';
+import {beginBrainDrag,finishBrainDrag,cancelBrainDrag} from '../../lib/brainDrop';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { latexTextToHtml, upgradeLatexInText } from '../../lib/latexRender';
+import { renderMathAtCaret, editMathSource, prepareMathClipboard } from '../../lib/latex';
 import { createPortal } from 'react-dom';
 import {
   Search, Plus, Folder as FolderIcon, Pin, Trash2, FileText, Download, X, Copy, Move,
@@ -46,12 +58,12 @@ import { GoogleClassroomIcon, GoogleDriveIcon, GoogleDocsIcon, GoogleSheetsIcon,
 import { isTauri, convertFileSrc } from '@tauri-apps/api/core';
 import { createDownloadTask, updateDownloadTask, completeDownloadTask } from '../ui/DownloadManager';
 import {
-  DndContext, closestCenter, DragOverlay,
-  PointerSensor, useSensor, useSensors,
+  DndContext, closestCenter, pointerWithin, DragOverlay,
+  PointerSensor, KeyboardSensor, useSensor, useSensors,
 } from '@dnd-kit/core';
 import {
   SortableContext, useSortable, arrayMove,
-  rectSortingStrategy, verticalListSortingStrategy
+  rectSortingStrategy, verticalListSortingStrategy, sortableKeyboardCoordinates
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { restrictToParentElement, snapCenterToCursor } from '@dnd-kit/modifiers';
@@ -96,7 +108,7 @@ function saveNoteVersion(noteId: string, content: string): void {
       if (Array.isArray(parsed)) versions = parsed;
     } catch {}
 
-    if (versions.length && versions[0]?.preview === preview) return;
+    if (versions.length && versions[0]?.content === content) return;
 
     versions.unshift({
       timestamp: new Date().toISOString(),
@@ -434,7 +446,7 @@ function getWordCount(html: string): number {
 }
 
 function getCharCount(html: string): number {
-  return html.replace(/<[^>]+>/g, "").replace(/&nbsp;/g, ' ').length;
+  return html.replace(/<\/(?:p|div|h[1-6]|li|tr)>/gi, " ").replace(/<[^>]+>/g, "").replace(/&nbsp;/g, ' ').length;
 }
 
 function getPageCount(html: string): number {
@@ -469,19 +481,7 @@ function compressImageForNote(dataUrl: string, maxSize = 1400): Promise<string> 
   });
 }
 
-function formatMathContent(html: string): string {
-  if (!html) return "";
-  let formatted = html;
-  // Format math formulas enclosed in $$
-  formatted = formatted.replace(/\$\$(.*?)\$\$/g, (_, formula) => {
-    return `<div class="math-formula-box" style="background: var(--bg-deep); border: 1px solid var(--border-default); padding: 12px 14px; border-radius: 8px; text-align: center; font-family: monospace; font-size: 15px; margin: 12px 0; color: var(--accent); box-shadow: inset 0 1px 3px rgba(0,0,0,0.3);"><span style="font-weight: 600; letter-spacing: 0.02em;">${formula}</span></div>`;
-  });
-  // Format math formulas enclosed in $
-  formatted = formatted.replace(/\$(.*?)\$/g, (_, formula) => {
-    return `<span style="font-family: monospace; color: var(--accent); background: var(--bg-hover); padding: 1px 4px; border-radius: 4px; font-size: 13px;">${formula}</span>`;
-  });
-  return formatted;
-}
+const formatMathContent = upgradeLatexInText;
 
 /* Helper to render custom note icons dynamically */
 function NoteIconRenderer({ iconName, color, size = 16 }: { iconName?: string; color: string; size?: number }) {
@@ -495,6 +495,7 @@ function NoteIconRenderer({ iconName, color, size = 16 }: { iconName?: string; c
 
 /* ====== COMPACT BLOCK NOTE CARD (lista view - 2 Columns) ====== */
 interface NoteCardProps {
+  folderLabel?: string;
   note: Note;
   isSelected: boolean;
   onSelect: () => void;
@@ -503,14 +504,15 @@ interface NoteCardProps {
   tagColors: Record<string, string>;
 }
 
-function NoteCard({ note, isSelected, onSelect, onOpen, onContextMenu, tagColors }: NoteCardProps) {
+function NoteCard({ note, folderLabel, isSelected, onSelect, onOpen, onContextMenu, tagColors }: NoteCardProps) {
+ const previewClick=useNotePreviewClick(onSelect,onOpen);
   const spineColor = note.coverColor || note.courseColor || getSpineColor(note.id);
-  const folderName = note.course;
+  const folderName = folderLabel || note.course;
   const folderColor = note.coverColor || note.courseColor || spineColor;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({ id: note.id });
   const preview = useMemo(() => {
     const text = note.content
-      .replace(/<[^>]+>/g, "")
+      .replace(/<\/(?:p|div|h[1-6]|li|tr)>/gi, " ").replace(/<[^>]+>/g, "")
       .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ')
       .replace(/&#(\d+);/g, (_, d) => String.fromCharCode(+d)).replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCharCode(parseInt(h, 16)))
       .trim();
@@ -520,17 +522,19 @@ function NoteCard({ note, isSelected, onSelect, onOpen, onContextMenu, tagColors
   const hasTags = note.tags && note.tags.length > 0;
 
   return (
-    <div style={{ position: "relative", height: "100%", minWidth: 0 }}>
+    <div className="note-card-shell" style={{ position: "relative", height: "100%", minWidth: 0 }}>
       <div
         ref={setNodeRef}
         {...attributes}
         {...listeners}
-        onClick={onSelect}
-        onDoubleClick={onOpen}
+        onClick={previewClick.onClick}
+        onDoubleClick={previewClick.onDoubleClick}
+        onKeyDown={e => { if (e.key === "Enter" && !isDragging) { e.preventDefault(); onOpen(); } else listeners?.onKeyDown?.(e); }}
+        aria-label={note.title || "Sin título"}
         onContextMenu={onContextMenu}
         onMouseEnter={() => setHov(true)}
         onMouseLeave={() => setHov(false)}
-        className="bento-card"
+        className="bento-card apheka-note-card" data-selected={isSelected}
         style={{
           display: "flex", flexDirection: "column", gap: 0,
           padding: "16px 16px 12px", height: "100%",
@@ -542,9 +546,9 @@ function NoteCard({ note, isSelected, onSelect, onOpen, onContextMenu, tagColors
             : isOver
               ? "1px dashed var(--accent)"
               : "1px solid " + (isSelected ? spineColor + "40" : hov ? "var(--border-strong)" : "var(--border-subtle)"),
-          borderRadius: "var(--radius-xl)",
+          borderRadius: "var(--radius-lg)",
           transition: isDragging ? "none" : transition ? transition : "all 250ms " + EASE,
-          transform: transform ? CSS.Transform.toString(transform) : hov ? "translateY(-2px)" : "none",
+          transform: transform ? CSS.Transform.toString(transform) : "none",
           opacity: isDragging ? 0.8 : 1,
           zIndex: isDragging ? 20 : isOver ? 15 : 'auto',
           boxShadow: isDragging
@@ -557,13 +561,6 @@ function NoteCard({ note, isSelected, onSelect, onOpen, onContextMenu, tagColors
           position: "relative", overflow: "hidden",
         }}
       >
-        {isSelected && (
-          <div style={{
-            position: "absolute", bottom: 0, left: 0, right: 0, height: 3,
-            background: spineColor,
-            zIndex: 2,
-          }} />
-        )}
         {/* Top section: bigger icon + bigger title + 3-dot */}
         <div style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 8 }}>
           <div style={{
@@ -577,18 +574,18 @@ function NoteCard({ note, isSelected, onSelect, onOpen, onContextMenu, tagColors
           <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 1, justifyContent: "center", paddingTop: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <span style={{
-                fontSize: 14, fontWeight: 500, color: "var(--text-primary)",
+                fontSize: 15, fontWeight: 500, color: "var(--text-primary)",
                 fontFamily: "'Inter Tight', sans-serif",
-                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", lineHeight: 1.4,
                 letterSpacing: "-0.02em",
               }}>{note.title || "Sin título"}</span>
               {note.isPinned && <Star size={10} fill="#F59E0B" style={{ color: "#F59E0B", flexShrink: 0 }} />}
             </div>
-            <span style={{ fontSize: 10, color: "var(--text-tertiary)", fontWeight: 450 }}>
+            <span style={{ fontSize: 11, color: "var(--text-tertiary)", fontWeight: 450 }}>
               {formatTimeAgo(note.updatedAt)} · {folderName || "Sin carpeta"}
             </span>
           </div>
-          <button onClick={(e) => { e.stopPropagation(); const br = e.currentTarget.getBoundingClientRect(); onContextMenu(e, br); }}
+          <button data-ui-control="" onClick={(e) => { e.stopPropagation(); const br = e.currentTarget.getBoundingClientRect(); onContextMenu(e, br); }}
             style={{
               background: "transparent", border: "1px solid transparent",
               cursor: "pointer", color: "var(--text-tertiary)",
@@ -609,7 +606,7 @@ function NoteCard({ note, isSelected, onSelect, onOpen, onContextMenu, tagColors
         <div style={{
           fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.55,
           display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
-          overflow: "hidden", opacity: 0.5,
+          overflow: "hidden", opacity: 1,
           maxHeight: "3.4em", minHeight: "3.4em", flexShrink: 0,
         }}>{preview}</div>
 
@@ -623,7 +620,7 @@ function NoteCard({ note, isSelected, onSelect, onOpen, onContextMenu, tagColors
               const tc = tagColors[t] || DEFAULT_TAG_COLORS[t] || note.courseColor || getSpineColor(note.id);
               return (
                 <span key={t} style={{
-                  fontSize: 9, fontWeight: 650, color: tc,
+                  fontSize: 11, fontWeight: 650, color: tc,
                   background: tc + "0d", lineHeight: "18px",
                   padding: "0 7px", borderRadius: 4,
                   letterSpacing: "0.01em",
@@ -632,7 +629,7 @@ function NoteCard({ note, isSelected, onSelect, onOpen, onContextMenu, tagColors
             })}
             {note.tags && note.tags.length > 3 && (
               <span style={{
-                fontSize: 8.5, fontWeight: 600, color: "var(--text-tertiary)",
+                fontSize: 11, fontWeight: 600, color: "var(--text-tertiary)",
                 lineHeight: "18px", padding: "0 6px", borderRadius: 4,
                 background: "var(--bg-deep)",
               }}>+{note.tags.length - 3} más</span>
@@ -648,7 +645,7 @@ function NoteCard({ note, isSelected, onSelect, onOpen, onContextMenu, tagColors
 function NoteDragGhost({ note }: { note: Note }) {
   const spineColor = note.coverColor || note.courseColor || getSpineColor(note.id);
   const text = (note.content || "")
-    .replace(/<[^>]+>/g, "")
+    .replace(/<\/(?:p|div|h[1-6]|li|tr)>/gi, " ").replace(/<[^>]+>/g, "")
     .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ')
     .trim();
   return (
@@ -722,6 +719,7 @@ interface BookshelfBookProps {
 }
 
 function BookshelfBook({ note, isSelected, folders, onSelect, onDoubleClick, onContextMenu }: BookshelfBookProps) {
+ const previewClick=useNotePreviewClick(onSelect,onDoubleClick);
   const folderData = useMemo(() => folders.find(f => f.id === note.folderId), [folders, note.folderId]);
   const spineColor = note.coverColor || folderData?.color || note.courseColor || getSpineColor(note.id);
   const tagColor = (note.tags && note.tags.length > 0)
@@ -733,7 +731,7 @@ function BookshelfBook({ note, isSelected, folders, onSelect, onDoubleClick, onC
   const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({ id: note.id });
 
   const previewText = useMemo(() => {
-    const text = note.content.replace(/<[^>]+>/g, "").trim();
+    const text = note.content.replace(/<\/(?:p|div|h[1-6]|li|tr)>/gi, " ").replace(/<[^>]+>/g, "").trim();
     return text.slice(0, 60) || "Sin contenido adicional.";
   }, [note.content]);
 
@@ -750,8 +748,8 @@ function BookshelfBook({ note, isSelected, folders, onSelect, onDoubleClick, onC
       marginBottom: 0,
       zIndex: isDragging ? 30 : isOver ? 20 : hov ? 10 : 3,
     }}
-      onClick={onSelect}
-      onDoubleClick={onDoubleClick}
+      onClick={previewClick.onClick}
+      onDoubleClick={previewClick.onDoubleClick}
       onContextMenu={onContextMenu}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
@@ -825,7 +823,7 @@ function BookshelfBook({ note, isSelected, folders, onSelect, onDoubleClick, onC
               display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
               overflow: "hidden", flex: 1, marginRight: 4,
             }}>{note.title || "Sin título"}</div>
-            <button onClick={(e) => { e.stopPropagation(); const br = e.currentTarget.getBoundingClientRect(); onContextMenu(e, br); }}
+            <button data-ui-control="" onClick={(e) => { e.stopPropagation(); const br = e.currentTarget.getBoundingClientRect(); onContextMenu(e, br); }}
               style={{
                 background: "none", border: "none", cursor: "pointer",
                 color: "var(--text-tertiary)", padding: 2, display: "flex",
@@ -840,7 +838,7 @@ function BookshelfBook({ note, isSelected, folders, onSelect, onDoubleClick, onC
             
             {/* Brief cover text preview */}
             <div style={{
-              fontSize: 9, color: "var(--text-secondary)", lineHeight: 1.35,
+              fontSize: 11, color: "var(--text-secondary)", lineHeight: 1.35,
               opacity: 0.6, display: "-webkit-box", WebkitLineClamp: 2,
               WebkitBoxOrient: "vertical", overflow: "hidden", marginTop: 1,
             }}>
@@ -851,12 +849,12 @@ function BookshelfBook({ note, isSelected, folders, onSelect, onDoubleClick, onC
           <div style={{ display: "flex", flexDirection: "column", gap: 1, marginTop: "auto", paddingTop: 6 }}>
             {folderData && (
               <span style={{
-                fontSize: 10, fontWeight: 700, color: folderData.color || spineColor,
+                fontSize: 11, fontWeight: 700, color: folderData.color || spineColor,
                 letterSpacing: "0.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
               }}>{folderData.name}</span>
             )}
             <span style={{
-              fontSize: 8, color: "var(--text-tertiary)",
+              fontSize: 11, color: "var(--text-tertiary)",
               fontWeight: 500,
             }}>{formatTimeAgo(note.updatedAt)}</span>
           </div>
@@ -929,7 +927,7 @@ function IconPicker({ currentIcon, currentColor, noteTitle, onSelect, onClose }:
             }}>
               {noteTitle || "Sin título"}
             </div>
-            <div style={{ fontSize: 9, fontWeight: 500, color: "var(--text-tertiary)", marginTop: 1 }}>
+            <div style={{ fontSize: 11, fontWeight: 500, color: "var(--text-tertiary)", marginTop: 1 }}>
               {AVAILABLE_ICONS.find(i => i.name === selectedIcon)?.label || selectedIcon}
             </div>
           </div>
@@ -948,7 +946,7 @@ function IconPicker({ currentIcon, currentColor, noteTitle, onSelect, onClose }:
             const Icon = i.icon;
             const isActive = i.name === selectedIcon;
             return (
-              <button key={i.name}
+              <button data-ui-control="" key={i.name}
                 onClick={() => setSelectedIcon(i.name)}
                 title={i.label}
                 style={{
@@ -981,7 +979,7 @@ function IconPicker({ currentIcon, currentColor, noteTitle, onSelect, onClose }:
               const Icon = IconForName(selectedIcon);
               const isActive = selectedColor === c;
               return (
-                <button key={c}
+                <button data-ui-control="" key={c}
                   onClick={() => setSelectedColor(c)}
                   title={c}
                   style={{
@@ -1008,7 +1006,7 @@ function IconPicker({ currentIcon, currentColor, noteTitle, onSelect, onClose }:
 
       {/* Footer */}
       <div style={{ padding: "8px 12px", borderTop: "1px solid var(--border-soft)", display: "flex", justifyContent: "flex-end", gap: 6 }}>
-        <button onClick={onClose} style={{
+        <button data-app-action="secondary" data-ui-control="" onClick={onClose} style={{
           padding: "6px 14px", borderRadius: 8, border: "1px solid var(--border-default)",
           background: "transparent", color: "var(--text-secondary)", fontSize: 12, fontWeight: 500,
           cursor: "pointer", transition: "all 150ms",
@@ -1016,7 +1014,7 @@ function IconPicker({ currentIcon, currentColor, noteTitle, onSelect, onClose }:
           onMouseEnter={e => { e.currentTarget.style.background = "var(--bg-hover)"; }}
           onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
         >Cancelar</button>
-        <button onClick={() => { onSelect(selectedIcon, selectedColor); onClose(); }} style={{
+        <button data-ui-control="" onClick={() => { onSelect(selectedIcon, selectedColor); onClose(); }} style={{
           padding: "6px 18px", borderRadius: 8, border: "none",
           background: `linear-gradient(135deg, ${selectedColor}, ${selectedColor}cc)`,
           color: "#fff", fontSize: 12, fontWeight: 600,
@@ -1064,10 +1062,10 @@ function NewFolderModal({ onClose, onCreate }: NewFolderModalProps) {
           style={{ width: "100%", borderRadius: 6, padding: "8px 12px", boxSizing: "border-box" }} />
         
         <div>
-          <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase" }}>Color de Carpeta</span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase" }}>Color de Carpeta</span>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 6, marginTop: 8 }}>
             {SPINE_COLORS.map(c => (
-              <button key={c} onClick={() => setColor(c)}
+              <button data-ui-control="" key={c} onClick={() => setColor(c)}
                 style={{
                   width: 22, height: 22, borderRadius: "50%", background: c, border: color === c ? "2px solid #fff" : "none",
                   cursor: "pointer", transform: color === c ? "scale(1.1)" : "none",
@@ -1077,13 +1075,13 @@ function NewFolderModal({ onClose, onCreate }: NewFolderModalProps) {
         </div>
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 4 }}>
-          <button onClick={onClose}
+          <button data-app-action="secondary" data-ui-control="" onClick={onClose}
             className="btn-secondary"
             style={{
               background: "none", border: "1px solid var(--border-default)", borderRadius: 6,
               padding: "6px 14px", color: "var(--text-secondary)", fontSize: 12, cursor: "pointer",
             }}>Cancelar</button>
-          <button onClick={() => { if (name.trim()) onCreate(name.trim(), color); }}
+          <button data-ui-control="" onClick={() => { if (name.trim()) onCreate(name.trim(), color); }}
             className="btn-primary"
             style={{
               background: color, color: "#fff", border: "none", borderRadius: 6,
@@ -1129,10 +1127,10 @@ function NewTagModal({ onClose, onCreate }: NewTagModalProps) {
           style={{ width: "100%", borderRadius: 6, padding: "8px 12px", boxSizing: "border-box" }} />
         
         <div>
-          <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase" }}>Color del hashtag</span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase" }}>Color del hashtag</span>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 6, marginTop: 8 }}>
             {SPINE_COLORS.map(c => (
-              <button key={c} onClick={() => setColor(c)}
+              <button data-ui-control="" key={c} onClick={() => setColor(c)}
                 style={{
                   width: 22, height: 22, borderRadius: "50%", background: c, border: color === c ? "2px solid #fff" : "none",
                   cursor: "pointer", transform: color === c ? "scale(1.1)" : "none",
@@ -1142,13 +1140,13 @@ function NewTagModal({ onClose, onCreate }: NewTagModalProps) {
         </div>
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 4 }}>
-          <button onClick={onClose}
+          <button data-app-action="secondary" data-ui-control="" onClick={onClose}
             className="btn-secondary"
             style={{
               background: "none", border: "1px solid var(--border-default)", borderRadius: 6,
               padding: "6px 14px", color: "var(--text-secondary)", fontSize: 12, cursor: "pointer",
             }}>Cancelar</button>
-          <button onClick={() => { if (name.trim()) onCreate(name.trim(), color); }}
+          <button data-ui-control="" onClick={() => { if (name.trim()) onCreate(name.trim(), color); }}
             className="btn-primary"
             style={{
               background: color, color: "#fff", border: "none", borderRadius: 6,
@@ -1162,361 +1160,6 @@ function NewTagModal({ onClose, onCreate }: NewTagModalProps) {
 }
 
 /* ====== EDITOR FORMATTING TOOLBAR ====== */
-interface EditorToolbarProps {
-  onFormat: (cmd: string, value?: string) => void;
-  onUndo?: () => void;
-  onRedo?: () => void;
-}
-
-const TEXT_COLORS = [
-  { name: "Por defecto", value: "var(--text-primary)" },
-  { name: "Rojo", value: "#EF4444" },
-  { name: "Naranja", value: "#F97316" },
-  { name: "Amarillo", value: "#F59E0B" },
-  { name: "Verde", value: "#10B981" },
-  { name: "Azul", value: "#3B82F6" },
-  { name: "Morado", value: "#8B5CF6" },
-  { name: "Rosa", value: "#EC4899" },
-];
-
-const HIGHLIGHT_COLORS = [
-  { name: "Transparente", value: "transparent" },
-  { name: "Resaltado Rojo", value: "rgba(239, 68, 68, 0.25)" },
-  { name: "Resaltado Naranja", value: "rgba(249, 115, 22, 0.25)" },
-  { name: "Resaltado Amarillo", value: "rgba(245, 158, 11, 0.25)" },
-  { name: "Resaltado Verde", value: "rgba(16, 185, 129, 0.25)" },
-  { name: "Resaltado Azul", value: "rgba(59, 130, 246, 0.25)" },
-  { name: "Resaltado Morado", value: "rgba(139, 92, 246, 0.25)" },
-  { name: "Resaltado Rosa", value: "rgba(236, 72, 153, 0.25)" },
-];
-
-function EditorToolbar({ onFormat, onUndo, onRedo }: EditorToolbarProps) {
-  const [showColorMenu, setShowColorMenu] = useState(false);
-  const [showHlMenu, setShowHlMenu] = useState(false);
-  const [showTablePicker, setShowTablePicker] = useState(false);
-  const [tableRows, setTableRows] = useState(3);
-  const [tableCols, setTableCols] = useState(3);
-  const colorMenuRef = useRef<HTMLDivElement>(null);
-  const highlightMenuRef = useRef<HTMLDivElement>(null);
-  const tablePickerRef = useRef<HTMLDivElement>(null);
-  const imageInputRef = useRef<HTMLInputElement>(null);
-
-  const trackCmds = ["bold", "italic", "underline", "strikeThrough", "insertUnorderedList", "insertOrderedList"];
-  const [activeFormats, setActiveFormats] = useState<Record<string, boolean>>({});
-  const [activeHeading, setActiveHeading] = useState("p");
-  useEffect(() => {
-    const check = () => {
-      try {
-        const state: Record<string, boolean> = {};
-        trackCmds.forEach(cmd => { state[cmd] = document.queryCommandState(cmd); });
-        const active = document.activeElement as HTMLElement | null;
-        const editorEl = active && active.isContentEditable ? active : null;
-        const sel = window.getSelection();
-        if (editorEl && sel && sel.rangeCount > 0 && editorEl.contains(sel.anchorNode)) {
-          let node: Node | null = sel.anchorNode;
-          if (node && node.nodeType === Node.TEXT_NODE) node = node.parentElement;
-          let el = node as HTMLElement | null;
-          while (el && el !== editorEl) {
-            const tag = el.tagName;
-            if (tag === 'B' || tag === 'STRONG') state.bold = true;
-            else if (tag === 'I' || tag === 'EM') state.italic = true;
-            else if (tag === 'U') state.underline = true;
-            else if (tag === 'S' || tag === 'STRIKE' || tag === 'DEL') state.strikeThrough = true;
-            else if (tag === 'UL') state.insertUnorderedList = true;
-            else if (tag === 'OL') state.insertOrderedList = true;
-            el = el.parentElement;
-          }
-        }
-        setActiveFormats(state);
-        const block = document.queryCommandValue("formatBlock") || "p";
-        setActiveHeading(block.replace(/[<>]/g, "").toLowerCase());
-      } catch {}
-    };
-    document.addEventListener("selectionchange", check);
-    document.addEventListener("keyup", check);
-    document.addEventListener("mouseup", check);
-    check();
-    return () => {
-      document.removeEventListener("selectionchange", check);
-      document.removeEventListener("keyup", check);
-      document.removeEventListener("mouseup", check);
-    };
-  }, []);
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (colorMenuRef.current && !colorMenuRef.current.contains(event.target as Node)) {
-        setShowColorMenu(false);
-      }
-      if (highlightMenuRef.current && !highlightMenuRef.current.contains(event.target as Node)) {
-        setShowHlMenu(false);
-      }
-      if (tablePickerRef.current && !tablePickerRef.current.contains(event.target as Node)) {
-        setShowTablePicker(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
-
-  return (
-    <div onMouseDown={e => { const t = e.target as HTMLElement; if (e.button === 0 && t.tagName !== 'INPUT' && t.tagName !== 'SELECT' && t.tagName !== 'TEXTAREA') e.preventDefault(); }} style={{
-      display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", position: "relative",
-    }}>
-      {/* 0. UNDO / REDO */}
-      {onUndo && (
-        <button onClick={onUndo} title="Deshacer (Ctrl+Z)"
-          style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
-          className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6" /><path d="M21 17a9 9 0 0 0-15-6.7L3 13" /></svg>
-        </button>
-      )}
-      {onRedo && (
-        <button onClick={onRedo} title="Rehacer (Ctrl+Y)"
-          style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
-          className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 7v6h-6" /><path d="M3 17a9 9 0 0 1 15-6.7L21 13" /></svg>
-        </button>
-      )}
-      {(onUndo || onRedo) && <div style={{ width: 1, height: 16, background: "var(--border-default)", margin: "0 4px" }} />}
-
-      {/* 1. HEADINGS — icon cuadritos */}
-      <div style={{ display: "flex", gap: 2, alignItems: "stretch" }}>
-        {([
-          { tag: "p", icon: Type, title: "Texto normal" },
-          { tag: "h1", icon: Heading1, title: "Título 1" },
-          { tag: "h2", icon: Heading2, title: "Título 2" },
-          { tag: "h3", icon: Heading3, title: "Título 3" },
-        ] as const).map(({ tag, icon: Icon, title }) => {
-          const active = activeHeading === tag;
-          return (
-            <button key={tag} onClick={() => onFormat("formatBlock", `<${tag}>`)}
-              title={title}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "center",
-                width: 28, height: 26,
-                borderRadius: 6, border: `1px solid ${active ? 'var(--accent)' : 'var(--border-default)'}`,
-                background: active ? "var(--accent-dim)" : "transparent",
-                color: active ? "var(--accent)" : "var(--text-tertiary)",
-                cursor: "pointer", transition: "all 120ms",
-              }}
-              className={active ? "" : "hover:border-[var(--border-strong)] hover:text-[var(--text-secondary)]"}>
-              <Icon size={13} />
-            </button>
-          );
-        })}
-      </div>
-
-      <div style={{ width: 1, height: 16, background: "var(--border-default)", margin: "0 4px" }} />
-
-      {/* 2. INLINE STYLING — only bold, italic, underline, strikethrough */}
-      <button onClick={() => onFormat("bold")} title="Negrita (Ctrl+B)"
-        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: activeFormats.bold ? "color-mix(in srgb, var(--accent) 16%, transparent)" : "transparent", boxShadow: activeFormats.bold ? "0 0 10px color-mix(in srgb, var(--accent) 28%, transparent)" : "none", color: activeFormats.bold ? "var(--accent)" : "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
-        className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
-        <Bold size={14} />
-      </button>
-      <button onClick={() => onFormat("italic")} title="Cursiva (Ctrl+I)"
-        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: activeFormats.italic ? "color-mix(in srgb, var(--accent) 16%, transparent)" : "transparent", boxShadow: activeFormats.italic ? "0 0 10px color-mix(in srgb, var(--accent) 28%, transparent)" : "none", color: activeFormats.italic ? "var(--accent)" : "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
-        className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
-        <Italic size={14} />
-      </button>
-      <button onClick={() => onFormat("underline")} title="Subrayado (Ctrl+U)"
-        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: activeFormats.underline ? "color-mix(in srgb, var(--accent) 16%, transparent)" : "transparent", boxShadow: activeFormats.underline ? "0 0 10px color-mix(in srgb, var(--accent) 28%, transparent)" : "none", color: activeFormats.underline ? "var(--accent)" : "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
-        className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
-        <Underline size={14} />
-      </button>
-      <button onClick={() => onFormat("strikeThrough")} title="Tachado"
-        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: activeFormats.strikeThrough ? "color-mix(in srgb, var(--accent) 16%, transparent)" : "transparent", boxShadow: activeFormats.strikeThrough ? "0 0 10px color-mix(in srgb, var(--accent) 28%, transparent)" : "none", color: activeFormats.strikeThrough ? "var(--accent)" : "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
-        className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
-        <Strikethrough size={14} />
-      </button>
-      {/* Resaltar — paleta legible sobre tema oscuro y claro */}
-      <div ref={highlightMenuRef} style={{ position: "relative" }}>
-        <button onClick={() => { setShowHlMenu(v => !v); setShowColorMenu(false); }} title="Resaltar"
-          style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms", fontSize: 14, fontWeight: 700, lineHeight: 1 }}
-          className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
-          <span style={{ background: "linear-gradient(135deg, #FBBF24, #F59E0B)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>A</span>
-        </button>
-        {showHlMenu && (
-          <div style={{ position: "absolute", top: "100%", left: 0, marginTop: 6, zIndex: 300, background: "var(--bg-elevated)", border: "1px solid var(--border-strong)", borderRadius: "var(--radius-md)", padding: 10, boxShadow: "var(--shadow-elevated)", display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
-            {HIGHLIGHT_COLORS.map(c => (
-              <button key={c.name} title={c.name} onClick={() => { onFormat("hiliteColor", c.value); setShowHlMenu(false); }}
-                style={{ width: 24, height: 24, borderRadius: 6, border: "1px solid var(--border-default)", cursor: "pointer", background: c.value === "transparent" ? "var(--bg-base)" : c.value, color: "var(--text-tertiary)", fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                {c.value === "transparent" ? "×" : ""}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-      {/* Color de texto */}
-      <div ref={colorMenuRef} style={{ position: "relative" }}>
-        <button onClick={() => { setShowColorMenu(v => !v); setShowHlMenu(false); }} title="Color de texto"
-          style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
-          className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
-          <Palette size={14} />
-        </button>
-        {showColorMenu && (
-          <div style={{ position: "absolute", top: "100%", left: 0, marginTop: 6, zIndex: 300, background: "var(--bg-elevated)", border: "1px solid var(--border-strong)", borderRadius: "var(--radius-md)", padding: 10, boxShadow: "var(--shadow-elevated)", display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
-            {TEXT_COLORS.map(c => (
-              <button key={c.name} title={c.name} onClick={() => { onFormat("foreColor", c.value); setShowColorMenu(false); }}
-                style={{ width: 24, height: 24, borderRadius: 6, border: "1px solid var(--border-default)", cursor: "pointer", background: c.value === "var(--text-primary)" ? "var(--bg-base)" : c.value, color: "var(--text-tertiary)", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                {c.value === "var(--text-primary)" ? "A" : ""}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-      {/* Enlaces e imagen */}
-      <button onClick={() => onFormat("createLinkPrompt")} title="Insertar enlace (Ctrl+K)"
-        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
-        className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
-        <Link2 size={14} />
-      </button>
-      <button onClick={() => onFormat("removeLink")} title="Quitar enlace"
-        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
-        className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
-        <Unlink size={14} />
-      </button>
-      <button onClick={() => imageInputRef.current?.click()} title="Insertar imagen"
-        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
-        className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
-        <ImageIcon size={14} />
-      </button>
-      <input ref={imageInputRef} type="file" accept="image/*" style={{ display: "none" }}
-        onChange={e => {
-          const f = e.target.files?.[0];
-          if (!f) return;
-          const reader = new FileReader();
-          reader.onload = async () => {
-            try {
-              const dataUrl = await compressImageForNote(String(reader.result || ""));
-              if (dataUrl) onFormat("insertImage", dataUrl);
-            } catch {}
-          };
-          reader.readAsDataURL(f);
-          e.target.value = "";
-        }} />
-
-      <div style={{ width: 1, height: 16, background: "var(--border-default)", margin: "0 4px" }} />
-
-      {/* 3. LISTS + BLOCKS */}
-      <button onClick={() => onFormat("insertUnorderedList")} title="Lista con viñetas"
-        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: activeFormats.insertUnorderedList ? "color-mix(in srgb, var(--accent) 16%, transparent)" : "transparent", boxShadow: activeFormats.insertUnorderedList ? "0 0 10px color-mix(in srgb, var(--accent) 28%, transparent)" : "none", color: activeFormats.insertUnorderedList ? "var(--accent)" : "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
-        className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
-        <List size={14} />
-      </button>
-      <button onClick={() => onFormat("insertOrderedList")} title="Lista numerada"
-        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: activeFormats.insertOrderedList ? "color-mix(in srgb, var(--accent) 16%, transparent)" : "transparent", boxShadow: activeFormats.insertOrderedList ? "0 0 10px color-mix(in srgb, var(--accent) 28%, transparent)" : "none", color: activeFormats.insertOrderedList ? "var(--accent)" : "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
-        className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
-        <ListOrdered size={14} />
-      </button>
-      <button onClick={() => onFormat("codeBlock")} title="Bloque de código"
-        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
-        className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
-        <Code size={14} />
-      </button>
-      <button onClick={() => onFormat("styledQuote")} title="Cita"
-        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
-        className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
-        <Quote size={14} />
-      </button>
-      <button onClick={() => onFormat("insertHR")} title="Separador"
-        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
-        className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
-        <Minus size={14} />
-      </button>
-
-      <div style={{ width: 1, height: 16, background: "var(--border-default)", margin: "0 4px" }} />
-
-      {/* 4. ALIGNMENT */}
-      <button onClick={() => onFormat("justifyLeft")} title="Alinear a la izquierda"
-        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
-        className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
-        <AlignLeft size={14} />
-      </button>
-      <button onClick={() => onFormat("justifyCenter")} title="Centrar"
-        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
-        className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
-        <AlignCenter size={14} />
-      </button>
-      <button onClick={() => onFormat("justifyRight")} title="Alinear a la derecha"
-        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
-        className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
-        <AlignRight size={14} />
-      </button>
-      <button onClick={() => onFormat("justifyFull")} title="Justificar"
-        style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
-        className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
-        <AlignJustify size={14} />
-      </button>
-
-      {/* 5. TABLE */}
-      <div ref={tablePickerRef} style={{ position: "relative" }}>
-        <button onClick={() => setShowTablePicker(!showTablePicker)} title="Insertar tabla"
-          style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 150ms" }}
-          className="hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]">
-          <Table size={14} />
-        </button>
-        {showTablePicker && (
-          <div style={{
-            position: "absolute", top: "100%", left: 0, marginTop: 6, zIndex: 300,
-            background: "var(--bg-elevated)", border: "1px solid var(--border-strong)",
-            borderRadius: "var(--radius-md)", padding: 14,
-            boxShadow: "var(--shadow-elevated)", minWidth: 220,
-          }}>
-            <div style={{
-              display: "grid", gridTemplateColumns: `repeat(${Math.max(tableCols, 1)}, 1fr)`, gap: 3, marginBottom: 10,
-              background: "var(--bg-base)", padding: 8, borderRadius: 8,
-            }}>
-              {Array.from({ length: Math.max(tableCols * tableRows, 1) }).map((_, i) => {
-                const col = (i % Math.max(tableCols, 1)) + 1;
-                const row = Math.floor(i / Math.max(tableCols, 1)) + 1;
-                return (
-                  <div key={i} onClick={() => { onFormat("insertTable", `${col}x${row}`); setShowTablePicker(false); }}
-                    title={`Insertar tabla ${col}×${row}`}
-                    style={{
-                      width: 20, height: 16, borderRadius: 3, cursor: "pointer",
-                      background: "var(--accent)", opacity: 0.25, border: "1px solid var(--accent)",
-                      transition: "all 100ms",
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.opacity = '0.6'; e.currentTarget.style.transform = 'scale(1.1)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.opacity = '0.25'; e.currentTarget.style.transform = 'scale(1)'; }} />
-                );
-              })}
-            </div>
-            <div style={{ display: "flex", gap: 14, alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--text-tertiary)" }}>Cols</span>
-                <button onClick={() => { setTableCols(Math.max(1, tableCols - 1)); }}
-                  style={{ width: 22, height: 22, borderRadius: 4, border: "1px solid var(--border-soft)", background: "var(--bg-hover)", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, lineHeight: 1 }}>−</button>
-                <button onClick={() => { setTableCols(Math.min(8, tableCols + 1)); }}
-                  style={{ width: 22, height: 22, borderRadius: 4, border: "1px solid var(--border-soft)", background: "var(--bg-hover)", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, lineHeight: 1 }}>+</button>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--text-tertiary)" }}>Filas</span>
-                <button onClick={() => { setTableRows(Math.max(1, tableRows - 1)); }}
-                  style={{ width: 22, height: 22, borderRadius: 4, border: "1px solid var(--border-soft)", background: "var(--bg-hover)", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, lineHeight: 1 }}>−</button>
-                <button onClick={() => { setTableRows(Math.min(10, tableRows + 1)); }}
-                  style={{ width: 22, height: 22, borderRadius: 4, border: "1px solid var(--border-soft)", background: "var(--bg-hover)", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, lineHeight: 1 }}>+</button>
-              </div>
-              <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary)" }}>{tableCols} × {tableRows}</span>
-            </div>
-            <button onClick={() => { onFormat("insertTable", `${tableCols}x${tableRows}`); setShowTablePicker(false); }}
-              style={{
-                width: "100%", background: "var(--accent)", color: "#fff", border: "none",
-                borderRadius: 8, padding: "7px 12px", fontSize: 11.5, fontWeight: 600, cursor: "pointer",
-                transition: "all 120ms",
-              }}
-              className="active:scale-[0.97]">Insertar tabla {tableCols}×{tableRows}</button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 /* ====== SHELF PLANK DECORATIVE ELEMENT ====== */
 function ShelfPlank() {
   return (
@@ -1542,7 +1185,8 @@ function ShelfPlank() {
 }
 
 export default function Notas() {
-  const { notes, noteFolders: folders, addNote, updateNote, updateNoteVisual, deleteNote, restoreNote, permanentlyDeleteNote, addNoteFolder, duplicateNote, reorderNotes, settings, addNotification, setPipUrl } = useApp();
+  const previewWidth=usePanelWidth('notes-preview',620,360,960,'left',220);
+  const { notes, noteFolders: folders, addNote, updateNote, updateNoteVisual, deleteNote, restoreNote, permanentlyDeleteNote, addNoteFolder, duplicateNote, reorderNotes, settings, addNotification, flushNoteContent } = useAppSlice(["notes","noteFolders","addNote","updateNote","updateNoteVisual","deleteNote","restoreNote","permanentlyDeleteNote","addNoteFolder","duplicateNote","reorderNotes","settings","addNotification","flushNoteContent"]);
 
   const matMenu = useMaterialMenu((m) => addNotification(m, 'error'));
 
@@ -1554,7 +1198,7 @@ export default function Notas() {
     try { const s = localStorage.getItem("owa_notes_tag"); return s || null; } catch { return null; }
   });
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
-    try { const s = localStorage.getItem("owa_notes_view_mode"); return (s === "lista" || s === "estante") ? s : "estante"; } catch { return "estante"; }
+    try { const s = localStorage.getItem("owa_notes_view_mode"); return (s === "lista" || s === "estante") ? s : "lista"; } catch { return "lista"; }
   });
   const [sortMode, setSortMode] = useState<SortMode>(() => {
     try {
@@ -1734,28 +1378,12 @@ export default function Notas() {
   useEffect(() => { localStorage.setItem("owa_notes_tag", selectedTag || ""); }, [selectedTag]);
   useEffect(() => { localStorage.setItem("owa_notes_view_mode", viewMode); }, [viewMode]);
 
-  // Clock time state (Compact aligned inside header)
-  const [ct, setCt] = useState(new Date());
 
   const editorRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLInputElement>(null);
   const histRef = useRef(createEditorHistory(() => editorRef.current));
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Real-time clock tick
-  useEffect(() => {
-    const interval = setInterval(() => setCt(new Date()), 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const timeStr = fmtClock(format(ct, "HH:mm"), settings?.timeFormat);
-  const secondsStr = settings?.timeFormat === '12h' ? null : format(ct, 'ss');
-  const dateStr = useMemo(() => {
-    try {
-      const d = format(ct, "EEEE, d 'de' MMMM", { locale: es });
-      return d.charAt(0).toUpperCase() + d.slice(1);
-    } catch { return ""; }
-  }, [ct]);
 
   const selectedNote = useMemo(
     () => notes.find((n) => n.id === selectedNoteId) || null,
@@ -1774,7 +1402,8 @@ const noteLiveAtts = useMemo(
   );
 
   // Filter notes by query, folder, tags, views
-  const filteredNotes = useMemo(() => {
+  const [noteKindFilter,setNoteKindFilter]=useState<'all'|'note'|'idea'|'reference'|'journal'>('all');
+  const folderFilteredNotes = useMemo(() => {
     // Sidebar view filters
     let result: typeof notes;
     if (activeSidebarTab === "trash") {
@@ -1817,7 +1446,7 @@ const noteLiveAtts = useMemo(
       }
       if (sortMode === "priority") {
         const order = { high: 0, medium: 1, low: 2, none: 3 };
-        return ((order[a.priority || "none"] || 3) - (order[b.priority || "none"] || 3));
+        return ((order[a.priority || "none"] ?? 3) - (order[b.priority || "none"] ?? 3));
       }
       if (sortMode === "course") {
         if (a.course !== b.course) return a.course.localeCompare(b.course);
@@ -1835,6 +1464,7 @@ const noteLiveAtts = useMemo(
     });
     return result;
   }, [notes, selectedFolderId, selectedTag, searchQuery, sortMode, activeSidebarTab]);
+  const filteredNotes=useMemo(()=>noteKindFilter==='all'||activeSidebarTab==='trash'?folderFilteredNotes:folderFilteredNotes.filter(n=>(n.noteType||'note')===noteKindFilter),[folderFilteredNotes,noteKindFilter,activeSidebarTab]);
 
   const totalPagesBS = useMemo(() => {
     if (viewMode !== "estante") return 1;
@@ -1844,7 +1474,7 @@ const noteLiveAtts = useMemo(
 
   const handleCreateNote = useCallback(() => {
     const id = addNote({
-      title: "", content: "", subtitle: "",
+      title: "", content: "", subtitle: "", noteType:noteKindFilter==='all'?'note':noteKindFilter,
       folderId: selectedFolderId || undefined,
       courseColor: currentFolder?.color || "#8B5CF6",
       isPinned: false, course: currentFolder?.name || "Sin curso", tags: [],
@@ -1852,12 +1482,22 @@ const noteLiveAtts = useMemo(
     setSelectedNoteId(id);
     setDrawerTab("contenido");
     setIsEditing(true);
-    setTimeout(() => titleRef.current?.focus(), 100);
-  }, [addNote, selectedFolderId, currentFolder]);
+    setTimeout(() => titleRef.current?.focus({preventScroll:true}), 100);
+  }, [addNote, selectedFolderId, currentFolder,noteKindFilter]);
+
+  const editorOwnerRef = useRef<string | null>(null);
+  const draftNotesRef = useRef(new Map<string,{title:string;content:string}>());
+  const captureEditorDraft = useCallback(()=>{
+    const id=editorOwnerRef.current;
+    if(!id || !editorRef.current || editorRef.current.dataset.noteId!==id) return;
+    draftNotesRef.current.set(id,{title:titleRef.current?.value || '',content:editorRef.current.innerHTML});
+  },[]);
 
   // contentEditable caret jumping fix: populate DOM only ONCE when note changes
   useEffect(() => {
     if (isEditing && selectedNote && editorRef.current) {
+      editorOwnerRef.current=selectedNote.id;
+      draftNotesRef.current.set(selectedNote.id,{title:selectedNote.title,content:selectedNote.content});
       // Enter genera <p> limpios (párrafos reales, saltos de línea consistentes)
       try { document.execCommand('defaultParagraphSeparator', false, 'p'); } catch { /* noop */ }
       if (editorRef.current.innerHTML !== selectedNote.content) {
@@ -1887,31 +1527,45 @@ const noteLiveAtts = useMemo(
 
   const lastContentRef = useRef("");
   const lastSavedSigRef = useRef("");
+  useEffect(()=>{
+    const sync=(event:Event)=>{
+      const detail=(event as CustomEvent).detail;
+      if(detail?.args?.entity!=='notes'||detail.args.id!==selectedNoteId)return;
+      if(!selectedNote || selectedNote.deletedAt){setSelectedNoteId(null);setIsEditing(false);return;}
+      if(saveTimeoutRef.current){clearTimeout(saveTimeoutRef.current);saveTimeoutRef.current=null;}
+      draftNotesRef.current.set(selectedNote.id,{title:selectedNote.title,content:selectedNote.content});
+      if(editorRef.current?.dataset.noteId===selectedNote.id)editorRef.current.innerHTML=selectedNote.content||'';
+      if(titleRef.current?.dataset.noteId===selectedNote.id)titleRef.current.value=selectedNote.title;
+      lastSavedSigRef.current=`${selectedNote.id}|${selectedNote.title}|${selectedNote.content}`;
+      histRef.current.reset();setSaveStatus('saved');
+    };
+    window.addEventListener('apheka:mcp-committed',sync);
+    return()=>window.removeEventListener('apheka:mcp-committed',sync);
+  },[selectedNote,selectedNoteId]);
   // ÚNICO punto de guardado de la nota abierta: autosave (20s), debounce de
   // escritura, blur, botón, acciones de formato y flush de salida pasan TODOS
   // por aquí. Normaliza, evita notas fantasma, firma y versiona.
   const handleSaveNote = useCallback((rawHtml?: string) => {
     if (!selectedNote) return;
-    let content = typeof rawHtml === 'string' && rawHtml
-      ? rawHtml
-      : selectedNote.content;
-    let title = selectedNote.title;
-
-    if (editorRef.current) {
-      content = normalizeEditorHtml(typeof rawHtml === 'string' && rawHtml ? rawHtml : editorRef.current.innerHTML);
+    try { if(sessionStorage.getItem('owa_restore_pending')) return; } catch {}
+    const draft=draftNotesRef.current.get(selectedNote.id);
+    let content = typeof rawHtml === 'string' ? rawHtml : draft?.content ?? selectedNote.content;
+    let title = draft?.title ?? selectedNote.title;
+    if (editorOwnerRef.current === selectedNote.id) {
+      if (editorRef.current?.dataset.noteId === selectedNote.id) content=typeof rawHtml === 'string' ? rawHtml : editorRef.current.innerHTML;
+      if (titleRef.current?.dataset.noteId === selectedNote.id) title=titleRef.current.value;
     }
-    if (titleRef.current) {
-      title = titleRef.current.value;
-    }
+    content=normalizeEditorHtml(content);
     // Robustez de escritura: título en blanco → "Sin título"; y un contenido que
     // solo tiene espacios o markup vacío (<p><br></p>, &nbsp;) se guarda REALMENTE
     // vacío, para que nunca existan notas fantasma que "se ven vacías pero pesan".
     title = (title || '').trim() || 'Sin título';
     const plainProbe = content.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/\u00A0/g, ' ').trim();
-    if (!plainProbe) content = '';
+    if (!plainProbe && !/<(?:img|video|audio|iframe|table|hr|svg|canvas|input)\b/i.test(content)) content = '';
 
     // Si nada cambió desde el último guardado, no re-escribe la nota
     // (antes cada cleanup del effect de autosave disparaba updateNote y re-creaba el ciclo).
+    draftNotesRef.current.set(selectedNote.id,{title,content});
     const sig = `${selectedNote.id}|${title}|${content}`;
     if (sig === lastSavedSigRef.current) { setSaveStatus("saved"); return; }
     lastSavedSigRef.current = sig;
@@ -1991,17 +1645,21 @@ const noteLiveAtts = useMemo(
     addNotification('Adjunto actualizado a su nueva ubicación', 'success');
   }, [selectedNote, updateNote, addNotification]);
 
-  const handleSelectNote = useCallback((noteId: string) => {    setSelectedNoteId(noteId);
-  }, []);
+  const handleSelectNote = useCallback((noteId: string) => { if(isEditing)handleSaveNote();setSelectedNoteId(noteId);
+  }, [isEditing,handleSaveNote]);
 
 
 
-  const handleOpenNote = useCallback(() => {
-    if (selectedNote) {
-      setIsEditing(true);
-      setShowDetailsPanel(true);
-    }
-  }, [selectedNote]);
+  const handleOpenNote = useCallback((id?:string) => {
+    const target=id||selectedNote?.id;
+    if(!target||!notes.some(note=>note.id===target&&!note.deletedAt))return;
+    if(target!==selectedNoteId)handleSelectNote(target);
+    setIsEditing(true);
+    setShowDetailsPanel(true);
+  }, [selectedNote,selectedNoteId,notes,handleSelectNote]);
+
+  useEffect(()=>{const open=()=>{const id=sessionStorage.getItem('apheka_open_note');if(!id||!notes.some(n=>n.id===id&&!n.deletedAt))return;sessionStorage.removeItem('apheka_open_note');handleOpenNote(id);};open();window.addEventListener('apheka:open-note',open);return()=>window.removeEventListener('apheka:open-note',open);},[notes,handleOpenNote]);
+  useEffect(()=>{window.dispatchEvent(new CustomEvent('apheka:note-focus',{detail:{id:isEditing?selectedNoteId:null}}));},[isEditing,selectedNoteId]);
 
   const handleDeleteNote = useCallback(() => {
     const id = deleteConfirmNoteId;
@@ -2104,74 +1762,22 @@ const noteLiveAtts = useMemo(
   useEffect(() => {
     const flushNow = () => {
       if (saveTimeoutRef.current) { clearTimeout(saveTimeoutRef.current); saveTimeoutRef.current = null; }
-      if (!selectedNote || !editorRef.current) return;
+      if (!selectedNote || !editorRef.current || editorRef.current.dataset.noteId!==selectedNote.id) return;
+      flushNoteContent(selectedNote.id,editorRef.current.innerHTML,(titleRef.current?.value || '').trim() || 'Sin título');
       handleSaveNote(editorRef.current.innerHTML ?? '');
     };
     const onVis = () => { if (document.visibilityState === 'hidden') flushNow(); };
+    window.addEventListener('apheka:flush-editors', flushNow);
     window.addEventListener('beforeunload', flushNow);
     window.addEventListener('pagehide', flushNow);
     document.addEventListener('visibilitychange', onVis);
     return () => {
+      window.removeEventListener('apheka:flush-editors', flushNow);
       window.removeEventListener('beforeunload', flushNow);
       window.removeEventListener('pagehide', flushNow);
       document.removeEventListener('visibilitychange', onVis);
     };
-  }, [selectedNote, handleSaveNote]);
-
-  // Detección de fórmulas en vivo: al teclear el "$" que cierra, envuelve
-  // $f$ (inline) o $$f$$ (bloque) con el mismo estilo de la vista previa,
-  // conservando el LaTeX crudo dentro para poder seguir editándolo.
-  const tryFormatMathAtCaret = useCallback(() => {
-    const ed = editorRef.current;
-    const sel = window.getSelection();
-    if (!ed || !sel || sel.rangeCount === 0) return;
-    const range = sel.getRangeAt(0);
-    const node = range.startContainer;
-    if (!ed.contains(node) || node.nodeType !== Node.TEXT_NODE) return;
-    let anc: HTMLElement | null = (node as Text).parentElement;
-    while (anc && anc !== ed) {
-      if (anc.classList.contains("notes-code-block") || anc.tagName === "PRE" || anc.tagName === "CODE") return;
-      anc = anc.parentElement;
-    }
-    const offset = range.startOffset;
-    const textNode = node as Text;
-    const before = textNode.textContent?.slice(0, offset) || "";
-    if (!before.endsWith("$")) return;
-    const bm = before.match(/\$\$([^$\n]{1,300})\$\$$/);
-    const im = bm ? null : before.match(/(^|[\s(\[{>])\$([^$\n]{1,200})\$$/);
-    const m = bm || im;
-    if (!m) return;
-    const inner = (bm ? m[1] : m![2]).trim();
-    if (!inner) return;
-    const delLen = bm ? m[0].length : m[0].length - m[1].length;
-    const startIdx = offset - delLen;
-    const wrap = document.createElement(bm ? "div" : "span");
-    if (bm) {
-      wrap.className = "math-formula-box";
-      wrap.setAttribute("style", "background: var(--bg-deep); border: 1px solid var(--border-default); padding: 12px 14px; border-radius: 8px; text-align: center; font-family: monospace; font-size: 15px; margin: 12px 0; color: var(--accent); box-shadow: inset 0 1px 3px rgba(0,0,0,0.3);");
-      const strong = document.createElement("span");
-      strong.setAttribute("style", "font-weight:600; letter-spacing:0.02em;");
-      strong.textContent = `$$${inner}$$`;
-      wrap.appendChild(strong);
-    } else {
-      wrap.setAttribute("style", "font-family: monospace; color: var(--accent); background: var(--bg-hover); padding: 1px 4px; border-radius: 4px; font-size: 13px;");
-      wrap.textContent = `$${inner}$`;
-    }
-    try {
-      textNode.deleteData(startIdx, delLen);
-      const r = document.createRange();
-      r.setStart(textNode, startIdx);
-      r.collapse(true);
-      r.insertNode(wrap);
-      textNode.parentElement?.normalize();
-      const r2 = document.createRange();
-      r2.setStartAfter(wrap);
-      r2.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(r2);
-      histRef.current.capture(false);
-    } catch { /* noop */ }
-  }, []);
+  }, [selectedNote, handleSaveNote, flushNoteContent]);
 
   // Comportamiento nativo: si el encabezado/cita donde está el cursor queda VACÍO
   // (p. ej. borraste su texto), se convierte en un párrafo limpio en vez de dejar
@@ -2204,19 +1810,21 @@ const noteLiveAtts = useMemo(
   }, []);
 
   const handleEditorInput = useCallback((e?: React.FormEvent<HTMLDivElement>) => {
-    const data = e ? ((e.nativeEvent as InputEvent | undefined)?.data ?? null) : null;
     setSaveStatus("pending");
+    if ((e?.nativeEvent as InputEvent | undefined)?.isComposing) {captureEditorDraft();return;}
     histRef.current.capture(true);
-    if (data === "$") tryFormatMathAtCaret();
-    fixEmptyHeadingAtCaret();
+    if (editorRef.current) renderMathAtCaret(editorRef.current);
+    if ((e?.nativeEvent as InputEvent | undefined)?.inputType?.startsWith("delete")) fixEmptyHeadingAtCaret();
+    captureEditorDraft();
     if (editorRef.current && selectedNote) {
       const html = editorRef.current.innerHTML;
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = setTimeout(() => { handleSaveNote(html); }, 600);
     }
-  }, [selectedNote, updateNote, tryFormatMathAtCaret, fixEmptyHeadingAtCaret, handleSaveNote]);
+  }, [selectedNote, updateNote, fixEmptyHeadingAtCaret, handleSaveNote, captureEditorDraft]);
 
   const handleFormat = useCallback((cmd: string, value?: string) => {
+    histRef.current.capture(true);
     if (cmd === "codeBlock") {
       const sel = window.getSelection();
       if (!sel || !sel.rangeCount) { editorRef.current?.focus(); return; }
@@ -2239,7 +1847,8 @@ const noteLiveAtts = useMemo(
         sel.addRange(newRange);
       } else {
         const text = sel.toString();
-        const html = `<pre class="notes-code-block"><code>${text || "Código"}</code><button class="copy-code-btn" data-code="${encodeURIComponent(text || "")}">Copiar</button></pre>`;
+        const safeCode=document.createElement('code');safeCode.textContent=text||'Código';
+        const html = `<pre class="notes-code-block">${safeCode.outerHTML}<button data-ui-control="" class="copy-code-btn" data-code="${encodeURIComponent(text || "")}">Copiar</button></pre>`;
         document.execCommand("insertHTML", false, html);
       }
     } else if (cmd === "insertTable") {
@@ -2309,37 +1918,7 @@ const noteLiveAtts = useMemo(
         if (a) a.setAttribute('title', value);
       }
     } else if (cmd === "hiliteColor") {
-      const sel = window.getSelection();
-      if (sel && sel.rangeCount > 0) {
-        const range = sel.getRangeAt(0);
-        const parent = range.startContainer.parentElement;
-        const highlightSpan = parent?.closest('span[style*="background"]') || parent?.closest('span[style*="background-color"]');
-        if (highlightSpan && (!value || value === "transparent")) {
-          const text = highlightSpan.textContent || '';
-          const p = highlightSpan.parentNode;
-          if (p) {
-            const textNode = document.createTextNode(text);
-            p.replaceChild(textNode, highlightSpan);
-            const newRange = document.createRange();
-            newRange.selectNodeContents(textNode);
-            newRange.collapse(false);
-            sel.removeAllRanges();
-            sel.addRange(newRange);
-          }
-        } else {
-          // Paleta translúcida legible sobre el tema (el #FFF9C4 fijo era ilegible con texto claro)
-          const color = value || "rgba(245, 158, 11, 0.25)";
-          document.execCommand("hiliteColor", false, color);
-          if (sel.rangeCount > 0) {
-            const a = (sel.getRangeAt(0).startContainer.parentElement?.closest('span[style*="background"]') || sel.getRangeAt(0).startContainer.parentElement?.closest('span[style*="background-color"]')) as HTMLElement | null;
-            if (a) {
-              a.style.backgroundColor = color;
-              a.style.borderRadius = '3px';
-              a.style.padding = '1px 3px';
-            }
-          }
-        }
-      }
+      if(editorRef.current)applyEditorHighlight(editorRef.current,value);
     } else if (cmd === "foreColor") {
       const resolved = value && value.startsWith('var(')
         ? (getComputedStyle(document.documentElement).getPropertyValue(value.slice(4, -1)).trim() || '#EAEAEA')
@@ -2374,6 +1953,8 @@ const noteLiveAtts = useMemo(
   }, [selectedNote, updateNote]);
 
   const handleEditorKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if(e.nativeEvent.isComposing || e.key==='Process') return;
+    histRef.current.capture(true);
     // 0. Undo/Redo propio (el nativo se rompe con las manipulaciones directas del DOM)
     if ((e.ctrlKey || e.metaKey) && !e.altKey) {
       const uk = e.key.toLowerCase();
@@ -2707,7 +2288,7 @@ const noteLiveAtts = useMemo(
     // 4c. Backspace at start of block: merge with previous
     if (e.key === "Backspace") {
       try {
-        const isAtStart = range.startOffset === 0;
+        const isAtStart = range.collapsed && range.startOffset === 0;
         if (isAtStart && node.nodeType === Node.TEXT_NODE) {
           let currentBlock = node.parentElement;
           while (currentBlock && currentBlock !== editorRef.current &&
@@ -2723,11 +2304,11 @@ const noteLiveAtts = useMemo(
                 prev.tagName !== "TABLE") {
               e.preventDefault();
               const html = currentBlock.innerHTML;
-              currentBlock.remove();
-              prev.insertAdjacentHTML("beforeend", html);
               const newRange = document.createRange();
               newRange.selectNodeContents(prev);
               newRange.collapse(false);
+              currentBlock.remove();
+              prev.insertAdjacentHTML("beforeend", html);
               sel.removeAllRanges();
               sel.addRange(newRange);
               histRef.current.capture(false);
@@ -2881,7 +2462,7 @@ const noteLiveAtts = useMemo(
     const htmlData = e.clipboardData.getData("text/html");
     if (htmlData) {
       e.preventDefault();
-      const cleaned = sanitizePastedHtml(htmlData);
+      const cleaned = sanitizePastedHtml(prepareMathClipboard(htmlData));
       document.execCommand("insertHTML", false, upgradeLatexInText(cleaned));
       histRef.current.capture(false);
       setSaveStatus("pending");
@@ -2891,7 +2472,7 @@ const noteLiveAtts = useMemo(
       if (text && (text.startsWith("http://") || text.startsWith("https://"))) {
         e.preventDefault();
         setPendingLink(text);
-      } else if (text && /\$/.test(text) && /\[a-zA-Z]+/.test(text)) {
+      } else if (text && /[\\$]/.test(text)) {
         // Matemática LaTeX pegada de una IA o web → se renderiza como matemática real
         e.preventDefault();
         document.execCommand("insertHTML", false, latexTextToHtml(text));
@@ -2996,16 +2577,18 @@ const noteLiveAtts = useMemo(
 
   // DRAG AND DROP HANDLERS FOR REORDERING (Libros / Bloques) — @dnd-kit
   const noteSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { delay: 300, tolerance: 8 } })
+    useSensor(PointerSensor, { activationConstraint: { delay: 300, tolerance: 8 } }),
+    useSensor(KeyboardSensor,{coordinateGetter:sortableKeyboardCoordinates})
   );
   const [activeNoteDragId, setActiveNoteDragId] = useState<string | null>(null);
 
   const handleDragEndNotes = useCallback((event: any, targetIds?: string[]) => {
+    if(finishBrainDrag()){setActiveNoteDragId(null);return;}
     const { active, over } = event;
     const ids = (targetIds && targetIds.length ? targetIds : filteredNotes.map(n => n.id));
     const oldIndex = ids.indexOf(active.id);
     if (oldIndex >= 0) {
-      let newIndex = over ? ids.indexOf(over.id) : ids.length - 1;
+      let newIndex = over ? ids.indexOf(over.id) : -1;
       if (newIndex >= 0 && oldIndex !== newIndex && active.id !== over?.id) {
         const newIds = arrayMove([...ids], oldIndex, newIndex);
         reorderNotes(newIds);
@@ -3068,7 +2651,7 @@ const noteLiveAtts = useMemo(
 
   useEffect(() => {
     if (selectedNote) {
-      lastContentRef.current = selectedNote.content.replace(/<[^>]+>/g, "").trim();
+      lastContentRef.current = selectedNote.content.replace(/<\/(?:p|div|h[1-6]|li|tr)>/gi, " ").replace(/<[^>]+>/g, "").trim();
     }
   }, [selectedNote]);
 
@@ -3152,53 +2735,18 @@ const noteLiveAtts = useMemo(
         }
       `}</style>
       {/* ===== HEADER: Estudio-style as card ===== */}
-      <header style={{
-        display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
-        marginBottom: 22, paddingTop: 8,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center' }}>
-          <h1 style={{
-            fontSize: 42, fontWeight: 200, color: 'var(--text-primary)', lineHeight: 1,
-            letterSpacing: '-0.03em', fontFamily: "'Inter Tight', sans-serif", margin: 0,
-            textShadow: '0 0 20px var(--accent-glow)',
-          }}>
-            Notas
-          </h1>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <NotificationBell />
-          <div style={{ paddingLeft: 16, borderLeft: '1px solid var(--border-subtle)', position: 'relative' }}>
-            <div style={{ position: 'absolute', top: '50%', right: 0, width: 150, height: 100, background: `radial-gradient(circle at center, var(--text-muted) 0%, transparent 70%)`, opacity: 0.1, transform: 'translateY(-50%)', pointerEvents: 'none', zIndex: 0 }} />
-            <div style={{ textAlign: 'right', position: 'relative', zIndex: 1 }}>
-              <div className="flex items-baseline gap-2 justify-end">
-                <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 68, fontWeight: 200, lineHeight: 0.9, color: 'var(--text-secondary)', letterSpacing: '0.02em' }}>
-                  {timeStr}
-                </span>
-                {secondsStr !== null && (
-                <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 22, fontWeight: 200, color: 'var(--text-tertiary)', opacity: 0.7, letterSpacing: '0.02em' }}>
-                  {secondsStr}
-                </span>
-                )}
-              </div>
-              <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.12em', marginTop: 6 }}>
-                {dateStr}
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
+      <WorkspaceHeader title="Notas" />
 
       {/* ===== MAIN GRID LAYOUT (toolbar + content inside one bento card) ===== */}
       {isEditing ? (
             /* ==================== INLINE EDITOR WORKSPACE ==================== */
-            <div className="bento-card" style={{
+            <div data-details={showDetailsPanel} className="bento-card note-writing-workspace" style={{
               display: "flex", flex: 1, minHeight: 0, padding: 0, background: "var(--bg-surface)",
               border: "1px solid var(--border-default)", borderRadius: "var(--radius-lg)",
               overflow: "hidden",
             }}>
               {/* Editor content */}
-              <div style={{
+              <div className="note-writing-column" style={{
                 flex: 1, display: "flex", flexDirection: "column", overflow: "hidden",
                 borderRight: showDetailsPanel ? "1px solid var(--border-default)" : "none",
               }}>
@@ -3207,7 +2755,7 @@ const noteLiveAtts = useMemo(
                   padding: "10px 16px", borderBottom: "1px solid var(--border-default)",
                   background: "var(--bg-elevated)",
                 }}>
-                  <button onClick={() => { handleSaveNote(); setIsEditing(false); }}
+                  <button data-app-action="secondary" data-ui-control="" onClick={() => { handleSaveNote(); setIsEditing(false); setSelectedNoteId(null); }}
                     style={{
                       background: "none", border: "1px solid var(--border-default)", color: "var(--text-primary)",
                       padding: "6px 12px", borderRadius: 8, display: "flex", alignItems: "center", gap: 6,
@@ -3225,11 +2773,11 @@ const noteLiveAtts = useMemo(
                       <Check size={12} />
                       {saveStatus === "saved" ? "Guardado" : "Guardando"}
                     </span>
-                    <span style={{ fontSize: 10.5, color: "var(--text-tertiary)", fontFamily: "'JetBrains Mono', monospace", fontVariantNumeric: 'tabular-nums' }}>
+                    <span style={{ fontSize: 11, color: "var(--text-tertiary)", fontFamily: "'JetBrains Mono', monospace", fontVariantNumeric: 'tabular-nums' }}>
                       {selectedNote ? getWordCount(selectedNote.content).toLocaleString('es') : 0} palabras
                     </span>
                     
-                    <button onClick={() => setShowDetailsPanel(!showDetailsPanel)}
+                    <button data-ui-control="" aria-label="Información de la nota" aria-pressed={showDetailsPanel} onClick={() => setShowDetailsPanel(!showDetailsPanel)}
                       style={{
                         background: showDetailsPanel ? "var(--accent-dim)" : "none",
                         border: "1px solid " + (showDetailsPanel ? "var(--accent)" : "var(--border-default)"),
@@ -3257,26 +2805,26 @@ const noteLiveAtts = useMemo(
                 }} />
 
                 {/* Rich formatting Toolbar */}
-                <div style={{ padding: "8px 16px", borderBottom: "1px solid var(--border-default)", flexShrink: 0 }}>
-                  <EditorToolbar onFormat={handleFormat}
-                    onUndo={() => { if (histRef.current.undo()) setSaveStatus("pending"); }}
-                    onRedo={() => { if (histRef.current.redo()) setSaveStatus("pending"); }} />
+                <div className="note-toolbar-strip" style={{ padding: "8px 16px", borderBottom: "1px solid var(--border-default)", flexShrink: 0 }}>
+                  <NoteEditorToolbar key={selectedNote?.id} processImage={compressImageForNote} onFormat={handleFormat}
+                    onUndo={() => { if (histRef.current.undo()){if(saveTimeoutRef.current)clearTimeout(saveTimeoutRef.current);captureEditorDraft();handleSaveNote(editorRef.current?.innerHTML);} }}
+                    onRedo={() => { if (histRef.current.redo()){if(saveTimeoutRef.current)clearTimeout(saveTimeoutRef.current);captureEditorDraft();handleSaveNote(editorRef.current?.innerHTML);} }} />
                 </div>
 
                 {/* Write panel — adaptive margins */}
-                <div style={{
+                <div className="note-writing-sheet" style={{
                   flex: 1, display: "flex", flexDirection: "column", overflow: "auto",
                   padding: showDetailsPanel ? "16px 24px 48px" : "16px 48px 48px",
                   width: "100%", boxSizing: "border-box",
                 }}>
                   {/* Clean text input for title */}
                   <input
-                    ref={titleRef}
-                    type="text"
+                    ref={titleRef} key={selectedNote?.id} data-note-id={selectedNote?.id}
+                    type="text" onChange={()=>{captureEditorDraft();setSaveStatus("pending");}}
                     defaultValue={selectedNote?.title || ""}
-                    placeholder="Título del cuaderno"
+                    aria-label="Título de la nota" placeholder="Título del cuaderno"
                     style={{
-                      fontSize: 32, fontWeight: 200, color: "var(--text-primary)",
+                      fontSize: 32, fontWeight: 500, color: "var(--text-primary)",
                       fontFamily: "'Inter Tight', system-ui, sans-serif",
                       background: "transparent", border: "none", outline: "none",
                       width: "100%", padding: "0 0 14px", marginBottom: 24,
@@ -3290,8 +2838,8 @@ const noteLiveAtts = useMemo(
 
                   {/* Content editor — adaptive width, professional reading experience */}
                   <div
-                    ref={editorRef}
-                    contentEditable
+                    ref={editorRef} key={selectedNote?.id} data-note-id={selectedNote?.id}
+                    contentEditable onBeforeInput={event=>{if(!(event.nativeEvent as InputEvent).isComposing)histRef.current.capture(true);}} onCompositionStart={()=>histRef.current.capture(true)} role="textbox" aria-label="Contenido de la nota" aria-multiline="true" onInput={handleEditorInput} onCompositionEnd={()=>handleEditorInput()}
                     suppressContentEditableWarning
                     className="notes-editor-area"
                     style={{
@@ -3304,6 +2852,7 @@ const noteLiveAtts = useMemo(
                       margin: "0",
                     }}
                     onDoubleClick={(e) => {
+                      if(editorRef.current){histRef.current.capture(true);if(editMathSource(e.target,editorRef.current)){e.preventDefault();handleEditorInput();histRef.current.capture(false);return;}}
                       const target = e.target as HTMLElement;
                       // Double-click on IMG: show options (border, size, delete)
                       if (target.tagName === "IMG") {
@@ -3353,7 +2902,6 @@ const noteLiveAtts = useMemo(
                         if (href && isLocalAttHref(href)) {
                           e.preventDefault();
                           openFileSmart(href, (target.textContent || 'adjunto').trim(), {
-                            onMedia: (u, n) => setPipUrl(u, n),
                             onError: (m) => addNotification(m, 'error'),
                             onMoved: (np) => handleNoteAttMoved(href, np),
                           }).catch(() => addNotification('No se pudo abrir el adjunto', 'error'));
@@ -3415,7 +2963,7 @@ const noteLiveAtts = useMemo(
                           color: "var(--text-primary)", fontSize: 12, outline: "none",
                           padding: "4px 0",
                         }} />
-                      <button onClick={() => { setSlashMenuPos(null); setSlashFilter(""); cleanUpSlashText(); }}
+                      <button data-ui-control="" onClick={() => { setSlashMenuPos(null); setSlashFilter(""); cleanUpSlashText(); }}
                         title="Cerrar"
                         style={{
                           width: 22, height: 22, borderRadius: 4, border: "none",
@@ -3434,12 +2982,12 @@ const noteLiveAtts = useMemo(
                     ) : filtered.map(section => (
                       <div key={section.cat}>
                         <div style={{
-                          fontSize: 9.5, fontWeight: 700, color: "var(--text-tertiary)",
+                          fontSize: 11, fontWeight: 700, color: "var(--text-tertiary)",
                           textTransform: "uppercase", letterSpacing: "0.06em",
                           padding: "6px 8px 2px",
                         }}>{section.cat}</div>
                         {section.opts.map(opt => (
-                          <button key={opt.label} onClick={() => handleSlashSelect(opt.cmd, opt.value)}
+                          <button data-ui-control="" key={opt.label} onClick={() => handleSlashSelect(opt.cmd, opt.value)}
                             style={{
                               display: "flex", alignItems: "center", gap: 8, padding: "6px 8px",
                               width: "100%", textAlign: "left", border: "none",
@@ -3458,224 +3006,10 @@ const noteLiveAtts = useMemo(
                 );
               })()}
 
-              {/* Collapsible Details Panel right — redesigned professional */}
-              {showDetailsPanel && selectedNote && (() => {
-                const detailFolder = folders.find(f => f.id === selectedNote.folderId);
-                const pColor = selectedNote.coverColor || detailFolder?.color || selectedNote.courseColor || "var(--accent)";
-                const noteTags = selectedNote.tags || [];
-                const infoAllTags = (() => {
-                  const s = new Set<string>();
-                  notes.forEach(n => n.tags?.forEach(t => s.add(t)));
-                  try { JSON.parse(localStorage.getItem("owa_created_tags") || "[]").forEach((t: string) => s.add(t)); } catch {}
-                  return Array.from(s);
-                })();
-                const handleTagToggle = (tagName: string) => {
-                  const current = selectedNote.tags || [];
-                  const next = current.includes(tagName)
-                    ? current.filter(t => t !== tagName)
-                    : [...current, tagName];
-                  updateNote(selectedNote.id, { tags: next });
-                };
-                return (
-                <div style={{
-                  width: 280, minWidth: 280, display: "flex", flexDirection: "column",
-                  padding: "20px 16px", overflowY: "auto", overflowX: "hidden",
-                  gap: 14, borderLeft: "1px solid var(--border-subtle)",
-                  background: "var(--bg-surface)",
-                }}>
-                  {/* Metadatos */}
-                  <div style={{
-                    background: "var(--bg-elevated)",
-                    border: "1px solid var(--border-subtle)", borderRadius: 10, padding: "14px 14px",
-                    transition: "border-color 200ms",
-                  }}>
-                    <h3 style={{
-                      fontSize: 9, fontWeight: 500, color: "var(--text-tertiary)",
-                      letterSpacing: "0.14em", textTransform: "uppercase",
-                      marginBottom: 12, fontFamily: "'Inter', sans-serif",
-                      display: "flex", alignItems: "center", gap: 5,
-                    }}>
-                      <Info size={9} /> Información
-                    </h3>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, alignItems: "center" }}>
-                        <span style={{ color: "var(--text-tertiary)" }}>Carpeta</span>
-                        <span style={{ fontWeight: 500, color: pColor, fontSize: 10.5 }}>
-                          {selectedNote.course || "—"}
-                        </span>
-                      </div>
-                      <div style={{ height: 1, background: "var(--border-subtle)", opacity: 0.5 }} />
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
-                        <span style={{ color: "var(--text-tertiary)" }}>Creada</span>
-                        <span style={{ color: "var(--text-secondary)", fontSize: 10.5 }}>
-                          {safeFormat(selectedNote.createdAt, "d MMM, HH:mm")}
-                        </span>
-                      </div>
-                      <div style={{ height: 1, background: "var(--border-subtle)", opacity: 0.5 }} />
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
-                        <span style={{ color: "var(--text-tertiary)" }}>Modificada</span>
-                        <span style={{ color: "var(--text-secondary)", fontSize: 10.5 }}>
-                          {safeFormat(selectedNote.updatedAt, "d MMM, HH:mm")}
-                        </span>
-                      </div>
-                      <div style={{ height: 1, background: "var(--border-subtle)", opacity: 0.5 }} />
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
-                        <span style={{ color: "var(--text-tertiary)" }}>Palabras</span>
-                        <span style={{ color: "var(--text-secondary)", fontSize: 10.5 }}>{getWordCount(selectedNote.content)}</span>
-                      </div>
-                      <div style={{ height: 1, background: "var(--border-subtle)", opacity: 0.5 }} />
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
-                        <span style={{ color: "var(--text-tertiary)" }}>Caracteres</span>
-                        <span style={{ color: "var(--text-secondary)", fontSize: 10.5 }}>{getCharCount(selectedNote.content)}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Etiquetas */}
-                  <div style={{
-                    background: "var(--bg-elevated)",
-                    border: "1px solid var(--border-subtle)", borderRadius: 10, padding: "14px 14px",
-                  }}>
-                    <h3 style={{
-                      fontSize: 9, fontWeight: 500, color: "var(--text-tertiary)",
-                      letterSpacing: "0.14em", textTransform: "uppercase",
-                      marginBottom: 10, fontFamily: "'Inter', sans-serif",
-                      display: "flex", alignItems: "center", gap: 5,
-                    }}>
-                      <Hash size={9} /> Etiquetas
-                    </h3>
-                    {infoAllTags.length > 0 ? (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                        {infoAllTags.map(tag => {
-                          const tc = mergedTagColors[tag] || "var(--accent)";
-                          const active = noteTags.includes(tag);
-                          return (
-                            <button key={tag} onClick={() => handleTagToggle(tag)}
-                              style={{
-                                display: "flex", alignItems: "center", gap: 7,
-                                padding: "6px 8px", borderRadius: 6, width: "100%",
-                                border: "none",
-                                background: active ? `${tc}14` : "transparent",
-                                color: active ? tc : "var(--text-secondary)",
-                                fontSize: 11.5, fontWeight: active ? 550 : 400,
-                                cursor: "pointer", textAlign: "left",
-                                transition: "all 120ms ease",
-                              }}
-                              className={active ? "" : "hover:bg-[var(--bg-hover)]"}>
-                              <span style={{
-                                width: 6, height: 6, borderRadius: "50%",
-                                background: tc, flexShrink: 0,
-                                opacity: active ? 1 : 0.5,
-                                transition: "opacity 150ms",
-                              }} />
-                              <span style={{
-                                flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                                fontFamily: "'Inter', sans-serif",
-                              }}>
-                                {tag}
-                              </span>
-                              {active && <span style={{ fontSize: 8, opacity: 0.6 }}>✓</span>}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <span style={{ color: "var(--text-tertiary)", fontSize: 11, fontStyle: "italic" }}>
-                        Sin etiquetas
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Materiales — debajo de Etiquetas, misma estética (nombre + 2 botones al costado, como Cursos) */}
-                  <div style={{
-                    background: "var(--bg-elevated)",
-                    border: "1px solid var(--border-subtle)", borderRadius: 10, padding: "14px 14px",
-                  }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 10 }}>
-                      <h3 style={{
-                        flex: 1, fontSize: 9, fontWeight: 500, color: "var(--text-tertiary)",
-                        letterSpacing: "0.14em", textTransform: "uppercase", margin: 0,
-                        fontFamily: "'Inter', sans-serif", display: "flex", alignItems: "center", gap: 5, minWidth: 0,
-                      }}>
-                        <Paperclip size={9} /> Materiales
-                      </h3>
-                      <button onClick={() => { setShowMatLinkForm(!showMatLinkForm); }}
-                        title="Añadir enlace"
-                        style={{ width: 26, height: 26, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 7, cursor: "pointer", border: "1px solid color-mix(in srgb, var(--accent) 40%, transparent)", background: "color-mix(in srgb, var(--accent) 8%, transparent)", color: "var(--accent)", transition: "all 150ms" }}
-                        className="hover:bg-[color-mix(in srgb,var(--accent)16%,transparent)] hover:border-[color-mix(in srgb,var(--accent)65%,transparent)]">
-                        <Link2 size={12} />
-                      </button>
-                      <button onClick={() => {
-                        if (isTauri()) {
-                          pickAndPersistFile()
-                            .then(r => { if (r) addNoteAttachment(r.path, r.name, 0); })
-                            .catch(() => addNotification('No se pudo abrir el selector de archivos', 'error'));
-                        } else {
-                          fileInputRef.current?.click();
-                        }
-                      }}
-                        title="Adjuntar archivo"
-                        style={{ width: 26, height: 26, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 7, cursor: "pointer", border: "1px solid color-mix(in srgb, var(--accent) 40%, transparent)", background: "color-mix(in srgb, var(--accent) 8%, transparent)", color: "var(--accent)", transition: "all 150ms" }}
-                        className="hover:bg-[color-mix(in srgb,var(--accent)16%,transparent)] hover:border-[color-mix(in srgb,var(--accent)65%,transparent)]">
-                        <Upload size={12} />
-                      </button>
-                    </div>
-                    {showMatLinkForm && (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10, padding: 10, background: "var(--bg-base)", borderRadius: 9, border: "1px solid var(--border-soft)" }}>
-                        <input value={matLinkName} onChange={e => setMatLinkName(e.target.value)}
-                          onKeyDown={e => { if (e.key === "Enter") handleAddNoteLink(matLinkName, matLinkUrl); }} placeholder="Nombre (opcional)"
-                          style={{ width: "100%", padding: "7px 10px", fontSize: 11.5, borderRadius: 7, border: "1px solid var(--border-default)", background: "var(--bg-elevated)", color: "var(--text-primary)", outline: "none", boxSizing: "border-box" }} />
-                        <input value={matLinkUrl} onChange={e => setMatLinkUrl(e.target.value)}
-                          onKeyDown={e => { if (e.key === "Enter") handleAddNoteLink(matLinkName, matLinkUrl); }} placeholder="https://..."
-                          style={{ width: "100%", padding: "7px 10px", fontSize: 11.5, borderRadius: 7, border: "1px solid var(--border-default)", background: "var(--bg-elevated)", color: "var(--text-primary)", outline: "none", boxSizing: "border-box" }} />
-                        <button onClick={() => handleAddNoteLink(matLinkName, matLinkUrl)}
-                          style={{ background: "var(--accent)", color: "#fff", border: "none", borderRadius: 7, padding: "7px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Añadir enlace</button>
-                      </div>
-                    )}
-                    {noteLiveAtts.length > 0 ? (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                        {noteLiveAtts.map(att => {
-                          const badge = getNoteMatBadge(att.dataUrl || '', att.name);
-                          const isLink = (att.dataUrl || '').startsWith('http');
-                          return (
-                            <div key={att.id} onClick={() => { openFileSmart(att.dataUrl || '', att.name, { onMedia: (u, n) => setPipUrl(u, n), onError: (m) => addNotification(m, 'error'), onMoved: (np) => handleNoteAttMoved(att.dataUrl || '', np) }).catch(() => addNotification('No se pudo abrir el adjunto', 'error')); }}
-                              style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 9px", background: "var(--bg-base)", border: "1px solid var(--border-subtle)", borderRadius: 10, cursor: "pointer", maxWidth: "100%", transition: "border-color 150ms, transform 150ms" }}
-                              className="hover:border-[var(--accent)]" title={"Abrir: " + att.name}>
-                              <span style={{
-                                width: 30, height: 30, borderRadius: 8, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
-                                background: "color-mix(in srgb, " + badge.badgeColor + " 14%, transparent)",
-                                border: "1px solid color-mix(in srgb, " + badge.badgeColor + " 30%, transparent)",
-                              }}>{badge.iconEl}</span>
-                              <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 1 }}>
-                                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-primary)", fontSize: 11.5, fontWeight: 500 }}>{att.name}</span>
-                                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-tertiary)", fontSize: 9.5 }}>
-                                  {!isLink && att.size > 0 ? `${(att.size / 1024).toFixed(0)} KB · ` : ''}{badge.subtitle}
-                                </span>
-                              </span>
-                              <button onClick={(e) => { e.stopPropagation(); setDeleteAttConfirm({ id: att.id, name: att.name }); }}
-                                style={{ width: 24, height: 24, borderRadius: 7, border: "none", background: "transparent", color: "var(--text-tertiary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 150ms" }}
-                                className="hover:bg-[rgba(239,68,68,0.14)] hover:text-[#EF4444]" title="Quitar material">
-                                <X size={13} />
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div style={{
-                        display: "flex", alignItems: "center", justifyContent: "center", gap: 6, height: 44,
-                        borderRadius: 9, border: "1px dashed var(--border-subtle)", background: "var(--bg-surface)",
-                        fontSize: 10.5, color: "var(--text-tertiary)",
-                      }}>
-                        Sin materiales — usa los botones de arriba
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Acceso Rápido (eliminado: Duplicar/Exportar PDF/Eliminar viven en el menú contextual de la nota) */}
-                </div>
-                );
-              })()}
+              {showDetailsPanel&&selectedNote&&<NoteDetailsPanel key={selectedNote.id} noteId={selectedNote.id} files={noteLiveAtts}
+                onAttach={()=>{if(isTauri())pickAndPersistFile().then(r=>{if(r)addNoteAttachment(r.path,r.name,0);}).catch(()=>addNotification('No se pudo abrir el selector de archivos','error'));else fileInputRef.current?.click();}}
+                onOpen={att=>{void openFileSmart(att.dataUrl||'',att.name,{onError:m=>addNotification(m,'error'),onMoved:np=>handleNoteAttMoved(att.dataUrl||'',np)}).catch(()=>addNotification('No se pudo abrir el adjunto','error'));}}
+                onRemove={att=>setDeleteAttConfirm({id:att.id,name:att.name})} onLink={handleAddNoteLink}/>}
             </div>
           ) : (
             /* ==================== MAIN CONTENT CARD ==================== */
@@ -3687,8 +3021,7 @@ const noteLiveAtts = useMemo(
               boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
             }}>
               {/* LEFT SIDEBAR (Library views & custom folder list) */}
-              <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-                <LibrarySidebar
+              <LibrarySidebar
                   folders={folders}
                   notes={notes}
                   selectedFolderId={selectedFolderId}
@@ -3723,8 +3056,7 @@ const noteLiveAtts = useMemo(
                   onTagReorder={(tags) => {
                     try { localStorage.setItem("owa_tag_order", JSON.stringify(tags)); } catch { /* cuota */ }
                   }}
-                />
-              </div>
+              />
 
               {/* CENTER CONTAINER */}
               <div style={{
@@ -3739,7 +3071,7 @@ const noteLiveAtts = useMemo(
                   background: "var(--bg-elevated)",
                 }}>
                   {/* View toggle — larger text, pill design */}
-                  <div style={{
+                  <div className="note-view-switcher" style={{
                     display: "flex",
                     background: "var(--bg-deep)",
                     border: "1px solid var(--border-subtle)",
@@ -3747,7 +3079,7 @@ const noteLiveAtts = useMemo(
                     boxSizing: "border-box", gap: 2,
                     boxShadow: "inset 0 1px 2px rgba(0,0,0,0.15)",
                   }}>
-                    <button onClick={() => setViewMode("estante")}
+                    <button data-ui-control="" aria-pressed={viewMode==="estante"} onClick={() => setViewMode("estante")}
                       title="Vista de Estantería"
                       style={{
                         height: 30, borderRadius: 7, border: "none",
@@ -3763,7 +3095,7 @@ const noteLiveAtts = useMemo(
                       <Library size={13} />
                       <span>Estante</span>
                     </button>
-                    <button onClick={() => setViewMode("lista")}
+                    <button data-ui-control="" aria-pressed={viewMode==="lista"} onClick={() => setViewMode("lista")}
                       title="Vista de Lista"
                       style={{
                         height: 30, borderRadius: 7, border: "none",
@@ -3796,7 +3128,7 @@ const noteLiveAtts = useMemo(
                           background: "var(--bg-surface)",
                         }} />
                     </div>
-                    <button onClick={() => setActiveSidebarTab(activeSidebarTab === 'favs' ? 'all' : 'favs')}
+                    <button data-ui-control="" onClick={() => setActiveSidebarTab(activeSidebarTab === 'favs' ? 'all' : 'favs')}
                       style={{
                         width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center",
                         background: activeSidebarTab === 'favs' ? 'rgba(245, 158, 11, 0.12)' : "var(--bg-surface)",
@@ -3809,7 +3141,7 @@ const noteLiveAtts = useMemo(
                       title={activeSidebarTab === 'favs' ? "Ver todas" : "Ver destacados"}>
                       <Star size={13} fill={activeSidebarTab === 'favs' ? '#F59E0B' : 'none'} />
                     </button>
-                    <button onClick={handleCreateNote}
+                    <button data-app-action="primary" data-ui-control="" onClick={handleCreateNote}
                       style={{
                         display: "flex", alignItems: "center", gap: 5, height: 30, padding: "0 12px",
                         background: "var(--accent)", color: "#fff", border: "none", borderRadius: 8,
@@ -3842,7 +3174,7 @@ const noteLiveAtts = useMemo(
                               {currentFolder.name}
                             </span>
                           </div>
-                          <button onClick={() => { setEditFolderId(currentFolder.id); setEditFolderName(currentFolder.name); setEditFolderColor(fc); }}
+                          <button data-ui-control="" onClick={() => { setEditFolderId(currentFolder.id); setEditFolderName(currentFolder.name); setEditFolderColor(fc); }}
                             style={{
                               width: 28, height: 28, flexShrink: 0,
                               display: "flex", alignItems: "center", justifyContent: "center",
@@ -3867,7 +3199,7 @@ const noteLiveAtts = useMemo(
                               {selectedTag}
                             </span>
                           </div>
-                          <button onClick={() => { setTagColorEdit(selectedTag); setEditTagName(selectedTag); }}
+                          <button data-ui-control="" onClick={() => { setTagColorEdit(selectedTag); setEditTagName(selectedTag); }}
                             style={{
                               width: 28, height: 28, flexShrink: 0,
                               display: "flex", alignItems: "center", justifyContent: "center",
@@ -3890,6 +3222,7 @@ const noteLiveAtts = useMemo(
                   position: "relative",
                 }}>
               {/* Trash view */}
+              
               {activeSidebarTab === "trash" ? (
                 <div style={{ flex: 1, overflow: "auto", padding: "12px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
                   {filteredNotes.length === 0 ? (
@@ -3904,25 +3237,25 @@ const noteLiveAtts = useMemo(
                   ) : (
                     <>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 14px", background: "var(--bg-surface)", borderRadius: "var(--radius-md)", border: "1px solid var(--border-default)" }}>
-                        <button onClick={() => handleSelectAllTrash(filteredNotes.map(n => n.id))}
+                        <button data-ui-control="" onClick={() => handleSelectAllTrash(filteredNotes.map(n => n.id))}
                           style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", color: "var(--text-tertiary)" }}
                           title="Seleccionar todo">
                           <CheckSquare size={14} style={{ opacity: trashSelectedIds.size === filteredNotes.length ? 1 : 0.4 }} />
                         </button>
-                        <span style={{ fontSize: 10.5, color: "var(--text-tertiary)", fontWeight: 500 }}>
+                        <span style={{ fontSize: 11, color: "var(--text-tertiary)", fontWeight: 500 }}>
                           {trashSelectedIds.size > 0
                             ? `${trashSelectedIds.size} seleccionada${trashSelectedIds.size !== 1 ? "s" : ""}`
                             : `${filteredNotes.length} nota${filteredNotes.length !== 1 ? "s" : ""}`}
                         </span>
                         {trashSelectedIds.size > 0 && (
                           <div style={{ display: "flex", gap: 4, marginLeft: "auto" }}>
-                            <button onClick={handleBatchRestore}
-                              style={{ background: "none", border: "1px solid var(--border-default)", borderRadius: 6, padding: "3px 8px", cursor: "pointer", color: "var(--success)", fontSize: 9.5, fontWeight: 600 }}
+                            <button data-app-action="secondary" data-ui-control="" onClick={handleBatchRestore}
+                              style={{ background: "none", border: "1px solid var(--border-default)", borderRadius: 6, padding: "3px 8px", cursor: "pointer", color: "var(--success)", fontSize: 11, fontWeight: 600 }}
                               className="hover:bg-[var(--bg-hover)]">
                               Restaurar {trashSelectedIds.size > 1 ? `(${trashSelectedIds.size})` : ""}
                             </button>
-                            <button onClick={handleBatchDelete}
-                              style={{ background: "none", border: "1px solid var(--error)30", borderRadius: 6, padding: "3px 8px", cursor: "pointer", color: "var(--error)", fontSize: 9.5, fontWeight: 600 }}
+                            <button data-app-action="danger" data-ui-control="" onClick={handleBatchDelete}
+                              style={{ background: "none", border: "1px solid var(--error)30", borderRadius: 6, padding: "3px 8px", cursor: "pointer", color: "var(--error)", fontSize: 11, fontWeight: 600 }}
                               className="hover:bg-[var(--bg-hover)]">
                               Eliminar {trashSelectedIds.size > 1 ? `(${trashSelectedIds.size})` : ""}
                             </button>
@@ -3941,7 +3274,7 @@ const noteLiveAtts = useMemo(
                               border: isSelected ? "1px solid var(--accent)30" : "1px solid var(--border-default)",
                               transition: "all 120ms",
                             }}>
-                              <button onClick={() => toggleTrashSelect(note.id)}
+                              <button data-ui-control="" onClick={() => toggleTrashSelect(note.id)}
                                 style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", flexShrink: 0, color: isSelected ? "var(--accent)" : "var(--text-tertiary)" }}>
                                 <CheckSquare size={13} />
                               </button>
@@ -3959,26 +3292,26 @@ const noteLiveAtts = useMemo(
                                 <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)", marginBottom: 1 }}>
                                   {note.course ? `${format(new Date(note.createdAt), 'dd/MM/yy')} — ${note.course}` : (note.title || "Sin título")}
                                 </div>
-                                <div style={{ fontSize: 9.5, color: "var(--text-tertiary)" }}>
+                                <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>
                                   {delTime}{note.tags?.length ? ` · ${note.tags.slice(0, 2).join(", ")}` : ""}
                                 </div>
                               </div>
                               <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
-                                <button onClick={() => handleRestoreNote(note.id)}
+                                <button data-app-action="secondary" data-ui-control="" onClick={() => handleRestoreNote(note.id)}
                                   style={{
                                     background: "none", border: "1px solid var(--border-default)",
                                     borderRadius: 5, padding: "4px 7px", cursor: "pointer",
-                                    color: "var(--success)", fontSize: 9, fontWeight: 600,
+                                    color: "var(--success)", fontSize: 11, fontWeight: 600,
                                   }}
                                   className="hover:bg-[var(--bg-hover)]"
                                   title="Restaurar">
                                   Restaurar
                                 </button>
-                                <button onClick={() => handlePermanentDelete(note.id)}
+                                <button data-ui-control="" onClick={() => handlePermanentDelete(note.id)}
                                   style={{
                                     background: "none", border: "1px solid var(--error)30",
                                     borderRadius: 5, padding: "4px 7px", cursor: "pointer",
-                                    color: "var(--error)", fontSize: 9, fontWeight: 600,
+                                    color: "var(--error)", fontSize: 11, fontWeight: 600,
                                   }}
                                   className="hover:bg-[var(--bg-hover)]"
                                   title="Eliminar permanentemente">
@@ -4004,20 +3337,20 @@ const noteLiveAtts = useMemo(
                   </div>
                 ) : viewMode === "lista" ? (
                   /* Upgraded Blocks View: Grid of 2 columns */
-                  <DndContext sensors={noteSensors} collisionDetection={closestCenter}
-                    onDragStart={(e) => setActiveNoteDragId(e.active.id as string)} onDragCancel={() => setActiveNoteDragId(null)} onDragEnd={handleDragEndNotes}>
+                  <DndContext sensors={noteSensors} collisionDetection={args=>args.pointerCoordinates ? pointerWithin(args) : closestCenter(args)}
+                    onDragStart={(e) => {setActiveNoteDragId(e.active.id as string);beginBrainDrag('notes',String(e.active.id));}} onDragCancel={() => {cancelBrainDrag();setActiveNoteDragId(null);}} onDragEnd={handleDragEndNotes}>
                     <SortableContext items={filteredNotes.map(n => n.id)} strategy={rectSortingStrategy}>
-                    <div style={{
+                    <div className="notes-card-grid" data-dragging={!!activeNoteDragId} style={{
                       flex: 1, overflow: "auto", display: "grid",
-                      gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                      gridTemplateColumns: "repeat(auto-fill, minmax(min(280px, 100%), 1fr))",
                       gridAutoRows: "max-content",
                       gap: 14, padding: "18px 14px 14px",
                     }}>
                       {filteredNotes.map((note, i) => (
-                        <NoteCard key={note.id} note={note}
+                        <NoteCard key={note.id} note={note} folderLabel={folders.find(folder=>folder.id===note.folderId)?.name}
                           isSelected={selectedNoteId === note.id}
                           onSelect={() => handleSelectNote(note.id)}
-                          onOpen={() => { handleSelectNote(note.id); handleOpenNote(); }}
+                          onOpen={() => handleOpenNote(note.id)}
                           onContextMenu={(e, br) => handleContextMenu(e, note.id, br)}
                           tagColors={mergedTagColors} />
                       ))}
@@ -4053,7 +3386,7 @@ const noteLiveAtts = useMemo(
                             onMouseEnter={() => setShowShelfArrows(true)}
                             onMouseLeave={() => setShowShelfArrows(false)}>
                             {showShelfArrows && safePageBS > 0 && !selectedNote && (
-                              <button onClick={() => setBookshelfPage(safePageBS - 1)}
+                              <button data-ui-control="" onClick={() => setBookshelfPage(safePageBS - 1)}
                                 style={{
                                   position: "absolute", left: 0, top: 16, bottom: 16,
                                   zIndex: 10, width: 36, borderRadius: "0 10px 10px 0",
@@ -4068,7 +3401,7 @@ const noteLiveAtts = useMemo(
                               </button>
                             )}
                             {showShelfArrows && safePageBS < totalPagesBS - 1 && !selectedNote && (
-                              <button onClick={() => setBookshelfPage(safePageBS + 1)}
+                              <button data-ui-control="" onClick={() => setBookshelfPage(safePageBS + 1)}
                                 style={{
                                   position: "absolute", right: 0, top: 16, bottom: 16,
                                   zIndex: 10, width: 36, borderRadius: "10px 0 0 10px",
@@ -4084,8 +3417,8 @@ const noteLiveAtts = useMemo(
                             )}
 
                           {/* Books — non-scrollable, fills remaining space */}
-                          <DndContext sensors={noteSensors} collisionDetection={closestCenter}
-                            onDragStart={(e) => setActiveNoteDragId(e.active.id as string)} onDragCancel={() => setActiveNoteDragId(null)} onDragEnd={(e) => handleDragEndNotes(e, pageNotesBS.map(n => n.id))}>
+                          <DndContext sensors={noteSensors} collisionDetection={args=>args.pointerCoordinates ? pointerWithin(args) : closestCenter(args)}
+                            onDragStart={(e) => {setActiveNoteDragId(e.active.id as string);beginBrainDrag('notes',String(e.active.id));}} onDragCancel={() => {cancelBrainDrag();setActiveNoteDragId(null);}} onDragEnd={(e) => handleDragEndNotes(e, pageNotesBS.map(n => n.id))}>
                             <SortableContext items={pageNotesBS.map(n => n.id)} strategy={rectSortingStrategy}>
                           <div style={{
                             flex: 1, display: "flex", flexDirection: "column",
@@ -4104,7 +3437,7 @@ const noteLiveAtts = useMemo(
                                         isSelected={selectedNoteId === note.id}
                                         folders={folders}
                                         onSelect={() => handleSelectNote(note.id)}
-                                        onDoubleClick={handleOpenNote}
+                                        onDoubleClick={()=>handleOpenNote(note.id)}
                                         onContextMenu={(e, br) => handleContextMenu(e, note.id, br)} />
                                     );
                                   })}
@@ -4148,7 +3481,7 @@ const noteLiveAtts = useMemo(
                                   return (
                                     <>
                                       {cur > 0 && (
-                                        <button onClick={() => setBookshelfPage(cur - 1)}
+                                        <button data-ui-control="" onClick={() => setBookshelfPage(cur - 1)}
                                           style={{
                                             width: 24, height: 24, borderRadius: 5, border: "none",
                                             background: "transparent", color: "var(--text-tertiary)",
@@ -4162,11 +3495,11 @@ const noteLiveAtts = useMemo(
                                       {pages.map((p, idx) =>
                                         p === '...' ? (
                                           <span key={'e' + idx} style={{
-                                            width: 16, textAlign: "center", fontSize: 10,
+                                            width: 16, textAlign: "center", fontSize: 11,
                                             color: "var(--text-tertiary)",
                                           }}>...</span>
                                         ) : (
-                                          <button key={p} onClick={() => setBookshelfPage(p as number)}
+                                          <button data-ui-control="" key={p} onClick={() => setBookshelfPage(p as number)}
                                             style={{
                                               minWidth: 22, height: 22, borderRadius: 5, border: "none",
                                               background: p === cur ? "var(--accent)" : "transparent",
@@ -4180,7 +3513,7 @@ const noteLiveAtts = useMemo(
                                         )
                                       )}
                                       {cur < total - 1 && (
-                                        <button onClick={() => setBookshelfPage(cur + 1)}
+                                        <button data-ui-control="" onClick={() => setBookshelfPage(cur + 1)}
                                           style={{
                                             width: 24, height: 24, borderRadius: 5, border: "none",
                                             background: "transparent", color: "var(--text-tertiary)",
@@ -4211,9 +3544,9 @@ const noteLiveAtts = useMemo(
 
                 {/* ==================== LATERAL OVERLAY DRAWER PANEL ==================== */}
                 {/* Slides in from right, uses app theme colors */}
-                <div className="bento-card notes-lateral-drawer" style={{
+                <div ref={previewWidth.ref} className="bento-card notes-lateral-drawer" role="region" aria-label="Vista previa de nota" style={{
                   position: "absolute", right: 0, top: 0, bottom: 0, padding: 0,
-                  width: selectedNote ? (isMaximized ? "85%" : "48%") : 0,
+                  width: selectedNote ? (isMaximized ? "calc(100% - 20px)" : "var(--panel-width, min(620px, 75%))") : 0,
                   opacity: selectedNote ? 1 : 0,
                   pointerEvents: selectedNote ? "all" : "none",
                   transform: selectedNote ? "translateX(0)" : "translateX(30px)",
@@ -4223,129 +3556,18 @@ const noteLiveAtts = useMemo(
                   borderLeft: "1px solid var(--border-strong)",
                   borderRadius: "16px 0 0 16px",
                   boxShadow: "-12px 0 40px rgba(0,0,0,0.25)",
-                  display: "flex", flexDirection: "column", overflow: "hidden",
+                  display: "flex", flexDirection: "column", overflow: "visible",
                 }}>
+                  {selectedNote&&<PanelResizeHandle control={previewWidth} label="Ancho de la vista previa de nota"/>}
                   {selectedNote && (
                     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
                       {/* Drawer Header (toolbar + tabs) — darker bg */}
                       <div className="notes-drawer-header">
-                        {/* Drawer Toolbar */}
-                        <div style={{
-                          display: "flex", alignItems: "center", justifyContent: "space-between",
-                          padding: "12px 16px", borderBottom: "1px solid var(--border-default)", gap: 10,
-                        }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-                            <button onClick={() => setSelectedNoteId(null)}
-                              style={{
-                                background: "none", border: "none", color: "var(--text-secondary)",
-                                padding: 6, display: "flex", borderRadius: 6, cursor: "pointer",
-                              }}
-                              className="hover:bg-[var(--bg-hover)]">
-                              <X size={15} />
-                            </button>
-
-                            {/* Note name */}
-                            <span style={{
-                              fontSize: 13, fontWeight: 600, color: "var(--text-primary)",
-                              fontFamily: "'Inter Tight', sans-serif", overflow: "hidden",
-                              textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, maxWidth: 260,
-                            }}>
-                              {selectedNote.title || (selectedNote.content || '').slice(0, 60) || 'Nota sin título'}
-                            </span>
-
-                            {/* Maximize Toggle button */}
-                            <button onClick={() => { if (selectedNote) { setFloatNoteId(selectedNote.id); setFloatMin(false); } }}
-                              title="Leer en panel flotante (anclado a la derecha)"
-                              style={{
-                                background: floatNoteId === selectedNote.id ? "var(--accent-dim)" : "none",
-                                border: "1px solid " + (floatNoteId === selectedNote.id ? "var(--accent)" : "var(--border-default)"),
-                                color: floatNoteId === selectedNote.id ? "var(--accent)" : "var(--text-secondary)",
-                                padding: 6, borderRadius: 6, display: "flex", cursor: "pointer", flexShrink: 0,
-                              }}>
-                              <PictureInPicture2 size={13} />
-                            </button>
-                            <button onClick={() => setIsMaximized(!isMaximized)}
-                              style={{
-                                background: "none", border: "1px solid var(--border-default)",
-                                color: "var(--text-secondary)", padding: 6, borderRadius: 6,
-                                display: "flex", cursor: "pointer", flexShrink: 0,
-                              }}
-                              className="hover:bg-[var(--bg-hover)]"
-                              title={isMaximized ? "Restaurar vista" : "Ampliar vista"}>
-                              {isMaximized ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
-                            </button>
-                          </div>
-
-                          {/* Folder chip + quick actions */}
-                          <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0 }}>
-                            {(() => {
-                              const fc = folders.find(f => f.id === selectedNote.folderId);
-                              return (
-                                <span style={{
-                                  display: "inline-flex", alignItems: "center", gap: 5,
-                                  fontSize: 10, fontWeight: 600, padding: "4px 10px", borderRadius: 7,
-                                  background: fc ? fc.color + "12" : "var(--bg-hover)",
-                                  color: fc ? fc.color : "var(--text-tertiary)",
-                                  border: "1px solid " + (fc ? fc.color + "30" : "var(--border-default)"),
-                                  maxWidth: 130, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flexShrink: 0,
-                                }}>
-                                  <FolderIcon size={11} />
-                                  {fc ? fc.name : "Sin carpeta"}
-                                </span>
-                              );
-                            })()}
-
-                            <button onClick={() => updateNote(selectedNote.id, { isPinned: !selectedNote.isPinned })}
-                              title={selectedNote.isPinned ? "Desfijar" : "Fijar"}
-                              style={{
-                                background: selectedNote.isPinned ? "rgba(245, 158, 11, 0.1)" : "none",
-                                border: "1px solid " + (selectedNote.isPinned ? "#F59E0B" : "var(--border-default)"),
-                                color: selectedNote.isPinned ? "#F59E0B" : "var(--text-secondary)",
-                                width: 30, height: 30, borderRadius: 6, display: "flex", cursor: "pointer",
-                                alignItems: "center", justifyContent: "center", flexShrink: 0,
-                              }}>
-                              <Star size={12} fill={selectedNote.isPinned ? "#F59E0B" : "none"} />
-                            </button>
-
-                            {(() => {
-                              const fc = folders.find(f => f.id === selectedNote.folderId);
-                              return (
-                                <button onClick={() => setShowMoveModal(true)}
-                                  title="Mover"
-                                  style={{
-                                    background: "none", border: "1px solid " + (fc ? fc.color + "30" : "var(--border-default)"),
-                                    color: fc ? fc.color : "var(--text-secondary)",
-                                    width: 30, height: 30, borderRadius: 6,
-                                    display: "flex", cursor: "pointer", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                                  }}>
-                                  <FolderIcon size={12} />
-                                </button>
-                              );
-                            })()}
-
-                            <button onClick={() => { handleSelectNote(selectedNote!.id); handleOpenNote(); }}
-                              title="Editar"
-                              style={{
-                                background: "var(--accent)", color: "#fff", border: "none",
-                                width: 30, height: 30, borderRadius: 6,
-                                display: "flex", cursor: "pointer",
-                                alignItems: "center", justifyContent: "center",
-                                boxShadow: "0 2px 8px var(--accent-glow)",
-                              }}>
-                              <Edit3 size={12} />
-                            </button>
-
-                            <button onClick={() => setDeleteConfirmNoteId(selectedNote!.id)}
-                              title="Eliminar"
-                              style={{
-                                background: "none", border: "1px solid var(--border-default)",
-                                color: "var(--error)", width: 30, height: 30, borderRadius: 6,
-                                display: "flex", cursor: "pointer", alignItems: "center", justifyContent: "center",
-                              }}>
-                              <Trash2 size={12} />
-                            </button>
-                          </div>
-                        </div>
+                        <NoteReaderHeader key={selectedNote.id} title={selectedNote.title} folder={folders.find(folder=>folder.id===selectedNote.folderId)?.name||selectedNote.course}
+                          pinned={selectedNote.isPinned} expanded={isMaximized} onClose={()=>setSelectedNoteId(null)}
+                          onEdit={()=>handleOpenNote(selectedNote.id)} onFloat={()=>{setFloatNoteId(selectedNote.id);setFloatMin(false);}}
+                          onExpand={()=>setIsMaximized(value=>!value)} onPin={()=>updateNote(selectedNote.id,{isPinned:!selectedNote.isPinned})}
+                          onMove={()=>setShowMoveModal(true)} onDelete={()=>setDeleteConfirmNoteId(selectedNote.id)}/>
 
                         {/* Tabs */}
                         <div style={{
@@ -4354,7 +3576,7 @@ const noteLiveAtts = useMemo(
                           background: "var(--bg-elevated)",
                         }}>
                           {(["contenido", "informacion", ...(noteLiveAtts.length > 0 ? ["materiales"] as const : []), "historial"]).map((tab) => (
-                            <button key={tab} onClick={() => setDrawerTab(tab as any)}
+                            <button data-ui-control="" key={tab} onClick={() => setDrawerTab(tab as any)}
                               style={{
                                 padding: "10px 12px", border: "none", background: drawerTab === tab ? "var(--bg-surface)" : "none",
                                 color: drawerTab === tab ? "var(--accent)" : "var(--text-tertiary)",
@@ -4374,13 +3596,7 @@ const noteLiveAtts = useMemo(
                       <div className="notes-drawer-content" style={{ flex: 1, overflow: "auto", padding: "16px 20px 24px" }}>
                         {drawerTab === "contenido" && (
                           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                            <h2 style={{
-                              fontFamily: "'Inter Tight', sans-serif", fontSize: 30, fontWeight: 200,
-                              color: "var(--text-primary)", margin: 0, letterSpacing: "-0.03em",
-                              lineHeight: 1.15,
-                            }}>
-                              {selectedNote.title}
-                            </h2>
+                            
 
                             {/* HTML math formatted preview content */}
                             <div onClick={(e) => {
@@ -4395,7 +3611,6 @@ const noteLiveAtts = useMemo(
                                 } else if (href && isLocalAttHref(href)) {
                                   e.preventDefault();
                                   openFileSmart(href, (t.textContent || 'adjunto').trim(), {
-                                    onMedia: (u, n) => setPipUrl(u, n),
                                     onError: (m) => addNotification(m, 'error'),
                                     onMoved: (np) => handleNoteAttMoved(href, np),
                                   }).catch(() => addNotification('No se pudo abrir el adjunto', 'error'));
@@ -4423,7 +3638,7 @@ const noteLiveAtts = useMemo(
                                   const isLink = att.dataUrl?.startsWith('http');
                                   const badge = getNoteMatBadge(att.dataUrl || '', att.name);
                                   return (
-                                    <div key={att.id} onClick={() => { openFileSmart(att.dataUrl || '', att.name, { onMedia: (u, n) => setPipUrl(u, n), onError: (m) => addNotification(m, 'error'), onMoved: (np) => handleNoteAttMoved(att.dataUrl || '', np) }); }}
+                                    <div key={att.id} onClick={() => { openFileSmart(att.dataUrl || '', att.name, { onError: (m) => addNotification(m, 'error'), onMoved: (np) => handleNoteAttMoved(att.dataUrl || '', np) }); }}
                                       onContextMenu={(e) => matMenu.openMenu(e, { url: att.dataUrl || '', name: att.name, color: badge.badgeColor })}
                                       style={{
                                         display: "flex", alignItems: "center", gap: 12, padding: "14px 16px",
@@ -4442,20 +3657,20 @@ const noteLiveAtts = useMemo(
                                       }}>{badge.iconEl}</span>
                                       <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 3 }}>
                                         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-primary)", fontSize: 13, fontWeight: 600, fontFamily: "'Inter Tight', sans-serif" }}>{att.name}</span>
-                                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-tertiary)", fontSize: 10, fontFamily: "'JetBrains Mono', monospace" }}>
+                                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-tertiary)", fontSize: 11, fontFamily: "'JetBrains Mono', monospace" }}>
                                           {badge.subtitle}{!isLink && att.size > 0 ? ` · ${(att.size / 1024).toFixed(0)} KB` : ''}
                                         </span>
                                       </span>
                                       <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
                                         {att.dataUrl && (att.dataUrl.startsWith('data:') || att.dataUrl.startsWith('blob:')) && (
-                                          <button onClick={(e) => { e.stopPropagation(); openFileSmart(att.dataUrl, att.name, { onMedia: (u, n) => setPipUrl(u, n), onError: (m) => addNotification(m, 'error') }); }}
+                                          <button data-ui-control="" onClick={(e) => { e.stopPropagation(); openFileSmart(att.dataUrl, att.name, { onError: (m) => addNotification(m, 'error') }); }}
                                             style={{ width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", color: "var(--text-tertiary)", cursor: "pointer", borderRadius: 8 }}
                                             className="hover:bg-[var(--bg-base)] hover:text-[var(--text-primary)]" title="Vista previa">
                                             <Eye size={13} />
                                           </button>
                                         )}
                                         {isLink && (
-                                          <button onClick={(e) => {
+                                          <button data-ui-control="" onClick={(e) => {
                                             e.stopPropagation();
                                             setLinkPreviewUrl(att.dataUrl || '');
                                             setLinkPreviewError(false);
@@ -4466,7 +3681,7 @@ const noteLiveAtts = useMemo(
                                           </button>
                                         )}
                                         {att.dataUrl && (att.dataUrl.startsWith('data:') || att.dataUrl.startsWith('blob:')) && (
-                                          <button onClick={(e) => {
+                                          <button data-ui-control="" onClick={(e) => {
                                             e.stopPropagation();
                                             const a = document.createElement('a');
                                             a.href = att.dataUrl;
@@ -4496,228 +3711,24 @@ const noteLiveAtts = useMemo(
                           </div>
                         )}
 
-                        {drawerTab === "informacion" && (
-                          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                            {/* Folder / Course card */}
-                            {selectedNote.course && (() => {
-                              const currentFolder = folders.find(f => f.id === selectedNote.folderId);
-                              const fc = selectedNote.coverColor || currentFolder?.color || selectedNote.courseColor || "var(--accent)";
-                              return (
-                                <div style={{
-                                  display: "flex", alignItems: "center", gap: 10,
-                                  padding: "12px 14px",
-                                  background: "var(--bg-elevated)", borderRadius: "var(--radius-md)",
-                                  border: "1px solid " + fc + "20",
-                                }}>
-                                  <div style={{
-                                    width: 32, height: 32, borderRadius: 8,
-                                    background: fc + "18", display: "flex", alignItems: "center", justifyContent: "center",
-                                    border: "1px solid " + fc + "25", flexShrink: 0,
-                                  }}>
-                                    <BookOpen size={15} style={{ color: fc }} />
-                                  </div>
-                                  <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ fontSize: 9, fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                                      Carpeta
-                                    </div>
-                                    <div style={{ fontSize: 14, fontWeight: 700, color: fc }}>
-                                      {selectedNote.course}
-                                    </div>
-                                  </div>
-                                </div>
-                              );
-                            })()}
-                            {/* Stats grid */}
-                            <div style={{
-                              display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8,
-                            }}>
-                              <div style={{
-                                padding: "10px 12px", background: "var(--bg-elevated)",
-                                borderRadius: "var(--radius-md)", border: "1px solid var(--border-soft)",
-                              }}>
-                                <div style={{ fontSize: 9, color: "var(--text-tertiary)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 4, display: "flex", alignItems: "center", gap: 3 }}>
-                                  <FileText size={10} /> Palabras
-                                </div>
-                                <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text-primary)" }}>
-                                  {getWordCount(selectedNote.content).toLocaleString()}
-                                </div>
-                              </div>
-                              <div style={{
-                                padding: "10px 12px", background: "var(--bg-elevated)",
-                                borderRadius: "var(--radius-md)", border: "1px solid var(--border-soft)",
-                              }}>
-                                <div style={{ fontSize: 9, color: "var(--text-tertiary)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 4, display: "flex", alignItems: "center", gap: 3 }}>
-                                  <Type size={10} /> Caracteres
-                                </div>
-                                <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text-primary)" }}>
-                                  {getCharCount(selectedNote.content).toLocaleString()}
-                                </div>
-                              </div>
-                              <div style={{
-                                padding: "10px 12px", background: "var(--bg-elevated)",
-                                borderRadius: "var(--radius-md)", border: "1px solid var(--border-soft)",
-                              }}>
-                                <div style={{ fontSize: 9, color: "var(--text-tertiary)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 4, display: "flex", alignItems: "center", gap: 3 }}>
-                                  <File size={10} /> Tamaño
-                                </div>
-                                <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text-primary)" }}>
-                                  {((selectedNote.content.length) / 1024).toFixed(1)} <span style={{ fontSize: 10, color: "var(--text-tertiary)" }}>KB</span>
-                                </div>
-                              </div>
-                              {selectedNote.tags && selectedNote.tags.length > 0 && (
-                                <div style={{
-                                  padding: "10px 12px", background: "var(--bg-elevated)",
-                                  borderRadius: "var(--radius-md)", border: "1px solid var(--border-soft)",
-                                }}>
-                                  <div style={{ fontSize: 9, color: "var(--text-tertiary)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 4, display: "flex", alignItems: "center", gap: 3 }}>
-                                    <Hash size={10} /> Etiquetas
-                                  </div>
-                                  <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
-                                    {selectedNote.tags.map(t => {
-                                      const tc = mergedTagColors[t] || "var(--accent)";
-                                      return (
-                                        <span key={t} style={{
-                                          fontSize: 10, fontWeight: 600, padding: "1px 5px",
-                                          borderRadius: 3, background: tc + "18", color: tc,
-                                        }}>{t}</span>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                            {/* Timestamps */}
-                            <div style={{
-                              display: "flex", flexDirection: "column", gap: 6,
-                              background: "var(--bg-elevated)", borderRadius: "var(--radius-md)",
-                              border: "1px solid var(--border-soft)", padding: "10px 12px",
-                            }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 10.5 }}>
-                                <Clock size={11} style={{ color: "var(--text-tertiary)", flexShrink: 0 }} />
-                                <span style={{ color: "var(--text-tertiary)", minWidth: 60 }}>Creado</span>
-                                <span style={{ color: "var(--text-primary)", fontWeight: 550 }}>
-                                  {safeFormat(selectedNote.createdAt, "d MMM yyyy, HH:mm")}
-                                </span>
-                              </div>
-                              <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 10.5 }}>
-                                <Edit3 size={11} style={{ color: "var(--text-tertiary)", flexShrink: 0 }} />
-                                <span style={{ color: "var(--text-tertiary)", minWidth: 60 }}>Editado</span>
-                                <span style={{ color: "var(--text-primary)", fontWeight: 550 }}>
-                                  {safeFormat(selectedNote.updatedAt, "d MMM yyyy, HH:mm")}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {drawerTab === "historial" && (() => {
-                          type VersionEntry = { timestamp: string; preview: string; wordCount: number; content?: string };
-                          let versions: VersionEntry[] = [];
-                          try {
-                            const parsed = JSON.parse(localStorage.getItem("owa_note_versions_" + selectedNote.id) || "[]");
-                            if (Array.isArray(parsed)) versions = parsed;
-                          } catch {}
-                          return (
-                            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                              <div style={{ position: "relative", paddingLeft: 22 }}>
-                                <div style={{
-                                  position: "absolute", left: 10, top: 10, bottom: 8,
-                                  width: 2, background: "var(--border-subtle)",
-                                  opacity: 0.35, borderRadius: 2,
-                                }} />
-                                {versions.length === 0 ? (
-                                  <div style={{ padding: "10px 12px", fontSize: 12, color: "var(--text-tertiary)" }}>
-                                    Aún no hay cambios guardados.
-                                  </div>
-                                ) : (
-                                  versions.map((v, i) => (
-                                    <div key={v.timestamp} style={{ position: "relative", paddingBottom: i < versions.length - 1 ? 12 : 0 }}>
-                                      <div style={{
-                                        position: "absolute", left: -16, top: 5, width: 8, height: 8,
-                                        borderRadius: "50%",
-                                        background: i === 0 ? "var(--accent)" : "var(--border-default)",
-                                        border: "2px solid var(--bg-surface)",
-                                        boxShadow: i === 0 ? "0 0 0 3px var(--accent-glow)" : "none",
-                                        zIndex: 2,
-                                      }} />
-                                      <div style={{
-                                        marginLeft: 2, padding: "10px 12px",
-                                        background: i === 0 ? "var(--bg-elevated)" : "transparent",
-                                        borderRadius: "var(--radius-md)",
-                                        border: i === 0 ? "1px solid var(--border-soft)" : "none",
-                                      }}>
-                                        <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--text-primary)", marginBottom: 1 }}>
-                                          {safeFormat(v.timestamp, "d MMM HH:mm")}
-                                        </div>
-                                        <div style={{ fontSize: 10, color: "var(--text-tertiary)", lineHeight: 1.4 }}>
-                                          {v.preview}
-                                        </div>
-                                        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
-                                          <span style={{ fontSize: 9, color: "var(--text-muted)" }}>
-                                            {v.wordCount} palabras
-                                          </span>
-                                          {v.content && (
-                                            <button onClick={(e) => {
-                                              e.stopPropagation();
-                                              const currentHtml = editorRef.current?.innerHTML || selectedNote.content;
-                                              if (currentHtml === v.content) {
-                                                toast("Ya estás en esta versión", { icon: "ℹ️", duration: 2000 });
-                                              } else {
-                                                if (editorRef.current) {
-                                                  editorRef.current.innerHTML = v.content!;
-                                                  // Reinicia el historial: antes un Ctrl+Z posterior
-                                                  // volvía al HTML previo con un caret de otro texto.
-                                                  histRef.current.reset();
-                                                  histRef.current.capture(false);
-                                                }
-                                                lastContentRef.current = v.content!.replace(/<[^>]+>/g, "").trim();
-                                                lastSavedSigRef.current = `${selectedNote.id}|${titleRef.current?.value || selectedNote.title}|${v.content!}`;
-                                                if (selectedNote) updateNote(selectedNote.id, { content: v.content! });
-                                                toast.success("Versión restaurada");
-                                              }
-                                              setSaveStatus("pending");
-                                            }}
-                                              style={{
-                                                fontSize: 9, fontWeight: 600, padding: "1px 6px",
-                                                border: "1px solid var(--border-soft)",
-                                                borderRadius: 4, background: "transparent",
-                                                color: "var(--accent)", cursor: "pointer",
-                                                lineHeight: "18px",
-                                              }}>
-                                              Restaurar
-                                            </button>
-                                          )}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  ))
-                                )}
-                              </div>
-                              <div style={{ position: "relative", paddingLeft: 22 }}>
-                                <div style={{
-                                  position: "absolute", left: -14, top: 5, width: 7, height: 7,
-                                  borderRadius: "50%", background: "var(--border-default)",
-                                  border: "2px solid var(--bg-surface)", zIndex: 2,
-                                }} />
-                                <div style={{ marginLeft: 2, padding: "6px 12px" }}>
-                                  <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--text-secondary)" }}>Nota creada</div>
-                                  <div style={{ fontSize: 10, color: "var(--text-tertiary)" }}>
-                                    {safeFormat(selectedNote.createdAt, "d MMM yyyy, HH:mm")}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })()}
+                        {drawerTab === "informacion" && <NoteMetadata note={selectedNote} folder={folders.find(folder=>folder.id===selectedNote.folderId)?.name}/>}
+                        {drawerTab === "historial" && <NoteHistory note={selectedNote} onRestore={html=>{
+                          if(saveTimeoutRef.current)clearTimeout(saveTimeoutRef.current);
+                          saveNoteVersion(selectedNote.id,selectedNote.content);
+                          if(editorRef.current){editorRef.current.innerHTML=html;histRef.current.reset();histRef.current.capture(false);}
+                          lastContentRef.current=html.replace(/<[^>]+>/g,' ').trim();
+                          lastSavedSigRef.current=selectedNote.id+'|'+selectedNote.title+'|'+html;
+                          updateNote(selectedNote.id,{content:html});setSaveStatus('saved');toast.success('Versión restaurada');
+                        }}/>}
                       </div>
 
                       {/* Footer statistics */}
                       <div style={{
                         padding: "10px 16px", borderTop: "1px solid var(--border-default)",
-                        fontSize: 10.5, color: "var(--text-secondary)", display: "flex",
+                        fontSize: 11, color: "var(--text-secondary)", display: "flex",
                         justifyContent: "space-between", alignItems: "center", flexShrink: 0,
                       }}>
-                        <span style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--text-tertiary)", fontSize: 10 }}>
+                        <span style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--text-tertiary)", fontSize: 11 }}>
                           <Check size={10} /> {getWordCount(selectedNote.content)} palabras
                         </span>
                       </div>
@@ -4799,7 +3810,7 @@ const noteLiveAtts = useMemo(
             if ("sub" in item && Array.isArray(item.sub)) {
               return (
                 <div key={i} style={{ position: 'relative' }}>
-                  <button data-move-toggle style={{
+                  <button data-ui-control="" data-move-toggle style={{
                     display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%",
                     padding: "7px 10px", background: "none", border: "none",
                     borderRadius: "var(--radius-sm)", color: "var(--text-secondary)",
@@ -4815,7 +3826,7 @@ const noteLiveAtts = useMemo(
                   </button>
                   <div data-move-panel style={{ display: 'none', maxHeight: 180, overflowY: 'auto', margin: '2px 4px 4px', background: 'var(--bg-deep)', borderRadius: 8, padding: 4 }}>
                     {item.sub.map((s: any, si: number) => (
-                      <button key={si} onClick={() => { s.action(); setContextMenu(null); }}
+                      <button data-ui-control="" key={si} onClick={() => { s.action(); setContextMenu(null); }}
                         style={{ display: 'block', width: '100%', padding: '6px 9px', background: 'none', border: 'none', borderRadius: 6, color: 'var(--text-secondary)', fontSize: 11.5, textAlign: 'left', cursor: 'pointer', transition: 'all 130ms' }}
                         className="hover:bg-[var(--bg-hover)]"
                         onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-primary)'; }}
@@ -4829,7 +3840,7 @@ const noteLiveAtts = useMemo(
             }
             const Icon = item.icon;
             return (
-              <button key={i} onClick={() => { item.action(); setContextMenu(null); }}
+              <button data-ui-control="" key={i} onClick={() => { item.action(); setContextMenu(null); }}
                 style={{
                   display: "flex", alignItems: "center", gap: 8, width: "100%",
                   padding: "7px 10px", background: "none", border: "none",
@@ -4880,13 +3891,13 @@ const noteLiveAtts = useMemo(
               ¿Quieres moverte a editar este cuaderno? Se guardarán los cambios actuales.
             </p>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
-              <button onClick={() => setSwitchTargetId(null)}
+              <button data-app-action="secondary" data-ui-control="" onClick={() => setSwitchTargetId(null)}
                 className="btn-secondary"
                 style={{
                   background: "none", border: "1px solid var(--border-default)", borderRadius: 6,
                   padding: "6px 14px", color: "var(--text-secondary)", fontSize: 12, cursor: "pointer",
                 }}>Cancelar</button>
-              <button onClick={() => { handleSaveNote(); handleSelectNote(switchTargetId); setSwitchTargetId(null); }}
+              <button data-app-action="primary" data-ui-control="" onClick={() => { handleSaveNote(); handleSelectNote(switchTargetId); setSwitchTargetId(null); }}
                 style={{
                   background: "var(--accent)", color: "#fff", border: "none", borderRadius: 6,
                   padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer",
@@ -4919,13 +3930,13 @@ const noteLiveAtts = useMemo(
               ¿Estás seguro de eliminar esta nota? Se moverá a la papelera.
             </p>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
-              <button onClick={() => setDeleteConfirmNoteId(null)}
+              <button data-app-action="secondary" data-ui-control="" onClick={() => setDeleteConfirmNoteId(null)}
                 style={{
                   background: "none", border: "1px solid var(--border-default)", borderRadius: 8,
                   padding: "7px 16px", color: "var(--text-secondary)", fontSize: 11, cursor: "pointer",
                   fontFamily: "'Inter', sans-serif", fontWeight: 500,
                 }}>Cancelar</button>
-              <button onClick={handleDeleteNote}
+              <button data-ui-control="" onClick={handleDeleteNote}
                 style={{
                   background: "#EF4444", color: "#fff", border: "none", borderRadius: 8,
                   padding: "7px 16px", fontSize: 11, fontWeight: 600, cursor: "pointer",
@@ -4960,7 +3971,7 @@ const noteLiveAtts = useMemo(
                 <h3 style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)", margin: 0, fontFamily: "'Inter Tight', sans-serif" }}>
                   Quitar material
                 </h3>
-                <p style={{ fontSize: 10.5, color: "var(--text-tertiary)", margin: "2px 0 0", fontFamily: "'JetBrains Mono', monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <p style={{ fontSize: 11, color: "var(--text-tertiary)", margin: "2px 0 0", fontFamily: "'JetBrains Mono', monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {deleteAttConfirm.name}
                 </p>
               </div>
@@ -4969,13 +3980,13 @@ const noteLiveAtts = useMemo(
               ¿Eliminar este material de la nota? Se quitará de Materiales. Esta acción no se puede deshacer.
             </p>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 18 }}>
-              <button onClick={() => setDeleteAttConfirm(null)}
+              <button data-app-action="secondary" data-ui-control="" onClick={() => setDeleteAttConfirm(null)}
                 style={{
                   background: "none", border: "1px solid var(--border-default)", borderRadius: 9,
                   padding: "8px 16px", color: "var(--text-secondary)", fontSize: 11.5, cursor: "pointer",
                   fontFamily: "'Inter', sans-serif", fontWeight: 500,
                 }}>Cancelar</button>
-              <button onClick={() => { removeNoteAttachment(deleteAttConfirm.id); setDeleteAttConfirm(null); }}
+              <button data-ui-control="" onClick={() => { removeNoteAttachment(deleteAttConfirm.id); setDeleteAttConfirm(null); }}
                 style={{
                   background: "#EF4444", color: "#fff", border: "none", borderRadius: 9,
                   padding: "8px 16px", fontSize: 11.5, fontWeight: 600, cursor: "pointer",
@@ -4987,41 +3998,18 @@ const noteLiveAtts = useMemo(
         document.body
       )}
       {floatNote && createPortal(
-        <div style={{ position: 'fixed', top: 0, right: floatMin ? -400 : 0, bottom: 0, width: floatWide ? '50vw' : 480, maxWidth: '96vw', zIndex: 98500, background: 'var(--bg-primary)', borderLeft: '1px solid var(--border-default)', boxShadow: '-20px 0 60px rgba(0,0,0,0.5)', display: floatMin ? 'none' : 'flex', flexDirection: 'column', transition: 'right 260ms cubic-bezier(0.16,1,0.3,1), width 220ms cubic-bezier(0.16,1,0.3,1)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '14px 16px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: (floatNote.folderId && folders.find(f => f.id === floatNote.folderId)?.color) || 'var(--accent)', flexShrink: 0 }} />
-            <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {floatNote.title || 'Nota sin título'}
-            </span>
-            <button onClick={() => { setFloatNoteId(null); setSelectedNoteId(floatNote.id); setIsEditing(true); }}
-              title="Editar en el editor real"
-              style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid rgba(225,29,72,0.35)', background: 'rgba(225,29,72,0.08)', color: 'var(--accent)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <Edit3 size={13} />
-            </button>
-            <button onClick={() => setFloatWide(v => !v)}
-              title={floatWide ? 'Reducir a ancho normal' : 'Expandir a media pantalla'}
-              style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid var(--border-default)', background: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              {floatWide ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
-            </button>
-            <button onClick={() => setFloatMin(true)}
-              title="Minimizar"
-              style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid var(--border-default)', background: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <Minus size={13} />
-            </button>
-            <button onClick={() => setFloatNoteId(null)}
-              title="Cerrar"
-              style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid var(--border-default)', background: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <X size={13} />
-            </button>
-          </div>
-          <div className="notes-preview-area" style={{ flex: 1, overflowY: 'auto', padding: '20px 22px 30px', fontSize: 14.5, lineHeight: 1.8, color: 'var(--text-primary)', fontFamily: "'Arial Narrow', Arial, system-ui, sans-serif", wordBreak: 'break-word' }}
+        <div className="note-floating-reader" role="dialog" aria-label="Lectura flotante de nota" aria-modal="false" style={{ position: 'fixed', top: 0, right: floatMin ? -400 : 0, bottom: 0, width: floatWide ? '50vw' : 480, maxWidth: '96vw', zIndex: 98500, background: 'var(--bg-primary)', borderLeft: '1px solid var(--border-default)', boxShadow: '-20px 0 60px rgba(0,0,0,0.5)', display: floatMin ? 'none' : 'flex', flexDirection: 'column', transition: 'right 260ms cubic-bezier(0.16,1,0.3,1), width 220ms cubic-bezier(0.16,1,0.3,1)' }}>
+          <NoteReaderHeader key={floatNote.id} floating title={floatNote.title} folder={folders.find(folder=>folder.id===floatNote.folderId)?.name||floatNote.course}
+            expanded={floatWide} onClose={()=>setFloatNoteId(null)} onMinimize={()=>setFloatMin(true)} onExpand={()=>setFloatWide(value=>!value)}
+            onEdit={()=>{handleOpenNote(floatNote.id);setFloatNoteId(null);}}/>
+          <div className="notes-preview-area" style={{ flex: 1, overflowY: 'auto', padding: '20px 22px 30px', fontSize: 14.5, lineHeight: 1.8, color: 'var(--text-primary)', fontFamily: "var(--font-primary)", wordBreak: 'break-word' }}
             dangerouslySetInnerHTML={{ __html: floatNote.content || '<p style="color:var(--text-muted);font-style:italic">Nota vacía</p>' }} />
         </div>,
         document.body
       )}
 
       {floatMin && floatNote && createPortal(
-        <button onClick={() => setFloatMin(false)}
+        <button data-ui-control="" onClick={() => setFloatMin(false)}
           title={'Restaurar: ' + (floatNote.title || 'Nota')}
           style={{ position: 'fixed', bottom: 18, right: 18, zIndex: 98500, display: 'flex', alignItems: 'center', gap: 8, padding: '9px 15px', borderRadius: 999, background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', boxShadow: '0 8px 30px rgba(0,0,0,0.4)', cursor: 'pointer', maxWidth: 300 }}>
           <span style={{ width: 7, height: 7, borderRadius: '50%', background: (floatNote.folderId && folders.find(f => f.id === floatNote.folderId)?.color) || 'var(--accent)', flexShrink: 0 }} />
@@ -5056,7 +4044,7 @@ const noteLiveAtts = useMemo(
               </p>
             </div>
             <div style={{ maxHeight: 260, overflow: "auto", padding: "0 8px" }}>
-              <button onClick={() => { handleMoveToFolder(undefined); setShowMoveModal(false); }}
+              <button data-ui-control="" onClick={() => { handleMoveToFolder(undefined); setShowMoveModal(false); }}
                 style={{
                   display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "9px 12px",
                   background: "transparent", border: "none", borderRadius: 8,
@@ -5074,7 +4062,7 @@ const noteLiveAtts = useMemo(
               </button>
               <div style={{ height: 1, background: "var(--border-subtle)", margin: "4px 0" }} />
               {folders.map((f) => (
-                <button key={f.id} onClick={() => { handleMoveToFolder(f.id); setShowMoveModal(false); }}
+                <button data-ui-control="" key={f.id} onClick={() => { handleMoveToFolder(f.id); setShowMoveModal(false); }}
                   style={{
                     display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "9px 12px",
                     background: "transparent", border: "none", borderRadius: 8,
@@ -5091,14 +4079,14 @@ const noteLiveAtts = useMemo(
                   </div>
                   <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</span>
                   <span style={{
-                    fontSize: 9.5, color: "var(--text-tertiary)", background: "var(--bg-hover)",
+                    fontSize: 11, color: "var(--text-tertiary)", background: "var(--bg-hover)",
                     padding: "1px 6px", borderRadius: 4, fontWeight: 650,
                   }}>{notes.filter(n => n.folderId === f.id && !n.deletedAt).length}</span>
                 </button>
               ))}
             </div>
             <div style={{ padding: "12px 20px", borderTop: "1px solid var(--border-subtle)", display: "flex", justifyContent: "flex-end" }}>
-              <button onClick={() => setShowMoveModal(false)}
+              <button data-app-action="secondary" data-ui-control="" onClick={() => setShowMoveModal(false)}
                 style={{
                   background: "var(--accent)", color: "#fff", border: "none", borderRadius: 8,
                   padding: "8px 20px", fontSize: 12.5, fontWeight: 600, cursor: "pointer",
@@ -5136,7 +4124,7 @@ const noteLiveAtts = useMemo(
               wordBreak: "break-all", border: "1px solid var(--border-subtle)",
             }}>{pendingLink}</div>
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
-              <button onClick={() => setPendingLink(null)}
+              <button data-app-action="danger" data-ui-control="" onClick={() => setPendingLink(null)}
                 style={{
                   padding: "6px 14px", borderRadius: 8, border: "1px solid var(--border-default)",
                   background: "transparent", color: "var(--text-secondary)", fontSize: 11.5,
@@ -5145,7 +4133,7 @@ const noteLiveAtts = useMemo(
                 className="hover:bg-[var(--bg-hover)]">
                 Descartar
               </button>
-              <button onClick={() => {
+              <button data-app-action="primary" data-ui-control="" onClick={() => {
                 if (editorRef.current) {
                   document.execCommand("insertHTML", false,
                     `<div class="notes-attachment"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg><a href="${pendingLink}" target="_blank">${pendingLink}</a><span class="att-meta">Enlace</span></div>`);
@@ -5200,7 +4188,7 @@ const noteLiveAtts = useMemo(
                 className="hover:bg-[var(--bg-hover)]">
                 Abrir
               </a>
-              <button onClick={() => setLinkPreviewUrl(null)}
+              <button data-ui-control="" onClick={() => setLinkPreviewUrl(null)}
                 style={{
                   width: 26, height: 26, flexShrink: 0,
                   display: "flex", alignItems: "center", justifyContent: "center",
@@ -5260,7 +4248,7 @@ const noteLiveAtts = useMemo(
                 objectFit: "contain",
               }}
             />
-            <button onClick={() => setLightboxImage(null)}
+            <button data-ui-control="" onClick={() => setLightboxImage(null)}
               style={{
                 position: "absolute", top: -12, right: -12, width: 32, height: 32,
                 borderRadius: "50%", border: "none", background: "var(--bg-elevated)",
@@ -5302,7 +4290,7 @@ const noteLiveAtts = useMemo(
               <span style={{ flex: 1, fontSize: 12, color: "var(--text-primary)", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {previewFile.name}
               </span>
-              <button onClick={() => {
+              <button data-app-action="secondary" data-ui-control="" onClick={() => {
                 const a = document.createElement('a');
                 a.href = previewFile.url;
                 a.download = previewFile.name;
@@ -5314,7 +4302,7 @@ const noteLiveAtts = useMemo(
               }} className="hover:bg-[var(--bg-hover)]">
                 <Download size={12} /> Descargar
               </button>
-              <button onClick={() => setPreviewFile(null)}
+              <button data-ui-control="" onClick={() => setPreviewFile(null)}
                 style={{
                   width: 26, height: 26, flexShrink: 0,
                   display: "flex", alignItems: "center", justifyContent: "center",
@@ -5404,7 +4392,8 @@ function LibrarySidebar({
   onTagColorsChange,
   onTagReorder,
 }: LibrarySidebarProps) {
-  const { reorderFolders, deleteNoteFolder, updateNoteFolder, updateNote, addNotification, courses } = useApp();
+  const panel=usePanelWidth('note-folders',228,176,340);
+  const { reorderFolders, deleteNoteFolder, updateNoteFolder, updateNote, addNotification, courses } = useAppSlice(["reorderFolders","deleteNoteFolder","updateNoteFolder","updateNote","addNotification","courses"]);
   const [showTagSection, setShowTagSection] = useState(true);
   const [activeFolderDragId, setActiveFolderDragId] = useState<string | null>(null);
   const [activeTagDragId, setActiveTagDragId] = useState<string | null>(null);
@@ -5413,10 +4402,12 @@ function LibrarySidebar({
     try { return JSON.parse(localStorage.getItem("owa_tag_order") || "[]"); } catch { return []; }
   });
   const folderSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { delay: 300, tolerance: 8 } })
+    useSensor(PointerSensor, { activationConstraint: { delay: 300, tolerance: 8 } }),
+    useSensor(KeyboardSensor,{coordinateGetter:sortableKeyboardCoordinates})
   );
   const tagSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { delay: 300, tolerance: 8 } })
+    useSensor(PointerSensor, { activationConstraint: { delay: 300, tolerance: 8 } }),
+    useSensor(KeyboardSensor,{coordinateGetter:sortableKeyboardCoordinates})
   );
   const handleFolderDragEnd = useCallback((event: any) => {
     const { active, over } = event;
@@ -5426,8 +4417,6 @@ function LibrarySidebar({
       if (over && active.id !== over.id) {
         const newIndex = ids.indexOf(over.id);
         if (newIndex !== -1) reorderFolders(arrayMove([...ids], oldIndex, newIndex));
-      } else if (!over) {
-        reorderFolders(arrayMove([...ids], oldIndex, ids.length - 1));
       }
     }
     setActiveFolderDragId(null);
@@ -5442,8 +4431,6 @@ function LibrarySidebar({
         const newIndex = localTagOrder.indexOf(over.id);
         if (newIndex === -1) { setActiveTagDragId(null); return; }
         newOrder = arrayMove([...localTagOrder], oldIndex, newIndex);
-      } else if (!over) {
-        newOrder = arrayMove([...localTagOrder], oldIndex, localTagOrder.length - 1);
       } else {
         setActiveTagDragId(null); return;
       }
@@ -5489,13 +4476,14 @@ function LibrarySidebar({
 const trashCount = notes.filter(n => n.deletedAt).length;
 
   return (
-    <div style={{
-      width: 260, minWidth: 260, display: "flex", flexDirection: "column",
+    <div ref={panel.ref} style={{
+      width: 228, minWidth: 228, display: "flex", flexDirection: "column",
       padding: "18px 12px 14px 14px", overflow: "hidden",
       borderRight: "1px solid var(--border-subtle)",
       background: "var(--bg-surface)",
       flex: 1, minHeight: 0,
-    }} className="owa-nsidebar">
+    }} className="owa-nsidebar note-folder-navigation">
+      <PanelResizeHandle control={panel} label="Ancho de carpetas de notas"/>
       <style dangerouslySetInnerHTML={{__html: `
         .sidebar-scroll-notas::-webkit-scrollbar { display: none; }
         .sidebar-scroll-notas { scrollbar-width: none; -ms-overflow-style: none; }
@@ -5511,10 +4499,10 @@ const trashCount = notes.filter(n => n.deletedAt).length;
             marginBottom: 8, paddingLeft: 4,
           }}>
             <span style={{
-              fontSize: 10, fontWeight: 700, color: "var(--text-tertiary)",
+              fontSize: 11, fontWeight: 700, color: "var(--text-tertiary)",
               letterSpacing: "0.1em", textTransform: "uppercase",
             }}>Carpetas</span>
-            <button onClick={onNewFolder} title="Nueva carpeta"
+            <button data-ui-control="" onClick={onNewFolder} title="Nueva carpeta"
               style={{
                 width: 26, height: 26,
                 display: "flex", alignItems: "center", justifyContent: "center",
@@ -5527,7 +4515,7 @@ const trashCount = notes.filter(n => n.deletedAt).length;
             </button>
           </div>
 
-          <DndContext sensors={folderSensors} collisionDetection={closestCenter} onDragStart={e => setActiveFolderDragId(e.active.id as string)} onDragEnd={handleFolderDragEnd} modifiers={[restrictToParentElement]}>
+          <DndContext sensors={folderSensors} collisionDetection={args=>args.pointerCoordinates ? pointerWithin(args) : closestCenter(args)} onDragStart={e => setActiveFolderDragId(e.active.id as string)} onDragCancel={()=>setActiveFolderDragId(null)} onDragEnd={handleFolderDragEnd} modifiers={[restrictToParentElement]}>
             <SortableContext items={folders.map(f => f.id)} strategy={verticalListSortingStrategy}>
               <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
                 {folders.filter(f => !deletedFolderIds.has(f.id)).map((f) => {
@@ -5536,7 +4524,7 @@ const trashCount = notes.filter(n => n.deletedAt).length;
                   return (
                     <SortableFolderRow key={f.id} f={f}>
                       {({ attributes, listeners }) => (
-                        <div className="folder-sidebar-item hover:bg-[var(--bg-hover)]" style={{ display: "flex", alignItems: "center", gap: 10, width: "100%",
+                        <div className="folder-sidebar-item hover:bg-[var(--bg-hover)]" data-selected={isSel} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%",
                           padding: "10px 14px 10px 6px",
                           background: isSel ? "var(--bg-hover)" : "transparent",
                           border: isSel ? "1px solid var(--border-soft)" : "1px solid transparent",
@@ -5565,7 +4553,7 @@ const trashCount = notes.filter(n => n.deletedAt).length;
                             fontWeight: 500, fontSize: 13.5,
                           }}>{f.name}</span>
                           <span style={{
-                            flexShrink: 0, fontSize: 10, fontWeight: 480, lineHeight: 1.3,
+                            flexShrink: 0, fontSize: 11, fontWeight: 480, lineHeight: 1.3,
                             color: "var(--text-tertiary)",
                             background: "var(--bg-hover)",
                             padding: "0px 7px", borderRadius: 5, minWidth: 18, textAlign: "center",
@@ -5590,11 +4578,11 @@ const trashCount = notes.filter(n => n.deletedAt).length;
             marginBottom: 8, paddingLeft: 4,
           }}>
             <span style={{
-              fontSize: 10, fontWeight: 700, color: "var(--text-tertiary)",
+              fontSize: 11, fontWeight: 700, color: "var(--text-tertiary)",
               letterSpacing: "0.1em", textTransform: "uppercase",
             }}>Etiquetas</span>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <button onClick={() => setShowTagSection(!showTagSection)}
+              <button data-ui-control="" onClick={() => setShowTagSection(!showTagSection)}
                 style={{
                   width: 26, height: 26,
                   display: "flex", alignItems: "center", justifyContent: "center",
@@ -5609,7 +4597,7 @@ const trashCount = notes.filter(n => n.deletedAt).length;
                   transition: "transform 250ms " + EASE,
                 }} />
               </button>
-              <button onClick={onNewTag}
+              <button data-ui-control="" onClick={onNewTag}
                 title="Nueva etiqueta"
                 style={{
                   width: 26, height: 26,
@@ -5628,7 +4616,7 @@ const trashCount = notes.filter(n => n.deletedAt).length;
             transition: "max-height 300ms " + EASE,
           }}>
             {allTags.length > 0 ? (
-              <DndContext sensors={tagSensors} collisionDetection={closestCenter} onDragStart={e => setActiveTagDragId(e.active.id as string)} onDragEnd={handleTagDragEnd} modifiers={[restrictToParentElement]}>
+              <DndContext sensors={tagSensors} collisionDetection={args=>args.pointerCoordinates ? pointerWithin(args) : closestCenter(args)} onDragStart={e => setActiveTagDragId(e.active.id as string)} onDragCancel={()=>setActiveTagDragId(null)} onDragEnd={handleTagDragEnd} modifiers={[restrictToParentElement]}>
                 <SortableContext items={allTags} strategy={verticalListSortingStrategy}>
                   <div style={{ display: "flex", flexDirection: "column", gap: 1, marginTop: 2 }}>
                     {allTags.map((tag) => {
@@ -5661,7 +4649,7 @@ const trashCount = notes.filter(n => n.deletedAt).length;
                                 {tag}
                               </span>
                               <span style={{
-                                flexShrink: 0, fontSize: 10, fontWeight: 480, lineHeight: 1.3,
+                                flexShrink: 0, fontSize: 11, fontWeight: 480, lineHeight: 1.3,
                                 color: "var(--text-tertiary)",
                                 background: "var(--bg-hover)",
                                 padding: "0px 7px", borderRadius: 5, minWidth: 18, textAlign: "center",
@@ -5697,7 +4685,7 @@ const trashCount = notes.filter(n => n.deletedAt).length;
             </h3>
             {/* Rename */}
             <div style={{ marginBottom: 12 }}>
-              <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", display: "block", marginBottom: 4 }}>Nombre</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", display: "block", marginBottom: 4 }}>Nombre</span>
               <input type="text" placeholder="Nombre de la etiqueta"
                 value={editTagName} onChange={(e) => setEditTagName(e.target.value)}
                 autoFocus
@@ -5706,10 +4694,10 @@ const trashCount = notes.filter(n => n.deletedAt).length;
             </div>
             {/* Color */}
             <div style={{ marginBottom: 12 }}>
-              <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", display: "block", marginBottom: 6 }}>Color</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", display: "block", marginBottom: 6 }}>Color</span>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 6 }}>
                 {SPINE_COLORS.map(c => (
-                  <button key={c} onClick={() => {
+                  <button data-ui-control="" key={c} onClick={() => {
                     const colors = { ...tagColors, [tagColorEdit]: c };
                     try { localStorage.setItem("owa_custom_tag_colors", JSON.stringify(colors)); } catch { /* cuota */ }
                     onTagColorsChange(colors);
@@ -5723,7 +4711,7 @@ const trashCount = notes.filter(n => n.deletedAt).length;
               </div>
             </div>
             {/* Delete tag option */}
-            <button onClick={() => setShowTagDeleteConfirm(true)}
+            <button data-ui-control="" onClick={() => setShowTagDeleteConfirm(true)}
               style={{
                 display: "flex", alignItems: "center", gap: 8, width: "100%",
                 padding: "8px 12px", background: "none", border: "1px solid var(--border-soft)",
@@ -5734,9 +4722,9 @@ const trashCount = notes.filter(n => n.deletedAt).length;
               <Trash2 size={13} /> Eliminar etiqueta
             </button>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
-              <button onClick={() => setTagColorEdit(null)}
+              <button data-app-action="secondary" data-ui-control="" onClick={() => setTagColorEdit(null)}
                 style={{ background: "none", border: "1px solid var(--border-default)", borderRadius: 6, padding: "6px 14px", color: "var(--text-secondary)", fontSize: 12, cursor: "pointer" }}>Cancelar</button>
-              <button onClick={() => {
+              <button data-app-action="primary" data-ui-control="" onClick={() => {
                 const newName = editTagName.trim();
                 const oldName = tagColorEdit;
                 if (!newName) return;
@@ -5804,9 +4792,9 @@ const trashCount = notes.filter(n => n.deletedAt).length;
               ¿Eliminar la etiqueta <strong>{tagColorEdit}</strong> de todas las notas?
             </p>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
-              <button onClick={() => setShowTagDeleteConfirm(false)}
+              <button data-app-action="secondary" data-ui-control="" onClick={() => setShowTagDeleteConfirm(false)}
                 style={{ background: "none", border: "1px solid var(--border-default)", borderRadius: 6, padding: "6px 14px", color: "var(--text-secondary)", fontSize: 12, cursor: "pointer" }}>Cancelar</button>
-              <button onClick={() => {
+              <button data-ui-control="" onClick={() => {
                 notes.filter(n => n.tags?.includes(tagColorEdit)).forEach(n => {
                   updateNote(n.id, { tags: (n.tags || []).filter(t => t !== tagColorEdit) });
                 });
@@ -5855,10 +4843,10 @@ const trashCount = notes.filter(n => n.deletedAt).length;
                 className="input-base"
                 style={{ width: "100%", borderRadius: 6, padding: "8px 12px", boxSizing: "border-box" }} />
               <div>
-                <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase" }}>Color</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase" }}>Color</span>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 6, marginTop: 8 }}>
                   {SPINE_COLORS.map(c => (
-                    <button key={c} onClick={() => setEditFolderColor(c)}
+                    <button data-ui-control="" key={c} onClick={() => setEditFolderColor(c)}
                       style={{
                         width: 22, height: 22, borderRadius: "50%", background: c,
                         border: editFolderColor === c ? "2px solid #fff" : "none",
@@ -5869,7 +4857,7 @@ const trashCount = notes.filter(n => n.deletedAt).length;
               </div>
               {/* Delete button inside edit modal */}
               {f.id !== "default" && (
-                <button onClick={() => { setEditFolderId(null); setDeleteFolderId(f.id); setDeleteFolderName(f.name); }}
+                <button data-ui-control="" onClick={() => { setEditFolderId(null); setDeleteFolderId(f.id); setDeleteFolderName(f.name); }}
                   style={{
                     display: "flex", alignItems: "center", gap: 8, width: "100%",
                     padding: "8px 12px", background: "none", border: "1px solid var(--border-soft)",
@@ -5882,9 +4870,9 @@ const trashCount = notes.filter(n => n.deletedAt).length;
                 </button>
               )}
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 4 }}>
-                <button onClick={() => setEditFolderId(null)}
+                <button data-app-action="secondary" data-ui-control="" onClick={() => setEditFolderId(null)}
                   style={{ background: "none", border: "1px solid var(--border-default)", borderRadius: 6, padding: "6px 14px", color: "var(--text-secondary)", fontSize: 12, cursor: "pointer" }}>Cancelar</button>
-                <button onClick={() => {
+                <button data-ui-control="" onClick={() => {
                   if (editFolderName.trim()) {
                     updateNoteFolder(editFolderId, { name: editFolderName.trim(), color: editFolderColor });
                     setEditFolderId(null);
@@ -5936,9 +4924,9 @@ const trashCount = notes.filter(n => n.deletedAt).length;
                 </p>
               )}
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
-                <button onClick={() => setDeleteFolderId(null)}
+                <button data-app-action="secondary" data-ui-control="" onClick={() => setDeleteFolderId(null)}
                   style={{ background: "none", border: "1px solid var(--border-default)", borderRadius: 6, padding: "6px 14px", color: "var(--text-secondary)", fontSize: 12, cursor: "pointer" }}>Cancelar</button>
-                <button onClick={() => {
+                <button data-ui-control="" onClick={() => {
                   notes.filter(n => n.folderId === deleteFolderId).forEach(n => {
                     updateNote(n.id, { folderId: undefined, deletedAt: new Date().toISOString() });
                   });
@@ -5967,7 +4955,7 @@ const trashCount = notes.filter(n => n.deletedAt).length;
         {(() => {
           const isSel = activeSidebarTab === "trash";
           return (
-            <button onClick={() => {
+            <button data-ui-control="" onClick={() => {
               if (isSel) { setActiveSidebarTab("all"); } else { setActiveSidebarTab("trash"); }
               onSelectFolder(null); onSelectTag(null);
             }}
@@ -5985,7 +4973,7 @@ const trashCount = notes.filter(n => n.deletedAt).length;
               <Trash2 size={13} style={{ color: isSel ? "var(--accent)" : "var(--text-tertiary)" }} />
               <span>Papelera</span>
               <span style={{
-                marginLeft: "auto", fontSize: 9,
+                marginLeft: "auto", fontSize: 11,
                 color: isSel ? "#fff" : "var(--text-tertiary)",
                 background: isSel ? "var(--accent)" : "var(--bg-hover)",
                 padding: "1px 6px", borderRadius: 4, fontWeight: 650,
@@ -5996,7 +4984,7 @@ const trashCount = notes.filter(n => n.deletedAt).length;
         {/* Restore hidden course folders */}
         {deletedFolderIds.size > 0 && (
           <div style={{ marginTop: 6, padding: "4px 4px", background: "var(--warning-dim)", borderRadius: 6, border: "1px solid var(--border-soft)" }}>
-            <span style={{ fontSize: 10, fontWeight: 700, color: "var(--warning)", textTransform: "uppercase", display: "block", marginBottom: 4, paddingLeft: 4 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--warning)", textTransform: "uppercase", display: "block", marginBottom: 4, paddingLeft: 4 }}>
               Carpetas ocultas
             </span>
             {Array.from(deletedFolderIds).map(id => {
@@ -6006,13 +4994,13 @@ const trashCount = notes.filter(n => n.deletedAt).length;
                 <div key={id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 4px", borderRadius: 4 }}>
                   <FolderIcon size={10} style={{ color: df.color, flexShrink: 0 }} />
                   <span style={{ flex: 1, fontSize: 11, color: "var(--text-secondary)", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{df.name}</span>
-                  <button onClick={() => {
+                  <button data-app-action="primary" data-ui-control="" onClick={() => {
                     setDeletedFolderIds(prev => { const next = new Set(prev); next.delete(id); return next; });
                     addNotification(`Carpeta "${df.name}" restaurada.`, 'success');
                   }}
                     style={{
                       background: "var(--accent)", color: "#fff", border: "none", borderRadius: 4,
-                      padding: "2px 8px", fontSize: 10, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
+                      padding: "2px 8px", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
                     }}>Restaurar</button>
                 </div>
               );

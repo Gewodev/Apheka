@@ -1,8 +1,23 @@
+import {beginBrainDrag,finishBrainDrag,cancelBrainDrag} from '../../lib/brainDrop';
+import TaskStudyControls from './tasks/TaskStudyControls';
+import TaskDurationField from './tasks/TaskDurationField';
+import {distributeSubtaskMinutes,suggestTaskSteps,nextStudyStep,studyBlockMinutes,taskMinutes} from '../../lib/taskStudyPlan';
+import {assessTasks,taskDeadline} from '../../lib/taskIntelligence';
+import {useAppSnapshot} from '../../store/AppContext';
+import {TaskBoard,TaskUrgencyMatrix,TaskOverview,TaskStateButton} from './tasks/TaskPriorityViews';
+import TaskStudyPicker from './tasks/TaskStudyPicker';
+import './tasks/taskWorkspace.css';
+import {useAppSlice} from "../../store/AppContext";
+import TimeControl from '../ui/TimeControl';
+import {usePanelWidth,PanelResizeHandle} from '../../hooks/usePanelWidth';
+import PlanSelectDropdown from '../ui/PlanSelectDropdown';
+import { taskLinkUnavailable } from '../../lib/linkEligibility';
+import WorkspaceHeader from '../ui/WorkspaceHeader';
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import LiveClock from '../ui/LiveClock';
 import { createPortal } from 'react-dom';
 import {
-  Plus, Search, Check, Trash2,
+  Plus, Search, Check, Trash2, Shuffle, Grid2X2,
   ChevronRight, CalendarDays, ChevronUp,
   Clock, List as ListIcon, FileText,
   Link, Video, File, X, Upload, Link2,
@@ -44,7 +59,7 @@ const s = {
   fr: (gap = 0) => ({ display: 'flex', alignItems: 'center' as const, gap }),
   bw: (w: string) => ({ width: w }),
   txt: (s = 12, w = 600, c = 'var(--text-primary)') => ({ fontSize: s, fontWeight: w, color: c }),
-  mm: (c = 'var(--text-tertiary)') => ({ fontSize: 9, fontWeight: 600, color: c, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }),
+  mm: (c = 'var(--text-tertiary)') => ({ fontSize: 11, fontWeight: 600, color: c, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }),
   card: (p = '14px 16px') => ({ padding: p, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 12, boxShadow: '0 4px 24px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.25)' }),
   inp: () => ({ width: '100%', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: 'var(--text-primary)', outline: 'none', transition: 'all 200ms' }),
   btn: (b = '1px solid var(--border-default)', bg = 'var(--bg-elevated)', c = 'var(--text-secondary)') => ({ display: 'flex', alignItems: 'center', gap: 6, height: 36, padding: '0 14px', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: b, background: bg, color: c, transition: 'all 200ms' }),
@@ -74,7 +89,7 @@ function toLocalDateStr(date: Date): string {
 }
 
 function getTimeRemaining(dueDate: string): { label: string; text: string; urgent: boolean; overdue: boolean } {
-  const parsed = localDate(dueDate);
+  const parsed = new Date(taskDeadline(dueDate)??NaN);
   if (isNaN(parsed.getTime())) return { label: '', text: '', urgent: false, overdue: false };
   const diff = parsed.getTime() - Date.now();
   if (diff <= 0) return { label: 'Vencida', text: 'Vencida', urgent: true, overdue: true };
@@ -128,7 +143,8 @@ function SortableCalendarTask({ task, children }: { task: Task; children: (dragP
 }
 
 export default function Tareas() {
-  const { tasks, courses, notes, addTask, updateTask, toggleTaskStatus, deleteTask, addSubTask, toggleSubTask, deleteSubTask, addTaskFile, removeTaskFile, clearAllTasks, addNotification, setNavigateTo, focusedTaskId, setFocusedTaskId, settings, addNote, updateNote, activePlannedSessionId, activeTaskId, setPipUrl, linkTaskToTimer } = useApp();
+  const inspectorWidth=usePanelWidth('task-inspector',600,500,860,'left',32);
+  const { tasks, courses, notes, addTask, updateTask, toggleTaskStatus, deleteTask, addSubTask, toggleSubTask, deleteSubTask, addTaskFile, removeTaskFile, clearAllTasks, addNotification, setNavigateTo, focusedTaskId, setFocusedTaskId, settings, addNote, updateNote, activePlannedSessionId, activeTaskId, linkTaskToTimer, startSubtaskStudy } = useAppSlice(["tasks","courses","notes","addTask","updateTask","toggleTaskStatus","deleteTask","addSubTask","toggleSubTask","deleteSubTask","addTaskFile","removeTaskFile","clearAllTasks","addNotification","setNavigateTo","focusedTaskId","setFocusedTaskId","settings","addNote","updateNote","activePlannedSessionId","activeTaskId","linkTaskToTimer","startSubtaskStudy"]);
   const th = document.documentElement.getAttribute('data-theme');
   const isDarkSelect = !th || th === 'oscuro' || th === 'vibrante';
   const selectBorder = isDarkSelect ? '1px solid rgba(255,255,255,0.12)' : '1px solid rgba(0,0,0,0.12)';
@@ -158,10 +174,17 @@ export default function Tareas() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [showNewModal, setShowNewModal] = useState(false);
+  const [newTaskCourse, setNewTaskCourse] = useState('');
+  const [newTaskPriority, setNewTaskPriority] = useState('');
+  const [newTaskMinutes,setNewTaskMinutes]=useState('');
+  const [newTaskSteps,setNewTaskSteps]=useState<import('../../store/AppContext').SubTask[]>([]);
+  useEffect(()=>{if(showNewModal){setNewTaskCourse('');setNewTaskPriority('');setNewTaskMinutes('');setNewTaskSteps([]);}},[showNewModal]);
   const [newTaskPrefillDate, setNewTaskPrefillDate] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'list' | 'board' | 'calendar'>(() => {
-    try { return (localStorage.getItem('owa_tasks_view') as 'list' | 'board' | 'calendar') || 'list'; } catch { return 'list'; }
-  });
+  const [viewMode,setViewMode]=useState<'list'|'board'|'urgency'>(()=>{try{const saved=localStorage.getItem('owa_tasks_view');return saved==='calendar'||saved==='urgency'?'urgency':saved==='board'?'board':'list';}catch{return 'list';}});
+  const [showPicker,setShowPicker]=useState(false),[assessmentTime,setAssessmentTime]=useState(Date.now);
+  const intelligence=useAppSlice(['studySessions','plannedSessions','navigateToCourse']),getApp=useAppSnapshot();
+  useEffect(()=>{let timer:ReturnType<typeof setTimeout>;const refresh=()=>{clearTimeout(timer);if(document.hidden)return;setAssessmentTime(Date.now());timer=setTimeout(refresh,60000-Date.now()%60000);};refresh();document.addEventListener('visibilitychange',refresh);window.addEventListener('focus',refresh);return()=>{clearTimeout(timer);document.removeEventListener('visibilitychange',refresh);window.removeEventListener('focus',refresh);};},[]);
+  const assessments=useMemo(()=>assessTasks(tasks,{now:assessmentTime,dailyGoal:settings.dailyGoal,courses,studySessions:intelligence.studySessions,plannedSessions:intelligence.plannedSessions}),[tasks,assessmentTime,settings.dailyGoal,courses,intelligence.studySessions,intelligence.plannedSessions]);
   const [sortBy, setSortBy] = useState<'fecha' | 'curso'>('fecha');
   const [calendarDate, setCalendarDate] = useState(new Date());
   const [calendarSelectedDay, setCalendarSelectedDay] = useState<Date>(new Date(0));
@@ -312,10 +335,9 @@ export default function Tareas() {
     return { total, completadas, pendientes, progreso, vencidas, completadasPct: total ? Math.round((completadas / total) * 100) : 0 };
   }, [tasks]);
 
+  const scopedTasks=useMemo(()=>tasks.filter(task=>!(task as Task&{deletedAt?:string}).deletedAt&&(!courseFilter||task.course===courseFilter)&&(!searchQuery||fuzzyMatch(task.title,searchQuery))),[tasks,courseFilter,searchQuery]);
   const filteredTasks = useMemo(() => {
-    let filtered = tasks;
-    if (courseFilter) filtered = filtered.filter(t => t.course === courseFilter);
-    if (searchQuery) filtered = filtered.filter(t => fuzzyMatch(t.title, searchQuery));
+    let filtered = scopedTasks;
     filtered = filtered.filter(t => !shouldHideCompleted(t));
     const allHaveSortOrder = filtered.length > 0 && filtered.every(t => t.sortOrder !== undefined);
     return [...filtered].sort((a, b) => {
@@ -326,9 +348,9 @@ export default function Tareas() {
       if (sortBy === 'fecha') { if (!a.dueDate) return 1; if (!b.dueDate) return -1; return localDate(a.dueDate).getTime() - localDate(b.dueDate).getTime(); }
       return (a.course || '').localeCompare(b.course || '');
     });
-  }, [tasks, courseFilter, searchQuery, sortBy, shouldHideCompleted]);
+  }, [scopedTasks, sortBy, shouldHideCompleted]);
 
-  const { reorderTasks } = useApp();
+  const { reorderTasks } = useAppSlice(["reorderTasks"]);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [calendarDragTaskId, setCalendarDragTaskId] = useState<string | null>(null);
   // Suprime el click que dispara el navegador justo después de soltar un drag (long-press)
@@ -342,6 +364,7 @@ export default function Tareas() {
   );
 
   const handleDragEndList = useCallback((event: any) => {
+    if(finishBrainDrag()){setActiveDragId(null);dragSuppressRef.current=true;return;}
     const { active, over } = event;
     const d = event?.delta ?? { x: 0, y: 0 };
     dragSuppressRef.current = Math.abs(d.x) + Math.abs(d.y) > 4;
@@ -463,24 +486,25 @@ export default function Tareas() {
 
   const handleToggle = useCallback((e: React.MouseEvent, id: string) => { e.stopPropagation(); e.preventDefault(); toggleTaskStatus(id); }, [toggleTaskStatus]);
   const handleOpenDetail = useCallback((id: string) => setSelectedTaskId(id), []);
+  useEffect(()=>{const open=()=>{const id=sessionStorage.getItem('apheka_open_task');if(!id||!tasks.some(t=>t.id===id))return;sessionStorage.removeItem('apheka_open_task');handleOpenDetail(id);};open();window.addEventListener('apheka:open-task',open);return()=>window.removeEventListener('apheka:open-task',open);},[tasks,handleOpenDetail]);
+  useEffect(()=>{window.dispatchEvent(new CustomEvent('apheka:task-focus',{detail:{id:selectedTaskId}}));},[selectedTaskId]);
 
   const handleCreateTask = useCallback(() => {
     const title = (document.getElementById('new-task-title') as HTMLInputElement)?.value?.trim();
-    const courseSelect = document.getElementById('new-task-course') as HTMLSelectElement;
-    const prioritySelect = document.getElementById('new-task-priority') as HTMLSelectElement;
     const dueDateInput = document.getElementById('new-task-duedate') as HTMLInputElement;
     const dueTimeInput = document.getElementById('new-task-duetime') as HTMLInputElement;
-    const estimatedInput = document.getElementById('new-task-estimated') as HTMLInputElement;
     if (!title) { addNotification('Ingresa un título', 'error'); return; }
-    const courseName = courseSelect?.value || 'Sin curso';
+    const courseName = newTaskCourse || 'Sin curso';
     const course = courses.find(c => c.name === courseName);
     let dueDate: string | undefined = undefined;
     if (dueDateInput?.value) {
       dueDate = includeTime && dueTimeInput?.value ? `${dueDateInput.value}T${dueTimeInput.value}` : dueDateInput.value;
     }
-    addTask({ title, course: courseName, courseColor: course?.color || (courseName === 'Sin curso' ? 'var(--text-muted)' : '#E11D48'), priority: (prioritySelect?.value as any) || 'none', urgent: (prioritySelect?.value as any) === 'high', important: (prioritySelect?.value as any) === 'high', dueDate, estimatedMinutes: estimatedInput?.value ? parseInt(estimatedInput.value) : 60, notes: (document.getElementById('new-task-notes') as HTMLTextAreaElement)?.value?.trim() || '' });
+    const estimatedMinutes=taskMinutes(newTaskMinutes||60),steps=newTaskSteps.filter(s=>s.title.trim());
+    if(estimatedMinutes>120&&steps.length<Math.ceil(estimatedMinutes/120)){setNewTaskSteps(suggestTaskSteps(estimatedMinutes,title,steps));addNotification('Revisa las partes propuestas antes de crear la tarea.','info');return;}
+    addTask({ title, course: courseName, courseColor: course?.color || (courseName === 'Sin curso' ? 'var(--text-muted)' : '#E11D48'), priority: (newTaskPriority as any) || 'none', urgent: (newTaskPriority as any) === 'high', important: (newTaskPriority as any) === 'high', dueDate, estimatedMinutes,subtasks:steps, notes: (document.getElementById('new-task-notes') as HTMLTextAreaElement)?.value?.trim() || '' });
     setShowNewModal(false);
-  }, [addTask, courses, includeTime]);
+  }, [addTask, courses, includeTime, newTaskCourse, newTaskPriority,newTaskMinutes,newTaskSteps, addNotification]);
 
   const matMenu = useMaterialMenu((m) => addNotification(m, 'error'));
 
@@ -558,77 +582,38 @@ export default function Tareas() {
     setNewMaterialName(''); setNewMaterialPath(''); setShowAddMaterial(false);
   }, [selectedTask, newMaterialName, newMaterialPath, addTaskFile, fetchPageTitle, deriveLinkName, updateTask, tasks]);
 
-  const monthStart = startOfMonth(calendarDate);
-  const monthEnd = endOfMonth(monthStart);
-  const calStart = startOfWeek(monthStart, { weekStartsOn: 1 });
-  const calEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
-  const calendarDays = eachDayOfInterval({ start: calStart, end: calEnd });
-  const weekRows: Date[][] = [];
-  if (calendarSubMode === 'semana') {
-    const weekStart = startOfWeek(calendarDate, { weekStartsOn: 1 });
-    const weekEnd = endOfWeek(calendarDate, { weekStartsOn: 1 });
-    weekRows.push(eachDayOfInterval({ start: weekStart, end: weekEnd }));
-  } else {
-    for (let i = 0; i < calendarDays.length; i += 7) weekRows.push(calendarDays.slice(i, i + 7));
-  }
-
-
-  const courseDistribution = useMemo(() => {
-    const map: Record<string, { count: number; color: string }> = {};
-    tasks.forEach(t => { if (!map[t.course]) map[t.course] = { count: 0, color: t.courseColor }; map[t.course].count++; });
-    return Object.entries(map).map(([name, { count, color }]) => ({ name, count, color, pct: tasks.length ? Math.round((count / tasks.length) * 100) : 0 })).sort((a, b) => b.count - a.count);
-  }, [tasks]);
-
-  const totalEst = useMemo(() => {
-    const mins = tasks.filter(t => t.status !== 'completado').reduce((a, t) => a + (t.estimatedMinutes || 0), 0);
-    return { h: Math.floor(mins / 60), m: mins % 60 };
-  }, [tasks]);
-
-  const weeklyHours = useMemo(() => {
-    const dayNames = ['L','M','X','J','V','S','D'];
-    return dayNames.map((d, i) => ({ l: d, h: [30, 55, 40, 75, 25, 10, 5][i] }));
-  }, []);
-
-  const statusData = [
-    { label: 'Completadas', val: stats.completadas, color: '#10B981' },
-    { label: 'Pendientes', val: stats.pendientes, color: '#F59E0B' },
-    { label: 'En progreso', val: stats.progreso, color: '#3B82F6' },
-  ].filter(s => s.val > 0);
-  const totalStatus = statusData.reduce((a, s) => a + s.val, 0);
+  const changeStatus=(id:string,status:Task['status'])=>{const task=tasks.find(task=>task.id===id);if(!task||task.status===status)return;updateTask(id,{status,completedAt:status==='completado'?new Date().toISOString():undefined});};
+  const beginRecommendedStudy=(id:string,mode:'pomodoro'|'chrono'='pomodoro',minutes?:number,subtaskId?:string)=>{
+    const task=tasks.find(task=>task.id===id),blocked=taskLinkUnavailable(task);
+    if(blocked){addNotification(blocked,'info');return;}
+    const live=getApp();
+    const sub=task&&(subtaskId?task.subtasks.find(s=>s.id===subtaskId&&!s.done):nextStudyStep(task));
+    if(!task)return;
+    if(taskMinutes(task.estimatedMinutes)>120&&!sub){updateTask(id,{subtasks:suggestTaskSteps(taskMinutes(task.estimatedMinutes),task.title,task.subtasks)});setShowPicker(false);handleOpenDetail(id);setSectionCollapsed(prev=>({...prev,subtareas:false}));addNotification('Revisa las subtareas para estudiar por bloques.','info');return;}
+    if((live.isTimerActive||live.sessionTime>0)&&(live.activeTaskId!==id||live.activeSubtaskId!==(sub?.id||null)||live.activePlannedSessionId||live.isRest||mode!==live.sessionType)){addNotification('Termina o reinicia la sesión actual antes de empezar otra tarea.','info');setShowPicker(false);setNavigateTo('estudio');return;}
+    linkTaskToTimer(id,sub?.id);if(task.status==='inicio')changeStatus(id,'progreso');
+    if(live.sessionTime===0){const duration=Math.max(1,Math.min(120,sub?studyBlockMinutes(task,sub):minutes||studyBlockMinutes(task)));live.setSessionType(mode);live.updateSettings(mode==='pomodoro'?{pomodoroTime:duration*60,pomodoroEndAt:undefined}:{chronoGoal:duration*60});}
+    live.setIsRest(false);live.setIsTimerActive(true);setShowPicker(false);setSelectedTaskId(null);setNavigateTo('estudio');
+  };
 
   return (
-    <div className="page-container flex flex-col h-full overflow-y-auto custom-scroll" style={{ gap: 20 }}>
+    <div className="page-container task-workspace flex flex-col h-full overflow-y-auto custom-scroll" style={{ gap: 20 }}>
 
       {/* HEADER */}
-      <header className="bento-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, padding: '14px 20px', flexShrink: 0, background: 'var(--bg-surface)', borderRadius: 12, border: '1px solid var(--border-subtle)' }}>
-        <h1 style={{ fontFamily: "'Inter Tight', sans-serif", fontWeight: 300, fontSize: 32, lineHeight: 1.4, letterSpacing: '0.02em', color: 'var(--text-primary)' }}>Tareas</h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, position: 'relative' }}>
-          <NotificationBell />
-          <div style={{ position: 'relative', zIndex: 1 }}>
-            <LiveClock>
-              {now => (
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 3, justifyContent: 'flex-end' }}>
-                  <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 68, fontWeight: 200, lineHeight: 0.9, color: 'var(--accent)', letterSpacing: '0.02em', textShadow: '0 0 20px var(--accent-glow)' }}>{fmtClock(format(now, 'HH:mm'), settings?.timeFormat)}</span>
-                  <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 22, fontWeight: 200, color: 'var(--accent)', opacity: 0.6, letterSpacing: '0.02em' }}>{format(now, 'ss')}</span>
-                </div>
-              )}
-            </LiveClock>
-          </div>
-        </div>
-      </header>
+      <WorkspaceHeader title="Tareas" />
 
       {/* TOOLBAR */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 14, flexShrink: 0 }}>
-        <div className="bento-card" style={{ display: 'flex', gap: 3, padding: 3, borderRadius: 10, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
+      <div className="task-workspace-toolbar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 14, flexShrink: 0 }}>
+        <div className="bento-card task-view-switcher" style={{ display: 'flex', gap: 3, padding: 3, borderRadius: 10, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
           {[
             { id: 'list', label: 'Lista', icon: ListIcon },
             { id: 'board', label: 'Tablero', icon: LayoutGrid },
-            { id: 'calendar', label: 'Calendario', icon: Calendar },
+            { id: 'urgency', label: 'Urgencia', icon: Grid2X2 },
           ].map(m => {
             const active = viewMode === m.id;
             const Icon = m.icon;
             return (
-              <button key={m.id} onClick={() => setViewMode(m.id as any)}
+              <button data-ui-control="" key={m.id} aria-pressed={active} onClick={() => setViewMode(m.id as any)}
                 style={{
                   padding: '8px 18px', borderRadius: 8, fontSize: 11.5, fontWeight: active ? 600 : 500,
                   fontFamily: "'Inter Tight', sans-serif",
@@ -653,11 +638,11 @@ export default function Tareas() {
             <Search size={12} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }} />
             <input type="text" placeholder="Buscar..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
               style={{ width: '100%', height: 32, paddingLeft: 28, fontSize: 12, fontWeight: 400, background: 'var(--bg-elevated)', borderRadius: 6, border: '1px solid var(--border-soft)', color: 'var(--text-primary)', outline: 'none', transition: 'all 150ms' }} />
-            {searchQuery && <button onClick={() => setSearchQuery('')} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', padding: 2 }}><X size={10} /></button>}
+            {searchQuery && <button data-ui-control="" onClick={() => setSearchQuery('')} style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', padding: 2 }}><X size={10} /></button>}
           </div>
 
           {/* Eye toggle — click toggles hide/show completed tasks */}
-            <button
+            <button data-ui-control=""
               onClick={toggleHideMode}
               title={hideMode === 'off' ? 'Ocultar completadas' : 'Mostrar completadas'}
               style={{
@@ -673,14 +658,15 @@ export default function Tareas() {
               {hideMode !== 'off' ? <EyeOff size={14} /> : <Eye size={14} />}
             </button>
 
-          <button onClick={() => setShowNewModal(true)} style={{ display: 'flex', alignItems: 'center', gap: 5, height: 32, padding: '0 14px', borderRadius: 6, fontSize: 11, fontWeight: 500, cursor: 'pointer', border: 'none', background: 'var(--accent)', color: '#fff', transition: 'all 200ms' }}>
+          <button data-app-action="primary" data-ui-control="" onClick={() => setShowNewModal(true)} style={{ display: 'flex', alignItems: 'center', gap: 5, height: 32, padding: '0 14px', borderRadius: 6, fontSize: 11, fontWeight: 500, cursor: 'pointer', border: 'none', background: 'var(--accent)', color: '#fff', transition: 'all 200ms' }}>
             <Plus size={14} /> Agregar tarea
           </button>
+          <button type="button" className="btn-secondary task-pick-trigger" aria-label="Elegir qué estudiar" title="Elegir qué estudiar" onClick={()=>setShowPicker(true)}><Shuffle size={17}/></button>
         </div>
       </div>
 
       {/* MAIN GRID */}
-      <div style={{ display: 'grid', gridTemplateColumns: viewMode === 'calendar' ? '1fr' : '1fr 280px', gap: 16, flex: 1 }}>
+      <div className="task-workspace-grid">
 
         {/* LEFT COLUMN */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -691,10 +677,10 @@ export default function Tareas() {
               {/* Column headers */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 0, padding: '11px 18px 11px 8px', borderBottom: '1px solid var(--border-soft)', flexShrink: 0, background: 'var(--bg-elevated)', borderRadius: '12px 12px 0 0' }}>
                 <span style={{ width: 36, flexShrink: 0 }} />
-                <span style={{ flex: 4, fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', textAlign: 'left' }}>Tarea</span>
-                <span style={{ flex: 2.2, fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', textAlign: 'center' }}>Curso</span>
-                <span style={{ flex: 0.8, fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', textAlign: 'center' }}>Prioridad</span>
-                <span style={{ flex: 1.5, fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', textAlign: 'center' }}>Fecha</span>
+                <span style={{ flex: 4, fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', textAlign: 'left' }}>Tarea</span>
+                <span style={{ flex: 2.2, fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', textAlign: 'center' }}>Curso</span>
+                <span style={{ flex: 0.8, fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', textAlign: 'center' }}>Prioridad</span>
+                <span style={{ flex: 1.5, fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', textAlign: 'center' }}>Fecha</span>
                 <span style={{ width: 30, flexShrink: 0 }} />
               </div>
               {/* Rows */}
@@ -711,14 +697,15 @@ export default function Tareas() {
                     </div>
                   </div>
                 )) : (
-                  <DndContext sensors={listSensors} collisionDetection={pointerWithin} onDragStart={e => { setActiveDragId(e.active.id as string); }} onDragEnd={handleDragEndList} modifiers={[restrictToParentElement]}>
+                  <DndContext sensors={listSensors} collisionDetection={pointerWithin} onDragStart={e => { setActiveDragId(e.active.id as string);beginBrainDrag('tasks',String(e.active.id)); }} onDragCancel={() => {cancelBrainDrag();setActiveDragId(null);}} onDragEnd={handleDragEndList} modifiers={[restrictToParentElement]}>
                     <SortableContext items={filteredTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
                       {filteredTasks.map(task => {
                         const t = task;
+                        const assessment=assessments.get(t.id);
                         const tr = t.dueDate ? getTimeRemaining(t.dueDate) : null;
                         const isDone = t.status === 'completado';
                         const isOverdue = tr?.overdue && !isDone;
-                        const titleColor = isDone ? 'rgba(255,255,255,0.35)' : 'var(--text-primary)';
+                        const titleColor = isDone ? 'var(--text-tertiary)' : 'var(--text-primary)';
                         const dateColor = isDone ? '#10B981' : (isOverdue ? '#EF4444' : 'var(--text-secondary)');
                         const stripColor = statusConfig[t.status]?.color || '#F59E0B';
                         const bgStatus = isDone ? 'rgba(16,185,129,0.03)' : 'transparent';
@@ -726,17 +713,9 @@ export default function Tareas() {
                         return (
                           <SortableTaskRow key={t.id} task={t}>
                             {({ isDragging: isDndDragging }) => (
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 0, padding: '0', minHeight: 50, borderBottom: '1px solid var(--border-soft)', background: selectedTaskId === t.id ? `${stripColor}06` : bgStatus, transition: 'all 120ms', opacity: isDndDragging ? 0.4 : 1, userSelect: 'none', WebkitUserSelect: 'none' }}
-                                className="hover:bg-white/[0.025]">
-                                {/* Left toggle strip — cuadrado centrado */}
-                                <div
-                                  onClick={(e) => { e.stopPropagation(); if (dragSuppressRef.current) return; handleToggle(e, t.id); }}
-                                  style={{ width: 32, height: 32, flexShrink: 0, background: isDone ? '#10B981' : t.status === 'progreso' ? '#3B82F6' : 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, margin: 'auto 0 auto 4px', transition: 'all 180ms cubic-bezier(0.16,1,0.3,1)', border: `1.5px solid ${isDone ? '#10B981' : t.status === 'progreso' ? '#3B82F6' : `${stripColor}55`}`, boxShadow: isDone ? '0 0 0 3px #10B98118' : t.status === 'progreso' ? '0 0 0 3px #3B82F618' : 'none' }}
-                                  onMouseEnter={e => { if (!isDone && t.status !== 'progreso') { e.currentTarget.style.borderColor = `${stripColor}88`; e.currentTarget.style.transform = 'scale(1.06)'; } }}
-                                  onMouseLeave={e => { if (!isDone && t.status !== 'progreso') { e.currentTarget.style.borderColor = `${stripColor}55`; e.currentTarget.style.transform = 'scale(1)'; } }}>
-                                  {isDone && <Check size={14} strokeWidth={2.5} style={{ color: '#fff' }} />}
-                                  {t.status === 'progreso' && <div style={{ width: 12, height: 12, borderRadius: 4, background: 'rgba(255,255,255,0.92)', boxShadow: '0 0 8px rgba(255,255,255,0.35)' }} />}
-                                </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 0, padding: '0', minHeight: 50, border: '0', background: selectedTaskId === t.id ? `${stripColor}06` : bgStatus, transition: 'all 120ms', opacity: isDndDragging ? 0.4 : 1, userSelect: 'none', WebkitUserSelect: 'none' }}
+                                className="task-ranked-row" data-task-id={t.id} data-urgent={assessment?.urgent||false} >
+                                <TaskStateButton task={t} onStatus={(id,status)=>{if(!dragSuppressRef.current)changeStatus(id,status);}}/>
                                 {/* Content area — click opens detail */}
                                 <div onClick={(e) => { e.stopPropagation(); if (dragSuppressRef.current) return; handleOpenDetail(t.id); }}
                                   style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 0, padding: '0 18px 0 12px', minHeight: 50, cursor: 'pointer', minWidth: 0 }}>
@@ -744,6 +723,7 @@ export default function Tareas() {
                                     <span style={{ fontSize: 13, fontWeight: 500, color: titleColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: isDone ? 'line-through' : 'none' }}>
                                       {t.title}
                                     </span>
+                                    {assessment&&t.status!=='completado'&&<span className="task-list-risk" title={assessment.reasons.join('\n')}>{assessment.label}</span>}
                                   </div>
                                   <div style={{ flex: 2.2, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                                     {t.course && t.course !== 'Sin curso' ? (
@@ -759,11 +739,11 @@ export default function Tareas() {
                                   </div>
                                   <div style={{ flex: 0.8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                     {t.priority !== 'none' ? (
-                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 9, fontWeight: 600, padding: '2px 8px', borderRadius: 6, textTransform: 'uppercase', letterSpacing: '0.04em', background: t.priority === 'high' ? 'rgba(239,68,68,0.15)' : t.priority === 'medium' ? 'rgba(245,158,11,0.15)' : 'rgba(16,185,129,0.15)', color: t.priority === 'high' ? '#EF4444' : t.priority === 'medium' ? '#F59E0B' : '#10B981' }}>
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 6, textTransform: 'uppercase', letterSpacing: '0.04em', background: t.priority === 'high' ? 'rgba(239,68,68,0.15)' : t.priority === 'medium' ? 'rgba(245,158,11,0.15)' : 'rgba(16,185,129,0.15)', color: t.priority === 'high' ? '#EF4444' : t.priority === 'medium' ? '#F59E0B' : '#10B981' }}>
                                       {t.priority === 'high' ? 'Alta' : t.priority === 'medium' ? 'Media' : 'Baja'}
                                     </span>
                                     ) : (
-                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 9, fontWeight: 400, padding: '2px 8px', borderRadius: 6, background: 'var(--bg-hover)', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 400, padding: '2px 8px', borderRadius: 6, background: 'var(--bg-hover)', color: 'var(--text-muted)', fontStyle: 'italic' }}>
                                       Sin prioridad
                                     </span>
                                     )}
@@ -828,588 +808,47 @@ export default function Tareas() {
             </div>
           )}
 
-          {/* BOARD VIEW - KANBAN */}
-          {viewMode === 'board' && (
-            <div style={{ display: 'flex', gap: 10, minHeight: 300 }}>
-              {[
-                { status: 'inicio', label: 'Pendientes', color: '#F59E0B' },
-                { status: 'progreso', label: 'En Curso', color: '#3B82F6' },
-                { status: 'completado', label: 'Completadas', color: '#10B981' },
-              ].map(col => {
-                const colTasks = tasks.filter(t => t.status === col.status && !shouldHideCompleted(t));
-                return (
-                  <div key={col.status} className="bento-card"
-                    onDragOver={e => e.preventDefault()}
-                    onDrop={e => {
-                      e.preventDefault();
-                      const taskId = e.dataTransfer.getData('text/plain');
-                      if (taskId) {
-                        const newStatus = col.status === 'completado' ? 'completado' : col.status === 'progreso' ? 'progreso' : 'inicio';
-                        // Fija/limpia completedAt igual que toggleTaskStatus (si no, las completadas nunca se ocultan)
-                        updateTask(taskId, { status: newStatus, completedAt: newStatus === 'completado' ? new Date().toISOString() : undefined });
-                      }
-                    }}
-                    style={{ flex: '1 1 0', minWidth: 0, width: 0, overflow: 'hidden', padding: '14px 12px', display: 'flex', flexDirection: 'column', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 12 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingBottom: 8, borderBottom: '1px solid var(--border-soft)', flexShrink: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <div style={{ width: 6, height: 6, borderRadius: '50%', background: col.color, boxShadow: `0 0 6px ${col.color}60` }} />
-                        <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.01em' }}>{col.label}</span>
-                      </div>
-                      <span style={{ fontSize: 9, fontWeight: 600, padding: '2px 7px', borderRadius: 5, background: `${col.color}15`, color: col.color }}>{colTasks.length}</span>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, overflowY: 'auto', minHeight: 200, maxHeight: 'calc(100vh - 320px)' }} className="no-scrollbar">
-                      {isInitialLoading ? [1,2,3].map((_, i) => (
-                        <div key={i} style={{ padding: '14px 14px 12px', borderRadius: 10, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', marginTop: 4 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
-                            <div style={{ width: 60, height: 9, borderRadius: 6, background: 'rgba(255,255,255,0.05)', animation: `pulse 1.5s ease-in-out infinite`, animationDelay: `${i * 120}ms` }} />
-                            <div style={{ width: 50, height: 9, borderRadius: 6, background: 'rgba(255,255,255,0.04)', animation: `pulse 1.5s ease-in-out infinite`, animationDelay: `${i * 120 + 100}ms` }} />
-                          </div>
-                          <div style={{ width: '80%', height: 12, borderRadius: 6, background: 'rgba(255,255,255,0.06)', marginBottom: 10, animation: `pulse 1.5s ease-in-out infinite`, animationDelay: `${i * 120 + 50}ms` }} />
-                          <div style={{ width: 40, height: 9, borderRadius: 6, background: 'rgba(255,255,255,0.04)', animation: `pulse 1.5s ease-in-out infinite`, animationDelay: `${i * 120 + 150}ms` }} />
-                        </div>
-                      )) : colTasks.map((task, i) => {
-                        const tr = task.dueDate ? getTimeRemaining(task.dueDate) : null;
-                        return (
-                        <div key={task.id} className="board-card hover:bg-white/[0.03]" draggable onDragStart={e => handleDragStart(e, task.id)} onDragEnd={handleDragEnd} onClick={() => { if (dragSuppressRef.current) { dragSuppressRef.current = false; return; } handleOpenDetail(task.id); }}
-                          style={{
-                            position: 'relative',
-                            padding: '14px 14px 12px',
-                            borderRadius: 10,
-                            background: 'var(--bg-base)',
-                            border: `1px solid ${task.status === 'completado' ? 'rgba(16,185,129,0.2)' : 'var(--border-subtle)'}`,
-                            cursor: 'pointer',
-                            transition: 'all 200ms',
-                            flexShrink: 0,
-                            overflow: 'hidden',
-                            width: '100%',
-                            maxWidth: '100%',
-                            boxSizing: 'border-box',
-                            marginTop: 4,
-                            opacity: draggingTaskId === task.id ? 0.35 : 1,
-                          }}>
-                          {/* Curso + Tiempo restante — juntos en fila superior */}
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                            {task.course && task.course !== 'Sin curso' ? (
-                            <span style={{ fontSize: 8, fontWeight: 600, color: task.courseColor, display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
-                              <span style={{ width: 4, height: 4, borderRadius: '50%', background: task.courseColor, flexShrink: 0 }} />
-                              {task.course}
-                            </span>
-                            ) : (
-                            <span style={{ fontSize: 8, fontWeight: 400, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4, fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
-                              Sin curso
-                            </span>
-                            )}
-                            {tr && (
-                              <span style={{ fontSize: 8, fontWeight: 700, color: tr.urgent ? '#EF4444' : 'var(--text-tertiary)', display: 'flex', alignItems: 'center', gap: 3 }}>
-                                <Timer size={9} />
-                                {tr.text}
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Title */}
-                          <div style={{ fontSize: 12, fontWeight: 600, color: task.status === 'completado' ? 'var(--text-tertiary)' : 'var(--text-primary)', marginBottom: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: task.status === 'completado' ? 'line-through' : 'none' }}>
-                            {task.title}
-                          </div>
-
-                          {/* Bottom row: prioridad + toggle */}
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
-                              {task.priority === 'none' && (
-                                <span style={{ fontSize: 8, fontWeight: 400, padding: '2px 6px', borderRadius: 4, background: 'var(--bg-hover)', color: 'var(--text-muted)', fontStyle: 'italic' }}>Sin prioridad</span>
-                              )}
-                              {task.priority === 'high' && (
-                                <span style={{ fontSize: 8, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: 'rgba(239,68,68,0.12)', color: '#EF4444' }}>ALTA</span>
-                              )}
-                              {task.priority === 'medium' && (
-                                <span style={{ fontSize: 8, fontWeight: 600, padding: '2px 6px', borderRadius: 4, background: 'rgba(245,158,11,0.1)', color: '#F59E0B' }}>MEDIA</span>
-                              )}
-                            </div>
-                            <button onClick={e => { e.stopPropagation(); handleToggle(e, task.id); }}
-                              style={{ width: 16, height: 16, borderRadius: 3, border: `2px solid ${task.status === 'completado' ? '#10B981' : statusConfig[task.status]?.color || 'rgba(255,255,255,0.15)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer', background: task.status === 'completado' ? '#10B981' : 'transparent' }}>
-                              {task.status === 'completado' && <Check size={8} strokeWidth={3} style={{ color: '#fff' }} />}
-                            </button>
-                          </div>
-                        </div>
-                      )})}
-                      {!isInitialLoading && colTasks.length === 0 && (
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 3, padding: '32px 0', color: 'var(--text-muted)' }}>
-                          <div style={{ width: 4, height: 16, borderRadius: 2, background: 'var(--border-soft)' }} />
-                          <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-tertiary)' }}>Vacío</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* CALENDAR VIEW */}
-          {viewMode === 'calendar' && (
-            <div className="bento-card" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative', padding: 0, background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 12 }}>
-              {/* Calendar Header */}
-              <div style={{ padding: '12px 16px', background: 'var(--bg-elevated)', borderBottom: '1px solid var(--border-soft)', borderRadius: '12px 12px 0 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <button onClick={() => { setCalendarDate(new Date()); const todayTasks = tasks.filter(t => t.dueDate && isSameDay(localDate(t.dueDate), new Date())); if (todayTasks.length > 0) setCalendarSelectedDay(new Date()); else setCalendarSelectedDay(new Date(0)); }} style={{ fontSize: 11, fontWeight: 500, padding: '5px 14px', borderRadius: 6, background: 'var(--bg-hover)', color: 'var(--text-secondary)', border: '1px solid var(--border-soft)', cursor: 'pointer', transition: 'all 150ms' }}>Hoy</button>
-                  <div style={{ display: 'flex', gap: 1 }}>
-                    <button onClick={handlePrevPeriod} style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--bg-hover)', border: '1px solid var(--border-soft)', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}><ChevronLeft size={14} /></button>
-                    <button onClick={handleNextPeriod} style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--bg-hover)', border: '1px solid var(--border-soft)', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}><ChevronRight size={14} /></button>
-                  </div>
-                  <h2 style={{ fontSize: 16, fontWeight: 500, color: 'var(--text-secondary)', fontFamily: "'Inter Tight', sans-serif", textTransform: 'capitalize', margin: 0 }}>{format(calendarDate, 'MMMM yyyy', { locale: es })}</h2>
-                </div>
-                <div style={{ display: 'flex', gap: 4, padding: 2, borderRadius: 6, background: 'var(--bg-hover)', border: '1px solid var(--border-soft)' }}>
-                  {[
-                    { id: 'mes', label: 'Mes' },
-                    { id: 'semana', label: 'Semana' },
-                  ].map(m => (
-                    <button key={m.id} onClick={() => setCalendarSubMode(m.id as any)}
-                      style={{ padding: '3px 10px', borderRadius: 4, fontSize: 9, fontWeight: 500, cursor: 'pointer', border: 'none', background: calendarSubMode === m.id ? 'var(--accent-dim)' : 'transparent', color: calendarSubMode === m.id ? 'var(--accent)' : 'var(--text-muted)' }}>{m.label}</button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Selected Day — sidebar derecha premium */}
-              {calendarSelectedDay.getTime() > 0 && (
-                <div style={{
-                  position: 'absolute',
-                  top: 0,
-                  right: 0,
-                  width: 300,
-                  height: '100%',
-                  background: 'var(--bg-surface)',
-                  borderLeft: '1px solid var(--border-default)',
-                  borderRadius: '0 12px 12px 0',
-                  padding: '22px 18px',
-                  boxShadow: '-6px 0 40px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.02) inset',
-                  zIndex: 20,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 14,
-                  animation: 'slideInRight 200ms ease-out',
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 14, borderBottom: '1px solid var(--border-soft)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
-                      <div style={{ width: 34, height: 34, borderRadius: 10, background: 'var(--surface-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border-soft)' }}>
-                        <CalendarDays size={15} style={{ color: 'var(--accent)', strokeWidth: 1.5 }} />
-                      </div>
-                      <div>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', textTransform: 'capitalize', display: 'block', lineHeight: 1.3, fontFamily: "'Inter Tight', sans-serif" }}>
-                          {format(calendarSelectedDay, "EEEE d", { locale: es })}
-                        </span>
-                        <span style={{ fontSize: 9.5, fontWeight: 500, color: 'var(--text-muted)' }}>
-                          {tasks.filter(t => t.dueDate && isSameDay(localDate(t.dueDate), calendarSelectedDay)).length} tareas
-                        </span>
-                      </div>
-                    </div>
-                    <button onClick={() => setCalendarSelectedDay(new Date(0))} style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--bg-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 200ms', opacity: 0.6 }}
-                      onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = 'var(--bg-elevated)'; }}
-                      onMouseLeave={e => { e.currentTarget.style.opacity = '0.6'; e.currentTarget.style.background = 'var(--bg-hover)'; }}>
-                      <X size={14} />
-                    </button>
-                  </div>
-                  <div className="no-scrollbar" style={{ display: 'flex', flexDirection: 'column', gap: 8, overflowY: 'auto', flex: 1, paddingRight: 2 }}>
-                    {(() => {
-                      const dayTasks = tasks.filter(t => t.dueDate && isSameDay(localDate(t.dueDate), calendarSelectedDay));
-                      if (dayTasks.length === 0) {
-                        return (
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 8, padding: '32px 0', color: 'var(--text-muted)' }}>
-                            <div style={{ width: 6, height: 24, borderRadius: 3, background: 'var(--border-soft)' }} />
-                            <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-tertiary)', fontStyle: 'italic' }}>Sin tareas este día</span>
-                          </div>
-                        );
-                      }
-                      return dayTasks.map(task => {
-                        const tr = task.dueDate ? getTimeRemaining(task.dueDate) : null;
-                        return (
-                          <div key={task.id} onClick={() => handleOpenDetail(task.id)}
-                            style={{ padding: '12px 14px', borderRadius: 10, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderLeft: `3px solid ${task.courseColor}`, cursor: 'pointer', transition: 'all 150ms', boxShadow: '0 1px 3px rgba(0,0,0,0.12)' }}
-                            className="hover:bg-white/[0.02]">
-                            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 7 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
-                                <span style={{ fontSize: 11.5, fontWeight: 500, color: task.status === 'completado' ? 'var(--text-tertiary)' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: task.status === 'completado' ? 'line-through' : 'none' }}>
-                                  {task.title}
-                                </span>
-                              </div>
-                              <button onClick={e => { e.stopPropagation(); handleToggle(e, task.id); }}
-                                style={{ flexShrink: 0, width: 15, height: 15, borderRadius: 4, border: `2px solid ${task.status === 'completado' ? '#10B981' : statusConfig[task.status]?.color || 'var(--border-default)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', background: task.status === 'completado' ? '#10B981' : 'transparent', transition: 'all 120ms' }}>
-                                {task.status === 'completado' && <Check size={7} strokeWidth={3} style={{ color: '#fff' }} />}
-                              </button>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                              {task.course && task.course !== 'Sin curso' ? (
-                              <span style={{ fontSize: 8.5, fontWeight: 500, color: task.courseColor, display: 'flex', alignItems: 'center', gap: 3 }}>
-                                <span style={{ width: 4, height: 4, borderRadius: '50%', background: task.courseColor, flexShrink: 0, boxShadow: `0 0 4px ${task.courseColor}50` }} />
-                                {task.course}
-                              </span>
-                              ) : (
-                              <span style={{ fontSize: 8.5, fontWeight: 400, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 3, fontStyle: 'italic' }}>
-                                Sin curso
-                              </span>
-                              )}
-                              {task.priority === 'high' && (
-                                <span style={{ fontSize: 7.5, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: 'color-mix(in srgb, #EF4444 12%, transparent)', color: '#EF4444' }}>ALTA</span>
-                              )}
-                              {task.priority === 'none' && (
-                                <span style={{ fontSize: 7.5, fontWeight: 400, padding: '1px 6px', borderRadius: 4, background: 'var(--bg-hover)', color: 'var(--text-muted)', fontStyle: 'italic' }}>Sin prioridad</span>
-                              )}
-                              {tr && (
-                                <span style={{ fontSize: 8.5, fontWeight: 500, color: tr.urgent ? '#EF4444' : 'var(--text-muted)', marginLeft: 'auto', whiteSpace: 'nowrap' }}>
-                                  {tr.text}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      });
-                    })()}
-                  </div>
-                  <div style={{ paddingTop: 10, borderTop: '1px solid var(--border-soft)', flexShrink: 0 }}>
-                    <div onClick={() => { setNewTaskPrefillDate(format(calendarSelectedDay, 'yyyy-MM-dd')); setShowNewModal(true); }}
-                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '9px 0', borderRadius: 8, fontSize: 10.5, fontWeight: 500, cursor: 'pointer', background: 'transparent', border: '1px dashed var(--border-default)', color: 'var(--text-muted)', transition: 'all 150ms' }}
-                      onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.borderColor = 'var(--border-soft)'; }}
-                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'var(--border-default)'; }}>
-                      <Plus size={12} /> Agregar tarea este día
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Day Headers */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: '1px solid var(--border-soft)', flexShrink: 0 }}>
-                {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map((d, i) => {
-                  const headerDay = addDays(startOfWeek(calendarDate, { weekStartsOn: 1 }), i);
-                  const isHeaderToday = isToday(headerDay);
-                  return (
-                    <div key={d} style={{ padding: '10px 0 6px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, background: 'var(--bg-surface)' }}>
-                      <span style={{ fontSize: 10, fontWeight: isHeaderToday ? 700 : 600, color: isHeaderToday ? 'var(--accent)' : (i >= 5 ? 'color-mix(in srgb, #EF4444 35%, transparent)' : 'var(--text-muted)'), letterSpacing: '0.1em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>{d}</span>
-                      <span style={{ width: isHeaderToday ? 16 : 0, height: 2.5, borderRadius: 2, background: isHeaderToday ? 'var(--accent)' : 'transparent', opacity: isHeaderToday ? 1 : 0, boxShadow: isHeaderToday ? '0 0 6px var(--accent)' : 'none' }} />
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Calendar Grid — más vertical */}
-              <DndContext sensors={calendarSensors} collisionDetection={pointerWithin} onDragStart={e => setCalendarDragTaskId(e.active.id as string)} onDragEnd={handleDragEndCalendar}>
-              <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-                {weekRows.map((week, wi) => {
-                  return (
-                    <div key={wi} style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', flex: 1, minHeight: 0 }}>
-                      {week.map((day, di) => {
-                        const dayTasks = tasks.filter(t => t.dueDate && isSameDay(localDate(t.dueDate), day));
-                        const isTodayDay = isToday(day);
-                        const isCurrentMonth = isSameMonth(day, monthStart);
-                        const isSel = isSameDay(day, calendarSelectedDay);
-                        const maxVisible = calendarSubMode === 'semana' ? 8 : 4;
-                        const visibleTasks = dayTasks.slice(0, maxVisible);
-                        const overflow = dayTasks.length - maxVisible;
-                        const cellBg = isSel ? 'var(--accent-dim)' : isTodayDay ? 'color-mix(in srgb, var(--accent) 2%, transparent)' : 'transparent';
-                        const isWeekend = di >= 5;
-                        return (
-                          <DroppableCalendarDay key={di} id={`day-${format(day, 'yyyy-MM-dd')}`}>
-                            {({ setNodeRef, isOver }) => (
-                              <div ref={setNodeRef}
-                                onClick={() => setCalendarSelectedDay(day)}
-                                style={{
-                                  borderRight: '1px solid var(--border-soft)',
-                                  borderBottom: '1px solid var(--border-soft)',
-                                  padding: calendarSubMode === 'semana' ? '8px 8px' : '4px 6px',
-                                  cursor: 'pointer',
-                                  background: isOver ? 'color-mix(in srgb, var(--accent) 6%, transparent)' : cellBg,
-                                  display: 'flex',
-                                  flexDirection: 'column',
-                                  minHeight: calendarSubMode === 'semana' ? 260 : 110,
-                                  overflow: 'hidden',
-                                  position: 'relative',
-                                  borderTop: isTodayDay ? '1px solid color-mix(in srgb, var(--accent) 30%, transparent)' : '1px solid transparent',
-                                  borderLeft: isSel ? '1px solid var(--accent-dim)' : di === 0 ? '1px solid var(--border-soft)' : 'none',
-                                  transition: 'background 150ms',
-                                  outline: isOver ? '1.5px solid var(--accent)' : 'none',
-                                  outlineOffset: -1.5,
-                                }}>
-                                {/* Day Number */}
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 4, flexShrink: 0 }}>
-                                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                                    <span style={{
-                                      fontSize: calendarSubMode === 'semana' ? 13 : 11,
-                                      fontWeight: isTodayDay ? 700 : (isSel ? 700 : 400),
-                                      color: isTodayDay ? '#fff' : (isSel ? 'var(--text-primary)' : isCurrentMonth ? (isWeekend ? 'var(--text-muted)' : 'var(--text-secondary)') : 'var(--text-muted)'),
-                                      width: 26, height: 26,
-                                      borderRadius: '50%',
-                                      background: isTodayDay ? `linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 70%, #fff))` : (isSel ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : 'transparent'),
-                                      boxShadow: isTodayDay ? '0 0 10px color-mix(in srgb, var(--accent) 45%, transparent), 0 2px 6px rgba(0,0,0,0.3)' : 'none',
-                                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    }}>{format(day, 'd')}</span>
-                                    <span style={{ width: 4, height: 4, borderRadius: '50%', background: isTodayDay ? 'var(--accent)' : (isSel ? 'color-mix(in srgb, var(--accent) 60%, transparent)' : 'transparent'), boxShadow: isTodayDay ? '0 0 6px var(--accent)' : 'none', transition: 'background 150ms' }} />
-                                  </div>
-                                </div>
-                                {/* Task cards */}
-                                {dayTasks.length > 0 && (
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1, overflow: 'hidden', paddingTop: calendarSubMode === 'semana' ? 4 : 2 }}>
-                                    {visibleTasks.map(task => {
-                                      const isOverdueCal = task.dueDate && new Date(task.dueDate).getTime() < Date.now() && task.status !== 'completado';
-                                      return calendarSubMode === 'semana' ? (
-                                        <DraggableCalendarTask key={task.id} id={task.id}>
-                                          {({ attributes, listeners, setNodeRef: dragRef, isDragging }) => (
-                                            <div ref={dragRef} {...attributes} {...listeners}
-                                              onClick={(e) => { e.stopPropagation(); setCalendarSelectedDay(day); handleOpenDetail(task.id); }}
-                                              style={{
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: 6,
-                                                borderRadius: 5,
-                                                padding: '3px 8px',
-                                                fontSize: 11,
-                                                fontWeight: 500,
-                                                color: task.status === 'completado' ? 'rgba(255,255,255,0.3)' : '#fff',
-                                                background: task.status === 'completado' ? 'rgba(255,255,255,0.03)' : (isOverdueCal ? 'rgba(239,68,68,0.2)' : `${task.courseColor}18`),
-                                                borderLeft: `2px solid ${isOverdueCal ? '#EF4444' : task.courseColor}`,
-                                                overflow: 'hidden',
-                                                textOverflow: 'ellipsis',
-                                                whiteSpace: 'nowrap',
-                                                lineHeight: '24px',
-                                                cursor: isDragging ? 'grabbing' : 'grab',
-                                                flexShrink: 0,
-                                                textDecoration: task.status === 'completado' ? 'line-through' : 'none',
-                                                transition: 'all 120ms',
-                                                opacity: isDragging ? 0.4 : 1,
-                                              }}
-                                              className="hover:brightness-125">
-                                              {(() => {
-                                                const hasExplicitTime = task.dueDate && !task.dueDate.endsWith('T23:59');
-                                                const timeLabel = hasExplicitTime ? format(localDate(task.dueDate as string), 'HH:mm') : null;
-                                                return (
-                                                  <>
-                                                    {timeLabel && (
-                                                      <span style={{
-                                                        fontSize: 9, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace",
-                                                        color: task.status === 'completado' ? 'rgba(255,255,255,0.25)' : (isOverdueCal ? '#EF4444' : task.courseColor),
-                                                        flexShrink: 0, opacity: 0.85,
-                                                      }}>{timeLabel}</span>
-                                                    )}
-                                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{task.title}</span>
-                                                  </>
-                                                );
-                                              })()}
-                                            </div>
-                                          )}
-                                        </DraggableCalendarTask>
-                                      ) : (
-                                        <DraggableCalendarTask key={task.id} id={task.id}>
-                                          {({ attributes, listeners, setNodeRef: dragRef, isDragging }) => (
-                                            <div ref={dragRef} {...attributes} {...listeners}
-                                              onClick={(e) => { e.stopPropagation(); setCalendarSelectedDay(day); handleOpenDetail(task.id); }}
-                                              style={{
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: 4,
-                                                height: 18,
-                                                borderRadius: 3,
-                                                padding: '0 6px',
-                                                cursor: isDragging ? 'grabbing' : 'grab',
-                                                flexShrink: 0,
-                                                background: isOverdueCal ? 'rgba(239,68,68,0.15)' : `${task.courseColor}15`,
-                                                borderLeft: `2px solid ${isOverdueCal ? '#EF4444' : task.courseColor}`,
-                                                transition: 'all 120ms',
-                                                opacity: isDragging ? 0.4 : 1,
-                                              }}
-                                              className="hover:brightness-125">
-                                              <span style={{
-                                                width: 5, height: 5, borderRadius: '50%',
-                                                background: isOverdueCal ? '#EF4444' : task.courseColor,
-                                                flexShrink: 0,
-                                              }} />
-                                              <span style={{
-                                                fontSize: 8,
-                                                fontWeight: 600,
-                                                color: task.status === 'completado' ? 'rgba(255,255,255,0.25)' : (isOverdueCal ? '#EF4444' : task.courseColor),
-                                                overflow: 'hidden',
-                                                textOverflow: 'ellipsis',
-                                                whiteSpace: 'nowrap',
-                                                textDecoration: task.status === 'completado' ? 'line-through' : 'none',
-                                              }}>
-                                                {task.title}
-                                              </span>
-                                            </div>
-                                          )}
-                                        </DraggableCalendarTask>
-                                      );
-                                    })}
-                                    {overflow > 0 && (
-                                      <div style={{ fontSize: 8, fontWeight: 500, color: 'var(--text-muted)', padding: '0 4px', flexShrink: 0 }}>+{overflow} más</div>
-                                    )}
-                                  </div>
-                                )}
-                                {dayTasks.length === 0 && calendarSubMode === 'semana' && (
-                                  <div style={{ flex: 1 }} />
-                                )}
-                              </div>
-                            )}
-                          </DroppableCalendarDay>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
-              </div>
-              <DragOverlay dropAnimation={null} modifiers={[snapCenterToCursor]} style={{ position: 'fixed', pointerEvents: 'none', zIndex: 1000 }}>
-                {calendarDragTaskId ? (() => {
-                  const t = tasks.find(x => x.id === calendarDragTaskId);
-                  if (!t) return null;
-                  const isOverdueCal = t.dueDate && localDate(t.dueDate).getTime() < Date.now() && t.status !== 'completado';
-                  return (
-                    <div style={{
-                      borderRadius: 4, padding: '3px 8px', fontSize: 11, fontWeight: 500,
-                      lineHeight: '24px',
-                      color: '#fff',
-                      background: isOverdueCal ? 'rgba(239,68,68,0.4)' : `${t.courseColor}30`,
-                      borderLeft: `2px solid ${isOverdueCal ? '#EF4444' : t.courseColor}`,
-                      boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
-                      textDecoration: t.status === 'completado' ? 'line-through' : 'none',
-                      maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }}>
-                      {t.title}
-                    </div>
-                  );
-                })() : null}
-              </DragOverlay>
-              </DndContext>
-            </div>
-          )}
-
+          {viewMode==='board'&&<TaskBoard tasks={filteredTasks} assessments={assessments} onOpen={handleOpenDetail} onStatus={changeStatus} onAdd={()=>setShowNewModal(true)}/>}
+          {viewMode==='urgency'&&<TaskUrgencyMatrix tasks={filteredTasks} assessments={assessments} onOpen={handleOpenDetail} onStatus={changeStatus}/>}
         </div>
-
-        {/* RIGHT PANEL */}
-        {(viewMode === 'list' || viewMode === 'board') && (
-        <div className="bento-card" style={{ display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto', padding: 8, background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 12, justifyContent: 'flex-start', alignItems: 'stretch' }}>
-          {(() => {
-            const isBoard = viewMode === 'board';
-            const sz = isBoard ? 130 : 170;
-            const labelSz = isBoard ? 12 : 14;
-            const innerSz = isBoard ? 12 : 24;
-            return (
-              <>
-                <div style={{ padding: isBoard ? '14px 14px' : '20px 18px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 12, minHeight: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: isBoard ? 10 : 14 }}>
-                      <span style={{ fontSize: isBoard ? 8 : 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.04em' }}>CURSOS</span>
-                    </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-                    <div onClick={() => setExpandedCourses(!expandedCourses)} style={{ position: 'relative', width: sz, height: sz, flexShrink: 0, cursor: 'pointer' }}>
-                      <div style={{
-                        width: '100%', height: '100%', borderRadius: '50%',
-                        background: courseDistribution.length > 0
-                          ? donutGradient(courseDistribution.map(c => ({ value: c.count, color: c.color })))
-                          : 'conic-gradient(from -90deg, var(--border-soft) 0deg 360deg)',
-                        mask: `radial-gradient(circle at ${sz/2}px ${sz/2}px, transparent ${16.5 * sz / 48}px, #000 ${16.5 * sz / 48}px ${23.5 * sz / 48}px, transparent ${23.5 * sz / 48}px)`,
-                        WebkitMask: `radial-gradient(circle at ${sz/2}px ${sz/2}px, transparent ${16.5 * sz / 48}px, #000 ${16.5 * sz / 48}px ${23.5 * sz / 48}px, transparent ${23.5 * sz / 48}px)`,
-                        pointerEvents: 'none',
-                      }} />
-                      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-                        <span style={{ fontSize: innerSz, fontWeight: 500, color: 'var(--text-primary)' }}>{tasks.length}</span>
-                        <span style={{ fontSize: isBoard ? 8 : 10, fontWeight: 500, color: 'var(--text-muted)', marginTop: isBoard ? 1 : 3 }}>tareas</span>
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, width: '100%' }}>
-                      {courseDistribution.slice(0, expandedCourses ? courseDistribution.length : (isBoard ? 5 : 6)).map(c => (
-                        <div key={c.name} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <div style={{ width: 4, height: 4, borderRadius: '50%', background: c.color, flexShrink: 0, boxShadow: `0 0 4px ${c.color}40` }} />
-                          <span style={{ fontSize: isBoard ? 9 : 10, fontWeight: 500, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{c.name}</span>
-                          <span style={{ fontSize: isBoard ? 9 : 10, fontWeight: 500, color: 'var(--text-muted)', flexShrink: 0 }}>{c.count}</span>
-                        </div>
-                      ))}
-                      {!expandedCourses && courseDistribution.length > (isBoard ? 5 : 6) && (
-                        <div onClick={() => setExpandedCourses(true)} style={{ fontSize: 9, color: 'var(--accent)', paddingTop: 2, borderTop: '1px solid var(--border-soft)', marginTop: 1, cursor: 'pointer', fontWeight: 600 }}>
-                          +{courseDistribution.length - (isBoard ? 5 : 6)} más
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{ padding: isBoard ? '14px 14px' : '20px 18px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 12, minHeight: 0 }}>
-                  <span style={{ fontSize: isBoard ? 8 : 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', display: 'block', marginBottom: isBoard ? 10 : 14 }}>ESTADO</span>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {statusData.length > 0 && (
-                      <div onClick={() => setExpandedStatus(!expandedStatus)} style={{ position: 'relative', width: sz, height: sz, flexShrink: 0, alignSelf: 'center', cursor: 'pointer' }}>
-                        <div style={{
-                          width: '100%', height: '100%', borderRadius: '50%',
-                          background: donutGradient(statusData.map(s => ({ value: s.val, color: s.color }))),
-                          mask: `radial-gradient(circle at ${sz/2}px ${sz/2}px, transparent ${16.5 * sz / 48}px, #000 ${16.5 * sz / 48}px ${23.5 * sz / 48}px, transparent ${23.5 * sz / 48}px)`,
-                          WebkitMask: `radial-gradient(circle at ${sz/2}px ${sz/2}px, transparent ${16.5 * sz / 48}px, #000 ${16.5 * sz / 48}px ${23.5 * sz / 48}px, transparent ${23.5 * sz / 48}px)`,
-                          pointerEvents: 'none',
-                        }} />
-                        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-                          <span style={{ fontSize: innerSz, fontWeight: 500, color: 'var(--text-primary)' }}>{stats.completadasPct}%</span>
-                          <span style={{ fontSize: isBoard ? 8 : 10, fontWeight: 500, color: 'var(--text-muted)', marginTop: isBoard ? 1 : 3 }}>completado</span>
-                        </div>
-                      </div>
-                    )}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      {[
-                        { label: 'Completadas', val: stats.completadas, color: '#10B981' },
-                        { label: 'En curso', val: stats.progreso, color: '#3B82F6' },
-                        { label: 'Pendientes', val: stats.pendientes, color: '#F59E0B' },
-                      ].map(item => (
-                        <div key={item.label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: isBoard ? '2px 0' : '4px 0' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                            <div style={{ width: 4, height: 4, borderRadius: '50%', background: item.color, flexShrink: 0, boxShadow: `0 0 4px ${item.color}40` }} />
-                            <span style={{ fontSize: isBoard ? 9 : 10, fontWeight: 500, color: 'var(--text-secondary)' }}>{item.label}</span>
-                          </div>
-                          <span style={{ fontSize: isBoard ? 9 : 10, fontWeight: 600, color: item.val > 0 ? 'var(--text-primary)' : 'var(--text-muted)' }}>{item.val}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </>
-            );
-          })()}
-        </div>
-        )}
+        <TaskOverview tasks={scopedTasks} assessments={assessments} courseFilter={courseFilter} onCourse={setCourseFilter} onOpen={handleOpenDetail}/>
       </div>
+      {showPicker&&<TaskStudyPicker tasks={tasks} assessments={assessments} onClose={()=>setShowPicker(false)} onOpen={id=>{setShowPicker(false);handleOpenDetail(id);}} onStudy={id=>beginRecommendedStudy(id)} hasCourse={task=>courses.some(course=>course.name===task.course)} onCourse={task=>{const course=courses.find(course=>course.name===task.course);if(course){setShowPicker(false);intelligence.navigateToCourse(course.id);}}}/>}
 
       {/* NEW TASK MODAL */}
       {showNewModal && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={() => setShowNewModal(false)}>
-          <div className="bento-card no-scrollbar" style={{ width: '100%', maxWidth: 440, maxHeight: 'calc(100vh - 40px)', overflowY: 'auto', padding: '24px 28px' }} onClick={e => e.stopPropagation()}>
+          <div className="bento-card no-scrollbar workspace-dialog task-create-dialog" role="dialog" aria-modal="true" aria-label="Nueva tarea" style={{ width: '100%', maxWidth: 500, maxHeight: 'calc(100vh - 40px)', overflowY: 'auto', padding: '24px 28px' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, paddingBottom: 14, borderBottom: '1px solid var(--border-subtle)' }}>
               <h2 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Plus size={18} style={{ color: 'var(--accent)' }} /> Nueva Tarea
               </h2>
-              <button onClick={() => setShowNewModal(false)} style={{ width: 30, height: 30, borderRadius: 8, background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={16} /></button>
+              <button data-ui-control="" aria-label="Cerrar nueva tarea" onClick={() => setShowNewModal(false)} style={{ width: 30, height: 30, borderRadius: 8, background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={16} /></button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
-                <label style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 4 }}>Título</label>
+                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 4 }}>Título</label>
                 <input id="new-task-title" type="text" name="nueva-tarea" autoComplete="off" placeholder="Ej. Resolver problemas de física..." style={{ width: '100%', padding: '10px 14px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12, color: 'var(--text-primary)', outline: 'none', fontFamily: "'Inter Tight', sans-serif" }} autoFocus />
               </div>
               <div>
-                <label style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 4 }}>Descripción (opcional)</label>
+                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 4 }}>Descripción (opcional)</label>
                 <textarea id="new-task-notes" placeholder="Detalles, consigna, qué incluye la entrega..." rows={2} style={{ width: '100%', padding: '10px 14px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12, color: 'var(--text-primary)', outline: 'none', resize: 'vertical', minHeight: 52, lineHeight: 1.6, fontFamily: "'Inter', sans-serif" }} />
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
-                  <label style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 4 }}>Curso</label>
-                  <select id="new-task-course" style={{ width: '100%', height: 36, padding: '0 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', outline: 'none', cursor: 'pointer', colorScheme: 'dark', fontFamily: "'Inter Tight', sans-serif" }}>
-                    <option value="" style={{ background: '#18181b', color: '#e4e4e7' }}>Sin curso</option>
-                    {courses.map(c => <option key={c.id} value={c.name} style={{ background: '#18181b', color: c.color }}>{c.name}</option>)}
-                  </select>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 4 }}>Curso</label>
+                  <PlanSelectDropdown label="Curso de la nueva tarea" value={newTaskCourse} onChange={setNewTaskCourse} options={courses.map(course=>({id:course.name,label:course.name,color:course.color}))} noneLabel="Sin curso" color="var(--accent)" />
                 </div>
                 <div>
-                  <label style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 4 }}>Prioridad</label>
-                  <select id="new-task-priority" style={{ width: '100%', height: 36, padding: '0 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', outline: 'none', cursor: 'pointer', colorScheme: 'dark', fontFamily: "'Inter Tight', sans-serif" }}>
-                    <option value="" style={{ background: '#18181b', color: '#e4e4e7' }}>Sin prioridad</option>
-                    <option value="high" style={{ background: '#18181b', color: '#EF4444' }}>Alta</option>
-                    <option value="medium" style={{ background: '#18181b', color: '#F59E0B' }}>Media</option>
-                    <option value="low" style={{ background: '#18181b', color: '#10B981' }}>Baja</option>
-                  </select>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 4 }}>Prioridad</label>
+                  <PlanSelectDropdown label="Prioridad de la nueva tarea" value={newTaskPriority} onChange={setNewTaskPriority} options={[{id:'high',label:'Alta',color:'#EF4444'},{id:'medium',label:'Media',color:'#F59E0B'},{id:'low',label:'Baja',color:'#10B981'}]} noneLabel="Sin prioridad" color="var(--accent)" />
                 </div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 0.7fr', gap: 12 }}>
                 <div>
-                  <label style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 4 }}>Fecha</label>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 4 }}>Fecha</label>
                   <input id="new-task-duedate" type="date" style={{ width: '100%', padding: '10px 14px', background: 'var(--bg-elevated)', border: selectBorder, borderRadius: 8, fontSize: 12, color: 'var(--text-primary)', outline: 'none', fontFamily: "'JetBrains Mono',monospace" }} />
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, fontSize: 10, color: 'var(--text-tertiary)', cursor: 'pointer' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, fontSize: 11, color: 'var(--text-tertiary)', cursor: 'pointer' }}>
                     <input type="checkbox" checked={includeTime} onChange={e => setIncludeTime(e.target.checked)} style={{ accentColor: 'var(--accent)' }} />
                     Incluir hora
                   </label>
@@ -1418,13 +857,14 @@ export default function Tareas() {
                   )}
                 </div>
                 <div>
-                  <label style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 4 }}>Estimado (min)</label>
-                  <input id="new-task-estimated" type="number" min="1" placeholder="60" style={{ width: '100%', padding: '10px 14px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12, color: 'var(--text-primary)', outline: 'none' }} />
+                  <TaskDurationField value={taskMinutes(newTaskMinutes||60)} onChange={value=>{setNewTaskMinutes(String(value));if(newTaskSteps.length)setNewTaskSteps(distributeSubtaskMinutes(value,newTaskSteps));}}/>
                 </div>
               </div>
+              {(Number(newTaskMinutes)>120||newTaskSteps.length>0)&&<section className="task-step-planner" aria-label="Dividir tarea en subtareas"><header><span>Subtareas{Number(newTaskMinutes)>120?' · bloques de hasta 120 min':''}</span>{Number(newTaskMinutes)>120&&<button type="button" className="btn-secondary" onClick={()=>setNewTaskSteps(suggestTaskSteps(Number(newTaskMinutes),(document.getElementById('new-task-title') as HTMLInputElement)?.value||'',newTaskSteps))}>Dividir en subtareas</button>}</header>{newTaskSteps.map((sub,index)=><div className="task-draft-step" key={sub.id}><span>{index+1}</span><input aria-label={'Subtarea propuesta '+(index+1)} placeholder="Nombre de la subtarea" value={sub.title} onChange={event=>setNewTaskSteps(steps=>steps.map(s=>s.id===sub.id?{...s,title:event.target.value}:s))}/><label><input key={sub.estimatedMinutes} type="number" min={1} max={120} defaultValue={sub.estimatedMinutes||25} aria-label={'Minutos de subtarea propuesta '+(index+1)} onBlur={event=>{const value=Math.max(1,Math.min(120,Math.round(Number(event.target.value)||25)));event.target.value=String(value);const steps=newTaskSteps.map(s=>s.id===sub.id?{...s,estimatedMinutes:value}:s);setNewTaskSteps(steps);setNewTaskMinutes(String(steps.reduce((sum,s)=>sum+(s.estimatedMinutes||25),0)));}}/>min</label><button type="button" aria-label={'Quitar subtarea propuesta '+(index+1)} onClick={()=>{const steps=newTaskSteps.filter(s=>s.id!==sub.id);setNewTaskSteps(steps);if(steps.length)setNewTaskMinutes(String(steps.reduce((sum,s)=>sum+(s.estimatedMinutes||25),0)));}}><X size={13}/></button></div>)}</section>}
+              <button type="button" className="task-add-draft-step" onClick={()=>{const assigned=newTaskSteps.reduce((sum,s)=>sum+(s.estimatedMinutes||25),0),total=taskMinutes(newTaskMinutes||60),minutes=Math.min(120,total>assigned?total-assigned:25);setNewTaskSteps(steps=>[...steps,{id:crypto.randomUUID(),title:'',done:false,estimatedMinutes:minutes}]);setNewTaskMinutes(String(Math.max(total,assigned+minutes)));}}><Plus size={14}/>Añadir subtarea</button>
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 6, paddingTop: 14, borderTop: '1px solid var(--border-subtle)' }}>
-                <button onClick={() => setShowNewModal(false)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 18px', height: 36, borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: '1px solid var(--border-default)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}>Cancelar</button>
-                <button onClick={handleCreateTask} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 22px', height: 36, borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: 'none', background: 'var(--accent)', color: '#fff' }}>Crear tarea</button>
+                <button data-app-action="secondary" data-ui-control="" onClick={() => setShowNewModal(false)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 18px', height: 36, borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: '1px solid var(--border-default)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}>Cancelar</button>
+                <button data-app-action="primary" data-ui-control="" onClick={handleCreateTask} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 22px', height: 36, borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: 'none', background: 'var(--accent)', color: '#fff' }}>Crear tarea</button>
               </div>
 
             </div>
@@ -1443,27 +883,29 @@ export default function Tareas() {
         const priorityColor = selectedTask.priority === 'high' ? '#EF4444' : selectedTask.priority === 'medium' ? '#F59E0B' : selectedTask.priority === 'low' ? '#10B981' : 'var(--border-default)';
         return createPortal(
           <div style={{ position: 'fixed', inset: 0, zIndex: 99990, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)' }} onClick={() => { setSelectedTaskId(null); setShowAddMaterial(false); setPdfPreviewUrl(null); setPreviewModalUrl(null); }}>
-            <div className="bento-card" style={{ position: 'fixed', right: 0, top: 0, bottom: 0, width: 520, maxWidth: '94vw', padding: 0, display: 'flex', flexDirection: 'column', background: 'var(--bg-primary)', overflow: 'hidden', border: 'none', borderLeft: '1px solid var(--border-default)', boxShadow: '-20px 0 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.03) inset' }} onClick={e => e.stopPropagation()}>
+            <div ref={inspectorWidth.ref} className="bento-card task-inspector" role="dialog" aria-label="Detalle de tarea" aria-modal="true" style={{ position: 'fixed', right: 0, top: 0, bottom: 0, width: "var(--panel-width,560px)", maxWidth: '94vw', padding: 0, display: 'flex', flexDirection: 'column', background: 'var(--bg-primary)', overflow: 'hidden', border: 'none', borderLeft: '1px solid var(--border-default)', boxShadow: '-20px 0 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.03) inset' }} onClick={e => e.stopPropagation()}>
+<PanelResizeHandle control={inspectorWidth} label="Ancho del detalle de tarea"/>
 
               {/* ── Panel Header (mínimo: cerrar · estado · eliminar) ── */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0, gap: 10 }}>
-                <button onClick={() => setSelectedTaskId(null)}
+              <div className="task-inspector-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0, gap: 10 }}>
+                <button data-ui-control="" onClick={() => setSelectedTaskId(null)}
                   title="Cerrar"
                   style={{ width: 30, height: 30, borderRadius: 9, background: 'var(--bg-hover)', border: '1px solid var(--border-soft)', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms', flexShrink: 0 }}
                   onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.borderColor = 'var(--border-hover)'; }}
                   onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'var(--border-soft)'; }}>
                   <X size={14} />
                 </button>
+                <span className="task-inspector-label">Detalle de tarea</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                  <span onClick={() => toggleTaskStatus(selectedTask.id)}
+                  <button data-ui-control="" type="button" onClick={() => toggleTaskStatus(selectedTask.id)}
                     title="Cambiar estado"
-                    style={{ cursor: 'pointer', fontSize: 10, fontWeight: 600, color: taskColor, letterSpacing: '0.06em', fontFamily: "'Inter Tight', sans-serif", padding: '6px 13px', borderRadius: 999, background: `${taskColor}10`, display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', transition: 'all 150ms', border: `1px solid ${taskColor}18` }}
+                    style={{ cursor: 'pointer', fontSize: 11, fontWeight: 600, color: taskColor, letterSpacing: '0.06em', fontFamily: "'Inter Tight', sans-serif", padding: '6px 13px', borderRadius: 999, background: `${taskColor}10`, display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', transition: 'all 150ms', border: `1px solid ${taskColor}18` }}
                     onMouseEnter={e => e.currentTarget.style.background = `${taskColor}18`}
                     onMouseLeave={e => e.currentTarget.style.background = `${taskColor}10`}>
                     <span style={{ width: 5, height: 5, borderRadius: '50%', background: taskColor, flexShrink: 0, boxShadow: `0 0 6px ${taskColor}80` }} />
                     {statusConfig[selectedTask.status]?.label}
-                  </span>
-                  <button onClick={() => setConfirmDeleteTask(selectedTask.id)}
+                  </button>
+                  <button data-ui-control="" onClick={() => setConfirmDeleteTask(selectedTask.id)}
                     title="Eliminar tarea"
                     style={{ width: 30, height: 30, borderRadius: 9, background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms', opacity: 0.6, flexShrink: 0 }}
                     onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.12)'; e.currentTarget.style.color = '#EF4444'; e.currentTarget.style.opacity = '1'; }}
@@ -1474,20 +916,20 @@ export default function Tareas() {
               </div>
 
               {/* ── Scrollable Content ── */}
-              <div style={{ flex: 1, overflowY: 'auto', padding: '26px 28px 30px', display: 'flex', flexDirection: 'column', gap: 22 }} className="no-scrollbar">
+              <div style={{ flex: 1, overflowY: 'auto', padding: '26px 28px 30px', display: 'flex', flexDirection: 'column', gap: 22 }} className="task-inspector-content custom-scroll">
 
                 {/* ── Title ── */}
                 <div style={{ padding: '2px 2px 4px' }}>
                   <input
-                    id="task-title-input"
+                    id="task-title-input" aria-label="Título de la tarea"
                     name="titulo-tarea"
                     autoComplete="off"
                     value={selectedTask.title}
                     onChange={e => updateTask(selectedTask.id, { title: e.target.value })}
-                    style={{ width: '100%', background: 'transparent', border: 'none', fontSize: 26, fontWeight: 300, letterSpacing: '-0.02em', color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", outline: 'none', padding: 0, lineHeight: 1.25, caretColor: taskColor }}
+                    style={{ width: '100%', background: 'transparent', border: 'none', fontSize: 26, fontWeight: 500, letterSpacing: '-0.02em', color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", outline: 'none', padding: 0, lineHeight: 1.25, caretColor: taskColor }}
                     placeholder="Título de la tarea..."
                   />
-                  <div style={{ width: 64, height: 2, borderRadius: 1, background: `linear-gradient(90deg, ${taskColor}, transparent)`, marginTop: 12, boxShadow: `0 0 12px ${taskColor}40` }} />
+
                 </div>
 
                 {/* ── Descripción (justo bajo el título) ── */}
@@ -1495,7 +937,7 @@ export default function Tareas() {
                   <textarea
                     value={selectedTask.notes || selectedTask.apuntes || ''}
                     onChange={e => updateTask(selectedTask.id, { notes: e.target.value })}
-                    placeholder="Añadir descripción..."
+                    aria-label="Descripción de la tarea" placeholder="Describe el resultado que quieres conseguir…"
                     rows={Math.min(6, Math.max(1, (selectedTask.notes || selectedTask.apuntes || '').split('\n').length))}
                     style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', resize: 'none', fontSize: 13, lineHeight: 1.7, color: 'var(--text-secondary)', fontFamily: "'Inter', sans-serif", padding: 0, minHeight: 26, overflow: 'hidden', transition: 'color 150ms' }}
                     onInput={e => { const el = e.currentTarget; el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; }}
@@ -1518,90 +960,47 @@ export default function Tareas() {
                   const courseIsSet = selectedTask.course !== 'Sin curso';
                   const courseHex = courseIsSet && selectedCourseColor.startsWith('#') ? selectedCourseColor : null;
                   const prioritySet = !!selectedTask.priority && selectedTask.priority !== 'none';
-                  const pillBase = { display: 'flex', alignItems: 'center', gap: 8, height: 30, padding: '0 13px', borderRadius: 999, transition: 'border-color 150ms, background 150ms' } as React.CSSProperties;
+                  const pillBase = { display: 'flex', alignItems: 'center', gap: 8, minHeight: 62, padding: '0 12px', borderRadius: 5, transition: 'border-color 150ms, background 150ms' } as React.CSSProperties;
                   return (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, padding: '2px 2px 0' }}>
+                    <div className="task-properties" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, padding: '2px 2px 0' }}>
                       {/* Curso */}
-                      <div style={{ ...pillBase, background: courseHex ? `${courseHex}0d` : 'var(--bg-elevated)', border: `1px solid ${courseHex ? `${courseHex}30` : 'var(--border-soft)'}` }}
+                      <div className="task-property task-colored-property" data-label="Curso" style={{ ...pillBase, ...({"--property-color": courseHex || "var(--workspace-line)"} as React.CSSProperties), background: courseHex ? `${courseHex}0d` : 'var(--bg-elevated)', border: `1px solid ${courseHex ? `${courseHex}30` : 'var(--border-soft)'}` }}
                         onMouseEnter={e => { e.currentTarget.style.borderColor = courseHex ? `${courseHex}55` : 'var(--border-hover)'; }}
                         onMouseLeave={e => { e.currentTarget.style.borderColor = courseHex ? `${courseHex}30` : 'var(--border-soft)'; }}>
                         <span style={{ width: 7, height: 7, borderRadius: '50%', background: selectedCourseColor, flexShrink: 0, opacity: courseIsSet ? 1 : 0.4 }} />
-                        <select value={selectedTask.course}
-                          onChange={e => updateTask(selectedTask.id, { course: e.target.value, courseColor: e.target.value === 'Sin curso' ? '#888888' : (courses.find(c => c.name === e.target.value)?.color || '#E11D48') })}
-                          style={{ background: 'transparent', border: 'none', outline: 'none', fontSize: 11, fontWeight: 600, color: courseHex ? courseHex : 'var(--text-secondary)', cursor: 'pointer', colorScheme: 'dark', fontFamily: "'Inter Tight', sans-serif", padding: 0, maxWidth: 128 }}>
-                          <option value="Sin curso" style={{ background: '#18181b', color: '#e4e4e7' }}>Sin curso</option>
-                          {courses.map(c => (
-                            <option key={c.id} value={c.name} style={{ background: '#18181b', color: c.color }}>{c.name}</option>
-                          ))}
-                        </select>
+                        <PlanSelectDropdown label="Curso de la tarea" value={selectedTask.course === 'Sin curso' ? '' : selectedTask.course} onChange={value=>updateTask(selectedTask.id,{course:value || 'Sin curso',courseColor:courses.find(course=>course.name===value)?.color || '#888888'})} options={courses.map(course=>({id:course.name,label:course.name,color:course.color}))} noneLabel="Sin curso" color="var(--accent)" />
                       </div>
                       {/* Prioridad */}
-                      <div style={{ ...pillBase, background: prioritySet ? `${priorityColor}0d` : 'var(--bg-elevated)', border: `1px solid ${prioritySet ? `${priorityColor}30` : 'var(--border-soft)'}` }}
+                      <div className="task-property task-colored-property" data-label="Prioridad" style={{ ...pillBase, ...({"--property-color": prioritySet ? priorityColor : "var(--workspace-line)"} as React.CSSProperties), background: prioritySet ? `${priorityColor}0d` : 'var(--bg-elevated)', border: `1px solid ${prioritySet ? `${priorityColor}30` : 'var(--border-soft)'}` }}
                         onMouseEnter={e => { e.currentTarget.style.borderColor = prioritySet ? `${priorityColor}55` : 'var(--border-hover)'; }}
                         onMouseLeave={e => { e.currentTarget.style.borderColor = prioritySet ? `${priorityColor}30` : 'var(--border-soft)'; }}>
                         <span style={{ width: 7, height: 7, borderRadius: '50%', background: priorityColor, flexShrink: 0, opacity: prioritySet ? 1 : 0.35 }} />
-                        <select value={selectedTask.priority || 'none'} onChange={e => updateTask(selectedTask.id, { priority: e.target.value as any })}
-                          style={{ background: 'transparent', border: 'none', outline: 'none', fontSize: 11, fontWeight: 600, color: prioritySet ? priorityColor : 'var(--text-secondary)', cursor: 'pointer', colorScheme: 'dark', fontFamily: "'Inter Tight', sans-serif", padding: 0 }}>
-                          <option value="none" style={{ background: '#18181b', color: '#e4e4e7' }}>Prioridad</option>
-                          <option value="low" style={{ background: '#18181b', color: '#10B981' }}>Baja</option>
-                          <option value="medium" style={{ background: '#18181b', color: '#F59E0B' }}>Media</option>
-                          <option value="high" style={{ background: '#18181b', color: '#EF4444' }}>Alta</option>
-                        </select>
+                        <PlanSelectDropdown label="Prioridad de la tarea" value={selectedTask.priority === 'none' ? '' : selectedTask.priority} onChange={value=>updateTask(selectedTask.id,{priority:(value || 'none') as any})} options={[{id:'low',label:'Baja',color:'#10B981'},{id:'medium',label:'Media',color:'#F59E0B'},{id:'high',label:'Alta',color:'#EF4444'}]} noneLabel="Sin prioridad" color="var(--accent)" />
                       </div>
                       {/* Fecha (solo día) */}
-                      <div style={{ ...pillBase, gap: 7, background: tr?.overdue ? 'rgba(239,68,68,0.06)' : 'var(--bg-elevated)', border: `1px solid ${tr?.overdue ? 'rgba(239,68,68,0.35)' : 'var(--border-soft)'}` }}
+                      <div className="task-property task-date-property" data-label="Fecha de entrega" style={{ ...pillBase, gap: 7, background: tr?.overdue ? 'rgba(239,68,68,0.06)' : 'var(--bg-elevated)', border: `1px solid ${tr?.overdue ? 'rgba(239,68,68,0.35)' : 'var(--border-soft)'}` }}
                         onMouseEnter={e => { e.currentTarget.style.borderColor = tr?.overdue ? 'rgba(239,68,68,0.6)' : 'var(--border-hover)'; }}
                         onMouseLeave={e => { e.currentTarget.style.borderColor = tr?.overdue ? 'rgba(239,68,68,0.35)' : 'var(--border-soft)'; }}>
                         <CalendarDays size={12} style={{ color: dateColor, flexShrink: 0, opacity: dateVal ? 1 : 0.4 }} />
-                        <input type="date"
+                        <input type="date" aria-label="Fecha de entrega de la tarea"
                           value={dateVal}
                           onChange={e => {
                             if (!e.target.value) { updateTask(selectedTask.id, { dueDate: undefined }); return; }
                             updateTask(selectedTask.id, { dueDate: hasTime ? `${e.target.value}T${timeVal}` : e.target.value });
                           }}
-                          style={{ background: 'transparent', border: 'none', outline: 'none', fontSize: 10.5, fontWeight: 600, color: dateColor, cursor: 'text', colorScheme: scheme, fontFamily: "'JetBrains Mono', monospace", padding: 0, width: dateVal ? 94 : 84 }}
+                          style={{ background: 'transparent', border: 'none', outline: 'none', fontSize: 11, fontWeight: 600, color: dateColor, cursor: 'text', colorScheme: scheme, fontFamily: "'JetBrains Mono', monospace", padding: 0, width: dateVal ? 94 : 84 }}
                         />
                       </div>
-                      {/* Hora: flechas dinámicas ±15 min · clic en el reloj para quitar/poner hora */}
-                      {dateVal && (() => {
-                        const shiftTime = (mins: number) => {
-                          const base = hasTime ? timeVal : '18:00';
-                          const [h, m] = base.split(':').map(Number);
-                          const t = ((h * 60 + m + mins) % 1440 + 1440) % 1440;
-                          const hh = String(Math.floor(t / 60)).padStart(2, '0');
-                          const mm = String(t % 60).padStart(2, '0');
-                          updateTask(selectedTask.id, { dueDate: `${dateVal}T${hh}:${mm}` });
-                        };
-                        return (
-                          <div style={{ ...pillBase, gap: 5, padding: '0 7px', background: hasTime ? 'var(--bg-surface)' : 'var(--bg-elevated)', border: `1px solid ${hasTime ? `${taskColor}30` : 'var(--border-soft)'}` }}>
-                            <button onClick={() => shiftTime(15)} title="Subir hora (+15 min)" tabIndex={-1}
-                              style={{ width: 16, height: 16, borderRadius: 4, border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
-                              onMouseEnter={e => { e.currentTarget.style.color = taskColor; }}
-                              onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; }}>
-                              <ChevronUp size={11} />
-                            </button>
-                            <span style={{ display: 'flex', flexShrink: 0, cursor: 'pointer' }}
-                              onClick={() => updateTask(selectedTask.id, { dueDate: hasTime ? dateVal : `${dateVal}T18:00` })}
-                              title={hasTime ? 'Quitar hora (solo fecha)' : 'Añadir hora límite (18:00)'}>
-                              <Clock size={12} style={{ color: hasTime ? taskColor : 'var(--text-muted)' }} />
-                            </span>
-                            <span style={{ fontSize: 10.5, fontWeight: 600, color: hasTime ? 'var(--text-primary)' : 'var(--text-muted)', fontFamily: "'JetBrains Mono', monospace", fontVariantNumeric: 'tabular-nums', minWidth: 38, textAlign: 'center' }}>
-                              {hasTime ? timeVal : '--:--'}
-                            </span>
-                            <button onClick={() => shiftTime(-15)} title="Bajar hora (−15 min)" tabIndex={-1}
-                              style={{ width: 16, height: 16, borderRadius: 4, border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
-                              onMouseEnter={e => { e.currentTarget.style.color = taskColor; }}
-                              onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; }}>
-                              <ChevronDown size={11} />
-                            </button>
-                          </div>
-                        );
-                      })()}
+                      <div className="task-property task-time-property" style={{...pillBase,border:'1px solid var(--workspace-line)'}}>
+                        <label className="task-time-toggle-row"><span>Hora de entrega</span><input type="checkbox" role="switch" aria-label="Activar hora de entrega" disabled={!dateVal} checked={!!hasTime} onChange={e=>updateTask(selectedTask.id,{dueDate:e.target.checked?dateVal+'T'+timeVal:dateVal})}/></label>
+                        {hasTime?<TimeControl label="Hora límite de la tarea" value={timeVal} onChange={time=>updateTask(selectedTask.id,{dueDate:time?dateVal+'T'+time:dateVal})}/>:<span className="task-time-empty">{dateVal?'Sin hora':'Elige una fecha'}</span>}
+                      </div>
                       {/* Estado (vence en / atrasado) — chip aparte */}
+                      <div className="task-property task-study-duration" data-label="Estudio"><TaskDurationField compact value={taskMinutes(selectedTask.estimatedMinutes)} onChange={estimatedMinutes=>updateTask(selectedTask.id,{estimatedMinutes,...(estimatedMinutes>120?{subtasks:suggestTaskSteps(estimatedMinutes,selectedTask.title,selectedTask.subtasks)}:selectedTask.subtasks.length?{subtasks:distributeSubtaskMinutes(estimatedMinutes,selectedTask.subtasks)}:{})})}/></div>
                       {tr && (
-                        <div style={{ ...pillBase, gap: 6, height: 30, padding: '0 11px', background: tr.overdue ? 'rgba(239,68,68,0.08)' : tr.urgent ? 'rgba(245,158,11,0.08)' : 'var(--bg-elevated)', border: `1px solid ${tr.overdue ? 'rgba(239,68,68,0.3)' : tr.urgent ? 'rgba(245,158,11,0.3)' : 'var(--border-soft)'}` }}>
+                        <div className="task-deadline-status" style={{ ...pillBase, gap: 6, height: 30, padding: '0 11px', background: tr.overdue ? 'rgba(239,68,68,0.08)' : tr.urgent ? 'rgba(245,158,11,0.08)' : 'var(--bg-elevated)', border: `1px solid ${tr.overdue ? 'rgba(239,68,68,0.3)' : tr.urgent ? 'rgba(245,158,11,0.3)' : 'var(--border-soft)'}` }}>
                           {tr.overdue && <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#EF4444', flexShrink: 0, boxShadow: '0 0 6px rgba(239,68,68,0.5)' }} />}
-                          <span style={{ fontSize: 10, fontWeight: 700, color: dateColor, whiteSpace: 'nowrap' }}>{tr.text}</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: dateColor, whiteSpace: 'nowrap' }}>{tr.text}</span>
                         </div>
                       )}
                     </div>
@@ -1620,13 +1019,15 @@ export default function Tareas() {
                       <div style={{ flex: 1, height: 3, borderRadius: 2, background: 'var(--border-soft)', overflow: 'hidden' }}>
                         <div style={{ width: `${pct}%`, height: '100%', background: progressColor, borderRadius: 2, transition: 'width 0.4s ease', boxShadow: `0 0 8px ${progressColor}60` }} />
                       </div>
-                      <span style={{ fontSize: 9.5, color: 'var(--text-secondary)', fontWeight: 600, whiteSpace: 'nowrap', fontFamily: "'JetBrains Mono', monospace" }}>{pct}% · {studyMins}m / {estMins}m</span>
+                      <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600, whiteSpace: 'nowrap', fontFamily: "'JetBrains Mono', monospace" }}>{pct}% · {studyMins}m / {estMins}m</span>
                     </div>
                   );
                 })()}
 
+                {selectedTask.sourceNoteId&&notes.some(note=>note.id===selectedTask.sourceNoteId&&!note.deletedAt)&&<button type="button" className="task-source-note" onClick={()=>{sessionStorage.setItem('apheka_open_note',selectedTask.sourceNoteId!);window.dispatchEvent(new Event('apheka:open-note'));setSelectedTaskId(null);setNavigateTo('apuntes');}}><FileText size={15}/><span>Abrir apunte de origen</span><ChevronRight size={15}/></button>}
+
                 {/* ── Subtareas ── */}
-                <div className="bento-card" style={{ padding: 0, background: 'var(--bg-surface)' }}>
+                <div className="bento-card task-detail-section" style={{ padding: 0, background: 'var(--bg-surface)' }}>
                   <div onClick={() => setSectionCollapsed(prev => ({ ...prev, subtareas: !prev.subtareas }))}
                     style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', cursor: 'pointer', transition: 'background 150ms', userSelect: 'none' }}
                     onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
@@ -1637,10 +1038,10 @@ export default function Tareas() {
                     <div style={{ width: 26, height: 26, borderRadius: 8, background: `${taskColor}10`, border: `1px solid ${taskColor}1a`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                       <CheckSquare size={12} style={{ color: taskColor }} />
                     </div>
-                    <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-primary)', letterSpacing: '0.1em', fontFamily: "'Inter Tight', sans-serif", flex: 1 }}>Subtareas</span>
+                    <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-primary)', letterSpacing: '0.1em', fontFamily: "'Inter Tight', sans-serif", flex: 1 }}>Subtareas</span>
                     {totalSubtasks > 0 && (
                       <>
-                        <span style={{ fontSize: 8.5, fontWeight: 600, color: '#10B981', background: 'rgba(16,185,129,0.1)', padding: '1px 9px', borderRadius: 4, border: '1px solid rgba(16,185,129,0.15)' }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#10B981', background: 'rgba(16,185,129,0.1)', padding: '1px 9px', borderRadius: 4, border: '1px solid rgba(16,185,129,0.15)' }}>
                           {doneSubtasks}/{totalSubtasks}
                         </span>
                         <div style={{ width: 48, height: 3, borderRadius: 2, background: 'var(--border-soft)', overflow: 'hidden', flexShrink: 0 }}>
@@ -1650,22 +1051,23 @@ export default function Tareas() {
                     )}
                   </div>
 
+                  {taskMinutes(selectedTask.estimatedMinutes)>120&&selectedTask.subtasks.length<Math.ceil(taskMinutes(selectedTask.estimatedMinutes)/120)&&<button type="button" className="task-distribute-steps btn-secondary" onClick={()=>{updateTask(selectedTask.id,{subtasks:suggestTaskSteps(taskMinutes(selectedTask.estimatedMinutes),selectedTask.title,selectedTask.subtasks)});setSectionCollapsed(prev=>({...prev,subtareas:false}));}}>Distribuir tiempo en subtareas</button>}
                   {!sectionCollapsed.subtareas && (
                     <div style={{ padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: 10, borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }}>
 
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 5, paddingTop: 10 }}>
                         {selectedTask.subtasks.map((st) => (
-                          <div key={st.id}
+                          <div key={st.id} className="task-subtask-row" data-done={st.done}
                             style={{ display: 'flex', alignItems: 'center', gap: 10, padding: "11px 13px", borderRadius: 9, background: st.done ? 'rgba(16,185,129,0.08)' : 'var(--bg-surface)', border: `1px solid ${st.done ? 'rgba(16,185,129,0.15)' : 'var(--border-soft)'}`, transition: 'all 150ms', opacity: st.done ? 0.55 : 1 }}
                             onMouseEnter={e => { if (!st.done) { e.currentTarget.style.borderColor = `${taskColor}40`; e.currentTarget.style.background = `${taskColor}06`; } }}
                             onMouseLeave={e => { if (!st.done) { e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.background = 'var(--bg-surface)'; } }}>
-                            <button onClick={() => toggleSubTask(selectedTask.id, st.id)}
+                            <button data-ui-control="" className="task-subtask-check" aria-label={`Completar subtarea ${st.title}`} aria-pressed={st.done} onClick={() => toggleSubTask(selectedTask.id, st.id)}
                               style={{ width: 20, height: 20, borderRadius: '50%', border: `2px solid ${st.done ? '#10B981' : 'var(--border-strong)'}`, background: st.done ? '#10B981' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, padding: 0, transition: 'all 250ms cubic-bezier(0.34, 1.56, 0.64, 1)' }}
                               onMouseEnter={e => { if (!st.done) { e.currentTarget.style.borderColor = taskColor; e.currentTarget.style.boxShadow = `0 0 0 3px ${taskColor}14`; } }}
                               onMouseLeave={e => { if (!st.done) { e.currentTarget.style.borderColor = 'var(--border-strong)'; e.currentTarget.style.boxShadow = 'none'; } }}>
                               {st.done && <Check size={10} strokeWidth={4} style={{ color: '#fff' }} />}
                             </button>
-                            <input
+                            <input aria-label={`Nombre de subtarea ${st.title}`}
                               value={st.title}
                               onChange={e => {
                                 const updated = selectedTask.subtasks.map(s => s.id === st.id ? { ...s, title: e.target.value } : s);
@@ -1673,26 +1075,26 @@ export default function Tareas() {
                               }}
                               style={{ flex: 1, background: 'transparent', border: 'none', fontSize: 12.5, fontWeight: st.done ? 400 : 500, color: st.done ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: st.done ? 'line-through' : 'none', outline: 'none', padding: 0 }}
                             />
+                            <label className="task-subtask-minutes"><input key={st.estimatedMinutes} type="number" min={1} max={120} aria-label={'Duración de subtarea '+st.title} defaultValue={st.estimatedMinutes||studyBlockMinutes(selectedTask,st)} onBlur={event=>{const value=Math.max(1,Math.min(120,Math.round(Number(event.target.value)||studyBlockMinutes(selectedTask,st))));event.target.value=String(value);const subtasks=selectedTask.subtasks.map(s=>({...s,estimatedMinutes:s.id===st.id?value:s.estimatedMinutes||studyBlockMinutes(selectedTask,s)}));updateTask(selectedTask.id,{subtasks,estimatedMinutes:subtasks.reduce((sum,s)=>sum+(s.estimatedMinutes||0),0)});}}/>min</label>
                             {!st.done && (
-                              <button onClick={() => {
+                              <button data-ui-control="" onClick={() => {
                                 try {
-                                  linkTaskToTimer(selectedTask.id);
+                                  if (taskLinkUnavailable(selectedTask)) { addNotification(taskLinkUnavailable(selectedTask)!, 'info'); return; }
+                                  beginRecommendedStudy(selectedTask.id,'pomodoro',undefined,st.id);
                                 } catch (e) {
                                   addNotification('No se pudo vincular la subtarea (almacenamiento lleno).', 'error');
                                   console.error(e);
                                   return;
                                 }
-                                setSelectedTaskId(null);
-                                setNavigateTo('estudio');
                               }}
                                 style={{ width: 26, height: 26, borderRadius: 6, border: 'none', background: 'transparent', color: '#10B981', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 150ms', flexShrink: 0, opacity: 0.4 }}
                                 onMouseEnter={e => { e.currentTarget.style.background = 'rgba(16,185,129,0.12)'; e.currentTarget.style.opacity = '1'; }}
                                 onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.opacity = '0.4'; }}
-                                title="Estudiar esta subtarea">
+                                aria-label={`Estudiar subtarea ${st.title}`} disabled={!!taskLinkUnavailable(selectedTask) || !st.title.trim()} title="Estudiar esta subtarea">
                                 <Play size={11} fill="#10B981" style={{ color: '#10B981' }} />
                               </button>
                             )}
-                            <button onClick={() => deleteSubTask(selectedTask.id, st.id)}
+                            <button data-ui-control="" onClick={() => deleteSubTask(selectedTask.id, st.id)}
                               style={{ width: 26, height: 26, borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 150ms', flexShrink: 0, opacity: 0.4 }}
                               onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#EF4444'; e.currentTarget.style.opacity = '1'; }}
                               onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.opacity = '0.4'; }}
@@ -1719,7 +1121,7 @@ export default function Tareas() {
                           onFocus={e => { e.currentTarget.style.borderColor = taskColor; e.currentTarget.style.boxShadow = `0 0 0 2px ${taskColor}14`; }}
                           onBlur={e => { e.currentTarget.style.borderColor = 'var(--border-default)'; e.currentTarget.style.boxShadow = 'none'; }}
                         />
-                        <button onClick={handleAddSubtask} disabled={!newSubtaskTitle.trim()}
+                        <button data-ui-control="" onClick={handleAddSubtask} disabled={!newSubtaskTitle.trim()}
                           style={{ width: 36, height: 36, borderRadius: 7, border: 'none', background: newSubtaskTitle.trim() ? taskColor : 'var(--border-soft)', color: newSubtaskTitle.trim() ? '#fff' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: newSubtaskTitle.trim() ? 'pointer' : 'default', transition: 'all 150ms', flexShrink: 0 }}>
                           <Plus size={15} />
                         </button>
@@ -1740,9 +1142,9 @@ export default function Tareas() {
                     <div style={{ width: 26, height: 26, borderRadius: 8, background: `${taskColor}10`, border: `1px solid ${taskColor}1a`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                       <Paperclip size={12} style={{ color: taskColor }} />
                     </div>
-                    <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-primary)', letterSpacing: '0.1em', fontFamily: "'Inter Tight', sans-serif", flex: 1 }}>Materiales</span>
+                    <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-primary)', letterSpacing: '0.1em', fontFamily: "'Inter Tight', sans-serif", flex: 1 }}>Materiales</span>
                     {selectedTask.files.length > 0 && (
-                      <span style={{ fontSize: 8.5, color: 'var(--text-secondary)', fontWeight: 600, background: 'var(--bg-hover)', padding: '1px 9px', borderRadius: 4 }}>{selectedTask.files.length} {selectedTask.files.length === 1 ? 'material' : 'materiales'}</span>
+                      <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600, background: 'var(--bg-hover)', padding: '1px 9px', borderRadius: 4 }}>{selectedTask.files.length} {selectedTask.files.length === 1 ? 'material' : 'materiales'}</span>
                     )}
                   </div>
 
@@ -1773,7 +1175,6 @@ export default function Tareas() {
                           const handleTileClick = async () => {
                             try {
                               await openFileSmart(f.path, f.name, {
-                                onMedia: (u, n) => setPipUrl(u, n),
                                 onError: (m) => addNotification(m, 'error'),
                                 onMoved: (np) => {
                                   updateTask(selectedTask.id, { files: selectedTask.files.map(x => x.id === f.id ? { ...x, path: np } : x) });
@@ -1825,7 +1226,7 @@ export default function Tareas() {
                               onMouseEnter={e => { e.currentTarget.style.borderColor = `${badgeColor}55`; e.currentTarget.style.transform = 'translateY(-1px)'; const del = e.currentTarget.querySelector('.mat-del') as HTMLElement; if (del) del.style.opacity = '1'; }}
                               onMouseLeave={e => { e.currentTarget.style.borderColor = `${badgeColor}22`; e.currentTarget.style.transform = 'none'; const del = e.currentTarget.querySelector('.mat-del') as HTMLElement; if (del) del.style.opacity = '0'; }}>
                               <span style={{ color: badgeColor, display: 'flex' }}>{iconEl}</span>
-                              <button className="mat-del" onClick={(e) => { e.stopPropagation(); setConfirmDeleteMaterial({ taskId: selectedTask.id, fileId: f.id }); }}
+                              <button data-ui-control="" className="mat-del" onClick={(e) => { e.stopPropagation(); setConfirmDeleteMaterial({ taskId: selectedTask.id, fileId: f.id }); }}
                                 style={{ position: 'absolute', top: -5, right: -5, width: 15, height: 15, borderRadius: '50%', background: '#EF4444', border: '1.5px solid var(--bg-primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', opacity: 0, transition: 'opacity 140ms', padding: 0 }}
                                 title="Eliminar">
                                 <X size={8} strokeWidth={3} />
@@ -1857,8 +1258,8 @@ export default function Tareas() {
                             <span style={{ width: 24, height: 24, borderRadius: 7, background: `${taskColor}12`, border: `1px solid ${taskColor}28`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                               <Link2 size={12} style={{ color: taskColor }} />
                             </span>
-                            <span style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-secondary)', fontFamily: "'Inter Tight', sans-serif", flex: 1 }}>Nuevo enlace</span>
-                            <button onClick={() => { setShowAddMaterial(false); setNewMaterialName(''); setNewMaterialPath(''); }}
+                            <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-secondary)', fontFamily: "'Inter Tight', sans-serif", flex: 1 }}>Nuevo enlace</span>
+                            <button data-ui-control="" onClick={() => { setShowAddMaterial(false); setNewMaterialName(''); setNewMaterialPath(''); }}
                               style={{ width: 26, height: 26, borderRadius: 7, cursor: 'pointer', border: '1px solid var(--border-default)', background: 'transparent', color: 'var(--text-muted)', transition: 'all 150ms', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
                               onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
                               onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
@@ -1878,12 +1279,12 @@ export default function Tareas() {
                             style={{ width: '100%', padding: '10px 12px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 8, fontSize: 12, color: 'var(--text-primary)', outline: 'none', transition: 'all 150ms' }}
                             onFocus={e => { e.currentTarget.style.borderColor = taskColor; e.currentTarget.style.boxShadow = `0 0 0 2px ${taskColor}12`; }}
                             onBlur={e => { e.currentTarget.style.borderColor = 'var(--border-default)'; e.currentTarget.style.boxShadow = 'none'; }} />
-                          <button onClick={handleAddMaterial} disabled={!newMaterialPath.trim()}
+                          <button data-ui-control="" onClick={handleAddMaterial} disabled={!newMaterialPath.trim()}
                             style={{ height: 34, borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: 'none', background: taskColor, color: '#fff', opacity: newMaterialPath.trim() ? 1 : 0.35, transition: 'all 150ms', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                             <Link2 size={12} /> Añadir enlace
                           </button>
-                          <button type="button" onClick={() => fileInputRef.current?.click()}
-                            style={{ height: 30, borderRadius: 8, fontSize: 10.5, fontWeight: 600, cursor: 'pointer', border: 'none', background: 'transparent', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, transition: 'color 150ms' }}
+                          <button data-ui-control="" type="button" onClick={() => fileInputRef.current?.click()}
+                            style={{ height: 30, borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: 'none', background: 'transparent', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, transition: 'color 150ms' }}
                             onMouseEnter={e => { e.currentTarget.style.color = taskColor; }}
                             onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-secondary)'; }}>
                             <Upload size={11} /> o subir un archivo
@@ -1899,38 +1300,7 @@ export default function Tareas() {
 
               {/* ── Footer: Estudiar CTA (fijo, siempre visible) ── */}
               <div style={{ flexShrink: 0, padding: '14px 22px 18px', borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-primary)', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {(() => {
-                  const replacing = !!activeTaskId && activeTaskId !== selectedTask.id;
-                  return (
-                <button
-                  onClick={() => {
-                    // Vinculación DIRECTA por contexto: reemplaza lo que haya
-                    // (tarea o sesión) sin puente por localStorage.
-                    linkTaskToTimer(selectedTask.id);
-                    setSelectedTaskId(null);
-                    setNavigateTo('estudio');
-                  }}
-                  title={replacing ? 'Reemplaza la tarea vinculada actual' : 'Estudiar esta tarea'}
-                  style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px 0', borderRadius: 9, fontSize: 11.5, fontWeight: 500,
-                    cursor: 'pointer',
-                    border: `1px solid ${taskColor}26`,
-                    background: `${taskColor}06`,
-                    color: taskColor,
-                    transition: 'all 200ms',
-                    width: '100%',
-                    fontFamily: "'Inter Tight', sans-serif",
-                    letterSpacing: '0.08em',
-                    textTransform: 'uppercase',
-                    opacity: 1,
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.background = `${taskColor}10`; e.currentTarget.style.borderColor = `${taskColor}40`; e.currentTarget.style.transform = 'scale(1.01)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = `${taskColor}06`; e.currentTarget.style.borderColor = `${taskColor}26`; e.currentTarget.style.transform = 'scale(1)'; }}>
-                  <Play size={13} fill={taskColor} style={{ color: taskColor }} />
-                  {replacing ? 'Cambiar a esta tarea' : 'Estudiar'}
-                </button>
-                  );
-                })()}
+                <TaskStudyControls task={selectedTask} assessment={assessments.get(selectedTask.id)} onDuration={minutes=>updateTask(selectedTask.id,{estimatedMinutes:minutes})} onStart={(mode,minutes)=>beginRecommendedStudy(selectedTask.id,mode,minutes)}/>
               </div>
           </div>
           </div>,
@@ -1996,25 +1366,25 @@ export default function Tareas() {
             <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
               {/* Browser Toolbar */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
-                <button onClick={goBack} disabled={!canGoBack} title="Atrás"
+                <button data-ui-control="" onClick={goBack} disabled={!canGoBack} title="Atrás"
                   style={{ padding: 4, borderRadius: 5, background: 'none', border: 'none', color: canGoBack ? 'var(--text-primary)' : 'var(--text-muted)', cursor: canGoBack ? 'pointer' : 'default', display: 'flex', opacity: canGoBack ? 1 : 0.3 }}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
                 </button>
-                <button onClick={goForward} disabled={!canGoForward} title="Adelante"
+                <button data-ui-control="" onClick={goForward} disabled={!canGoForward} title="Adelante"
                   style={{ padding: 4, borderRadius: 5, background: 'none', border: 'none', color: canGoForward ? 'var(--text-primary)' : 'var(--text-muted)', cursor: canGoForward ? 'pointer' : 'default', display: 'flex', opacity: canGoForward ? 1 : 0.3 }}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
                 </button>
-                <button onClick={refresh} title="Recargar"
+                <button data-ui-control="" onClick={refresh} title="Recargar"
                   style={{ padding: 4, borderRadius: 5, background: 'none', border: 'none', color: 'var(--text-primary)', cursor: 'pointer', display: 'flex' }}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
                 </button>
                 <div style={{ flex: 1, position: 'relative' }}>
                   <input value={navUrl} onChange={e => setNavUrl(e.target.value)} onKeyDown={handleKeyDown}
                     placeholder="Buscar o escribir URL..."
-                    style={{ width: '100%', padding: '5px 10px 5px 26px', borderRadius: 6, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', fontSize: 10, color: 'var(--text-primary)', outline: 'none' }} />
+                    style={{ width: '100%', padding: '5px 10px 5px 26px', borderRadius: 6, background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', fontSize: 11, color: 'var(--text-primary)', outline: 'none' }} />
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }}><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
                 </div>
-                <button onClick={() => window.open(currentUrl, '_blank')} title="Abrir en navegador externo"
+                <button data-ui-control="" onClick={() => window.open(currentUrl, '_blank')} title="Abrir en navegador externo"
                   style={{ padding: 4, borderRadius: 5, background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex' }}>
                   <ExternalLink size={12} />
                 </button>
@@ -2045,10 +1415,10 @@ export default function Tareas() {
             onClick={() => { setPdfPreviewUrl(null); setPreviewModalUrl(null); }}>
             <div className="bento-card" style={{ width: '94%', maxWidth: 1000, height: '85vh', padding: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', border: '1px solid var(--border-soft)', boxShadow: '0 24px 80px rgba(0,0,0,0.6)' }} onClick={e => e.stopPropagation()}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderBottom: '1px solid var(--border-subtle)' }}>
-                <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'flex', alignItems: 'center', gap: 6 }}>
                   <Eye size={13} style={{ color: 'var(--accent)' }} /> Vista previa
                 </span>
-                <button onClick={() => { setPdfPreviewUrl(null); setPreviewModalUrl(null); }} style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={14} /></button>
+                <button data-ui-control="" onClick={() => { setPdfPreviewUrl(null); setPreviewModalUrl(null); }} style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={14} /></button>
               </div>
               {isWebUrl ? <MiniBrowser /> : (
                 <div style={{ flex: 1, background: 'var(--bg-elevated)' }}>
@@ -2084,8 +1454,8 @@ export default function Tareas() {
             <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', display: 'block', marginBottom: 6 }}>Eliminar material</span>
             <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', display: 'block', marginBottom: 16 }}>¿Estás seguro de eliminar este material?</span>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-              <button onClick={() => setConfirmDeleteMaterial(null)} style={{ padding: '7px 20px', borderRadius: 6, fontSize: 10, fontWeight: 600, cursor: 'pointer', border: '1px solid var(--border-default)', background: 'transparent', color: 'var(--text-secondary)' }}>Cancelar</button>
-              <button onClick={() => { removeTaskFile(confirmDeleteMaterial.taskId, confirmDeleteMaterial.fileId); setConfirmDeleteMaterial(null); }} style={{ padding: '7px 20px', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', border: 'none', background: '#EF4444', color: '#fff' }}>Eliminar</button>
+              <button data-app-action="secondary" data-ui-control="" onClick={() => setConfirmDeleteMaterial(null)} style={{ padding: '7px 20px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: '1px solid var(--border-default)', background: 'transparent', color: 'var(--text-secondary)' }}>Cancelar</button>
+              <button data-ui-control="" onClick={() => { removeTaskFile(confirmDeleteMaterial.taskId, confirmDeleteMaterial.fileId); setConfirmDeleteMaterial(null); }} style={{ padding: '7px 20px', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: 'none', background: '#EF4444', color: '#fff' }}>Eliminar</button>
             </div>
           </div>
         </div>,
@@ -2102,8 +1472,8 @@ export default function Tareas() {
             <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', display: 'block', marginBottom: 6 }}>Eliminar tarea</span>
             <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', display: 'block', marginBottom: 16 }}>¿Estás seguro de eliminar esta tarea?</span>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-              <button onClick={() => setConfirmDeleteTask(null)} style={{ padding: '7px 20px', borderRadius: 6, fontSize: 10, fontWeight: 600, cursor: 'pointer', border: '1px solid var(--border-default)', background: 'transparent', color: 'var(--text-secondary)' }}>Cancelar</button>
-              <button onClick={() => { deleteTask(confirmDeleteTask); setSelectedTaskId(null); setConfirmDeleteTask(null); }} style={{ padding: '7px 20px', borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer', border: 'none', background: '#EF4444', color: '#fff' }}>Eliminar</button>
+              <button data-app-action="secondary" data-ui-control="" onClick={() => setConfirmDeleteTask(null)} style={{ padding: '7px 20px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: '1px solid var(--border-default)', background: 'transparent', color: 'var(--text-secondary)' }}>Cancelar</button>
+              <button data-ui-control="" onClick={() => { deleteTask(confirmDeleteTask); setSelectedTaskId(null); setConfirmDeleteTask(null); }} style={{ padding: '7px 20px', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: 'none', background: '#EF4444', color: '#fff' }}>Eliminar</button>
             </div>
           </div>
         </div>,

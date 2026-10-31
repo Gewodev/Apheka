@@ -1,3 +1,9 @@
+import type {BannerCrop} from '../../lib/bannerCrop';
+import {useAppSlice} from "../../store/AppContext";
+import {courseStudySeconds} from '../../lib/courseStudy';
+import BannerField from '../ui/BannerField';
+import WorkspaceHeader from '../ui/WorkspaceHeader';
+import {beginBrainDrag,finishBrainDrag,cancelBrainDrag} from '../../lib/brainDrop';
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
   GraduationCap, PlusCircle, Upload, Download,
@@ -21,7 +27,8 @@ interface CursosHubProps {
 }
 
 export default function CursosHub({ onSelectCourse, onTabSelect }: CursosHubProps) {
-  const { courses = [], addCourse, updateCourse, reorderCourses } = useApp();
+  const { courses = [], tasks, studySessions, addCourse, updateCourse, reorderCourses } = useAppSlice(["courses","tasks","studySessions","addCourse","updateCourse","reorderCourses"]);
+  const studyTotals=useMemo(()=>courseStudySeconds(courses,tasks,studySessions),[courses,tasks,studySessions]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
 
@@ -30,6 +37,8 @@ export default function CursosHub({ onSelectCourse, onTabSelect }: CursosHubProp
   const [courseColor, setCourseColor] = useState('#758bfa');
   const [courseCover, setCourseCover] = useState<string | undefined>(undefined);
   const [editorSrc, setEditorSrc] = useState<string | null>(null);
+  const [courseOriginal,setCourseOriginal]=useState<string|undefined>();
+  const [courseCrop,setCourseCrop]=useState<BannerCrop|undefined>();
   const [timeStr, setTimeStr] = useState(() => format(new Date(), "HH:mm"));
   const [secStr, setSecStr] = useState(() => format(new Date(), "ss"));
   const [dragActive, setDragActive] = useState(false);
@@ -56,7 +65,8 @@ export default function CursosHub({ onSelectCourse, onTabSelect }: CursosHubProp
     if (e.target) e.target.value = '';
   };
 
-  const handleEditorConfirm = (dataUrl: string) => {
+  const handleEditorConfirm = (dataUrl: string,crop:BannerCrop) => {
+    setCourseOriginal(previous=>previous||editorSrc||undefined);setCourseCrop(crop);
     setCourseCover(dataUrl);
     setEditorSrc(null);
     toast.success('Imagen aplicada');
@@ -66,8 +76,8 @@ export default function CursosHub({ onSelectCourse, onTabSelect }: CursosHubProp
     const name = courseName.trim();
     if (!name) { toast.error('El nombre es obligatorio'); return; }
     if (courses.some(c => c.name.toLowerCase() === name.toLowerCase())) { toast.error('Ya existe'); return; }
-    addCourse({ name, color: courseColor, progress: 0, totalTasks: 0, completedTasks: 0, hoursStudied: 0, coverImage: courseCover, coverUrl: courseCover, groups: [], studyTopics: [] });
-    setCourseName(''); setCourseColor('#758bfa'); setCourseCover(undefined); setEditorSrc(null); setShowAddModal(false);
+    addCourse({ name, color: courseColor, progress: 0, totalTasks: 0, completedTasks: 0, hoursStudied: 0, coverImage: courseCover, coverUrl: courseCover,coverOriginal:courseOriginal,coverCrop:courseCrop, groups: [], studyTopics: [] });
+    setCourseName(''); setCourseColor('#758bfa'); setCourseCover(undefined);setCourseOriginal(undefined);setCourseCrop(undefined); setEditorSrc(null); setShowAddModal(false);
     toast.success('Asignatura creada');
   };
 
@@ -96,6 +106,7 @@ export default function CursosHub({ onSelectCourse, onTabSelect }: CursosHubProp
 
   const handleHubDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
+    if(finishBrainDrag()){setDragActive(false);setTimeout(()=>{hubDragRef.current=false;},80);return;}
     setDragActive(false);
     setTimeout(() => { hubDragRef.current = false; }, 80);
     if (!over) return;
@@ -126,7 +137,7 @@ export default function CursosHub({ onSelectCourse, onTabSelect }: CursosHubProp
         if (Array.isArray(importedData)) {
           importedData.forEach((c: Course) => {
             if (!courses.some(x => x.name.toLowerCase() === c.name.toLowerCase())) {
-              addCourse({ name: c.name, color: c.color || '#758bfa', progress: 0, totalTasks: 0, completedTasks: 0, hoursStudied: 0, coverImage: c.coverImage || c.coverUrl, coverUrl: c.coverImage || c.coverUrl, groups: c.groups || [], studyTopics: c.studyTopics || [] });
+              addCourse({ name: c.name, color: c.color || '#758bfa', progress: 0, totalTasks: 0, completedTasks: 0, hoursStudied: 0, coverImage: c.coverImage || c.coverUrl, coverUrl: c.coverImage || c.coverUrl,coverOriginal:c.coverOriginal,coverCrop:c.coverCrop, groups: c.groups || [], studyTopics: c.studyTopics || [] });
             }
           });
           toast.success('Importado correctamente');
@@ -142,54 +153,19 @@ export default function CursosHub({ onSelectCourse, onTabSelect }: CursosHubProp
       display: "flex", flexDirection: "column", height: "100%",
       overflow: "hidden", gap: 24, padding: "24px 32px",
     }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', paddingTop: 4, flexShrink: 0 }}>
-        <div>
-          <h1 style={{
-            fontFamily: "'Inter Tight', 'Arial Narrow', sans-serif",
-            fontWeight: 200, fontSize: 44, lineHeight: 1,
-            letterSpacing: '-0.04em',
-            color: 'var(--text-primary)', margin: 0,
-          }}>Mis Cursos</h1>
-          <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 6 }}>
-            {courses.length} {courses.length === 1 ? 'asignatura' : 'asignaturas'}
-          </p>
+      <WorkspaceHeader title="Cursos" description={`${courses.length} ${courses.length === 1 ? 'asignatura' : 'asignaturas'} para organizar lo que aprendes.`} />
+      <div className="workspace-toolbar">
+        <span className="workspace-toolbar-label">Biblioteca de cursos</span>
+        <div className="workspace-actions">
+          <button data-ui-control="" className="btn-secondary" onClick={() => importInputRef.current?.click()}><Upload size={15} /> Importar</button>
+          <button data-ui-control="" className="btn-secondary" onClick={handleExport}><Download size={15} /> Exportar</button>
+          <button data-ui-control="" className="btn-primary" onClick={() => setShowAddModal(true)}><PlusCircle size={16} /> Añadir curso</button>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-            <NotificationBell />
-            <div style={{ paddingLeft: 20, borderLeft: '1px solid var(--border-subtle)', position: 'relative' }}>
-              <div style={{ position: 'absolute', top: '50%', right: 0, width: 150, height: 100, background: 'radial-gradient(circle at center, var(--accent-dim) 0%, transparent 70%)', opacity: 0.4, transform: 'translateY(-50%)', pointerEvents: 'none', zIndex: 0 }} />
-              <div style={{ textAlign: 'right', position: 'relative', zIndex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 2, justifyContent: 'flex-end' }}>
-                  <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 68, fontWeight: 200, lineHeight: 0.9, color: 'var(--accent)', letterSpacing: '0.02em', textShadow: '0 0 20px var(--accent-glow)' }}>{timeStr}</span>
-                  <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 22, fontWeight: 200, color: 'var(--accent)', opacity: 0.7, letterSpacing: '0.02em' }}>{secStr}</span>
-                </div>
-                <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 4, display: 'block' }}>{dateStr}</span>
-              </div>
-            </div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button onClick={() => setShowAddModal(true)} style={{ display: "flex", alignItems: "center", gap: 8, height: 38, borderRadius: 10, padding: "0 18px", fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: "var(--accent)", color: "#fff", fontFamily: "'Outfit', sans-serif", boxShadow: "0 4px 15px var(--accent-dim)", transition: "all 200ms " + EASE }}
-              onMouseEnter={e => e.currentTarget.style.filter = 'brightness(1.15)'} onMouseLeave={e => e.currentTarget.style.filter = 'none'}>
-              <PlusCircle size={14} /> Añadir
-            </button>
-            <button onClick={() => importInputRef.current?.click()} style={{ display: "flex", alignItems: "center", gap: 8, height: 38, borderRadius: 10, padding: "0 18px", fontSize: 12, fontWeight: 600, border: "1px solid var(--border-subtle)", cursor: "pointer", background: "transparent", color: "var(--text-secondary)", fontFamily: "'Outfit', sans-serif", transition: "all 200ms " + EASE }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
-              <Upload size={13} /> Importar
-            </button>
-            <button onClick={handleExport} style={{ display: "flex", alignItems: "center", gap: 8, height: 38, borderRadius: 10, padding: "0 18px", fontSize: 12, fontWeight: 600, border: "1px solid var(--border-subtle)", cursor: "pointer", background: "transparent", color: "var(--text-secondary)", fontFamily: "'Outfit', sans-serif", transition: "all 200ms " + EASE }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
-              <Download size={13} /> Exportar
-            </button>
-          </div>
-        </div>
-      </header>
+      </div>
 
       <input type="file" ref={importInputRef} style={{ display: 'none' }} accept=".json" onChange={handleImport} />
 
-      <div style={{ flex: 1, overflow: "auto", paddingRight: 4, paddingTop: 4 }}>
+      <div style={{ flex: 1, minHeight: 0, minWidth: 0, overflow: "auto", paddingRight: 4, paddingTop: 4 }}>
         {courses.length === 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '100px 20px', textAlign: 'center' }}>
             <GraduationCap size={60} style={{ color: 'var(--text-muted)', marginBottom: 16, opacity: 0.3 }} />
@@ -199,14 +175,14 @@ export default function CursosHub({ onSelectCourse, onTabSelect }: CursosHubProp
         ) : (
           <>
           <DndContext sensors={sensors} collisionDetection={closestCorners}
-            onDragStart={startDrag}
+            onDragStart={event=>{startDrag();beginBrainDrag('courses',String(event.active.id));}}
             onDragEnd={handleHubDragEnd}
-            onDragCancel={endDrag}
+            onDragCancel={()=>{cancelBrainDrag();endDrag();}}
           >
             <SortableContext items={courses.map(c => c.id)} strategy={rectSortingStrategy}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 24, paddingBottom: 24, userSelect: dragActive ? 'none' : undefined }}>
+              <div className="course-workspace-grid" style={{ userSelect: dragActive ? 'none' : undefined }}>
                 {courses.map((course) => (
-                  <CourseTile key={course.id} course={course} dragActive={dragActive} onSelect={onSelectRef.current} dragGuard={() => hubDragRef.current} />
+                  <CourseTile key={course.id} course={course} activeTasks={tasks.filter(t=>t.course===course.name&&t.status!=="completado").length} studyHours={(studyTotals[course.id]||0)/3600} onSelect={onSelectRef.current} dragGuard={() => hubDragRef.current} />
                 ))}
               </div>
             </SortableContext>
@@ -218,15 +194,15 @@ export default function CursosHub({ onSelectCourse, onTabSelect }: CursosHubProp
       {/* Add Modal */}
       {showAddModal && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={() => setShowAddModal(false)}>
-          <div className="bento-card" style={{ width: 432, padding: '26px 28px', borderRadius: 16, background: "linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)", border: "1px solid var(--border-default)", boxShadow: "var(--shadow-elevated)" }} onClick={e => e.stopPropagation()}>
+          <div className="bento-card workspace-dialog course-create-dialog" role="dialog" aria-modal="true" aria-label="Nueva asignatura" style={{ width: 480, padding: '26px 28px', borderRadius: 16, background: "var(--bg-elevated)", border: "1px solid var(--border-default)", boxShadow: "var(--shadow-elevated)" }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 22 }}>
               <div>
                 <h3 style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 9, fontFamily: "'Inter Tight', sans-serif", margin: 0, letterSpacing: '0.01em' }}>
                   <GraduationCap size={16} style={{ color: "var(--accent)" }} /> Nueva Asignatura
                 </h3>
-                <p style={{ fontSize: 10, color: 'var(--text-tertiary)', margin: '4px 0 0', fontFamily: "'Inter', sans-serif", fontWeight: 400 }}>Crea una asignatura para organizar tus cursos</p>
+                <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: '4px 0 0', fontFamily: "'Inter', sans-serif", fontWeight: 400 }}>Crea una asignatura para organizar tus cursos</p>
               </div>
-              <button onClick={() => setShowAddModal(false)} title="Cerrar"
+              <button data-ui-control="" onClick={() => setShowAddModal(false)} title="Cerrar"
                 style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4, display: 'flex', borderRadius: 6, transition: 'all 150ms ' + EASE }}
                 onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
@@ -235,8 +211,8 @@ export default function CursosHub({ onSelectCourse, onTabSelect }: CursosHubProp
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
               <div>
-                <label style={{ fontSize: 8.5, fontWeight: 500, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.14em', display: 'block', marginBottom: 8, fontFamily: "'Inter Tight', sans-serif" }}>Nombre</label>
-                <input value={courseName} onChange={e => setCourseName(e.target.value)}
+                <label style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.14em', display: 'block', marginBottom: 8, fontFamily: "'Inter Tight', sans-serif" }}>Nombre</label>
+                <input aria-label="Nombre de la asignatura" value={courseName} onChange={e => setCourseName(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') handleCreate(); }}
                   style={{ width: '100%', height: 42, fontSize: 13, fontWeight: 500, padding: '0 13px', borderRadius: 10, boxSizing: 'border-box', background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)', outline: 'none', fontFamily: "'Inter Tight', sans-serif", transition: 'border-color 180ms ' + EASE }}
                   onFocus={e => e.currentTarget.style.borderColor = 'var(--accent)'}
@@ -244,52 +220,19 @@ export default function CursosHub({ onSelectCourse, onTabSelect }: CursosHubProp
                   placeholder="Ej: Cálculo, Biología..." autoFocus />
               </div>
               <div>
-                <label style={{ fontSize: 8.5, fontWeight: 500, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.14em', display: 'block', marginBottom: 8, fontFamily: "'Inter Tight', sans-serif" }}>Color</label>
+                <label style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.14em', display: 'block', marginBottom: 8, fontFamily: "'Inter Tight', sans-serif" }}>Color</label>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {['#E11D48','#3B82F6','#10B981','#F59E0B','#8B5CF6','#EC4899','#06B6D4','#84CC16','#F97316','#6366F1','#14B8A6','#D946EF','#0EA5E9','#22C55E','#EAB308','#A855F7','#758bfa','#6B7280'].map(c => {
                     const sel = courseColor === c;
                     return (
-                      <button key={c} onClick={() => setCourseColor(c)} title={c}
+                      <button data-ui-control="" key={c} onClick={() => setCourseColor(c)} title={c}
                         style={{ width: 26, height: 26, borderRadius: '50%', border: sel ? '2px solid var(--bg-elevated)' : '2px solid transparent', background: c, cursor: 'pointer', outline: sel ? `2px solid ${c}` : 'none', outlineOffset: 2, boxShadow: sel ? `0 0 12px ${c}55` : 'none', transition: 'all 180ms ' + EASE, padding: 0 }} />
                     );
                   })}
                 </div>
               </div>
-              <div>
-                <label style={{ fontSize: 8.5, fontWeight: 500, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.14em', display: 'block', marginBottom: 8, fontFamily: "'Inter Tight', sans-serif" }}>Banner (opcional)</label>
-                {courseCover ? (
-                  <div>
-                    <div style={{ position: 'relative', width: '100%', aspectRatio: '16/7', borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border-soft)', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.04), 0 2px 12px rgba(0,0,0,0.12)' }}>
-                      <img src={courseCover} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                    </div>
-                    <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                      <button onClick={() => setEditorSrc(courseCover)} title="Editar la imagen (mover la posición)"
-                        style={{ height: 30, padding: '0 13px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 9, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: "'Inter Tight', sans-serif", transition: 'all 180ms ' + EASE }}
-                        onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)'; }}
-                        onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
-                        <Pencil size={11} /> Editar imagen
-                      </button>
-                      <button onClick={() => setCourseCover(undefined)} title="Quitar el banner"
-                        style={{ height: 30, padding: '0 13px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'rgba(239,68,68,0.7)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 9, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: "'Inter Tight', sans-serif", transition: 'all 180ms ' + EASE }}
-                        onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(239,68,68,0.5)'; e.currentTarget.style.color = '#EF4444'; }}
-                        onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'rgba(239,68,68,0.7)'; }}>
-                        <X size={12} /> Quitar
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <button onClick={() => fileInputRef.current?.click()}
-                    style={{ width: '100%', height: 84, borderRadius: 10, border: '1px dashed var(--border-default)', background: 'var(--bg-deep)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 7, transition: "all 200ms " + EASE }}
-                    onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 4%, var(--bg-deep))'; }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-default)'; e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.background = 'var(--bg-deep)'; }}>
-                    <ImageIcon size={16} style={{ color: "var(--accent)", opacity: 0.85 }} />
-                    <span style={{ fontSize: 8.5, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.12em', fontFamily: "'Inter Tight', sans-serif" }}>Subir banner</span>
-                    <span style={{ fontSize: 9.5, color: 'var(--text-tertiary)', fontWeight: 400 }}>Se abrirá el editor para ajustar la imagen</span>
-                  </button>
-                )}
-                <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept="image/*" onChange={handleImageUpload} />
-              </div>
-              <button onClick={handleCreate} disabled={!courseName.trim()}
+              <BannerField value={courseCover} onChange={value=>{setCourseCover(value);setCourseOriginal(value);setCourseCrop(undefined);}} onEdit={value=>setEditorSrc(courseOriginal||value)}/>
+              <button data-ui-control="" onClick={handleCreate} disabled={!courseName.trim()}
                 style={{ width: '100%', height: 42, border: 'none', borderRadius: 10, cursor: 'pointer', marginTop: 2, background: courseName.trim() ? "var(--accent)" : "var(--bg-hover)", color: courseName.trim() ? "#fff" : "var(--text-muted)", fontSize: 12, fontWeight: 600, fontFamily: "'Inter Tight', sans-serif", letterSpacing: '0.03em', transition: "all 200ms " + EASE, boxShadow: courseName.trim() ? "0 6px 20px color-mix(in srgb, var(--accent) 28%, transparent)" : 'none' }}
                 onMouseEnter={e => { if (courseName.trim()) { e.currentTarget.style.filter = 'brightness(1.07)'; } }}
                 onMouseLeave={e => { e.currentTarget.style.filter = 'none'; }}>
@@ -302,7 +245,7 @@ export default function CursosHub({ onSelectCourse, onTabSelect }: CursosHubProp
 
       {/* Editor de imagen del banner (se abre al subir o al pulsar el lápiz) */}
       {editorSrc && (
-        <ImageEditorModal src={editorSrc} title="Banner de la asignatura"
+        <ImageEditorModal src={editorSrc} initialCrop={courseCrop} title="Banner de la asignatura"
           onConfirm={handleEditorConfirm} onCancel={() => setEditorSrc(null)} />
       )}
 
@@ -311,33 +254,37 @@ export default function CursosHub({ onSelectCourse, onTabSelect }: CursosHubProp
 }
 
 // ─── Tarjeta de curso SORTABLE: sigue al cursor y los vecinos se apartan ───
-function CourseTile({ course, dragActive, onSelect, dragGuard }: {
+function CourseTile({ course, activeTasks, studyHours, onSelect, dragGuard }: {
   course: Course;
-  dragActive: boolean;
+  activeTasks: number;
+  studyHours: number;
   onSelect: (id: string) => void;
   dragGuard: () => boolean;
 }) {
+  const cover=course.coverUrl||course.coverImage;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: course.id });
   return (
-    <div
+    <div className="course-workspace-tile"
       ref={setNodeRef}
       {...attributes}
       {...listeners}
+      role="button" tabIndex={0} aria-label={`Abrir curso ${course.name}`}
+      onKeyDown={e=>{if(e.key==='Enter')onSelect(course.id);}}
       onClick={() => { if (dragGuard()) return; onSelect(course.id); }}
       onContextMenu={(e) => { if (isDragging) e.preventDefault(); }}
       style={{
         position: 'relative', overflow: 'hidden',
-        borderRadius: 16,
+        borderRadius: 10,
         border: isDragging ? `2px dashed ${course.color}` : `1.5px solid ${course.color}35`,
         background: isDragging
           ? 'color-mix(in srgb, var(--accent) 6%, var(--bg-elevated))'
-          : course.coverUrl
-            ? `linear-gradient(160deg, ${course.color}06, transparent 50%)`
-            : `linear-gradient(160deg, ${course.color}14, transparent 50%)`,
+          : cover
+            ? 'var(--bg-surface)'
+            : 'var(--bg-surface)',
         cursor: isDragging ? 'grabbing' : 'pointer',
         outline: isDragging ? '2px dashed var(--accent)' : 'none',
         outlineOffset: isDragging ? 0 : 2,
-        transition: isDragging ? 'border-color 150ms' : (transition || `all 500ms ${EASE}`),
+        transition: isDragging ? 'none' : [transition, 'border-color 160ms ease-out'].filter(Boolean).join(', '),
         aspectRatio: '16/10',
         opacity: isDragging ? 0.45 : 1,
         zIndex: isDragging ? 5 : 1,
@@ -349,32 +296,20 @@ function CourseTile({ course, dragActive, onSelect, dragGuard }: {
         userSelect: 'none',
         WebkitUserSelect: 'none',
       }}
-      onMouseEnter={(e) => {
-        if (isDragging || dragActive) return;
-        e.currentTarget.style.borderColor = `${course.color}65`;
-        e.currentTarget.style.transform = 'translateY(-2px) scale(1.005)';
-        e.currentTarget.style.boxShadow = `0 8px 28px ${course.color}18, inset 0 0 40px ${course.color}08, 0 0 0 1px ${course.color}1a inset`;
-      }}
-      onMouseLeave={(e) => {
-        if (isDragging || dragActive) return;
-        e.currentTarget.style.transform = 'none';
-        e.currentTarget.style.borderColor = `${course.color}35`;
-        e.currentTarget.style.boxShadow = `inset 0 0 40px ${course.color}06, 0 0 0 1px ${course.color}10 inset`;
-      }}
     >
       {/* Full-bleed cover */}
-      {course.coverUrl ? (
-        <img src={course.coverUrl} alt="" draggable={false}
+      {cover ? (
+        <img src={cover} alt="" draggable={false}
           style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', transition: "transform 700ms " + EASE, pointerEvents: 'none' }}
         />
       ) : (
         <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 0, pointerEvents: 'none' }}>
-          <GraduationCap size={44} style={{ color: course.color, opacity: 0.08 }} />
+          <span className="course-monogram" style={{ color:course.color }}>{course.name.split(/\s+/).map(word=>word[0]).slice(0,2).join('').toUpperCase()}</span>
         </div>
       )}
 
       {/* Dark overlay for cover images */}
-      {course.coverUrl && (
+      {cover && (
         <div style={{
           position: 'absolute', inset: 0,
           background: 'linear-gradient(to bottom, transparent 30%, rgba(0,0,0,0.75) 100%)',
@@ -388,14 +323,18 @@ function CourseTile({ course, dragActive, onSelect, dragGuard }: {
         padding: '16px 18px', zIndex: 2, pointerEvents: 'none',
       }}>
         <span style={{
-          fontSize: 26, fontWeight: 250,
-          color: course.coverUrl ? '#fff' : `var(--text-primary)`,
+          fontSize: 24, fontWeight: 500,
+          color: cover ? '#fff' : `var(--text-primary)`,
           fontFamily: "'Inter Tight', sans-serif",
           letterSpacing: '-0.03em', lineHeight: 1.15,
           display: 'block',
-          textShadow: course.coverUrl ? '0 2px 16px rgba(0,0,0,0.6)' : 'none',
+          textShadow: cover ? '0 2px 16px rgba(0,0,0,0.6)' : 'none',
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
         }}>{course.name}</span>
+        <div className="course-tile-summary" style={{color:cover?'#ececf0':'var(--text-secondary)'}}>
+          <span>{activeTasks} tareas activas</span>
+          <span>{Math.round(studyHours*10)/10} h de estudio</span>
+        </div>
       </div>
     </div>
   );

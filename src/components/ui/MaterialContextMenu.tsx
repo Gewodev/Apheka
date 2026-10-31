@@ -1,7 +1,9 @@
+import { localPathFromUrl } from '../../lib/externalTarget';
+import { resolveExternalResource } from '../../lib/openFileSmart';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Copy, FolderOpen, FolderSearch, ChevronRight, ExternalLink, Check, Palette } from 'lucide-react';
-import { isTauri, convertFileSrc } from '@tauri-apps/api/core';
+import { isTauri } from '@tauri-apps/api/core';
 import { revealItemInDir, openPath, openUrl as openUrlSystem } from '@tauri-apps/plugin-opener';
 import { openFileSmart, resolveLocalPath } from '../../lib/openFileSmart';
 import { BrowserIcon, PdfAppIcon } from './BrowserIcons';
@@ -213,13 +215,13 @@ function MenuPanel(props: {
   const openWith = async (b: DetectedBrowser) => {
     close();
     try { await openUrlInBrowser(b.exe, await resolveToOpenable(entry.url)); }
-    catch (e) { console.warn(e); }
+    catch (error) { notify?.(error instanceof Error ? error.message : 'No se pudo abrir el recurso con la aplicación elegida'); }
   };
 
   const openWithExe = async (exe: string) => {
     close();
     try { await openUrlInBrowser(exe, await resolveToOpenable(entry.url)); }
-    catch (e) { console.warn(e); }
+    catch (error) { notify?.(error instanceof Error ? error.message : 'No se pudo abrir el recurso con la aplicación elegida'); }
   };
 
   // Guarda el predeterminado, lo VERIFICA releyendo y lo ejecuta al instante
@@ -231,7 +233,7 @@ function MenuPanel(props: {
     const where = scope === 'course' ? 'este curso' : 'toda la app';
     if (picked.kind === 'pdf') {
       setDefaultPdfApp(picked.id, cid);
-      const check = getDefaultPdfAppId(cid ?? selCourseId());
+      const check = getDefaultPdfAppId(cid);
       setDefaultPdfId(getDefaultPdfAppId(selCourseId()));
       setDefaultModal(null);
       if (check !== picked.id) { notify?.('No se pudo guardar el predeterminado'); return; }
@@ -240,7 +242,7 @@ function MenuPanel(props: {
       else runOpenAppPdf();
     } else {
       setDefaultBrowser(picked.id, cid);
-      const check = getDefaultBrowserId(cid ?? selCourseId());
+      const check = getDefaultBrowserId(cid);
       setDefaultId(getDefaultBrowserId(selCourseId()));
       setDefaultModal(null);
       if (check !== picked.id) { notify?.('No se pudo guardar el predeterminado'); return; }
@@ -301,9 +303,7 @@ function MenuPanel(props: {
           </div>
         </div>
 
-        {(!canOpenWith || !inTauri || (browsers.length === 0 && pdfApps.length === 0)) && (
-          <Item icon={<FolderOpen size={13} />} label="Abrir" accent={entry.color} onClick={runOpen} />
-        )}
+        <Item icon={<FolderOpen size={13} />} label="Abrir" accent={entry.color} onClick={runOpen} />
         {inTauri && canOpenWith && (browsers.length > 0 || pdfApps.length > 0) && (
           <Item
             icon={<ExternalLink size={13} />}
@@ -355,15 +355,15 @@ function MenuPanel(props: {
                 key={b.id}
                 onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; disarmDefaultPress(); }}
-                onMouseDown={() => armDefaultPress({ id: b.id, name: b.name, kind: 'browser', exe: b.exe })}
+                onMouseDown={() => armDefaultPress({ id: isPdf ? `browser:${b.id}` : b.id, name: b.name, kind: isPdf ? 'pdf' : 'browser', exe: b.exe })}
                 onMouseUp={disarmDefaultPress}
                 onClick={() => { if (longPressedRef.current) { longPressedRef.current = false; return; } openWith(b); }}
-                title={`${b.name}${getDefaultBrowserId(entry.courseId) === b.id ? ' · predeterminado' : ''} — mantén pulsado para predeterminar`}
+                title={`${b.name}${(isPdf ? defaultPdfId === `browser:${b.id}` : defaultId === b.id) ? ' · predeterminado' : ''} — mantén pulsado para predeterminar`}
                 style={{ ...itemBase, height: 28 }}
               >
                 <span style={{ display: 'flex', width: 17, justifyContent: 'center' }}><BrowserIcon id={b.id} size={15} /></span>
                 <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.name}</span>
-                {defaultId === b.id && <Check size={11} style={{ color: 'var(--accent)' }} />}
+                {(isPdf ? defaultPdfId === `browser:${b.id}` : defaultId === b.id) && <Check size={11} style={{ color: 'var(--accent)' }} />}
               </div>
             ))}
           </div>
@@ -482,12 +482,7 @@ export function useMaterialMenu(notify?: (msg: string) => void) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
 
-  const toLocal = (url: string): string | null => {
-    const m = url.match(/^https?:\/\/asset\.localhost\/(.+)$/);
-    if (m) { try { return decodeURIComponent(m[1]); } catch { return m[1]; } }
-    if (url.startsWith('data:') || /^https?:\/\//i.test(url)) return null;
-    return url;
-  };
+  const toLocal = localPathFromUrl;
 
   // Patrón WhatsApp/Claude: intenta la ruta guardada DIRECTA primero; solo si falla
   // (archivo movido) resuelve por nombre.
@@ -508,31 +503,15 @@ export function useMaterialMenu(notify?: (msg: string) => void) {
   };
 
   // Convierte cualquier entrada (http / ruta local / data) en URL abrible:
-  // http queda igual; rutas locales se exponen vía asset protocol.
-  const resolveToOpenable = async (url: string): Promise<string> => {
-    if (/^https?:\/\//i.test(url)) return url;
-    const loc = toLocal(url);
-    if (loc) {
-      const resolved = await resolveOrDirect(loc, stateRef.current?.entry.name || '');
-      return convertFileSrc(resolved);
-    }
-    return url;
-  };
+  // http queda igual; los archivos conservan una ruta real para lectores externos.
+  const resolveToOpenable = (url: string): Promise<string> => resolveExternalResource(url, stateRef.current?.entry.name || 'archivo.pdf');
 
   const openPdfWithApp = async (exe: string): Promise<void> => {
     const s = stateRef.current;
     if (!s) return;
     closeMenu();
-    try {
-      const loc = toLocal(s.entry.url);
-      if (loc) {
-        const resolved = await resolveOrDirect(loc, s.entry.name);
-        // Con la app ELEGIDA (no la del sistema): se abre vía asset URL.
-        await openUrlInBrowser(exe, convertFileSrc(resolved));
-        return;
-      }
-      await openUrlInBrowser(exe, s.entry.url);
-    } catch { notify?.('No se pudo abrir el PDF'); }
+    try { await openUrlInBrowser(exe, await resolveExternalResource(s.entry.url, s.entry.name)); }
+    catch (error) { notify?.(error instanceof Error ? error.message : 'No se pudo abrir el PDF'); }
   };
 
   const runOpen = async () => {
@@ -540,19 +519,8 @@ export function useMaterialMenu(notify?: (msg: string) => void) {
     if (!s) return;
     const { url, name } = s.entry;
     closeMenu();
-    // Enlaces: si hay navegador predeterminado (curso > global), ábrelo CON ESE navegador
-    if (isTauri() && /^https?:\/\//i.test(url)) {
-      try {
-        const { resolveDefaultBrowserExe } = await import('../../lib/browsers');
-        const exe = await resolveDefaultBrowserExe(s.entry.courseId ?? readCourseId());
-        if (exe) {
-          await openUrlInBrowser(exe, url);
-          return;
-        }
-      } catch { /* cae al flujo normal */ }
-    }
-    // PDF local: si hay app PDF predeterminada (curso > global), úsala
-    if (isTauri() && /\.pdf($|[?#])/i.test(url)) {
+    // PDF: el lector elegido tiene prioridad sobre el navegador de enlaces.
+    if (isTauri() && (/\.pdf($|[?#])/i.test(url) || /\.pdf$/i.test(name))) {
       try {
         const { resolveDefaultPdfAppExe } = await import('../../lib/browsers');
         const exe = await resolveDefaultPdfAppExe(s.entry.courseId ?? readCourseId());
@@ -562,8 +530,19 @@ export function useMaterialMenu(notify?: (msg: string) => void) {
         }
         if (exe) {
           const loc = toLocal(url);
-          const target = loc ? convertFileSrc(await resolveOrDirect(loc, name)) : url;
+          const target = await resolveExternalResource(url, name);
           await openUrlInBrowser(exe, target);
+          return;
+        }
+      } catch { /* cae al flujo normal */ }
+    }
+    // Enlaces: si hay navegador predeterminado (curso > global), ábrelo CON ESE navegador
+    if (isTauri() && !toLocal(url) && /^https?:\/\//i.test(url)) {
+      try {
+        const { resolveDefaultBrowserExe } = await import('../../lib/browsers');
+        const exe = await resolveDefaultBrowserExe(s.entry.courseId ?? readCourseId());
+        if (exe) {
+          await openUrlInBrowser(exe, url);
           return;
         }
       } catch { /* cae al flujo normal */ }
@@ -610,7 +589,7 @@ export function useMaterialMenu(notify?: (msg: string) => void) {
       const loc = toLocal(url);
       if (loc) {
         const resolved = await resolveOrDirect(loc, s.entry.name);
-        await openUrlSystem(convertFileSrc(resolved));
+        await openUrlSystem(new URL('file:///'+resolved.replace(/\\/g, '/')).href);
         return;
       }
       await openUrlSystem(url);

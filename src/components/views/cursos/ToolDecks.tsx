@@ -1,3 +1,4 @@
+import { readDeckData } from '../../../lib/deckData';
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { parseLines, shuffle, analyzeExplanation, adaptiveOrder, loadStats, saveStats, type DeckStat } from '../../../lib/deckParse';
 import { createPortal } from 'react-dom';
@@ -109,7 +110,7 @@ export function MT({ t }: { t: string }) {
 
 const EASE = 'cubic-bezier(0.16,1,0.3,1)';
 
-const readDeck = (content?: string): any => { try { return JSON.parse(content || '{}'); } catch { return {}; } };
+const readDeck = readDeckData;
 const deckItemCount = (mode: ToolDeckMode, content?: string): number => {
   const d = readDeck(content);
   if (mode === 'flashcardsDeck') return (d.cards || []).length;
@@ -189,9 +190,9 @@ function PromptPanel({ mode, accent, defaults, exclude }: { mode: ToolDeckMode; 
           Según considere
         </label>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, height: 34, borderRadius: 9, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', padding: '0 6px', opacity: autoN ? 0.4 : 1, transition: 'opacity 150ms' }}>
-          <button onClick={() => setN(v => Math.max(3, v - 1))} disabled={autoN} style={{ width: 24, height: 24, borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: autoN ? 'default' : 'pointer', fontSize: 13 }}>−</button>
+          <button data-ui-control="" onClick={() => setN(v => Math.max(3, v - 1))} disabled={autoN} style={{ width: 24, height: 24, borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: autoN ? 'default' : 'pointer', fontSize: 13 }}>−</button>
           <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', minWidth: 22, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>{autoN ? 'auto' : n}</span>
-          <button onClick={() => setN(v => Math.min(30, v + 1))} disabled={autoN} style={{ width: 24, height: 24, borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: autoN ? 'default' : 'pointer', fontSize: 13 }}>+</button>
+          <button data-ui-control="" onClick={() => setN(v => Math.min(30, v + 1))} disabled={autoN} style={{ width: 24, height: 24, borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: autoN ? 'default' : 'pointer', fontSize: 13 }}>+</button>
         </div>
       </div>
       {exclude.length > 0 && (
@@ -200,7 +201,7 @@ function PromptPanel({ mode, accent, defaults, exclude }: { mode: ToolDeckMode; 
           Sin considerar los {exclude.length} tema(s) ya creados
         </label>
       )}
-      <button onClick={copy}
+      <button data-ui-control="" onClick={copy}
         style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, height: 36, borderRadius: 9, border: 'none', background: copied ? '#10B981' : accent, color: '#0B0C0F', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, fontFamily: "'Inter Tight', sans-serif", transition: 'background 200ms' }}>
         {copied ? <><Check size={13} /> ¡Copiado!</> : <><Copy size={12} /> Copiar prompt</>}
       </button>
@@ -215,6 +216,7 @@ export function DeckEditorModal({ mode, accent, initialName, initialColor, initi
   onClose: () => void; onSave: (name: string, color: string, content: string) => void;
 }) {
   const meta = DECK_META[mode];
+  useEffect(() => { const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); }; document.addEventListener('keydown', onKey); return () => document.removeEventListener('keydown', onKey); }, [onClose]);
   const isEdit = !!initialContent;
   const [step, setStep] = useState<1 | 2>(isEdit ? 2 : 1);
   const [name, setName] = useState(initialName || '');
@@ -243,39 +245,43 @@ export function DeckEditorModal({ mode, accent, initialName, initialColor, initi
 
   const ICON = meta.icon;
   // Paleta para ciclar haciendo clic sobre el icono de la herramienta
-  const PALETTE = [meta.color, '#E11D48', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16', '#E8E8EA'];
+  const PALETTE = Array.from(new Set([meta.color, '#E11D48', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16', '#E8E8EA']));
   const cycleColor = () => {
     const i = PALETTE.indexOf(color);
     setColor(PALETTE[(i + 1) % PALETTE.length]);
   };
   return createPortal(
     <div style={{ position: 'fixed', inset: 0, zIndex: 100030, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.62)', backdropFilter: 'blur(8px)' }} onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ width: 'min(560px, 94vw)', maxHeight: '90vh', borderRadius: 18, overflow: 'hidden', display: 'flex', flexDirection: 'column', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', boxShadow: '0 30px 90px rgba(0,0,0,0.55)', animation: `deckIn 240ms ${EASE}` }}>
+      <div className="workspace-dialog course-tool-editor" role="dialog" aria-modal="true" aria-label={`Configurar ${meta.label}`} style={{ width: 'min(560px, 94vw)', maxHeight: '90vh', borderRadius: 18, overflow: 'hidden', display: 'flex', flexDirection: 'column', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', boxShadow: '0 30px 90px rgba(0,0,0,0.55)', animation: `deckIn 240ms ${EASE}` }}>
         <style>{`@keyframes deckIn { from { opacity: 0; transform: translateY(10px) scale(0.985); } to { opacity: 1; transform: none; } }`}</style>
         {/* Header compacto: icono (clic = color) al costado del nombre */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 13, padding: '14px 20px 13px', borderBottom: '1px solid var(--border-subtle)', background: `linear-gradient(180deg, ${color}06, transparent)` }}>
-          <button onClick={cycleColor} title="Cambiar color del bloque (clic para ciclar)"
+          <button data-ui-control="" onClick={cycleColor} title="Cambiar color del bloque (clic para ciclar)"
             style={{ width: 52, height: 52, borderRadius: 14, background: `${color}12`, border: `1.5px solid ${color}38`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, transition: `all 200ms ${EASE}` }}
             onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.05)'; }}
             onMouseLeave={e => { e.currentTarget.style.transform = 'none'; }}>
             <ICON size={23} style={{ color }} />
           </button>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 8.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--text-tertiary)', marginBottom: 3 }}>Herramienta · {meta.label}</div>
-            <input value={name} onChange={e => setName(e.target.value)} placeholder="Nombre del bloque" autoFocus={step === 1}
+            <div style={{ fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--text-tertiary)', marginBottom: 3 }}>Herramienta · {meta.label}</div>
+            <input aria-label="Nombre de la herramienta" value={name} onChange={e => setName(e.target.value)} placeholder="Nombre del bloque" autoFocus={step === 1}
               style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', color: 'var(--text-primary)', fontSize: 16, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', fontFamily: "'Inter Tight', sans-serif", borderBottom: '1px dashed var(--border-subtle)', padding: '2px 0' }} />
           </div>
           {step === 2 && (
-            <button onClick={() => setShowPrompt(v => !v)} title="Generar contenido"
+            <button data-ui-control="" onClick={() => setShowPrompt(v => !v)} title="Generar contenido"
               style={{ width: 34, height: 34, borderRadius: 10, border: showPrompt ? `1px solid ${color}55` : '1px solid var(--border-subtle)', background: showPrompt ? `${color}12` : 'transparent', color: showPrompt ? color : 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <ClipboardList size={15} />
             </button>
           )}
+          <button data-ui-control="" aria-label="Cerrar herramienta" onClick={onClose} style={{width:36,height:36,display:'flex',alignItems:'center',justifyContent:'center',background:'transparent',border:'1px solid var(--border-subtle)',color:'var(--text-secondary)',cursor:'pointer'}}><X size={17}/></button>
+        </div>
+        <div className="tool-color-options" role="group" aria-label="Color de la herramienta">
+          {PALETTE.map(value=><button key={value} aria-label={`Color ${value}`} aria-pressed={color===value} onClick={()=>setColor(value)} style={{background:value,border:'1px solid var(--border-subtle)'}}/>)}
         </div>
 
         {step === 1 ? (
           <div style={{ padding: '18px 22px', display: 'flex', justifyContent: 'flex-end' }}>
-            <button onClick={() => setStep(2)} disabled={!name.trim()}
+            <button data-ui-control="" data-tool-action="" onClick={() => setStep(2)} disabled={!name.trim()}
               style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 22px', borderRadius: 10, border: 'none', background: name.trim() ? color : 'var(--border-subtle)', color: name.trim() ? '#0B0C0F' : 'var(--text-muted)', cursor: name.trim() ? 'pointer' : 'default', fontSize: 12, fontWeight: 700, fontFamily: "'Inter Tight', sans-serif", opacity: name.trim() ? 1 : 0.6 }}>
               Siguiente <ChevronRight size={14} />
             </button>
@@ -292,10 +298,10 @@ export function DeckEditorModal({ mode, accent, initialName, initialColor, initi
                 <PromptPanel mode={mode} accent={color} defaults={{ tema: name }} exclude={existingNames} />
               </div>
             )}
-            <textarea value={text} onChange={e => setText(e.target.value)} rows={11} placeholder={meta.placeholder}
+            <textarea aria-label="Contenido de la herramienta" value={text} onChange={e => setText(e.target.value)} rows={11} placeholder={meta.placeholder}
               style={{ width: '100%', boxSizing: 'border-box', background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', borderRadius: 12, padding: 14, color: 'var(--text-primary)', fontSize: 12.5, lineHeight: 1.7, fontFamily: 'inherit', resize: 'vertical', outline: 'none' }} />
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
-              <button onClick={() => { if (!valid) { toast.error(parsed.ok.length === 0 ? 'Añade al menos una entrada' : `Mínimo ${minCount} parejas para emparejar`); return; } onSave(name.trim() || meta.label, color, JSON.stringify(mode === 'flashcardsDeck' ? { cards: parsed.ok } : mode === 'quizDeck' ? { questions: parsed.ok } : mode === 'matchDeck' ? { pairs: parsed.ok } : mode === 'clozeDeck' ? { items: parsed.ok } : mode === 'vfDeck' ? { items: parsed.ok } : mode === 'seqDeck' ? { seqs: parsed.ok } : mode === 'catDeck' ? { items: parsed.ok } : { concepts: parsed.ok })); }}
+              <button data-ui-control="" data-tool-action="" onClick={() => { if (!valid) { toast.error(parsed.ok.length === 0 ? 'Añade al menos una entrada' : `Mínimo ${minCount} parejas para emparejar`); return; } onSave(name.trim() || meta.label, color, JSON.stringify(mode === 'flashcardsDeck' ? { cards: parsed.ok } : mode === 'quizDeck' ? { questions: parsed.ok } : mode === 'matchDeck' ? { pairs: parsed.ok } : mode === 'clozeDeck' ? { items: parsed.ok } : mode === 'vfDeck' ? { items: parsed.ok } : mode === 'seqDeck' ? { seqs: parsed.ok } : mode === 'catDeck' ? { items: parsed.ok } : { concepts: parsed.ok })); }}
                 disabled={!valid}
                 style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 20px', borderRadius: 10, border: 'none', background: valid ? color : 'var(--border-subtle)', color: valid ? '#0B0C0F' : 'var(--text-muted)', cursor: valid ? 'pointer' : 'default', fontSize: 12, fontWeight: 700, fontFamily: "'Inter Tight', sans-serif" }}>
                 <Check size={13} /> Guardar bloque
@@ -317,7 +323,7 @@ interface DeckRunnerProps {
 }
 
 export function DeckRunner({ mat, accent, onClose }: DeckRunnerProps) {
-  const mode = (mat.toolMode || 'flashcardsDeck') as ToolDeckMode;
+  const mode = (Object.prototype.hasOwnProperty.call(DECK_META, mat.toolMode || '') ? mat.toolMode : 'flashcardsDeck') as ToolDeckMode;
   const meta = DECK_META[mode];
   const data = readDeck(mat.content);
   const blockColor = (mat as any).color || meta.color;
@@ -334,11 +340,11 @@ export function DeckRunner({ mat, accent, onClose }: DeckRunnerProps) {
 
   // ── Dentro del panel: fondo con el icono difuminado + nombre gigante tenue ──
   return (
-    <div style={{ position: 'relative', height: '100%', minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+    <div className="course-tool-runner" data-tool-mode={mode} style={{ position: 'relative', height: '100%', minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
       {/* Fondo: icono grande difuminado + nombre gigante tenue */}
       <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <meta.icon size={360} style={{ color: blockColor, opacity: 0.09, filter: 'blur(1.5px)', position: 'absolute' }} />
-        <span style={{ position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)', fontSize: 92, fontWeight: 700, letterSpacing: '0.04em', color: blockColor, opacity: 0.06, whiteSpace: 'nowrap', fontFamily: "'Inter Tight', sans-serif", textTransform: 'uppercase' }}>{meta.label}</span>
+        <meta.icon size={360} style={{ color: blockColor, opacity: 0.025, filter: 'none', position: 'absolute' }} />
+        <span style={{ position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)', fontSize: 92, fontWeight: 700, letterSpacing: '0.04em', color: blockColor, opacity: 0.02, whiteSpace: 'nowrap', fontFamily: "'Inter Tight', sans-serif", textTransform: 'uppercase' }}>{meta.label}</span>
       </div>
       <div style={{ position: 'relative', flex: 1, minHeight: 0, overflowY: 'auto', padding: '10px 16px 26px', display: 'flex', flexDirection: 'column' }} className="no-scrollbar">
         {body}
@@ -408,17 +414,17 @@ function StatsPanel({ right, wrong, weakest, color, onAgain, onWrongOnly, onClos
       )}
       {/* Acciones a ancho completo */}
       <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap' }}>
-        <button onClick={onAgain} style={{ flex: '1 1 190px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '13px 18px', borderRadius: 12, border: `1px solid ${color}40`, background: `${color}12`, color, cursor: 'pointer', fontSize: 12.5, fontWeight: 700, fontFamily: "'Inter Tight', sans-serif", transition: `all 160ms ${EASE}` }}
+        <button data-ui-control="" onClick={onAgain} style={{ flex: '1 1 190px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '13px 18px', borderRadius: 12, border: `1px solid ${color}40`, background: `${color}12`, color, cursor: 'pointer', fontSize: 12.5, fontWeight: 700, fontFamily: "'Inter Tight', sans-serif", transition: `all 160ms ${EASE}` }}
           onMouseEnter={e => { e.currentTarget.style.background = `${color}20`; e.currentTarget.style.transform = 'translateY(-1px)'; }}
           onMouseLeave={e => { e.currentTarget.style.background = `${color}12`; e.currentTarget.style.transform = 'none'; }}>
           <RotateCcw size={14} /> Repetir (adaptativo)
         </button>
         {onWrongOnly && wrong > 0 && (
-          <button onClick={onWrongOnly} style={{ flex: '1 1 160px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '13px 18px', borderRadius: 12, border: '1px solid rgba(239,68,68,0.35)', background: 'rgba(239,68,68,0.07)', color: '#EF4444', cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }}>
+          <button data-ui-control="" onClick={onWrongOnly} style={{ flex: '1 1 160px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '13px 18px', borderRadius: 12, border: '1px solid rgba(239,68,68,0.35)', background: 'rgba(239,68,68,0.07)', color: '#EF4444', cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }}>
             Solo las falladas
           </button>
         )}
-        <button onClick={onClose} style={{ flex: '1 1 130px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '13px 18px', borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }}>
+        <button data-ui-control="" onClick={onClose} style={{ flex: '1 1 130px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '13px 18px', borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }}>
           Terminar
         </button>
       </div>
@@ -487,13 +493,13 @@ function FlashcardsRun({ cards, matId, color, accent }: { cards: DeckCard[]; mat
           <div style={{ width: `${((pos + 1) / queue.length) * 100}%`, height: '100%', borderRadius: 99, background: color, transition: 'width 300ms ' + EASE }} />
         </div>
         <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--text-tertiary)', fontVariantNumeric: 'tabular-nums' }}>{pos + 1} / {queue.length}</span>
-        <button onClick={() => { const q = shuffle(queue); setQueue(q); setPos(0); setFlipped(false); }} title="Mezclar"
+        <button data-ui-control="" onClick={() => { const q = shuffle(queue); setQueue(q); setPos(0); setFlipped(false); }} title="Mezclar"
           style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <Shuffle size={12} />
         </button>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', justifyContent: 'center' }}>
-        <button onClick={() => move(-1)} disabled={pos === 0} title="Anterior"
+        <button data-ui-control="" onClick={() => move(-1)} disabled={pos === 0} title="Anterior"
           style={{ width: 44, height: 44, borderRadius: 999, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', color: pos === 0 ? 'var(--text-muted)' : 'var(--text-primary)', cursor: pos === 0 ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, opacity: pos === 0 ? 0.4 : 1, transition: 'all 160ms ' + EASE }}>
           <ArrowLeft size={18} />
         </button>
@@ -509,7 +515,7 @@ function FlashcardsRun({ cards, matId, color, accent }: { cards: DeckCard[]; mat
           </span>
           <div style={{ fontSize: 29, fontWeight: 300, color: 'var(--text-primary)', lineHeight: 1.5, maxWidth: 700, fontFamily: "'Inter Tight', sans-serif" }}><MT t={flipped ? card.a : card.q} /></div>
         </div>
-        <button onClick={() => move(1)} disabled={pos >= queue.length - 1} title="Siguiente"
+        <button data-ui-control="" onClick={() => move(1)} disabled={pos >= queue.length - 1} title="Siguiente"
           style={{ width: 44, height: 44, borderRadius: 999, border: `1px solid ${color}40`, background: `${color}10`, color, cursor: pos >= queue.length - 1 ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, opacity: pos >= queue.length - 1 ? 0.4 : 1, transition: 'all 160ms ' + EASE }}>
           <ArrowRight size={18} />
         </button>
@@ -517,13 +523,13 @@ function FlashcardsRun({ cards, matId, color, accent }: { cards: DeckCard[]; mat
       {/* Autoevaluación elegante bajo la tarjeta */}
       {flipped && (
         <div style={{ display: 'flex', gap: 10, width: 'min(660px, 100%)', animation: `deckIn 200ms ${EASE}` }}>
-          <button onClick={() => grade(true)}
+          <button data-ui-control="" onClick={() => grade(true)}
             style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, height: 46, borderRadius: 13, border: '1px solid rgba(16,185,129,0.32)', background: 'rgba(16,185,129,0.07)', color: '#10B981', cursor: 'pointer', fontSize: 12.5, fontWeight: 700, fontFamily: "'Inter Tight', sans-serif", transition: `all 160ms ${EASE}` }}
             onMouseEnter={e => { e.currentTarget.style.background = 'rgba(16,185,129,0.15)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
             onMouseLeave={e => { e.currentTarget.style.background = 'rgba(16,185,129,0.07)'; e.currentTarget.style.transform = 'none'; }}>
             <Check size={14} /> Lo conseguiste
           </button>
-          <button onClick={() => grade(false)}
+          <button data-ui-control="" onClick={() => grade(false)}
             style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, height: 46, borderRadius: 13, border: '1px solid rgba(239,68,68,0.32)', background: 'rgba(239,68,68,0.06)', color: '#EF4444', cursor: 'pointer', fontSize: 12.5, fontWeight: 700, fontFamily: "'Inter Tight', sans-serif", transition: `all 160ms ${EASE}` }}
             onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.13)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
             onMouseLeave={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.06)'; e.currentTarget.style.transform = 'none'; }}>
@@ -589,7 +595,7 @@ function QuizRun({ questions, matId, color, accent }: { questions: DeckQuestion[
           const state = reveal && isCorrect ? 'ok' : isPicked ? 'bad' : 'idle';
           const c = state === 'ok' ? '#10B981' : state === 'bad' ? '#EF4444' : 'var(--text-primary)';
           return (
-            <button key={i} onClick={() => pick(i)} disabled={reveal}
+            <button data-ui-control="" key={i} onClick={() => pick(i)} disabled={reveal}
               style={{
                 minHeight: 122, borderRadius: 15, padding: '20px 22px', textAlign: 'left', position: 'relative',
                 border: `1px solid ${state === 'ok' ? '#10B98155' : state === 'bad' ? '#EF444455' : 'var(--border-subtle)'}`,
@@ -669,7 +675,7 @@ function VFRun({ items, matId, color, accent }: { items: DeckVF[]; matId: string
           const st = reveal && isCorrect ? 'ok' : isThis ? 'bad' : 'idle';
           const c = st === 'ok' ? '#10B981' : st === 'bad' ? '#EF4444' : 'var(--text-primary)';
           return (
-            <button key={String(v)} onClick={() => answer(v)} disabled={reveal}
+            <button data-ui-control="" key={String(v)} onClick={() => answer(v)} disabled={reveal}
               style={{
                 height: 72, borderRadius: 14, border: `1px solid ${st === 'ok' ? '#10B98155' : st === 'bad' ? '#EF444455' : 'var(--border-subtle)'}`,
                 background: st === 'ok' ? 'rgba(16,185,129,0.08)' : st === 'bad' ? 'rgba(239,68,68,0.07)' : 'var(--bg-deep)',
@@ -776,14 +782,14 @@ function MatchRun({ pairs, matId, color, accent }: { pairs: DeckPair[]; matId: s
           const isWrong = wrongKeys.includes(t.key);
           const isMatched = matchedIds.has(t.pairId);
           return (
-            <button key={t.key} onClick={() => flip(t)} disabled={phase === 'preview' || isMatched}
+            <button data-ui-control="" key={t.key} onClick={() => flip(t)} disabled={phase === 'preview' || isMatched}
               style={{ minHeight: 112, height: '100%', perspective: 900, background: 'transparent', border: 'none', padding: 0, cursor: phase === 'preview' ? 'default' : isMatched ? 'default' : 'pointer' }}>
               <div style={{
                 transform: open ? 'rotateY(180deg)' : 'rotateY(0deg)', transition: 'transform 460ms cubic-bezier(0.2,0.8,0.25,1)',
                 transformStyle: 'preserve-3d', position: 'relative', minHeight: 112, height: '100%',
               }}>
                 <div style={{ position: 'absolute', inset: 0, borderRadius: 13, backfaceVisibility: 'hidden', border: `1px solid ${isWrong ? '#EF444460' : 'var(--border-subtle)'}`, background: isWrong ? 'rgba(239,68,68,0.08)' : 'var(--bg-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.18em', color: 'var(--text-muted)', opacity: 0.4 }}>OWA</span>
+                  <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.18em', color: 'var(--text-muted)', opacity: 0.4 }}>APHEKA</span>
                 </div>
                 <div style={{
                   borderRadius: 13, backfaceVisibility: 'hidden', transform: 'rotateY(180deg)', position: 'absolute', inset: 0, padding: '12px 14px',
@@ -872,7 +878,7 @@ function SeqRun({ seqs, matId, color, accent }: { seqs: DeckSeq[]; matId: string
           const isWrong = wrongTile === ti;
           const c = isLocked ? '#10B981' : isWrong ? '#EF4444' : 'var(--text-primary)';
           return (
-            <button key={t + ti} onClick={() => tap(ti)} disabled={isLocked}
+            <button data-ui-control="" key={t + ti} onClick={() => tap(ti)} disabled={isLocked}
               style={{
                 padding: '15px 20px', borderRadius: 12, textAlign: 'center',
                 border: `1px solid ${isLocked ? '#10B98150' : isWrong ? '#EF444455' : 'var(--border-subtle)'}`,
@@ -948,7 +954,7 @@ function CatRun({ items, matId, color, accent }: { items: DeckCat[]; matId: stri
           const st = reveal && isCorrect ? 'ok' : isPicked ? 'bad' : 'idle';
           const col = st === 'ok' ? '#10B981' : st === 'bad' ? '#EF4444' : 'var(--text-primary)';
           return (
-            <button key={c} onClick={() => pick(c)} disabled={reveal}
+            <button data-ui-control="" key={c} onClick={() => pick(c)} disabled={reveal}
               style={{
                 minHeight: 92, borderRadius: 15, border: `1px solid ${st === 'ok' ? '#10B98155' : st === 'bad' ? '#EF444455' : 'var(--border-subtle)'}`,
                 background: st === 'ok' ? 'rgba(16,185,129,0.08)' : st === 'bad' ? 'rgba(239,68,68,0.07)' : 'var(--bg-deep)',
@@ -1041,11 +1047,11 @@ function ClozeRun({ items, matId, color, accent }: { items: DeckCloze[]; matId: 
       )}
       <div style={{ display: 'flex', justifyContent: 'center' }}>
         {!checked ? (
-          <button onClick={check} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '11px 26px', borderRadius: 11, border: 'none', background: color, color: '#0B0C0F', cursor: 'pointer', fontSize: 12.5, fontWeight: 700, fontFamily: "'Inter Tight', sans-serif" }}>
+          <button data-ui-control="" onClick={check} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '11px 26px', borderRadius: 11, border: 'none', background: color, color: '#0B0C0F', cursor: 'pointer', fontSize: 12.5, fontWeight: 700, fontFamily: "'Inter Tight', sans-serif" }}>
             <Check size={14} /> Comprobar
           </button>
         ) : (
-          <button onClick={next} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '11px 26px', borderRadius: 11, border: `1px solid ${color}40`, background: `${color}12`, color, cursor: 'pointer', fontSize: 12.5, fontWeight: 700 }}>
+          <button data-ui-control="" onClick={next} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '11px 26px', borderRadius: 11, border: `1px solid ${color}40`, background: `${color}12`, color, cursor: 'pointer', fontSize: 12.5, fontWeight: 700 }}>
             Siguiente <ChevronRight size={14} />
           </button>
         )}
@@ -1186,7 +1192,7 @@ function FeynmanRun({ concepts, matId, color, accent }: { concepts: DeckFeynman[
           {listening && <span style={{ fontSize: 10, fontWeight: 700, color: '#EF4444', display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 7, height: 7, borderRadius: 99, background: '#EF4444', animation: 'pulse 1.2s ease-in-out infinite' }} /> Escuchando…</span>}
         </div>
         <div style={{ display: 'flex', gap: 8, flex: 1, minHeight: 180 }}>
-          <button onClick={toggleMic} title={listening ? 'Detener dictado' : 'Dictar tu explicación con la voz'}
+          <button data-ui-control="" onClick={toggleMic} title={listening ? 'Detener dictado' : 'Dictar tu explicación con la voz'}
             style={{ width: 46, borderRadius: 12, flexShrink: 0, alignSelf: 'stretch', border: `1px solid ${listening ? '#EF444455' : color + '38'}`, background: listening ? 'rgba(239,68,68,0.1)' : `${color}0c`, color: listening ? '#EF4444' : color, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 180ms' }}>
             {listening ? <span style={{ width: 12, height: 12, borderRadius: 3, background: '#EF4444', animation: 'pulse 1.2s ease-in-out infinite' }} /> : <Mic size={17} />}
           </button>
@@ -1194,17 +1200,17 @@ function FeynmanRun({ concepts, matId, color, accent }: { concepts: DeckFeynman[
             style={{ flex: 1, boxSizing: 'border-box', background: 'var(--bg-deep)', border: `1px solid ${listening ? '#EF444440' : 'var(--border-subtle)'}`, borderRadius: 12, padding: 12, color: 'var(--text-primary)', fontSize: 12.5, lineHeight: 1.7, fontFamily: 'inherit', resize: 'none', outline: 'none' }} />
         </div>
         {!result ? (
-          <button onClick={compare} disabled={explanation.trim().length < 15}
+          <button data-ui-control="" onClick={compare} disabled={explanation.trim().length < 15}
             style={{ alignSelf: 'center', display: 'flex', alignItems: 'center', gap: 6, padding: '10px 26px', borderRadius: 11, border: 'none', background: explanation.trim().length >= 15 ? color : 'var(--border-subtle)', color: explanation.trim().length >= 15 ? '#0B0C0F' : 'var(--text-muted)', cursor: explanation.trim().length >= 15 ? 'pointer' : 'default', fontSize: 12, fontWeight: 700, fontFamily: "'Inter Tight', sans-serif" }}>
             <Eye size={13} /> Comparar y evaluar
           </button>
         ) : (
           <div style={{ display: 'flex', gap: 8, alignSelf: 'center' }}>
-            <button onClick={nextItem}
+            <button data-ui-control="" onClick={nextItem}
               style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 22px', borderRadius: 11, border: 'none', background: color, color: '#0B0C0F', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: "'Inter Tight', sans-serif" }}>
               Siguiente <ChevronRight size={13} />
             </button>
-            <button onClick={() => { clearTimeout(autoRef.current); setResult(null); }}
+            <button data-ui-control="" onClick={() => { clearTimeout(autoRef.current); setResult(null); }}
               style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 18px', borderRadius: 11, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
               <RotateCcw size={12} /> Repetir
             </button>

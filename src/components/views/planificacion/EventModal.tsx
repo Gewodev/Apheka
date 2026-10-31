@@ -1,3 +1,6 @@
+import {useAppSlice} from "../../../store/AppContext";
+import PlanSelectDropdown from '../../ui/PlanSelectDropdown';
+import { taskLinkUnavailable, eventLinkUnavailable } from '../../../lib/linkEligibility';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Calendar, CalendarClock, Clock, Plus, Trash2, Repeat, Check, Music, Image, File, Globe, Upload, Link2, ChevronUp, ChevronDown, Minus } from 'lucide-react';
@@ -94,11 +97,28 @@ export interface PlanEvent {
   attachments?: { type: 'link' | 'file'; name: string; url: string; size?: string }[];
 }
 
+// Keep an editable draft: clamping every keystroke turns a typed 15 into 55.
+function EventNumber({value, min, max, label, className, onCommit}: {
+  value: number | string; min: number; max: number; label: string;
+  className?: string; onCommit: (value: number) => void;
+}) {
+  const [draft, setDraft] = useState(String(value));
+  useEffect(() => setDraft(String(value)), [value]);
+  const commit = () => {
+    const parsed = draft.trim() ? Number(draft) : Number(value);
+    const next = Math.max(min, Math.min(max, Number.isFinite(parsed) ? Math.trunc(parsed) : min));
+    setDraft(String(next)); onCommit(next);
+  };
+  return <input aria-label={label} className={className} type="number" min={min} max={max}
+    value={draft} onFocus={e => e.currentTarget.select()} onChange={e => setDraft(e.target.value)}
+    onBlur={commit} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } }} />;
+}
+
 interface EventModalProps {
   event: PlanEvent | null;
   defaults: Partial<PlanEvent>;
   courses: { id: string; name: string; color: string }[];
-  tasks: { id: string; title: string; courseColor: string; dueDate?: string }[];
+  tasks: { id: string; title: string; courseColor: string; status: string; dueDate?: string }[];
   occurrenceDate?: string | null; // The specific date of the occurrence being edited
   onClose: () => void;
   onSave: (ev: PlanEvent) => void;
@@ -122,7 +142,6 @@ export default function EventModal({
   const th = document.documentElement.getAttribute('data-theme');
   const isDarkSelect = !th || th === 'oscuro' || th === 'vibrante';
   const selectBorder = isDarkSelect ? '1px solid rgba(255,255,255,0.12)' : '1px solid rgba(0,0,0,0.12)';
-  const { setPipUrl } = useApp();
   const matMenu = useMaterialMenu((m) => addNotification(m, 'error'));
   const isRecurringEdit = !!(event && event.repeat !== 'none');
   const [showScopePrompt, setShowScopePrompt] = useState(false);
@@ -148,9 +167,9 @@ export default function EventModal({
   };
   const end = computeEnd(start, duration);
   const shiftStart = (unit: 'h' | 'm', dir: number) => {
-    const [h, m] = start.split(':').map(Number);
-    if (unit === 'h') { const nh = (h + dir + 24) % 24; setStart(`${String(nh).padStart(2, '0')}:${String(m).padStart(2, '0')}`); }
-    else { const nm = (m + dir * 5 + 60) % 60; setStart(`${String(h).padStart(2, '0')}:${String(nm).padStart(2, '0')}`); }
+    const [h,m] = start.split(':').map(Number);
+    const total = (h*60 + m + dir*(unit === 'h' ? 60 : 5) + 1440) % 1440;
+    setStart(`${String(Math.floor(total/60)).padStart(2,'0')}:${String(total%60).padStart(2,'0')}`);
   };
   const [courseId, setCourseId] = useState(event?.courseId || defaults.courseId || '');
   const [color, setColor] = useState(event?.color || (defaults.courseId ? courses.find(c => c.id === defaults.courseId)?.color || '#E11D48' : '#E11D48'));
@@ -159,11 +178,14 @@ export default function EventModal({
   const [repeatDays, setRepeatDays] = useState<number[]>(event?.repeatDays || []);
   const [repeatUntil, setRepeatUntil] = useState(event?.repeatUntil || '');
   const [taskId, setTaskId] = useState(event?.taskId || '');
+  const linkUnavailable = eventLinkUnavailable({date,allDay,endTime:computeEnd(start,duration)});
+  const eligibleTasks = tasks.filter(task => !taskLinkUnavailable(task));
+  const unavailableTask = taskId ? taskLinkUnavailable(tasks.find(task => task.id === taskId)) : null;
   const [attachments, setAttachments] = useState<{ type: 'link' | 'file'; name: string; url: string; size?: string }[]>(event?.attachments || []);
   const [showLinkForm, setShowLinkForm] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
   const [linkName, setLinkName] = useState('');
-  
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -204,8 +226,12 @@ export default function EventModal({
       addNotification('El título es obligatorio', 'error');
       return;
     }
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      addNotification('Elige una fecha válida para el evento', 'error');
+      return;
+    }
     if (!allDay && start >= end) {
-      addNotification('La hora de inicio no puede ser posterior o igual a la de fin', 'error');
+      addNotification('La duración supera este día. Reduce los minutos o crea otro evento para el día siguiente.', 'error');
       return;
     }
     if (repeat === 'custom_days' && repeatDays.length === 0) {
@@ -234,7 +260,7 @@ export default function EventModal({
       repeat,
       repeatDays: repeat === 'custom_days' ? repeatDays : undefined,
       repeatUntil: repeat !== 'none' && repeatUntil ? repeatUntil : undefined,
-      taskId: taskId || undefined,
+      taskId: taskId && !unavailableTask && (!linkUnavailable || event?.taskId===taskId) ? taskId : undefined,
       attachments
     };
     if (event && event.repeat !== 'none') {
@@ -309,6 +335,15 @@ export default function EventModal({
     setPendingEv(null);
   }
 
+  useEffect(()=>{
+    const dismiss=(event:KeyboardEvent)=>{
+      if(event.key!=='Escape'||event.defaultPrevented)return;
+      if(showScopePrompt){setShowScopePrompt(false);setPendingEv(null);}else onClose();
+    };
+    document.addEventListener('keydown',dismiss);
+    return()=>document.removeEventListener('keydown',dismiss);
+  },[onClose,showScopePrompt]);
+
   const DAY_INITIALS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 
   const toggleRepeatDay = (idx: number) => {
@@ -367,7 +402,6 @@ export default function EventModal({
 
   const openAttachment = (item: { type: 'link' | 'file'; name: string; url: string }) => {
     openFileSmart(item.url, item.name, {
-      onMedia: (u, n) => setPipUrl(u, n),
       onError: (m) => addNotification(m, 'error'),
       onMoved: (np) => {
         setAttachments(prev => prev.map(a => a.url === item.url ? { ...a, url: np } : a));
@@ -376,26 +410,26 @@ export default function EventModal({
     }).catch(() => addNotification('No se pudo abrir el material', 'error'));
   };
 
-  return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 1500, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(4px)' }} onClick={onClose}>
-      <div 
-        style={{ 
-          width: 580, 
-          maxHeight: '90vh', 
-          overflowY: 'auto', 
-          background: 'var(--surface)', 
+  return createPortal(
+    <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(4px)' }} onClick={onClose}>
+      <div role="dialog" aria-modal="true" aria-label={event ? "Editar evento" : "Nuevo evento"} className="apheka-event-dialog"
+        style={{
+          width: 700, maxWidth: 'calc(100vw - 32px)',
+          maxHeight: '90vh',
+          overflow: 'hidden',
+          background: 'var(--surface)',
           border: '1px solid var(--border-soft)',
           borderRadius: 16,
           boxShadow: '0 24px 48px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04)',
           display: 'flex',
           flexDirection: 'column'
-        }} 
+        }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div style={{ padding: '24px 32px 20px', borderBottom: '1px solid var(--border-soft)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: 'var(--surface)', zIndex: 10 }}>
+        <div style={{ flexShrink: 0, padding: '20px 32px', borderBottom: '1px solid var(--border-soft)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: 'var(--surface)', zIndex: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ width: 4, height: 20, borderRadius: 4, background: color, boxShadow: `0 0 12px ${color}60` }} />
+            <CalendarClock size={19} style={{ color }} />
             <h2 style={{ fontSize: 20, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight',sans-serif", letterSpacing: '-0.02em' }}>
               {event ? 'Editar Evento' : 'Nuevo Evento'}
             </h2>
@@ -406,133 +440,67 @@ export default function EventModal({
                 <Trash2 size={13} /> Eliminar
               </button>
             )}
-            <button onClick={onClose} style={{ padding: 8, borderRadius: 8, background: 'transparent', border: '1px solid transparent', color: 'var(--text-secondary)', cursor: 'pointer', transition: 'all 200ms' }} onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface-hover)' }} onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
+            <button aria-label="Cerrar evento" onClick={onClose} style={{ padding: 8, borderRadius: 8, background: 'transparent', border: '1px solid transparent', color: 'var(--text-secondary)', cursor: 'pointer', transition: 'all 200ms' }} onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface-hover)' }} onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
               <X size={18} />
             </button>
           </div>
         </div>
 
         {/* Body */}
-        <div style={{ padding: '24px 32px', display: 'flex', flexDirection: 'column', gap: 24 }}>
+        <div className="event-form-body" style={{ padding: '24px 32px', flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
           {/* Title */}
           <div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 8 }}>Título</label>
-            <input 
-              autoFocus 
-              type="text" 
-              value={title} 
-              onChange={e => setTitle(e.target.value)} 
-              onKeyDown={e => e.key === 'Enter' && handleSave()} 
-              placeholder="Ej: Reunión de proyecto, Examen final..." 
+            <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 8 }}>Título</label>
+            <input
+              aria-label="Título del evento"
+              autoFocus
+              type="text"
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleSave()}
+              placeholder="Ej: Reunión de proyecto, Examen final..."
               style={{ width: '100%', fontSize: 16, height: 48, background: 'var(--surface-elevated)', border: '1px solid var(--border-soft)', borderRadius: 10, padding: '0 16px', color: 'var(--text-primary)', outline: 'none', transition: 'border-color 200ms' }}
               onFocus={e => e.currentTarget.style.borderColor = 'var(--text-secondary)'}
               onBlur={e => e.currentTarget.style.borderColor = 'var(--border-soft)'}
             />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
-            {/* Date & All Day */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 8 }}>Fecha</label>
-                <div style={{ position: 'relative' }}>
-                  <Calendar size={15} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
-                  <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ width: '100%', fontSize: 14, height: 44, background: 'var(--surface-elevated)', border: selectBorder, borderRadius: 10, padding: '0 16px 0 40px', color: 'var(--text-primary)', outline: 'none' }} />
-                </div>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, height: 44, padding: '0 16px', background: 'var(--surface-elevated)', border: '1px solid var(--border-soft)', borderRadius: 10 }}>
-                <button 
-                  onClick={() => setAllDay(p => !p)} 
-                  style={{ width: 40, height: 22, borderRadius: 12, border: 'none', cursor: 'pointer', position: 'relative', transition: 'background 200ms', background: allDay ? 'var(--accent)' : 'var(--bg-secondary)', flexShrink: 0 }}
-                >
-                  <div style={{ width: 16, height: 16, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, transition: 'left 200ms', left: allDay ? 21 : 3, boxShadow: '0 2px 6px rgba(0,0,0,0.2)' }} />
-                </button>
-                <span style={{ fontSize: 14, color: 'var(--text-secondary)', fontWeight: 500 }}>Todo el día</span>
-              </div>
+          <section className="apheka-event-schedule" aria-label="Fecha y duración">
+            <div className="apheka-event-section-head">
+              <span>Cuándo</span>
+              <label className="apheka-inline-check"><input type="checkbox" checked={allDay} onChange={e => setAllDay(e.target.checked)} /> Todo el día</label>
             </div>
-
-            {/* Hora de inicio (stepper dinámico) + Durará → fin calculado */}
-            {!allDay && (() => {
-              const ChevBtn = ({ dir, unit }: { dir: 1 | -1; unit: 'h' | 'm' }) => (
-                <button onClick={() => shiftStart(unit, dir)} tabIndex={-1}
-                  title={unit === 'h' ? (dir > 0 ? '+1 hora' : '-1 hora') : (dir > 0 ? '+5 minutos' : '-5 minutos')}
-                  style={{ width: '100%', height: 18, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, transition: 'color 150ms' }}
-                  onMouseEnter={e => { e.currentTarget.style.color = color; }}
-                  onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; }}>
-                  {dir > 0 ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                </button>
-              );
-              return (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                  <div style={{ display: 'flex', gap: 14, alignItems: 'stretch' }}>
-                  <div style={{ flex: 1 }}>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 8 }}>Hora de inicio</label>
-                    <div tabIndex={0}
-                      onKeyDown={e => {
-                        if (e.key === 'ArrowUp') { e.preventDefault(); shiftStart('h', 1); }
-                        else if (e.key === 'ArrowDown') { e.preventDefault(); shiftStart('h', -1); }
-                        else if (e.key === 'ArrowRight') { e.preventDefault(); shiftStart('m', 1); }
-                        else if (e.key === 'ArrowLeft') { e.preventDefault(); shiftStart('m', -1); }
-                      }}
-                      title="Flechas: arriba/abajo horas, izquierda/derecha minutos"
-                      style={{ display: 'flex', alignItems: 'stretch', borderRadius: 10, border: selectBorder, background: 'var(--surface-elevated)', overflow: 'hidden', outline: 'none' }}
-                      onFocus={e => { e.currentTarget.style.borderColor = color; }}
-                      onBlur={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; }}>
-                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '2px 0' }}>
-                        <ChevBtn dir={1} unit="h" />
-                        <span style={{ height: 34, display: 'flex', alignItems: 'center', fontFamily: "'JetBrains Mono', monospace", fontSize: 17, fontWeight: 700, color, fontVariantNumeric: 'tabular-nums' }}>
-                          {String(Number(start.split(':')[0])).padStart(2, '0')}
-                        </span>
-                        <ChevBtn dir={-1} unit="h" />
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', width: 16, justifyContent: 'center', fontSize: 16, fontWeight: 700, color: 'var(--text-tertiary)', fontFamily: "'JetBrains Mono', monospace" }}>:</div>
-                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '2px 0' }}>
-                        <ChevBtn dir={1} unit="m" />
-                        <span style={{ height: 34, display: 'flex', alignItems: 'center', fontFamily: "'JetBrains Mono', monospace", fontSize: 17, fontWeight: 700, color, fontVariantNumeric: 'tabular-nums' }}>
-                          {String(Number(start.split(':')[1])).padStart(2, '0')}
-                        </span>
-                        <ChevBtn dir={-1} unit="m" />
-                      </div>
+            <div className={`apheka-schedule-fields${allDay ? ' all-day' : ''}`}>
+              <label className="apheka-field">Fecha
+                <input aria-label="Fecha del evento" type="date" value={date} onChange={e => setDate(e.target.value)} />
+              </label>
+              {!allDay && <>
+                <div className="apheka-field">Inicio
+                  <div className="apheka-time-control">
+                    <EventNumber label="Hora de inicio" className="apheka-time-input" min={0} max={23} value={start.split(':')[0]} onCommit={h => setStart(`${String(h).padStart(2,'0')}:${start.split(':')[1]}`)} />
+                    <span aria-hidden="true">:</span>
+                    <EventNumber label="Minuto de inicio" className="apheka-time-input" min={0} max={59} value={start.split(':')[1]} onCommit={m => setStart(`${start.split(':')[0]}:${String(m).padStart(2,'0')}`)} />
+                    <div className="apheka-time-arrows">
+                      <button type="button" aria-label="Adelantar cinco minutos" onClick={() => shiftStart('m',1)}><ChevronUp size={13} /></button>
+                      <button type="button" aria-label="Retroceder cinco minutos" onClick={() => shiftStart('m',-1)}><ChevronDown size={13} /></button>
                     </div>
                   </div>
-                  <div style={{ width: 118, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 5, borderRadius: 10, border: '1px solid var(--border-soft)', background: color + '0a' }}>
-                    <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Termina</span>
-                    <span style={{ fontSize: 20, fontWeight: 700, color, fontFamily: "'JetBrains Mono', monospace", fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{end}</span>
+                </div>
+                <div className="apheka-field">Duración
+                  <div className="apheka-duration-control">
+                    <button type="button" aria-label="Reducir duración cinco minutos" disabled={duration <= 5} onClick={() => setDuration(Math.max(5,duration-5))}><Minus size={14} /></button>
+                    <EventNumber label="Duración en minutos" min={5} max={720} value={duration} onCommit={setDuration} />
+                    <span>min</span>
+                    <button type="button" aria-label="Aumentar duración cinco minutos" disabled={duration >= 720} onClick={() => setDuration(Math.min(720,duration+5))}><Plus size={14} /></button>
                   </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>Durará</label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <button onClick={() => setDuration(Math.max(5, duration - 5))} title="-5 min"
-                      style={{ width: 30, height: 38, borderRadius: 9, border: '1px solid var(--border-soft)', background: 'var(--surface-elevated)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, transition: 'all 150ms' }}
-                      onMouseEnter={e => { e.currentTarget.style.color = color; e.currentTarget.style.borderColor = color; }}
-                      onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.borderColor = 'var(--border-soft)'; }}>
-                      <Minus size={13} />
-                    </button>
-                    <div style={{ width: 66, height: 38, borderRadius: 9, border: '1px solid var(--border-soft)', background: 'var(--surface-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                      <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'JetBrains Mono', monospace", fontVariantNumeric: 'tabular-nums' }}>{duration}</span>
-                      <span style={{ fontSize: 8, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.06em' }}>MIN</span>
-                    </div>
-                    <button onClick={() => setDuration(Math.min(720, duration + 5))} title="+5 min"
-                      style={{ width: 30, height: 38, borderRadius: 9, border: '1px solid var(--border-soft)', background: 'var(--surface-elevated)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, transition: 'all 150ms' }}
-                      onMouseEnter={e => { e.currentTarget.style.color = color; e.currentTarget.style.borderColor = color; }}
-                      onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.borderColor = 'var(--border-soft)'; }}>
-                      <Plus size={13} />
-                    </button>
-                  </div>
-                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                    {[15, 30, 45, 60, 90, 120].map((mins: number) => (
-                      <button key={mins} onClick={() => setDuration(mins)}
-                        style={{ padding: '5px 9px', borderRadius: 7, fontSize: 10, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", cursor: 'pointer', border: duration === mins ? '1px solid ' + color : '1px solid var(--border-soft)', background: duration === mins ? color + '14' : 'transparent', color: duration === mins ? color : 'var(--text-muted)', transition: 'all 130ms' }}>
-                        {mins}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                </div>
-              );
-            })()}
-          </div>
+              </>}
+            </div>
+            {!allDay && <div className="apheka-schedule-summary">
+              <span>Termina a las <strong>{end}</strong>{start >= end ? ' del día siguiente' : ''}</span>
+              <div role="group" aria-label="Duraciones habituales">{[15,30,60,90].map(mins => <button type="button" key={mins} aria-pressed={duration===mins} onClick={() => setDuration(mins)}>{mins} min</button>)}</div>
+            </div>}
+          </section>
 
           {/* Repeat */}
           <div style={{ padding: '16px', background: 'var(--surface-elevated)', borderRadius: 12, border: '1px solid var(--border-soft)' }}>
@@ -541,14 +509,9 @@ export default function EventModal({
                 <Repeat size={15} style={{ color: 'var(--text-muted)' }} />
                 <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)' }}>Repetición</span>
               </div>
-              <select value={repeat} onChange={e => setRepeat(e.target.value as any)} style={{ fontSize: 13, height: 32, background: 'var(--bg-secondary)', border: selectBorder, borderRadius: 6, padding: '0 12px', color: 'var(--text-secondary)', outline: 'none' }}>
-                <option value="none">Ninguna</option>
-                <option value="daily">Diariamente</option>
-                <option value="weekly">Semanalmente</option>
-                <option value="custom_days">Días específicos</option>
-              </select>
+              <PlanSelectDropdown label="Repetición del evento" value={repeat==='none'?'':repeat} onChange={value=>setRepeat((value||'none') as any)} options={[{id:'daily',label:'Diariamente'},{id:'weekly',label:'Semanalmente'},{id:'custom_days',label:'Días específicos'}]} noneLabel="Ninguna" color="var(--accent)"/>
             </div>
-            
+
             {repeat === 'custom_days' && (
               <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginBottom: 16 }}>
                 {DAY_INITIALS.map((d, i) => {
@@ -582,23 +545,20 @@ export default function EventModal({
             )}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+          <div className="apheka-event-grid">
             {/* Linking */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div>
-                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 8 }}>Materia</label>
-                <select value={courseId} onChange={e => setCourseId(e.target.value)} style={{ width: '100%', fontSize: 14, height: 44, background: 'var(--surface-elevated)', border: selectBorder, borderRadius: 10, padding: '0 16px', color: 'var(--text-primary)', outline: 'none' }}>
-                  <option value="">Ninguna</option>
-                  {courses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
+                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 8 }}>Materia</label>
+                <PlanSelectDropdown label="Materia del evento" value={courseId} onChange={setCourseId} options={courses.map(course=>({id:course.id,label:course.name,color:course.color}))} noneLabel="Sin materia" color="var(--accent)" />
               </div>
-              {tasks.length > 0 && (
+              {(tasks.length > 0 || taskId) && (
                 <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 8 }}>Tarea vinculada</label>
-                  <select value={taskId} onChange={e => setTaskId(e.target.value)} style={{ width: '100%', fontSize: 14, height: 44, background: 'var(--surface-elevated)', border: selectBorder, borderRadius: 10, padding: '0 16px', color: 'var(--text-primary)', outline: 'none' }}>
-                    <option value="">Ninguna</option>
-                    {tasks.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
-                  </select>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 8 }}>Tarea vinculada</label>
+                  <PlanSelectDropdown label="Tarea vinculada al evento" disabled={!!linkUnavailable} value={unavailableTask ? '' : taskId} onChange={setTaskId} options={eligibleTasks.map(task=>({id:task.id,label:task.title,color:task.courseColor}))} noneLabel="Sin tarea vinculada" color="var(--accent)" />
+                  {linkUnavailable && <p className="workspace-field-help">{linkUnavailable}</p>}
+                  {unavailableTask && <p className="workspace-field-help">{unavailableTask} Al guardar se quitará este vínculo.</p>}
+                  {!eligibleTasks.length && <p className="workspace-field-help">No hay tareas disponibles para vincular.</p>}
                   {taskMismatch && (
                     <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'linear-gradient(135deg, rgba(245,158,11,0.12), rgba(245,158,11,0.05))', border: '1px solid rgba(245,158,11,0.28)', borderRadius: 10 }}>
                       <div style={{ width: 30, height: 30, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.3)', color: '#F59E0B', flexShrink: 0, boxShadow: '0 0 10px rgba(245,158,11,0.15)' }}>
@@ -625,7 +585,7 @@ export default function EventModal({
 
             {/* Appearance */}
             <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 8 }}>Color</label>
+              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 8 }}>Color</label>
               <div style={{ position: 'relative', height: 44 }}>
                 <input type="color" value={color} onChange={e => setColor(e.target.value)} style={{ opacity: 0, position: 'absolute', inset: 0, width: '100%', height: '100%', cursor: 'pointer' }} />
                 <div style={{ width: '100%', height: '100%', background: 'var(--surface-elevated)', border: '1px solid var(--border-soft)', borderRadius: 10, display: 'flex', alignItems: 'center', padding: '0 12px', gap: 12, pointerEvents: 'none' }}>
@@ -638,12 +598,12 @@ export default function EventModal({
 
           {/* Description & Attachments */}
           <div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 8 }}>Detalles & Materiales</label>
+            <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 8 }}>Detalles & Materiales</label>
             <div style={{ background: 'var(--surface-elevated)', border: '1px solid var(--border-soft)', borderRadius: 12, overflow: 'visible' }}>
-              <textarea 
-                value={desc} 
-                onChange={e => setDesc(e.target.value)} 
-                placeholder="Agrega notas, enlaces, o detalles importantes..." 
+              <textarea
+                value={desc}
+                onChange={e => setDesc(e.target.value)}
+                placeholder="Agrega notas, enlaces, o detalles importantes..."
                 style={{ width: '100%', fontSize: 14, minHeight: 80, background: 'transparent', border: 'none', padding: '16px', color: 'var(--text-primary)', outline: 'none', resize: 'vertical' }}
               />
               <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border-soft)', background: 'var(--bg-primary)', display: 'flex', flexDirection: 'column', gap: 10, borderRadius: '0 0 12px 12px' }}>
@@ -683,7 +643,7 @@ export default function EventModal({
                     })}
                   </div>
                 )}
-                
+
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {showLinkForm && (
                     <div style={{ background: 'var(--surface)', border: '1px solid var(--border-soft)', borderRadius: 8, padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -694,7 +654,7 @@ export default function EventModal({
                           type="url"
                           value={linkUrl}
                           onChange={e => setLinkUrl(e.target.value)}
-                          onKeyDown={e => { if (e.key === 'Enter') handleAddLink(); if (e.key === 'Escape') { setShowLinkForm(false); setLinkUrl(''); setLinkName(''); } }}
+                          onKeyDown={e => { if (e.key === 'Enter') handleAddLink(); if (e.key === 'Escape') { e.stopPropagation(); setShowLinkForm(false); setLinkUrl(''); setLinkName(''); } }}
                           placeholder="https://..."
                           style={{ flex: 1, fontSize: 13, height: 32, background: 'var(--surface-elevated)', border: '1px solid var(--border-soft)', borderRadius: 6, padding: '0 10px', color: 'var(--text-primary)', outline: 'none' }}
                         />
@@ -703,7 +663,7 @@ export default function EventModal({
                         type="text"
                         value={linkName}
                         onChange={e => setLinkName(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter') handleAddLink(); if (e.key === 'Escape') { setShowLinkForm(false); setLinkUrl(''); setLinkName(''); } }}
+                        onKeyDown={e => { if (e.key === 'Enter') handleAddLink(); if (e.key === 'Escape') { e.stopPropagation(); setShowLinkForm(false); setLinkUrl(''); setLinkName(''); } }}
                         placeholder="Nombre (opcional)"
                         style={{ fontSize: 12, height: 28, background: 'var(--surface-elevated)', border: '1px solid var(--border-soft)', borderRadius: 6, padding: '0 10px', color: 'var(--text-primary)', outline: 'none' }}
                       />
@@ -770,7 +730,7 @@ export default function EventModal({
         )}
 
         {/* Footer */}
-        <div style={{ padding: '20px 32px', borderTop: '1px solid var(--border-soft)', display: 'flex', gap: 12, background: 'var(--bg-primary)', borderRadius: '0 0 16px 16px' }}>
+        <div style={{ flexShrink: 0, padding: '16px 32px', borderTop: '1px solid var(--border-soft)', display: 'flex', gap: 12, background: 'var(--bg-primary)', borderRadius: '0 0 16px 16px' }}>
           <button onClick={onClose} style={{ flex: 1, height: 48, borderRadius: 10, border: '1px solid var(--border-soft)', background: 'var(--surface)', color: 'var(--text-primary)', fontSize: 14, fontWeight: 600, cursor: 'pointer', transition: 'background 200ms' }} onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-hover)'} onMouseLeave={e => e.currentTarget.style.background = 'var(--surface)'}>
             Cancelar
           </button>
@@ -780,6 +740,6 @@ export default function EventModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>, document.body
   );
 }

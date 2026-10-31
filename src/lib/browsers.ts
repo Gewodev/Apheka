@@ -1,3 +1,4 @@
+import { externalTarget } from './externalTarget';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 
 export interface DetectedBrowser {
@@ -48,7 +49,7 @@ export function setDefaultBrowser(browserId: string | null, courseId?: string): 
 
 /** Abre un enlace http(s) EN UN NAVEGADOR CONCRETO del sistema */
 export async function openUrlInBrowser(exe: string, url: string): Promise<void> {
-  await invoke('open_url_in_browser', { exe, url });
+  await invoke('open_url_in_browser', { exe, url: externalTarget(url) });
 }
 
 async function exeAlive(exe: string): Promise<boolean> {
@@ -102,8 +103,9 @@ export async function resolveDefaultPdfAppExe(courseId?: string): Promise<string
   const id = getDefaultPdfAppId(courseId ?? readSelectedCourse());
   if (!id) return null;
   if (id === 'sys') return 'sys';
-  const list = await getPdfApps();
-  const exe = list.find(a => a.id === id)?.exe || null;
+  const browser=id.startsWith('browser:');
+  const list = browser ? await getInstalledBrowsers() : await getPdfApps();
+  const exe = list.find(a => a.id === (browser?id.slice('browser:'.length):id))?.exe || null;
   if (exe && !(await exeAlive(exe))) return null;
   return exe;
 }

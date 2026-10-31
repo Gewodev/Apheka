@@ -1,19 +1,11 @@
+import { FLOATING_FONTS } from '../lib/floatingFonts';
 import { useState, useEffect, useRef } from 'react';
 import { listen, emit } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { DigitSVG, ColonSVG } from './LEDDigits';
 import { ANIMATIONS } from './FloatingAnimations';
 
-const FONTS: Record<string, { family: string; name: string }> = {
-  led: { family: "'Share Tech Mono', monospace", name: 'LED' },
-  outfit: { family: "'Outfit', sans-serif", name: 'Outfit' },
-  'dm-sans': { family: "'DM Sans', sans-serif", name: 'DM Sans' },
-  playfair: { family: "'Playfair Display', serif", name: 'Playfair' },
-  space: { family: "'Space Grotesk', sans-serif", name: 'Space Grotesk' },
-  jakarta: { family: "'Plus Jakarta Sans', sans-serif", name: 'Jakarta' },
-  sora: { family: "'Sora', sans-serif", name: 'Sora' },
-  inter: { family: "'Inter', sans-serif", name: 'Inter' },
-};
+const FONTS = FLOATING_FONTS;
 
 interface TimerSync {
   sessionTime: number;
@@ -155,6 +147,7 @@ export default function FloatingTimer() {
   }
 
   async function startDrag(e: React.MouseEvent) {
+    if (e.button !== 0) return;
     const t = e.target as HTMLElement;
     if (t.closest('.close-btn')) return;
     try { await getCurrentWindow().startDragging(); } catch {}

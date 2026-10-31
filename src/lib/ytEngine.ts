@@ -1,27 +1,7 @@
-// Motor de YouTube compartido: la MISMA lógica que usa el reproductor emergente
-// (VideoPiP) se usa también en el reproductor GENERAL. El emergente reproduce
-// la nube de forma fiable con la IFrame API imperativa; el general usa este
-// mismo patrón (video oculto detrás, audio del iframe).
+// Shared engine for the single integrated YouTube music player.
 
 let ytApiPromise: Promise<boolean> | null = null;
-export function ensureYouTubeApi(): Promise<boolean> {
-  if (!ytApiPromise) {
-    ytApiPromise = new Promise((resolve) => {
-      try {
-        const w = window as any;
-        if (w.YT && w.YT.Player) { resolve(true); return; }
-        const prev = w.onYouTubeIframeAPIReady;
-        w.onYouTubeIframeAPIReady = () => { if (prev) prev(); resolve(true); };
-        const s = document.createElement('script');
-        s.src = 'https://www.youtube.com/iframe_api';
-        s.async = true;
-        s.onerror = () => resolve(false);
-        document.head.appendChild(s);
-      } catch { resolve(false); }
-    });
-  }
-  return ytApiPromise;
-}
+export function ensureYouTubeApi():Promise<boolean>{if((window as any).YT?.Player)return Promise.resolve(true);if(!ytApiPromise){ytApiPromise=new Promise<boolean>(resolve=>{let done=false;const script=document.createElement('script'),w=window as any,previous=w.onYouTubeIframeAPIReady;const finish=(ok:boolean)=>{if(done)return;done=true;clearTimeout(timeout);if(!ok){script.remove();ytApiPromise=null;}resolve(ok);};const timeout=setTimeout(()=>finish(false),12000);w.onYouTubeIframeAPIReady=()=>{try{previous?.();}finally{finish(true);}};script.src='https://www.youtube.com/iframe_api';script.async=true;script.referrerPolicy='strict-origin-when-cross-origin';script.onerror=()=>finish(false);document.head.appendChild(script);});}return ytApiPromise;}
 
 export function extractYouTubeId(raw: string): string | null {
   try {
@@ -49,4 +29,4 @@ export function extractPlaylistId(raw: string): string | null {
 // AppContext.setMusicProgressCb para que la barra busque DENTRO del iframe
 // y toggleMusicPlayback para pausar/reproducir AL INSTANTE, sin esperar el
 // re-render de React — máxima fluidez de pausa y reproducción consecutiva).
-export const generalYtControl: { seekTo?: (ratio: number) => void; playVideo?: () => void; pauseVideo?: () => void } = {};
+export const generalYtControl: { pendingSeek?:{url:string;ratio:number};restorePosition?:()=>void;getTime?:()=>number;getDuration?:()=>number;seekTo?: (ratio: number) => void; playVideo?: () => void; pauseVideo?: () => void } = {};

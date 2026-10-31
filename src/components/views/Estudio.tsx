@@ -1,6 +1,16 @@
+import {playStudyAlarm} from '../../lib/studyAlarm';
+import {useAppSlice} from "../../store/AppContext";
+import SessionFinishControl from '../ui/SessionFinishControl';
+import { useWindowFullscreen, windowFullscreen } from '../../hooks/useWindowFullscreen';
+import {clockValue} from '../../lib/analogClock';
+import WorkspaceClock from '../ui/WorkspaceClock';
+import { deadlineForClock } from '../../lib/timerSchedule';
+import DurationControl from '../ui/DurationControl';
+import { taskLinkUnavailable } from '../../lib/linkEligibility';
+import { calculateStreak, getGoalForDay } from '../../lib/studyStreak';
+import { seconds } from '../../lib/studyAnalytics';
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import toast from 'react-hot-toast';
-import LiveClock from '../ui/LiveClock';
 import {
   Play, Pause, RotateCcw, Zap, Clock,
   CheckCircle, Trophy, Sparkles, Flame,
@@ -10,7 +20,7 @@ import {
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { WebviewWindow, getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
-import { useApp, fmtClock, StudySession } from '../../store/AppContext';
+import { useApp, StudySession } from '../../store/AppContext';
 import { useTimer } from '../../hooks/useTimer';
 import { format, subDays } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -27,39 +37,7 @@ function toLocalDate(iso: string): string {
   try { return format(new Date(iso), 'yyyy-MM-dd'); } catch { return String(iso || '').slice(0, 10); }
 }
 
-function getGoalForDay(dayStr: string, currentGoal: number, dailyGoalHistory?: Record<string, number>, initialDailyGoal?: number): number {
-  const changeDates = Object.keys(dailyGoalHistory || {}).filter(k => /^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
-  for (let i = changeDates.length - 1; i >= 0; i--) {
-    if (changeDates[i] <= dayStr) return dailyGoalHistory![changeDates[i]];
-  }
-  return initialDailyGoal ?? currentGoal;
-}
 
-function calculateStreak(dailyTotals: Record<string, number>, dailyGoalMin: number, dailyGoalHistory?: Record<string, number>, initialDailyGoal?: number): number {
-  const todayStr = format(new Date(), 'yyyy-MM-dd');
-  const yesterdayStr = format(subDays(new Date(), 1), 'yyyy-MM-dd');
-
-  const metGoal = (dayStr: string): boolean => {
-    const goalForDay = getGoalForDay(dayStr, dailyGoalMin, dailyGoalHistory, initialDailyGoal);
-    if (goalForDay <= 0) return false;
-    const studied = dailyTotals[dayStr];
-    return studied !== undefined && studied > 0 && studied >= goalForDay * 60;
-  };
-
-  const startDay = metGoal(todayStr) ? todayStr :
-                   metGoal(yesterdayStr) ? yesterdayStr : null;
-
-  if (!startDay) return 0;
-
-  let s = 1;
-  let d = subDays(new Date(startDay), 1);
-  let maxLookback = 365;
-  while (maxLookback-- > 0 && metGoal(format(d, 'yyyy-MM-dd'))) {
-    s++;
-    d = subDays(d, 1);
-  }
-  return s;
-}
 
 const TomatoIcon = ({ size = 24, color = 'currentColor', style }: { size?: number; color?: string; style?: React.CSSProperties }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" style={style}>
@@ -147,7 +125,7 @@ function detectPerformanceSuggestion(opts: {
 
 export default function Estudio() {
   const {
-    tasks, hydrated, courses, addSubTask, settings, updateSettings, dailyStudyTime, activeTaskId, setActiveTaskId,
+    tasks, hydrated, courses, addSubTask, settings, updateSettings, dailyStudyTime, activeTaskId, activeSubtaskId, linkTaskToTimer,
     pomodoroSessions, incrementPomodoroSessions, studySessions,
     addStudySession, updateStudySession, weeklyStudyTime,
     dailyPerformances,
@@ -158,7 +136,7 @@ export default function Estudio() {
     plannedSessions, updatePlannedSession,
     activePlannedSessionId, linkPlannedSessionToTimer, unlinkPlannedSessionFromTimer, unlinkTaskFromTimer,
     navigateToCourse, setNavigateTo,
-  } = useApp();
+  } = useAppSlice(["tasks","hydrated","courses","addSubTask","settings","updateSettings","dailyStudyTime","activeTaskId","activeSubtaskId","linkTaskToTimer","pomodoroSessions","incrementPomodoroSessions","studySessions","addStudySession","updateStudySession","weeklyStudyTime","dailyPerformances","focusPomodoroTime","focusChronoTime","breakTime","dailyBreakTime","dailyFocusPomodoro","dailyFocusChrono","accumulatedPauseTime","distractionCount","addNotification","updateTask","setAccumulatedPauseTime","setIsTimerActive","setDistractionCount","setShowRestPrompt","plannedSessions","updatePlannedSession","activePlannedSessionId","linkPlannedSessionToTimer","unlinkPlannedSessionFromTimer","unlinkTaskFromTimer","navigateToCourse","setNavigateTo"]);
 
   const {
     sessionType, setSessionType, chronoRounds, setChronoRounds, chronoGoal,
@@ -172,15 +150,19 @@ export default function Estudio() {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showSessionEval, setShowSessionEval] = useState(false);
   const [showFreeStudyPrompt, setShowFreeStudyPrompt] = useState(false);
+  const floatingToggleBusy = useRef(false);
   const [headerMenu, setHeaderMenu] = useState<{ x: number; y: number } | null>(null);
-  const [customMinutes, setCustomMinutes] = useState<number>(() => Math.round((settings.pomodoroTime || 1500) / 60));
+  const [customMinutes, setCustomMinutes] = useState<number>(() => Math.max(1,Math.ceil((settings.pomodoroTime || 1500) / 60)));
   const [targetTime, setTargetTime] = useState('');
+  useEffect(()=>{setCustomMinutes(Math.max(1,Math.ceil(settings.pomodoroTime/60)));},[settings.pomodoroTime]);
   useEffect(() => {
     if (!headerMenu) return;
+    const escape = (event: KeyboardEvent) => {if(event.key==='Escape')setHeaderMenu(null);};
+    window.addEventListener('keydown',escape);
     const close = () => setHeaderMenu(null);
     window.addEventListener('click', close);
     window.addEventListener('wheel', close, { passive: true });
-    return () => { window.removeEventListener('click', close); window.removeEventListener('wheel', close); };
+    return () => { window.removeEventListener('click', close); window.removeEventListener('wheel', close); window.removeEventListener('keydown',escape); };
   }, [headerMenu]);
   const [evalSessionId, setEvalSessionId] = useState<string | null>(null);
   const [showSessionDetail, setShowSessionDetail] = useState(false);
@@ -258,6 +240,8 @@ export default function Estudio() {
   const pendingSessionRef = useRef<Omit<StudySession, 'id'> | null>(null);
 
   const activeTask = tasks.find(t => t.id === activeTaskId);
+  const activeSubtask = activeTask?.subtasks.find(s=>s.id===activeSubtaskId);
+  const activeTaskTitle = activeSubtask ? `${activeSubtask.title} | ${activeTask?.title}` : activeTask?.title;
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const weekAgoStr = format(subDays(new Date(), 6), 'yyyy-MM-dd');
   const monthStartStr = format(new Date(new Date().getFullYear(), new Date().getMonth(), 1), 'yyyy-MM-dd');
@@ -271,7 +255,7 @@ export default function Estudio() {
     weekStart.setDate(today.getDate() - mondayOffset);
     weekStart.setHours(0, 0, 0, 0);
     return format(weekStart, 'yyyy-MM-dd');
-  }, []);
+  }, [todayStr]);
 
   // Monthly study seconds
   const monthlyStudySecs = useMemo(() => {
@@ -307,39 +291,38 @@ export default function Estudio() {
     studySessions.filter(s => toLocalDate(s.startedAt) >= weekAgoStr),
   [studySessions, weekAgoStr]);
 
-  const streak = useMemo(() => calculateStreak(weeklyStudyTime, settings?.dailyGoal || 240, settings?.dailyGoalHistory, settings?.initialDailyGoal), [weeklyStudyTime, settings?.dailyGoal, settings?.dailyGoalHistory, settings?.initialDailyGoal]);
-
-  const weekDayData = useMemo(() => {
-    const dn = ['D','L','M','M','J','V','S'];
-    return Array.from({ length: 7 }, (_, i) => {
-      const d = subDays(new Date(), 6 - i);
-      return { l: dn[d.getDay()], v: Math.round((weeklyStudyTime[format(d, 'yyyy-MM-dd')] || 0) / 60) };
-    }).reverse();
-  }, [weeklyStudyTime]);
+  const streak = useMemo(() => calculateStreak(weeklyStudyTime, settings?.dailyGoal ?? 240, settings?.dailyGoalHistory, settings?.initialDailyGoal), [weeklyStudyTime, settings?.dailyGoal, settings?.dailyGoalHistory, settings?.initialDailyGoal, format(new Date(), 'yyyy-MM-dd')]);
 
 
+
+
+  const openPomodoroOptions = (event: React.MouseEvent) => {
+    if(sessionType!=='pomodoro'||isRest||isTimerActive)return;
+    event.preventDefault();
+    setCustomMinutes(Math.max(1,Math.ceil(settings.pomodoroTime/60)));
+    setTargetTime(clockValue(new Date(settings.pomodoroEndAt && settings.pomodoroEndAt>Date.now() ? settings.pomodoroEndAt : Date.now()+settings.pomodoroTime*1000)));
+    setHeaderMenu({x:Math.max(12,Math.min(event.clientX,innerWidth-276)),y:Math.max(12,Math.min(event.clientY,innerHeight-216))});
+  };
   const applyPomodoroMinutes = (mins: number) => {
     const m = Math.max(1, Math.min(120, Math.round(mins)));
     setCustomMinutes(m);
+    setTargetTime(clockValue(new Date(Date.now()+m*60000)));
     updateSettings({ pomodoroTime: m * 60 });
     setSessionTime(0);
     toast.success(`Pomodoro ajustado a ${m} min`);
   };
+  const previewTargetTime=(time:string)=>{
+    setTargetTime(time);
+    const result=deadlineForClock(time);
+    if(!result.error)setCustomMinutes(Math.max(1,Math.ceil(result.seconds/60)));
+  };
   const applyTargetTime = () => {
-    if (!targetTime) return;
-    const [h, m] = targetTime.split(':').map(Number);
-    if (isNaN(h) || isNaN(m)) return;
-    const now = new Date();
-    const target = new Date();
-    target.setHours(h, m, 0, 0);
-    let diffSec = Math.round((target.getTime() - now.getTime()) / 1000);
-    if (diffSec <= 0) { toast.error('Esa hora ya pasó — elige una hora futura'); return; }
-    if (diffSec > 2 * 3600) { toast.error('Máximo 2 horas de diferencia con la hora actual'); return; }
-    const mins = Math.max(1, Math.round(diffSec / 60));
-    updateSettings({ pomodoroTime: mins * 60 });
+    const result = deadlineForClock(targetTime);
+    if (result.error) { toast.error(result.error); return; }
+    updateSettings({ pomodoroTime: result.seconds, pomodoroEndAt: result.deadline! });
     setSessionTime(0);
     setHeaderMenu(null);
-    toast.success(`Pomodoro de ${mins} min (hasta las ${targetTime})`);
+    toast.success(`Pomodoro configurado hasta las ${targetTime}`);
   };
   const fmt = (sec: number) => {
     const m = Math.floor(sec / 60);
@@ -358,6 +341,7 @@ export default function Estudio() {
   useEffect(() => {
     if (isTimerActive && !isRest && sessionTime >= settings.pomodoroTime && !hasTriggeredRef.current && sessionType === 'pomodoro') {
       hasTriggeredRef.current = true;
+      if(settings.soundEffects)playStudyAlarm('focus');
       setIsTimerActive(false);
       if (settings.notifications !== false && (settings as any).event_pomodoro !== false) {
         sendNativeNotification('Sesión completada', 'Buen trabajo. Evalúa tu sesión.');
@@ -369,6 +353,8 @@ export default function Estudio() {
         endedAt: new Date().toISOString(),
         duration: sessionTime,
         taskId: activeTaskId || undefined,
+                  subtaskId: activeSubtaskId || undefined,
+                  taskTitle: activeTaskTitle,
         courseId: undefined,
         pauseCount: distractionCount,
         pauseDuration: accumulatedPauseTime - lastPauseTimeRef.current,
@@ -446,11 +432,11 @@ export default function Estudio() {
       const taskId = localStorage.getItem('owa_study_task_id');
       if (!taskId) return;
       const found = (tasks || []).find(t => t && t.id === taskId);
-      if (found) {
-        setActiveTaskId(taskId);
+      if (found && !taskLinkUnavailable(found)) {
+        linkTaskToTimer(taskId);
         addNotification(`Estudiando: ${found.title}`, 'success');
       } else {
-        addNotification('La tarea vinculada ya no existe.', 'info');
+        addNotification(taskLinkUnavailable(found) || 'La tarea vinculada ya no existe.', 'info');
       }
       localStorage.removeItem('owa_study_task_id');
       localStorage.removeItem('owa_study_task_title');
@@ -478,6 +464,7 @@ export default function Estudio() {
       if (settings.notifications !== false && (settings as any).event_break !== false) {
         notifyBreakOver();
       }
+      if(settings.soundEffects)playStudyAlarm('break');
       addNotification(isLongBreak ? 'Descanso largo completado' : 'Descanso completado', 'success');
     }
     if (!isRest) breakNotifiedRef.current = false;
@@ -485,7 +472,7 @@ export default function Estudio() {
 
   const unlinkTask = () => { 
     if (isTimerActive) return;
-    setActiveTaskId(null); 
+    unlinkTaskFromTimer();
     addNotification('Sesion completada', 'success'); 
   };
 
@@ -546,28 +533,32 @@ export default function Estudio() {
   const statusText = !isTimerActive ? 'PAUSADO' : (isBreakTime ? 'DESCANSO' : 'ENFOQUE');
   const chronoRoundsNow = sessionType === 'chrono' && chronoGoal > 0 ? Math.floor(sessionTime / chronoGoal) : 0;
 
+  const configuredDailyGoal = settings?.dailyGoal ?? 240;
+  const dailyGoalMet = configuredDailyGoal > 0 && dailyStudyTime >= configuredDailyGoal * 60;
+  const dailyGoalPercent = configuredDailyGoal > 0 ? Math.min(100, Math.max(0, dailyStudyTime / (configuredDailyGoal * 60) * 100)) : 0;
+
   const studyTotalSecs = focusPomodoroTime + focusChronoTime;
   const studyH = Math.floor(studyTotalSecs / 3600);
   const studyM = Math.floor((studyTotalSecs % 3600) / 60);
   const studyFormatted = studyH > 0 ? `${studyH}h ${studyM}m` : `${studyM}m`;
 
   const efficiencyPct = useMemo(() => {
-    const weekAll = (studySessions || []).filter(s => s && toLocalDate(s.startedAt) >= weekStartStr);
+    const weekAll = (studySessions || []).filter(s => s && toLocalDate(s.startedAt) >= weekStartStr && toLocalDate(s.startedAt) <= todayStr);
     // Las sesiones marcadas como distracción NO son estudio: se excluyen del
     // foco/flujo y se miden aparte (antes inflaban la meta y los bloques).
     const weekSessions = weekAll.filter(s => !s.isDistraction && s.type !== 'break');
     const distSessions = weekAll.filter(s => s.isDistraction);
     const clamp = (v: number, mn: number, mx: number) => Math.max(mn, Math.min(v, mx));
 
-    const focusSecs = weekSessions.reduce((acc, s) => acc + (s.duration || 0), 0);
-    const pauseSecs = weekSessions.reduce((acc, s) => acc + (s.pauseDuration || 0), 0);
-    const distSecs = distSessions.reduce((acc, s) => acc + (s.duration || 0), 0);
+    const focusSecs = weekSessions.reduce((acc, s) => acc + seconds(s.duration), 0);
+    const pauseSecs = weekSessions.reduce((acc, s) => acc + seconds(s.pauseDuration), 0);
+    const distSecs = distSessions.reduce((acc, s) => acc + seconds(s.duration), 0);
     const breakSecs = weekAll.filter(s => s.type === 'break')
-      .reduce((acc, s) => acc + (s.duration || 0), 0);
+      .reduce((acc, s) => acc + seconds(s.duration), 0);
 
     if (focusSecs <= 0 && weekSessions.length === 0) return 0;
 
-    const dailyGoalSecs = (settings?.dailyGoal || 240) * 60;
+    const dailyGoalSecs = (settings?.dailyGoal ?? 240) * 60;
     const focusMin = focusSecs / 60;
 
     // ScoreMeta (tolerancia 95%)
@@ -618,10 +609,10 @@ export default function Estudio() {
       Math.pow(scoreEnfoque, hasRating ? 0.25 : 0.35) *
       Math.pow(scoreFlujo, hasRating ? 0.15 : 0.20) *
       Math.pow(scoreDescanso, hasRating ? 0.08 : 0.10) *
-      Math.pow(scorePercepcion, hasRating ? 0.27 : 0);
+      Math.pow(clamp(scorePercepcion, 0, 1), hasRating ? 0.27 : 0);
 
-    return Math.max(1, Math.round(ire));
-  }, [studySessions, settings?.dailyGoal, weekStartStr]);
+    return clamp(Math.round(ire), 0, 100);
+  }, [studySessions, settings?.dailyGoal, weekStartStr, todayStr]);
 
   // Daily trend: compare today vs yesterday
   const yesterdayStr = format(subDays(new Date(), 1), 'yyyy-MM-dd');
@@ -639,8 +630,6 @@ export default function Estudio() {
     return studySessions.filter(s => s.isDistraction && toLocalDate(s.startedAt) >= weekStartStr).length;
   }, [studySessions]);
 
-  const yesterdayDistractions = 0; // not persisted daily, show neutral
-  const yesterdayEfficiency = 75; // fallback
 
   const activityFeed: ActivityEntry[] = useMemo(() => {
     const entries: ActivityEntry[] = [];
@@ -658,7 +647,7 @@ export default function Estudio() {
       if (isFull) status = 'completado';
       else if (isHalf) status = 'mitad';
       
-      let label = s.type === 'pomodoro' ? 'Pomodoro' : (s.type === 'chrono' ? 'Cronómetro' : 'Descanso');
+      let label = s.taskTitle || (s.type === 'pomodoro' ? 'Pomodoro' : (s.type === 'chrono' ? 'Cronómetro' : 'Descanso'));
       
       const completionTime = s.endedAt ? (() => { try { return format(new Date(s.endedAt), 'HH:mm'); } catch { return '—'; } })() : '—';
       
@@ -673,19 +662,19 @@ export default function Estudio() {
         meta: completionTime,
         pauseCount: s.pauseCount || 0,
         pauseDuration: s.pauseDuration || 0,
-        sessionEff: s.duration + s.pauseDuration + (s.pauseCount || 0) * 60 > 0
-          ? Math.round(100 * s.duration / (s.duration + s.pauseDuration + (s.pauseCount || 0) * 60))
+        sessionEff: seconds(s.duration) + seconds(s.pauseDuration) > 0
+          ? Math.round(100 * seconds(s.duration) / (seconds(s.duration) + seconds(s.pauseDuration)))
           : 100,
         sessionIre: (() => {
           const clamp = (v: number, mn: number, mx: number) => Math.max(mn, Math.min(v, mx));
-          const dur = s.duration || 0;
+          const dur = seconds(s.duration);
           const focusMin = dur / 60;
-          const eff = dur + s.pauseDuration + (s.pauseCount || 0) * 60 > 0
-            ? dur / (dur + s.pauseDuration + (s.pauseCount || 0) * 60) : 1;
-          const distPerHour = focusMin > 0 ? ((s.pauseCount || 0) / (focusMin / 60)) : 0;
+          const eff = dur + seconds(s.pauseDuration) > 0
+            ? dur / (dur + seconds(s.pauseDuration)) : 1;
+          // Pause clicks are not measured distractions.
           const pomGoal = settings.pomodoroTime;
           const sm = pomGoal > 0 ? clamp(dur / (pomGoal * 0.95), 0, 1) : 0.5;
-          const se = clamp(eff * Math.exp(-0.05 * distPerHour), 0, 1);
+          const se = clamp(eff, 0, 1);
           let sf = 0;
           if (focusMin < 5) sf = clamp(focusMin / 10, 0, 0.5);
           else if (focusMin < 15) sf = 0.5 + ((focusMin - 5) / 10) * 0.4;
@@ -698,7 +687,7 @@ export default function Estudio() {
             Math.pow(sm, hasVol ? 0.30 : 0.40) *
             Math.pow(se, hasVol ? 0.28 : 0.35) *
             Math.pow(sf, hasVol ? 0.14 : 0.15) *
-            Math.pow(sp, hasVol ? 0.28 : 0));
+            Math.pow(clamp(sp, 0, 1), hasVol ? 0.28 : 0));
         })(),
         evaluated: s.perception !== undefined,
         volmeter: s.volmeter,
@@ -712,40 +701,7 @@ export default function Estudio() {
     return entries;
   }, [studySessions, settings.pomodoroTime]);
 
-  const [isFullscreen, setIsFullscreen] = useState(false);
-
-  useEffect(() => {
-    const check = async () => {
-      try {
-        const win = getCurrentWebviewWindow();
-        setIsFullscreen(await win.isFullscreen());
-      } catch { /* web mode */ }
-    };
-    check();
-    const interval = setInterval(check, 2000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const tf = async () => {
-    try {
-      const win = getCurrentWebviewWindow();
-      const current = await win.isFullscreen();
-      await win.setFullscreen(!current);
-      // Re-read actual state to avoid icon desync
-      const actual = await win.isFullscreen();
-      setIsFullscreen(actual);
-    } catch {
-      if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
-      else document.exitFullscreen();
-      // Re-check after browser fullscreen toggle
-      setTimeout(async () => {
-        try {
-          const win = getCurrentWebviewWindow();
-          setIsFullscreen(await win.isFullscreen());
-        } catch {}
-      }, 300);
-    }
-  };
+  const { active: isFullscreen, busy: fullscreenBusy } = useWindowFullscreen();
 
   const donutDataRaw = useMemo(() => [
     { name: 'Pomodoro', value: focusPomodoroTime, color: focusColor },
@@ -777,32 +733,32 @@ export default function Estudio() {
     return `conic-gradient(from -90deg, ${stops.join(', ')})`;
   }, [donutDataRaw, totalDonut]);
   return (
-    <div className="page-container h-full flex flex-col" style={{ position: 'relative', overflow: 'hidden' }}>
+    <div className="page-container h-full flex flex-col study-workspace" style={{ position: 'relative', overflow: 'hidden' }}>
       <div className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', gap: 0, padding: '0 0 16px 0' }}>
 
       {/* HEADER — click derecho: ajustar duración del Pomodoro */}
-      <header onContextMenu={e => {
-        if (sessionType !== 'pomodoro' || isRest || isTimerActive) return;
-        e.preventDefault();
-        setHeaderMenu({ x: Math.min(e.clientX, window.innerWidth - 270), y: Math.min(e.clientY, window.innerHeight - 300) });
-      }} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, paddingTop: 8, cursor: sessionType === 'pomodoro' && !isRest && !isTimerActive ? 'context-menu' : undefined }}>
+      <header className="workspace-header study-header" onContextMenu={openPomodoroOptions} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, paddingTop: 8, cursor: sessionType === 'pomodoro' && !isRest && !isTimerActive ? 'context-menu' : undefined }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <h1 style={{ fontSize: 'clamp(28px, 4vw, 40px)', fontWeight: 200, color: 'var(--text-primary)', lineHeight: 1, letterSpacing: '-0.03em', fontFamily: "'Inter Tight', sans-serif", textShadow: '0 0 20px var(--accent-glow)' }}>Estudio</h1>
+            <h1 style={{ fontSize: 'clamp(28px, 4vw, 40px)', fontWeight: 500, color: 'var(--text-primary)', lineHeight: 1, letterSpacing: '-0.03em', fontFamily: "'Inter Tight', sans-serif" }}>Estudio</h1>
           </div>
-          <p className="hidden sm:block" style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4, fontWeight: 400, letterSpacing: '0.02em' }}>Tu concentración, tu ritmo.</p>
+          
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <div className="hidden sm:flex" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <button onClick={tf} style={{ padding: 8, borderRadius: '50%', background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-secondary)', cursor: 'pointer', transition: 'all 200ms', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Pantalla completa">
+            <button onClick={() => { void windowFullscreen.toggle(); }} disabled={fullscreenBusy} aria-busy={fullscreenBusy} aria-pressed={isFullscreen} aria-label={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'} style={{ padding: 8, borderRadius: '50%', background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-secondary)', cursor: fullscreenBusy ? 'wait' : 'pointer', transition: 'all 200ms', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title={isFullscreen ? 'Salir de pantalla completa · Esc / F11' : 'Pantalla completa · F11'}>
               {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
             </button>
             {/* Floating timer toggle — show/hide always-on-top floating timer window */}
             <button className="hidden md:block" onClick={async () => {
+              if(floatingToggleBusy.current)return;
+              floatingToggleBusy.current=true;
+              try {
               const existing = await WebviewWindow.getByLabel('floating-timer');
               if (existing) {
                 const visible = await existing.isVisible();
+                await existing.setSkipTaskbar(true);
                 if (visible) { await existing.hide(); } else { await existing.show(); await existing.setFocus(); }
                 return;
               }
@@ -814,10 +770,15 @@ export default function Estudio() {
                 decorations: false,
                 transparent: true,
                 alwaysOnTop: true,
-                skipTaskbar: false,
+                skipTaskbar: true,
               });
               win.setShadow(false).catch(() => {});
-              win.once('tauri://error', () => {});
+              await new Promise<void>((resolve,reject)=>{
+                const timeout=setTimeout(()=>resolve(),5000);
+                void win.once('tauri://created',()=>{clearTimeout(timeout);resolve();});
+                void win.once('tauri://error',()=>{clearTimeout(timeout);reject(new Error('No se pudo crear la ventana'));});
+              });
+              } catch {addNotification('No se pudo abrir el temporizador flotante.','error');} finally {floatingToggleBusy.current=false;}
             }} style={{
               padding: 8, borderRadius: '50%', background: 'var(--bg-deep)',
               border: '1px solid var(--border-soft)', color: 'var(--text-secondary)',
@@ -827,111 +788,9 @@ export default function Estudio() {
             </button>
           </div>
 
-          <div className="flex items-center gap-4 flex-shrink-0" style={{ paddingLeft: 16, borderLeft: '1px solid var(--border-subtle)', position: 'relative' }}>
-            <div style={{ position: 'absolute', top: '50%', right: 0, width: 150, height: 100, background: `radial-gradient(circle at center, var(--text-muted) 0%, transparent 70%)`, opacity: 0.1, transform: 'translateY(-50%)', pointerEvents: 'none', zIndex: 0 }} />
-            <div className="hidden sm:block" style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--text-tertiary)', position: 'relative', zIndex: 1 }} />
-            <NotificationBell />
-            <div style={{ textAlign: 'right', position: 'relative', zIndex: 1 }}>
-              <div className="flex items-baseline gap-2 justify-end">
-                <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 'clamp(32px, 6vw, 68px)', fontWeight: 200, lineHeight: 0.9, color: 'var(--text-secondary)', letterSpacing: '0.02em', transition: 'color 300ms' }}>
-                  <LiveClock>{now => fmtClock(format(now, 'HH:mm'), settings?.timeFormat)}</LiveClock>
-                </span>
-                <span className="hidden lg:inline" style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 'clamp(14px, 2vw, 22px)', fontWeight: 200, color: 'var(--text-tertiary)', opacity: 0.7, letterSpacing: '0.02em', transition: 'color 300ms' }}>
-                  <LiveClock>{now => format(now, 'ss')}</LiveClock>
-                </span>
-              </div>
-              <div className="hidden lg:block" style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.12em', marginTop: 6 }}>
-                <LiveClock>{now => format(now, "EEEE, d 'de' MMMM", { locale: es })}</LiveClock>
-              </div>
-            </div>
-          </div>
+          <div className="workspace-header-tools"><NotificationBell/><WorkspaceClock/></div>
         </div>
-        {headerMenu && (
-          <div onClick={e => e.stopPropagation()}
-            style={{ position: 'fixed', left: headerMenu.x, top: headerMenu.y, zIndex: 100050, width: 268, borderRadius: 16, overflow: 'hidden', background: 'var(--bg-surface)', border: '1px solid var(--border-default)', boxShadow: '0 26px 70px rgba(0,0,0,0.55)', animation: 'owaHeaderMenuIn 170ms cubic-bezier(0.16,1,0.3,1)' }}>
-            <style>{`@keyframes owaHeaderMenuIn { from { opacity: 0; transform: scale(0.96) translateY(-5px); } to { opacity: 1; transform: none; } }`}</style>
-            {/* Cabecera con icono */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '13px 15px 11px', borderBottom: '1px solid var(--border-subtle)', background: 'linear-gradient(180deg, color-mix(in srgb, var(--accent) 5%, transparent), transparent)' }}>
-              <div style={{ width: 30, height: 30, borderRadius: 9, background: 'color-mix(in srgb, var(--accent) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <Timer size={14} style={{ color: 'var(--accent)' }} />
-              </div>
-              <div>
-                <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em' }}>Duración del Pomodoro</div>
-                <div style={{ fontSize: 9, color: 'var(--text-tertiary)', marginTop: 1 }}>Ajusta tu próxima sesión</div>
-              </div>
-            </div>
-
-            {/* Personalizado: stepper grande */}
-            <div style={{ padding: '13px 15px 11px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 9 }}>
-                <span style={{ fontSize: 8.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--text-tertiary)' }}>Personalizado</span>
-                <span style={{ fontSize: 9, color: 'var(--text-tertiary)' }}>±5 min</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <button onClick={() => applyPomodoroMinutes(customMinutes - 5)} title="-5 min"
-                  style={{ width: 38, height: 38, borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 140ms' }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-primary)'; }}>
-                  <Minus size={15} />
-                </button>
-                <div style={{ flex: 1, textAlign: 'center', padding: '6px 0', borderRadius: 11, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)' }}>
-                  <span style={{ fontSize: 26, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>{customMinutes}</span>
-                  <span style={{ fontSize: 11, color: 'var(--text-tertiary)', marginLeft: 5, fontWeight: 500 }}>min</span>
-                </div>
-                <button onClick={() => applyPomodoroMinutes(customMinutes + 5)} title="+5 min"
-                  style={{ width: 38, height: 38, borderRadius: 12, border: '1px solid color-mix(in srgb, var(--accent) 35%, transparent)', background: 'color-mix(in srgb, var(--accent) 8%, transparent)', color: 'var(--accent)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 140ms' }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 15%, transparent)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--accent) 35%, transparent)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 8%, transparent)'; }}>
-                  <Plus size={15} />
-                </button>
-              </div>
-              <div style={{ display: 'flex', gap: 5, marginTop: 9, flexWrap: 'wrap' }}>
-                {[10, 25, 30, 45, 50, 60].map(m => (
-                  <button key={m} onClick={() => applyPomodoroMinutes(m)}
-                    style={{
-                      flex: '1 1 auto', padding: '5px 0', borderRadius: 8, fontSize: 10, fontWeight: 700, cursor: 'pointer', transition: 'all 130ms',
-                      border: m === customMinutes ? '1px solid color-mix(in srgb, var(--accent) 50%, transparent)' : '1px solid var(--border-subtle)',
-                      background: m === customMinutes ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : 'var(--bg-deep)',
-                      color: m === customMinutes ? 'var(--accent)' : 'var(--text-secondary)',
-                    }}>
-                    {m}m
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div style={{ height: 1, background: 'var(--border-subtle)', margin: '0 15px' }} />
-
-            {/* Por hora: termina a la hora elegida */}
-            <div style={{ padding: '12px 15px 14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 9 }}>
-                <span style={{ fontSize: 8.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--text-tertiary)' }}>Terminar a las…</span>
-                {targetTime && (() => {
-                  const [h, m] = targetTime.split(':').map(Number);
-                  const t = new Date(); t.setHours(h, m, 0, 0);
-                  const diff = Math.round((t.getTime() - Date.now()) / 60000);
-                  const tooLong = diff > 120;
-                  return (
-                    <span style={{ fontSize: 9.5, fontWeight: 700, color: diff <= 0 ? '#EF4444' : tooLong ? '#EF4444' : '#10B981', fontVariantNumeric: 'tabular-nums' }}>
-                      {diff <= 0 ? 'hora pasada' : tooLong ? 'más de 2 h' : '= ' + diff + ' min'}
-                    </span>
-                  );
-                })()}
-              </div>
-              <div style={{ display: 'flex', gap: 7, alignItems: 'center' }}>
-                <input type="time" value={targetTime} onChange={e => setTargetTime(e.target.value)}
-                  style={{ flex: 1, height: 34, borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', fontSize: 13, padding: '0 10px', outline: 'none', colorScheme: 'dark', fontFamily: "'JetBrains Mono', monospace" }} />
-                <button onClick={applyTargetTime} disabled={!targetTime}
-                  style={{ height: 34, padding: '0 15px', borderRadius: 10, border: 'none', background: targetTime ? 'var(--accent)' : 'var(--border-subtle)', color: targetTime ? '#fff' : 'var(--text-muted)', cursor: targetTime ? 'pointer' : 'default', fontSize: 11, fontWeight: 700, opacity: targetTime ? 1 : 0.55, fontFamily: "'Inter Tight', sans-serif" }}>
-                  Fijar
-                </button>
-              </div>
-              <div style={{ fontSize: 9, color: 'var(--text-tertiary)', marginTop: 7, lineHeight: 1.5, display: 'flex', alignItems: 'center', gap: 5 }}>
-                <Clock size={9} style={{ flexShrink: 0 }} /> La sesión dura hasta esa hora · máx. 2 h
-              </div>
-            </div>
-          </div>
-        )}
+        {headerMenu&&<div className="pomodoro-options-menu" role="dialog" aria-label="Duración del pomodoro" style={{position:'fixed',left:Math.max(12,Math.min(headerMenu.x,innerWidth-276)),top:Math.max(12,Math.min(headerMenu.y,innerHeight-216)),width:260,zIndex:100050}} onClick={e=>e.stopPropagation()}><SessionFinishControl seconds={settings.pomodoroTime} onClose={()=>setHeaderMenu(null)} onApply={timing=>{updateSettings({pomodoroTime:timing.seconds,pomodoroEndAt:timing.fixedEnd?timing.deadline:undefined});setSessionTime(0);setHeaderMenu(null);}}/></div>}
       </header>
 
       {/* MAIN TWO-COLUMN DASHBOARD LAYOUT */}
@@ -941,7 +800,7 @@ export default function Estudio() {
         <div className="lg:flex-[1.6]" style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
           
           {/* TIMER PANEL */}
-          <div className="bento-card" style={{ padding: isNarrow ? '18px 18px 12px' : '24px 32px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative', border: '1px solid var(--border-subtle)', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
+          <div className="bento-card pomodoro-timer-panel" onContextMenu={openPomodoroOptions} style={{ padding: isNarrow ? '18px 18px 12px' : '24px 32px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative', border: '1px solid var(--border-subtle)', boxShadow: 'none' }}>
             
             {/* Mode Type Header */}
             <div style={{ display: 'flex', gap: 4, padding: 3, borderRadius: 10, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', marginBottom: 6 }}>
@@ -972,7 +831,7 @@ export default function Estudio() {
             </div>
 
             {/* Glowing Segmented Timer */}
-            <div style={{ position: 'relative', margin: '10px 0 4px', height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div className="study-timer-face" style={{ position: 'relative', margin: '10px 0 4px', height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: 520, height: 240, background: `radial-gradient(ellipse, ${statusColor}08 0%, transparent 65%)`, pointerEvents: 'none' }} />
               <LEDTime 
                 time={isBreakTime ? fmt(computedRest) : fmt(computedDisplay)} 
@@ -1010,7 +869,7 @@ export default function Estudio() {
                   onMouseLeave={e => { e.currentTarget.style.borderColor = `${linkedPlanCourse?.color || statusColor}55`; e.currentTarget.style.background = `${linkedPlanCourse?.color || statusColor}0d`; }}
                 >
                   <div style={{ width: 5, height: 5, borderRadius: '50%', background: linkedPlanCourse?.color || statusColor, boxShadow: `0 0 6px ${linkedPlanCourse?.color || statusColor}80`, flexShrink: 0 }} />
-                  <span style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em', color: linkedPlanCourse?.color || statusColor, fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>Sesión</span>
+                  <span style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em', color: linkedPlanCourse?.color || statusColor, fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>Sesión</span>
                   <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{linkedPlanSession.title || 'Sesión'}</span>
                 </div>
                 <button onClick={e => { e.stopPropagation(); setShowUnlinkPlanConfirm(true); }} title="Desvincular sesión"
@@ -1027,13 +886,14 @@ export default function Estudio() {
               {activeTask && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px', borderRadius: 999, background: `${activeTask.courseColor || statusColor}08`, border: `1px solid ${activeTask.courseColor || statusColor}20`, maxWidth: 260 }}>
                   <div style={{ width: 4, height: 4, borderRadius: '50%', background: activeTask.courseColor || statusColor, boxShadow: `0 0 4px ${activeTask.courseColor || statusColor}60`, flexShrink: 0 }} />
-                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-secondary)', letterSpacing: '0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }}>
-                    {activeTask.title}
+                  <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)', letterSpacing: '0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }}>
+                    {activeTaskTitle}
                   </span>
                 </div>
               )}
+              {activeTask?.sourceNoteId&&<button type="button" className="btn-secondary" aria-label="Abrir apunte de la tarea" onClick={()=>{sessionStorage.setItem('apheka_open_note',activeTask.sourceNoteId!);window.dispatchEvent(new Event('apheka:open-note'));setNavigateTo('apuntes');}} style={{padding:'6px 10px',fontSize:11}}>Abrir apunte</button>}
               {!activeTask && !linkedPlanSession && (
-                <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-muted)', letterSpacing: '0.02em' }}>Sin tarea vinculada</span>
+                <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)', letterSpacing: '0.02em' }}>Sin tarea vinculada</span>
               )}
               {activeTask && (
                 <button onClick={() => setShowUnlinkTaskConfirm(true)} title="Desvincular tarea"
@@ -1078,7 +938,7 @@ export default function Estudio() {
                 </button>
               </div>
               
-              <button onClick={handleToggle} style={{
+              <button aria-label={isTimerActive ? "Pausar temporizador" : "Iniciar temporizador"} onClick={handleToggle} style={{
                 width: controlSize, height: controlSize, borderRadius: '50%', cursor: 'pointer',
                 border: `1px solid ${statusColor}50`,
                 background: `${statusColor}15`,
@@ -1110,6 +970,8 @@ export default function Estudio() {
                   endedAt: new Date().toISOString(),
                   duration: nowSessionTime,
                   taskId: activeTaskId || undefined,
+                  subtaskId: activeSubtaskId || undefined,
+                  taskTitle: activeTaskTitle,
                   courseId: undefined,
                   pauseCount: distractionCount,
                   pauseDuration: accumulatedPauseTime,
@@ -1163,7 +1025,7 @@ export default function Estudio() {
             
             {/* Donut Chart - distribution */}
             <div className="bento-card" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column' }}>
-              <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-primary)', letterSpacing: '0.12em', textTransform: 'uppercase', fontFamily: "'Inter', sans-serif", marginBottom: 10 }}>Distribución</span>
+              <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-primary)', letterSpacing: '0.12em', textTransform: 'uppercase', fontFamily: "'Inter', sans-serif", marginBottom: 10 }}>Distribución</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                 <div style={{ width: 120, height: 120, flexShrink: 0 }}>
                   <div style={{
@@ -1183,7 +1045,7 @@ export default function Estudio() {
                       <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <div style={{ width: 8, height: 8, borderRadius: '50%', background: d.color, boxShadow: `0 0 4px ${d.color}60`, flexShrink: 0 }} />
                         <span style={{ fontSize: 11, color: 'var(--text-primary)', fontWeight: 500 }}>{d.name}</span>
-                        <span style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 400, marginLeft: 'auto' }}>{pct}%</span>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400, marginLeft: 'auto' }}>{pct}%</span>
                       </div>
                     );
                   })}
@@ -1195,25 +1057,25 @@ export default function Estudio() {
             <div className="bento-card" style={{
               padding: '20px 24px', display: 'flex', flexDirection: 'column', justifyContent: 'center',
               background: `linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)`,
-              border: `1px solid ${dailyStudyTime >= (settings?.dailyGoal || 240) * 60 ? `${settings?.accentColor || 'var(--accent)'}30` : 'var(--border-subtle)'}`,
+              border: `1px solid ${dailyGoalMet ? `${settings?.accentColor || 'var(--accent)'}30` : 'var(--border-subtle)'}`,
               position: 'relative', overflow: 'hidden',
             }}>
-              {dailyStudyTime >= (settings?.dailyGoal || 240) * 60 && (
+              {dailyGoalMet && (
                 <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(circle at 80% 30%, ${settings?.accentColor || 'var(--accent)'}15 0%, transparent 60%)`, pointerEvents: 'none' }} />
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-primary)', letterSpacing: '0.12em', textTransform: 'uppercase', fontFamily: "'Inter', sans-serif" }}>Progreso de Hoy</span>
+                <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-primary)', letterSpacing: '0.12em', textTransform: 'uppercase', fontFamily: "'Inter', sans-serif" }}>Progreso de Hoy</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  {dailyStudyTime >= (settings?.dailyGoal || 240) * 60 && (
+                  {dailyGoalMet && (
                     <div style={{ width: 6, height: 6, borderRadius: '50%', background: settings?.accentColor || 'var(--accent)', boxShadow: `0 0 8px ${settings?.accentColor || 'var(--accent)'}80` }} />
                   )}
                   <span style={{
-                    fontSize: 9, fontWeight: 700,
-                    color: dailyStudyTime >= (settings?.dailyGoal || 240) * 60 ? (settings?.accentColor || 'var(--accent)') : 'var(--text-secondary)',
-                    background: dailyStudyTime >= (settings?.dailyGoal || 240) * 60 ? `${settings?.accentColor || 'var(--accent)'}10` : 'var(--bg-deep)',
+                    fontSize: 11, fontWeight: 700,
+                    color: dailyGoalMet ? (settings?.accentColor || 'var(--accent)') : 'var(--text-secondary)',
+                    background: dailyGoalMet ? `${settings?.accentColor || 'var(--accent)'}10` : 'var(--bg-deep)',
                     padding: '2px 8px', borderRadius: 4,
                   }}>
-                    {dailyStudyTime >= (settings?.dailyGoal || 240) * 60 ? 'META' : `${Math.min(100, Math.round((dailyStudyTime / ((settings?.dailyGoal || 240) * 60)) * 100))}%`}
+                    {dailyGoalMet ? 'META' : `${Math.round(dailyGoalPercent)}%`}
                   </span>
                 </div>
               </div>
@@ -1222,23 +1084,23 @@ export default function Estudio() {
                   {Math.floor(dailyStudyTime / 3600)}<span style={{ fontSize: 14, fontWeight: 300, color: 'var(--text-tertiary)' }}>h </span>
                   {Math.floor((dailyStudyTime % 3600) / 60)}<span style={{ fontSize: 14, fontWeight: 300, color: 'var(--text-tertiary)' }}>m</span>
                 </span>
-                <span style={{ fontSize: 10, color: 'var(--text-tertiary)', fontWeight: 400 }}>/ {settings?.dailyGoal || 240}min</span>
+                <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 400 }}>/ {settings?.dailyGoal ?? 240}min</span>
               </div>
               <div style={{ width: '100%', height: 6, background: 'var(--bg-deep)', borderRadius: 4, overflow: 'hidden', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.15)' }}>
                 <div style={{
                   height: '100%', borderRadius: 4,
                   background: `linear-gradient(90deg, ${settings?.accentColor || 'var(--accent)'}, ${settings?.accentColor || 'var(--accent)'}cc)`,
-                  width: `${Math.min(100, (dailyStudyTime / ((settings?.dailyGoal || 240) * 60)) * 100)}%`,
+                  width: `${dailyGoalPercent}%`,
                   transition: 'width 500ms ease',
                   boxShadow: `0 0 8px ${settings?.accentColor || 'var(--accent)'}60`,
                 }} />
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10 }}>
-                <Flame size={11} color={dailyStudyTime >= (settings?.dailyGoal || 240) * 60 ? '#F59E0B' : 'var(--text-muted)'} fill={dailyStudyTime >= (settings?.dailyGoal || 240) * 60 ? '#F59E0B' : 'none'} />
-                <span style={{ fontSize: 10, fontWeight: 600, color: dailyStudyTime >= (settings?.dailyGoal || 240) * 60 ? '#F59E0B' : 'var(--text-secondary)' }}>
+                <Flame size={11} color={dailyGoalMet ? '#F59E0B' : 'var(--text-muted)'} fill={dailyGoalMet ? '#F59E0B' : 'none'} />
+                <span style={{ fontSize: 11, fontWeight: 600, color: dailyGoalMet ? '#F59E0B' : 'var(--text-secondary)' }}>
                   {streak} {streak === 1 ? 'día' : 'días'} consecutivos
                 </span>
-                <span style={{ marginLeft: 'auto', fontSize: 9, color: 'var(--text-tertiary)', fontWeight: 400 }}>
+                <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 400 }}>
                   Este mes: {monthlyStudyFormatted}
                 </span>
               </div>
@@ -1257,30 +1119,30 @@ export default function Estudio() {
             
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* Metric 1: Pure Study Time */}
-                <div className="stat-card" style={{ background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', borderRadius: 16, padding: '20px', display: 'flex', flexDirection: 'column', gap: 8, position: 'relative', overflow: 'hidden' }}>
+                <div className="stat-card study-stat-card" style={{ background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', borderRadius: 16, padding: '20px', display: 'flex', flexDirection: 'column', gap: 8, position: 'relative', overflow: 'hidden' }}>
                   <Clock size={80} style={{ position: 'absolute', bottom: -20, right: -20, color: statusColor, opacity: 0.15 }} />
-                  <span style={{ fontSize: 10, fontWeight: 300, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', zIndex: 1 }}>Estudio Puro</span>
+                  <span style={{ fontSize: 11, fontWeight: 300, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', zIndex: 1 }}>Estudio Puro</span>
                   <span style={{ fontSize: 26, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", zIndex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{weeklyStudyFormatted}</span>
                 </div>
 
                 {/* Metric 2: Completed Sessions */}
-                <div className="stat-card" style={{ background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', borderRadius: 16, padding: '20px', display: 'flex', flexDirection: 'column', gap: 8, position: 'relative', overflow: 'hidden' }}>
+                <div className="stat-card study-stat-card" style={{ background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', borderRadius: 16, padding: '20px', display: 'flex', flexDirection: 'column', gap: 8, position: 'relative', overflow: 'hidden' }}>
                   <CheckCircle size={80} style={{ position: 'absolute', bottom: -20, right: -20, color: '#8B5CF6', opacity: 0.15 }} />
-                  <span style={{ fontSize: 10, fontWeight: 300, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', zIndex: 1 }}>Sesiones</span>
+                  <span style={{ fontSize: 11, fontWeight: 300, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', zIndex: 1 }}>Sesiones</span>
                   <span style={{ fontSize: 26, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", zIndex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{weeklySessions.length}</span>
                 </div>
 
                 {/* Metric 3: Eficiencia (IRE compuesto) */}
-                <div className="stat-card" style={{ background: 'var(--bg-deep)', border: `1px solid ${efficiencyPct >= 80 ? '#10B981' : efficiencyPct >= 50 ? '#F59E0B' : '#EF4444'}30`, borderRadius: 16, padding: '20px', display: 'flex', flexDirection: 'column', gap: 8, position: 'relative', overflow: 'hidden' }}>
+                <div className="stat-card study-stat-card" style={{ background: 'var(--bg-deep)', border: `1px solid ${efficiencyPct >= 80 ? '#10B981' : efficiencyPct >= 50 ? '#F59E0B' : '#EF4444'}30`, borderRadius: 16, padding: '20px', display: 'flex', flexDirection: 'column', gap: 8, position: 'relative', overflow: 'hidden' }}>
                   <Zap size={80} style={{ position: 'absolute', bottom: -20, right: -20, color: efficiencyPct >= 80 ? '#10B981' : efficiencyPct >= 50 ? '#F59E0B' : '#EF4444', opacity: 0.15 }} />
-                  <span style={{ fontSize: 10, fontWeight: 300, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', zIndex: 1 }}>Rendimiento</span>
+                  <span style={{ fontSize: 11, fontWeight: 300, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', zIndex: 1 }}>Rendimiento</span>
                   <span style={{ fontSize: 26, fontWeight: 300, color: efficiencyPct >= 80 ? '#10B981' : efficiencyPct >= 50 ? 'var(--text-primary)' : '#EF4444', fontFamily: "'Inter Tight', sans-serif", zIndex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{efficiencyPct}%</span>
                 </div>
 
                 {/* Metric 4: Distracciones */}
-                <div className="stat-card" style={{ background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', borderRadius: 16, padding: '20px', display: 'flex', flexDirection: 'column', gap: 8, position: 'relative', overflow: 'hidden' }}>
+                <div className="stat-card study-stat-card" style={{ background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', borderRadius: 16, padding: '20px', display: 'flex', flexDirection: 'column', gap: 8, position: 'relative', overflow: 'hidden' }}>
                   <AlertTriangle size={80} style={{ position: 'absolute', bottom: -20, right: -20, color: '#EF4444', opacity: 0.15 }} />
-                  <span style={{ fontSize: 10, fontWeight: 300, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', zIndex: 1 }}>Distracciones</span>
+                  <span style={{ fontSize: 11, fontWeight: 300, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', zIndex: 1 }}>Distracciones</span>
                   <span style={{ fontSize: 26, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", zIndex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{todayDistractionCount}</span>
                 </div>
             </div>
@@ -1297,11 +1159,11 @@ export default function Estudio() {
                   <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>
                     Actividad de hoy
                   </span>
-                  <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-muted)', marginLeft: 8 }}>{activityFeed.length} bloques</span>
+                  <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', marginLeft: 8 }}>{activityFeed.length} bloques</span>
                 </div>
               </div>
               {activityFeed.length > 0 && (
-                <button onClick={() => setShowAllActivity(true)} style={{ fontSize: 10, fontWeight: 500, color: 'var(--accent)', background: 'var(--accent-dim)', border: 'none', cursor: 'pointer', padding: '6px 12px', borderRadius: 8, transition: 'all 150ms', fontFamily: "'Inter Tight', sans-serif" }}
+                <button onClick={() => setShowAllActivity(true)} style={{ fontSize: 11, fontWeight: 500, color: 'var(--accent)', background: 'var(--accent-dim)', border: 'none', cursor: 'pointer', padding: '6px 12px', borderRadius: 8, transition: 'all 150ms', fontFamily: "'Inter Tight', sans-serif" }}
                   className="hover:opacity-80">
                   Ver todo
                 </button>
@@ -1356,7 +1218,7 @@ export default function Estudio() {
                           {mins > 0 ? `${mins}m` : `${secs}s`}
                         </span>
                         {isDist ? (
-                          <span style={{ fontSize: 9, fontWeight: 600, color: '#F59E0B', fontFamily: "'Inter Tight', sans-serif", flex: 1, textAlign: 'center', letterSpacing: '0.02em' }}>Distracción</span>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: '#F59E0B', fontFamily: "'Inter Tight', sans-serif", flex: 1, textAlign: 'center', letterSpacing: '0.02em' }}>Distracción</span>
                         ) : (
                           <>
                             <div style={{ display: 'flex', gap: 2, flex: 1, minWidth: 0, alignItems: 'center' }}>
@@ -1380,13 +1242,13 @@ export default function Estudio() {
                                 ))
                               )}
                             </div>
-                            <span style={{ width: 32, textAlign: 'center', fontSize: 10, fontWeight: 600, color: effColor, fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{eff}%</span>
+                            <span style={{ width: 32, textAlign: 'center', fontSize: 11, fontWeight: 600, color: effColor, fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{eff}%</span>
                             {isStudyEntry ? (
                               <span style={{ width: 46, display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
-                                <span style={{ fontSize: 9, fontWeight: 700, color: planCol || 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", borderRadius: 6, padding: '2px 6px', lineHeight: 1.4 }}>{vmNorm}/10</span>
+                                <span style={{ fontSize: 11, fontWeight: 700, color: planCol || 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", borderRadius: 6, padding: '2px 6px', lineHeight: 1.4 }}>{vmNorm}/10</span>
                               </span>
                             ) : (
-                              <span style={{ width: 46, textAlign: 'center', fontSize: 9, fontWeight: 600, color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{vm}/20</span>
+                              <span style={{ width: 46, textAlign: 'center', fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{vm}/20</span>
                             )}
                           </>
                         )}
@@ -1401,7 +1263,7 @@ export default function Estudio() {
                   </div>
                   <div style={{ textAlign: 'center' }}>
                     <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-tertiary)', display: 'block', marginBottom: 4 }}>Sin actividad hoy</span>
-                    <span style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.5 }}>Inicia un bloque de estudio para ver tu progreso aquí.</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>Inicia un bloque de estudio para ver tu progreso aquí.</span>
                   </div>
                 </div>
               )}
@@ -1436,7 +1298,7 @@ export default function Estudio() {
                   </div>
                   <div>
                     <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em' }}>Actividad</span>
-                    <span style={{ fontSize: 10, color: 'var(--text-tertiary)', marginLeft: 6, fontWeight: 500 }}>{activityFeed.length} {activityFeed.length === 1 ? 'sesión' : 'sesiones'}</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-tertiary)', marginLeft: 6, fontWeight: 500 }}>{activityFeed.length} {activityFeed.length === 1 ? 'sesión' : 'sesiones'}</span>
                   </div>
                 </div>
                 <button onClick={() => setShowAllActivity(false)} style={{ background: 'var(--bg-hover)', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 6, borderRadius: 6, display: 'flex', transition: 'background 150ms' }}
@@ -1450,7 +1312,7 @@ export default function Estudio() {
                 {activityFeed.length > 0 ? (
                   <>
                     {/* Summary */}
-                    <div style={{ padding: '14px 0 12px', fontSize: 10, color: 'var(--text-tertiary)', fontWeight: 500, borderBottom: '1px solid var(--border-soft)', marginBottom: 8, letterSpacing: '0.02em' }}>
+                    <div style={{ padding: '14px 0 12px', fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 500, borderBottom: '1px solid var(--border-soft)', marginBottom: 8, letterSpacing: '0.02em' }}>
                       {(() => {
                         const validSecs = activityFeed.reduce((s, e) => s + e.duration, 0);
                         const validCount = activityFeed.length;
@@ -1506,7 +1368,7 @@ export default function Estudio() {
                               {mins > 0 ? `${mins}m` : `${secs}s`}
                             </span>
                             {isDist ? (
-                              <span style={{ fontSize: 9, fontWeight: 600, color: '#F59E0B', fontFamily: "'Inter Tight', sans-serif", flex: 1, textAlign: 'center', letterSpacing: '0.02em' }}>Distracción</span>
+                              <span style={{ fontSize: 11, fontWeight: 600, color: '#F59E0B', fontFamily: "'Inter Tight', sans-serif", flex: 1, textAlign: 'center', letterSpacing: '0.02em' }}>Distracción</span>
                             ) : (
                               <>
                                 <div style={{ display: 'flex', gap: 2, flex: 1, minWidth: 0, alignItems: 'center' }}>
@@ -1530,13 +1392,13 @@ export default function Estudio() {
                                     ))
                                   )}
                                 </div>
-                                <span style={{ width: 32, textAlign: 'center', fontSize: 10, fontWeight: 600, color: effColor, fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{eff}%</span>
+                                <span style={{ width: 32, textAlign: 'center', fontSize: 11, fontWeight: 600, color: effColor, fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{eff}%</span>
                                 {isStudyEntry ? (
                                   <span style={{ width: 46, display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
-                                    <span style={{ fontSize: 9, fontWeight: 700, color: planCol || 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", borderRadius: 6, padding: '2px 6px', lineHeight: 1.4 }}>{vmNorm}/10</span>
+                                    <span style={{ fontSize: 11, fontWeight: 700, color: planCol || 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", borderRadius: 6, padding: '2px 6px', lineHeight: 1.4 }}>{vmNorm}/10</span>
                                   </span>
                                 ) : (
-                                  <span style={{ width: 46, textAlign: 'right', fontSize: 9, fontWeight: 600, color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{vm}/20</span>
+                                  <span style={{ width: 46, textAlign: 'right', fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", flexShrink: 0 }}>{vm}/20</span>
                                 )}
                               </>
                             )}
@@ -1585,7 +1447,7 @@ export default function Estudio() {
                   <span style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em' }}>
                     {detailSession.type === 'pomodoro' ? 'Pomodoro' : 'Cronómetro'}
                   </span>
-                  <span style={{ fontSize: 10, color: 'var(--text-tertiary)', display: 'block', marginTop: 2, fontWeight: 450 }}>
+                  <span style={{ fontSize: 11, color: 'var(--text-tertiary)', display: 'block', marginTop: 2, fontWeight: 450 }}>
                     {(() => { try { return format(new Date(detailSession.startedAt), "d MMM yyyy, HH:mm", { locale: es }); } catch { return '—'; } })()} · {Math.floor(detailSession.duration / 60)}m {detailSession.duration % 60}s
                   </span>
                 </div>
@@ -1610,7 +1472,7 @@ export default function Estudio() {
                     ) : (
                       <Clock size={20} color={chronoColor} />
                     )}
-                    <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", marginTop: 2 }}>{dVol ?? '—'}<span style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-tertiary)' }}>{'/' + dScale}</span></span>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", marginTop: 2 }}>{dVol ?? '—'}<span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)' }}>{'/' + dScale}</span></span>
                   </div>
                 </div>
               </div>
@@ -1621,7 +1483,7 @@ export default function Estudio() {
               {detailSession.perception !== undefined && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, background: 'var(--bg-hover)' }}>
                   <Brain size={14} style={{ color: focusColor, flexShrink: 0 }} />
-                  <span style={{ fontSize: 10, color: 'var(--text-tertiary)', fontWeight: 500, width: 60, flexShrink: 0 }}>Percepción</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 500, width: 60, flexShrink: 0 }}>Percepción</span>
                   <div style={{ display: 'flex', gap: 3, flex: 1, justifyContent: 'flex-end' }}>
                     {[1,2,3,4,5,6,7,8,9,10].map(n => (
                       <div key={n} style={{
@@ -1637,7 +1499,7 @@ export default function Estudio() {
               {detailSession.discomfort !== undefined && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, background: 'var(--bg-hover)' }}>
                   <AlertTriangle size={14} style={{ color: detailSession.discomfort > 5 ? '#F59E0B' : 'var(--text-muted)', flexShrink: 0 }} />
-                  <span style={{ fontSize: 10, color: 'var(--text-tertiary)', fontWeight: 500, width: 60, flexShrink: 0 }}>Molestia</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 500, width: 60, flexShrink: 0 }}>Molestia</span>
                   <div style={{ display: 'flex', gap: 3, flex: 1, justifyContent: 'flex-end' }}>
                     {[1,2,3,4,5,6,7,8,9,10].map(n => (
                       <div key={n} style={{
@@ -1653,7 +1515,7 @@ export default function Estudio() {
               {detailSession.volmeter !== undefined && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 10, background: 'var(--bg-hover)' }}>
                   <Zap size={14} style={{ color: dCol, flexShrink: 0 }} />
-                  <span style={{ fontSize: 10, color: 'var(--text-tertiary)', fontWeight: 500, width: 72, flexShrink: 0 }}>Rendimiento</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 500, width: 72, flexShrink: 0 }}>Rendimiento</span>
                   <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 2, justifyContent: 'flex-end' }}>
                     {Array.from({ length: dScale }, (_, i) => {
                       const filled = i < (dVol ?? 0);
@@ -1673,14 +1535,14 @@ export default function Estudio() {
               {detailSession.subjects && detailSession.subjects.length > 0 && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, background: 'var(--bg-hover)' }}>
                   <BookOpen size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-                  <span style={{ fontSize: 10, color: 'var(--text-tertiary)', fontWeight: 500, width: 60, flexShrink: 0 }}>Materias</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 500, width: 60, flexShrink: 0 }}>Materias</span>
                   <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end', flex: 1 }}>
                     {detailSession.subjects.map((sub, i) => {
                       const course = courses.find(c => c.id === sub);
                       return course ? (
-                        <span key={i} style={{ fontSize: 9, padding: '2px 7px', borderRadius: 5, background: `${course.color || focusColor}15`, color: course.color || focusColor, fontWeight: 600 }}>{course.name}</span>
+                        <span key={i} style={{ fontSize: 11, padding: '2px 7px', borderRadius: 5, background: `${course.color || focusColor}15`, color: course.color || focusColor, fontWeight: 600 }}>{course.name}</span>
                       ) : (
-                        <span key={i} style={{ fontSize: 9, padding: '2px 7px', borderRadius: 5, background: `${focusColor}15`, color: focusColor, fontWeight: 600 }}>{sub.slice(0, 20)}</span>
+                        <span key={i} style={{ fontSize: 11, padding: '2px 7px', borderRadius: 5, background: `${focusColor}15`, color: focusColor, fontWeight: 600 }}>{sub.slice(0, 20)}</span>
                       );
                     })}
                   </div>
@@ -1689,14 +1551,14 @@ export default function Estudio() {
               {detailSession.isDistraction && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, background: '#F59E0B06', border: '1px solid #F59E0B12' }}>
                   <AlertTriangle size={14} color="#F59E0B" style={{ flexShrink: 0 }} />
-                  <span style={{ fontSize: 10, color: 'var(--text-tertiary)', fontWeight: 500, width: 60, flexShrink: 0 }}>Estado</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 500, width: 60, flexShrink: 0 }}>Estado</span>
                   <span style={{ fontSize: 11, color: '#F59E0B', fontWeight: 500, marginLeft: 'auto' }}>Distracción</span>
                 </div>
               )}
               {(detailSession.pauseCount ?? 0) > 0 && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, background: 'var(--bg-hover)' }}>
                   <Coffee size={14} style={{ color: '#F59E0B', flexShrink: 0 }} />
-                  <span style={{ fontSize: 10, color: 'var(--text-tertiary)', fontWeight: 500, width: 60, flexShrink: 0 }}>Pausas</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 500, width: 60, flexShrink: 0 }}>Pausas</span>
                   <span style={{ fontSize: 13, fontWeight: 600, color: '#F59E0B', fontFamily: "'Inter Tight', sans-serif", marginLeft: 'auto' }}>{detailSession.pauseCount}</span>
                 </div>
               )}
@@ -1753,7 +1615,7 @@ export default function Estudio() {
             <p style={{ fontSize: 11.5, color: 'var(--text-secondary)', lineHeight: 1.5, margin: 0 }}>La tarea dejará de estar conectada al temporizador. Podrás vincularla nuevamente desde Tareas.</p>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
               <button onClick={() => setShowUnlinkTaskConfirm(false)} style={{ padding: '6px 16px', borderRadius: 8, border: '1px solid var(--border-soft)', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 11, fontWeight: 600, fontFamily: "'Inter Tight', sans-serif" }}>Cancelar</button>
-              <button onClick={() => { setActiveTaskId(null); setShowUnlinkTaskConfirm(false); addNotification('Tarea desvinculada', 'info'); }} style={{ padding: '6px 16px', borderRadius: 8, border: 'none', background: '#EF4444', color: '#fff', cursor: 'pointer', fontSize: 11, fontWeight: 700, fontFamily: "'Inter Tight', sans-serif" }}>Desvincular</button>
+              <button onClick={() => { unlinkTaskFromTimer(); setShowUnlinkTaskConfirm(false); addNotification('Tarea desvinculada', 'info'); }} style={{ padding: '6px 16px', borderRadius: 8, border: 'none', background: '#EF4444', color: '#fff', cursor: 'pointer', fontSize: 11, fontWeight: 700, fontFamily: "'Inter Tight', sans-serif" }}>Desvincular</button>
             </div>
           </div>
         </div>
@@ -1820,9 +1682,9 @@ export default function Estudio() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 36 }}>
-                  <span style={{ fontSize: 10, fontWeight: 600, color: linkedPlanCourse?.color || statusColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{linkedPlanCourse?.name || 'Curso'}</span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: linkedPlanCourse?.color || statusColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{linkedPlanCourse?.name || 'Curso'}</span>
                   <div style={{ width: 3, height: 3, borderRadius: '50%', background: 'var(--border-default)', flexShrink: 0 }} />
-                  <span style={{ fontSize: 9, color: 'var(--text-tertiary)', fontFamily: "'JetBrains Mono', monospace", flexShrink: 0 }}>{linkedPlanSession.durationMinutes}min</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontFamily: "'JetBrains Mono', monospace", flexShrink: 0 }}>{linkedPlanSession.durationMinutes}min</span>
                 </div>
               </div>
             )}
@@ -1832,8 +1694,8 @@ export default function Estudio() {
               <div style={{ marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, background: `${activeTask.courseColor || statusColor}10`, border: `1px solid ${activeTask.courseColor || statusColor}30` }}>
                 <div style={{ width: 6, height: 6, borderRadius: '50%', background: activeTask.courseColor || statusColor, flexShrink: 0 }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{activeTask.title}</div>
-                  <div style={{ fontSize: 10, fontWeight: 500, color: activeTask.status === 'inicio' ? '#F59E0B' : activeTask.status === 'progreso' ? '#3B82F6' : '#10B981' }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{activeTaskTitle}</div>
+                  <div style={{ fontSize: 11, fontWeight: 500, color: activeTask.status === 'inicio' ? '#F59E0B' : activeTask.status === 'progreso' ? '#3B82F6' : '#10B981' }}>
                     {activeTask.status === 'inicio' ? 'Sin empezar' : activeTask.status === 'progreso' ? 'En progreso' : 'Completada'}
                   </div>
                 </div>
@@ -1909,7 +1771,7 @@ export default function Estudio() {
                 <input type="range" min="0" max="20" value={evalVolmeter} onChange={e => setEvalVolmeter(Number(e.target.value))}
                   style={{ width: '100%', height: 3, cursor: 'pointer', WebkitAppearance: 'none', appearance: 'none', outline: 'none', borderRadius: 2, background: 'transparent', marginTop: 6 }}
                   className="volume-slider" />
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
                   <span>Bajo</span><span>Alto</span>
                 </div>
               </div>
@@ -2103,7 +1965,7 @@ export default function Estudio() {
               <input type="range" min="0" max="20" value={evalVolmeter} onChange={e => setEvalVolmeter(Number(e.target.value))}
                 style={{ width: '100%', height: 3, cursor: 'pointer', WebkitAppearance: 'none', appearance: 'none', outline: 'none', borderRadius: 2, background: 'transparent', marginTop: 6 }}
                 className="volume-slider" />
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
                 <span>Bajo</span><span>Alto</span>
               </div>
             </div>

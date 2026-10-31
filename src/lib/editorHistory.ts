@@ -11,6 +11,8 @@
 interface EditorSnapshot {
   html: string;
   caret: number;
+  anchor?: {path:number[];offset:number};
+  focus?: {path:number[];offset:number};
 }
 
 export interface EditorHistory {
@@ -74,6 +76,32 @@ function setCaretOffset(editor: HTMLElement, target: number): void {
 const COALESCE_MS = 250;
 const MAX_ENTRIES = 400;
 
+function selectionPoint(editor:HTMLElement,node:Node|null,offset:number):EditorSnapshot['anchor'] {
+  if(!node || !editor.contains(node))return undefined;
+  const path:number[]=[];
+  let current:Node=node;
+  while(current!==editor){
+    const parent:ParentNode|null=current.parentNode;
+    if(!parent)return undefined;
+    path.unshift(Array.prototype.indexOf.call(parent.childNodes,current));
+    current=parent;
+  }
+  return {path,offset};
+}
+
+function restoreSelection(editor:HTMLElement,snapshot:EditorSnapshot):boolean {
+  if(!snapshot.anchor || !snapshot.focus)return false;
+  const resolve=(point:NonNullable<EditorSnapshot['anchor']>)=>{
+    let node:Node=editor;
+    for(const index of point.path){if(!node.childNodes[index])return null;node=node.childNodes[index];}
+    const length=node.nodeType===Node.TEXT_NODE?(node.textContent?.length || 0):node.childNodes.length;
+    return {node,offset:Math.max(0,Math.min(length,point.offset))};
+  };
+  const anchor=resolve(snapshot.anchor),focus=resolve(snapshot.focus);
+  if(!anchor || !focus)return false;
+  try {window.getSelection()?.setBaseAndExtent(anchor.node,anchor.offset,focus.node,focus.offset);return true;}catch{return false;}
+}
+
 export function createEditorHistory(getEditor: () => HTMLElement | null): EditorHistory {
   let entries: EditorSnapshot[] = [];
   let redoEntries: EditorSnapshot[] = [];
@@ -82,15 +110,16 @@ export function createEditorHistory(getEditor: () => HTMLElement | null): Editor
   const snapNow = (): EditorSnapshot | null => {
     const ed = getEditor();
     if (!ed) return null;
-    return { html: ed.innerHTML, caret: getCaretOffset(ed) };
+    const selection=window.getSelection();
+    return { html: ed.innerHTML, caret: getCaretOffset(ed),anchor:selectionPoint(ed,selection?.anchorNode || null,selection?.anchorOffset || 0),focus:selectionPoint(ed,selection?.focusNode || null,selection?.focusOffset || 0) };
   };
 
   const apply = (s: EditorSnapshot): void => {
     const ed = getEditor();
     if (!ed) return;
     ed.innerHTML = s.html;
-    setCaretOffset(ed, s.caret);
-    ed.focus();
+    ed.focus({preventScroll:true});
+    if(!restoreSelection(ed,s))setCaretOffset(ed, s.caret);
   };
 
   const reset = (): void => {
@@ -106,6 +135,10 @@ export function createEditorHistory(getEditor: () => HTMLElement | null): Editor
     if (!s) return;
     const top = entries[entries.length - 1];
     if (top && top.html === s.html) {
+      // beforeinput checkpoints the actual selection. Empty paragraphs and
+      // formatted boundaries can share a text offset but have different paths.
+      if(JSON.stringify(top.anchor)!==JSON.stringify(s.anchor) || JSON.stringify(top.focus)!==JSON.stringify(s.focus))lastCaptureTs=0;
+      entries[entries.length-1]=s;
       if (!typing) redoEntries = [];
       return;
     }

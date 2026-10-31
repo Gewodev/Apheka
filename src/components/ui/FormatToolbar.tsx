@@ -11,9 +11,9 @@ interface FormatToolbarProps {
 }
 
 const btnStyle: React.CSSProperties = {
-  width: 30, height: 30, borderRadius: 6, border: 'none', background: 'transparent',
+  width: 34, height: 34, borderRadius: 6, border: 'none', background: 'transparent',
   cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center',
-  justifyContent: 'center', transition: 'all 120ms ease', flexShrink: 0,
+  justifyContent: 'center', transition: 'background-color 120ms ease, color 120ms ease', flexShrink: 0,
 };
 
 const sepStyle: React.CSSProperties = {
@@ -30,7 +30,7 @@ const CONF: Record<ToolbarItem, { icon: React.ComponentType<{size?: number}>, cm
   list: { icon: List, cmd: 'insertUnorderedList', title: 'Lista', stateCmd: 'insertUnorderedList' },
   orderedList: { icon: ListOrdered, cmd: 'insertOrderedList', title: 'Lista ordenada', stateCmd: 'insertOrderedList' },
   heading3: { icon: Heading3, cmd: 'formatBlock', value: '<h3>', title: 'Título', stateCmd: 'heading3' },
-  highlight: { icon: Highlighter, cmd: 'hiliteColor', value: '#FFF9C4', title: 'Resaltar' },
+  highlight: { icon: Highlighter, cmd: 'hiliteColor', value: 'rgba(234,179,8,0.2)', title: 'Resaltar' },
   alignLeft: { icon: AlignLeft, cmd: 'justifyLeft', title: 'Alinear' },
   alignCenter: { icon: AlignCenter, cmd: 'justifyCenter', title: 'Centrar' },
 };
@@ -39,13 +39,13 @@ const SEP_AFTER: ToolbarItem[] = ['strikethrough', 'orderedList'];
 
 export function FormatToolbar({ onFormat, color, toolbarItems, activeFormats }: FormatToolbarProps) {
   const items = toolbarItems || ALL;
-  const hoverBg = color ? `${color}18` : 'var(--bg-hover)';
-  const activeBg = color ? `${color}30` : 'var(--bg-hover)';
+  const hoverBg = color ? `color-mix(in srgb, ${color} 8%, transparent)` : 'var(--bg-hover)';
+  const activeBg = color ? `color-mix(in srgb, ${color} 12%, transparent)` : 'var(--bg-hover)';
   const activeColor = color || 'var(--accent)';
   return (
-    <div onMouseDown={e => { const t = e.target as HTMLElement; if (e.button === 0 && t.tagName !== 'INPUT') e.preventDefault(); }} style={{
+    <div className="note-format-toolbar" role="toolbar" aria-label="Formato del texto" onMouseDown={e => { const t = e.target as HTMLElement; if (e.button === 0 && t.tagName !== 'INPUT') e.preventDefault(); }} style={{
       display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px',
-      background: color ? `${color}06` : 'var(--bg-surface)',
+      background: 'transparent',
       borderBottom: '1px solid var(--border-subtle)',
       flexShrink: 0, overflowX: 'auto',
     }}>
@@ -60,14 +60,14 @@ export function FormatToolbar({ onFormat, color, toolbarItems, activeFormats }: 
               onClick={() => onFormat(cfg.cmd, cfg.value)}
               style={{
                 ...btnStyle,
-                border: isActive ? `1px solid ${activeColor}70` : '1px solid transparent',
+                border: isActive ? `1px solid color-mix(in srgb, ${activeColor} 45%, var(--border-default))` : '1px solid transparent',
                 background: isActive ? activeBg : 'transparent',
                 color: isActive ? activeColor : 'var(--text-secondary)',
-                boxShadow: isActive ? `0 0 10px ${activeColor}33` : 'none',
+                boxShadow: 'none',
               }}
               onMouseEnter={e => { e.currentTarget.style.background = isActive ? activeBg : hoverBg; }}
               onMouseLeave={e => { e.currentTarget.style.background = isActive ? activeBg : 'transparent'; }}
-              title={cfg.title}><Icon size={13} /></button>
+              aria-label={cfg.title} aria-pressed={!!isActive} title={cfg.title}><Icon size={16} /></button>
             {SEP_AFTER.includes(key) && <div style={sepStyle} />}
           </React.Fragment>
         );

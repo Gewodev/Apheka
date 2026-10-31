@@ -1,4 +1,9 @@
+import {musicConnection} from './musicNetwork';
 import { invoke, isTauri } from './tauri';
+function musicProxyArgs(){const c=musicConnection.getTransportOptions();return {proxyMode:c.mode,proxyUrl:c.mode==='custom'?c.proxyUrl:undefined};}
+
+const mediaCache=new Map<string,{time:number;value:string}>(),mediaPending=new Map<string,Promise<string>>();
+async function mediaRequest(command:string,url:string):Promise<string>{const connection=musicProxyArgs(),key=JSON.stringify([command,url,connection]),hit=mediaCache.get(key),ttl=command==='stream_youtube_audio'?30000:600000;if(hit&&Date.now()-hit.time<ttl)return hit.value;const existing=mediaPending.get(key);if(existing)return existing;const operation=invoke<string>(command,{url,...connection}).then(value=>{if(mediaCache.size>=30)mediaCache.delete(mediaCache.keys().next().value!);mediaCache.set(key,{time:Date.now(),value});return value;}).finally(()=>mediaPending.delete(key));mediaPending.set(key,operation);return operation;}
 
 export async function downloadYtDlp(): Promise<string> {
   if (!isTauri()) throw new Error('Solo disponible en la app de escritorio');
@@ -9,17 +14,17 @@ export async function downloadYtDlp(): Promise<string> {
 
 export async function searchYouTubeMusic(query: string): Promise<any> {
   if (!isTauri()) return {};
-  return invoke('search_youtube', { query });
+  return invoke('search_youtube', { query,...musicProxyArgs() });
 }
 
 export async function getYouTubeMetadata(url: string): Promise<any> {
   if (!isTauri()) return {};
-  return invoke('get_youtube_metadata', { url });
+  return mediaRequest('get_youtube_metadata',url);
 }
 
 export async function streamYouTubeAudio(url: string): Promise<string> {
   if (!isTauri()) return '';
-  return invoke('stream_youtube_audio', { url });
+  return mediaRequest('stream_youtube_audio',url);
 }
 
 // ── Re-export for convenience ──
@@ -105,137 +110,13 @@ function getThumbnail(data: Record<string, unknown>): string {
   return '';
 }
 
-const API_KEY = import.meta.env.VITE_GOOGLE_API_KEY || '';
-
-async function webSearchMusic(query: string): Promise<SearchResult[]> {
-  if (!API_KEY) {
-    console.warn('[webSearchMusic] No API key (VITE_GOOGLE_API_KEY)');
-    return [];
-  }
-  const tryFetch = async (url: string): Promise<SearchResult[]> => {
-    const r = await fetch(url);
-    if (!r.ok) {
-      const errorText = await r.text().catch(() => 'unknown error');
-      console.warn(`[webSearchMusic] HTTP ${r.status}: ${errorText}`);
-      return [];
-    }
-    const data = await r.json();
-    if (data.error) {
-      console.warn('[webSearchMusic] API error:', data.error);
-      return [];
-    }
-    return (data.items || []).map((item: any) => ({
-      id: item.id?.videoId || '',
-      title: item.snippet?.title || 'Unknown',
-      channel: item.snippet?.channelTitle || 'Unknown',
-      duration: 0,
-      thumbnail: item.snippet?.thumbnails?.high?.url || item.snippet?.thumbnails?.default?.url || '',
-      webpage_url: `https://www.youtube.com/watch?v=${item.id?.videoId}`,
-    }));
-  };
-  try {
-    const results = await tryFetch(
-      `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoCategoryId=10&maxResults=20&q=${encodeURIComponent(query)}&key=${API_KEY}`
-    );
-    if (results.length > 0) return results;
-  } catch (e) {
-    console.warn('[webSearchMusic] First attempt failed, trying without category filter:', e);
-  }
-  try {
-    return await tryFetch(
-      `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=20&q=${encodeURIComponent(query)}&key=${API_KEY}`
-    );
-  } catch (e) {
-    console.warn('[webSearchMusic] All attempts failed:', e);
-    return [];
-  }
-}
+async function webSearchMusic(query:string):Promise<SearchResult[]>{const {searchMusicCatalog}=await import('./youtubeMusic');const value=await searchMusicCatalog(query,'song');return value.songs.map(song=>({id:song.id,title:song.title,channel:song.artist,duration:song.duration,thumbnail:song.cover,webpage_url:'https://www.youtube.com/watch?v='+song.id}));}
 
 async function webStreamUrl(videoId: string): Promise<string> {
   return `https://www.youtube.com/watch?v=${videoId}`;
 }
 
-// Web download using multiple free conversion APIs
-const SAFE_HOSTS = ['youtube.com', 'youtu.be', 'vimeo.com'];
-
-function assertSafeVideoUrl(url: string): void {
-  try {
-    const parsed = new URL(url);
-    const hostOk = SAFE_HOSTS.some(h => parsed.hostname.endsWith(h));
-    if (!hostOk || !['http:', 'https:'].includes(parsed.protocol)) {
-      throw new Error('Host not permitted or protocol unsafe');
-    }
-  } catch {
-    throw new Error('Invalid URL format');
-  }
-}
-
-async function webDownloadAudio(downloadId: string, ytUrl: string, format: string): Promise<void> {
-  assertSafeVideoUrl(ytUrl);
-  const match = ytUrl.match(/(?:v=|youtu\.be\/)([\w-]{11})/);
-  if (!match) throw new Error('URL de YouTube inválida');
-  const videoId = match[1];
-
-  // 1) Try Cobalt API (api.cobalt.tools)
-  try {
-    const resp = await fetch('https://api.cobalt.tools/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify({
-        url: ytUrl,
-        videoQuality: 'max',
-        audioFormat: format === 'mp3' ? 'mp3' : 'aac',
-        filenameStyle: 'basic',
-      }),
-    });
-    if (resp.ok) {
-      const data = await resp.json();
-      if (data.url) {
-        const a = document.createElement('a');
-        a.href = data.url;
-        a.download = `audio.${format}`;
-        a.click();
-        return;
-      }
-    }
-  } catch { /* try next */ }
-
-  // 2) Try direct download via y2mate API
-  try {
-    const resp = await fetch('https://www.y2mate.com/mates/en676/analyzeV2/ajax', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ k_query: ytUrl, k_page: 'home', hl: 'en', q_auto: '0' }),
-    });
-    if (resp.ok) {
-      const data = await resp.json();
-      if (data?.links?.mp3?.['mp3128']?.url || data?.links?.mp4?.['mp4']?.url) {
-        const dlUrl = data.links.mp3['mp3128']?.url || data.links.mp4['mp4']?.url;
-        window.open(dlUrl, '_blank');
-        return;
-      }
-    }
-  } catch { /* try next */ }
-
-  // 3) Try loadingfem using public API
-  try {
-    const resp = await fetch(`https://yt-downloader-xi-six.vercel.app/api/download?url=${ytUrl}&format=${format}`, {
-      method: 'GET',
-    });
-    if (resp.ok) {
-      const blob = await resp.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${videoId}.${format}`;
-      a.click();
-      URL.revokeObjectURL(url);
-      return;
-    }
-  } catch { /* try next */ }
-
-  throw new Error('web-download-unavailable');
-}
+async function webDownloadAudio(_id:string,_url:string,_format:string):Promise<void>{throw Error('Descarga el audio desde APHEKA de escritorio. No se envían enlaces a conversores públicos.');}
 
 // ── Commands ──
 
@@ -245,7 +126,7 @@ export async function streamAudioUrl(url: string): Promise<string> {
     if (match) return webStreamUrl(match[1]);
     throw new Error('Streaming requires Tauri desktop app');
   }
-  return invoke<string>('stream_youtube_audio', { url });
+  return mediaRequest('stream_youtube_audio',url);
 }
 
 export async function fetchMetadata(url: string): Promise<YouTubePlaylist | YouTubeMetadata> {
@@ -266,7 +147,7 @@ export async function fetchMetadata(url: string): Promise<YouTubePlaylist | YouT
     }
     throw new Error('Metadata fetch requires Tauri desktop app');
   }
-  const raw = await invoke<string>('get_youtube_metadata', { url });
+  const raw = await mediaRequest('get_youtube_metadata',url);
   const data: Record<string, unknown> = JSON.parse(raw);
 
   if (data.entries) {
@@ -275,10 +156,10 @@ export async function fetchMetadata(url: string): Promise<YouTubePlaylist | YouT
     const entries: YouTubeMetadata[] = rawEntries.map(e => ({
       ...e,
       id: String(e.id || ''),
-      title: String(e.title || 'Unknown'),
+      title: String(e.title || 'Sin título'),
       thumbnail: getThumbnail(e),
       duration: parseDuration(e.duration as string | number | undefined),
-      channel: String(e.channel || e.uploader || 'Unknown'),
+      channel: String(e.channel || e.uploader || 'Fuente externa'),
       webpage_url: String(e.webpage_url || e.url || ''),
       playlist: String(data.title || ''),
       playlist_index: Number(e.playlist_index) || 0,
@@ -289,7 +170,7 @@ export async function fetchMetadata(url: string): Promise<YouTubePlaylist | YouT
       ...(data as Record<string, unknown>),
       id: String(data.id || ''),
       title: String(data.title || 'Playlist'),
-      channel: String(data.channel || data.uploader || 'Unknown'),
+      channel: String(data.channel || data.uploader || 'Fuente externa'),
       thumbnail: getThumbnail(data as Record<string, unknown>),
       webpage_url: String(data.webpage_url || url),
       entries,
@@ -300,50 +181,31 @@ export async function fetchMetadata(url: string): Promise<YouTubePlaylist | YouT
   return {
     ...(data as Record<string, unknown>),
     id: String(data.id || ''),
-    title: String(data.title || 'Unknown'),
+    title: String(data.title || 'Sin título'),
     thumbnail: getThumbnail(data as Record<string, unknown>),
     duration: parseDuration(data.duration as string | number | undefined),
-    channel: String(data.channel || data.uploader || 'Unknown'),
+    channel: String(data.channel || data.uploader || 'Fuente externa'),
     webpage_url: String(data.webpage_url || data.url || url),
   } as YouTubeMetadata;
 }
 
-export async function searchMusic(query: string): Promise<SearchResult[]> {
-  if (!isTauri()) return webSearchMusic(query);
-  try {
-    const raw = await invoke<string>('search_youtube', { query });
-    const data = JSON.parse(raw);
-    if (!data.entries) return [];
-    return (data.entries as Record<string, unknown>[]).map(e => ({
-      id: String(e.id || ''),
-      title: String(e.title || 'Unknown'),
-      channel: String(e.channel || e.uploader || 'Unknown'),
-      duration: parseDuration(e.duration as string | number | undefined),
-      thumbnail: getThumbnail(e),
-      webpage_url: String(e.webpage_url || e.url || ''),
-      ...e,
-    })) as SearchResult[];
-  } catch (e) {
-    console.warn('[searchMusic] Rust backend failed, falling back to web API:', e);
-    return webSearchMusic(query);
-  }
-}
+export async function searchMusic(query:string):Promise<SearchResult[]>{return webSearchMusic(query);}
 
 export async function validateUrl(url: string): Promise<YouTubePlaylist | YouTubeMetadata> {
   if (!isTauri()) {
     return fetchMetadata(url);
   }
-  const raw = await invoke<string>('validate_url', { url });
+  const raw = await mediaRequest('validate_url',url);
   const data = JSON.parse(raw);
 
   if (data.entries) {
-    const entries = (data.entries as Record<string, unknown>[]).map(e => ({
+    const entries = (data.entries as Record<string, unknown>[]).filter(e=>e&&typeof e==='object').map(e => ({
       ...e,
       id: String(e.id || ''),
-      title: String(e.title || 'Unknown'),
+      title: String(e.title || 'Sin título'),
       thumbnail: getThumbnail(e),
       duration: parseDuration(e.duration as string | number | undefined),
-      channel: String(e.channel || e.uploader || 'Unknown'),
+      channel: String(e.channel || e.uploader || 'Fuente externa'),
       webpage_url: String(e.webpage_url || e.url || ''),
     }));
 
@@ -351,7 +213,7 @@ export async function validateUrl(url: string): Promise<YouTubePlaylist | YouTub
       ...(data as Record<string, unknown>),
       id: String(data.id || ''),
       title: String(data.title || 'Playlist'),
-      channel: String(data.channel || data.uploader || 'Unknown'),
+      channel: String(data.channel || data.uploader || 'Fuente externa'),
       thumbnail: getThumbnail(data as Record<string, unknown>),
       webpage_url: String(data.webpage_url || url),
       entries,
@@ -362,10 +224,10 @@ export async function validateUrl(url: string): Promise<YouTubePlaylist | YouTub
   return {
     ...(data as Record<string, unknown>),
     id: String(data.id || ''),
-    title: String(data.title || 'Unknown'),
+    title: String(data.title || 'Sin título'),
     thumbnail: getThumbnail(data as Record<string, unknown>),
     duration: parseDuration(data.duration as string | number | undefined),
-    channel: String(data.channel || data.uploader || 'Unknown'),
+    channel: String(data.channel || data.uploader || 'Fuente externa'),
     webpage_url: String(data.webpage_url || data.url || url),
   } as YouTubeMetadata;
 }
@@ -377,12 +239,13 @@ export async function startDownload(
   format: string = 'mp3',
   includeCover: boolean = true,
   audioQuality: string = '3',
+  videoQuality: string = '1080',
 ): Promise<void> {
   if (!isTauri()) {
     return webDownloadAudio(downloadId, url, format);
   }
   return invoke('start_download', {
-    url, downloadId,
+    url, downloadId,videoQuality,...musicProxyArgs(),
     outputDir: outputDir || '',
     format,
     includeCover,

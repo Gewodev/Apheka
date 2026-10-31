@@ -1,0 +1,3 @@
+import {useEffect,useState} from 'react';
+import {localMusicDay} from '../lib/dailyMusicOrder';
+export function useLocalDay(){const [day,setDay]=useState(localMusicDay);useEffect(()=>{let timer:ReturnType<typeof setTimeout>;const sync=()=>{clearTimeout(timer);if(document.hidden)return;const now=new Date();setDay(localMusicDay(now));timer=setTimeout(sync,new Date(now.getFullYear(),now.getMonth(),now.getDate()+1).getTime()-now.getTime()+50);};sync();document.addEventListener('visibilitychange',sync);window.addEventListener('focus',sync);return()=>{clearTimeout(timer);document.removeEventListener('visibilitychange',sync);window.removeEventListener('focus',sync);};},[]);return day;}

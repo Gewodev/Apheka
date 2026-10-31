@@ -1,8 +1,9 @@
+import {useAppSlice} from "../store/AppContext";
 import { useMemo } from 'react';
 import { useApp } from '../store/AppContext';
 
 export default function StudyAnimation() {
-  const { settings } = useApp();
+  const { settings } = useAppSlice(["settings"]);
   const glowColor = settings.accentColor || '#E11D48';
 
   const style = useMemo(() => ({

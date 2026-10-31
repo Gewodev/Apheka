@@ -5,8 +5,16 @@ import React, { useState, useEffect } from 'react';
 export default function LiveClock({ children }: { children: (now: Date) => React.ReactNode }) {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
-    const iv = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(iv);
+    let timer:ReturnType<typeof setTimeout>|undefined;
+    const tick=()=>{
+      if(timer)clearTimeout(timer);
+      if(document.hidden)return;
+      setNow(new Date());
+      timer=setTimeout(tick,1000-Date.now()%1000);
+    };
+    document.addEventListener('visibilitychange',tick);
+    tick();
+    return()=>{if(timer)clearTimeout(timer);document.removeEventListener('visibilitychange',tick);};
   }, []);
   return <>{children(now)}</>;
 }

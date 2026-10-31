@@ -1,8 +1,24 @@
-import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import NoteEditorToolbar from '../ui/NoteEditorToolbar';
+import {useObservedSize} from '../../hooks/useObservedSize';
+import {applyEditorHighlight} from '../../lib/editorHighlight';
+import type {BannerCrop} from '../../lib/bannerCrop';
+import 'katex/dist/katex.min.css';
+import {useCoverPalette} from '../../hooks/useCoverPalette';
+import {useAppSlice} from "../../store/AppContext";
+import {courseStudySeconds} from '../../lib/courseStudy';
+import {productiveSessions} from '../../lib/studyAnalytics';
+import { localPathFromUrl } from '../../lib/externalTarget';
+import { resolveExternalResource } from '../../lib/openFileSmart';
+import BannerField from '../ui/BannerField';
+import PlanSelectDropdown from '../ui/PlanSelectDropdown';
+import CourseSessionDialog from './cursos/CourseSessionDialog';
+import CourseSessionPreview from './cursos/CourseSessionPreview';
+import { sessionLinkUnavailable } from '../../lib/linkEligibility';
+import React, { useState, useMemo, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import {
   GraduationCap, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Pencil, PlusCircle, Layers, Trash2,
-  Book, Upload, X, Search, Edit3, Plus, File, Sigma, Lightbulb, Key, Type, HelpCircle, ListChecks, ExternalLink,
+  Book, Upload, X, Quote, Search, Edit3, Plus, File, Sigma, Lightbulb, Key, Type, HelpCircle, ListChecks, ExternalLink,
   Check, StickyNote, BookOpen, ArrowUpRight, ArrowLeft, Play,
   NotebookPen, ListTodo, Bold, Italic, Underline, Heading1, Heading2, Heading3,
   List, ListOrdered, Highlighter, Paperclip, MoreHorizontal, Eye, FolderOpen,
@@ -14,7 +30,6 @@ import {
   Zap, DollarSign, CalendarDays,
   Library, Files, ClipboardList, Trophy,
 } from 'lucide-react';
-import { FormatToolbar } from '../ui/FormatToolbar';
 import { GoogleClassroomIcon, GoogleDriveIcon, GoogleDocsIcon, GoogleSheetsIcon, GoogleSlidesIcon, GoogleFormsIcon, WordIcon, ExcelIcon, PowerPointIcon } from '../ui/GoogleIcons';
 import {
   DndContext, closestCenter, closestCorners, useSensor, useSensors, PointerSensor, useDroppable, DragEndEvent
@@ -32,7 +47,8 @@ import { format, addDays, startOfWeek, endOfWeek } from "date-fns";
 import { es } from "date-fns/locale";
 import toast from 'react-hot-toast';
 import { createEditorHistory } from '../../lib/editorHistory';
-import { latexTextToHtml, upgradeLatexInText } from '../../lib/latexRender';
+import { latexToHtml, latexTextToHtml, upgradeLatexInText } from '../../lib/latexRender';
+import { renderMathAtCaret, editMathSource, prepareMathClipboard } from '../../lib/latex';
 import { fuzzyMatch } from '../../lib/fuzzy';
 import { usePlannerDay } from '../../lib/plannerDay';
 import { useMaterialMenu } from '../ui/MaterialContextMenu';
@@ -338,12 +354,12 @@ function IconPicker({ currentIcon, currentColor, noteTitle, onSelect, onClose }:
       {view === 'grid' ? (
         <>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Seleccionar Icono</span>
-            <button onClick={onClose} style={{ background: "none", border: "none", color: "var(--text-tertiary)", cursor: "pointer", padding: 2 }}><LI.X size={13} /></button>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Seleccionar Icono</span>
+            <button data-ui-control="" onClick={onClose} style={{ background: "none", border: "none", color: "var(--text-tertiary)", cursor: "pointer", padding: 2 }}><LI.X size={13} /></button>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 10, flexWrap: "wrap" }}>
             {SPINE_COLORS.slice(0, 10).map(c => (
-              <button key={c} onClick={() => setSelectedColor(c)}
+              <button data-ui-control="" key={c} onClick={() => setSelectedColor(c)}
                 style={{ width: 20, height: 20, borderRadius: "50%", border: selectedColor === c ? `2px solid ${c}` : "1px solid " + c + "40", background: selectedColor === c ? c : c + "20", cursor: "pointer", transition: "all 120ms", transform: selectedColor === c ? "scale(1.2)" : "none" }} />
             ))}
             <div style={{ flex: 1 }} />
@@ -355,7 +371,7 @@ function IconPicker({ currentIcon, currentColor, noteTitle, onSelect, onClose }:
               const Icon = i.icon;
               const isSel = selectedIcon === i.name;
               return (
-                <button key={i.name} onClick={() => { setSelectedIcon(i.name); setView('preview'); }} title={i.label}
+                <button data-ui-control="" key={i.name} onClick={() => { setSelectedIcon(i.name); setView('preview'); }} title={i.label}
                   style={{ height: 36, borderRadius: 6, border: `1px solid ${isSel ? selectedColor : "var(--border-default)"}`, background: isSel ? selectedColor + "16" : "transparent", color: isSel ? selectedColor : "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 120ms" }}>
                   <Icon size={16} />
                 </button>
@@ -366,31 +382,31 @@ function IconPicker({ currentIcon, currentColor, noteTitle, onSelect, onClose }:
       ) : (
         <>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-            <button onClick={() => setView('grid')} style={{ width: 28, height: 28, borderRadius: 6, border: "1px solid var(--border-subtle)", background: "transparent", cursor: "pointer", color: "var(--text-secondary)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <button data-ui-control="" onClick={() => setView('grid')} style={{ width: 28, height: 28, borderRadius: 6, border: "1px solid var(--border-subtle)", background: "transparent", cursor: "pointer", color: "var(--text-secondary)", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <LI.ChevronLeft size={13} />
             </button>
-            <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Vista Previa</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Vista Previa</span>
             <div style={{ flex: 1 }} />
-            <button onClick={onClose} style={{ background: "none", border: "none", color: "var(--text-tertiary)", cursor: "pointer", padding: 2 }}><LI.X size={13} /></button>
+            <button data-ui-control="" onClick={onClose} style={{ background: "none", border: "none", color: "var(--text-tertiary)", cursor: "pointer", padding: 2 }}><LI.X size={13} /></button>
           </div>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, padding: "24px 0" }}>
             <div style={{ width: 80, height: 80, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", border: `2px solid ${selectedColor}25`, transition: "all 200ms" }}>
               <SelIcon size={42} style={{ color: selectedColor }} />
             </div>
             <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>{noteTitle || "Sin título"}</div>
-            <div style={{ fontSize: 9, color: "var(--text-tertiary)" }}>{AVAILABLE_ICONS.find(i => i.name === selectedIcon)?.label || selectedIcon}</div>
+            <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>{AVAILABLE_ICONS.find(i => i.name === selectedIcon)?.label || selectedIcon}</div>
           </div>
           <div style={{ display: "flex", gap: 4, justifyContent: "center", flexWrap: "wrap", marginBottom: 14 }}>
             {SPINE_COLORS.map(c => (
-              <button key={c} onClick={() => setSelectedColor(c)}
+              <button data-ui-control="" key={c} onClick={() => setSelectedColor(c)}
                 style={{ width: 22, height: 22, borderRadius: "50%", border: selectedColor === c ? `2px solid ${c}` : "1px solid " + c + "30", background: c, cursor: "pointer", transition: "all 120ms", transform: selectedColor === c ? "scale(1.15)" : "none", boxShadow: selectedColor === c ? `0 0 8px ${c}60` : "none" }} />
             ))}
             <input type="color" value={selectedColor} onChange={e => setSelectedColor(e.target.value)}
               style={{ width: 22, height: 22, borderRadius: "50%", border: "1px solid var(--border-subtle)", padding: 0, cursor: "pointer", background: "none" }} />
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={() => setView('grid')} style={{ flex: 1, height: 34, borderRadius: 8, border: "1px solid var(--border-subtle)", background: "transparent", color: "var(--text-secondary)", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Atrás</button>
-            <button onClick={() => { onSelect(selectedIcon, selectedColor); onClose(); }} style={{ flex: 1, height: 34, borderRadius: 8, border: "none", background: selectedColor, color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Seleccionar</button>
+            <button data-ui-control="" onClick={() => setView('grid')} style={{ flex: 1, height: 34, borderRadius: 8, border: "1px solid var(--border-subtle)", background: "transparent", color: "var(--text-secondary)", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Atrás</button>
+            <button data-ui-control="" onClick={() => { onSelect(selectedIcon, selectedColor); onClose(); }} style={{ flex: 1, height: 34, borderRadius: 8, border: "none", background: selectedColor, color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Seleccionar</button>
           </div>
         </>
       )}
@@ -515,20 +531,20 @@ function MaterialCard({ mat, dragAttributes, dragListeners, onEdit, onDelete, on
         >
           {customLinkIcon ? renderLinkChoiceIcon((mat as any).icon, 17, accent) : <Icon size={17} style={{ color: accent }} />}
         </div>
-        <span style={{ flex: 1, fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: accent, fontFamily: "'Inter Tight', sans-serif" }}>{cardLabel}</span>
+        <span style={{ flex: 1, fontSize: 11, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: accent, fontFamily: "'Inter Tight', sans-serif" }}>{cardLabel}</span>
         {(practice || _lk) && (
-          <button onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); onEdit(mat); }} title="Editar"
+          <button data-ui-control="" onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); onEdit(mat); }} title="Editar"
             style={{ width: 26, height: 26, borderRadius: 8, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
             onMouseEnter={e => { e.currentTarget.style.background = `${accent}14`; e.currentTarget.style.color = accent; }}
             onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}><Edit3 size={11} /></button>
         )}
         {(mat as any).groupName && onUngroup && (
-          <button onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); onUngroup(); }} title="Sacar al tema principal"
+          <button data-ui-control="" onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); onUngroup(); }} title="Sacar al tema principal"
             style={{ width: 26, height: 26, borderRadius: 8, border: 'none', background: 'transparent', cursor: 'pointer', color: '#F59E0B', opacity: 0.55, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
             onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = 'rgba(245,158,11,0.12)'; }}
             onMouseLeave={e => { e.currentTarget.style.opacity = '0.55'; e.currentTarget.style.background = 'transparent'; }}><LI.FolderMinus size={11} /></button>
         )}
-        <button onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); onDelete(mat); }} title="Eliminar"
+        <button data-ui-control="" onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); onDelete(mat); }} title="Eliminar"
           style={{ width: 26, height: 26, borderRadius: 8, border: 'none', background: 'transparent', cursor: 'pointer', color: 'rgba(239,68,68,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
           onMouseEnter={e => { e.currentTarget.style.background = '#EF444414'; e.currentTarget.style.color = '#EF4444'; }}
           onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(239,68,68,0.55)'; }}><Trash2 size={11} /></button>
@@ -536,7 +552,7 @@ function MaterialCard({ mat, dragAttributes, dragListeners, onEdit, onDelete, on
       <div style={{ flex: 1, padding: '0 14px 12px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
         <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--text-primary)', lineHeight: 1.35, fontFamily: "'Inter Tight', sans-serif", display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{title}</div>
         {practice ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 10, fontSize: 9, fontWeight: 700, color: accent, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 10, fontSize: 11, fontWeight: 700, color: accent, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
             <Play size={9} /> Practicar
           </div>
         ) : mat.type === 'resource' ? null : null}
@@ -569,11 +585,11 @@ function FolderTile({ g, color, onOpen, onRename, onDelete }: { g: string; color
           <FolderOpen size={19} style={{ color, opacity: isOver ? 1 : 0.9 }} />
         </div>
         <div style={{ display: 'flex', gap: 4, opacity: hovered ? 1 : 0, transition: 'opacity 180ms ease' }}>
-          <button onClick={(e) => { e.stopPropagation(); onRename(); }} title="Editar nombre del grupo"
+          <button data-ui-control="" onClick={(e) => { e.stopPropagation(); onRename(); }} title="Editar nombre del grupo"
             style={{ width: 26, height: 26, borderRadius: 7, border: 'none', background: 'var(--bg-hover)', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 120ms' }}>
             <Pencil size={12} />
           </button>
-          <button onClick={(e) => { e.stopPropagation(); onDelete(); }} title="Eliminar grupo"
+          <button data-ui-control="" onClick={(e) => { e.stopPropagation(); onDelete(); }} title="Eliminar grupo"
             style={{ width: 26, height: 26, borderRadius: 7, border: 'none', background: 'rgba(239,68,68,0.12)', cursor: 'pointer', color: '#EF4444', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 120ms' }}>
             <Trash2 size={12} />
           </button>
@@ -669,10 +685,10 @@ function ToolPracticeModal({ mat, topicMaterials, onClose }: { mat: SubjectMater
               </span>
               <div>
                 <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Inter Tight', sans-serif", color: 'var(--text-primary)', lineHeight: 1.25 }}>{mat.title || meta.name}</div>
-                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: accent, marginTop: 3, fontFamily: "'Inter Tight', sans-serif" }}>{meta.name}</div>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: accent, marginTop: 3, fontFamily: "'Inter Tight', sans-serif" }}>{meta.name}</div>
               </div>
             </div>
-            <button onClick={onClose} title="Cerrar" style={{ width: 30, height: 30, borderRadius: 9, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+            <button data-ui-control="" onClick={onClose} title="Cerrar" style={{ width: 30, height: 30, borderRadius: 9, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
               onMouseEnter={e => { e.currentTarget.style.borderColor = '#EF444455'; e.currentTarget.style.color = '#EF4444'; }}
               onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-muted)'; }}><X size={14} /></button>
           </div>
@@ -690,14 +706,14 @@ function ToolPracticeModal({ mat, topicMaterials, onClose }: { mat: SubjectMater
     return wrap(
       <>
         <div style={{ borderRadius: 14, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', padding: '22px 24px', marginBottom: 16 }}>
-          <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: accent, marginBottom: 10, fontFamily: "'Inter Tight', sans-serif" }}>Pregunta</div>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: accent, marginBottom: 10, fontFamily: "'Inter Tight', sans-serif" }}>Pregunta</div>
           <div style={{ fontSize: 17, fontWeight: 600, lineHeight: 1.5, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>{q}</div>
         </div>
         {!quizChecked ? (
           <>
             <textarea value={quizAnswer} onChange={e => setQuizAnswer(e.target.value)} placeholder="Escribe tu respuesta…" autoFocus
               style={{ width: '100%', minHeight: 90, padding: 14, borderRadius: 12, fontSize: 13.5, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', lineHeight: 1.55 }} />
-            <button onClick={() => setQuizChecked(true)} disabled={!quizAnswer.trim()} style={{ ...btnBase, width: '100%', height: 40, borderRadius: 11, marginTop: 14, fontSize: 12.5, opacity: !quizAnswer.trim() ? 0.4 : 1 }}>Comprobar respuesta</button>
+            <button data-ui-control="" onClick={() => setQuizChecked(true)} disabled={!quizAnswer.trim()} style={{ ...btnBase, width: '100%', height: 40, borderRadius: 11, marginTop: 14, fontSize: 12.5, opacity: !quizAnswer.trim() ? 0.4 : 1 }}>Comprobar respuesta</button>
           </>
         ) : (
           <div style={{ borderRadius: 14, border: `1px solid ${correct ? '#10B98135' : '#EF444435'}`, background: correct ? '#10B9810a' : '#EF44440a', padding: '18px 20px' }}>
@@ -710,7 +726,7 @@ function ToolPracticeModal({ mat, topicMaterials, onClose }: { mat: SubjectMater
             <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, marginTop: 8, padding: '8px 12px', borderRadius: 8, background: `${accent}08`, border: `1px solid ${accent}15` }}>
               <span style={{ color: accent, fontWeight: 600 }}>Respuesta correcta: </span>{a}
             </div>
-            <button onClick={() => { setQuizAnswer(''); setQuizChecked(false); }} style={{ ...ghostBtn, marginTop: 14, width: '100%', height: 36, borderRadius: 10 }}>Practicar otra vez</button>
+            <button data-ui-control="" onClick={() => { setQuizAnswer(''); setQuizChecked(false); }} style={{ ...ghostBtn, marginTop: 14, width: '100%', height: 36, borderRadius: 10 }}>Practicar otra vez</button>
           </div>
         )}
       </>
@@ -724,7 +740,7 @@ function ToolPracticeModal({ mat, topicMaterials, onClose }: { mat: SubjectMater
         <div style={{ textAlign: 'center', padding: '40px 20px' }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Aún no hay pares para practicar</div>
           <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 6 }}>Crea al menos una tarjeta de Matching y vuelve aquí.</div>
-          <button onClick={onClose} style={{ ...ghostBtn, margin: '18px auto 0' }}>Entendido</button>
+          <button data-ui-control="" onClick={onClose} style={{ ...ghostBtn, margin: '18px auto 0' }}>Entendido</button>
         </div>
       );
     }
@@ -738,7 +754,7 @@ function ToolPracticeModal({ mat, topicMaterials, onClose }: { mat: SubjectMater
               const done = matched.includes(i);
               const sel = selL === i;
               return (
-                <button key={i} disabled={done} onClick={() => setSelL(i)}
+                <button data-ui-control="" key={i} disabled={done} onClick={() => setSelL(i)}
                   style={{ textAlign: 'left', minHeight: 40, padding: '8px 10px', borderRadius: 9, border: `1px solid ${done ? '#10B98140' : sel ? `${accent}55` : 'var(--border-soft)'}`, background: done ? '#10B9810d' : sel ? `${accent}0e` : 'var(--bg-deep)', color: done ? '#10B981' : 'var(--text-primary)', fontSize: 11.5, fontWeight: 500, cursor: done ? 'default' : 'pointer', lineHeight: 1.4, transition: 'all 120ms', display: 'flex', alignItems: 'center', gap: 7 }}>
                   {done && <Check size={11} style={{ flexShrink: 0 }} />}
                   <span style={{ opacity: done ? 0.75 : 1 }}>{p.q}</span>
@@ -755,7 +771,7 @@ function ToolPracticeModal({ mat, topicMaterials, onClose }: { mat: SubjectMater
               const bg = done ? '#10B9810d' : wrongSel ? '#EF44440e' : sel ? `${accent}0e` : 'var(--bg-deep)';
               const color = done ? '#10B981' : wrongSel ? '#EF4444' : 'var(--text-primary)';
               return (
-                <button key={j} disabled={done} onClick={() => setSelR(j)}
+                <button data-ui-control="" key={j} disabled={done} onClick={() => setSelR(j)}
                   style={{ textAlign: 'left', minHeight: 40, padding: '8px 10px', borderRadius: 9, border: `1px solid ${borderColor}`, background: bg, color, fontSize: 11.5, fontWeight: 500, cursor: done ? 'default' : 'pointer', lineHeight: 1.4, transition: 'all 120ms', display: 'flex', alignItems: 'center', gap: 7 }}>
                   {done && <Check size={11} style={{ flexShrink: 0 }} />}
                   <span style={{ opacity: done ? 0.75 : 1 }}>{pairs[pairIdx].a}</span>
@@ -765,11 +781,11 @@ function ToolPracticeModal({ mat, topicMaterials, onClose }: { mat: SubjectMater
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 14 }}>
-          <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{matched.length}/{pairs.length} conectados{fails > 0 ? ` · ${fails} ${fails === 1 ? 'fallo' : 'fallos'}` : ''}</span>
+          <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{matched.length}/{pairs.length} conectados{fails > 0 ? ` · ${fails} ${fails === 1 ? 'fallo' : 'fallos'}` : ''}</span>
           {allMatched ? (
-            <button onClick={resetMatching} style={ghostBtn}>Repetir</button>
+            <button data-ui-control="" onClick={resetMatching} style={ghostBtn}>Repetir</button>
           ) : (
-            <button onClick={attemptMatch} disabled={selL === null || selR === null} style={{ ...btnBase, opacity: selL === null || selR === null ? 0.4 : 1 }}>Comprobar pareja</button>
+            <button data-ui-control="" onClick={attemptMatch} disabled={selL === null || selR === null} style={{ ...btnBase, opacity: selL === null || selR === null ? 0.4 : 1 }}>Comprobar pareja</button>
           )}
         </div>
       </>
@@ -784,7 +800,7 @@ function ToolPracticeModal({ mat, topicMaterials, onClose }: { mat: SubjectMater
       <>
         {isFey && (
           <div style={{ borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', padding: '14px 18px', marginBottom: 12 }}>
-            <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: accent, marginBottom: 6, fontFamily: "'Inter Tight', sans-serif" }}>Concepto</div>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: accent, marginBottom: 6, fontFamily: "'Inter Tight', sans-serif" }}>Concepto</div>
             <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{mat.word || mat.title}</div>
           </div>
         )}
@@ -794,8 +810,8 @@ function ToolPracticeModal({ mat, topicMaterials, onClose }: { mat: SubjectMater
             <textarea value={text} onChange={e => setText(e.target.value)} placeholder={isFey ? 'Explica el concepto…' : 'Escribe aquí todo lo que recuerdas…'} autoFocus
               style={{ width: '100%', minHeight: 200, padding: 12, borderRadius: 10, fontSize: 13, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', lineHeight: 1.6 }} />
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
-              <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{text.trim().split(/\s+/).filter(Boolean).length} palabras</span>
-              <button onClick={() => setRevealed(true)} disabled={!text.trim()} style={{ ...btnBase, opacity: !text.trim() ? 0.4 : 1 }}>{isFey ? 'Revelar modelo' : 'Revelar original'}</button>
+              <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{text.trim().split(/\s+/).filter(Boolean).length} palabras</span>
+              <button data-ui-control="" onClick={() => setRevealed(true)} disabled={!text.trim()} style={{ ...btnBase, opacity: !text.trim() ? 0.4 : 1 }}>{isFey ? 'Revelar modelo' : 'Revelar original'}</button>
             </div>
           </>
         ) : (
@@ -811,7 +827,7 @@ function ToolPracticeModal({ mat, topicMaterials, onClose }: { mat: SubjectMater
               })}
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
-              <button onClick={() => { setText(''); setRevealed(false); }} style={ghostBtn}>Volver a intentar</button>
+              <button data-ui-control="" onClick={() => { setText(''); setRevealed(false); }} style={ghostBtn}>Volver a intentar</button>
             </div>
           </>
         )}
@@ -841,13 +857,13 @@ function ToolPracticeModal({ mat, topicMaterials, onClose }: { mat: SubjectMater
           })}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 14 }}>
-          <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>
+          <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
             {clozeChecked ? `${correctGaps}/${gapParts.length} huecos correctos` : `${gaps.filter(g => g.trim()).length}/${gapParts.length} completados`}
           </span>
           {clozeChecked ? (
-            <button onClick={() => { setClozeChecked(false); setGaps(gapParts.map(() => '')); }} style={ghostBtn}>Reiniciar</button>
+            <button data-ui-control="" onClick={() => { setClozeChecked(false); setGaps(gapParts.map(() => '')); }} style={ghostBtn}>Reiniciar</button>
           ) : (
-            <button onClick={() => setClozeChecked(true)} disabled={gaps.some(g => !g.trim())} style={{ ...btnBase, opacity: gaps.some(g => !g.trim()) ? 0.4 : 1 }}>Comprobar</button>
+            <button data-ui-control="" onClick={() => setClozeChecked(true)} disabled={gaps.some(g => !g.trim())} style={{ ...btnBase, opacity: gaps.some(g => !g.trim()) ? 0.4 : 1 }}>Comprobar</button>
           )}
         </div>
       </>
@@ -863,16 +879,16 @@ function ToolPracticeModal({ mat, topicMaterials, onClose }: { mat: SubjectMater
         {!catResult ? (
           <>
             <div style={{ borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', padding: '14px 18px', marginBottom: 12 }}>
-              <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: accent, marginBottom: 6, fontFamily: "'Inter Tight', sans-serif" }}>categoría</div>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: accent, marginBottom: 6, fontFamily: "'Inter Tight', sans-serif" }}>categoría</div>
               <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{mat.title || 'Sin título'}</div>
-              <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 6 }}>{items.length} {items.length === 1 ? 'elemento' : 'elementos'} guardados</div>
+              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 6 }}>{items.length} {items.length === 1 ? 'elemento' : 'elementos'} guardados</div>
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.5, marginBottom: 10 }}>Escribe de memoria todos los elementos de la categoría (uno por línea).</div>
             <textarea value={catText} onChange={e => setCatText(e.target.value)} placeholder={'Perro\nGato\n…'} autoFocus
               style={{ width: '100%', minHeight: 160, padding: 12, borderRadius: 10, fontSize: 13, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', lineHeight: 1.6 }} />
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
-              <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{count} {count === 1 ? 'palabra' : 'palabras'}</span>
-              <button onClick={() => {
+              <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{count} {count === 1 ? 'palabra' : 'palabras'}</span>
+              <button data-ui-control="" onClick={() => {
                 const t = catText.toLowerCase();
                 const list = items.map(el => ({ el, hit: t.includes(el.toLowerCase()) }));
                 setCatResult({ recalled: list.filter(x => x.hit).length, total: items.length, list });
@@ -893,8 +909,8 @@ function ToolPracticeModal({ mat, topicMaterials, onClose }: { mat: SubjectMater
               ))}
             </div>
             <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-              <button onClick={() => { const missing = catResult.list.filter(x => !x.hit).map(x => x.el).join('\n'); setCatText(missing); setCatResult(null); }} style={{ ...btnBase, flex: 1 }}>Reintentar con lo que faltó</button>
-              <button onClick={() => { setCatText(''); setCatResult(null); }} style={{ ...ghostBtn, flex: 1 }}>Empezar de nuevo</button>
+              <button data-ui-control="" onClick={() => { const missing = catResult.list.filter(x => !x.hit).map(x => x.el).join('\n'); setCatText(missing); setCatResult(null); }} style={{ ...btnBase, flex: 1 }}>Reintentar con lo que faltó</button>
+              <button data-ui-control="" onClick={() => { setCatText(''); setCatResult(null); }} style={{ ...ghostBtn, flex: 1 }}>Empezar de nuevo</button>
             </div>
           </>
         )}
@@ -910,7 +926,7 @@ function ToolPracticeModal({ mat, topicMaterials, onClose }: { mat: SubjectMater
     return wrap(
       <>
         <div style={{ borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', padding: '14px 18px', marginBottom: 12 }}>
-          <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: accent, marginBottom: 6, fontFamily: "'Inter Tight', sans-serif" }}>Dato a recordar</div>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: accent, marginBottom: 6, fontFamily: "'Inter Tight', sans-serif" }}>Dato a recordar</div>
           <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{mat.title}</div>
         </div>
         {!revealed ? (
@@ -922,23 +938,23 @@ function ToolPracticeModal({ mat, topicMaterials, onClose }: { mat: SubjectMater
             )}
             <div style={{ borderRadius: 12, border: '1px dashed var(--border-subtle)', minHeight: 48, padding: '10px 14px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, background: 'var(--bg-deep)' }}>
               {built ? mneAnswer.map(i => (
-                <button key={i} onClick={() => setMneAnswer(m => m.filter(x => x !== i))} title="Quitar"
+                <button data-ui-control="" key={i} onClick={() => setMneAnswer(m => m.filter(x => x !== i))} title="Quitar"
                   style={{ height: 26, padding: '0 10px', borderRadius: 7, border: `1px solid ${accent}45`, background: `${accent}0d`, color: accent, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{mneWords[i].w}</button>
               )) : <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Construye la regla aquí</span>}
             </div>
-            <div style={{ fontSize: 10, color: 'var(--text-tertiary)', margin: '12px 0 8px' }}>Palabras disponibles · pulsa para añadir</div>
+            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: '12px 0 8px' }}>Palabras disponibles · pulsa para añadir</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {mneWords.map((wObj, i) => usedSet.has(i) ? null : (
-                <button key={i} onClick={() => setMneAnswer(m => [...m, i])}
+                <button data-ui-control="" key={i} onClick={() => setMneAnswer(m => [...m, i])}
                   style={{ height: 28, padding: '0 12px', borderRadius: 8, border: '1px solid var(--border-soft)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontSize: 12, cursor: 'pointer', transition: 'all 120ms' }}
                   onMouseEnter={e => { e.currentTarget.style.borderColor = `${accent}50`; e.currentTarget.style.color = accent; }}
                   onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.color = 'var(--text-primary)'; }}>{wObj.w}</button>
               ))}
             </div>
             <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
-              <button onClick={() => setMneChecked(true)} disabled={mneAnswer.length === 0} style={{ ...btnBase, opacity: mneAnswer.length === 0 ? 0.4 : 1 }}>Comprobar</button>
-              <button onClick={() => setRevealed(true)} style={ghostBtn}>Ver la regla</button>
-              <button onClick={resetMne} style={ghostBtn}>Barajar</button>
+              <button data-ui-control="" onClick={() => setMneChecked(true)} disabled={mneAnswer.length === 0} style={{ ...btnBase, opacity: mneAnswer.length === 0 ? 0.4 : 1 }}>Comprobar</button>
+              <button data-ui-control="" onClick={() => setRevealed(true)} style={ghostBtn}>Ver la regla</button>
+              <button data-ui-control="" onClick={resetMne} style={ghostBtn}>Barajar</button>
             </div>
           </>
         ) : (
@@ -946,7 +962,7 @@ function ToolPracticeModal({ mat, topicMaterials, onClose }: { mat: SubjectMater
             <div style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.5, marginBottom: 10 }}>La regla mnemotécnica completa:</div>
             <div style={{ borderRadius: 12, border: '1px solid #10B98140', background: '#10B9810d', padding: '16px 18px', fontSize: 14, fontWeight: 600, lineHeight: 1.7, color: '#10B981', fontFamily: "'Inter Tight', sans-serif" }}>{mat.content}</div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
-              <button onClick={() => { setRevealed(false); resetMne(); }} style={ghostBtn}>Volver a jugar</button>
+              <button data-ui-control="" onClick={() => { setRevealed(false); resetMne(); }} style={ghostBtn}>Volver a jugar</button>
             </div>
           </>
         )}
@@ -981,14 +997,14 @@ function TagAssignInline({ defs, assigned, onToggle, accent }: {
   };
   return (
     <div style={{ borderTop: '1px solid var(--border-subtle)', padding: '6px 10px', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', background: 'var(--bg-surface)' }}>
-      {active.length === 0 && <span style={{ fontSize: 8, color: 'var(--text-tertiary)', fontWeight: 500 }}>Sin etiquetas</span>}
+      {active.length === 0 && <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 500 }}>Sin etiquetas</span>}
       {active.map(d => (
-        <span key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 8, fontWeight: 600, padding: '2px 7px', borderRadius: 4, background: `${d.color}14`, color: d.color, letterSpacing: '0.03em' }}>
+        <span key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, padding: '2px 7px', borderRadius: 4, background: `${d.color}14`, color: d.color, letterSpacing: '0.03em' }}>
           <span style={{ width: 5, height: 5, borderRadius: '50%', background: d.color }} />{d.name}
         </span>
       ))}
       <div style={{ marginLeft: 'auto' }}>
-        <button ref={btnRef} onClick={togglePop} title="Etiquetar"
+        <button data-ui-control="" ref={btnRef} onClick={togglePop} title="Etiquetar"
           style={{ width: 22, height: 22, borderRadius: 6, border: `1px solid ${open ? `${accent}55` : 'var(--border-subtle)'}`, background: open ? `${accent}12` : 'transparent', cursor: 'pointer', color: open ? accent : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 120ms' }}>
           <Tag size={10} />
         </button>
@@ -997,11 +1013,11 @@ function TagAssignInline({ defs, assigned, onToggle, accent }: {
         <>
           <div style={{ position: 'fixed', inset: 0, zIndex: 99988 }} onClick={(e) => { e.stopPropagation(); setOpen(false); }} />
           <div style={{ position: 'fixed', left: pos?.x ?? 0, top: pos?.y ?? 0, zIndex: 99990, minWidth: 170, maxWidth: 190, borderRadius: 10, border: '1px solid var(--border-default)', background: 'var(--bg-elevated)', boxShadow: '0 10px 34px rgba(0,0,0,0.32)', padding: 6 }}>
-            <div style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-tertiary)', padding: '4px 8px 6px' }}>Etiquetas</div>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-tertiary)', padding: '4px 8px 6px' }}>Etiquetas</div>
             {defs.map(d => {
               const on = assigned.includes(d.id);
               return (
-                <button key={d.id} onClick={(e) => { e.stopPropagation(); onToggle(d.id); }}
+                <button data-ui-control="" key={d.id} onClick={(e) => { e.stopPropagation(); onToggle(d.id); }}
                   style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '6px 8px', borderRadius: 6, border: 'none', background: on ? `${d.color}12` : 'transparent', cursor: 'pointer', color: 'var(--text-primary)', fontSize: 11, fontWeight: 600, textAlign: 'left' }}>
                   <span style={{ width: 8, height: 8, borderRadius: '50%', background: d.color, boxShadow: on ? `0 0 0 2px ${d.color}30` : 'none' }} />
                   <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</span>
@@ -1037,7 +1053,7 @@ function NoteCard({ note, courseColor, onSelect }: { note: any; courseColor: str
       </div>
       <div style={{ marginTop: 6, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
         {(note.tags || []).slice(0, 2).map((t: string) => (
-          <span key={t} style={{ fontSize: 8, fontWeight: 600, padding: '1px 6px', borderRadius: 3, background: `${courseColor}12`, color: courseColor }}>{t}</span>
+          <span key={t} style={{ fontSize: 11, fontWeight: 600, padding: '1px 6px', borderRadius: 3, background: `${courseColor}12`, color: courseColor }}>{t}</span>
         ))}
       </div>
     </div>
@@ -1065,10 +1081,10 @@ function TaskRow({ task, onToggle, onDelete, courseColor }: { task: any; onToggl
       </div>
       <span style={{ flex: 1, fontSize: 12, fontWeight: 500, color: task.status === 'completado' ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: task.status === 'completado' ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</span>
       {task.priority !== 'none' && (
-        <span style={{ fontSize: 8, fontWeight: 600, padding: '1px 6px', borderRadius: 3, background: `${priorityColors[task.priority]}18`, color: priorityColors[task.priority], textTransform: 'uppercase' }}>{task.priority}</span>
+        <span style={{ fontSize: 11, fontWeight: 600, padding: '1px 6px', borderRadius: 3, background: `${priorityColors[task.priority]}18`, color: priorityColors[task.priority], textTransform: 'uppercase' }}>{task.priority}</span>
       )}
-      {task.dueDate && <span style={{ fontSize: 9, color: 'var(--text-muted)', flexShrink: 0 }}>{task.dueDate}</span>}
-      <button onClick={onDelete} style={{ width: 20, height: 20, borderRadius: 4, border: 'none', background: 'transparent', cursor: 'pointer', color: 'rgba(239,68,68,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Trash2 size={10} /></button>
+      {task.dueDate && <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>{task.dueDate}</span>}
+      <button data-ui-control="" onClick={onDelete} style={{ width: 20, height: 20, borderRadius: 4, border: 'none', background: 'transparent', cursor: 'pointer', color: 'rgba(239,68,68,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Trash2 size={10} /></button>
     </div>
   );
 }
@@ -1114,12 +1130,35 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
     return () => { liveNoteEditors.delete(note.id); };
   }, [note.id]);
 
-  useEffect(() => {
-    if (editorRef.current && editorRef.current.innerHTML !== note?.content) {
-      editorRef.current.innerHTML = note?.content || '';
-    }
-    dirtyRef.current = false;
-  }, [note?.id, note?.content]);
+  const saveRef = useRef(onSave); saveRef.current=onSave;
+  const saveDelay = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(()=>{
+    const sync=(event:Event)=>{
+      const detail=(event as CustomEvent).detail;
+      if(detail?.args?.entity!=='notes'||detail.args.id!==note.id)return;
+      if(saveDelay.current){clearTimeout(saveDelay.current);saveDelay.current=null;}
+      if(editorRef.current)editorRef.current.innerHTML=note.content||'';
+      dirtyRef.current=false;histRef.current.reset();
+    };
+    window.addEventListener('apheka:mcp-committed',sync);
+    return()=>window.removeEventListener('apheka:mcp-committed',sync);
+  },[note.id,note.content]);
+  useLayoutEffect(() => {
+    const editor=editorRef.current;
+    if(!editor)return;
+    editor.innerHTML=note?.content || '';
+    dirtyRef.current=false;
+    histRef.current.reset();
+    return()=>{
+      if(saveDelay.current)clearTimeout(saveDelay.current);
+      if(dirtyRef.current)saveRef.current(note.id,{content:editor.innerHTML});
+      if(trackTimeout.current)clearTimeout(trackTimeout.current);
+    };
+  }, [note.id]);
+  useEffect(()=>{
+    const editor=editorRef.current;
+    if(editor && !dirtyRef.current && document.activeElement!==editor && editor.innerHTML!==note.content) editor.innerHTML=note.content || '';
+  },[note.content]);
 
   // Historial undo/redo propio: se reinicia SOLO al cambiar de apunte
   // (no con cada commit del autosave, que re-renderiza el contenido)
@@ -1127,26 +1166,22 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
     histRef.current.reset();
   }, [note.id]);
 
-  useEffect(() => {
-    return () => {
-      if (!editorRef.current) return;
-      const content = editorRef.current.innerHTML;
-      onSave(note.id, { content });
-      if (trackTimeout.current) clearTimeout(trackTimeout.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const markDirty = () => { dirtyRef.current = true; };
+  const markDirty = () => {
+    if(!editable)return;
+    dirtyRef.current=true;
+    if(saveDelay.current)clearTimeout(saveDelay.current);
+    saveDelay.current=setTimeout(autoSave,600);
+  };
 
   const autoSave = () => {
-    if (!dirtyRef.current) return;
+    if (!editable || !dirtyRef.current) return;
     const content = editorRef.current?.innerHTML || '';
-    onSave(note.id, { content });
+    saveRef.current(note.id, { content });
     dirtyRef.current = false;
   };
 
   const trackFormats = () => {
+    if(!onActiveFormatsChange)return;
     const sel = window.getSelection();
     let bold = false, italic = false, underline = false, strikeThrough = false;
     let insertUnorderedList = false, insertOrderedList = false;
@@ -1181,12 +1216,13 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
   };
 
   const scheduleTrack = () => {
+    if(!onActiveFormatsChange)return;
     if (trackTimeout.current) clearTimeout(trackTimeout.current);
     trackTimeout.current = setTimeout(trackFormats, 0);
   };
 
   useEffect(() => {
-    if (!editable) return;
+    if (!editable || !onActiveFormatsChange) return;
     const onSelChange = () => scheduleTrack();
     document.addEventListener('selectionchange', onSelChange);
     return () => document.removeEventListener('selectionchange', onSelChange);
@@ -1214,58 +1250,17 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
       }
     }
     const html = e.clipboardData.getData('text/html');
-    if (html) {
-      const temp = document.createElement('div');
-      temp.innerHTML = html;
-      const all = temp.querySelectorAll('*');
-      for (const el of all) {
-        // Los SVG vectoriales (diagramas pegados u otros) se conservan INTEGROS:
-        // sus atributos (viewBox, fill, stroke, d, x, y…) son su contenido.
-        if (el.closest('svg')) continue;
-        const st = (el as HTMLElement).style;
-        st.removeProperty('background-color'); st.removeProperty('background');
-        st.removeProperty('color'); st.removeProperty('font-family'); st.removeProperty('font-size');
-        st.removeProperty('font-weight'); st.removeProperty('font-style'); st.removeProperty('line-height');
-        st.removeProperty('letter-spacing'); st.removeProperty('text-align'); st.removeProperty('text-decoration');
-        st.removeProperty('text-transform'); st.removeProperty('text-indent'); st.removeProperty('margin');
-        st.removeProperty('padding'); st.removeProperty('border'); st.removeProperty('border-color');
-        st.removeProperty('border-style'); st.removeProperty('border-width'); st.removeProperty('box-shadow');
-        st.removeProperty('width'); st.removeProperty('height'); st.removeProperty('max-width');
-        st.removeProperty('max-height'); st.removeProperty('min-width'); st.removeProperty('min-height');
-        st.removeProperty('position'); st.removeProperty('top'); st.removeProperty('left'); st.removeProperty('right');
-        st.removeProperty('bottom'); st.removeProperty('float'); st.removeProperty('clear');
-        st.removeProperty('display'); st.removeProperty('vertical-align'); st.removeProperty('white-space');
-        st.removeProperty('word-spacing'); st.removeProperty('opacity');
-        el.removeAttribute('bgcolor');
-        el.removeAttribute('face');
-        el.removeAttribute('class');
-        el.removeAttribute('id');
-        el.removeAttribute('style');
-      }
-      const cleaned = temp.innerHTML
-        .replace(/<meta[^>]*>/gi, '')
-        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-        .replace(/<link[^>]*>/gi, '')
-        .replace(/<!--[\s\S]*?-->/g, '')
-        .replace(/<o:p[^>]*>[\s\S]*?<\/o:p>/gi, '')
-        .replace(/<xml[^>]*>[\s\S]*?<\/xml>/gi, '')
-        .replace(/<head[^>]*>[\s\S]*?<\/head>/gi, '')
-        .replace(/<title[^>]*>[\s\S]*?<\/title>/gi, '')
-        .replace(/<span[^>]*>/gi, '<span>')
-        .replace(/<div([^>]*)>/gi, '<p$1>')
-        .replace(/<\/div>/gi, '</p>');
-            document.execCommand('insertHTML', false, upgradeLatexInText(cleaned));
-      } else {
-      const text = e.clipboardData.getData('text/plain');
-      const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\r\n/g, '\n');
-      document.execCommand('insertHTML', false, escaped.split('\n').map(l => l.trim() === '' ? '<p><br></p>' : `<p>${l}</p>`).join(''));
-    }
+    const clean=html?sanitizePastedHtml(prepareMathClipboard(html)):latexTextToHtml(e.clipboardData.getData('text/plain'));
+    if(clean)document.execCommand('insertHTML',false,upgradeLatexInText(clean));
+    histRef.current.capture(false);
     markDirty();
     scheduleTrack();
   };
 
   const handleEditorKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (!editable) { e.preventDefault(); return; }
+    if (!editable) return;
+    if(e.nativeEvent.isComposing || e.key==='Process')return;
+    histRef.current.capture(true);
     if ((e.ctrlKey || e.metaKey) && !e.altKey) {
       const uk = e.key.toLowerCase();
       if (uk === "z" && !e.shiftKey) {
@@ -1287,6 +1282,14 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
     const node = range.startContainer;
 
     if (e.key === "Enter" && !e.shiftKey) {
+      const block=(node.nodeType===Node.TEXT_NODE?node.parentElement:node as HTMLElement)?.closest('h1,h2,h3,h4,blockquote');
+      if(range.collapsed && block && editorRef.current?.contains(block)) {
+        const tail=range.cloneRange();tail.selectNodeContents(block);tail.setStart(range.startContainer,range.startOffset);
+        if(!tail.toString()){
+          e.preventDefault();const p=document.createElement('p');p.innerHTML='<br>';block.after(p);
+          const next=document.createRange();next.selectNodeContents(p);next.collapse(true);sel.removeAllRanges();sel.addRange(next);histRef.current.capture(false);markDirty();return;
+        }
+      }
       try {
         let listItem: HTMLElement | null = null;
         let lp = node.parentElement;
@@ -1331,25 +1334,6 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
       lastEnterEmpty.current = false;
     }
 
-    if (e.key === "Backspace") {
-      try {
-        if (range.startOffset === 0 && node.nodeType === Node.TEXT_NODE) {
-          let cb: HTMLElement | null = node.parentElement;
-          while (cb && cb !== editorRef.current && !["P","H1","H2","H3","LI","BLOCKQUOTE"].includes(cb.tagName)) cb = cb.parentElement;
-          if (cb && cb !== editorRef.current && cb.previousElementSibling) {
-            e.preventDefault();
-            const html = cb.innerHTML; cb.remove();
-            (cb.previousElementSibling as HTMLElement).insertAdjacentHTML("beforeend", html);
-            const nr = document.createRange();
-            nr.selectNodeContents(cb.previousElementSibling); nr.collapse(false);
-            sel.removeAllRanges(); sel.addRange(nr);
-            histRef.current.capture(false);
-            markDirty(); return;
-          }
-        }
-      } catch {}
-    }
-
     if (e.key === " ") {
       if (node.nodeType === Node.TEXT_NODE) {
         const text = node.textContent || "";
@@ -1376,7 +1360,13 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
 
   const blockquoteButtonRef = useRef<HTMLButtonElement>(null);
   const applyFormat = (cmd: string, value?: string) => {
-    if (cmd === 'h1' || cmd === 'h2' || cmd === 'h3') {
+    histRef.current.capture(true);
+    if(cmd==='hiliteColor'){if(editorRef.current)applyEditorHighlight(editorRef.current,value);}
+    else if(cmd==='codeBlock'){insertCode();histRef.current.capture(false);trackFormats();return;}
+    else if(cmd==='styledQuote'){document.execCommand('formatBlock',false,'<blockquote>');}
+    else if(cmd==='insertHR'){document.execCommand('insertHTML',false,'<hr><p><br></p>');}
+    else if(cmd==='insertTable'){const [cols,rows]=(value||'3x3').split('x').map(Number);document.execCommand('insertHTML',false,'<table><tbody>'+Array.from({length:Math.min(10,rows||3)},()=>'<tr>'+Array.from({length:Math.min(10,cols||3)},()=>'<td><br></td>').join('')+'</tr>').join('')+'</tbody></table><p><br></p>');}
+    else if (cmd === 'h1' || cmd === 'h2' || cmd === 'h3') {
       const block = document.queryCommandValue('formatBlock')?.replace(/[<>]/g, '')?.toLowerCase() || '';
       document.execCommand('formatBlock', false, block === cmd ? '<p>' : `<${cmd}>`);
     } else if (cmd === 'blockquote') {
@@ -1409,7 +1399,7 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
   const insertCode = () => {
     const sel = window.getSelection();
     if (!sel || !sel.rangeCount) return;
-    document.execCommand('insertHTML', false, `<code style="background:var(--bg-hover);padding:2px 6px;border-radius:4px;font-size:13px;font-family:'JetBrains Mono',monospace">${sel.toString()}</code>`);
+    document.execCommand('insertHTML', false, `<code style="background:var(--bg-hover);padding:2px 6px;border-radius:4px;font-size:13px;font-family:'JetBrains Mono',monospace">${sel.toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</code>`);
     markDirty();
   };
 
@@ -1424,77 +1414,28 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
   const insertMathAtCaret = () => {
     const sel = window.getSelection();
     if (!sel || !sel.rangeCount) return;
-    const raw = sel.toString().trim();
-    const conv = (raw || 'x^2')
-      .replace(/\^\{([^}]+)\}/g, '<sup>$1</sup>')
-      .replace(/_\{([^}]+)\}/g, '<sub>$1</sub>')
-      .replace(/\^(\S+)/g, '<sup>$1</sup>')
-      .replace(/_(\S+)/g, '<sub>$1</sub>');
-    document.execCommand('insertHTML', false, `<span style="font-family:'Cambria Math','STIX Two Math',Georgia,serif;font-style:italic;letter-spacing:0.02em;background:rgba(139,92,246,0.10);border:1px solid rgba(139,92,246,0.20);border-radius:6px;padding:2px 8px;white-space:nowrap;">${conv}</span>&nbsp;`);
+    const raw = sel.toString().trim() || 'x^2';
+    document.execCommand('insertHTML', false, latexToHtml(raw) + '&nbsp;');
     markDirty();
     histRef.current.capture(true);
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', background: 'transparent' }}>
+    <div className="course-note-surface" onPointerDown={e=>{if(editable)e.stopPropagation();}} style={{ display: 'flex', flexDirection: 'column', background: 'transparent' }}>
       {editable && !hideToolbar && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '8px 10px', borderBottom: '1px solid var(--border-subtle)', background: `${courseColor}04`, flexWrap: 'wrap' }}>
-          <FormatToolbar onFormat={applyFormat} color={courseColor}
-            toolbarItems={['bold','italic','underline','strikethrough','list','orderedList','heading3']}
-            activeFormats={activeFormats} />
-          <div style={{ width: 1, height: 18, background: 'var(--border-subtle)', margin: '0 6px', flexShrink: 0 }} />
-          <button onClick={() => applyFormat('h1')} title="Título 1"
-            style={{ width: 26, height: 26, borderRadius: 5, border: 'none', background: activeFormats.heading1 ? `${courseColor}18` : 'transparent', cursor: 'pointer', color: activeFormats.heading1 ? courseColor : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, transition: 'all 150ms' }}
-            onMouseEnter={e => e.currentTarget.style.background = `${courseColor}12`}
-            onMouseLeave={e => { if (!activeFormats.heading1) e.currentTarget.style.background = 'transparent'; }}>H1</button>
-          <button onClick={() => applyFormat('h2')} title="Título 2"
-            style={{ width: 26, height: 26, borderRadius: 5, border: 'none', background: activeFormats.heading2 ? `${courseColor}18` : 'transparent', cursor: 'pointer', color: activeFormats.heading2 ? courseColor : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, transition: 'all 150ms' }}
-            onMouseEnter={e => e.currentTarget.style.background = `${courseColor}12`}
-            onMouseLeave={e => { if (!activeFormats.heading2) e.currentTarget.style.background = 'transparent'; }}>H2</button>
-          <button onClick={() => applyFormat('h3')} title="Título 3"
-            style={{ width: 26, height: 26, borderRadius: 5, border: 'none', background: activeFormats.heading3 ? `${courseColor}18` : 'transparent', cursor: 'pointer', color: activeFormats.heading3 ? courseColor : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, transition: 'all 150ms' }}
-            onMouseEnter={e => e.currentTarget.style.background = `${courseColor}12`}
-            onMouseLeave={e => { if (!activeFormats.heading3) e.currentTarget.style.background = 'transparent'; }}>H3</button>
-          <div style={{ width: 1, height: 18, background: 'var(--border-subtle)', margin: '0 6px', flexShrink: 0 }} />
-          <button ref={blockquoteButtonRef} onClick={() => applyFormat('blockquote')} title="Cita"
-            style={{ width: 26, height: 26, borderRadius: 5, border: 'none', background: activeFormats.blockquote ? `${courseColor}18` : 'transparent', cursor: 'pointer', color: activeFormats.blockquote ? courseColor : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms', fontSize: 14 }}
-            onMouseEnter={e => e.currentTarget.style.background = `${courseColor}12`}
-            onMouseLeave={e => { if (!activeFormats.blockquote) e.currentTarget.style.background = 'transparent'; }}>?</button>
-          <button onClick={insertCode} title="Código"
-            style={{ width: 26, height: 26, borderRadius: 5, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms', fontSize: 12, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}
-            onMouseEnter={e => e.currentTarget.style.background = `${courseColor}12`}
-            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>&lt;/&gt;</button>
-          <button onClick={insertLink} title="Insertar enlace"
-            style={{ width: 26, height: 26, borderRadius: 5, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
-            onMouseEnter={e => e.currentTarget.style.background = `${courseColor}12`}
-            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-          </button>
-          <div style={{ width: 1, height: 18, background: 'var(--border-subtle)', margin: '0 6px', flexShrink: 0 }} />
-          <button onClick={() => applyMathFormat('superscript')} title="Superíndice (x²)"
-            style={{ width: 26, height: 26, borderRadius: 5, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, transition: 'all 150ms' }}
-            onMouseEnter={e => e.currentTarget.style.background = `${courseColor}12`}
-            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>x²</button>
-          <button onClick={() => applyMathFormat('subscript')} title="Subíndice (x₂)"
-            style={{ width: 26, height: 26, borderRadius: 5, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, transition: 'all 150ms' }}
-            onMouseEnter={e => e.currentTarget.style.background = `${courseColor}12`}
-            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>x₂</button>
-          <button onClick={insertMathAtCaret} title="Ecuación — selecciona texto y convierte ^ y _ (ej. x^2, H_2O, x^{n+1})"
-            style={{ width: 26, height: 26, borderRadius: 5, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
-            onMouseEnter={e => e.currentTarget.style.background = `${courseColor}12`}
-            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-            <Sigma size={12} />
-          </button>
-          <div style={{ flex: 1 }} />
-          {toolbarEnd}
+        <div className="course-writing-toolbar course-note-controls" onMouseDown={e=>{if(e.button===0&&(e.target as HTMLElement).closest('button'))e.preventDefault();}}>
+          <NoteEditorToolbar key={note.id} variant="essential" editorRef={editorRef} onFormat={applyFormat}
+            />
+          {toolbarEnd&&<div className="course-note-actions">{toolbarEnd}</div>}
         </div>
       )}
       <div ref={editorRef} contentEditable={editable} suppressContentEditableWarning
-        onPaste={handlePaste} onInput={() => { markDirty(); histRef.current.capture(true); }}
-        onBlur={autoSave} onKeyDown={handleEditorKeyDown}
+        onBeforeInput={event=>{if(!(event.nativeEvent as InputEvent).isComposing)histRef.current.capture(true);}} onCompositionStart={()=>histRef.current.capture(true)} role="textbox" aria-label="Contenido del apunte" aria-multiline="true" onPaste={handlePaste} onInput={e => { if(!(e.nativeEvent as InputEvent).isComposing && editorRef.current)renderMathAtCaret(editorRef.current); markDirty(); if(!(e.nativeEvent as InputEvent).isComposing)histRef.current.capture(true); }} onCompositionEnd={()=>{if(editorRef.current)renderMathAtCaret(editorRef.current);markDirty();histRef.current.capture(true);}}
+        onBlur={()=>{const editor=editorRef.current;if(editable&&editor){const rendered=upgradeLatexInText(editor.innerHTML);if(rendered!==editor.innerHTML){histRef.current.capture(true);editor.innerHTML=rendered;dirtyRef.current=true;histRef.current.capture(false);}}autoSave();}} onKeyDown={handleEditorKeyDown}
+        onDoubleClick={e=>{if(editable&&editorRef.current){histRef.current.capture(true);if(editMathSource(e.target,editorRef.current)){e.preventDefault();markDirty();histRef.current.capture(false);}}}}
         onMouseUp={scheduleTrack}
         onClick={(e) => { const t = e.target as HTMLElement; if (t.tagName === 'IMG' && onImageClick) { e.stopPropagation(); onImageClick((t as HTMLImageElement).src); } }}
-        className="notes-editor-area"
+        className="notes-editor-area course-note-editor"
         style={{ padding: '12px 16px', minHeight: 80, fontSize: 14, lineHeight: 1.8, color: 'var(--text-primary)',
           background: 'transparent', outline: 'none',
           fontFamily: "'Atkinson Hyperlegible', system-ui, serif",
@@ -1505,55 +1446,11 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
 }
 
 // --- Desplegable custom (agrupación / tema): siempre hacia arriba, con buscador y scroll interno acotado ---
-function PlanSelectDropdown({ value, onChange, options, noneLabel, color }: { value: string; onChange: (v: string) => void; options: { id: string; label: string }[]; noneLabel: string; color: string }) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const sel = options.find(o => o.id === value);
-  const filtered = options.filter(o => !query.trim() || fuzzyMatch(o.label, query));
-  const close = () => { setOpen(false); setQuery(''); };
-  return (
-    <div ref={wrapRef} tabIndex={-1} style={{ position: 'relative', outline: 'none' }}
-      onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) close(); }}>
-      <button type="button" onClick={() => setOpen(o => !o)}
-        style={{ width: '100%', height: 42, borderRadius: 10, border: `1px solid ${open ? `${color}55` : 'var(--border-subtle)'}`, background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 38px 0 13px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif", cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, transition: 'all 150ms', textAlign: 'left' }}>
-        <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: sel ? 'var(--text-primary)' : 'var(--text-muted)' }}>{sel ? sel.label : noneLabel}</span>
-        <ChevronDown size={14} style={{ flexShrink: 0, color: open ? color : 'var(--text-muted)', transition: 'transform 180ms ease', transform: open ? 'rotate(180deg)' : 'none' }} />
-      </button>
-      {open && (
-        <div className="plan-select-popup">
-          <div className="psp-search-wrap">
-            <input autoFocus value={query} onChange={e => setQuery(e.target.value)} placeholder="Buscar…" className="psp-search" />
-          </div>
-          <div className="psp-list no-scrollbar">
-            <button type="button" className={`psp-opt${value === '' ? ' sel' : ''}`} onClick={() => { onChange(''); close(); }}
-              style={value === '' ? { background: `color-mix(in srgb, ${color} 12%, transparent)`, color, fontWeight: 600 } : undefined}>
-              <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{noneLabel}</span>
-              {value === '' && <Check size={12} style={{ color, flexShrink: 0 }} />}
-            </button>
-            {filtered.map(o => {
-              const sel2 = o.id === value;
-              return (
-                <button key={o.id} type="button" className={`psp-opt${sel2 ? ' sel' : ''}`} onClick={() => { onChange(o.id); close(); }} title={o.label}
-                  style={sel2 ? { background: `color-mix(in srgb, ${color} 12%, transparent)`, color, fontWeight: 600 } : undefined}>
-                  <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.label}</span>
-                  {sel2 && <Check size={12} style={{ color, flexShrink: 0 }} />}
-                </button>
-              );
-            })}
-            {filtered.length === 0 && (
-              <span className="psp-empty">Sin resultados</span>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 // --- Main Component ---
 export default function Cursos({ initialCourseId, initialTab = 'overview', onNavigate }: { initialCourseId?: string; initialTab?: 'overview' | 'tareas' | 'notas' | 'archivos'; onNavigate?: (view: string) => void }) {
-  const { courses = [], tasks = [], notes = [], noteFolders = [], updateCourse, deleteCourse, setNavigateTo, setFocusedTaskId, addTask, updateTask, deleteTask, addNote, updateNote, deleteNote, reorderNotes, reorderTasks, plannedSessions, addPlannedSession, updatePlannedSession, deletePlannedSession, reorderPlannedSessions, setPipUrl, studySessions, activePlannedSessionId, linkPlannedSessionToTimer, unlinkPlannedSessionFromTimer, courseDeepLink, setCourseDeepLink, navigateToCourse, activeTaskId, addNotification, flushNoteContent } = useApp();
+  const { hydrated, courses = [], tasks = [], notes = [], noteFolders = [], updateCourse, deleteCourse, setNavigateTo, setFocusedTaskId, addTask, updateTask, deleteTask, addNote, updateNote, deleteNote, reorderNotes, reorderTasks, plannedSessions, addPlannedSession, updatePlannedSession, deletePlannedSession, reorderPlannedSessions, studySessions, activePlannedSessionId, linkPlannedSessionToTimer, unlinkPlannedSessionFromTimer, courseDeepLink, setCourseDeepLink, navigateToCourse, activeTaskId, addNotification, flushNoteContent } = useAppSlice(["hydrated","courses","tasks","notes","noteFolders","updateCourse","deleteCourse","setNavigateTo","setFocusedTaskId","addTask","updateTask","deleteTask","addNote","updateNote","deleteNote","reorderNotes","reorderTasks","plannedSessions","addPlannedSession","updatePlannedSession","deletePlannedSession","reorderPlannedSessions","studySessions","activePlannedSessionId","linkPlannedSessionToTimer","unlinkPlannedSessionFromTimer","courseDeepLink","setCourseDeepLink","navigateToCourse","activeTaskId","addNotification","flushNoteContent"]);
+  const courseTimeTotals=useMemo(()=>courseStudySeconds(courses,tasks,studySessions),[courses,tasks,studySessions]);
   const th = document.documentElement.getAttribute('data-theme');
   const isDarkSelect = !th || th === 'oscuro' || th === 'vibrante';
   const selectBorder = isDarkSelect ? '1px solid rgba(255,255,255,0.12)' : '1px solid rgba(0,0,0,0.12)';
@@ -1627,6 +1524,8 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const [editCourseName, setEditCourseName] = useState('');
   const [editCourseCover, setEditCourseCover] = useState<string | undefined>(undefined);
   const [editEditorSrc, setEditEditorSrc] = useState<string | null>(null);
+  const [editCourseOriginal,setEditCourseOriginal]=useState<string|undefined>();
+  const [editCourseCrop,setEditCourseCrop]=useState<BannerCrop|undefined>();
   const [editCourseTeacher, setEditCourseTeacher] = useState('');
   const [editCourseColor, setEditCourseColor] = useState('#6366f1');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -1765,7 +1664,7 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const { plannerDate, setPlannerDate, markManual } = usePlannerDay(selectedCourseId);
   // Deep-link para editar una sesión desde otro curso: el panel escribe owa_course_edit_session antes de navegar
   useEffect(() => {
-    if (!selectedCourseId) return;
+    if (!hydrated || !selectedCourseId) return;
     try {
       const pending = localStorage.getItem('owa_course_edit_session');
       if (!pending) return;
@@ -1781,9 +1680,12 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
       setPlanType(target.type || 'estudio');
       setPlanDuration(target.durationMinutes || 30);
       setPlanIntensity(target.intensity || 5);
+      setPlanRepeat(target.repeat || 'none');
+      setPlanRepeatDays(target.repeatDays || []);
+      setPlanRepeatUntil(target.repeatUntil || '');
       setShowPlanModal(true);
     } catch { /* noop */ }
-  }, [selectedCourseId, plannedSessions]);
+  }, [hydrated, selectedCourseId, plannedSessions]);
   const [planStartTime, setPlanStartTime] = useState('09:00');
   const [planTitle, setPlanTitle] = useState('');
   const [planGroupId, setPlanGroupId] = useState('');
@@ -1794,28 +1696,6 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const [planRepeat, setPlanRepeat] = useState<'none' | 'daily' | 'weekly' | 'custom_days'>('none');
   const [planRepeatDays, setPlanRepeatDays] = useState<number[]>([]);
   const [planRepeatUntil, setPlanRepeatUntil] = useState('');
-  const [planTimeEdit, setPlanTimeEdit] = useState<'h' | 'm' | null>(null);
-  const [planTimeEditVal, setPlanTimeEditVal] = useState('');
-  const parsePlanTime = (t: string) => {
-    const [h, m] = (t || '09:00').split(':').map(Number);
-    return { h: Number.isFinite(h) ? h : 9, m: Number.isFinite(m) ? m : 0 };
-  };
-  const shiftPlanTime = (unit: 'h' | 'm', dir: number) => {
-    const { h, m } = parsePlanTime(planStartTime);
-    const nh = unit === 'h' ? (h + dir + 24) % 24 : h;
-    const nm = unit === 'm' ? (m + dir * 5 + 60) % 60 : m;
-    setPlanStartTime(`${String(nh).padStart(2, '0')}:${String(nm).padStart(2, '0')}`);
-  };
-  const commitPlanTimeEdit = (unit: 'h' | 'm') => {
-    setPlanTimeEdit(null);
-    const raw = planTimeEditVal.trim();
-    if (!/^\d{1,2}$/.test(raw)) return;
-    const n = parseInt(raw, 10);
-    const { h, m } = parsePlanTime(planStartTime);
-    if (unit === 'h' && n <= 23) setPlanStartTime(`${String(n).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
-    if (unit === 'm' && n <= 59) setPlanStartTime(`${String(h).padStart(2, '0')}:${String(n).padStart(2, '0')}`);
-  };
-
   // Session detail horizontal panel
   const [detailSessionId, setDetailSessionId] = useState<string | null>(null);
   const [confirmDeleteSession, setConfirmDeleteSession] = useState<PlannedSession | null>(null);
@@ -1898,27 +1778,8 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const [radarFilter, setRadarFilter] = useState<'agrupaciones' | 'dias' | 'tipos'>('agrupaciones');
   const [showChartsModal, setShowChartsModal] = useState(false);
   const [radarHover, setRadarHover] = useState<number | null>(null);
-  const radarWrapRef = useRef<HTMLDivElement>(null);
+  const {ref:observeRadar,size:radarDims,element:radarWrapRef}=useObservedSize<HTMLDivElement>();
   const radarSvgRef = useRef<SVGSVGElement>(null);
-  const [radarDims, setRadarDims] = useState<{ w: number; h: number } | null>(null);
-  useEffect(() => {
-    let last = '';
-    const measure = () => {
-      const el = radarWrapRef.current;
-      if (!el) return;
-      const r = el.getBoundingClientRect();
-      const key = `${Math.round(r.width)}x${Math.round(r.height)}`;
-      if (r.width > 50 && r.height > 50 && key !== last) {
-        last = key;
-        setRadarDims({ w: Math.round(r.width), h: Math.round(r.height) });
-      }
-    };
-    const onResize = () => measure();
-    window.addEventListener('resize', onResize);
-    const t = window.setInterval(measure, 400);
-    measure();
-    return () => { window.removeEventListener('resize', onResize); window.clearInterval(t); };
-  }, []);
 
   // Task state
   const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -1934,6 +1795,18 @@ export default function Cursos({ initialCourseId, initialTab = 'overview', onNav
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
   const editContentRef = useRef<HTMLDivElement>(null);
+  useEffect(()=>{
+    const sync=(event:Event)=>{
+      const args=(event as CustomEvent).detail?.args;
+      if(args?.entity!=='notes'||args.id!==editingNoteId)return;
+      const note=notes.find(n=>n.id===editingNoteId&&!n.deletedAt);
+      if(!note){setEditingNoteId(null);return;}
+      if(editContentRef.current)editContentRef.current.innerHTML=note.content||'';
+      setEditContent(note.content||'');
+    };
+    window.addEventListener('apheka:mcp-committed',sync);
+    return()=>window.removeEventListener('apheka:mcp-committed',sync);
+  },[notes,editingNoteId]);
   const topicHistRef = useRef(createEditorHistory(() => editContentRef.current));
   const [noteActiveFormats, setNoteActiveFormats] = useState<Record<string, boolean>>({});
   const noteTrackTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -2338,8 +2211,8 @@ const saveCourseNoteContent = (id: string, html: string) => {
           setOverviewNoteEditMode(false);
           setConfirmDeleteNoteId(null);
         } else if (editingNoteId) {
-          const html = editContentRef.current?.innerHTML || editContent;
-          if (html) saveCourseNoteContent(editingNoteId, html);
+          const html = liveNoteEditors.get(editingNoteId)?.();
+          if (html !== undefined && html !== null) saveCourseNoteContent(editingNoteId, html);
           if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
           setEditingNoteId(null);
         }
@@ -2358,16 +2231,18 @@ const saveCourseNoteContent = (id: string, html: string) => {
           if (html !== null) flushNoteContent(id, html);
         } catch { }
       }
-      if (editingNoteId) {
-        const html = editContentRef.current?.innerHTML || editContent;
+      if (editingNoteId && !liveNoteEditors.has(editingNoteId)) {
+        const html = editContentRef.current?.innerHTML ?? editContent;
         try { flushNoteContent(editingNoteId, html || ''); } catch { }
       }
     };
     const onVis = () => { if (document.visibilityState === 'hidden') flushAll(); };
+    window.addEventListener('apheka:flush-editors', flushAll);
     window.addEventListener('beforeunload', flushAll);
     window.addEventListener('pagehide', flushAll);
     document.addEventListener('visibilitychange', onVis);
     return () => {
+      window.removeEventListener('apheka:flush-editors', flushAll);
       window.removeEventListener('beforeunload', flushAll);
       window.removeEventListener('pagehide', flushAll);
       document.removeEventListener('visibilitychange', onVis);
@@ -2569,10 +2444,10 @@ const saveCourseNoteContent = (id: string, html: string) => {
   useEffect(() => {
     if (course) {
       setEditCourseName(course.name);
-      setEditCourseCover(course.coverUrl || course.coverImage);
+      setEditCourseCover(course.coverUrl || course.coverImage);setEditCourseOriginal(course.coverOriginal);setEditCourseCrop(course.coverCrop);
       setEditCourseTeacher(course.teacher || course.teacherName || '');
     }
-  }, [selectedCourseId, course?.name, course?.coverUrl, course?.coverImage, course?.teacher, course?.teacherName]);
+  }, [selectedCourseId, course?.name, course?.coverUrl, course?.coverImage, course?.teacher, course?.teacherName,course?.coverOriginal,course?.coverCrop]);
 
   // Save last active tab per course to localStorage for hub recall
   useEffect(() => {
@@ -2656,6 +2531,7 @@ const saveCourseNoteContent = (id: string, html: string) => {
   }, [topicItems, topicSearch, activeTagFilter]);
 
   // Course tasks
+  const coursePalette=useCoverPalette(course?.coverUrl||course?.coverImage);
   const courseTasks = useMemo(() => tasks.filter(t => !!t && typeof t === 'object' && t.course === course?.name), [tasks, course]);
   const courseTaskStats = useMemo(() => {
     const total = courseTasks.length;
@@ -2760,7 +2636,8 @@ const saveCourseNoteContent = (id: string, html: string) => {
     if (e.target) e.target.value = '';
   };
 
-  const handleEditCoverConfirm = (dataUrl: string) => {
+  const handleEditCoverConfirm = (dataUrl: string,crop:BannerCrop) => {
+    setEditCourseOriginal(previous=>previous||editEditorSrc||undefined);setEditCourseCrop(crop);
     setEditCourseCover(dataUrl);
     setEditEditorSrc(null);
     toast.success('Imagen aplicada');
@@ -2768,7 +2645,7 @@ const saveCourseNoteContent = (id: string, html: string) => {
 
   const handleSaveCourseSettings = () => {
     if (!editCourseName.trim()) return;
-    updateCourse(course.id, { name: editCourseName.trim(), coverImage: editCourseCover, coverUrl: editCourseCover, color: editCourseColor, teacher: editCourseTeacher.trim() || undefined, teacherName: editCourseTeacher.trim() || undefined });
+    updateCourse(course.id, { name: editCourseName.trim(), coverImage: editCourseCover, coverUrl: editCourseCover,coverOriginal:editCourseOriginal,coverCrop:editCourseCrop, color: editCourseColor, teacher: editCourseTeacher.trim() || undefined, teacherName: editCourseTeacher.trim() || undefined });
     setShowEditCourse(false);
     toast.success('Guardado');
   };
@@ -3057,7 +2934,7 @@ const saveCourseNoteContent = (id: string, html: string) => {
     // editable), http → navegador del sistema, media → PiP. Sin visor interno,
     // sin copias asset. Los enlaces con predeterminado usan ESE navegador y los
     // PDF con app predeterminada usan ESA app (curso > global). Sin errores.
-    if (/^https?:\/\//i.test(mat.dataUrl)) {
+    if (!localPathFromUrl(mat.dataUrl) && /^https?:\/\//i.test(mat.dataUrl)) {
       const url = mat.dataUrl;
       const name = mat.name || 'Archivo';
       const id = mat.id;
@@ -3067,7 +2944,7 @@ const saveCourseNoteContent = (id: string, html: string) => {
           const exe = await resolveDefaultBrowserExe(course.id);
           if (exe) { await openUrlInBrowser(exe, url); return; }
         } catch { /* cae al flujo normal */ }
-        openFileSmart(url, name, { onMedia: (u, n) => setPipUrl(u, n), onError: (m) => toast.error(m), onMoved: (np) => handleMatMoved(id, np) }).catch(() => toast.error('No se pudo abrir el recurso'));
+        openFileSmart(url, name, { onError: (m) => toast.error(m), onMoved: (np) => handleMatMoved(id, np) }).catch(() => toast.error('No se pudo abrir el recurso'));
       })();
       return;
     }
@@ -3078,26 +2955,18 @@ const saveCourseNoteContent = (id: string, html: string) => {
       (async () => {
         try {
           const { resolveDefaultPdfAppExe, openUrlInBrowser } = await import('../../lib/browsers');
-          const { convertFileSrc } = await import('@tauri-apps/api/core');
           const exe = await resolveDefaultPdfAppExe(course.id);
           if (exe && exe !== 'sys') {
-            const { resolveLocalPath } = await import('../../lib/openFileSmart');
-            const { stat } = await import('@tauri-apps/plugin-fs');
-            try {
-              const st = await stat(pdfUrl);
-              if (st && st.isFile !== false) { await openUrlInBrowser(exe, convertFileSrc(pdfUrl)); return; }
-            } catch { /* ruta no directa: intenta resolver por nombre */ }
-            try {
-              const found = await resolveLocalPath(pdfUrl, name);
-              if (found) { await openUrlInBrowser(exe, convertFileSrc(found)); return; }
-            } catch { /* cae al flujo normal */ }
+            const target = await resolveExternalResource(pdfUrl, name, path => handleMatMoved(id, path));
+            await openUrlInBrowser(exe, target);
+            return;
           }
         } catch { /* cae al flujo normal */ }
-        openFileSmart(pdfUrl, name, { onMedia: (u, n) => setPipUrl(u, n), onError: (m) => toast.error(m), onMoved: (np) => handleMatMoved(id, np) }).catch(() => toast.error('No se pudo abrir el recurso'));
+        openFileSmart(pdfUrl, name, { onError: (m) => toast.error(m), onMoved: (np) => handleMatMoved(id, np) }).catch(() => toast.error('No se pudo abrir el recurso'));
       })();
       return;
     }
-    openFileSmart(mat.dataUrl, mat.name || 'Archivo', { onMedia: (u, n) => setPipUrl(u, n), onError: (m) => toast.error(m), onMoved: (np) => handleMatMoved(mat.id, np) }).catch(() => toast.error('No se pudo abrir el recurso'));
+    openFileSmart(mat.dataUrl, mat.name || 'Archivo', { onError: (m) => toast.error(m), onMoved: (np) => handleMatMoved(mat.id, np) }).catch(() => toast.error('No se pudo abrir el recurso'));
   };
 
   const setTopicReviewLevel = (topicId: string, level: number) => {
@@ -3492,7 +3361,7 @@ const saveCourseNoteContent = (id: string, html: string) => {
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', padding: 40, gap: 12 }}>
         <GraduationCap size={48} style={{ color: 'var(--text-muted)', opacity: 0.3 }} />
         <p style={{ color: 'var(--text-secondary)', fontSize: 15 }}>Asignatura no encontrada</p>
-        <button onClick={() => setNavigateTo('cursos')} style={{ height: 36, padding: '0 20px', borderRadius: 10, border: 'none', background: 'var(--accent)', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Volver</button>
+        <button data-app-action="secondary" data-ui-control="" onClick={() => setNavigateTo('cursos')} style={{ height: 36, padding: '0 20px', borderRadius: 10, border: 'none', background: 'var(--accent)', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Volver</button>
       </div>
     );
   }
@@ -3505,24 +3374,24 @@ const saveCourseNoteContent = (id: string, html: string) => {
   // --- RENDER ---
 
   return (
-    <div className="cursos-root-view" style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg-base)', overflow: 'hidden' }}>
+    <div className="cursos-root-view" style={{ "--course-cover-accent":coursePalette?.accentColor||"var(--accent)", height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg-base)', overflow: 'hidden' } as React.CSSProperties}>
       {/* Content */}
       <div style={{ flex: 1, height: '100%', display: 'flex', flexDirection: 'column', overflowY: currentView === 'overview' ? 'hidden' : 'auto', overflowX: 'hidden' }}>
         {currentView === 'topic' && activeTopic ? (
           /* --- TOPIC VIEW with Big Banner --- */
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
             {/* Big banner */}
-            <div style={{ position: 'relative', height: 200, overflow: 'hidden', background: `linear-gradient(135deg, ${course.color}33 0%, var(--bg-surface) 100%)` }}>
+            <div className="course-context-banner" style={{ position: 'relative', height: 184, overflow: 'hidden', background: "var(--bg-surface)" }}>
               {(() => {
                 const grp = groups.find(g => g.id === activeTopic.groupId);
                 const imgSrc = grp?.image || course.coverUrl || course.coverImage;
                 return imgSrc ? (
-                  <><img src={imgSrc} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.6 }} /><div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, rgba(0,0,0,0.65) 0%, transparent 60%)' }} /></>
-                ) : <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(135deg, ${course.color}22, rgba(0,0,0,0.4))` }} />;
+                  <><img src={imgSrc} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 1 }} /><div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, rgba(0,0,0,0.65) 0%, transparent 60%)' }} /></>
+                ) : <div style={{ position: 'absolute', inset: 0, background: "var(--bg-surface)" }} />;
               })()}
               <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', padding: '0 36px', gap: 36 }}>
                 <div style={{ flex: 1, minWidth: 0, paddingRight: 28 }}>
-                  <h1 style={{ fontSize: 40, fontWeight: 200, color: '#fff', margin: '0 0 14px', letterSpacing: '-0.03em', fontFamily: "'Inter Tight', sans-serif", textShadow: '0 2px 20px rgba(0,0,0,0.6)', lineHeight: 1.15 }}>{activeTopic.title}</h1>
+                  <h1 style={{ fontSize: 32, fontWeight: 500, color: '#fff', margin: '0 0 14px', letterSpacing: '-0.03em', fontFamily: "'Inter Tight', sans-serif", textShadow: '0 2px 20px rgba(0,0,0,0.6)', lineHeight: 1.15 }}>{activeTopic.title}</h1>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <span style={{ fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.7)', letterSpacing: '0.01em', borderBottom: '1px solid rgba(255,255,255,0.2)', paddingBottom: 2 }}>{course.name}</span>
                     {(() => { const g = groups.find(gr => gr.id === activeTopic.groupId); return g ? <><span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>/</span><span style={{ fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.7)', letterSpacing: '0.01em', borderBottom: '1px solid rgba(255,255,255,0.2)', paddingBottom: 2 }}>{g.name}</span></> : null; })()}
@@ -3531,17 +3400,17 @@ const saveCourseNoteContent = (id: string, html: string) => {
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   {activeToolGroup === 'todos' ? (
                   <>
-                  <button onClick={() => { setEditingTopicId(activeTopic.id); setTopicName(activeTopic.title); setShowTopicModal(true); }} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                  <button data-ui-control="" onClick={() => { setEditingTopicId(activeTopic.id); setTopicName(activeTopic.title); setShowTopicModal(true); }} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
                     onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'} title="Editar tema"><Pencil size={13} /></button>
-                  <button onClick={() => { setStudyToolMode('none'); setReviewing(false); setReviewFlipped(false); setTopicSearch(''); setActiveTagFilter(null); if (activeTopic.groupId) { setSelectedGroupId(activeTopic.groupId); setCurrentView('group'); } else { setCurrentView('overview'); } }} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                  <button data-ui-control="" onClick={() => { setStudyToolMode('none'); setReviewing(false); setReviewFlipped(false); setTopicSearch(''); setActiveTagFilter(null); if (activeTopic.groupId) { setSelectedGroupId(activeTopic.groupId); setCurrentView('group'); } else { setCurrentView('overview'); } }} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
                     onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.25)'; e.currentTarget.style.color = '#fff'; }} onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.15)'; }} title={activeTopic.groupId ? `Volver a ${groups.find(g => g.id === activeTopic.groupId)?.name || 'la agrupación'}` : 'Volver'}><ArrowLeft size={14} /></button>
                   </>
                   ) : (
                   <>
-                  <button onClick={() => { setTopicGroupModal({ mode: 'rename', orig: activeToolGroup }); setNewGroupName(activeToolGroup.includes('/') ? activeToolGroup.split('/').pop()! : activeToolGroup); }} title="Editar nombre de la carpeta"
+                  <button data-ui-control="" onClick={() => { setTopicGroupModal({ mode: 'rename', orig: activeToolGroup }); setNewGroupName(activeToolGroup.includes('/') ? activeToolGroup.split('/').pop()! : activeToolGroup); }} title="Editar nombre de la carpeta"
                     style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
                     onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}><Pencil size={13} /></button>
-                  <button onClick={() => setActiveToolGroup(activeToolGroup.includes('/') ? activeToolGroup.split('/').slice(0, -1).join('/') || 'todos' : 'todos')} title="Salir de la carpeta al tema"
+                  <button data-ui-control="" onClick={() => setActiveToolGroup(activeToolGroup.includes('/') ? activeToolGroup.split('/').slice(0, -1).join('/') || 'todos' : 'todos')} title="Salir de la carpeta al tema"
                     style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
                     onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.28)'; e.currentTarget.style.color = '#fff'; }} onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.15)'; }}>
                     <LI.CornerUpLeft size={14} />
@@ -3552,8 +3421,8 @@ const saveCourseNoteContent = (id: string, html: string) => {
               </div>
             </div>
             {/* Content: viewer (left/center) + create sidebar (right) */}
-            <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
-              <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div className="course-topic-layout" style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
+              <div className="course-topic-content" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
               {/* Toolbar: buscador con efecto de foco · al ejecutarse, barra de ejecución */}
               <div style={{ flexShrink: 0, padding: '16px 28px 8px' }}>
                 {deckRunner && deckRunner.toolMode && ['flashcardsDeck', 'quizDeck', 'matchDeck', 'clozeDeck', 'feynmanDeck', 'vfDeck', 'seqDeck', 'catDeck'].includes(deckRunner.toolMode) ? (() => {
@@ -3562,7 +3431,7 @@ const saveCourseNoteContent = (id: string, html: string) => {
                     <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {deckRunner.name || deckRunner.title}
                     </span>
-                    <button onClick={closeDeckRunner} title="Terminar ejecución"
+                    <button data-ui-control="" onClick={closeDeckRunner} title="Terminar ejecución"
                       style={{ width: 30, height: 30, borderRadius: 8, border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.07)', color: '#EF4444', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <X size={13} />
                     </button>
@@ -3574,10 +3443,10 @@ const saveCourseNoteContent = (id: string, html: string) => {
                   <input value={topicSearch} onChange={e => setTopicSearch(e.target.value)} onFocus={() => setSearchFocused(true)} onBlur={() => setSearchFocused(false)} placeholder="Buscar en el tema…"
                     style={{ width: '100%', height: 40, borderRadius: 12, border: `1px solid ${topicSearch || searchFocused ? `${course.color}60` : 'var(--border-soft)'}`, background: topicSearch || searchFocused ? `linear-gradient(90deg, ${course.color}0e, var(--bg-elevated-alpha, var(--bg-elevated)))` : 'var(--bg-elevated-alpha, var(--bg-elevated))', padding: '0 40px 0 40px', fontSize: 12, color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', transition: 'all 250ms ' + EASE, fontWeight: 500, boxShadow: topicSearch ? `0 6px 20px ${course.color}16` : searchFocused ? '0 6px 20px rgba(0,0,0,0.08)' : '0 1px 2px rgba(0,0,0,0.04)' }} />
                   {topicSearch && (
-                    <span style={{ position: 'absolute', right: 34, top: '50%', transform: 'translateY(-50%)', fontSize: 9, fontWeight: 700, color: course.color, fontFamily: "'Inter Tight', sans-serif" }}>{topicFiltered.length}</span>
+                    <span style={{ position: 'absolute', right: 34, top: '50%', transform: 'translateY(-50%)', fontSize: 11, fontWeight: 700, color: course.color, fontFamily: "'Inter Tight', sans-serif" }}>{topicFiltered.length}</span>
                   )}
                   {topicSearch && (
-                    <button onClick={() => setTopicSearch('')} style={{ position: 'absolute', right: 7, top: '50%', transform: 'translateY(-50%)', width: 22, height: 22, borderRadius: 7, border: 'none', background: `${course.color}16`, cursor: 'pointer', color: course.color, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 150ms' }} title="Limpiar búsqueda"><X size={11} /></button>
+                    <button data-ui-control="" onClick={() => setTopicSearch('')} style={{ position: 'absolute', right: 7, top: '50%', transform: 'translateY(-50%)', width: 22, height: 22, borderRadius: 7, border: 'none', background: `${course.color}16`, cursor: 'pointer', color: course.color, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 150ms' }} title="Limpiar búsqueda"><X size={11} /></button>
                   )}
                 </div>
                 )}
@@ -3608,7 +3477,7 @@ const saveCourseNoteContent = (id: string, html: string) => {
                     {/* Review header with Progress Bar */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <button onClick={closeReview} title="Salir del repaso"
+                        <button data-ui-control="" onClick={closeReview} title="Salir del repaso"
                           style={{ width: 30, height: 30, borderRadius: 9, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}>
                           <X size={14} />
                         </button>
@@ -3617,12 +3486,12 @@ const saveCourseNoteContent = (id: string, html: string) => {
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.04em', color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>REPASO DE FLASHCARDS</div>
-                          <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{activeTopic?.title}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{activeTopic?.title}</div>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', fontFamily: "'Inter Tight', sans-serif" }}>{Math.min(reviewIndex + 1, reviewDeck.length)} / {reviewDeck.length}</span>
-                          <span style={{ fontSize: 10, fontWeight: 700, color: '#10B981', background: '#10B98114', border: '1px solid #10B98125', padding: '3px 9px', borderRadius: 99 }}>{reviewStats.correct} acertadas</span>
-                          {reviewStats.again > 0 && <span style={{ fontSize: 10, fontWeight: 700, color: '#EF4444', background: '#EF444414', border: '1px solid #EF444425', padding: '3px 9px', borderRadius: 99 }}>{reviewStats.again} a repetir</span>}
+                          <span style={{ fontSize: 11, fontWeight: 700, color: '#10B981', background: '#10B98114', border: '1px solid #10B98125', padding: '3px 9px', borderRadius: 99 }}>{reviewStats.correct} acertadas</span>
+                          {reviewStats.again > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: '#EF4444', background: '#EF444414', border: '1px solid #EF444425', padding: '3px 9px', borderRadius: 99 }}>{reviewStats.again} a repetir</span>}
                         </div>
                       </div>
                       {/* Barra de progreso */}
@@ -3645,14 +3514,14 @@ const saveCourseNoteContent = (id: string, html: string) => {
                         }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: 99, background: reviewFlipped ? '#10B98116' : '#8B5CF616', border: `1px solid ${reviewFlipped ? '#10B98130' : '#8B5CF630'}` }}>
                           {reviewFlipped ? <CheckCircle size={12} style={{ color: '#10B981' }} /> : <HelpCircle size={12} style={{ color: '#8B5CF6' }} />}
-                          <span style={{ fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.14em', color: reviewFlipped ? '#10B981' : '#8B5CF6', fontFamily: "'Inter Tight', sans-serif" }}>
+                          <span style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.14em', color: reviewFlipped ? '#10B981' : '#8B5CF6', fontFamily: "'Inter Tight', sans-serif" }}>
                             {reviewFlipped ? 'Respuesta · Revelada' : 'Pregunta'}
                           </span>
                         </div>
                         <div style={{ fontSize: 17, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.55, maxWidth: 520, fontFamily: "'Inter Tight', sans-serif", wordBreak: 'break-word' }}>
                           {reviewFlipped ? reviewDeck[reviewIndex]?.answer : reviewDeck[reviewIndex]?.question}
                         </div>
-                        <span style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 12, opacity: 0.8, fontFamily: "'Inter', sans-serif" }}>
+                        <span style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 12, opacity: 0.8, fontFamily: "'Inter', sans-serif" }}>
                           {reviewFlipped ? 'Haz clic para ver la pregunta' : 'Toca para revelar la respuesta'}
                         </span>
                       </div>
@@ -3665,12 +3534,12 @@ const saveCourseNoteContent = (id: string, html: string) => {
                             { grade: 'good', label: 'Bien', sub: '3 días', color: '#3B82F6' },
                             { grade: 'easy', label: 'Fácil', sub: '7 días', color: '#10B981' },
                           ] as { grade: 'again' | 'hard' | 'good' | 'easy'; label: string; sub: string; color: string }[]).map(b => (
-                            <button key={b.grade} onClick={() => gradeFlashcard(b.grade)}
+                            <button data-ui-control="" key={b.grade} onClick={() => gradeFlashcard(b.grade)}
                               style={{ flex: 1, minWidth: 110, padding: '12px 16px', borderRadius: 14, border: `1px solid ${b.color}40`, background: `linear-gradient(135deg, ${b.color}14 0%, var(--bg-surface) 100%)`, cursor: 'pointer', transition: 'all 180ms ' + EASE, textAlign: 'center' }}
                               onMouseEnter={e => { e.currentTarget.style.background = `${b.color}22`; e.currentTarget.style.borderColor = `${b.color}70`; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 6px 20px ${b.color}25`; }}
                               onMouseLeave={e => { e.currentTarget.style.background = `linear-gradient(135deg, ${b.color}14 0%, var(--bg-surface) 100%)`; e.currentTarget.style.borderColor = `${b.color}40`; e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}>
                               <div style={{ fontSize: 12, fontWeight: 800, color: b.color, fontFamily: "'Inter Tight', sans-serif" }}>{b.label}</div>
-                              <div style={{ fontSize: 8.5, color: 'var(--text-tertiary)', marginTop: 3 }}>Repaso en {b.sub}</div>
+                              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 3 }}>Repaso en {b.sub}</div>
                             </button>
                           ))}
                         </div>
@@ -3692,12 +3561,12 @@ const saveCourseNoteContent = (id: string, html: string) => {
                     </div>
                     <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-muted)', fontFamily: "'Inter Tight', sans-serif" }}>Sin resultados</span>
                     <span style={{ fontSize: 11, color: 'var(--text-tertiary)', textAlign: 'center', maxWidth: 300, lineHeight: 1.5 }}>Ningún elemento coincide con tu búsqueda o etiqueta seleccionada. Ajusta el filtro para continuar.</span>
-                    <button onClick={() => { setTopicSearch(''); setActiveTagFilter(null); }} style={{ height: 28, padding: '0 14px', borderRadius: 8, border: `1px solid ${course.color}40`, background: `${course.color}0d`, cursor: 'pointer', color: course.color, fontSize: 10, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}><X size={11} /> Limpiar filtros</button>
+                    <button data-ui-control="" onClick={() => { setTopicSearch(''); setActiveTagFilter(null); }} style={{ height: 28, padding: '0 14px', borderRadius: 8, border: `1px solid ${course.color}40`, background: `${course.color}0d`, cursor: 'pointer', color: course.color, fontSize: 11, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}><X size={11} /> Limpiar filtros</button>
                   </div>
                 ) : (
                   <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={e => { setActiveTopicDragId(e.active.id as string); }} onDragEnd={handleTopicGridDragEnd}>
                     <SortableContext items={filtered.map(e => e.id)} strategy={rectSortingStrategy}>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(235px, 1fr))', gap: 14, alignItems: 'start' }}>
+                      <div className="course-material-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(235px, 100%), 1fr))', gap: 14, alignItems: 'start' }}>
                 {activeToolGroup === 'todos' && ((activeTopic as any)?.toolGroups || []).filter((g: string) => !g.includes('/')).map((g: string) => (
                   <FolderTile key={'grp-' + g} g={g} color={course.color} onRename={() => { setTopicGroupModal({ mode: 'rename', orig: g }); setNewGroupName(g.split('/').pop()!); }} onDelete={() => setConfirmDelGroup(g)} count={filtered.filter(e => e.type === 'resource' && ((e.item as any).groupName === g || String((e.item as any).groupName || '').startsWith(g + '/'))).length} onOpen={() => setActiveToolGroup(g)} />
                 ))}
@@ -3719,16 +3588,16 @@ const saveCourseNoteContent = (id: string, html: string) => {
                                       <div style={{ width: 38, height: 38, borderRadius: 11, background: '#8B5CF610', border: '1px solid #8B5CF61a', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                         <BookOpen size={17} style={{ color: '#8B5CF6' }} />
                                       </div>
-                                      <span style={{ flex: 1, fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#8B5CF6', fontFamily: "'Inter Tight', sans-serif" }}>Flashcards</span>
+                                      <span style={{ flex: 1, fontSize: 11, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#8B5CF6', fontFamily: "'Inter Tight', sans-serif" }}>Flashcards</span>
                                       {fc.nextReview <= Date.now() && (
                                         <span style={{ fontSize: 7.5, fontWeight: 800, padding: '3px 8px', borderRadius: 6, background: '#8B5CF612', color: '#8B5CF6', letterSpacing: '0.08em' }}>REPASAR</span>
                                       )}
-                                      <button onPointerDown={e => e.stopPropagation()} title="Editar" onClick={e => { e.stopPropagation(); openFlashcardModal(fc); }} style={{ width: 26, height: 26, borderRadius: 8, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Pencil size={11} /></button>
-                                      <button onPointerDown={e => e.stopPropagation()} title="Eliminar" onClick={e => { e.stopPropagation(); handleDeleteFlashcard(fc.id); }} style={{ width: 26, height: 26, borderRadius: 8, border: 'none', background: 'transparent', cursor: 'pointer', color: 'rgba(239,68,68,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={11} /></button>
+                                      <button data-ui-control="" onPointerDown={e => e.stopPropagation()} title="Editar" onClick={e => { e.stopPropagation(); openFlashcardModal(fc); }} style={{ width: 26, height: 26, borderRadius: 8, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Pencil size={11} /></button>
+                                      <button data-ui-control="" onPointerDown={e => e.stopPropagation()} title="Eliminar" onClick={e => { e.stopPropagation(); handleDeleteFlashcard(fc.id); }} style={{ width: 26, height: 26, borderRadius: 8, border: 'none', background: 'transparent', cursor: 'pointer', color: 'rgba(239,68,68,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={11} /></button>
                                     </div>
                                     <div style={{ flex: 1, padding: '0 14px 12px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                                       <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--text-primary)', lineHeight: 1.35, fontFamily: "'Inter Tight', sans-serif", display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{fc.question}</div>
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 10, fontSize: 9, fontWeight: 700, color: '#10B981', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 10, fontSize: 11, fontWeight: 700, color: '#10B981', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
                                         <Play size={9} /> Repasar
                                       </div>
                                     </div>
@@ -3751,7 +3620,7 @@ const saveCourseNoteContent = (id: string, html: string) => {
                                       <div style={{ width: 38, height: 38, borderRadius: 11, background: '#06B6D410', border: '1px solid #06B6D41a', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                         <Mic size={17} style={{ color: '#06B6D4' }} />
                                       </div>
-                                      <span style={{ flex: 1, fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#06B6D4', fontFamily: "'Inter Tight', sans-serif" }}>Grabación</span>
+                                      <span style={{ flex: 1, fontSize: 11, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#06B6D4', fontFamily: "'Inter Tight', sans-serif" }}>Grabación</span>
                                     </div>
                                     <div style={{ flex: 1, padding: '0 14px 12px', display: 'flex', alignItems: 'center' }}>
                                       <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--text-primary)', lineHeight: 1.35, fontFamily: "'Inter Tight', sans-serif", display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{r.name || 'Grabación'}</div>
@@ -3787,13 +3656,13 @@ const saveCourseNoteContent = (id: string, html: string) => {
               {/* Right lateral: Herramientas — tool blocks */}
               {(() => {
                 return (
-                <div style={{ width: 300, flexShrink: 0, borderLeft: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                <div className="course-topic-tools" style={{ width: 300, flexShrink: 0, borderLeft: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                     {/* --- Header --- */}
                     <div style={{ padding: '20px 20px 14px', flexShrink: 0, borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                       <div style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-secondary)', fontFamily: "'Inter Tight', sans-serif" }}>Herramientas</div>
                       <div style={{ display: 'flex', gap: 6 }}>
                         {activeToolGroup === 'todos' && (
-                        <button onClick={() => { setTopicGroupModal({ mode: 'create' }); setNewGroupName(''); }}
+                        <button data-ui-control="" onClick={() => { setTopicGroupModal({ mode: 'create' }); setNewGroupName(''); }}
                           style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${course.color}30`, background: `${course.color}10`, cursor: 'pointer', color: course.color, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms ' + EASE }}
                           onMouseEnter={e => { e.currentTarget.style.background = `${course.color}22`; e.currentTarget.style.borderColor = `${course.color}50`; }}
                           onMouseLeave={e => { e.currentTarget.style.background = `${course.color}10`; e.currentTarget.style.borderColor = `${course.color}30`; }}
@@ -3801,14 +3670,14 @@ const saveCourseNoteContent = (id: string, html: string) => {
                           <LI.FolderPlus size={15} />
                         </button>
                         )}
-                        <button onClick={() => { topicOnlyRef.current = true; generalOnlyRef.current = false; pendingGroupNameRef.current = activeToolGroup !== 'todos' ? activeToolGroup : undefined; handleAddFileBtn(activeTopic?.id); }}
+                        <button data-ui-control="" onClick={() => { topicOnlyRef.current = true; generalOnlyRef.current = false; pendingGroupNameRef.current = activeToolGroup !== 'todos' ? activeToolGroup : undefined; handleAddFileBtn(activeTopic?.id); }}
                           style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${course.color}30`, background: `${course.color}10`, cursor: 'pointer', color: course.color, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms ' + EASE }}
                           onMouseEnter={e => { e.currentTarget.style.background = `${course.color}22`; e.currentTarget.style.borderColor = `${course.color}50`; }}
                           onMouseLeave={e => { e.currentTarget.style.background = `${course.color}10`; e.currentTarget.style.borderColor = `${course.color}30`; }}
                           title="Subir archivo al tema activo">
                           <Upload size={15} />
                         </button>
-                        <button onClick={() => { generalOnlyRef.current = false; setAddLinkTargetTopic(activeTopic?.id); pendingGroupNameRef.current = activeToolGroup !== 'todos' ? activeToolGroup : undefined; setShowAddLinkModal(true); setAddLinkUrl(''); setAddLinkName(''); }}
+                        <button data-ui-control="" onClick={() => { generalOnlyRef.current = false; setAddLinkTargetTopic(activeTopic?.id); pendingGroupNameRef.current = activeToolGroup !== 'todos' ? activeToolGroup : undefined; setShowAddLinkModal(true); setAddLinkUrl(''); setAddLinkName(''); }}
                           style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${course.color}30`, background: `${course.color}10`, cursor: 'pointer', color: course.color, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms ' + EASE }}
                           onMouseEnter={e => { e.currentTarget.style.background = `${course.color}22`; e.currentTarget.style.borderColor = `${course.color}50`; }}
                           onMouseLeave={e => { e.currentTarget.style.background = `${course.color}10`; e.currentTarget.style.borderColor = `${course.color}30`; }}
@@ -3831,7 +3700,7 @@ const saveCourseNoteContent = (id: string, html: string) => {
                           { mode: 'catDeck' as const, icon: LI.Shapes, label: 'CATEGORIZAR', color: '#A855F7', action: () => setDeckEditor({ mode: 'catDeck' }) },
                         ];
                         return toolsList.map(t => (
-                          <button key={t.mode}
+                          <button data-ui-control="" key={t.mode}
                             onClick={t.action}
                             title={`Agregar ${t.label}`}
                             style={{
@@ -3865,15 +3734,15 @@ const saveCourseNoteContent = (id: string, html: string) => {
             </div>
           ) : activeTab === 'overview' ? (
             /* --- OVERVIEW TAB --- */
-          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+          <div className="course-overview-page" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
             {/* Big banner */}
-            <div style={{ position: 'relative', height: 200, overflow: 'hidden', background: `linear-gradient(135deg, ${course.color}33 0%, var(--bg-surface) 100%)` }}>
+            <div className="course-context-banner" style={{ position: 'relative', height: 184, overflow: 'hidden', background: "var(--bg-surface)" }}>
               {(() => {
                 const grpImage = currentView === 'group' && selectedGroupId ? groups.find(g => g.id === selectedGroupId)?.image : undefined;
                 const imgSrc = grpImage || course.coverUrl || course.coverImage;
                 return imgSrc ? (
-                  <><img src={imgSrc} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.6 }} /><div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, rgba(0,0,0,0.65) 0%, transparent 60%)' }} /></>
-                ) : <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(135deg, ${course.color}22, rgba(0,0,0,0.4))` }} />;
+                  <><img src={imgSrc} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 1 }} /><div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, rgba(0,0,0,0.65) 0%, transparent 60%)' }} /></>
+                ) : <div style={{ position: 'absolute', inset: 0, background: "var(--bg-surface)" }} />;
               })()}
               <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', padding: '0 32px', gap: 20 }}>
                 <div style={{ flex: 1 }}>
@@ -3881,7 +3750,7 @@ const saveCourseNoteContent = (id: string, html: string) => {
                     const activeGrp = groups.find(g => g.id === selectedGroupId);
                     return activeGrp ? (
                       <>
-                        <h1 style={{ fontSize: 40, fontWeight: 200, color: '#fff', margin: '0 0 10px', letterSpacing: '-0.03em', fontFamily: "'Inter Tight', sans-serif", textShadow: '0 2px 20px rgba(0,0,0,0.6)' }}>{activeGrp.name}</h1>
+                        <h1 style={{ fontSize: 32, fontWeight: 500, color: '#fff', margin: '0 0 10px', letterSpacing: '-0.03em', fontFamily: "'Inter Tight', sans-serif", textShadow: '0 2px 20px rgba(0,0,0,0.6)' }}>{activeGrp.name}</h1>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10 }}>
                           <span style={{ fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.01em', borderBottom: '1px solid rgba(255,255,255,0.15)', paddingBottom: 2 }}>{course.name}</span>
                         </div>
@@ -3889,19 +3758,19 @@ const saveCourseNoteContent = (id: string, html: string) => {
                     ) : null;
                   })() : (
                     <>
-                      <h1 style={{ fontSize: 48, fontWeight: 200, color: '#fff', margin: '0 0 12px', letterSpacing: '-0.03em', fontFamily: "'Inter Tight', sans-serif", textShadow: '0 2px 20px rgba(0,0,0,0.6)' }}>{course.name}</h1>
-                      {(course.teacher || course.teacherName) && <span style={{ fontSize: 16, fontWeight: 300, color: 'rgba(255,255,255,0.5)', display: 'block', lineHeight: 1.4, letterSpacing: '0.02em' }}>{course.teacher || course.teacherName}</span>}
+                      <h1 className="course-overview-title" style={{ fontSize: 48, fontWeight: 500, color: '#fff', margin: '0 0 12px', letterSpacing: '-0.03em', fontFamily: "'Inter Tight', sans-serif", textShadow: '0 2px 20px rgba(0,0,0,0.6)' }}>{course.name}</h1>
+                      {(course.teacher || course.teacherName) && <span style={{ fontSize: 16, fontWeight: 500, color: 'rgba(255,255,255,0.5)', display: 'block', lineHeight: 1.4, letterSpacing: '0.02em' }}>{course.teacher || course.teacherName}</span>}
                     </>
                   )}
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
                   {currentView === 'group' ? (
                     <>
-                      <button onClick={() => { setCurrentView('overview'); setSelectedGroupId(null); }} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                      <button data-ui-control="" onClick={() => { setCurrentView('overview'); setSelectedGroupId(null); }} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
                         onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}><ChevronLeft size={14} /></button>
-                       <button onClick={() => { const grp = groups.find(g => g.id === selectedGroupId); if (grp) { setEditingGroupId(grp.id); setGroupName(grp.name); setGroupCover(grp.image); setShowGroupModal(true); } }} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                       <button data-ui-control="" onClick={() => { const grp = groups.find(g => g.id === selectedGroupId); if (grp) { setEditingGroupId(grp.id); setGroupName(grp.name); setGroupCover(grp.image); setShowGroupModal(true); } }} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
                         onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}><Pencil size={13} /></button>
-                       <button onClick={() => {
+                       <button data-ui-control="" onClick={() => {
                           const currentGrp = groups.find(g => g.id === selectedGroupId);
                           const grpTopics = parsedTopics.filter(t => t.groupId === selectedGroupId);
                           const hasTopics = grpTopics.length > 0;
@@ -3915,9 +3784,9 @@ const saveCourseNoteContent = (id: string, html: string) => {
                     </>
                   ) : (
                     <>
-                      <button onClick={() => { setEditCourseName(course.name); setEditCourseTeacher(course.teacher || course.teacherName || ''); setEditCourseCover(course.coverUrl || course.coverImage); setEditCourseColor(course.color); setDeleteConfirmName(''); setShowEditCourse(true); }} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      <button data-ui-control="" aria-label="Configurar curso" onClick={() => { setEditCourseName(course.name); setEditCourseTeacher(course.teacher || course.teacherName || ''); setEditCourseCover(course.coverUrl || course.coverImage);setEditCourseOriginal(course.coverOriginal);setEditCourseCrop(course.coverCrop); setEditCourseColor(course.color); setDeleteConfirmName(''); setShowEditCourse(true); }} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                         onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}><Pencil size={13} /></button>
-                      <button onClick={handleToggleMode}
+                      <button data-ui-control="" onClick={handleToggleMode}
                         title={overviewMode === 'tareas_notas' ? 'Modo Estudio' : 'Vista General'}
                         style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 300ms cubic-bezier(0.16, 1, 0.3, 1)' }}>
                         <ArrowLeftRight size={13} style={{ transition: 'transform 400ms cubic-bezier(0.16, 1, 0.3, 1)', transform: overviewMode === 'temas_archivos' ? 'rotate(180deg)' : 'rotate(0deg)' }} />
@@ -3930,18 +3799,19 @@ const saveCourseNoteContent = (id: string, html: string) => {
             {/* Content based on mode — with crossfade animation */}
             <div style={{
               flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column',
-              transition: 'all 350ms cubic-bezier(0.16, 1, 0.3, 1)',
+              transition: 'opacity 160ms ease-out, transform 160ms ease-out',
               opacity: modePhase === 'out' ? 0 : 1,
               transform: modePhase === 'out' ? 'translateY(8px) scale(0.97)' : modePhase === 'in' ? 'translateY(-4px) scale(1.005)' : 'none',
-              filter: modePhase === 'out' ? 'blur(4px)' : modePhase === 'in' ? 'blur(1px)' : 'none',
+              // Avoid rasterizing the entire course through an animated blur.
+              filter: 'none',
             }}>
             {overviewMode === 'tareas_notas' ? (
-              <div key="tasks_notes" style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', gap: 48, padding: '32px 40px 60px', width: '100%', boxSizing: 'border-box' }} className="no-scrollbar">
+              <div key="tasks_notes" style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', gap: 48, padding: '32px 40px 60px', width: '100%', boxSizing: 'border-box' }} className="course-overview-columns no-scrollbar">
                 {/* --- LEFT: Tasks --- */}
-                <div style={{ flex: 4, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 32 }}>
+                <div className="course-task-section" style={{ flex: 4, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 32 }}>
                   {/* Task Creator Card */}
-                  <div className="bento-card" style={{ borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', overflow: 'hidden', padding: 0, boxShadow: '0 1px 8px rgba(0,0,0,0.04)' }}>
-                      <div style={{ padding: '24px 28px' }}>
+                  <div className="bento-card course-task-creator" style={{ borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', overflow: 'hidden', padding: 0, boxShadow: '0 1px 8px rgba(0,0,0,0.04)' }}>
+                      <div className="course-task-creator-body" style={{ padding: '24px 28px' }}>
                       <input value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} placeholder="Nombre de la tarea"
                         style={{ width: '100%', border: 'none', borderBottom: 'none', height: 'auto', padding: '4px 0', fontSize: 18, fontWeight: 600, background: 'transparent', color: 'var(--text-primary)', outline: 'none', fontFamily: "'Inter Tight', sans-serif", borderRadius: 0, letterSpacing: '-0.02em' }}
                         onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) handleAddTask(); }} />
@@ -3952,10 +3822,10 @@ const saveCourseNoteContent = (id: string, html: string) => {
                         rows={1} style={{ width: '100%', border: 'none', padding: 0, fontSize: 12, color: 'var(--text-tertiary)', background: 'transparent', outline: 'none', resize: 'none', fontFamily: "'Inter', sans-serif", overflow: 'hidden', lineHeight: 1.6 }}
                         onInput={e => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }} />
 
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 12 }}>
-                        <input type="date" value={newTaskDueDate} onChange={e => setNewTaskDueDate(e.target.value)}
+                      <div className="course-task-create-fields" style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 12 }}>
+                        <input aria-label="Fecha de entrega de la tarea del curso" type="date" value={newTaskDueDate} onChange={e => setNewTaskDueDate(e.target.value)}
                           style={{ height: 42, borderRadius: 8, border: selectBorder, background: newTaskDueDate ? `${course.color}08` : 'var(--bg-surface)', color: newTaskDueDate ? course.color : 'var(--text-tertiary)', padding: '0 14px', cursor: 'pointer', fontSize: 13, fontWeight: 500, fontFamily: "'Inter Tight', sans-serif", outline: 'none', width: 170, minWidth: 170, boxSizing: 'border-box' }} />
-                        <select value={newTaskPriority} onChange={e => setNewTaskPriority(e.target.value as any)}
+                        <select aria-label="Prioridad de la tarea del curso" value={newTaskPriority} onChange={e => setNewTaskPriority(e.target.value as any)}
                           style={{ height: 40, borderRadius: 8, border: selectBorder, background: newTaskPriority !== 'none' ? `${({ high: '#EF4444', medium: '#F59E0B', low: '#10B981' })[newTaskPriority]}18` : 'var(--bg-surface)', color: newTaskPriority !== 'none' ? ({ high: '#EF4444', medium: '#F59E0B', low: '#10B981' })[newTaskPriority] : 'var(--text-tertiary)', padding: '0 28px 0 12px', cursor: 'pointer', fontSize: 12, fontWeight: 500, fontFamily: "'Inter Tight', sans-serif", outline: 'none', width: 120, minWidth: 120, boxSizing: 'border-box' }}>
                           <option value="none">Sin prioridad</option>
                           <option value="high">Alta</option>
@@ -3963,7 +3833,7 @@ const saveCourseNoteContent = (id: string, html: string) => {
                           <option value="low">Baja</option>
                         </select>
                         <div style={{ flex: 1 }} />
-                        <button onClick={handleAddTask} disabled={!newTaskTitle.trim()}
+                        <button data-ui-control="" onClick={handleAddTask} disabled={!newTaskTitle.trim()}
                           style={{ width: 40, height: 40, borderRadius: 10, border: `1.5px solid ${newTaskTitle.trim() ? course.color : 'var(--border-subtle)'}`, background: 'transparent', color: newTaskTitle.trim() ? course.color : 'var(--text-muted)', cursor: newTaskTitle.trim() ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms ' + EASE }}
                           title="Añadir tarea">
                           <PlusCircle size={20} />
@@ -3975,7 +3845,7 @@ const saveCourseNoteContent = (id: string, html: string) => {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 0, marginBottom: 16 }}>
                     <div style={{ height: 1, flex: 1, background: `linear-gradient(to right, transparent, ${course.color}25)` }} />
                     <h3 style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: "'Inter Tight', sans-serif" }}>Tareas académicas</h3>
-                    <button onClick={() => setShowCompletedTasks(prev => !prev)}
+                    <button data-ui-control="" onClick={() => setShowCompletedTasks(prev => !prev)}
                       style={{ width: 22, height: 22, borderRadius: 4, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.5, transition: 'opacity 200ms' }}
                       onMouseEnter={e => e.currentTarget.style.opacity = '1'}
                       onMouseLeave={e => e.currentTarget.style.opacity = '0.5'}
@@ -4054,10 +3924,10 @@ const saveCourseNoteContent = (id: string, html: string) => {
                                   <span style={{ fontSize: 11.5, fontWeight: 500, fontFamily: "'JetBrains Mono', monospace", color: !dueDisplay ? 'var(--text-tertiary)' : isDone ? 'var(--text-tertiary)' : isOverdue ? '#EF4444' : 'var(--text-secondary)', letterSpacing: '0.02em' }}>
                                     {dueDisplay ? `Entrega: ${dueDisplay}` : 'Sin fecha de entrega'}
                                   </span>
-                                  {descPreview && <span style={{ fontSize: 10.5, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginLeft: 6, flex: 1, minWidth: 0 }}>{descPreview}</span>}
+                                  {descPreview && <span style={{ fontSize: 11, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginLeft: 6, flex: 1, minWidth: 0 }}>{descPreview}</span>}
                                 </div>
                               </div>
-                              <button onClick={(e) => { e.stopPropagation(); setFocusedTaskId(task.id); setNavigateTo('tareas'); }} title="Ir a Tareas"
+                              <button data-ui-control="" onClick={(e) => { e.stopPropagation(); setFocusedTaskId(task.id); setNavigateTo('tareas'); }} title="Ir a Tareas"
                                 style={{ position: 'relative', zIndex: 2, width: 28, height: 28, borderRadius: 7, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, opacity: 0, transition: 'all 150ms ' + EASE }}
                                 onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = `${course.color}10`; e.currentTarget.style.color = course.color; }}
                                 onMouseLeave={e => { e.currentTarget.style.opacity = '0'; e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
@@ -4079,12 +3949,12 @@ const saveCourseNoteContent = (id: string, html: string) => {
                   })()}
                 </div>
                 {/* --- RIGHT: Mis Apuntes · Vertical Expandable Blocks --- */}
-                  <div style={{ flex: 3, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 0 }}>
+                  <div className="course-note-section" style={{ flex: 3, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 0 }}>
                   {/* Header */}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 0, marginBottom: 16 }}>
                     <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: "'Inter Tight', sans-serif" }}>{showCourseNotesInOverview ? 'Mi conocimiento' : 'Mis apuntes'}</h3>
                     <div style={{ display: 'flex', gap: 6 }}>
-                      <button
+                      <button data-ui-control=""
                         onMouseDown={() => { eyePressTimerRef.current = setTimeout(() => { setShowCourseNotesInOverview((prev: boolean) => !prev); eyePressTimerRef.current = null; }, 500); }}
                         onMouseUp={() => { if (eyePressTimerRef.current) { clearTimeout(eyePressTimerRef.current); eyePressTimerRef.current = null; setShowOverviewNoteDates((prev: boolean) => !prev); } }}
                         onMouseLeave={(e) => { if (eyePressTimerRef.current) { clearTimeout(eyePressTimerRef.current); eyePressTimerRef.current = null; } e.currentTarget.style.background = `${course.color}10`; e.currentTarget.style.borderColor = `${course.color}30`; }}
@@ -4093,7 +3963,7 @@ const saveCourseNoteContent = (id: string, html: string) => {
                         onMouseEnter={e => { e.currentTarget.style.background = `${course.color}22`; e.currentTarget.style.borderColor = `${course.color}50`; }}>
                         {showOverviewNoteDates ? <LI.CalendarDays size={13} /> : <LI.CalendarX size={13} />}
                       </button>
-                      <button onClick={() => {
+                      <button data-ui-control="" onClick={() => {
                         const newId = addNote({ title: '', content: '', course: course.name, courseColor: course.color, isCoursePrivate: true, isPinned: false });
                         setSelectedOverviewNoteId(newId);
                         setOverviewNoteEditMode(true);
@@ -4109,7 +3979,7 @@ const saveCourseNoteContent = (id: string, html: string) => {
 
                   {/* Note Blocks · always collapsed */}
                   {filteredCourseNotes.length > 0 ? (
-                    <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={() => { notesDragRef.current = true; }} onDragEnd={handleOverviewNoteDragEnd}>
+                    <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={() => { notesDragRef.current = true; }} onDragCancel={()=>{notesDragRef.current=false;}} onDragEnd={handleOverviewNoteDragEnd}>
                       <SortableContext items={sortedIds} strategy={rectSortingStrategy}>
                         <div ref={overviewNoteContainerRef} style={{ display: 'flex', flexDirection: 'column', gap: 14, position: 'relative', zIndex: 2, padding: '0 12px 8px', maxHeight: 'clamp(300px, 52vh, 640px)', overflowY: 'auto', overscrollBehavior: 'contain' }} className="course-notes-scroll">
                           {expandedFirst.map(n => {
@@ -4119,10 +3989,50 @@ const saveCourseNoteContent = (id: string, html: string) => {
                             // propios (isCoursePrivate) sí se pueden editar/borrar.
                             const canModifyNote = !showCourseNotesInOverview || n.isCoursePrivate;
                             const isExpanded = selectedOverviewNoteId === n.id;
+                            const noteActions = <>
+                                          {showOverviewNoteDates && !overviewNoteEditMode && (
+                                            <span style={{ fontSize: 11, fontWeight: 600, color: dateContrast(course.color, th), marginRight: 6, letterSpacing: '0.03em', fontFamily: "'JetBrains Mono', monospace", opacity: 0.85 }}>
+                                              {format(new Date(n.createdAt), "dd/MM/yy · HH:mm", { locale: es })}
+                                            </span>
+                                          )}
+                                          {!overviewNoteEditMode&&<div style={{flex:1}}/>}
+                                          <button data-ui-control="" onClick={() => { toggleHighlight(n.id); }}
+                                            title="Destacar"
+                                            style={{ width: 24, height: 24, borderRadius: 5, border: 'none', background: 'transparent', cursor: 'pointer', color: isHighlighted ? '#D4A017' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                                            onMouseEnter={e => e.currentTarget.style.background = `${course.color}10`}
+                                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                                            <Star size={11} fill={isHighlighted ? '#D4A017' : 'none'} />
+                                          </button>
+                                          {!overviewNoteEditMode && canModifyNote && (
+                                            <button data-ui-control="" onClick={() => { setOverviewNoteEditMode(true); setOverviewActiveFormats({}); }}
+                                              title="Editar"
+                                              style={{ width: 24, height: 24, borderRadius: 5, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                                              onMouseEnter={e => e.currentTarget.style.background = `${course.color}10`}
+                                              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                                              <Pencil size={11} />
+                                            </button>
+                                          )}
+                                          {canModifyNote && (
+                                            <button data-ui-control="" onClick={() => setConfirmDeleteNoteId(n.id)}
+                                              title="Eliminar"
+                                              style={{ width: 24, height: 24, borderRadius: 5, border: 'none', background: 'transparent', cursor: 'pointer', color: 'rgba(239,68,68,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
+                                              onMouseEnter={e => e.currentTarget.style.background = `${course.color}10`}
+                                              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                                              <Trash2 size={11} />
+                                            </button>
+                                          )}
+                                          <div style={{ width: 1, height: 18, background: 'var(--border-subtle)', margin: '0 4px' }} />
+                                           <button data-ui-control="" aria-label="Cerrar apunte" title="Cerrar apunte" onClick={() => { flushOverviewEditors(); setSelectedOverviewNoteId(null); setOverviewNoteEditMode(false); setConfirmDeleteNoteId(null); }}
+                                            style={{ width: 24, height: 24, borderRadius: 5, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                            onMouseEnter={e => e.currentTarget.style.background = `${course.color}10`}
+                                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                                            <X size={12} />
+                                          </button>
+                            </>;
                             return (
                               <SortableWrapper key={n.id} id={n.id}>
                                 {({ attributes, listeners, isDragging }) => (
-                                  <div style={{
+                                  <div className="course-note-block" data-highlighted={isHighlighted} style={{
                                     borderRadius: 12, position: 'relative',
                                     border: isHighlighted ? `1.5px solid #D4A017` : isCourseNote ? `1px solid ${course.color}25` : `1px solid var(--border-subtle)`,
                                     borderLeft: isHighlighted ? `3px solid #D4A017` : isCourseNote ? `3px solid ${course.color}50` : `1px solid var(--border-subtle)`,
@@ -4140,61 +4050,16 @@ const saveCourseNoteContent = (id: string, html: string) => {
                                     {isExpanded ? (
                                       <>
                                         {/* -- EXPANDED -- */}
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0, padding: '4px 10px', borderBottom: '1px solid var(--border-subtle)', background: `${course.color}05`, flexWrap: 'wrap', minHeight: 32 }}>
-                                          {overviewNoteEditMode && canModifyNote && (
-                                            <>
-                                              <FormatToolbar onFormat={(cmd, val) => { document.execCommand(cmd, false, val); document.dispatchEvent(new Event('selectionchange')); }} color={course.color}
-                                                toolbarItems={['bold','italic','underline','strikethrough','list','orderedList']} activeFormats={overviewActiveFormats} />
-                                              <div style={{ width: 1, height: 18, background: 'var(--border-subtle)', margin: '0 4px' }} />
-                                            </>
-                                          )}
-                                          {showOverviewNoteDates && !overviewNoteEditMode && (
-                                            <span style={{ fontSize: 8.5, fontWeight: 600, color: dateContrast(course.color, th), marginRight: 6, letterSpacing: '0.03em', fontFamily: "'JetBrains Mono', monospace", opacity: 0.85 }}>
-                                              {format(new Date(n.createdAt), "dd/MM/yy · HH:mm", { locale: es })}
-                                            </span>
-                                          )}
-                                          <div style={{ flex: 1 }} />
-                                          <button onClick={() => { toggleHighlight(n.id); }}
-                                            title="Destacar"
-                                            style={{ width: 24, height: 24, borderRadius: 5, border: 'none', background: 'transparent', cursor: 'pointer', color: isHighlighted ? '#D4A017' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
-                                            onMouseEnter={e => e.currentTarget.style.background = `${course.color}10`}
-                                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                                            <Star size={11} fill={isHighlighted ? '#D4A017' : 'none'} />
-                                          </button>
-                                          {!overviewNoteEditMode && canModifyNote && (
-                                            <button onClick={() => { setOverviewNoteEditMode(true); setOverviewActiveFormats({}); }}
-                                              title="Editar"
-                                              style={{ width: 24, height: 24, borderRadius: 5, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
-                                              onMouseEnter={e => e.currentTarget.style.background = `${course.color}10`}
-                                              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                                              <Pencil size={11} />
-                                            </button>
-                                          )}
-                                          {canModifyNote && (
-                                            <button onClick={() => setConfirmDeleteNoteId(n.id)}
-                                              title="Eliminar"
-                                              style={{ width: 24, height: 24, borderRadius: 5, border: 'none', background: 'transparent', cursor: 'pointer', color: 'rgba(239,68,68,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
-                                              onMouseEnter={e => e.currentTarget.style.background = `${course.color}10`}
-                                              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                                              <Trash2 size={11} />
-                                            </button>
-                                          )}
-                                          <div style={{ width: 1, height: 18, background: 'var(--border-subtle)', margin: '0 4px' }} />
-                                           <button onClick={() => { flushOverviewEditors(); setSelectedOverviewNoteId(null); setOverviewNoteEditMode(false); setConfirmDeleteNoteId(null); }}
-                                            style={{ width: 24, height: 24, borderRadius: 5, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                            onMouseEnter={e => e.currentTarget.style.background = `${course.color}10`}
-                                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                                            <X size={12} />
-                                          </button>
-                                        </div>
+                                        {!overviewNoteEditMode && (<div className="course-writing-toolbar" onMouseDown={e=>{if(e.button===0&&(e.target as HTMLElement).closest('button'))e.preventDefault();}} style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0, padding: '4px 10px', borderBottom: '1px solid var(--border-subtle)', background: `${course.color}05`, flexWrap: 'wrap', minHeight: 32 }}>
+                                          {noteActions}
+                                        </div>)}
                                         <div style={{ maxHeight: 420, overflowY: 'auto', minHeight: 0 }}>
                                           <NoteEditor
+                                            toolbarEnd={noteActions}
                                             note={n}
                                             courseColor={course.color}
                                             onSave={(id, data) => saveCourseNoteContent(id, data?.content ?? '')}
                                             editable={overviewNoteEditMode && canModifyNote}
-                                            hideToolbar
-                                            onActiveFormatsChange={setOverviewActiveFormats}
                                             onImageClick={(src) => { setPreviewImageSrc(src); setShowImagePreview(true); }}
                                           />
                                         </div>
@@ -4203,7 +4068,7 @@ const saveCourseNoteContent = (id: string, html: string) => {
                                       <>
                                         {/* Date display */}
                                         {showOverviewNoteDates && (
-                                          <div style={{ padding: '8px 16px 0', fontSize: 9, fontWeight: 600, color: dateContrast(course.color, th), fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.03em', opacity: 0.8 }}>
+                                          <div style={{ padding: '8px 16px 0', fontSize: 11, fontWeight: 600, color: dateContrast(course.color, th), fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.03em', opacity: 0.8 }}>
                                             {format(new Date(n.createdAt), "dd/MM/yy", { locale: es })}
                            </div>
                                          )}
@@ -4253,7 +4118,7 @@ const saveCourseNoteContent = (id: string, html: string) => {
                         ) : (
                           <DndContext sensors={studySensors} collisionDetection={closestCorners} onDragStart={e => { setActiveTopicDragId(e.active.id as string); }} onDragEnd={handleGroupTopicDragEnd}>
                             <SortableContext items={grpTopics.map(t => t.id)} strategy={rectSortingStrategy}>
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+                          <div className="course-topic-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
                             {grpTopics.map(topic => {
                                 const mats = safeArr(topic.materials);
                                 const typeColors: Record<string, string> = { resource: '#3B82F6', concept: '#8B5CF6', 'key-data': '#10B981', formula: '#F59E0B', meaning: '#EC4899', quiz: '#EF4444', procedure: '#06B6D4' };
@@ -4295,13 +4160,13 @@ const saveCourseNoteContent = (id: string, html: string) => {
                                         <h4 style={{ fontSize: 17, fontWeight: 600, color: 'var(--text-primary)', margin: 0, fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em', lineHeight: 1.25, flex: 1, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{topic.title}</h4>
                                         <div style={{ display: 'flex', gap: 2, flexShrink: 0, opacity: 0, transition: 'opacity 150ms' }}
                                           className="topic-actions">
-                                          <button onClick={(e) => { e.stopPropagation(); setEditingTopicId(topic.id); setTopicName(topic.title); setShowTopicModal(true); }}
+                                          <button data-ui-control="" onClick={(e) => { e.stopPropagation(); setEditingTopicId(topic.id); setTopicName(topic.title); setShowTopicModal(true); }}
                                             style={{ width: 26, height: 26, borderRadius: 6, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
                                             onMouseEnter={ev => { ev.currentTarget.style.background = 'var(--bg-hover)'; ev.currentTarget.style.color = 'var(--text-secondary)'; }}
                                             onMouseLeave={ev => { ev.currentTarget.style.background = 'transparent'; ev.currentTarget.style.color = 'var(--text-muted)'; }}>
                                             <Edit3 size={12} />
                                           </button>
-                                          <button onClick={(e) => { e.stopPropagation(); setDeleteTopicId(topic.id); }}
+                                          <button data-ui-control="" onClick={(e) => { e.stopPropagation(); setDeleteTopicId(topic.id); }}
                                             style={{ width: 26, height: 26, borderRadius: 6, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
                                             onMouseEnter={ev => { ev.currentTarget.style.background = 'rgba(239,68,68,0.08)'; ev.currentTarget.style.color = '#EF4444'; }}
                                             onMouseLeave={ev => { ev.currentTarget.style.background = 'transparent'; ev.currentTarget.style.color = 'var(--text-muted)'; }}>
@@ -4311,8 +4176,8 @@ const saveCourseNoteContent = (id: string, html: string) => {
                                       </div>
                                       <div onClick={e => e.stopPropagation()} style={{ marginTop: 'auto', paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 5 }}>
                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                          <span style={{ fontSize: 8.5, fontWeight: 800, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: "'Inter Tight', sans-serif" }}>Dominio</span>
-                                          <span style={{ fontSize: 9.5, fontWeight: 800, fontFamily: "'JetBrains Mono', monospace", color: topic.reviewLevel > 0 ? 'var(--text-primary)' : 'var(--text-tertiary)', letterSpacing: '-0.02em' }}>{topic.reviewLevel > 0 ? `${topic.reviewLevel}/10` : 'Sin repasar'}</span>
+                                          <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: "'Inter Tight', sans-serif" }}>Dominio</span>
+                                          <span style={{ fontSize: 11, fontWeight: 800, fontFamily: "'JetBrains Mono', monospace", color: topic.reviewLevel > 0 ? 'var(--text-primary)' : 'var(--text-tertiary)', letterSpacing: '-0.02em' }}>{topic.reviewLevel > 0 ? `${topic.reviewLevel}/10` : 'Sin repasar'}</span>
                                         </div>
                                         <div style={{ display: 'flex', gap: 2.5, cursor: 'pointer', touchAction: 'none' }} title="Clic para fijar el dominio">
                                           {REVIEW_LEVEL_COLORS.map((col, i) => {
@@ -4332,13 +4197,13 @@ const saveCourseNoteContent = (id: string, html: string) => {
                                     <div style={{ borderTop: '1px solid var(--border-subtle)', padding: '10px 20px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                                       {totalCreated > 0 ? (
                                         createdItems.map((e, i) => (
-                                          <div key={`${e.label}-${i}`} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 500, color: 'var(--text-muted)', padding: '2px 6px', borderRadius: 5, background: `${e.color}10`, border: `1px solid ${e.color}18` }}>
+                                          <div key={`${e.label}-${i}`} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', padding: '2px 6px', borderRadius: 5, background: `${e.color}10`, border: `1px solid ${e.color}18` }}>
                                             <div style={{ width: 5, height: 5, borderRadius: '50%', background: e.color, flexShrink: 0 }} />
                                             <span>{e.count} {e.label}</span>
                                           </div>
                                         ))
                                       ) : (
-                                        <span style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic', padding: '2px 0' }}>Sin materiales</span>
+                                        <span style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic', padding: '2px 0' }}>Sin materiales</span>
                                       )}
                                     </div>
                                   </div>
@@ -4354,7 +4219,7 @@ const saveCourseNoteContent = (id: string, html: string) => {
                                 <Plus size={22} style={{ color: course.color, opacity: 0.7 }} />
                               </div>
                               <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-muted)', fontFamily: "'Inter Tight', sans-serif" }}>Agregar tema</span>
-                              <span style={{ fontSize: 10, color: 'var(--text-muted)', opacity: 0.6 }}>Haz clic para crear</span>
+                              <span style={{ fontSize: 11, color: 'var(--text-muted)', opacity: 0.6 }}>Haz clic para crear</span>
                             </div>
                           </div>
                           </SortableContext>
@@ -4366,10 +4231,10 @@ const saveCourseNoteContent = (id: string, html: string) => {
               ) : (
 /* --- ESTUDIO MODE --- */
                 <>
-                <div style={{ display: 'flex', flexDirection: 'row', flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>
+                <div className="course-study-layout" style={{ display: 'flex', flexDirection: 'row', flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>
 
                   {/* -- LEFT COLUMN: PANEL RESUMEN (4 Métricas + CRONOGRAMA) + MATERIALES -- */}
-                  <div style={{ width: 380, flexShrink: 0, display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
+                  <div className="course-material-section" style={{ width: 380, flexShrink: 0, display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
 
                     {/* -- PANEL Métricas: UN SOLO BLOQUE (estética bloques de temas) CON LOS 4 DATOS EN 2×2 + DIVISORES ANIMADOS -- */}
                     <div style={{ flexShrink: 0, padding: '14px 16px 0' }}>
@@ -4381,22 +4246,22 @@ const saveCourseNoteContent = (id: string, html: string) => {
                         const topicsInProgress = parsedTopics.filter(t => (t.reviewLevel || 0) > 0).length;
                         const tasksDone = courseTasks.filter(t => t.status === 'completado').length;
                         const metricCell = (Icon: React.ElementType, color: string, value: React.ReactNode, label: string, sub: string) => (
-                          <div style={{ position: 'relative', minWidth: 0, overflow: 'hidden', padding: '11px 14px 10px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                          <div className="course-metric-cell" style={{ position: 'relative', minWidth: 0, overflow: 'hidden', padding: '11px 14px 10px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                             <div style={{ position: 'absolute', right: 5, top: '50%', transform: 'translateY(-50%)', width: 62, height: 62, borderRadius: '50%', border: `1.5px solid ${color}`, opacity: 0.04, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
                               <Icon size={30} strokeWidth={1.1} style={{ color, opacity: 0.9 }} />
                             </div>
                             <span style={{ fontSize: 7.5, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.14em', fontFamily: "'Inter Tight', sans-serif", whiteSpace: 'nowrap' }}>{label}</span>
                             <div>
-                              <div style={{ fontSize: 23, fontWeight: 300, fontFamily: "'Inter Tight', sans-serif", fontVariantNumeric: 'tabular-nums', lineHeight: 1.05, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>{value}</div>
+                              <div style={{ fontSize: 23, fontWeight: 500, fontFamily: "'Inter Tight', sans-serif", fontVariantNumeric: 'tabular-nums', lineHeight: 1.05, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>{value}</div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 5 }}>
                                 <div style={{ width: 14, height: 2, borderRadius: 1, background: color, opacity: 0.55, flexShrink: 0 }} />
-                                <span style={{ fontSize: 8, fontWeight: 500, color: 'var(--text-muted)', fontFamily: "'Inter Tight', sans-serif", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub}</span>
+                                <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', fontFamily: "'Inter Tight', sans-serif", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub}</span>
                               </div>
                             </div>
                           </div>
                         );
                         return (
-                          <div style={{ height: 186, position: 'relative', borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'linear-gradient(160deg, var(--bg-elevated-alpha, var(--bg-elevated)) 0%, color-mix(in srgb, var(--bg-elevated-alpha, var(--bg-elevated)) 82%, transparent) 100%)', overflow: 'hidden', boxShadow: `0 1px 0 rgba(255,255,255,0.035) inset, 0 8px 24px ${course.color}0d` }}>
+                          <div className="course-summary-metrics" style={{ height: 186, position: 'relative', borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'linear-gradient(160deg, var(--bg-elevated-alpha, var(--bg-elevated)) 0%, color-mix(in srgb, var(--bg-elevated-alpha, var(--bg-elevated)) 82%, transparent) 100%)', overflow: 'hidden', boxShadow: `0 1px 0 rgba(255,255,255,0.035) inset, 0 8px 24px ${course.color}0d` }}>
                             <div style={{ position: 'absolute', left: '50%', top: '8%', bottom: '8%', width: 1, background: 'var(--border-soft)', boxShadow: `0 0 14px ${course.color}3f`, animation: 'metricDividerPulse 4.5s ease-in-out infinite', pointerEvents: 'none', zIndex: 1 }} />
                             <div style={{ position: 'absolute', top: '50%', left: '8%', right: '8%', height: 1, background: 'var(--border-soft)', boxShadow: `0 0 14px ${course.color}3f`, animation: 'metricDividerPulse 4.5s ease-in-out 1.1s infinite', pointerEvents: 'none', zIndex: 1 }} />
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr 1fr', height: '100%' }}>
@@ -4416,14 +4281,14 @@ const saveCourseNoteContent = (id: string, html: string) => {
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '24px 20px 10px', flexShrink: 0 }}>
                           <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: "'Inter Tight', sans-serif" }}>Materiales</h3>
                           <div style={{ display: 'flex', gap: 6 }}>
-                            <button onClick={() => { topicOnlyRef.current = false; generalOnlyRef.current = true; handleAddFileBtn(undefined); }}
+                            <button data-ui-control="" onClick={() => { topicOnlyRef.current = false; generalOnlyRef.current = true; handleAddFileBtn(undefined); }}
                               style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${course.color}30`, background: `${course.color}10`, cursor: 'pointer', color: course.color, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms ' + EASE }}
                               onMouseEnter={e => { e.currentTarget.style.background = `${course.color}22`; e.currentTarget.style.borderColor = `${course.color}50`; }}
                               onMouseLeave={e => { e.currentTarget.style.background = `${course.color}10`; e.currentTarget.style.borderColor = `${course.color}30`; }}
                               title="Subir archivo">
                               <Upload size={15} />
                             </button>
-                            <button onClick={() => { topicOnlyRef.current = false; setAddLinkTargetTopic(undefined); setShowAddLinkModal(true); setAddLinkUrl(''); setAddLinkName(''); }}
+                            <button data-ui-control="" onClick={() => { topicOnlyRef.current = false; setAddLinkTargetTopic(undefined); setShowAddLinkModal(true); setAddLinkUrl(''); setAddLinkName(''); }}
                               style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${course.color}30`, background: `${course.color}10`, cursor: 'pointer', color: course.color, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms ' + EASE }}
                               onMouseEnter={e => { e.currentTarget.style.background = `${course.color}22`; e.currentTarget.style.borderColor = `${course.color}50`; }}
                               onMouseLeave={e => { e.currentTarget.style.background = `${course.color}10`; e.currentTarget.style.borderColor = `${course.color}30`; }}
@@ -4478,7 +4343,7 @@ const saveCourseNoteContent = (id: string, html: string) => {
                               }
                               setLoadingMatId(mat.id || `idx_${idx}`);
                               try {
-                                await openFileSmart(dataUrl, matName, { onMedia: (u, n) => setPipUrl(u, n), onError: (m) => toast.error(m), onMoved: (np) => handleMatMoved(mat.id, np) });
+                                await openFileSmart(dataUrl, matName, { onError: (m) => toast.error(m), onMoved: (np) => handleMatMoved(mat.id, np) });
                               } catch { /* noop */ }
                               setTimeout(() => setLoadingMatId(null), 400);
                             };
@@ -4548,16 +4413,16 @@ const saveCourseNoteContent = (id: string, html: string) => {
                                   </div>
                                   {isAudio && playingAudioId === mat.id && (
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                                      <span style={{ fontSize: 9, color: 'var(--text-muted)', minWidth: 28, textAlign: 'right', fontFamily: "'JetBrains Mono', monospace" }}>{formatTime(audioProgress)}</span>
+                                      <span style={{ fontSize: 11, color: 'var(--text-muted)', minWidth: 28, textAlign: 'right', fontFamily: "'JetBrains Mono', monospace" }}>{formatTime(audioProgress)}</span>
                                       <div style={{ width: 60, height: 3, borderRadius: 2, background: 'var(--bg-hover)', cursor: 'pointer', position: 'relative' }}
                                         onClick={e => { if (audioRef.current) { const r = e.currentTarget.getBoundingClientRect(); audioRef.current.currentTime = ((e.clientX - r.left) / r.width) * audioDuration; } }}>
                                         <div style={{ width: `${(audioProgress / (audioDuration || 1)) * 100}%`, height: '100%', borderRadius: 2, background: badgeColor, transition: 'width 100ms linear' }} />
                                       </div>
-                                      <span style={{ fontSize: 9, color: 'var(--text-muted)', minWidth: 28, fontFamily: "'JetBrains Mono', monospace" }}>{formatTime(audioDuration)}</span>
+                                      <span style={{ fontSize: 11, color: 'var(--text-muted)', minWidth: 28, fontFamily: "'JetBrains Mono', monospace" }}>{formatTime(audioDuration)}</span>
                                     </div>
                                   )}
                                   {isLink ? (
-                                    <button onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); setEditLinkId(mat.id); setEditLinkUrl(dataUrl); setEditLinkName(matName); }}
+                                    <button data-ui-control="" onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); setEditLinkId(mat.id); setEditLinkUrl(dataUrl); setEditLinkName(matName); }}
                                       style={{ width: 24, height: 24, borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, transition: 'all 150ms', opacity: 0.4 }}
                                       onMouseEnter={ev => { ev.currentTarget.style.background = 'var(--bg-hover)'; ev.currentTarget.style.color = 'var(--text-primary)'; ev.currentTarget.style.opacity = '1'; }}
                                       onMouseLeave={ev => { ev.currentTarget.style.background = 'transparent'; ev.currentTarget.style.color = 'var(--text-muted)'; ev.currentTarget.style.opacity = '0.4'; }}
@@ -4565,7 +4430,7 @@ const saveCourseNoteContent = (id: string, html: string) => {
                                       <Edit3 size={11} />
                                     </button>
                                   ) : (
-                                    <button onClick={e => { e.stopPropagation(); setConfirmDeleteMatId(mat.id); }}
+                                    <button data-ui-control="" onClick={e => { e.stopPropagation(); setConfirmDeleteMatId(mat.id); }}
                                       style={{ width: 24, height: 24, borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, transition: 'all 150ms', opacity: 0.4 }}
                                       onMouseEnter={ev => { ev.currentTarget.style.background = 'rgba(239,68,68,0.1)'; ev.currentTarget.style.color = '#EF4444'; ev.currentTarget.style.opacity = '1'; }}
                                       onMouseLeave={ev => { ev.currentTarget.style.background = 'transparent'; ev.currentTarget.style.color = 'var(--text-muted)'; ev.currentTarget.style.opacity = '0.4'; }}
@@ -4586,7 +4451,7 @@ const saveCourseNoteContent = (id: string, html: string) => {
                     </div>
 
                     {/* -- CENTER: PLANNER SEMANAL (superior) + RADAR DE RENDIMIENTO (inferior) -- */}
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+                    <div className="course-session-section" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
 
                       {/* -- PLANNER SEMANAL · franja de días (solo días) + sesiones del día seleccionado -- */}
                       <div className="crono-block" style={{ flexShrink: 0, margin: '14px 20px 0', height: 168, borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'linear-gradient(160deg, var(--bg-elevated-alpha, var(--bg-elevated)) 0%, color-mix(in srgb, var(--bg-elevated-alpha, var(--bg-elevated)) 82%, transparent) 100%)', position: 'relative', overflow: 'hidden', boxShadow: `0 1px 0 rgba(255,255,255,0.035) inset, 0 8px 24px ${course.color}0d`, display: 'flex', flexDirection: 'column' }}>
@@ -4627,7 +4492,7 @@ const saveCourseNoteContent = (id: string, html: string) => {
                                   const isTodayDay = d.iso === today;
                                   const isSel = d.iso === plannerDate;
                                   return (
-                                    <button key={d.iso} onClick={() => markManual(d.iso)}
+                                    <button data-ui-control="" key={d.iso} onClick={() => markManual(d.iso)}
                                       title={format(new Date(d.iso + 'T12:00:00'), 'EEEE d MMMM', { locale: es })}
                                       style={{ flex: 1, minWidth: 0, cursor: 'pointer', height: 28, padding: '0 4px', borderRadius: 8, border: isSel ? `1px solid ${course.color}` : '1px solid transparent', background: 'transparent', transition: 'all 180ms ' + EASE, fontFamily: 'inherit' }}
                                       onMouseEnter={e => { if (!isTodayDay && !isSel) { e.currentTarget.style.background = 'var(--bg-hover)'; } }}
@@ -4636,7 +4501,7 @@ const saveCourseNoteContent = (id: string, html: string) => {
                                     </button>
                                   );
                                 })}
-                                <button onClick={openAddSession} title="Añadir sesión de estudio"
+                                <button data-ui-control="" onClick={openAddSession} title="Añadir sesión de estudio"
                                   style={{ flex: '0 0 auto', width: 26, height: 26, boxSizing: 'border-box', marginLeft: 6, borderRadius: 9, border: `1.5px solid ${course.color}40`, background: `${course.color}08`, cursor: 'pointer', color: course.color, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, lineHeight: 0, transition: 'all 200ms ' + EASE }}
                                   onMouseEnter={e => { e.currentTarget.style.background = `${course.color}18`; e.currentTarget.style.borderColor = `${course.color}60`; }}
                                   onMouseLeave={e => { e.currentTarget.style.background = `${course.color}08`; e.currentTarget.style.borderColor = `${course.color}40`; }}>
@@ -4652,8 +4517,8 @@ const saveCourseNoteContent = (id: string, html: string) => {
                                 {daySessions.length === 0 ? (
                                   <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 9, padding: '0 12px' }}>
                                     <Calendar size={30} strokeWidth={1.1} style={{ color: 'var(--text-tertiary)', opacity: 0.8 }} />
-                                    <span style={{ fontSize: 10.5, fontWeight: 500, color: 'var(--text-secondary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '0.03em' }}>Sin sesiones este día</span>
-                                    <span style={{ fontSize: 9, fontWeight: 400, color: 'var(--text-muted)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '0.02em', opacity: 0.9 }}>Programa una con el botón + de arriba</span>
+                                    <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '0.03em' }}>Sin sesiones este día</span>
+                                    <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '0.02em', opacity: 0.9 }}>Programa una con el botón + de arriba</span>
                                   </div>
                                 ) : (
                                   <DndContext sensors={planSensors} collisionDetection={closestCorners} onDragEnd={handlePlanDragEnd}>
@@ -4676,7 +4541,7 @@ const saveCourseNoteContent = (id: string, html: string) => {
                                         <div style={{ fontSize: 15.5, fontWeight: 500, color: isDone ? 'var(--text-tertiary)' : 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.01em', lineHeight: 1.25, textDecoration: isDone ? 'line-through' : 'none' }}>{sess.title || 'Sesión de estudio'}</div>
                                       </div>
                                       {otherCourse && (
-                                        <span title={otherCourse.name} style={{ flexShrink: 0, fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: "'Inter Tight', sans-serif", color: otherCourse.color, background: `${otherCourse.color}10`, border: `1px solid ${otherCourse.color}28`, padding: '2.5px 7px', borderRadius: 5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 80, lineHeight: 1.3 }}>{otherCourse.name}</span>
+                                        <span title={otherCourse.name} style={{ flexShrink: 0, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: "'Inter Tight', sans-serif", color: otherCourse.color, background: `${otherCourse.color}10`, border: `1px solid ${otherCourse.color}28`, padding: '2.5px 7px', borderRadius: 5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 80, lineHeight: 1.3 }}>{otherCourse.name}</span>
                                       )}
                                       {intensity > 0 && (
                                         <div style={{ flex: 1, minWidth: 96, maxWidth: 210, display: 'flex', gap: 3, alignItems: 'center', flexShrink: 0 }} title={`Intensidad programada ${intensity}/10`}>
@@ -4693,16 +4558,16 @@ const saveCourseNoteContent = (id: string, html: string) => {
                                       {isDone && (
                                         <div style={{ position: 'absolute', inset: 0, borderRadius: 10, background: 'linear-gradient(135deg, color-mix(in srgb, var(--bg-surface) 88%, transparent) 0%, color-mix(in srgb, var(--bg-elevated) 80%, transparent) 100%)', boxShadow: 'inset 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent)', border: '1px dashed color-mix(in srgb, var(--accent) 42%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, pointerEvents: 'none', zIndex: 1 }}>
                                           <Check size={13} strokeWidth={2.5} style={{ color: 'var(--accent)', filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.5))' }} />
-                                          <span style={{ fontSize: 8.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.18em', fontFamily: "'Inter Tight', sans-serif", color: 'var(--accent)', whiteSpace: 'nowrap', textShadow: '0 1px 5px rgba(0,0,0,0.55)' }}>Sesión de estudio lograda</span>
+                                          <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.18em', fontFamily: "'Inter Tight', sans-serif", color: 'var(--accent)', whiteSpace: 'nowrap', textShadow: '0 1px 5px rgba(0,0,0,0.55)' }}>Sesión de estudio lograda</span>
                                         </div>
                                       )}
                                       {isDone ? (
-                                        <button onClick={e => { e.stopPropagation(); updatePlannedSession(sess.id, { completed: false }); }} title="Desmarcar como completada"
+                                        <button data-ui-control="" onClick={e => { e.stopPropagation(); updatePlannedSession(sess.id, { completed: false }); }} title="Desmarcar como completada"
                                           style={{ width: 22, height: 22, borderRadius: '50%', background: '#22C55E14', border: '1px solid #22C55E45', color: '#22C55E', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer', padding: 0, transition: 'all 180ms ' + EASE, position: 'relative', zIndex: 2 }}>
                                           <Check size={11.5} strokeWidth={2.6} />
                                         </button>
                                       ) : (
-                                        <button onClick={e => { e.stopPropagation(); updatePlannedSession(sess.id, { completed: true }); }} title="Marcar como completada"
+                                        <button data-ui-control="" onClick={e => { e.stopPropagation(); updatePlannedSession(sess.id, { completed: true }); }} title="Marcar como completada"
                                           style={{ width: 22, height: 22, borderRadius: '50%', border: '1px solid var(--border-soft)', background: 'transparent', flexShrink: 0, cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#22C55E', transition: 'all 180ms ' + EASE, position: 'relative', zIndex: 2 }}>
                                           <Check size={11.5} strokeWidth={2.6} style={{ opacity: 0, transition: 'opacity 180ms ' + EASE }} />
                                         </button>
@@ -4723,260 +4588,19 @@ const saveCourseNoteContent = (id: string, html: string) => {
 
                       {/* -- PANEL DE DETALLE DE Sesión · overlay rectangular horizontal (estética bloques de temas) -- */}
                       {detailSessionId && (() => {
-                        const ds = (plannedSessions || []).find(s => s.id === detailSessionId);
-                        if (!ds) return null;
-                        const dInt = Math.max(0, Math.min(10, ds.intensity || 0));
-                        const dGroup = courses.flatMap(c => (c.groups || [])).find(g => g.id === ds.groupId);
-                        const dTopic = courses.flatMap(c => (c.studyTopics || [])).find(t => t.id === ds.topicId);
-                        const dDone = !!ds.completed;
-                        const dOtherCourse = courses.find(c => c.id === ds.courseId && c.id !== course.id);
-                        const dLinkCol = dOtherCourse ? dOtherCourse.color : course.color;
-                        const dTimeStr = (ds.startTime || '').slice(0, 5);
-                        const dHh = dTimeStr ? dTimeStr.slice(0, 2) : '';
-                        const dMm = dTimeStr ? dTimeStr.slice(3, 5) : '';
-                        const dStartMin = dTimeStr ? parseInt(dTimeStr.slice(0, 2), 10) * 60 + parseInt(dTimeStr.slice(3, 5), 10) : -1;
-                        const dEndMin = dStartMin >= 0 ? dStartMin + (ds.durationMinutes || 30) : -1;
-                        const dEndStr = dEndMin >= 0 ? `${String(Math.floor(dEndMin / 60) % 24).padStart(2, '0')}:${String(dEndMin % 60).padStart(2, '0')}` : '';
-                        const dDurPct = Math.min(100, Math.max(9, Math.round(((ds.durationMinutes || 30) / 120) * 100)));
-                        const dLinked = (studySessions || []).find(s => s.plannedSessionId === ds.id && s.type !== 'break');
-                        const dLinkedMin = dLinked ? Math.max(1, Math.round((dLinked.duration || 0) / 60)) : 0;
-                        const dRealPct = dLinked ? Math.min(100, Math.max(5, Math.round((dLinkedMin / Math.max(1, ds.durationMinutes || 30)) * 100))) : dDurPct;
-const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 7, padding: '5px 8px', borderRadius: 9, border: 'none', background: 'transparent', color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", fontSize: 11.5, fontWeight: 500, cursor: 'pointer', transition: 'all 160ms ' + EASE, maxWidth: '100%', textAlign: 'left', minWidth: 0 };
-                        const treeHover = (e: any, on: boolean) => {
-                          e.currentTarget.style.background = on ? `${dLinkCol}0d` : 'transparent';
+                        const ds=(plannedSessions||[]).find(s=>s.id===detailSessionId);if(!ds)return null;
+                        const owner=courses.find(c=>c.id===ds.courseId)||course;
+                        const group=(owner.groups||[]).find(g=>g.id===ds.groupId),topic=(owner.studyTopics||[]).find(t=>t.id===ds.topicId);
+                        const close=()=>{setDetailSessionId(null);setConfirmDeleteSession(null);setChangeCourseFor(null);};
+                        const edit=()=>{
+                          setDetailSessionId(null);setConfirmDeleteSession(null);
+                          if(owner.id!==course.id){try{localStorage.setItem('owa_course_edit_session',ds.id);}catch{}navigateToCourse(owner.id);return;}
+                          setPlanEditId(ds.id);setPlanDate(ds.date);setPlanStartTime(ds.startTime||'09:00');setPlanTitle(ds.title||'');setPlanGroupId(ds.groupId||'');setPlanTopicId(ds.topicId||'');setPlanType(ds.type||'estudio');setPlanDuration(ds.durationMinutes||30);setPlanIntensity(ds.intensity||5);setPlanRepeat(ds.repeat||'none');setPlanRepeatDays(ds.repeatDays||[]);setPlanRepeatUntil(ds.repeatUntil||'');setShowPlanModal(true);
                         };
-                        const treeBranch = (w: number) => <div style={{ width: w, height: 1.5, borderRadius: 1, background: `${dLinkCol}77`, flexShrink: 0 }} />;
-                        const startStudy = () => {
-                          if (activeTaskId) { addNotification('Hay una tarea vinculada al temporizador. Desvincula esa tarea para iniciar esta sesión.', 'info'); return; }
-                          linkPlannedSessionToTimer(ds.id); setNavigateTo('estudio');
-                        };
-                        const goGroup = () => { setDetailSessionId(null); try { localStorage.removeItem('owa_session_detail_v1'); } catch { } const tc = dOtherCourse || course; navigateToCourse(tc.id, ds.groupId || undefined); };
-                        const goTopic = () => { setDetailSessionId(null); try { localStorage.removeItem('owa_session_detail_v1'); } catch { } const tc = dOtherCourse || course; navigateToCourse(tc.id, ds.groupId || undefined, ds.topicId || undefined); };
-                        const closePanel = () => { setDetailSessionId(null); setConfirmDeleteSession(null); setChangeCourseFor(null); };
-                        const openEditFromSession = (ps: PlannedSession) => {
-                          setPlanEditId(ps.id);
-                          setPlanDate(ps.date);
-                          setPlanStartTime(ps.startTime || '09:00');
-                          setPlanTitle(ps.title || '');
-                          setPlanGroupId(ps.groupId || '');
-                          setPlanTopicId(ps.topicId || '');
-                          setPlanType(ps.type || 'estudio');
-                          setPlanDuration(ps.durationMinutes || 30);
-                          setPlanIntensity(ps.intensity || 5);
-                          setShowPlanModal(true);
-                          setDetailSessionId(null);
-                          setConfirmDeleteSession(null);
-                        };
-                        const editSession = () => {
-                          setDetailSessionId(null);
-                          if (dOtherCourse) {
-                            try { localStorage.setItem('owa_course_edit_session', ds.id); } catch { /* noop */ }
-                            navigateToCourse(ds.courseId);
-                            return;
-                          }
-                          openEditFromSession(ds);
-                        };
-                        const recentTopicsList = (() => {
-                          try {
-                            const raw = localStorage.getItem(`owa_recent_topics_${course.id}`);
-                            const arr = raw ? JSON.parse(raw) : [];
-                            if (!Array.isArray(arr)) return [];
-                            return arr
-                              .filter((x: any) => x && typeof x.id === 'string' && x.id !== (ds.topicId || '') && parsedTopics.some(t => t.id === x.id))
-                              .sort((a: any, b: any) => (b.at || 0) - (a.at || 0))
-                              .slice(0, 3)
-                              .map((x: any) => parsedTopics.find(t => t.id === x.id))
-                              .filter(Boolean) as SubjectTopic[];
-                          } catch { return []; }
-                        })();
-                        const dMats = Array.isArray((dTopic as any)?.materials) ? ((dTopic as any).materials as any[]).filter((m: any) => m && typeof m === 'object') : [];
-                        const dMatMeta = (m: any) => {
-                          const u = String(m?.url || '').toLowerCase();
-                          if (/\.(pdf)($|\?)/.test(u)) return { I: FileText, c: '#EF4444' };
-                          if (/\.(xlsx?|ods|csv)($|\?)/.test(u)) return { I: FileSpreadsheet, c: '#10B981' };
-                          if (/\.(png|jpe?g|gif|webp|svg)($|\?)/.test(u)) return { I: ImageIcon, c: '#F59E0B' };
-                          if (/\.(mp3|wav|ogg|m4a|flac)($|\?)/.test(u)) return { I: Music, c: '#8B5CF6' };
-                          if (/\.(mp4|webm|mov|mkv)($|\?)/.test(u)) return { I: Play, c: '#EC4899' };
-                          if (/\.(docx?|odt|pptx?|txt)($|\?)/.test(u)) return { I: FileText, c: '#3B82F6' };
-                          return { I: File, c: 'var(--text-muted)' };
-                        };
-                        return createPortal(
-                          <div onClick={closePanel} style={{ position: 'fixed', inset: 0, zIndex: 99995, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.32)', backdropFilter: 'blur(3px)', animation: 'fadeIn 200ms ' + EASE }}>
-                            <div onClick={e => e.stopPropagation()} className="bento-card" style={{ position: 'relative', width: 980, maxWidth: 'calc(100% - 48px)', background: 'linear-gradient(160deg, var(--bg-elevated-alpha, var(--bg-elevated)) 0%, color-mix(in srgb, var(--bg-elevated-alpha, var(--bg-elevated)) 86%, transparent) 100%)', border: '1px solid var(--border-soft)', borderRadius: 16, boxShadow: '0 24px 60px rgba(0,0,0,0.45)', padding: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                              <div style={{ padding: '30px 40px 28px', display: 'flex', flexDirection: 'column', gap: 28 }}>
-
-                              {/* header: título grande en el color del curso + "sesión de estudio" pequeño abajo */}
-                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                  <div style={{ fontSize: 30, fontWeight: 300, letterSpacing: '-0.015em', color: course.color, fontFamily: "'Inter Tight', sans-serif", lineHeight: 1.15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textShadow: `0 0 24px ${course.color}22` }}>{ds.title || 'Sesión de estudio'}</div>
-                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, marginTop: 10, fontSize: 10, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif" }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', minWidth: 0 }}>
-                                      <span>Sesión de estudio</span>
-                                      <span style={{ opacity: 0.5 }}>·</span>
-                                      <span style={{ textTransform: 'none', letterSpacing: '0.02em', fontSize: 10.5 }}>{format(new Date(ds.date + 'T12:00:00'), 'EEEE d MMMM', { locale: es })}</span>
-                                    </div>
-                                    <span title={dOtherCourse ? dOtherCourse.name : course.name} style={{ color: dLinkCol, fontWeight: 600, textTransform: 'none', letterSpacing: '0.02em', fontSize: 10.5, maxWidth: 340, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 1, textAlign: 'right', marginLeft: 'auto' }}>{dOtherCourse ? dOtherCourse.name : course.name}</span>
-                                  </div>
-                                </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, marginTop: 2 }}>
-                                  {dOtherCourse && (
-                                    <button onClick={() => { setDetailSessionId(null); navigateToCourse(dOtherCourse.id); }} title={`Ir al curso: ${dOtherCourse.name}`}
-                                      style={{ width: 28, height: 28, borderRadius: '50%', border: `1px solid ${dLinkCol}45`, background: `${dLinkCol}0f`, color: dLinkCol, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 180ms ' + EASE, padding: 0 }}
-                                      onMouseEnter={e => { e.currentTarget.style.background = `${dLinkCol}1c`; e.currentTarget.style.boxShadow = `0 0 12px ${dLinkCol}33`; }}
-                                      onMouseLeave={e => { e.currentTarget.style.background = `${dLinkCol}0f`; e.currentTarget.style.boxShadow = 'none'; }}>
-                                      <GraduationCap size={12.5} strokeWidth={2.2} />
-                                    </button>
-                                  )}
-                                  <button onClick={() => updatePlannedSession(ds.id, { completed: !dDone })} title={dDone ? 'Desmarcar como completada' : 'Marcar como completada'}
-                                    style={{ width: 32, height: 32, borderRadius: '50%', border: dDone ? 'none' : `1.5px solid ${course.color}66`, background: dDone ? '#22C55E' : `${course.color}0d`, color: dDone ? '#fff' : course.color, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms ' + EASE, padding: 0, boxShadow: dDone ? '0 0 16px rgba(34,197,94,0.5)' : `0 0 10px ${course.color}1a` }}
-                                    onMouseEnter={e => { if (!dDone) { e.currentTarget.style.background = `${course.color}18`; e.currentTarget.style.boxShadow = `0 0 14px ${course.color}33`; } }}
-                                    onMouseLeave={e => { if (!dDone) { e.currentTarget.style.background = `${course.color}0d`; e.currentTarget.style.boxShadow = `0 0 10px ${course.color}1a`; } }}>
-                                    {dDone ? <Check size={15} strokeWidth={2.8} /> : <Check size={15} strokeWidth={2} style={{ opacity: 0.7 }} />}
-                                  </button>
-                                  <button onClick={editSession} title="Editar sesión" style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid var(--border-soft)', background: 'var(--bg-elevated)', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 180ms ' + EASE, padding: 0 }}
-                                    onMouseEnter={e => { e.currentTarget.style.color = course.color; e.currentTarget.style.borderColor = `${course.color}45`; e.currentTarget.style.background = `${course.color}0f`; }}
-                                    onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.background = 'var(--bg-elevated)'; }}>
-                                    <Pencil size={11.5} strokeWidth={2.2} />
-                                  </button>
-                                  <button onClick={() => setConfirmDeleteSession(ds)} title="Eliminar sesión" style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid var(--border-soft)', background: 'var(--bg-elevated)', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 180ms ' + EASE, padding: 0 }}
-                                    onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(239,68,68,0.45)'; e.currentTarget.style.color = '#EF4444'; e.currentTarget.style.background = 'rgba(239,68,68,0.12)'; e.currentTarget.style.boxShadow = '0 0 10px rgba(239,68,68,0.22)'; }}
-                                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.boxShadow = 'none'; }}>
-                                    <Trash2 size={12} strokeWidth={2.2} />
-                                  </button>
-                                  <button onClick={closePanel} title="Cerrar" style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid var(--border-soft)', background: 'var(--bg-elevated)', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 180ms ' + EASE, padding: 0 }}
-                                    onMouseEnter={e => { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.borderColor = 'var(--border-default)'; }}
-                                    onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'var(--border-soft)'; }}>
-                                    <X size={12.5} strokeWidth={2.2} />
-                                  </button>
-                                </div>
-                              </div>
-
-                              {/* fila central: intensidad + horario + duración · 3 columnas que llenan el ancho */}
-                              <div style={{ display: 'flex', flexDirection: 'row', gap: 12, alignItems: 'stretch' }}>
-                                <div style={{ flex: 1, minWidth: 0, border: '1px solid var(--border-soft)', borderRadius: 12, padding: '12px 16px', background: 'linear-gradient(160deg, var(--bg-elevated-alpha, var(--bg-elevated)) 0%, transparent 100%)', display: 'flex', flexDirection: 'column', gap: 9 }}>
-                                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
-                                    <span style={{ fontSize: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif" }}>Intensidad esperada</span>
-                                    <span style={{ fontSize: 30, fontWeight: 300, letterSpacing: '-0.02em', fontFamily: "'Inter Tight', sans-serif", color: dInt > 0 ? REVIEW_LEVEL_COLORS[dInt - 1] : 'var(--text-tertiary)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{dInt}<span style={{ fontSize: 13, fontWeight: 400, color: 'var(--text-muted)', fontFamily: "'JetBrains Mono', monospace", marginLeft: 4 }}>/10</span></span>
-                                  </div>
-                                  <div style={{ display: 'flex', gap: 3, alignItems: 'center', marginTop: 'auto' }}>
-                                    {REVIEW_LEVEL_COLORS.map((col, i) => (
-                                      <div key={i} style={{ flex: 1, height: 20, borderRadius: 4, background: i < dInt ? col : 'var(--bg-hover)', boxShadow: i === dInt - 1 ? `0 0 12px ${col}aa` : 'none', transition: 'all 180ms ' + EASE }} />
-                                    ))}
-                                  </div>
-                                </div>
-
-                                <div style={{ width: 300, flexShrink: 0, border: '1px solid var(--border-soft)', borderRadius: 12, padding: '14px 16px', background: 'linear-gradient(160deg, var(--bg-elevated-alpha, var(--bg-elevated)) 0%, transparent 100%)', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                  <span style={{ fontSize: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif" }}>Horario</span>
-                                  {dTimeStr ? (
-                                    <>
-                                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginTop: 'auto' }}>
-                                        <span style={{ fontSize: 28, fontWeight: 200, letterSpacing: '0.01em', fontFamily: "'JetBrains Mono', monospace", color: 'var(--text-primary)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{dHh}<span style={{ animation: 'clockColonBlink 1.2s ' + EASE + ' infinite', display: 'inline-block' }}>:</span>{dMm}</span>
-                                        <span style={{ fontSize: 19, fontWeight: 300, color: course.color, fontFamily: "'JetBrains Mono', monospace", lineHeight: 1 }}>?</span>
-                                        <span style={{ fontSize: 17, fontWeight: 300, fontFamily: "'JetBrains Mono', monospace", color: 'var(--text-secondary)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{dEndStr}</span>
-                                      </div>
-                                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 8, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif" }}>
-                                        <span>Inicio</span><span>Fin</span>
-                                      </div>
-                                    </>
-                                  ) : (
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 'auto', color: 'var(--text-tertiary)' }}>
-                                      <Clock size={16} strokeWidth={1.6} />
-                                      <span style={{ fontSize: 17, fontWeight: 300, fontFamily: "'Inter Tight', sans-serif" }}>Flexible</span>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* fila inferior: carpeta grande + línea + tema con sus materiales (izq) + Últimos ingresos (der) */}
-                              <div style={{ display: 'flex', flexDirection: 'row', gap: 16, alignItems: 'stretch', padding: '0 2px' }}>
-                                {(dGroup || dTopic) ? (
-                                  <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                    {dOtherCourse && (
-                                      <button onClick={() => navigateToCourse(dOtherCourse.id)} title="Ir al curso" style={treeNode}
-                                        onMouseEnter={e => treeHover(e, true)} onMouseLeave={e => treeHover(e, false)}>
-                                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: dLinkCol, boxShadow: `0 0 8px ${dLinkCol}99`, flexShrink: 0 }} />
-                                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600, minWidth: 0, fontSize: 10.5 }}>{dOtherCourse.name}</span>
-                                      </button>
-                                    )}
-                                    {/* carpeta grande, de frente arriba */}
-                                    <button onClick={dGroup ? goGroup : goTopic} title={dGroup ? `Ir a ${dGroup.name}` : `Ir a ${dTopic?.title || ''}`} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 0, border: 'none', background: 'transparent', cursor: 'pointer', width: '100%', textAlign: 'left', borderRadius: 10, transition: 'all 160ms ' + EASE }}
-                                      onMouseEnter={e => { e.currentTarget.style.background = `${dLinkCol}0a`; }}
-                                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
-                                      <span style={{ width: 34, height: 34, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `${dLinkCol}12`, border: `1px solid ${dLinkCol}30`, flexShrink: 0 }}>
-                                        <FolderOpen size={17} style={{ color: dLinkCol }} />
-                                      </span>
-                                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", minWidth: 0 }}>{dGroup ? dGroup.name : (dTopic?.title || '')}</span>
-                                    </button>
-                                    {dGroup && dTopic && (
-                                      <>
-                                        <div style={{ width: 2, height: 15, background: `${dLinkCol}55`, marginLeft: 16, flexShrink: 0, borderRadius: 1 }} />
-                                        <button onClick={goTopic} title={`Ir a ${dTopic.title}`} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: 0, border: 'none', background: 'transparent', cursor: 'pointer', width: '100%', textAlign: 'left', borderRadius: 10, transition: 'all 160ms ' + EASE }}
-                                          onMouseEnter={e => { e.currentTarget.style.background = `${dLinkCol}0a`; }}
-                                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
-                                          <span style={{ width: 26, height: 26, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `${dLinkCol}12`, border: `1px solid ${dLinkCol}30`, flexShrink: 0 }}>
-                                            <BookOpen size={13} style={{ color: dLinkCol }} />
-                                          </span>
-                                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13.5, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", minWidth: 0 }}>{dTopic.title}</span>
-                                        </button>
-                                      </>
-                                    )}
-                                    {dMats.length > 0 && (
-                                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 2, minWidth: 0 }}>
-                                        <div style={{ fontSize: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", lineHeight: 1.6 }}>Materiales dentro</div>
-                                        {dMats.slice(0, 3).map((m: any) => {
-                                          const meta = dMatMeta(m);
-                                          const MI = meta.I;
-                                          return (
-                                            <div key={m.id || m.url || m.name} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 8px', borderRadius: 7, color: 'var(--text-secondary)', fontFamily: "'Inter Tight', sans-serif", fontSize: 11 }}>
-                                              <MI size={11} style={{ color: meta.c, flexShrink: 0 }} />
-                                              <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name || 'Archivo'}</span>
-                                            </div>
-                                          );
-                                        })}
-                                        {dMats.length > 3 && (
-                                          <div style={{ padding: '2px 8px', fontSize: 10.5, color: 'var(--text-muted)', fontFamily: "'Inter Tight', sans-serif" }}>+{dMats.length - 3} más</div>
-                                        )}
-                                      </div>
-                                    )}
-                                  </div>
-                                ) : null}
-
-                                {recentTopicsList.length > 0 && (
-                                  <>
-                                    {(dGroup || dTopic) && <div style={{ width: 1, background: 'var(--border-subtle)', flexShrink: 0, margin: '2px 0' }} />}
-                                    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                                      <div style={{ fontSize: 8, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", marginBottom: 2 }}>Últimos ingresos a temas</div>
-                                      {recentTopicsList.map(rt => (
-                                        <button key={rt.id} onClick={() => { setDetailSessionId(null); try { localStorage.removeItem('owa_session_detail_v1'); } catch { } navigateToCourse(course.id, rt.groupId || undefined, rt.id); }} title={rt.title}
-                                          style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 8, background: 'transparent', border: 'none', color: 'var(--text-secondary)', fontFamily: "'Inter Tight', sans-serif", fontSize: 11, cursor: 'pointer', transition: 'all 150ms ' + EASE, width: '100%', textAlign: 'left' }}
-                                          onMouseEnter={e => { e.currentTarget.style.background = `${course.color}0a`; e.currentTarget.style.color = 'var(--text-primary)'; }}
-                                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
-                                          <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{rt.title}</span>
-                                        </button>
-                                      ))}
-                                    </div>
-                                  </>
-                                )}
-
-                                {!(dGroup || dTopic) && recentTopicsList.length === 0 && (
-                                  <div style={{ flex: 1, fontSize: 11.5, fontStyle: 'italic', color: 'var(--text-muted)', fontFamily: "'Inter', sans-serif" }}>Sin tema o agrupación vinculada</div>
-                                )}
-                              </div>
-
-                              {/* CTA principal */}
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 2 }}>
-                                <button onClick={startStudy} title={activeTaskId ? 'Hay una tarea vinculada al temporizador' : 'Vincular al temporizador y abrir Estudio'}
-                                  style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '12px 12px', borderRadius: 10, fontSize: 11, fontWeight: 500, letterSpacing: '0.14em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif", color: activeTaskId ? 'var(--text-muted)' : '#fff', background: activeTaskId ? 'var(--bg-deep)' : `linear-gradient(135deg, ${course.color}, ${course.color}b8)`, border: `1px solid ${activeTaskId ? 'var(--border-subtle)' : 'transparent'}`, cursor: activeTaskId ? 'not-allowed' : 'pointer', boxShadow: activeTaskId ? 'none' : `0 4px 18px ${course.color}38`, transition: 'all 200ms ' + EASE, opacity: activeTaskId ? 0.65 : 1, animation: activeTaskId ? 'none' : `sessionCtaBreath 2.6s ${EASE} infinite` }}
-                                  onMouseEnter={e => { if (!activeTaskId) { e.currentTarget.style.boxShadow = `0 6px 24px ${course.color}55`; } }}
-                                  onMouseLeave={e => { if (!activeTaskId) { e.currentTarget.style.boxShadow = `0 4px 18px ${course.color}38`; } }}>
-                                  {activeTaskId ? 'Tarea vinculada activa' : 'Iniciar sesión de estudio'}
-                                </button>
-                              </div>
-                              </div>
-                            </div>
-                          </div>,
-                          document.body
-                        );
+                        const go=(groupId?:string,topicId?:string)=>{close();try{localStorage.removeItem('owa_session_detail_v1');}catch{}navigateToCourse(owner.id,groupId,topicId);};
+                        let recentTopics:SubjectTopic[]=[];
+                        try{const raw=JSON.parse(localStorage.getItem(`owa_recent_topics_${owner.id}`)||'[]');if(Array.isArray(raw))recentTopics=raw.filter(x=>x&&typeof x.id==='string'&&x.id!==ds.topicId).sort((a,b)=>(b.at||0)-(a.at||0)).slice(0,3).map(x=>(owner.studyTopics||[]).find(t=>t.id===x.id)).filter(Boolean) as SubjectTopic[];}catch{}
+                        return <CourseSessionPreview session={ds} course={owner} group={group} topic={topic} recentTopics={recentTopics} studySessions={studySessions||[]} confirmationOpen={!!confirmDeleteSession} unavailable={sessionLinkUnavailable(ds)} onClose={close} onEdit={edit} onDelete={()=>setConfirmDeleteSession(ds)} onComplete={()=>updatePlannedSession(ds.id,{completed:!ds.completed})} onStart={()=>{const reason=sessionLinkUnavailable(ds);if(reason){addNotification(reason,'info');return;}linkPlannedSessionToTimer(ds.id);setNavigateTo('estudio');}} onResume={()=>setNavigateTo('estudio')} onGroup={()=>go(ds.groupId||undefined)} onTopic={()=>go(ds.groupId||undefined,ds.topicId||undefined)} onRecent={item=>go(item.groupId||undefined,item.id)}/>;
                       })()}
 
                       {/* -- VENTANA DE confirmación · eliminar sesión (evita borrados accidentales) -- */}
@@ -4993,14 +4617,14 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                               ¿Eliminar <b style={{ color: 'var(--text-primary)', fontWeight: 600 }}>“{confirmDeleteSession.title || 'Sesión de estudio'}</b>? Se quitará del cronograma y no se puede deshacer.
                             </span>
                             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 2 }}>
-                              <button onClick={() => setConfirmDeleteSession(null)}
-                                style={{ padding: '8px 14px', borderRadius: 9, fontSize: 10.5, fontWeight: 600, fontFamily: "'Inter Tight', sans-serif", border: '1px solid var(--border-soft)', background: 'var(--bg-hover)', color: 'var(--text-secondary)', cursor: 'pointer', transition: 'all 150ms ' + EASE }}
+                              <button data-app-action="secondary" data-ui-control="" onClick={() => setConfirmDeleteSession(null)}
+                                style={{ padding: '8px 14px', borderRadius: 9, fontSize: 11, fontWeight: 600, fontFamily: "'Inter Tight', sans-serif", border: '1px solid var(--border-soft)', background: 'var(--bg-hover)', color: 'var(--text-secondary)', cursor: 'pointer', transition: 'all 150ms ' + EASE }}
                                 onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-elevated)'; }}
                                 onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}>
                                 Cancelar
                               </button>
-                              <button onClick={() => { deletePlannedSession(confirmDeleteSession.id); setConfirmDeleteSession(null); setDetailSessionId(null); }}
-                                style={{ padding: '8px 14px', borderRadius: 9, fontSize: 10.5, fontWeight: 600, fontFamily: "'Inter Tight', sans-serif", border: '1px solid rgba(239,68,68,0.4)', background: '#EF4444', color: '#fff', cursor: 'pointer', boxShadow: '0 4px 14px rgba(239,68,68,0.35)', transition: 'all 150ms ' + EASE }}
+                              <button data-ui-control="" onClick={() => { deletePlannedSession(confirmDeleteSession.id); setConfirmDeleteSession(null); setDetailSessionId(null); }}
+                                style={{ padding: '8px 14px', borderRadius: 9, fontSize: 11, fontWeight: 600, fontFamily: "'Inter Tight', sans-serif", border: '1px solid rgba(239,68,68,0.4)', background: '#EF4444', color: '#fff', cursor: 'pointer', boxShadow: '0 4px 14px rgba(239,68,68,0.35)', transition: 'all 150ms ' + EASE }}
                                 onMouseEnter={e => { e.currentTarget.style.background = '#DC2626'; e.currentTarget.style.boxShadow = '0 5px 18px rgba(239,68,68,0.5)'; }}
                                 onMouseLeave={e => { e.currentTarget.style.background = '#EF4444'; e.currentTarget.style.boxShadow = '0 4px 14px rgba(239,68,68,0.35)'; }}>
                                 Sí, eliminar
@@ -5018,7 +4642,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                           const cAxis = (i: number) => AXIS_COLORS[i % AXIS_COLORS.length];
 
                           // Measured course-wide real activity (timer sessions actually studied)
-                          const courseStudy = (studySessions || []).filter(s => s.courseId === course.id && s.type !== 'break');
+                          const courseStudy = productiveSessions(studySessions || []).filter(s => s.courseId ? s.courseId === course.id : s.taskId ? tasks.find(t=>t.id===s.taskId)?.course===course.name : s.subjects?.includes(course.id));
                           const withVol = courseStudy.filter(ss => ss.volmeter != null && ss.volmeter !== undefined);
 
                           // Real, countable data per grouping (or topic when no groups exist)
@@ -5050,7 +4674,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                           const maxMat = Math.max(1, ...axisItems.map(a => a.matCount));
                           const doneOf = (ses: PlannedSession[]) => ses.length > 0 ? ses.filter(s => s.completed).length / ses.length : 0;
                           const labels = axisItems.map(a => a.name);
-                          const courseRealMin = Math.round(courseStudy.reduce((sm, ss) => sm + (ss.duration || 0), 0) / 60);
+                          const courseRealMin = Math.round((courseTimeTotals[course.id]||0) / 60);
                           const courseRealSessions = courseStudy.length;
                           const coursePlan = (plannedSessions || []).filter(s => s.courseId === course.id);
                           const coursePlanMin = coursePlan.reduce((sm, s) => sm + (s.durationMinutes || 0), 0);
@@ -5186,7 +4810,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                               <>
                                 {headerEl}
                                 <div style={{ flex: 1, minHeight: 0, padding: '6px 22px 14px', position: 'relative', display: 'flex', flexDirection: 'column' }}>
-                                  <div ref={radarWrapRef} style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+                                  <div ref={observeRadar} style={{ flex: 1, minHeight: 0, position: 'relative' }}>
                                     <svg ref={radarSvgRef} width="100%" height="100%" viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} preserveAspectRatio="xMidYMid meet" style={{ maxHeight: '100%', margin: '0 auto', display: 'block', overflow: 'visible' }}>
                                       <defs>
                                         <radialGradient id="spiderFillDiag" cx="50%" cy="50%" r="60%">
@@ -5276,11 +4900,11 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                                           <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{diagAxes[radarHover].label}</span>
                                         </div>
                                         <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
-                                          <span style={{ fontSize: 26, fontWeight: 300, color: dCol(radarHover), fontFamily: "'Inter Tight', sans-serif", lineHeight: 1, letterSpacing: '-0.02em' }}>{Math.round(diagAxes[radarHover].value * 100)}%</span>
-                                          <span style={{ fontSize: 8, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: "'Inter Tight', sans-serif" }}>curso</span>
+                                          <span style={{ fontSize: 26, fontWeight: 500, color: dCol(radarHover), fontFamily: "'Inter Tight', sans-serif", lineHeight: 1, letterSpacing: '-0.02em' }}>{Math.round(diagAxes[radarHover].value * 100)}%</span>
+                                          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: "'Inter Tight', sans-serif" }}>curso</span>
                                         </div>
                                         <div style={{ height: 1, background: 'var(--border-subtle)', opacity: 0.7 }} />
-                                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 10, color: 'var(--text-muted)', minWidth: 0 }}>
+                                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 11, color: 'var(--text-muted)', minWidth: 0 }}>
                                           <span style={{ fontWeight: 500, flexShrink: 0, fontFamily: "'Inter Tight', sans-serif" }}>Detalle</span>
                                           <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{diagAxes[radarHover].detail}</span>
                                         </div>
@@ -5298,7 +4922,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
 
                               {/* -- MULTI-COLOR SPIDER CHART -- */}
                               <div style={{ flex: 1, minHeight: 0, padding: '6px 22px 14px', position: 'relative', display: 'flex', flexDirection: 'column' }}>
-                                <div ref={radarWrapRef} style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+                                <div ref={observeRadar} style={{ flex: 1, minHeight: 0, position: 'relative' }}>
                                 <svg ref={radarSvgRef} width="100%" height="100%" viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} preserveAspectRatio="xMidYMid meet" style={{ maxHeight: '100%', margin: '0 auto', display: 'block', overflow: 'visible' }}>
                                   <defs>
                                     <radialGradient id="spiderFill" cx="50%" cy="50%" r="60%">
@@ -5421,34 +5045,34 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                                           <span style={{ width: 7, height: 7, flexShrink: 0, borderRadius: '50%', background: axisCol, boxShadow: `0 0 8px ${axisCol}66` }} />
                                           <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>{item.name}</span>
-                                          <span style={{ fontSize: 8, fontWeight: 600, color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 }}>{Math.round(item.mastery * 100)}%</span>
+                                          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 }}>{Math.round(item.mastery * 100)}%</span>
                                         </div>
 
                                         {/* valor principal */}
                                         <div style={{ display: 'flex', alignItems: 'baseline', gap: 7, margin: '9px 0 10px' }}>
-                                          <span style={{ fontSize: 25, fontWeight: 300, color: axisCol, fontFamily: "'Inter Tight', sans-serif", lineHeight: 1, letterSpacing: '-0.02em' }}>{fmtVal(item)}</span>
-                                          <span style={{ fontSize: 8, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: "'Inter Tight', sans-serif" }}>Rendimiento</span>
+                                          <span style={{ fontSize: 25, fontWeight: 500, color: axisCol, fontFamily: "'Inter Tight', sans-serif", lineHeight: 1, letterSpacing: '-0.02em' }}>{fmtVal(item)}</span>
+                                          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: "'Inter Tight', sans-serif" }}>Rendimiento</span>
                                           <span style={{ flex: 1, height: 1, background: `linear-gradient(90deg, ${axisCol}30, transparent)` }} />
                                         </div>
 
                                         <div style={{ height: 1, background: 'var(--border-subtle)', opacity: 0.7 }} />
 
                                         {/* En esta agrupación */}
-                                        <div style={{ fontSize: 8, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', margin: '10px 0 5px', fontFamily: "'Inter Tight', sans-serif" }}>En esta agrupación</div>
+                                        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', margin: '10px 0 5px', fontFamily: "'Inter Tight', sans-serif" }}>En esta agrupación</div>
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 18, fontSize: 10, color: 'var(--text-muted)' }}>
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 18, fontSize: 11, color: 'var(--text-muted)' }}>
                                             <span style={{ fontWeight: 500 }}>Materiales</span><span style={{ fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'JetBrains Mono', monospace" }}>{item.matCount}</span>
                                           </div>
-                                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 18, fontSize: 10, color: 'var(--text-muted)' }}>
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 18, fontSize: 11, color: 'var(--text-muted)' }}>
                                             <span style={{ fontWeight: 500 }}>Sesiones planificadas</span>
                                             <span style={{ fontWeight: 600, color: item.ses.length > 0 ? 'var(--text-primary)' : 'var(--text-tertiary)', fontFamily: "'JetBrains Mono', monospace" }}>{item.ses.length > 0 ? `${done}/${item.ses.length}` : '—'}</span>
                                           </div>
-                                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 18, fontSize: 10, color: 'var(--text-muted)' }}>
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 18, fontSize: 11, color: 'var(--text-muted)' }}>
                                             <span style={{ fontWeight: 500 }}>Intensidad real/plan</span>
                                             <span style={{ fontWeight: 600, color: item.planInt > 0 ? axisCol : 'var(--text-tertiary)', fontFamily: "'JetBrains Mono', monospace" }}>{item.planInt > 0 || item.realInt > 0 ? `${Math.round(item.realInt)} / ${item.planInt > 0 ? Math.round(item.planInt) : '—'}` : '—'}</span>
                                           </div>
                                           {item.topicCount > 0 && (
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 18, fontSize: 10, color: 'var(--text-muted)' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 18, fontSize: 11, color: 'var(--text-muted)' }}>
                                               <span style={{ fontWeight: 500 }}>Temas en progreso</span><span style={{ fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'JetBrains Mono', monospace" }}>{item.activeTopics}/{item.topicCount}</span>
                                             </div>
                                           )}
@@ -5457,21 +5081,21 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                                         <div style={{ height: 1, background: 'var(--border-subtle)', opacity: 0.7, marginTop: 10 }} />
 
                                         {/* Actividad real del curso */}
-                                        <div style={{ fontSize: 8, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', margin: '10px 0 5px', fontFamily: "'Inter Tight', sans-serif" }}>Actividad real del curso</div>
+                                        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', margin: '10px 0 5px', fontFamily: "'Inter Tight', sans-serif" }}>Actividad real del curso</div>
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 18, fontSize: 10, color: 'var(--text-muted)' }}>
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 18, fontSize: 11, color: 'var(--text-muted)' }}>
                                             <span style={{ fontWeight: 500 }}>Sesiones reales</span><span style={{ fontWeight: 600, color: courseRealSessions > 0 ? 'var(--text-primary)' : 'var(--text-tertiary)', fontFamily: "'JetBrains Mono', monospace" }}>{courseRealSessions > 0 ? courseRealSessions : '—'}</span>
                                           </div>
-                                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 18, fontSize: 10, color: 'var(--text-muted)' }}>
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 18, fontSize: 11, color: 'var(--text-muted)' }}>
                                             <span style={{ fontWeight: 500 }}>Minutos estudiados</span><span style={{ fontWeight: 600, color: courseRealMin > 0 ? 'var(--text-primary)' : 'var(--text-tertiary)', fontFamily: "'JetBrains Mono', monospace" }}>{courseRealMin > 0 ? `${courseRealMin} min` : '—'}</span>
                                           </div>
-                                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 18, fontSize: 10, color: 'var(--text-muted)' }}>
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 18, fontSize: 11, color: 'var(--text-muted)' }}>
                                             <span style={{ fontWeight: 500 }}>Tiempo vs. plan</span><span style={{ fontWeight: 600, color: coursePlanMin > 0 ? 'var(--text-primary)' : 'var(--text-tertiary)', fontFamily: "'JetBrains Mono', monospace" }}>{coursePlanMin > 0 ? `${coursePlanPct}%` : '—'}</span>
                                           </div>
                                         </div>
 
                                         <div style={{ height: 1, background: 'var(--border-subtle)', opacity: 0.7, marginTop: 10 }} />
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 9, fontSize: 9.5, color: 'var(--text-muted)', fontFamily: "'Inter Tight', sans-serif", flexWrap: 'wrap' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 9, fontSize: 11, color: 'var(--text-muted)', fontFamily: "'Inter Tight', sans-serif", flexWrap: 'wrap' }}>
                                           <span style={{ fontWeight: 600 }}>Tareas {courseTasksDone}/{courseTasks.length}</span>
                                           <span style={{ opacity: 0.5 }}>·</span>
                                           <span style={{ fontWeight: 600 }}>{courseNotes} notas</span>
@@ -5491,11 +5115,11 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                     </div>
 
                   {/* -- RIGHT: AGRUPACIONES · FULL LATERAL -- */}
-                  <div style={{ width: 320, flexShrink: 0, display: 'flex', flexDirection: 'column', borderLeft: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
+                  <div className="course-group-section" style={{ width: 320, flexShrink: 0, display: 'flex', flexDirection: 'column', borderLeft: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '24px 20px 10px', flexShrink: 0 }}>
                       <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: "'Inter Tight', sans-serif" }}>Agrupaciones</h3>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <button onClick={() => { setEditingGroupId(null); setGroupName(''); setGroupCover(undefined); setShowGroupModal(true); }}
+                        <button data-ui-control="" onClick={() => { setEditingGroupId(null); setGroupName(''); setGroupCover(undefined); setShowGroupModal(true); }}
                           style={{ width: 28, height: 28, borderRadius: 8, border: `1.5px solid ${course.color}40`, background: `${course.color}08`, cursor: 'pointer', color: course.color, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms ' + EASE }}
                           onMouseEnter={e => { e.currentTarget.style.background = `${course.color}18`; e.currentTarget.style.borderColor = `${course.color}60`; }}
                           onMouseLeave={e => { e.currentTarget.style.background = `${course.color}08`; e.currentTarget.style.borderColor = `${course.color}40`; }}
@@ -5532,7 +5156,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                                   <div style={{ minWidth: 0, flex: 1 }}>
                                     <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', fontFamily: "'Inter Tight', sans-serif", textShadow: '0 1px 6px rgba(0,0,0,0.5)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>{group.name}</div>
                                   </div>
-                                  <button onClick={e => { e.stopPropagation(); setInlineEditGroupId(group.id); setInlineGroupName(group.name); setInlineGroupCover(group.image); }}
+                                  <button data-ui-control="" onClick={e => { e.stopPropagation(); setInlineEditGroupId(group.id); setInlineGroupName(group.name); setInlineGroupCover(group.image); }}
                                     style={{ width: 26, height: 26, borderRadius: 6, border: 'none', background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(6px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 150ms', opacity: 0.7 }}
                                     onMouseEnter={ev => { ev.currentTarget.style.background = 'rgba(255,255,255,0.22)'; ev.currentTarget.style.opacity = '1'; }}
                                     onMouseLeave={ev => { ev.currentTarget.style.background = 'rgba(255,255,255,0.12)'; ev.currentTarget.style.opacity = '0.7'; }}
@@ -5549,7 +5173,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                   <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>{group.name}</div>
                                 </div>
-                                <button onClick={e => { e.stopPropagation(); setInlineEditGroupId(group.id); setInlineGroupName(group.name); setInlineGroupCover(group.image); }}
+                                <button data-ui-control="" onClick={e => { e.stopPropagation(); setInlineEditGroupId(group.id); setInlineGroupName(group.name); setInlineGroupCover(group.image); }}
                                   style={{ width: 26, height: 26, borderRadius: 6, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 150ms', opacity: 0 }}
                                   onMouseEnter={ev => { ev.currentTarget.style.background = 'var(--bg-hover)'; ev.currentTarget.style.opacity = '1'; }}
                                   onMouseLeave={ev => { ev.currentTarget.style.background = 'transparent'; ev.currentTarget.style.opacity = '0'; }}
@@ -5569,254 +5193,6 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                     </div>
                   </div>
                 </div>
-
-                {/* -- PLAN SESSION MODAL -- */}
-                {showPlanModal && (
-                  <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                    onClick={e => { if (e.target === e.currentTarget) setShowPlanModal(false); }}>
-                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)' }} />
-                    <div style={{ position: 'relative', width: 480, maxHeight: '88vh', background: 'var(--bg-surface)', borderRadius: 16, border: '1px solid var(--border-subtle)', boxShadow: '0 24px 64px rgba(0,0,0,0.5)', overflow: 'hidden', display: 'flex', flexDirection: 'column', animation: 'modalDrop 260ms cubic-bezier(0.16, 1, 0.3, 1)' }} className="bento-card modal-opaque">
-                      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${course.color}, ${course.color}55, transparent)`, pointerEvents: 'none' }} />
-                      <div style={{ padding: '22px 24px 14px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                          <div>
-                            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em' }}>{planEditId ? 'Editar sesión' : 'Nueva sesión de estudio'}</h3>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
-                              <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', fontFamily: "'Inter Tight', sans-serif", textTransform: 'capitalize', letterSpacing: '-0.01em' }}>
-                                {planDate ? format(new Date(planDate + 'T12:00:00'), 'EEEE', { locale: es }) : ''}
-                                <span style={{ color: 'var(--text-tertiary)', fontWeight: 500 }}> · {planDate ? format(new Date(planDate + 'T12:00:00'), "d 'de' MMMM", { locale: es }) : ''}</span>
-                              </span>
-                              <span style={{ width: 3, height: 3, borderRadius: '50%', background: 'var(--text-tertiary)', flexShrink: 0, opacity: 0.7 }} />
-                              <span title={`Vinculado al curso ${course.name}`}
-                                style={{ fontSize: 10, fontWeight: 700, color: course.color, fontFamily: "'Inter Tight', sans-serif", background: `${course.color}0c`, border: `1px solid ${course.color}26`, padding: '3px 11px', borderRadius: 999, display: 'inline-flex', alignItems: 'center', textTransform: 'uppercase', letterSpacing: '0.09em', lineHeight: 1.4, maxWidth: 240, overflow: 'hidden' }}>
-                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{course.name}</span>
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                        <button onClick={() => setShowPlanModal(false)}
-                          style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: 'var(--bg-hover)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
-                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#EF4444'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
-                          <X size={14} />
-                        </button>
-                      </div>
-
-                      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: 15 }} className="no-scrollbar">
-                        <div>
-                          <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', marginBottom: 7, letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Título</label>
-                          <input value={planTitle} onChange={e => setPlanTitle(e.target.value)}
-                            placeholder="Ej: Repasar capítulo 3"
-                            autoFocus
-                            style={{ width: '100%', height: 42, borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 13px', fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif" }}
-                            className="input-base" />
-                        </div>
-
-                        <div style={{ display: 'flex', gap: 14 }}>
-                          <div style={{ flex: 1 }}>
-                            <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', marginBottom: 7, letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Hora de inicio</label>
-                            <div style={{ display: 'flex', alignItems: 'stretch', borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', overflow: 'hidden' }}>
-                              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '2px 0' }}>
-                                <button onClick={() => shiftPlanTime('h', 1)} title="Subir hora (+1h)"
-                                  style={{ width: '100%', height: 16, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'color 150ms' }}
-                                  onMouseEnter={e => e.currentTarget.style.color = course.color}
-                                  onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
-                                  <ChevronUp size={14} />
-                                </button>
-                                {planTimeEdit === 'h' ? (
-                                  <input autoFocus value={planTimeEditVal}
-                                    onChange={e => setPlanTimeEditVal(e.target.value.replace(/\D/g, '').slice(0, 2))}
-                                    onBlur={() => commitPlanTimeEdit('h')}
-                                    onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                                    style={{ width: '72%', background: 'transparent', border: 'none', outline: 'none', textAlign: 'center', fontSize: 17, fontWeight: 700, color: course.color, fontFamily: "'JetBrains Mono', monospace", fontVariantNumeric: 'tabular-nums', padding: 0, height: 28 }} />
-                                ) : (
-                                  <button onClick={() => { setPlanTimeEdit('h'); setPlanTimeEditVal(String(parsePlanTime(planStartTime).h)); }} title="Editar hora (manual)"
-                                    style={{ width: '100%', height: 34, background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'JetBrains Mono', monospace", fontSize: 17, fontWeight: 700, color: course.color, fontVariantNumeric: 'tabular-nums', letterSpacing: '0.02em', padding: 0, transition: 'background 150ms' }}
-                                    onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
-                                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                                    {String(parsePlanTime(planStartTime).h).padStart(2, '0')}
-                                  </button>
-                                )}
-                                <button onClick={() => shiftPlanTime('h', -1)} title="Bajar hora (-1h)"
-                                  style={{ width: '100%', height: 16, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'color 150ms' }}
-                                  onMouseEnter={e => e.currentTarget.style.color = course.color}
-                                  onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
-                                  <ChevronDown size={14} />
-                                </button>
-                              </div>
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, flexShrink: 0, fontSize: 16, fontWeight: 700, color: 'var(--text-tertiary)', fontFamily: "'JetBrains Mono', monospace" }}>:</div>
-                              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '2px 0' }}>
-                                <button onClick={() => shiftPlanTime('m', 1)} title="Subir minutos (+5m)"
-                                  style={{ width: '100%', height: 16, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'color 150ms' }}
-                                  onMouseEnter={e => e.currentTarget.style.color = course.color}
-                                  onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
-                                  <ChevronUp size={14} />
-                                </button>
-                                {planTimeEdit === 'm' ? (
-                                  <input autoFocus value={planTimeEditVal}
-                                    onChange={e => setPlanTimeEditVal(e.target.value.replace(/\D/g, '').slice(0, 2))}
-                                    onBlur={() => commitPlanTimeEdit('m')}
-                                    onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                                    style={{ width: '72%', background: 'transparent', border: 'none', outline: 'none', textAlign: 'center', fontSize: 17, fontWeight: 700, color: course.color, fontFamily: "'JetBrains Mono', monospace", fontVariantNumeric: 'tabular-nums', padding: 0, height: 28 }} />
-                                ) : (
-                                  <button onClick={() => { setPlanTimeEdit('m'); setPlanTimeEditVal(String(parsePlanTime(planStartTime).m)); }} title="Editar minutos (manual)"
-                                    style={{ width: '100%', height: 34, background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'JetBrains Mono', monospace", fontSize: 17, fontWeight: 700, color: course.color, fontVariantNumeric: 'tabular-nums', letterSpacing: '0.02em', padding: 0, transition: 'background 150ms' }}
-                                    onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
-                                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                                    {String(parsePlanTime(planStartTime).m).padStart(2, '0')}
-                                  </button>
-                                )}
-                                <button onClick={() => shiftPlanTime('m', -1)} title="Bajar minutos (-5m)"
-                                  style={{ width: '100%', height: 16, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'color 150ms' }}
-                                  onMouseEnter={e => e.currentTarget.style.color = course.color}
-                                  onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
-                                  <ChevronDown size={14} />
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                          <div style={{ width: 158 }}>
-                            <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', marginBottom: 7, letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Duración</label>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <button onClick={() => setPlanDuration(Math.max(5, planDuration - 5))} title="Reducir"
-                                style={{ width: 38, height: 46, borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
-                                onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}50`; e.currentTarget.style.color = course.color; }}
-                                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
-                                <Minus size={14} />
-                              </button>
-                              <div style={{ flex: 1, height: 46, borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                                <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'JetBrains Mono', monospace", lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{planDuration}</span>
-                                <span style={{ fontSize: 8.5, fontWeight: 600, color: 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif", textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 3 }}>min</span>
-                              </div>
-                              <button onClick={() => setPlanDuration(Math.min(240, planDuration + 5))} title="Aumentar"
-                                style={{ width: 38, height: 46, borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
-                                onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}50`; e.currentTarget.style.color = course.color; }}
-                                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
-                                <Plus size={14} />
-                              </button>
-                            </div>
-                            <div style={{ display: 'flex', gap: 5, marginTop: 7 }}>
-                              {[15, 25, 30, 45, 60].map(m => (
-                                <button key={m} onClick={() => setPlanDuration(m)}
-                                  style={{ flex: 1, padding: '4px 0', borderRadius: 7, fontSize: 9.5, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace", cursor: 'pointer', border: planDuration === m ? `1px solid ${course.color}50` : '1px solid var(--border-subtle)', background: planDuration === m ? `${course.color}12` : 'transparent', color: planDuration === m ? course.color : 'var(--text-muted)', transition: 'all 150ms' }}>
-                                  {m}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div style={{ borderRadius: 11, border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', padding: '13px 14px', display: 'flex', flexDirection: 'column', gap: 9 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Intensidad esperada</label>
-                            <span style={{ fontSize: 11, fontWeight: 700, color: planIntensity > 0 ? REVIEW_LEVEL_COLORS[planIntensity - 1] : 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif" }}>
-                              {planIntensity <= 3 ? 'Suave' : planIntensity <= 6 ? 'Media' : planIntensity <= 8 ? 'Intensa' : 'Máxima'}
-                            </span>
-                          </div>
-                          <div style={{ display: 'flex', gap: 4, alignItems: 'stretch' }}>
-                            {REVIEW_LEVEL_COLORS.map((col, i) => {
-                              const v = i + 1;
-                              const on = v <= planIntensity;
-                              return (
-                                <button key={v} onClick={() => setPlanIntensity(v)} title={`Intensidad ${v}`}
-                                  style={{ flex: 1, height: 26, borderRadius: 6, cursor: 'pointer', border: on ? 'none' : '1px solid var(--border-subtle)', background: on ? `linear-gradient(180deg, ${col}, color-mix(in srgb, ${col} 45%, #000 55%))` : 'var(--bg-deep)', opacity: on ? 1 : 0.45, boxShadow: v === planIntensity ? 'inset 0 1px 0 rgba(255,255,255,0.22), inset 0 0 12px rgba(255,255,255,0.16)' : on ? 'inset 0 1px 0 rgba(255,255,255,0.18)' : 'none', transition: 'all 160ms ' + EASE }}
-                                  onMouseEnter={e => { if (!on) e.currentTarget.style.opacity = '0.8'; }}
-                                  onMouseLeave={e => { if (!on) e.currentTarget.style.opacity = '0.45'; }} />
-                              );
-                            })}
-                          </div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <span style={{ fontSize: 8.5, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.05em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Suave</span>
-                            <span style={{ fontSize: 8.5, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.05em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Máxima</span>
-                          </div>
-                        </div>
-
-                        {/* ── Repetir (misma lógica que eventos/sesiones del Planificador) ── */}
-                        <div style={{ borderRadius: 11, border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', padding: '13px 14px', display: 'flex', flexDirection: 'column', gap: 9 }}>
-                          <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Repetir</label>
-                          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                            {([['none', 'No repite'], ['daily', 'Cada día'], ['weekly', 'Cada semana'], ['custom_days', 'Días propios']] as const).map(([v, lbl]) => (
-                              <button key={v} onClick={() => setPlanRepeat(v)}
-                                style={{ flex: 1, minWidth: 78, padding: '6px 0', borderRadius: 8, fontSize: 10, fontWeight: 700, fontFamily: "'Inter Tight', sans-serif", cursor: 'pointer', border: planRepeat === v ? '1px solid color-mix(in srgb, ' + course.color + ' 45%, transparent)' : '1px solid var(--border-subtle)', background: planRepeat === v ? 'color-mix(in srgb, ' + course.color + ' 8%, transparent)' : 'transparent', color: planRepeat === v ? course.color : 'var(--text-muted)', transition: 'all 150ms' }}>
-                                {lbl}
-                              </button>
-                            ))}
-                          </div>
-                          {planRepeat === 'custom_days' && (
-                            <div style={{ display: 'flex', gap: 4, animation: 'fadeIn 200ms ease' }}>
-                              {['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((d, i) => {
-                                const on = planRepeatDays.includes(i);
-                                return (
-                                  <button key={d} onClick={() => setPlanRepeatDays(prev => prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i])}
-                                    title={['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'][i]}
-                                    style={{ flex: 1, height: 30, borderRadius: 8, fontSize: 10.5, fontWeight: 700, fontFamily: "'Inter Tight', sans-serif", cursor: 'pointer', border: on ? 'none' : '1px solid var(--border-subtle)', background: on ? course.color : 'transparent', color: on ? '#fff' : 'var(--text-muted)', transition: 'all 150ms' }}>
-                                    {d}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          )}
-                          {planRepeat !== 'none' && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, animation: 'fadeIn 200ms ease' }}>
-                              <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>Hasta</span>
-                              <input type="date" value={planRepeatUntil}
-                                onChange={e => setPlanRepeatUntil(e.target.value)}
-                                style={{ flex: 1, height: 32, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', fontSize: 11, padding: '0 10px', outline: 'none', colorScheme: 'dark', fontFamily: "'JetBrains Mono', monospace" }} />
-                            </div>
-                          )}
-                        </div>
-
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-                          <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Vincular a (opcional)</label>
-                          <PlanSelectDropdown value={planGroupId}
-                            onChange={v => { setPlanGroupId(v); setPlanTopicId(''); }}
-                            options={groups.map(g => ({ id: g.id, label: g.name }))}
-                            noneLabel="Sin agrupación" color={course.color} />
-                          {planGroupId ? (
-                            parsedTopics.filter(t => t.groupId === planGroupId).length > 0 ? (
-                              <div style={{ animation: 'fadeIn 200ms ' + EASE }}>
-                                <PlanSelectDropdown value={planTopicId}
-                                  onChange={setPlanTopicId}
-                                  options={parsedTopics.filter(t => t.groupId === planGroupId).map(t => ({ id: t.id, label: t.title }))}
-                                  noneLabel="Sin tema" color={course.color} />
-                              </div>
-                            ) : (
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 42, borderRadius: 10, border: '1px dashed var(--border-subtle)', background: 'var(--bg-deep)', padding: '0 13px', animation: 'fadeIn 200ms ' + EASE }}>
-                                <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)', fontFamily: "'Inter', sans-serif" }}>Esta agrupación no tiene temas</span>
-                              </div>
-                            )
-                          ) : (
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 42, borderRadius: 10, border: '1px dashed var(--border-subtle)', background: 'var(--bg-deep)', padding: '0 13px' }}>
-                              <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)', fontFamily: "'Inter', sans-serif" }}>Elige una agrupación para vincular un tema</span>
-                            </div>
-                          )}
-                        </div>
-
-                        <div style={{ padding: '14px 24px 20px', borderTop: '1px solid var(--border-subtle)', display: 'flex', gap: 10, justifyContent: 'flex-end', flexShrink: 0 }}>
-                        <button onClick={() => setShowPlanModal(false)}
-                          style={{ height: 38, borderRadius: 9, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '0 18px', transition: 'all 150ms' }}
-                          onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
-                          Cancelar
-                        </button>
-                        <button onClick={() => {
-                            if (!planDate || !planTitle.trim()) return;
-                            const payload: Omit<PlannedSession, 'id' | 'createdAt'> = { courseId: course.id, date: planDate, startTime: planStartTime || undefined, title: planTitle.trim(), groupId: planGroupId || undefined, topicId: planTopicId || undefined, durationMinutes: planDuration, type: planType, intensity: planIntensity, completed: false, repeat: planRepeat, repeatDays: planRepeat === 'custom_days' && planRepeatDays.length ? [...planRepeatDays].sort() : undefined, repeatUntil: planRepeat !== 'none' && planRepeatUntil ? planRepeatUntil : undefined };
-                            if (planEditId) { const { completed: _c, ...rest } = payload; updatePlannedSession(planEditId, rest); }
-                            else addPlannedSession(payload);
-                            setShowPlanModal(false);
-                            setDetailSessionId(null);
-                          }}
-                          style={{ height: 38, borderRadius: 9, border: 'none', background: course.color, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: '0 22px', transition: 'all 150ms', boxShadow: `0 4px 14px ${course.color}2e` }}
-                          onMouseEnter={e => { e.currentTarget.style.opacity = '0.92'; }}
-                          onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
-                          {planEditId ? 'Guardar cambios' : 'Planificar'}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                )}
 
                 {/* -- DAY DETAIL MODAL -- */}
                 {showDayDetail && dayDetailDate && (
@@ -5849,7 +5225,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                               <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0 }}>
                                 <div style={{ width: 44, height: 44, borderRadius: 12, background: `${course.color}12`, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${course.color}25`, flexDirection: 'column', flexShrink: 0 }}>
                                   <span style={{ fontSize: 17, fontWeight: 800, color: course.color, fontFamily: "'Inter Tight', sans-serif", lineHeight: 1 }}>{format(dayInfo, 'd')}</span>
-                                  <span style={{ fontSize: 8, fontWeight: 700, color: `${course.color}90`, fontFamily: "'Inter Tight', sans-serif", textTransform: 'uppercase', letterSpacing: '0.08em' }}>{format(dayInfo, 'EEE', { locale: es })}</span>
+                                  <span style={{ fontSize: 11, fontWeight: 700, color: `${course.color}90`, fontFamily: "'Inter Tight', sans-serif", textTransform: 'uppercase', letterSpacing: '0.08em' }}>{format(dayInfo, 'EEE', { locale: es })}</span>
                                 </div>
                                 <div style={{ minWidth: 0 }}>
                                   <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -5861,13 +5237,13 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                                 </div>
                               </div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                                <button onClick={openPlanForDay}
+                                <button data-ui-control="" onClick={openPlanForDay}
                                   style={{ height: 32, borderRadius: 9, border: `1px solid ${course.color}40`, background: `${course.color}14`, cursor: 'pointer', color: course.color, padding: '0 14px', fontSize: 11, fontWeight: 800, fontFamily: "'Inter Tight', sans-serif", display: 'flex', alignItems: 'center', gap: 6, transition: 'all 150ms', boxShadow: `0 2px 10px ${course.color}12` }}
                                   onMouseEnter={e => { e.currentTarget.style.background = `${course.color}22`; e.currentTarget.style.borderColor = `${course.color}60`; e.currentTarget.style.transform = 'translateY(-1px)'; }}
                                   onMouseLeave={e => { e.currentTarget.style.background = `${course.color}14`; e.currentTarget.style.borderColor = `${course.color}40`; e.currentTarget.style.transform = 'translateY(0)'; }}>
                                   <Plus size={12} /> Agregar evento
                                 </button>
-                                <button onClick={() => setShowDayDetail(false)}
+                                <button data-ui-control="" onClick={() => setShowDayDetail(false)}
                                   style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: 'var(--bg-hover)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
                                   onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#EF4444'; }}
                                   onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
@@ -5878,7 +5254,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
 
                             {/* Corner completion tag */}
                             {daySessions.length > 0 && (
-                              <button onClick={toggleMarkDay}
+                              <button data-ui-control="" onClick={toggleMarkDay}
                                 title={allDone ? 'Desmarcar día como pendiente' : 'Marcar día como completado'}
                                 style={{
                                   position: 'absolute', top: 0, right: 0, borderTopRightRadius: 16, borderBottomLeftRadius: 14,
@@ -5886,7 +5262,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                                   border: allDone ? 'none' : `1px dashed ${course.color}55`,
                                   cursor: 'pointer', color: allDone ? '#fff' : course.color,
                                   padding: '9px 16px', display: 'flex', alignItems: 'center', gap: 6,
-                                  fontFamily: "'Inter Tight', sans-serif", fontSize: 10, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase',
+                                  fontFamily: "'Inter Tight', sans-serif", fontSize: 11, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase',
                                   transition: 'all 200ms',
                                 }}
                                 onMouseEnter={e => { e.currentTarget.style.filter = 'brightness(1.1)'; e.currentTarget.style.transform = 'scale(1.02)'; }}
@@ -5903,14 +5279,14 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                                     <Calendar size={20} style={{ color: `${course.color}70` }} />
                                   </div>
                                   <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', fontFamily: "'Inter', sans-serif" }}>No hay sesiones planificadas</span>
-                                  <span style={{ fontSize: 10.5, color: 'var(--text-muted)', fontFamily: "'Inter', sans-serif", textAlign: 'center', maxWidth: 250 }}>Usa el botón "Agregar evento" para planificar un bloque de estudio, repaso o ejercicio para este día.</span>
+                                  <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: "'Inter', sans-serif", textAlign: 'center', maxWidth: 250 }}>Usa el botón "Agregar evento" para planificar un bloque de estudio, repaso o ejercicio para este día.</span>
                                 </div>
                               ) : (
                                 <>
                                   <div style={{ marginBottom: 12 }}>
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7 }}>
-                                      <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: "'Inter Tight', sans-serif" }}>{pending.length > 0 ? 'Por completar' : 'Todas completadas'}</span>
-                                      <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', fontFamily: "'Inter', sans-serif" }}>{doneCount}/{daySessions.length} · {totalMins} min</span>
+                                      <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: "'Inter Tight', sans-serif" }}>{pending.length > 0 ? 'Por completar' : 'Todas completadas'}</span>
+                                      <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', fontFamily: "'Inter', sans-serif" }}>{doneCount}/{daySessions.length} · {totalMins} min</span>
                                     </div>
                                     <div style={{ height: 4, borderRadius: 3, background: 'var(--bg-hover)', overflow: 'hidden' }}>
                                       <div style={{ width: `${(doneCount / daySessions.length) * 100}%`, height: '100%', borderRadius: 3, background: allDone ? '#10B981' : course.color, transition: 'width 300ms cubic-bezier(0.16,1,0.3,1)' }} />
@@ -5948,7 +5324,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                                           {/* Time chip */}
                                           {s.startTime && (
                                             <div style={{ width: 44, flexShrink: 0, textAlign: 'center', padding: '5px 0', borderRadius: 7, background: `${tc}10`, border: `1px solid ${tc}22` }}>
-                                              <span style={{ fontSize: 10.5, fontWeight: 800, color: tc, fontFamily: "'Inter Tight', sans-serif", lineHeight: 1 }}>{s.startTime}</span>
+                                              <span style={{ fontSize: 11, fontWeight: 800, color: tc, fontFamily: "'Inter Tight', sans-serif", lineHeight: 1 }}>{s.startTime}</span>
                                             </div>
                                           )}
                                           {/* Type icon */}
@@ -5959,15 +5335,15 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                                           <div style={{ flex: 1, minWidth: 0 }}>
                                             <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter', sans-serif", display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: s.completed ? 'line-through' : 'none' }}>{s.title}</span>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
-                                              <span style={{ fontSize: 9, fontWeight: 700, color: tc, fontFamily: "'Inter Tight', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' }}>{sessionTypeLabel(s.type)}</span>
-                                              {grp && <><span style={{ fontSize: 9, color: 'var(--text-muted)' }}>·</span><span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', fontFamily: "'Inter', sans-serif" }}>{grp.name}</span></>}
-                                              {tpc && <><span style={{ fontSize: 9, color: 'var(--text-muted)' }}>·</span><span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', fontFamily: "'Inter', sans-serif" }}>{tpc.title}</span></>}
-                                              <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>·</span>
-                                              <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', fontFamily: "'Inter', sans-serif" }}>{s.durationMinutes} min</span>
+                                              <span style={{ fontSize: 11, fontWeight: 700, color: tc, fontFamily: "'Inter Tight', sans-serif", textTransform: 'uppercase', letterSpacing: '0.04em' }}>{sessionTypeLabel(s.type)}</span>
+                                              {grp && <><span style={{ fontSize: 11, color: 'var(--text-muted)' }}>·</span><span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', fontFamily: "'Inter', sans-serif" }}>{grp.name}</span></>}
+                                              {tpc && <><span style={{ fontSize: 11, color: 'var(--text-muted)' }}>·</span><span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', fontFamily: "'Inter', sans-serif" }}>{tpc.title}</span></>}
+                                              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>·</span>
+                                              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', fontFamily: "'Inter', sans-serif" }}>{s.durationMinutes} min</span>
                                             </div>
                                           </div>
                                           {/* Delete */}
-                                          <button onClick={(e) => { e.stopPropagation(); setConfirmDeleteSession(s); }}
+                                          <button data-ui-control="" onClick={(e) => { e.stopPropagation(); setConfirmDeleteSession(s); }}
                                             title="Eliminar sesión"
                                             style={{ width: 26, height: 26, borderRadius: 6, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms', flexShrink: 0, opacity: 0.5 }}
                                             onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#EF4444'; e.currentTarget.style.opacity = '1'; }}
@@ -6005,10 +5381,10 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                           </div>
                           <div>
                             <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>Estadísticas y Análisis de Estudio</h3>
-                            <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)' }}>Métricas algorítmicas y polígono de rendimiento</span>
+                            <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)' }}>Métricas algorítmicas y polígono de rendimiento</span>
                           </div>
                         </div>
-                        <button onClick={() => setShowChartsModal(false)}
+                        <button data-ui-control="" onClick={() => setShowChartsModal(false)}
                           style={{ width: 28, height: 28, borderRadius: 7, border: 'none', background: 'var(--bg-hover)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
                           onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.12)'; e.currentTarget.style.color = '#EF4444'; }}
                           onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
@@ -6034,9 +5410,9 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                               { label: 'Rendimiento', val: `${pct}%`, sub: 'Índice de enfoque', color: '#8B5CF6' },
                             ].map((st, i) => (
                               <div key={i} style={{ padding: '14px 16px', borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', fontFamily: "'Inter Tight', sans-serif" }}>{st.label}</span>
+                                <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', fontFamily: "'Inter Tight', sans-serif" }}>{st.label}</span>
                                 <span style={{ fontSize: 20, fontWeight: 800, color: st.color, fontFamily: "'Inter Tight', sans-serif" }}>{st.val}</span>
-                                <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>{st.sub}</span>
+                                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{st.sub}</span>
                               </div>
                             ));
                           })()}
@@ -6048,8 +5424,8 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                             <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>Polígono de Rendimiento Multidimensional</span>
                             <div style={{ display: 'flex', gap: 4, background: 'var(--bg-surface)', padding: 3, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
                               {([['agrupaciones','Agrupaciones'],['dias','Días'],['tipos','Tipos']] as const).map(([key, lbl]) => (
-                                <button key={key} onClick={() => setRadarFilter(key)}
-                                  style={{ height: 24, borderRadius: 6, border: 'none', background: radarFilter === key ? course.color : 'transparent', cursor: 'pointer', color: radarFilter === key ? '#fff' : 'var(--text-muted)', padding: '0 10px', fontSize: 9.5, fontWeight: 700, fontFamily: "'Inter Tight', sans-serif" }}>
+                                <button data-ui-control="" key={key} onClick={() => setRadarFilter(key)}
+                                  style={{ height: 24, borderRadius: 6, border: 'none', background: radarFilter === key ? course.color : 'transparent', cursor: 'pointer', color: radarFilter === key ? '#fff' : 'var(--text-muted)', padding: '0 10px', fontSize: 11, fontWeight: 700, fontFamily: "'Inter Tight', sans-serif" }}>
                                   {lbl}
                                 </button>
                               ))}
@@ -6155,7 +5531,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                         {/* Header */}
                         <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>Editar agrupacion</h3>
-                          <button onClick={() => setInlineEditGroupId(null)}
+                          <button data-ui-control="" onClick={() => setInlineEditGroupId(null)}
                             style={{ width: 28, height: 28, borderRadius: 7, border: 'none', background: 'var(--bg-hover)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
                             onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.12)'; e.currentTarget.style.color = '#EF4444'; }}
                             onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
@@ -6180,7 +5556,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                             {inlineGroupCover ? (
                               <div style={{ position: 'relative', width: '100%', height: 100, borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
                                 <img src={inlineGroupCover} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                <button onClick={() => setInlineGroupCover(undefined)}
+                                <button data-ui-control="" onClick={() => setInlineGroupCover(undefined)}
                                   style={{ position: 'absolute', top: 8, right: 8, width: 24, height: 24, borderRadius: 7, background: 'rgba(239,68,68,0.85)', backdropFilter: 'blur(4px)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
                                   onMouseEnter={e => { e.currentTarget.style.background = '#EF4444'; }}
                                   onMouseLeave={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.85)'; }}>
@@ -6188,7 +5564,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                                 </button>
                               </div>
                             ) : (
-                              <button onClick={() => groupCoverInputInlineRef.current?.click()}
+                              <button data-ui-control="" onClick={() => groupCoverInputInlineRef.current?.click()}
                                 style={{ width: '100%', height: 80, borderRadius: 10, border: '1px dashed var(--border-subtle)', background: 'var(--bg-elevated)', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, color: 'var(--text-muted)', transition: 'all 150ms', fontSize: 12, fontWeight: 500 }}
                                 onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}50`; e.currentTarget.style.background = `${course.color}08`; }}
                                 onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = 'var(--bg-elevated)'; }}>
@@ -6202,20 +5578,20 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
 
                         {/* Footer */}
                         <div style={{ padding: '16px 24px 20px', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <button onClick={() => setConfirmDeleteGroupId(inlineEditGroupId)}
+                          <button data-ui-control="" onClick={() => setConfirmDeleteGroupId(inlineEditGroupId)}
                             style={{ height: 36, borderRadius: 8, border: '1px solid rgba(239,68,68,0.25)', background: 'rgba(239,68,68,0.06)', color: '#EF4444', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '0 14px', display: 'flex', alignItems: 'center', gap: 6, transition: 'all 150ms', fontFamily: "'Inter', sans-serif" }}
                             onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.12)'; }}
                             onMouseLeave={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.06)'; }}>
                             <Trash2 size={13} /> Eliminar
                           </button>
                           <div style={{ display: 'flex', gap: 8 }}>
-                            <button onClick={() => setInlineEditGroupId(null)}
+                            <button data-app-action="secondary" data-ui-control="" onClick={() => setInlineEditGroupId(null)}
                               style={{ height: 36, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 500, cursor: 'pointer', padding: '0 16px', transition: 'all 150ms', fontFamily: "'Inter', sans-serif" }}
                               onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
                               onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
                               Cancelar
                             </button>
-                            <button onClick={() => {
+                            <button data-ui-control="" onClick={() => {
                               if (inlineGroupName.trim()) {
                                 const currentGroups = safeArr(course.groups);
                                 updateCourse(course.id, { groups: currentGroups.map(g => g.id === inlineEditGroupId ? { ...g, name: inlineGroupName.trim(), image: inlineGroupCover } : g) });
@@ -6253,13 +5629,13 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                           {delCount > 0 && <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>{delCount} tema{delCount !== 1 ? 's' : ''} se desvincular{delCount !== 1 ? 'an' : 'a'}</p>}
                         </div>
                         <div style={{ padding: '12px 24px 24px', display: 'flex', gap: 10, justifyContent: 'center' }}>
-                          <button onClick={() => setConfirmDeleteGroupId(null)}
+                          <button data-app-action="secondary" data-ui-control="" onClick={() => setConfirmDeleteGroupId(null)}
                             style={{ height: 38, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 13, fontWeight: 500, cursor: 'pointer', padding: '0 20px', transition: 'all 150ms', fontFamily: "'Inter', sans-serif" }}
                             onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
                             onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
                             Cancelar
                           </button>
-                          <button onClick={() => { handleDeleteGroup(confirmDeleteGroupId); setConfirmDeleteGroupId(null); if (inlineEditGroupId === confirmDeleteGroupId) setInlineEditGroupId(null); }}
+                          <button data-ui-control="" onClick={() => { handleDeleteGroup(confirmDeleteGroupId); setConfirmDeleteGroupId(null); if (inlineEditGroupId === confirmDeleteGroupId) setInlineEditGroupId(null); }}
                             style={{ height: 38, borderRadius: 8, border: 'none', background: '#EF4444', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: '0 20px', transition: 'all 150ms', fontFamily: "'Inter', sans-serif" }}
                             onMouseEnter={e => { e.currentTarget.style.opacity = '0.9'; }}
                             onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
@@ -6301,7 +5677,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                     <option value="low">Baja</option>
                   </select>
                   <div style={{ flex: 1 }} />
-                  <button onClick={handleAddTask} disabled={!newTaskTitle.trim()}
+                  <button data-ui-control="" onClick={handleAddTask} disabled={!newTaskTitle.trim()}
                     style={{ width: 40, height: 40, borderRadius: 10, border: `1.5px solid ${newTaskTitle.trim() ? course.color : 'var(--border-subtle)'}`, background: 'transparent', color: newTaskTitle.trim() ? course.color : 'var(--text-muted)', cursor: newTaskTitle.trim() ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms ' + EASE }}
                     title="Añadir tarea">
                     <PlusCircle size={20} />
@@ -6342,7 +5718,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                       onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}30`; e.currentTarget.style.boxShadow = `0 2px 10px ${course.color}08`; }}
                       onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.boxShadow = '0 0 0 0 rgba(0,0,0,0)'; }}
                       onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setTaskMenu({ id: task.id, x: e.clientX, y: e.clientY }); }}>
-                      <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-tertiary)', minWidth: 14, textAlign: 'right', flexShrink: 0, fontFamily: "'Inter Tight', sans-serif" }}>{idx + 1}</span>
+                      <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)', minWidth: 14, textAlign: 'right', flexShrink: 0, fontFamily: "'Inter Tight', sans-serif" }}>{idx + 1}</span>
                       <div onClick={() => handleToggleTask(task.id)} style={{ width: 20, height: 20, borderRadius: 6, flexShrink: 0, cursor: 'pointer', border: `1.5px solid ${task.status === 'progreso' ? '#3B82F6' : task.status === 'completado' ? '#10B981' : `${course.color}40`}`, background: task.status === 'progreso' ? '#3B82F6' : task.status === 'completado' ? '#10B981' : `${course.color}08`, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms ' + EASE }}>
                         {task.status === 'completado' && <Check size={11} strokeWidth={2.5} color="#fff" />}
                         {task.status === 'progreso' && <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff' }} />}
@@ -6350,11 +5726,11 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: "'Inter', sans-serif" }}>{task.title}</div>
-                        {descPreview && <div style={{ fontSize: 10, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 1 }}>{descPreview}</div>}
+                        {descPreview && <div style={{ fontSize: 11, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 1 }}>{descPreview}</div>}
                       </div>
                       <div style={{ width: 52, flexShrink: 0, textAlign: 'center' }}>
                         {task.priority !== 'none' && task.priority && (
-                          <span style={{ fontSize: 8, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: `${priorityColors[task.priority]}20`, color: priorityColors[task.priority], textTransform: 'uppercase', letterSpacing: '0.03em', fontFamily: "'Inter Tight', sans-serif", whiteSpace: 'nowrap' }}>{priorityLabels[task.priority]}</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: `${priorityColors[task.priority]}20`, color: priorityColors[task.priority], textTransform: 'uppercase', letterSpacing: '0.03em', fontFamily: "'Inter Tight', sans-serif", whiteSpace: 'nowrap' }}>{priorityLabels[task.priority]}</span>
                         )}
                       </div>
                       <div style={{ width: 100, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -6384,7 +5760,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
               <>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16, marginBottom: 8 }}>
                   <div style={{ height: 1, flex: 1, background: `linear-gradient(to right, transparent, ${course.color}20)` }} />
-                  <h4 style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.06em', fontFamily: "'Inter Tight', sans-serif" }}>Completadas</h4>
+                  <h4 style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.06em', fontFamily: "'Inter Tight', sans-serif" }}>Completadas</h4>
                   <div style={{ height: 1, flex: 1, background: `linear-gradient(to left, transparent, ${course.color}20)` }} />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -6398,11 +5774,11 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                         </div>
                         {isConfirm ? (
                           <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-                            <button onClick={() => setPendingTaskDeleteId(null)} style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 9, cursor: 'pointer' }}>Cancelar</button>
-                            <button onClick={() => { deleteTask(task.id); setPendingTaskDeleteId(null); toast.success('Tarea eliminada'); }} style={{ padding: '4px 8px', borderRadius: 4, border: 'none', background: '#EF4444', color: '#fff', fontSize: 9, fontWeight: 600, cursor: 'pointer' }}>Eliminar</button>
+                            <button data-app-action="secondary" data-ui-control="" onClick={() => setPendingTaskDeleteId(null)} style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 11, cursor: 'pointer' }}>Cancelar</button>
+                            <button data-ui-control="" onClick={() => { deleteTask(task.id); setPendingTaskDeleteId(null); toast.success('Tarea eliminada'); }} style={{ padding: '4px 8px', borderRadius: 4, border: 'none', background: '#EF4444', color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>Eliminar</button>
                           </div>
                         ) : (
-                          <button onClick={() => setPendingTaskDeleteId(task.id)} style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid rgba(239,68,68,0.3)', background: 'transparent', color: 'rgba(239,68,68,0.6)', fontSize: 9, cursor: 'pointer', transition: 'all 150ms' }}
+                          <button data-app-action="danger" data-ui-control="" onClick={() => setPendingTaskDeleteId(task.id)} style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid rgba(239,68,68,0.3)', background: 'transparent', color: 'rgba(239,68,68,0.6)', fontSize: 11, cursor: 'pointer', transition: 'all 150ms' }}
                             onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; e.currentTarget.style.color = '#EF4444'; }}
                             onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(239,68,68,0.6)'; }}>
                             <Trash2 size={9} style={{ marginRight: 2, verticalAlign: 'middle' }} /> Eliminar
@@ -6423,7 +5799,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div style={{ width: 3, height: 15, borderRadius: 2, background: course.color, flexShrink: 0 }} />
                 <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', fontFamily: "'Inter Tight', sans-serif" }}>Apuntes</span>
-                <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-muted)', background: 'var(--bg-hover)', height: 18, padding: '0 7px', borderRadius: 9, display: 'inline-flex', alignItems: 'center', fontFamily: "'Inter Tight', sans-serif" }}>{courseNotes.length}</span>
+                <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', background: 'var(--bg-hover)', height: 18, padding: '0 7px', borderRadius: 9, display: 'inline-flex', alignItems: 'center', fontFamily: "'Inter Tight', sans-serif" }}>{courseNotes.length}</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 {courseNotes.length > 0 && (
@@ -6431,11 +5807,11 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                     <div style={{ position: 'relative', width: 140 }}>
                       <Search size={11} style={{ position: 'absolute', left: 8, top: '50%', marginTop: -5.5, color: 'var(--text-muted)', pointerEvents: 'none' }} />
                       <input value={notesSearch} onChange={e => setNotesSearch(e.target.value)} placeholder="Buscar..."
-                        style={{ width: '100%', height: 28, padding: '0 10px 0 26px', borderRadius: 6, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', fontSize: 10, outline: 'none', boxSizing: 'border-box', fontFamily: "'Inter', sans-serif" }} />
+                        style={{ width: '100%', height: 28, padding: '0 10px 0 26px', borderRadius: 6, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', fontSize: 11, outline: 'none', boxSizing: 'border-box', fontFamily: "'Inter', sans-serif" }} />
                     </div>
                   </>
                 )}
-                <button onClick={handleCreateNote} disabled={!!editingNoteId}
+                <button data-ui-control="" onClick={handleCreateNote} disabled={!!editingNoteId}
                   title={editingNoteId ? 'Termina de editar el apunte actual' : 'Nuevo apunte'}
                   style={{ width: 32, height: 32, borderRadius: 8, border: `1.5px solid ${editingNoteId ? 'var(--border-subtle)' : course.color}`, background: 'transparent', color: editingNoteId ? 'var(--text-muted)' : course.color, cursor: editingNoteId ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms ' + EASE, opacity: editingNoteId ? 0.35 : 1 }}
                   onMouseEnter={e => { if (!editingNoteId) { e.currentTarget.style.background = course.color; e.currentTarget.style.color = '#fff'; } }}
@@ -6445,7 +5821,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
               </div>
             </div>
             {(notesSearch ? filteredNotes : sortedNotes).length > 0 ? (
-              <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={() => { notesDragRef.current = true; }} onDragEnd={handleNoteDragEnd}>
+              <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={() => { notesDragRef.current = true; }} onDragCancel={()=>{notesDragRef.current=false;}} onDragEnd={handleNoteDragEnd}>
                 <SortableContext items={(notesSearch ? filteredNotes : sortedNotes).map(n => n.id)} strategy={rectSortingStrategy}>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14 }}>
                     {(notesSearch ? filteredNotes : sortedNotes).map(n => {
@@ -6457,7 +5833,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                         }
                       };
                       const handleDoneEditing = () => {
-                        saveCourseNoteContent(n.id, editContentRef.current?.innerHTML ?? editContent);
+                        saveCourseNoteContent(n.id, liveNoteEditors.get(n.id)?.() ?? n.content);
                         setEditingNoteId(null);
                       };
                       return (
@@ -6473,65 +5849,36 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                               onMouseLeave={e => { if (!isEditing && !editingNoteId) { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = 'var(--bg-elevated-alpha, var(--bg-elevated))'; } }}>
                               {/* -- NOT EDITING -- */}
                               {!isEditing ? (
-                                <div style={{ padding: '28px' }}>
+                                <div className="course-note-preview" style={{ padding: '18px' }}>
                                   <div style={{ fontSize: 15, lineHeight: 1.8, color: 'var(--text-primary)', fontFamily: "'Atkinson Hyperlegible', system-ui, serif", wordBreak: 'break-word', maxHeight: 360, overflowY: 'auto' }}
                                     dangerouslySetInnerHTML={{ __html: n.content || '<span style="color:var(--text-muted);font-style:italic;font-size:13px">Haz clic para añadir contenido...</span>' }} />
                                 </div>
                               ) : (
                                 /* -- EDITING -- */
                                 <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                  <div style={{ position: 'sticky', top: 0, zIndex: 6, background: 'var(--bg-elevated)', borderBottom: '1px solid var(--border-subtle)', borderRadius: '15px 15px 0 0' }}>
-                                  <FormatToolbar onFormat={handleNoteFormat} color={course.color} activeFormats={noteActiveFormats} />
-                                  </div>
-                                  <div ref={editContentRef}
-                                    className="owa-native-editor"
-                                    data-placeholder="Escribe tus apuntes…"
-                                    contentEditable
-                                    suppressContentEditableWarning
-                                    dangerouslySetInnerHTML={{ __html: editContent }}
-                                    onKeyDown={(e) => {
-                                      if ((e.ctrlKey || e.metaKey) && !e.altKey) { const uk = e.key.toLowerCase(); if (uk === 'z' && !e.shiftKey) { e.preventDefault(); topicHistRef.current.undo(); } else if (uk === 'y' || (uk === 'z' && e.shiftKey)) { e.preventDefault(); topicHistRef.current.redo(); } return; }
-                                      if (e.key === 'Enter' && !e.shiftKey && enterEndHeading(e.nativeEvent, editContentRef.current)) { topicHistRef.current.capture(true); }
-                                    }}
-                                    onPaste={(e) => {
-                                      const html = e.clipboardData.getData('text/html');
-                                      e.preventDefault();
-                                      const clean = html ? sanitizePastedHtml(html) : plainTextToHtml(e.clipboardData.getData('text/plain'));
-                                      document.execCommand('insertHTML', false, clean || ' ');
-                                      const ed2 = editContentRef.current;
-                                      if (ed2) { fixEmptyHeadingCaret(ed2); }
-                                      const html2 = editContentRef.current?.innerHTML ?? clean;
-                                      topicHistRef.current.capture(true);
-                                      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-                                      saveTimerRef.current = setTimeout(() => saveCourseNoteContent(n.id, html2), 800);
-                                    }}
-                                    onInput={(e: React.FormEvent<HTMLDivElement>) => { const ed = e.currentTarget; fixEmptyHeadingCaret(ed); const html = ed.innerHTML; topicHistRef.current.capture(true); if (saveTimerRef.current) clearTimeout(saveTimerRef.current); saveTimerRef.current = setTimeout(() => saveCourseNoteContent(n.id, html), 800); }}
-                                    onBlur={() => { saveCourseNoteContent(n.id, editContentRef.current?.innerHTML ?? editContent); }}
-                                    onMouseUp={scheduleNoteTrack}
-                                    style={{ padding: '18px 20px 16px', minHeight: 240, fontSize: 15, lineHeight: 1.9, color: 'var(--text-primary)', background: 'transparent', outline: 'none', fontFamily: "'Atkinson Hyperlegible', system-ui, serif", wordBreak: 'break-word', caretColor: course.color }} />
-                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 14px 10px', borderTop: '1px solid var(--border-subtle)', background: `${course.color}04` }}>
-                                    <button onClick={() => handleTogglePinNote(n.id)}
+                                  <NoteEditor key={n.id} note={n} courseColor={course.color} editable onSave={(id,data)=>saveCourseNoteContent(id,data.content)} toolbarEnd={<>
+                                    <button data-ui-control="" onClick={() => handleTogglePinNote(n.id)}
                                       style={{ width: 30, height: 30, borderRadius: 6, border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: n.isPinned ? '#F59E0B' : 'var(--text-muted)', transition: 'color 150ms ' + EASE }}
                                       title={n.isPinned ? 'Quitar destacado' : 'Destacar'}>
                                       <Star size={13} fill={n.isPinned ? '#F59E0B' : 'none'} />
                                     </button>
                                     <div style={{ display: 'flex', gap: 4 }}>
-                                      <button onClick={() => setConfirmDeleteNoteId(n.id)}
+                                      <button data-ui-control="" onClick={() => setConfirmDeleteNoteId(n.id)}
                                         style={{ width: 30, height: 30, borderRadius: 6, border: 'none', background: 'transparent', cursor: 'pointer', color: 'rgba(239,68,68,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'color 150ms ' + EASE }}
                                         onMouseEnter={e => e.currentTarget.style.color = '#EF4444'}
                                         onMouseLeave={e => e.currentTarget.style.color = 'rgba(239,68,68,0.4)'}
                                         title="Eliminar">
                                         <Trash2 size={13} />
                                       </button>
-                                      <button onClick={handleDoneEditing}
+                                      <button data-ui-control="" onClick={handleDoneEditing}
                                         style={{ width: 30, height: 30, borderRadius: 6, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.55, transition: 'opacity 150ms ' + EASE }}
                                         onMouseEnter={e => e.currentTarget.style.opacity = '1'}
                                         onMouseLeave={e => e.currentTarget.style.opacity = '0.55'}
-                                        title="Hecho (Esc)">
-                                        <ChevronUp size={14} />
+                                        title="Cerrar apunte" aria-label="Cerrar apunte">
+                                        <X size={14} />
                                       </button>
                                     </div>
-                                  </div>
+                                  </>}/>
                                 </div>
                               )}
                             </div>
@@ -6569,10 +5916,10 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{mat.name || 'Archivo'}</div>
-                      <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>{(mat as any)._topicTitle || 'Tema general'}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{(mat as any)._topicTitle || 'Tema general'}</div>
                     </div>
                     {mat.dataUrl && (
-                      <button onClick={() => handleOpenResource(mat)} style={{ width: 28, height: 28, borderRadius: 6, border: 'none', background: 'var(--bg-hover)', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <button data-ui-control="" onClick={() => handleOpenResource(mat)} style={{ width: 28, height: 28, borderRadius: 6, border: 'none', background: 'var(--bg-hover)', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <ExternalLink size={12} />
                       </button>
                     )}
@@ -6583,7 +5930,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
               <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)', border: '1px dashed var(--border-subtle)', borderRadius: 10 }}>
                 <FolderOpen size={32} style={{ margin: '0 auto 8px', opacity: 0.3 }} />
                 <p style={{ fontSize: 13 }}>No hay archivos subidos en los temas de este curso</p>
-                <p style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 4 }}>Los archivos se añaden desde la vista de cada tema</p>
+                <p style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>Los archivos se añaden desde la vista de cada tema</p>
               </div>
             )}
           </div>
@@ -6591,17 +5938,18 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
       </div>
 
       {/* ----------- MODALS ----------- */}
+      {createPortal(<div className="course-portals" style={{ display: 'contents', '--course-color': course.color } as React.CSSProperties}>
       {showEditCourse && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }} onClick={() => setShowEditCourse(false)}>
-          <div className="bento-card" style={{ width: 432, padding: '26px 28px', borderRadius: 16, background: "linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)", border: '1px solid var(--border-default)', boxShadow: "var(--shadow-elevated)" }} onClick={e => e.stopPropagation()}>
+          <div role="dialog" aria-modal="true" aria-label="Configurar curso" className="bento-card course-settings-dialog" style={{ width: 432, padding: '26px 28px', borderRadius: 16, background: "linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)", border: '1px solid var(--border-default)', boxShadow: "var(--shadow-elevated)" }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 22 }}>
               <div>
                 <h3 style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)', margin: 0, fontFamily: "'Inter Tight', sans-serif", letterSpacing: '0.01em', display: 'flex', alignItems: 'center', gap: 9 }}>
                   <GraduationCap size={16} style={{ color: course.color }} /> Configurar curso
                 </h3>
-                <p style={{ fontSize: 10, color: 'var(--text-tertiary)', margin: '4px 0 0', fontFamily: "'Inter', sans-serif", fontWeight: 400 }}>Ajusta la información de la asignatura</p>
+                <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: '4px 0 0', fontFamily: "'Inter', sans-serif", fontWeight: 400 }}>Ajusta la información de la asignatura</p>
               </div>
-              <button onClick={() => setShowEditCourse(false)} title="Cerrar"
+              <button data-ui-control="" onClick={() => setShowEditCourse(false)} title="Cerrar"
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4, display: 'flex', borderRadius: 6, transition: 'all 150ms ' + EASE }}
                 onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
@@ -6610,21 +5958,21 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div>
-                <div style={{ fontSize: 8.5, fontWeight: 500, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.14em', marginBottom: 8, fontFamily: "'Inter Tight', sans-serif" }}>Nombre</div>
+                <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.14em', marginBottom: 8, fontFamily: "'Inter Tight', sans-serif" }}>Nombre</div>
                 <input value={editCourseName} onChange={e => setEditCourseName(e.target.value)} placeholder="Nombre del curso"
                   style={{ width: '100%', height: 42, borderRadius: 10, padding: '0 13px', fontSize: 13, fontWeight: 500, fontFamily: "'Inter Tight', sans-serif", border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', transition: 'border-color 180ms ' + EASE }}
                   onFocus={e => e.currentTarget.style.borderColor = 'var(--accent)'}
                   onBlur={e => e.currentTarget.style.borderColor = 'var(--border-subtle)'} />
               </div>
               <div>
-                <div style={{ fontSize: 8.5, fontWeight: 500, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.14em', marginBottom: 8, fontFamily: "'Inter Tight', sans-serif" }}>Profesor</div>
+                <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.14em', marginBottom: 8, fontFamily: "'Inter Tight', sans-serif" }}>Profesor</div>
                 <input value={editCourseTeacher} onChange={e => setEditCourseTeacher(e.target.value)} placeholder="Nombre del profesor"
                   style={{ width: '100%', height: 42, borderRadius: 10, padding: '0 13px', fontSize: 13, fontWeight: 500, fontFamily: "'Inter Tight', sans-serif", border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', transition: 'border-color 180ms ' + EASE }}
                   onFocus={e => e.currentTarget.style.borderColor = 'var(--accent)'}
                   onBlur={e => e.currentTarget.style.borderColor = 'var(--border-subtle)'} />
                </div>
                <div>
-               <div style={{ fontSize: 8.5, fontWeight: 500, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.14em', marginBottom: 8, fontFamily: "'Inter Tight', sans-serif" }}>Color</div>
+               <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.14em', marginBottom: 8, fontFamily: "'Inter Tight', sans-serif" }}>Color</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 10, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)' }}>
                 <div style={{ width: 34, height: 34, borderRadius: '50%', background: editCourseColor, flexShrink: 0, border: '2px solid var(--bg-surface)', boxShadow: '0 2px 8px rgba(0,0,0,0.3)', transition: 'background 200ms ' + EASE }} />
                 <div style={{ flex: 1, position: 'relative', height: 30, borderRadius: 6, overflow: 'hidden' }}>
@@ -6632,52 +5980,19 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                   <input type="color" value={editCourseColor} onChange={e => setEditCourseColor(e.target.value)}
                     style={{ position: 'absolute', top: -4, left: -4, width: 'calc(100% + 8px)', height: 'calc(100% + 8px)', opacity: 0, cursor: 'pointer' }} />
                 </div>
-                <input value={editCourseColor.toUpperCase()} onChange={e => { const v = e.target.value; if (/^#[0-9A-Fa-f]{6}$/.test(v)) setEditCourseColor(v.toLowerCase()); }} style={{ width: 68, height: 26, borderRadius: 4, padding: '0 6px', fontSize: 9, fontFamily: 'monospace', fontWeight: 600, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', textAlign: 'center' }} />
+                <input value={editCourseColor.toUpperCase()} onChange={e => { const v = e.target.value; if (/^#[0-9A-Fa-f]{6}$/.test(v)) setEditCourseColor(v.toLowerCase()); }} style={{ width: 68, height: 26, borderRadius: 4, padding: '0 6px', fontSize: 11, fontFamily: 'monospace', fontWeight: 600, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', textAlign: 'center' }} />
               </div>
               </div>
-              <div>
-              <div style={{ fontSize: 8.5, fontWeight: 500, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.14em', marginBottom: 8, fontFamily: "'Inter Tight', sans-serif" }}>Banner</div>
-              {editCourseCover ? (
-                <div>
-                  <div style={{ position: 'relative', width: '100%', aspectRatio: '16/7', borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border-soft)', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.04), 0 2px 12px rgba(0,0,0,0.12)' }}>
-                    <img src={editCourseCover} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                    <button onClick={() => setEditEditorSrc(editCourseCover)} title="Editar la imagen (mover la posición)"
-                      style={{ height: 30, padding: '0 13px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 9, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: "'Inter Tight', sans-serif", transition: 'all 180ms ' + EASE }}
-                      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)'; }}
-                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
-                      <Pencil size={11} /> Editar imagen
-                    </button>
-                    <button onClick={() => setEditCourseCover(undefined)} title="Quitar el banner"
-                      style={{ height: 30, padding: '0 13px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', color: 'rgba(239,68,68,0.7)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 9, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: "'Inter Tight', sans-serif", transition: 'all 180ms ' + EASE }}
-                      onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(239,68,68,0.5)'; e.currentTarget.style.color = '#EF4444'; }}
-                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.color = 'rgba(239,68,68,0.7)'; }}>
-                      <X size={12} /> Quitar
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <button onClick={() => courseCoverInputRef.current?.click()}
-                  style={{ width: '100%', height: 84, borderRadius: 10, border: '1px dashed var(--border-default)', background: 'var(--bg-deep)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 7, transition: "all 200ms " + EASE }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)'; e.currentTarget.style.background = 'color-mix(in srgb, var(--accent) 4%, var(--bg-deep))'; }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-default)'; e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.background = 'var(--bg-deep)'; }}>
-                  <ImageIcon size={16} style={{ color: "var(--accent)", opacity: 0.85 }} />
-                  <span style={{ fontSize: 8.5, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.12em', fontFamily: "'Inter Tight', sans-serif" }}>Subir banner</span>
-                  <span style={{ fontSize: 9.5, color: 'var(--text-tertiary)', fontWeight: 400 }}>Se abrirá el editor para ajustar la imagen</span>
-                </button>
-              )}
-              <input type="file" ref={courseCoverInputRef} style={{ display: 'none' }} accept="image/*" onChange={handleEditCoverUpload} />
-              </div>
-              <button onClick={handleSaveCourseSettings}
+              <BannerField value={editCourseCover} onChange={value=>{setEditCourseCover(value);setEditCourseOriginal(value);setEditCourseCrop(undefined);}} onEdit={value=>setEditEditorSrc(editCourseOriginal||value)}/>
+              <button className="course-settings-save" data-ui-control="" onClick={handleSaveCourseSettings}
                 style={{ width: '100%', height: 42, borderRadius: 10, border: 'none', background: course.color, color: '#fff', fontSize: 12, fontWeight: 600, fontFamily: "'Inter Tight', sans-serif", letterSpacing: '0.03em', cursor: 'pointer', transition: "all 200ms " + EASE, boxShadow: `0 6px 20px color-mix(in srgb, ${course.color} 28%, transparent)` }}
                 onMouseEnter={e => { e.currentTarget.style.filter = 'brightness(1.07)'; }}
                 onMouseLeave={e => { e.currentTarget.style.filter = 'none'; }}>
                 Guardar cambios
               </button>
               <div style={{ borderTop: '1px solid var(--border-subtle)', marginTop: 4, paddingTop: 14, display: 'flex', justifyContent: 'center' }}>
-                <button onClick={() => { setShowDeleteConfirm(true); setDeleteConfirmName(''); }}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 18px', borderRadius: 8, border: '1px solid rgba(239,68,68,0.25)', background: 'transparent', color: 'rgba(239,68,68,0.7)', fontSize: 10, fontWeight: 600, cursor: 'pointer', transition: 'all 150ms', letterSpacing: '0.02em' }}
+                <button data-app-action="danger" data-ui-control="" onClick={() => { setShowDeleteConfirm(true); setDeleteConfirmName(''); }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 18px', borderRadius: 8, border: '1px solid rgba(239,68,68,0.25)', background: 'transparent', color: 'rgba(239,68,68,0.7)', fontSize: 11, fontWeight: 600, cursor: 'pointer', transition: 'all 150ms', letterSpacing: '0.02em' }}
                   onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; e.currentTarget.style.borderColor = 'rgba(239,68,68,0.5)'; e.currentTarget.style.color = '#EF4444'; }}
                   onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'rgba(239,68,68,0.25)'; e.currentTarget.style.color = 'rgba(239,68,68,0.7)'; }}>
                   <Trash2 size={11} /> Eliminar asignatura
@@ -6690,7 +6005,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
 
       {/* Editor de imagen del banner (se abre al subir o al pulsar el lápiz) */}
       {editEditorSrc && (
-        <ImageEditorModal src={editEditorSrc} title="Banner de la asignatura"
+        <ImageEditorModal src={editEditorSrc} initialCrop={editCourseCrop} title="Banner de la asignatura"
           onConfirm={handleEditCoverConfirm} onCancel={() => setEditEditorSrc(null)} />
       )}
 
@@ -6703,19 +6018,19 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
               </div>
               <div style={{ flex: 1 }}>
                 <h3 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', margin: 0, fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em' }}>Eliminar asignatura</h3>
-                <p style={{ fontSize: 10, color: 'var(--text-tertiary)', margin: '2px 0 0', lineHeight: 1.4 }}>Esta acción no se puede deshacer.</p>
+                <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: '2px 0 0', lineHeight: 1.4 }}>Esta acción no se puede deshacer.</p>
               </div>
-              <button onClick={() => setShowDeleteConfirm(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}><X size={15} /></button>
+              <button data-ui-control="" onClick={() => setShowDeleteConfirm(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}><X size={15} /></button>
             </div>
-            <div style={{ fontSize: 10, color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: 12 }}>
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: 12 }}>
               Escribe <strong style={{ color: '#EF4444' }}>{course.name}</strong> para confirmar:
             </div>
             <input value={deleteConfirmName} onChange={e => setDeleteConfirmName(e.target.value)} autoFocus
               placeholder="Nombre de la asignatura..."
               style={{ width: '100%', height: 38, borderRadius: 8, padding: '0 12px', fontSize: 12, fontFamily: "'Inter Tight', sans-serif", border: `1px solid ${deleteConfirmName.trim() === course.name ? 'rgba(239,68,68,0.5)' : 'var(--border-soft)'}`, background: 'var(--bg-deep)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', marginBottom: 14 }} />
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-              <button onClick={() => setShowDeleteConfirm(false)} style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 11, fontWeight: 500, cursor: 'pointer' }}>Cancelar</button>
-              <button onClick={handleConfirmDeleteCourse} disabled={deleteConfirmName.trim() !== course.name}
+              <button data-app-action="secondary" data-ui-control="" onClick={() => setShowDeleteConfirm(false)} style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 11, fontWeight: 500, cursor: 'pointer' }}>Cancelar</button>
+              <button data-ui-control="" onClick={handleConfirmDeleteCourse} disabled={deleteConfirmName.trim() !== course.name}
                 style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: deleteConfirmName.trim() === course.name ? '#EF4444' : 'var(--bg-hover)', color: deleteConfirmName.trim() === course.name ? '#fff' : 'var(--text-muted)', fontSize: 11, fontWeight: 600, cursor: deleteConfirmName.trim() === course.name ? 'pointer' : 'default', transition: 'all 150ms', display: 'flex', alignItems: 'center', gap: 5 }}>
                 <Trash2 size={11} /> Eliminar
               </button>
@@ -6735,7 +6050,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                 </div>
                 <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', margin: 0, fontFamily: "'Inter Tight', sans-serif" }}>{editingTopicId ? 'Editar' : 'Nuevo'} Tema</h3>
               </div>
-              <button onClick={() => setShowTopicModal(false)}
+              <button data-ui-control="" onClick={() => setShowTopicModal(false)}
                 style={{ width: 28, height: 28, borderRadius: 7, border: 'none', background: 'var(--bg-hover)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
                 onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#EF4444'; }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
@@ -6753,13 +6068,13 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
               </div>
             </div>
             <div style={{ padding: '12px 24px 18px', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-              <button onClick={() => setShowTopicModal(false)}
+              <button data-app-action="secondary" data-ui-control="" onClick={() => setShowTopicModal(false)}
                 style={{ height: 36, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 500, cursor: 'pointer', padding: '0 16px', transition: 'all 150ms', fontFamily: "'Inter', sans-serif" }}
                 onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
                 Cancelar
               </button>
-              <button onClick={handleAddTopic} disabled={!topicName.trim()}
+              <button data-ui-control="" onClick={handleAddTopic} disabled={!topicName.trim()}
                 style={{ height: 36, borderRadius: 8, border: 'none', background: topicName.trim() ? course.color : 'var(--bg-hover)', color: topicName.trim() ? '#fff' : 'var(--text-muted)', fontSize: 12, fontWeight: 600, cursor: topicName.trim() ? 'pointer' : 'default', padding: '0 20px', transition: 'all 150ms', fontFamily: "'Inter', sans-serif" }}
                 onMouseEnter={e => { if (topicName.trim()) e.currentTarget.style.opacity = '0.9'; }}
                 onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
@@ -6781,7 +6096,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                 </div>
                 <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', margin: 0, fontFamily: "'Inter Tight', sans-serif" }}>{editingGroupId ? 'Editar' : 'Nueva'} Agrupacion</h3>
               </div>
-              <button onClick={() => setShowGroupModal(false)}
+              <button data-ui-control="" onClick={() => setShowGroupModal(false)}
                 style={{ width: 28, height: 28, borderRadius: 7, border: 'none', background: 'var(--bg-hover)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
                 onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#EF4444'; }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
@@ -6801,7 +6116,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                 {groupCover ? (
                   <div style={{ position: 'relative', width: '100%', height: 100, borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
                     <img src={groupCover} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    <button onClick={() => setGroupCover(undefined)}
+                    <button data-ui-control="" onClick={() => setGroupCover(undefined)}
                       style={{ position: 'absolute', top: 8, right: 8, width: 24, height: 24, borderRadius: 7, background: 'rgba(239,68,68,0.85)', backdropFilter: 'blur(4px)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
                       onMouseEnter={e => { e.currentTarget.style.background = '#EF4444'; }}
                       onMouseLeave={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.85)'; }}>
@@ -6809,7 +6124,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                     </button>
                   </div>
                 ) : (
-                  <button onClick={() => groupCoverInputRef.current?.click()}
+                  <button data-ui-control="" onClick={() => groupCoverInputRef.current?.click()}
                     style={{ width: '100%', height: 80, borderRadius: 10, border: '1px dashed var(--border-subtle)', background: 'var(--bg-elevated)', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, color: 'var(--text-muted)', transition: 'all 150ms', fontSize: 12, fontWeight: 500, fontFamily: "'Inter', sans-serif" }}
                     onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}50`; e.currentTarget.style.background = `${course.color}08`; }}
                     onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = 'var(--bg-elevated)'; }}>
@@ -6822,7 +6137,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
             </div>
             <div style={{ padding: '12px 24px 18px', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0, gap: 8 }}>
                 {editingGroupId ? (
-                  <button onClick={() => {
+                  <button data-ui-control="" onClick={() => {
                     if (confirm('¿Eliminar esta agrupación? Los temas dentro pasarán a temas sueltos.')) {
                       handleDeleteGroup(editingGroupId);
                       setShowGroupModal(false);
@@ -6833,13 +6148,13 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                   </button>
                 ) : <div />}
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <button onClick={() => setShowGroupModal(false)}
+                  <button data-app-action="secondary" data-ui-control="" onClick={() => setShowGroupModal(false)}
                     style={{ height: 36, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 500, cursor: 'pointer', padding: '0 16px', transition: 'all 150ms', fontFamily: "'Inter', sans-serif" }}
                     onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
                     onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
                     Cancelar
                   </button>
-                  <button onClick={handleSaveGroup} disabled={!groupName.trim()}
+                  <button data-ui-control="" onClick={handleSaveGroup} disabled={!groupName.trim()}
                     style={{ height: 36, borderRadius: 8, border: 'none', background: groupName.trim() ? course.color : 'var(--bg-hover)', color: groupName.trim() ? '#fff' : 'var(--text-muted)', fontSize: 12, fontWeight: 600, cursor: groupName.trim() ? 'pointer' : 'default', padding: '0 20px', transition: 'all 150ms', fontFamily: "'Inter', sans-serif" }}
                     onMouseEnter={e => { if (groupName.trim()) e.currentTarget.style.opacity = '0.9'; }}
                     onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
@@ -6863,7 +6178,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                 </div>
                 <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', margin: 0, fontFamily: "'Inter Tight', sans-serif" }}>{importPreviewData ? 'Vista previa de importacion' : importExportMode === 'choose' ? 'Importar / Exportar' : importExportMode === 'import' ? 'Importar temas' : 'Exportar temas'}</h3>
               </div>
-              <button onClick={() => { setShowAgrupacionImportExport(false); setImportPreviewData(null); }}
+              <button data-ui-control="" onClick={() => { setShowAgrupacionImportExport(false); setImportPreviewData(null); }}
                 style={{ width: 28, height: 28, borderRadius: 7, border: 'none', background: 'var(--bg-hover)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
                 onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#EF4444'; }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
@@ -6877,7 +6192,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                   {!selectedGroupId && groups.length > 0 && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)' }}>
                       <Layers size={12} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-                      <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', flexShrink: 0 }}>Destino:</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', flexShrink: 0 }}>Destino:</span>
                       <select value={importTargetGroupId || ''} onChange={e => setImportTargetGroupId(e.target.value)}
                         style={{ flex: 1, height: 26, borderRadius: 6, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', fontSize: 11, fontWeight: 500, padding: '0 8px', outline: 'none', cursor: 'pointer' }}>
                         {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
@@ -6904,7 +6219,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                             </div>
                             <Layers size={12} style={{ color: 'var(--text-muted)', opacity: 0.5 }} />
                             <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", flex: 1 }}>{item.group.name}</span>
-                            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{item.topics.length} tema{item.topics.length !== 1 ? 's' : ''}</span>
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{item.topics.length} tema{item.topics.length !== 1 ? 's' : ''}</span>
                           </div>
                           <div style={{ borderTop: '1px solid var(--border-subtle)', padding: '4px 8px' }}>
                             {item.topics.map((topic: any, ti: number) => {
@@ -6923,7 +6238,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                                   </div>
                                   <Book size={10} style={{ color: 'var(--text-muted)', opacity: 0.5 }} />
                                   <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 500 }}>{topic.title || 'Sin titulo'}</span>
-                                  {topic.materials?.length > 0 && <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>{topic.materials.length} material{topic.materials.length !== 1 ? 'es' : ''}</span>}
+                                  {topic.materials?.length > 0 && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{topic.materials.length} material{topic.materials.length !== 1 ? 'es' : ''}</span>}
                                 </div>
                               );
                             })}
@@ -6933,13 +6248,13 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                     })}
                   </div>
                   <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-                    <button onClick={() => { setImportPreviewData(null); setImportSelected([]); setImportExportMode('choose'); }}
+                    <button data-ui-control="" onClick={() => { setImportPreviewData(null); setImportSelected([]); setImportExportMode('choose'); }}
                       style={{ flex: 1, height: 34, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter', sans-serif", transition: 'all 150ms' }}
                       onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
                       onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-elevated)'; }}>
                       Volver
                     </button>
-                    <button onClick={() => {
+                    <button data-ui-control="" onClick={() => {
                       if (!importPreviewData) return;
                       const totalSelectedTopics = importSelected.reduce((sum, row) => sum + (row?.filter(Boolean).length || 0), 0);
                       if (totalSelectedTopics === 0) { toast.error('Selecciona al menos un tema'); return; }
@@ -6971,7 +6286,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                   {importExportMode === 'choose' ? (
                     /* -- CHOOSE: Two Elegant Blocks -- */
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '8px 0' }}>
-                      <button onClick={() => setImportExportMode('import')}
+                      <button data-ui-control="" onClick={() => setImportExportMode('import')}
                         style={{ display: 'flex', alignItems: 'center', gap: 14, width: '100%', padding: '16px 18px', borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', cursor: 'pointer', textAlign: 'left', transition: 'all 200ms ' + EASE }}
                         onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}40`; e.currentTarget.style.background = `${course.color}06`; e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = `0 4px 16px ${course.color}12`; }}
                         onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = 'var(--bg-deep)'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}>
@@ -6980,11 +6295,11 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                         </div>
                         <div style={{ flex: 1 }}>
                           <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", marginBottom: 2 }}>Importar</div>
-                          <div style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.4 }}>Cargar temas desde un archivo JSON exportado</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.4 }}>Cargar temas desde un archivo JSON exportado</div>
                         </div>
                         <ChevronRight size={14} style={{ color: 'var(--text-muted)', opacity: 0.4 }} />
                       </button>
-                      <button onClick={() => setImportExportMode('export')}
+                      <button data-ui-control="" onClick={() => setImportExportMode('export')}
                         style={{ display: 'flex', alignItems: 'center', gap: 14, width: '100%', padding: '16px 18px', borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-deep)', cursor: 'pointer', textAlign: 'left', transition: 'all 200ms ' + EASE }}
                         onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}40`; e.currentTarget.style.background = `${course.color}06`; e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = `0 4px 16px ${course.color}12`; }}
                         onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = 'var(--bg-deep)'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}>
@@ -6993,7 +6308,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                         </div>
                         <div style={{ flex: 1 }}>
                           <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", marginBottom: 2 }}>Exportar</div>
-                          <div style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.4 }}>Exportar temas de las agrupaciones a un archivo JSON</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.4 }}>Exportar temas de las agrupaciones a un archivo JSON</div>
                         </div>
                         <ChevronRight size={14} style={{ color: 'var(--text-muted)', opacity: 0.4 }} />
                       </button>
@@ -7020,20 +6335,20 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                                   </div>
                                   <Book size={10} style={{ color: 'var(--text-muted)', opacity: 0.5 }} />
                                   <span style={{ flex: 1, fontSize: 12, color: 'var(--text-primary)', fontWeight: 500 }}>{topic.title}</span>
-                                  <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{(topic.materials || []).length} material{(topic.materials || []).length !== 1 ? 'es' : ''}</span>
+                                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{(topic.materials || []).length} material{(topic.materials || []).length !== 1 ? 'es' : ''}</span>
                                 </div>
                               );
                             });
                           })()}
                         </div>
                         <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-                          <button onClick={() => setImportExportMode('choose')}
+                          <button data-ui-control="" onClick={() => setImportExportMode('choose')}
                             style={{ flex: 1, height: 34, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter', sans-serif", transition: 'all 150ms' }}
                             onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
                             onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-elevated)'; }}>
                             Volver
                           </button>
-                          <button onClick={async () => {
+                          <button data-ui-control="" onClick={async () => {
                             const currentGrp = groups.find(g => g.id === selectedGroupId);
                             if (!currentGrp) { toast.error('Agrupacion no encontrada'); return; }
                             const selectedTopics = parsedTopics.filter(t => exportSelectedIds.has(t.id));
@@ -7072,20 +6387,20 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                                   {isSelected && <Check size={10} style={{ color: '#fff', strokeWidth: 3 }} />}
                                 </div>
                                 <span style={{ flex: 1, fontSize: 12, color: 'var(--text-primary)', fontWeight: 500 }}>{g.name}</span>
-                                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{count} tema{count !== 1 ? 's' : ''}</span>
+                                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{count} tema{count !== 1 ? 's' : ''}</span>
                               </div>
                             );
                           })}
                         </div>
                         {groups.length > 0 && (
                           <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-                            <button onClick={() => setImportExportMode('choose')}
+                            <button data-ui-control="" onClick={() => setImportExportMode('choose')}
                               style={{ flex: 1, height: 34, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter', sans-serif", transition: 'all 150ms' }}
                               onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
                               onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-elevated)'; }}>
                               Volver
                             </button>
-                            <button onClick={async () => {
+                            <button data-ui-control="" onClick={async () => {
                               const selected = groups.filter(g => exportSelectedIds.has(g.id));
                               if (selected.length === 0) { toast.error('Selecciona al menos una agrupacion'); return; }
                               try {
@@ -7112,7 +6427,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                   ) : (
                     /* -- IMPORT -- */
                     <div>
-                      <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '0 0 10px' }}>Selecciona un archivo JSON exportado desde Owa Studio.</p>
+                      <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '0 0 10px' }}>Selecciona un archivo JSON exportado desde APHEKA.</p>
                       <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, height: 44, borderRadius: 8, border: '1px dashed var(--border-subtle)', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 11, fontWeight: 500, transition: 'all 200ms ' + EASE }}
                         onMouseEnter={e => { e.currentTarget.style.borderColor = `${course.color}40`; e.currentTarget.style.background = `${course.color}06`; e.currentTarget.style.color = course.color; }}
                         onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
@@ -7152,13 +6467,13 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
               Esta acción eliminara permanentemente este tema y todo su contenido. No se puede deshacer.
             </p>
             <div style={{ display: 'flex', gap: 8, width: '100%', marginTop: 8 }}>
-              <button onClick={() => setDeleteTopicId(null)}
+              <button data-ui-control="" onClick={() => setDeleteTopicId(null)}
                 style={{ flex: 1, height: 36, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter', sans-serif", transition: 'all 150ms' }}
                 onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-elevated)'; }}>
                 Cancelar
               </button>
-              <button onClick={() => { if (deleteTopicId) handleDeleteTopic(deleteTopicId); setDeleteTopicId(null); }}
+              <button data-ui-control="" onClick={() => { if (deleteTopicId) handleDeleteTopic(deleteTopicId); setDeleteTopicId(null); }}
                 style={{ flex: 1, height: 36, borderRadius: 8, border: 'none', background: '#EF4444', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter', sans-serif", transition: 'all 150ms', boxShadow: '0 2px 8px rgba(239,68,68,0.35)' }}
                 onMouseEnter={e => { e.currentTarget.style.opacity = '0.88'; }}
                 onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
@@ -7179,21 +6494,21 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
               return (
                 <>
                   {canBack && (
-                    <button onClick={() => { handleBackTaskStatus(taskMenu.id); setTaskMenu(null); }}
+                    <button data-app-action="secondary" data-ui-control="" onClick={() => { handleBackTaskStatus(taskMenu.id); setTaskMenu(null); }}
                       style={{ display: 'flex', alignItems: 'center', gap: 8, height: 32, padding: '0 10px', borderRadius: 7, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 11.5, fontWeight: 500, fontFamily: "'Inter', sans-serif", transition: 'all 120ms' }}
                       onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
                       onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
                       <LI.Undo2 size={12} /> Retroceder
                     </button>
                   )}
-                  <button onClick={() => { const mt = courseTasks.find(t => t.id === taskMenu.id); if (mt) { setFocusedTaskId(mt.id); setNavigateTo('tareas'); } setTaskMenu(null); }}
+                  <button data-app-action="secondary" data-ui-control="" onClick={() => { const mt = courseTasks.find(t => t.id === taskMenu.id); if (mt) { setFocusedTaskId(mt.id); setNavigateTo('tareas'); } setTaskMenu(null); }}
                     style={{ display: 'flex', alignItems: 'center', gap: 8, height: 32, padding: '0 10px', borderRadius: 7, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 11.5, fontWeight: 500, fontFamily: "'Inter', sans-serif", transition: 'all 120ms' }}
                     onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
                     onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
                     <LI.ExternalLink size={12} /> Abrir en Tareas
                   </button>
                   <div style={{ height: 1, background: 'var(--border-subtle)', margin: '3px 6px' }} />
-                  <button onClick={() => { setConfirmDeleteTaskId(taskMenu.id); setTaskMenu(null); }}
+                  <button data-app-action="danger" data-ui-control="" onClick={() => { setConfirmDeleteTaskId(taskMenu.id); setTaskMenu(null); }}
                     style={{ display: 'flex', alignItems: 'center', gap: 8, height: 32, padding: '0 10px', borderRadius: 7, border: 'none', background: 'transparent', cursor: 'pointer', color: 'rgba(239,68,68,0.75)', fontSize: 11.5, fontWeight: 500, fontFamily: "'Inter', sans-serif", transition: 'all 120ms' }}
                     onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#EF4444'; }}
                     onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(239,68,68,0.75)'; }}>
@@ -7219,13 +6534,13 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
               ¿Eliminar "{courseTasks.find(t => t.id === confirmDeleteTaskId)?.title || ''}"? Esta acción no se puede deshacer.
             </p>
             <div style={{ display: 'flex', gap: 8, width: '100%', marginTop: 8 }}>
-              <button onClick={() => setConfirmDeleteTaskId(null)}
+              <button data-ui-control="" onClick={() => setConfirmDeleteTaskId(null)}
                 style={{ flex: 1, height: 36, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter', sans-serif", transition: 'all 150ms' }}
                 onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-elevated)'; }}>
                 Cancelar
               </button>
-              <button onClick={() => { deleteTask(confirmDeleteTaskId); setConfirmDeleteTaskId(null); toast.success('Tarea eliminada'); }}
+              <button data-ui-control="" onClick={() => { deleteTask(confirmDeleteTaskId); setConfirmDeleteTaskId(null); toast.success('Tarea eliminada'); }}
                 style={{ flex: 1, height: 36, borderRadius: 8, border: 'none', background: '#EF4444', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter', sans-serif", transition: 'all 150ms', boxShadow: '0 2px 8px rgba(239,68,68,0.35)' }}
                 onMouseEnter={e => { e.currentTarget.style.opacity = '0.88'; }}
                 onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
@@ -7241,10 +6556,10 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }}>
               <File size={14} style={{ color: course?.color }} />
               <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pdfPreviewName}</span>
-              <a href={pdfPreviewUrl} download={pdfPreviewName} style={{ height: 26, padding: '0 10px', borderRadius: 5, border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 9, fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <a href={pdfPreviewUrl} download={pdfPreviewName} style={{ height: 26, padding: '0 10px', borderRadius: 5, border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 11, fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
                 <ExternalLink size={9} /> Abrir
               </a>
-              <button onClick={() => setShowPdfPreview(false)} style={{ width: 26, height: 26, borderRadius: 5, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={13} /></button>
+              <button data-ui-control="" onClick={() => setShowPdfPreview(false)} style={{ width: 26, height: 26, borderRadius: 5, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={13} /></button>
             </div>
             <div style={{ flex: 1, background: '#0a0a0a', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
               {pdfPreviewUrl.match(/\.(pdf|PDF)$/) || pdfPreviewUrl.startsWith('data:application/pdf') ? (
@@ -7278,16 +6593,16 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                     <div style={{ width: 34, height: 34, borderRadius: 10, background: `${vAccent}10`, border: `1px solid ${vAccent}26`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                       <VIcon size={15} style={{ color: vAccent }} />
                     </div>
-                    <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: vAccent, fontFamily: "'Inter Tight', sans-serif" }}>{vMeta?.label || 'Material'}</span>
+                    <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: vAccent, fontFamily: "'Inter Tight', sans-serif" }}>{vMeta?.label || 'Material'}</span>
                     <span style={{ flex: 1 }} />
-                    <button onClick={() => setViewingMat(null)} title="Cerrar"
+                    <button data-ui-control="" onClick={() => setViewingMat(null)} title="Cerrar"
                       style={{ width: 26, height: 26, borderRadius: 8, border: '1px solid var(--border-soft)', background: 'var(--bg-surface)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={13} /></button>
                   </div>
                   <div style={{ padding: '18px 20px' }}>
                     <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--text-primary)', lineHeight: 1.4, fontFamily: "'Inter Tight', sans-serif" }}>{vTitle}</div>
                     {vBody && (
                       <div style={{ marginTop: 14 }}>
-                        <div style={{ fontSize: 8.5, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: vAccent, fontFamily: "'Inter Tight', sans-serif", marginBottom: 6 }}>{vBodyLabel}</div>
+                        <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: vAccent, fontFamily: "'Inter Tight', sans-serif", marginBottom: 6 }}>{vBodyLabel}</div>
                         <div style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap' }}>{vBody}</div>
                       </div>
                     )}
@@ -7314,7 +6629,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                 <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6, margin: 0, fontFamily: "'Inter Tight', sans-serif" }}>
                   <>{editingMaterial ? 'Editar' : 'Añadir'} {materialType && MATERIAL_META[materialType]?.label}</>
                 </h3>
-                <button onClick={() => setShowMaterialModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}><X size={15} /></button>
+                <button data-ui-control="" onClick={() => setShowMaterialModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}><X size={15} /></button>
               </div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -7347,15 +6662,15 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                 <div>{materialForm.image ? (
                   <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
                     <img src={materialForm.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', background: 'var(--bg-deep)' }} />
-                    <button onClick={() => setForm({ image: undefined })} style={{ position: 'absolute', top: 4, right: 4, width: 20, height: 20, borderRadius: '50%', background: 'rgba(239,68,68,0.9)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={9} /></button>
+                    <button data-ui-control="" onClick={() => setForm({ image: undefined })} style={{ position: 'absolute', top: 4, right: 4, width: 20, height: 20, borderRadius: '50%', background: 'rgba(239,68,68,0.9)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={9} /></button>
                   </div>
                 ) : (
-                  <button onClick={() => materialImageInputRef.current?.click()} style={{ width: '100%', height: 48, borderRadius: 6, border: '1px dashed var(--border-subtle)', background: 'transparent', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, color: 'var(--text-muted)' }}>
-                    <Upload size={10} /><span style={{ fontSize: 7, fontWeight: 600, textTransform: 'uppercase' }}>Imagen</span>
+                  <button data-ui-control="" onClick={() => materialImageInputRef.current?.click()} style={{ width: '100%', height: 48, borderRadius: 6, border: '1px dashed var(--border-subtle)', background: 'transparent', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, color: 'var(--text-muted)' }}>
+                    <Upload size={10} /><span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase' }}>Imagen</span>
                   </button>
                 )}</div>
               )}
-              <button onClick={handleSaveMaterial} style={{ width: '100%', height: 34, borderRadius: 6, border: 'none', background: course.color, color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>{editingMaterial ? 'Guardar' : 'Crear Material'}</button>
+              <button data-ui-control="" onClick={handleSaveMaterial} style={{ width: '100%', height: 34, borderRadius: 6, border: 'none', background: course.color, color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>{editingMaterial ? 'Guardar' : 'Crear Material'}</button>
             </div>
           </div>
         </div>
@@ -7381,7 +6696,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
         };
         const Field = ({ txt, children }: { txt: string; children: React.ReactNode }) => (
           <div>
-            <div style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: meta.color, marginBottom: 6, fontFamily: "'Inter Tight', sans-serif" }}>{txt}</div>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: meta.color, marginBottom: 6, fontFamily: "'Inter Tight', sans-serif" }}>{txt}</div>
             {children}
           </div>
         );
@@ -7395,7 +6710,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                 </span>
                 {meta.name}
               </h3>
-              <button onClick={() => { setToolModal(null); setToolFields({}); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}><X size={15} /></button>
+              <button data-ui-control="" onClick={() => { setToolModal(null); setToolFields({}); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}><X size={15} /></button>
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: '0 0 16px 44px', fontStyle: 'italic', lineHeight: 1.5 }}>{meta.hint}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -7445,8 +6760,8 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
               {toolModal.mode === 'cloze' && (
                 <Field txt="Texto con huecos">
                   <div style={{ display: 'flex', alignItems: 'center', marginBottom: 7 }}>
-                    <span onClick={insertClozeGap} title="Selecciona una palabra y plsalo para convertirla en hueco (guardará la respuesta)" style={{ display: 'flex', alignItems: 'center', gap: 5, height: 26, padding: '0 10px', borderRadius: 7, border: `1px solid ${meta.color}40`, background: `${meta.color}0d`, color: meta.color, fontSize: 10, fontWeight: 700, cursor: 'pointer', fontFamily: "'Inter Tight', sans-serif", transition: 'background 150ms' }} onMouseEnter={e => e.currentTarget.style.background = `${meta.color}1a`} onMouseLeave={e => e.currentTarget.style.background = `${meta.color}0d`}><Plus size={10} /> Insertar hueco</span>
-                    <span style={{ fontSize: 8.5, color: 'var(--text-tertiary)', marginLeft: 8 }}>Selecciona texto para guardar la respuesta</span>
+                    <span onClick={insertClozeGap} title="Selecciona una palabra y plsalo para convertirla en hueco (guardará la respuesta)" style={{ display: 'flex', alignItems: 'center', gap: 5, height: 26, padding: '0 10px', borderRadius: 7, border: `1px solid ${meta.color}40`, background: `${meta.color}0d`, color: meta.color, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: "'Inter Tight', sans-serif", transition: 'background 150ms' }} onMouseEnter={e => e.currentTarget.style.background = `${meta.color}1a`} onMouseLeave={e => e.currentTarget.style.background = `${meta.color}0d`}><Plus size={10} /> Insertar hueco</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-tertiary)', marginLeft: 8 }}>Selecciona texto para guardar la respuesta</span>
                   </div>
                   <textarea ref={clozeRef} value={toolFields.body || ''} onChange={e => setToolField('body', e.target.value)} placeholder="Escribe el texto aquí" style={{ ...textareaStyle, minHeight: 140 }} onFocus={focusIn} onBlur={focusOut} />
                 </Field>
@@ -7466,7 +6781,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
 
               {!['quizzes', 'matching', 'blurting', 'feynman', 'cloze', 'categorization', 'mnemonics'].includes(toolModal.mode) && (
                 <Field txt="Desarrollo de la técnica">
-                  <div style={{ fontSize: 9.5, color: 'var(--text-tertiary)', lineHeight: 1.55, marginBottom: 8, padding: '8px 10px', borderRadius: 8, background: `${meta.color}0a`, border: `1px dashed ${meta.color}30` }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.55, marginBottom: 8, padding: '8px 10px', borderRadius: 8, background: `${meta.color}0a`, border: `1px dashed ${meta.color}30` }}>
                     {TOOL_CREATOR_META[toolModal.mode].theory.how.map((h, i) => (
                       <div key={i} style={{ display: 'flex', gap: 6 }}><span style={{ color: meta.color, fontWeight: 700 }}>{i + 1}.</span><span>{h}</span></div>
                     ))}
@@ -7475,7 +6790,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                 </Field>
               )}
             </div>
-            <button onClick={handleSaveToolModal} style={{ width: '100%', height: 38, borderRadius: 9, border: 'none', background: meta.color, color: '#fff', fontSize: 11.5, fontWeight: 600, cursor: 'pointer', marginTop: 18, boxShadow: `0 6px 20px ${meta.color}30`, transition: 'transform 150ms ' + EASE, fontFamily: "'Inter Tight', sans-serif" }}
+            <button data-ui-control="" onClick={handleSaveToolModal} style={{ width: '100%', height: 38, borderRadius: 9, border: 'none', background: meta.color, color: '#fff', fontSize: 11.5, fontWeight: 600, cursor: 'pointer', marginTop: 18, boxShadow: `0 6px 20px ${meta.color}30`, transition: 'transform 150ms ' + EASE, fontFamily: "'Inter Tight', sans-serif" }}
               onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-1px)'}
               onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}>
               {toolModal.editingId ? 'Guardar cambios' : `Crear ${meta.name}`}
@@ -7502,13 +6817,13 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                           {delMat && <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--text-secondary)', fontFamily: "'Inter', sans-serif" }}>"{delMat.name || 'Sin nombre'}" sera eliminado</p>}
                         </div>
                         <div style={{ padding: '12px 24px 24px', display: 'flex', gap: 10, justifyContent: 'center' }}>
-                          <button onClick={() => setConfirmDeleteMatId(null)}
+                          <button data-app-action="secondary" data-ui-control="" onClick={() => setConfirmDeleteMatId(null)}
                             style={{ height: 38, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 13, fontWeight: 500, cursor: 'pointer', padding: '0 20px', transition: 'all 150ms', fontFamily: "'Inter', sans-serif" }}
                             onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
                             onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
                             Cancelar
                           </button>
-                          <button onClick={() => { handleDeleteResourceFromOverview(confirmDeleteMatId); }}
+                          <button data-ui-control="" onClick={() => { handleDeleteResourceFromOverview(confirmDeleteMatId); }}
                             style={{ height: 38, borderRadius: 8, border: 'none', background: '#EF4444', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: '0 20px', transition: 'all 150ms', fontFamily: "'Inter', sans-serif" }}
                             onMouseEnter={e => { e.currentTarget.style.opacity = '0.9'; }}
                             onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
@@ -7536,7 +6851,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                             ) : null;
                           })()}
                         </div>
-                        <button onClick={() => setShowAddLinkModal(false)}
+                        <button data-ui-control="" onClick={() => setShowAddLinkModal(false)}
                           style={{ width: 28, height: 28, borderRadius: 7, border: 'none', background: 'var(--bg-hover)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
                           onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#EF4444'; }}
                           onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
@@ -7563,13 +6878,13 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                         </div>
                       </div>
                       <div style={{ padding: '12px 24px 18px', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-                        <button onClick={() => setShowAddLinkModal(false)}
+                        <button data-app-action="secondary" data-ui-control="" onClick={() => setShowAddLinkModal(false)}
                           style={{ height: 36, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '0 16px', transition: 'all 150ms' }}
                           onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
                           onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
                           Cancelar
                         </button>
-                        <button onClick={handleAddLink}
+                        <button data-ui-control="" onClick={handleAddLink}
                           style={{ height: 36, borderRadius: 8, border: 'none', background: course.color, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '0 20px', transition: 'all 150ms' }}
                           onMouseEnter={e => { e.currentTarget.style.opacity = '0.9'; }}
                           onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
@@ -7595,13 +6910,13 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                   return (
                     <div style={{ position: 'fixed', inset: 0, zIndex: 10000 }} onClick={() => setLinkIconPick(null)} onContextMenu={e => { e.preventDefault(); setLinkIconPick(null); }}>
                       <div onClick={e => e.stopPropagation()} style={{ position: 'fixed', left: px, top: py, width: 220, borderRadius: 12, padding: 10, background: 'color-mix(in srgb, var(--bg-elevated) 96%, transparent)', backdropFilter: 'blur(16px)', border: '1px solid var(--border-soft)', boxShadow: '0 18px 50px rgba(0,0,0,0.42)', animation: 'fadeInScale 160ms ease' }}>
-                        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-tertiary)', padding: '2px 6px 8px', fontFamily: "'Inter Tight', sans-serif" }}>Icono del enlace</div>
+                        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-tertiary)', padding: '2px 6px 8px', fontFamily: "'Inter Tight', sans-serif" }}>Icono del enlace</div>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 4 }}>
                           {LINK_ICON_CHOICES.map(c => {
                             const active = (current || 'auto') === c.id;
                             const Cmp = c.Icon;
                             return (
-                              <button key={c.id} onClick={() => setMaterialIcon(linkIconPick.matId, c.id === 'auto' ? null : c.id)} title={c.id === 'auto' ? 'Original' : c.label}
+                              <button data-ui-control="" key={c.id} onClick={() => setMaterialIcon(linkIconPick.matId, c.id === 'auto' ? null : c.id)} title={c.id === 'auto' ? 'Original' : c.label}
                                 style={{ height: 34, borderRadius: 8, border: active ? `1.5px solid ${course?.color || 'var(--accent)'}` : '1px solid var(--border-subtle)', background: active ? `${course?.color || 'var(--accent)'}12` : 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: active ? (course?.color || 'var(--accent)') : 'var(--text-secondary)' }}>
                                 <Cmp size={15} />
                               </button>
@@ -7621,7 +6936,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                     <div style={{ position: 'relative', width: 400, background: 'var(--bg-surface)', borderRadius: 16, border: '1px solid var(--border-subtle)', boxShadow: '0 24px 64px rgba(0,0,0,0.5)', overflow: 'hidden' }} className="bento-card">
                       <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>Editar enlace</h3>
-                        <button onClick={() => setEditLinkId(null)}
+                        <button data-ui-control="" onClick={() => setEditLinkId(null)}
                           style={{ width: 28, height: 28, borderRadius: 7, border: 'none', background: 'var(--bg-hover)', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 150ms' }}
                           onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#EF4444'; }}
                           onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
@@ -7648,20 +6963,20 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                         </div>
                       </div>
                       <div style={{ padding: '12px 24px 18px', display: 'flex', gap: 10, justifyContent: 'space-between' }}>
-                        <button onClick={() => { setConfirmDeleteMatId(editLinkId); setEditLinkId(null); }}
+                        <button data-ui-control="" onClick={() => { setConfirmDeleteMatId(editLinkId); setEditLinkId(null); }}
                           style={{ height: 36, borderRadius: 8, border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.08)', color: '#EF4444', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '0 16px', transition: 'all 150ms' }}
                           onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.15)'; }}
                           onMouseLeave={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; }}>
                           Eliminar
                         </button>
                         <div style={{ display: 'flex', gap: 10 }}>
-                          <button onClick={() => setEditLinkId(null)}
+                          <button data-app-action="secondary" data-ui-control="" onClick={() => setEditLinkId(null)}
                             style={{ height: 36, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '0 16px', transition: 'all 150ms' }}
                             onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
                             onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
                             Cancelar
                           </button>
-                          <button onClick={handleSaveEditLink}
+                          <button data-ui-control="" onClick={handleSaveEditLink}
                             style={{ height: 36, borderRadius: 8, border: 'none', background: course.color, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '0 20px', transition: 'all 150ms' }}
                             onMouseEnter={e => { e.currentTarget.style.opacity = '0.9'; }}
                             onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}>
@@ -7683,7 +6998,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
               </span>
               <div>
                 <h3 style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--text-primary)', margin: 0, fontFamily: "'Inter Tight', sans-serif" }}>Mover a grupo</h3>
-                <div style={{ fontSize: 10.5, color: 'var(--text-tertiary)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}>{moveToGroupMat.name}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}>{moveToGroupMat.name}</div>
               </div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 220, overflowY: 'auto', marginBottom: 16 }}>
@@ -7695,7 +7010,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                 const mat = (safeArr(activeTopic?.materials)).find(m => m.id === moveToGroupMat.id);
                 const isCurrent = (mat as any)?.groupName === g;
                 return (
-                  <button key={g} onClick={() => {
+                  <button data-ui-control="" key={g} onClick={() => {
                     updateCourse(course.id, { studyTopics: (safeArr(course.studyTopics)).map(tp => tp.id === activeTopic?.id ? { ...tp, materials: (safeArr(tp.materials)).map(m => m.id === moveToGroupMat.id ? ({ ...m, groupName: g } as any) : m) } : tp) } as any);
                     toast.success('Movido a ' + g.split('/').pop());
                     setMoveToGroupMat(null);
@@ -7711,7 +7026,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                 );
               })}
             </div>
-            <button onClick={() => { ungroupMaterial(moveToGroupMat.id); setMoveToGroupMat(null); }} style={{ width: '100%', height: 34, borderRadius: 9, border: '1px dashed var(--border-subtle)', background: 'transparent', color: 'var(--text-tertiary)', fontSize: 11, fontWeight: 500, cursor: 'pointer', fontFamily: "'Inter Tight', sans-serif" }}>
+            <button data-ui-control="" onClick={() => { ungroupMaterial(moveToGroupMat.id); setMoveToGroupMat(null); }} style={{ width: '100%', height: 34, borderRadius: 9, border: '1px dashed var(--border-subtle)', background: 'transparent', color: 'var(--text-tertiary)', fontSize: 11, fontWeight: 500, cursor: 'pointer', fontFamily: "'Inter Tight', sans-serif" }}>
               Sacar al tema principal (sin grupo)
             </button>
           </div>
@@ -7731,7 +7046,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                   {topicGroupModal.mode === 'rename' ? 'Editar grupo' : 'Nuevo grupo'}
                 </h3>
               </div>
-              <button onClick={() => setTopicGroupModal(null)} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4 }}><X size={15} /></button>
+              <button data-ui-control="" onClick={() => setTopicGroupModal(null)} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4 }}><X size={15} /></button>
             </div>
             <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: 6, letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Nombre del grupo</label>
             <input value={newGroupName} onChange={e => setNewGroupName(e.target.value)} onKeyDown={e => {
@@ -7748,14 +7063,14 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
             
             <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
               {topicGroupModal.mode === 'rename' && topicGroupModal.orig && (
-                <button onClick={() => { const orig = topicGroupModal.orig!; setTopicGroupModal(null); setConfirmDelGroup(orig); }}
+                <button data-ui-control="" onClick={() => { const orig = topicGroupModal.orig!; setTopicGroupModal(null); setConfirmDelGroup(orig); }}
                   title="Eliminar grupo y sus contenidos"
                   style={{ height: 38, padding: '0 12px', borderRadius: 9, border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.12)', color: '#EF4444', fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontFamily: "'Inter Tight', sans-serif" }}>
                   <Trash2 size={13} /> Eliminar
                 </button>
               )}
-              <button onClick={() => setTopicGroupModal(null)} style={{ flex: 1, height: 38, borderRadius: 9, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter Tight', sans-serif" }}>Cancelar</button>
-              <button onClick={() => {
+              <button data-ui-control="" onClick={() => setTopicGroupModal(null)} style={{ flex: 1, height: 38, borderRadius: 9, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter Tight', sans-serif" }}>Cancelar</button>
+              <button data-ui-control="" onClick={() => {
                 if (newGroupName.trim() && activeTopic) {
                   if (topicGroupModal.mode === 'rename' && topicGroupModal.orig) {
                     renameToolGroup(topicGroupModal.orig, newGroupName.trim());
@@ -7791,13 +7106,13 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
             </p>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
               {[`${mats} material${mats === 1 ? '' : 'es'}`, `${fcs} tarjet${fcs === 1 ? 'a' : 'as'}`, subs > 0 ? `${subs} subgrupo${subs === 1 ? '' : 's'}` : null].filter(Boolean).map((t, i) => (
-                <span key={i} style={{ fontSize: 10.5, fontWeight: 600, color: '#EF4444', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', padding: '4px 10px', borderRadius: 8 }}>{t}</span>
+                <span key={i} style={{ fontSize: 11, fontWeight: 600, color: '#EF4444', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', padding: '4px 10px', borderRadius: 8 }}>{t}</span>
               ))}
             </div>
             <p style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.5, margin: '0 0 16px' }}>Esta acción no se puede deshacer.</p>
             <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={() => setConfirmDelGroup(null)} style={{ flex: 1, height: 38, borderRadius: 9, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter Tight', sans-serif" }}>Cancelar</button>
-              <button onClick={() => { deleteToolGroup(g); setConfirmDelGroup(null); }} style={{ flex: 1, height: 38, borderRadius: 9, border: 'none', background: '#EF4444', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', boxShadow: '0 6px 20px rgba(239,68,68,0.30)', fontFamily: "'Inter Tight', sans-serif" }}>Sí, eliminar</button>
+              <button data-ui-control="" onClick={() => setConfirmDelGroup(null)} style={{ flex: 1, height: 38, borderRadius: 9, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter Tight', sans-serif" }}>Cancelar</button>
+              <button data-ui-control="" onClick={() => { deleteToolGroup(g); setConfirmDelGroup(null); }} style={{ flex: 1, height: 38, borderRadius: 9, border: 'none', background: '#EF4444', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', boxShadow: '0 6px 20px rgba(239,68,68,0.30)', fontFamily: "'Inter Tight', sans-serif" }}>Sí, eliminar</button>
             </div>
           </div>
         </div>
@@ -7824,8 +7139,8 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
               ¿Eliminar <b style={{ color: 'var(--text-primary)', fontWeight: 600 }}>“{confirmDelToolMat.name}”</b> del tema? Esta acción no se puede deshacer.
             </p>
             <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={() => setConfirmDelToolMat(null)} style={{ flex: 1, height: 38, borderRadius: 9, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter Tight', sans-serif" }}>Cancelar</button>
-              <button onClick={confirmDeleteMaterialNow} style={{ flex: 1, height: 38, borderRadius: 9, border: 'none', background: '#EF4444', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', boxShadow: '0 6px 20px rgba(239,68,68,0.30)', fontFamily: "'Inter Tight', sans-serif" }}>Sí, eliminar</button>
+              <button data-ui-control="" onClick={() => setConfirmDelToolMat(null)} style={{ flex: 1, height: 38, borderRadius: 9, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter Tight', sans-serif" }}>Cancelar</button>
+              <button data-ui-control="" onClick={confirmDeleteMaterialNow} style={{ flex: 1, height: 38, borderRadius: 9, border: 'none', background: '#EF4444', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', boxShadow: '0 6px 20px rgba(239,68,68,0.30)', fontFamily: "'Inter Tight', sans-serif" }}>Sí, eliminar</button>
             </div>
           </div>
         </div>
@@ -7845,14 +7160,14 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                   {activeToolGroup !== 'todos' ? `Añadiendo al grupo “${activeToolGroup.split('/').pop()}”` : 'Se vinculará al tema activo'}
                 </p>
               </div>
-              <button onClick={() => { setShowFlashcardModal(false); setEditingFlashcard(null); }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}><X size={16} /></button>
+              <button data-ui-control="" onClick={() => { setShowFlashcardModal(false); setEditingFlashcard(null); }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}><X size={16} /></button>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               {!editingFlashcard && (
                 <div style={{ display: 'flex', gap: 6, padding: 4, borderRadius: 10, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)' }}>
                   {([['uno', 'Individual'], ['masivo', 'Grupo / Masivo (pregunta - respuesta)']] as const).map(([v, lbl]) => (
-                    <button key={v} onClick={() => setFcMode(v)}
+                    <button data-ui-control="" key={v} onClick={() => setFcMode(v)}
                       style={{ flex: 1, height: 32, borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700, transition: 'all 180ms ' + EASE, fontFamily: "'Inter Tight', sans-serif", background: fcMode === v ? '#8B5CF6' : 'transparent', color: fcMode === v ? '#fff' : 'var(--text-tertiary)', boxShadow: fcMode === v ? '0 4px 14px rgba(139,92,246,0.35)' : 'none' }}>
                       {lbl}
                     </button>
@@ -7863,19 +7178,19 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
               {fcMode === 'uno' || editingFlashcard ? (
                 <>
                   <div>
-                    <label style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#8B5CF6', display: 'block', marginBottom: 6, fontFamily: "'Inter Tight', sans-serif" }}>Pregunta / Término</label>
+                    <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#8B5CF6', display: 'block', marginBottom: 6, fontFamily: "'Inter Tight', sans-serif" }}>Pregunta / Término</label>
                     <textarea value={fcQuestion} onChange={e => setFcQuestion(e.target.value)} placeholder="Escribe la pregunta, fórmula, concepto o código…" autoFocus style={{ width: '100%', minHeight: 76, padding: '10px 12px', borderRadius: 10, fontSize: 12.5, lineHeight: 1.5, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
                   </div>
                   <div>
-                    <label style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#10B981', display: 'block', marginBottom: 6, fontFamily: "'Inter Tight', sans-serif" }}>Respuesta / Explicación</label>
+                    <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#10B981', display: 'block', marginBottom: 6, fontFamily: "'Inter Tight', sans-serif" }}>Respuesta / Explicación</label>
                     <textarea value={fcAnswer} onChange={e => setFcAnswer(e.target.value)} placeholder="Escribe la respuesta detallada, definición o solución…" style={{ width: '100%', minHeight: 76, padding: '10px 12px', borderRadius: 10, fontSize: 12.5, lineHeight: 1.5, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
                   </div>
                 </>
               ) : (
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                    <label style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#8B5CF6', fontFamily: "'Inter Tight', sans-serif" }}>Una por línea · pregunta - respuesta</label>
-                    <span style={{ fontSize: 10, fontWeight: 600, color: '#8B5CF6', background: '#8B5CF614', padding: '2px 8px', borderRadius: 99 }}>
+                    <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#8B5CF6', fontFamily: "'Inter Tight', sans-serif" }}>Una por línea · pregunta - respuesta</label>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: '#8B5CF6', background: '#8B5CF614', padding: '2px 8px', borderRadius: 99 }}>
                       {parseBulkFlashcards().filter(c => c.a).length} detectadas
                     </span>
                   </div>
@@ -7884,12 +7199,12 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                   {parseBulkFlashcards().filter(c => c.a).length > 0 && (
                     <div style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap', maxHeight: 80, overflowY: 'auto', padding: 4 }}>
                       {parseBulkFlashcards().filter(c => c.a).slice(0, 6).map((c, i) => (
-                        <span key={i} style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', padding: '3px 8px', borderRadius: 6, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <span key={i} style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', padding: '3px 8px', borderRadius: 6, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           <b style={{ color: '#8B5CF6' }}>{c.q}</b>: {c.a}
                         </span>
                       ))}
                       {parseBulkFlashcards().filter(c => c.a).length > 6 && (
-                        <span style={{ fontSize: 9.5, color: 'var(--text-tertiary)', padding: '3px 6px' }}>+{parseBulkFlashcards().filter(c => c.a).length - 6} más</span>
+                        <span style={{ fontSize: 11, color: 'var(--text-tertiary)', padding: '3px 6px' }}>+{parseBulkFlashcards().filter(c => c.a).length - 6} más</span>
                       )}
                     </div>
                   )}
@@ -7897,14 +7212,14 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
               )}
 
               <div>
-                <label style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-tertiary)', display: 'block', marginBottom: 6, fontFamily: "'Inter Tight', sans-serif" }}>Dificultad inicial</label>
+                <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-tertiary)', display: 'block', marginBottom: 6, fontFamily: "'Inter Tight', sans-serif" }}>Dificultad inicial</label>
                 <div style={{ display: 'flex', gap: 8 }}>
                   {([
                     { v: 'facil', label: 'Fácil', color: '#10B981' },
                     { v: 'bueno', label: 'Medio', color: '#F59E0B' },
                     { v: 'dificil', label: 'Difícil', color: '#EF4444' },
                   ] as { v: 'facil' | 'bueno' | 'dificil'; label: string; color: string }[]).map(o => (
-                    <button key={o.v} onClick={() => setFcDifficulty(o.v)}
+                    <button data-ui-control="" key={o.v} onClick={() => setFcDifficulty(o.v)}
                       style={{ flex: 1, height: 32, borderRadius: 8, border: `1px solid ${fcDifficulty === o.v ? o.color : 'var(--border-soft)'}`, background: fcDifficulty === o.v ? `${o.color}14` : 'transparent', cursor: 'pointer', fontSize: 11, fontWeight: 700, color: fcDifficulty === o.v ? o.color : 'var(--text-muted)', transition: 'all 150ms', fontFamily: "'Inter Tight', sans-serif" }}>
                       {o.label}
                     </button>
@@ -7913,11 +7228,11 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
               </div>
 
               {fcMode === 'masivo' && !editingFlashcard ? (
-                <button onClick={handleSaveFlashcard} disabled={parseBulkFlashcards().filter(c => c.a).length === 0} style={{ width: '100%', height: 40, borderRadius: 10, border: 'none', background: '#8B5CF6', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: parseBulkFlashcards().filter(c => c.a).length === 0 ? 0.4 : 1, boxShadow: '0 6px 20px rgba(139,92,246,0.35)', fontFamily: "'Inter Tight', sans-serif", marginTop: 4 }}>
+                <button data-ui-control="" onClick={handleSaveFlashcard} disabled={parseBulkFlashcards().filter(c => c.a).length === 0} style={{ width: '100%', height: 40, borderRadius: 10, border: 'none', background: '#8B5CF6', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: parseBulkFlashcards().filter(c => c.a).length === 0 ? 0.4 : 1, boxShadow: '0 6px 20px rgba(139,92,246,0.35)', fontFamily: "'Inter Tight', sans-serif", marginTop: 4 }}>
                   Crear grupo de {parseBulkFlashcards().filter(c => c.a).length} flashcards
                 </button>
               ) : (
-                <button onClick={handleSaveFlashcard} disabled={!fcQuestion.trim() || !fcAnswer.trim()} style={{ width: '100%', height: 40, borderRadius: 10, border: 'none', background: '#8B5CF6', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: !fcQuestion.trim() || !fcAnswer.trim() ? 0.4 : 1, boxShadow: '0 6px 20px rgba(139,92,246,0.35)', fontFamily: "'Inter Tight', sans-serif", marginTop: 4 }}>
+                <button data-ui-control="" onClick={handleSaveFlashcard} disabled={!fcQuestion.trim() || !fcAnswer.trim()} style={{ width: '100%', height: 40, borderRadius: 10, border: 'none', background: '#8B5CF6', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: !fcQuestion.trim() || !fcAnswer.trim() ? 0.4 : 1, boxShadow: '0 6px 20px rgba(139,92,246,0.35)', fontFamily: "'Inter Tight', sans-serif", marginTop: 4 }}>
                   {editingFlashcard ? 'Guardar cambios' : 'Crear flashcard'}
                 </button>
               )}
@@ -7935,11 +7250,11 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
           onClick={() => { setShowImagePreview(false); setPreviewZoom(1); setPanOffset({ x: 0, y: 0 }); }}>
           {/* TOP BAR · floating bare icons */}
           <div onClick={e => e.stopPropagation()} style={{ position: 'absolute', top: 24, right: 24, zIndex: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
-            <button onClick={handleDeleteImage} title="Eliminar imagen"
+            <button data-ui-control="" onClick={handleDeleteImage} title="Eliminar imagen"
               style={{ width: 32, height: 32, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(6px)', cursor: 'pointer', color: 'rgba(255,255,255,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 120ms' }}>
               <LI.Trash2 size={14} />
             </button>
-            <button onClick={() => { setShowImagePreview(false); setPreviewZoom(1); setPanOffset({ x: 0, y: 0 }); }} title="Cerrar"
+            <button data-ui-control="" onClick={() => { setShowImagePreview(false); setPreviewZoom(1); setPanOffset({ x: 0, y: 0 }); }} title="Cerrar"
               style={{ width: 32, height: 32, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(6px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 120ms' }}>
               <LI.X size={15} />
             </button>
@@ -7961,17 +7276,17 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
             position: 'absolute', bottom: 80, left: '50%', transform: 'translateX(-50%)', zIndex: 10,
             display: 'flex', alignItems: 'center', gap: 14,
           }}>
-            <button onClick={() => setPreviewZoom(z => Math.max(1, z - 0.1))} title="Alejar"
+            <button data-ui-control="" onClick={() => setPreviewZoom(z => Math.max(1, z - 0.1))} title="Alejar"
               style={{ width: 38, height: 38, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 120ms' }}>
               <LI.ZoomOut size={16} />
             </button>
             <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)', fontWeight: 500, minWidth: 38, textAlign: 'center', fontVariantNumeric: 'tabular-nums', letterSpacing: '0.02em' }}>{Math.round(previewZoom * 100)}%</span>
-            <button onClick={() => setPreviewZoom(z => Math.min(2.5, z + 0.1))} title="Acercar"
+            <button data-ui-control="" onClick={() => setPreviewZoom(z => Math.min(2.5, z + 0.1))} title="Acercar"
               style={{ width: 38, height: 38, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 120ms' }}>
               <LI.ZoomIn size={16} />
             </button>
-            <button onClick={() => setPreviewZoom(1)} title="Restablecer"
-              style={{ height: 34, padding: '0 14px', borderRadius: 17, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.06)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: 'rgba(255,255,255,0.4)', fontSize: 10, fontWeight: 600, letterSpacing: '0.03em', transition: 'all 120ms' }}>100%</button>
+            <button data-ui-control="" onClick={() => setPreviewZoom(1)} title="Restablecer"
+              style={{ height: 34, padding: '0 14px', borderRadius: 17, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.06)', backdropFilter: 'blur(8px)', cursor: 'pointer', color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: 600, letterSpacing: '0.03em', transition: 'all 120ms' }}>100%</button>
           </div>
         </div>
       )}
@@ -7999,13 +7314,13 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
               ¿Estás seguro de eliminar este apunte?
             </p>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
-              <button onClick={() => setConfirmDeleteNoteId(null)}
+              <button data-app-action="secondary" data-ui-control="" onClick={() => setConfirmDeleteNoteId(null)}
                 style={{
                   background: "none", border: "1px solid var(--border-default)", borderRadius: 8,
                   padding: "7px 16px", color: "var(--text-secondary)", fontSize: 11, cursor: "pointer",
                   fontFamily: "'Inter', sans-serif", fontWeight: 500,
                 }}>Cancelar</button>
-              <button onClick={() => { deleteNote(confirmDeleteNoteId); if (selectedOverviewNoteId === confirmDeleteNoteId) { setSelectedOverviewNoteId(null); setOverviewNoteEditMode(false); } if (editingNoteId === confirmDeleteNoteId) setEditingNoteId(null); if (selectedNoteId === confirmDeleteNoteId) setSelectedNoteId(null); setConfirmDeleteNoteId(null); toast.success('Apunte eliminado'); }}
+              <button data-ui-control="" onClick={() => { deleteNote(confirmDeleteNoteId); if (selectedOverviewNoteId === confirmDeleteNoteId) { setSelectedOverviewNoteId(null); setOverviewNoteEditMode(false); } if (editingNoteId === confirmDeleteNoteId) setEditingNoteId(null); if (selectedNoteId === confirmDeleteNoteId) setSelectedNoteId(null); setConfirmDeleteNoteId(null); toast.success('Apunte eliminado'); }}
                 style={{
                   background: "#EF4444", color: "#fff", border: "none", borderRadius: 8,
                   padding: "7px 16px", fontSize: 11, fontWeight: 600, cursor: "pointer",
@@ -8015,6 +7330,15 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
           </div>
         </div>
       )}
+
+                {showPlanModal && <CourseSessionDialog editing={!!planEditId} course={course} groups={groups} topics={parsedTopics}
+                  initialValue={{title:planTitle,date:planDate,startTime:planStartTime,durationMinutes:planDuration,intensity:planIntensity,type:planType,groupId:planGroupId,topicId:planTopicId,repeat:planRepeat,repeatDays:planRepeatDays,repeatUntil:planRepeatUntil}}
+                  onClose={()=>setShowPlanModal(false)} onSave={draft=>{
+                    const payload:Omit<PlannedSession,'id'|'createdAt'>={courseId:course.id,...draft,groupId:draft.groupId||undefined,topicId:draft.topicId||undefined,startTime:draft.startTime||undefined,completed:false,repeatDays:draft.repeat==='custom_days'?[...draft.repeatDays].sort():undefined,repeatUntil:draft.repeat!=='none'&&draft.repeatUntil?draft.repeatUntil:undefined};
+                    if(planEditId){const {completed:_completed,...rest}=payload;updatePlannedSession(planEditId,rest);}else addPlannedSession(payload);
+                    setShowPlanModal(false);setDetailSessionId(null);
+                  }}/>}
+
 
       {/* Hidden inline audio player */}
       <audio ref={audioRef} preload="metadata" />
@@ -8028,16 +7352,16 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                 <Tag size={14} style={{ color: tagColorInput }} />
                 {editingTagId ? 'Editar etiqueta' : 'Nueva etiqueta'}
               </h3>
-              <button onClick={() => { setTagModalOpen(false); setEditingTagId(null); setConfirmDeleteTag(false); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}><X size={15} /></button>
+              <button data-ui-control="" onClick={() => { setTagModalOpen(false); setEditingTagId(null); setConfirmDeleteTag(false); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}><X size={15} /></button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               {!editingTagId && topicTagDefs.length > 0 && (
                 <div>
-                  <div style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-tertiary)', marginBottom: 6 }}>Etiquetas existentes</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-tertiary)', marginBottom: 6 }}>Etiquetas existentes</div>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     {topicTagDefs.map(d => (
-                      <button key={d.id} onClick={() => openTagModal(d)}
-                        style={{ display: 'flex', alignItems: 'center', gap: 6, height: 26, padding: '0 10px', borderRadius: 13, border: '1px solid var(--border-subtle)', background: `${d.color}0c`, cursor: 'pointer', fontSize: 10, fontWeight: 600, color: 'var(--text-primary)', transition: 'all 120ms' }}
+                      <button data-ui-control="" key={d.id} onClick={() => openTagModal(d)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, height: 26, padding: '0 10px', borderRadius: 13, border: '1px solid var(--border-subtle)', background: `${d.color}0c`, cursor: 'pointer', fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', transition: 'all 120ms' }}
                         onMouseEnter={e => { e.currentTarget.style.borderColor = d.color; e.currentTarget.style.transform = 'translateY(-1px)'; }}
                         onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.transform = 'translateY(0)'; }}>
                         <span style={{ width: 6, height: 6, borderRadius: '50%', background: d.color }} />{d.name}
@@ -8048,13 +7372,13 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                 </div>
               )}
               <div>
-                <div style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-tertiary)', marginBottom: 5 }}>Nombre</div>
+                <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-tertiary)', marginBottom: 5 }}>Nombre</div>
                 <input value={tagNameInput} onChange={e => setTagNameInput(e.target.value)} placeholder="Ej. fórmulas, Examen, Repaso..." autoFocus
                   onKeyDown={e => { if (e.key === 'Enter') handleSaveTag(); }}
                   style={{ width: '100%', height: 38, padding: '0 12px', borderRadius: 8, fontSize: 13, fontFamily: "'Inter Tight', sans-serif", fontWeight: 500, border: `1px solid ${tagNameInput ? `${tagColorInput}50` : 'var(--border-soft)'}`, background: 'var(--bg-deep)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box' }} />
               </div>
               <div>
-                <div style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-tertiary)', marginBottom: 6 }}>Color</div>
+                <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-tertiary)', marginBottom: 6 }}>Color</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                   <div style={{ width: 30, height: 30, borderRadius: '50%', background: tagColorInput, flexShrink: 0, border: '2px solid var(--bg-surface)', boxShadow: '0 2px 8px rgba(0,0,0,0.3)', transition: 'background 200ms ' + EASE }} />
                   <div style={{ flex: 1, position: 'relative', height: 28, borderRadius: 6, overflow: 'hidden' }}>
@@ -8062,16 +7386,16 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                     <input type="color" value={tagColorInput} onChange={e => setTagColorInput(e.target.value)}
                       style={{ position: 'absolute', top: -4, left: -4, width: 'calc(100% + 8px)', height: 'calc(100% + 8px)', opacity: 0, cursor: 'pointer' }} />
                   </div>
-                  <input value={tagColorInput.toUpperCase()} onChange={e => { const v = e.target.value; if (/^#[0-9A-Fa-f]{6}$/.test(v)) setTagColorInput(v.toLowerCase()); }} style={{ width: 66, height: 26, borderRadius: 4, padding: '0 6px', fontSize: 9, fontFamily: 'monospace', fontWeight: 600, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', textAlign: 'center' }} />
+                  <input value={tagColorInput.toUpperCase()} onChange={e => { const v = e.target.value; if (/^#[0-9A-Fa-f]{6}$/.test(v)) setTagColorInput(v.toLowerCase()); }} style={{ width: 66, height: 26, borderRadius: 4, padding: '0 6px', fontSize: 11, fontFamily: 'monospace', fontWeight: 600, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box', textAlign: 'center' }} />
                 </div>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {SPINE_COLORS.map(c => (
-                    <button key={c} onClick={() => setTagColorInput(c)} title={c}
+                    <button data-ui-control="" key={c} onClick={() => setTagColorInput(c)} title={c}
                       style={{ width: 20, height: 20, borderRadius: '50%', background: c, cursor: 'pointer', border: tagColorInput === c ? '2px solid var(--bg-surface)' : '2px solid transparent', boxShadow: tagColorInput === c ? `0 0 0 2px ${c}` : 'none', transition: 'all 120ms', padding: 0 }} />
                   ))}
                 </div>
               </div>
-              <button onClick={handleSaveTag} disabled={!tagNameInput.trim()}
+              <button data-ui-control="" onClick={handleSaveTag} disabled={!tagNameInput.trim()}
                 style={{ width: '100%', height: 34, borderRadius: 8, border: 'none', background: tagColorInput, color: '#fff', fontSize: 11, fontWeight: 700, cursor: tagNameInput.trim() ? 'pointer' : 'default', opacity: tagNameInput.trim() ? 1 : 0.4, fontFamily: "'Inter Tight', sans-serif", letterSpacing: '0.02em' }}>
                 {editingTagId ? 'Guardar cambios' : 'Crear etiqueta'}
               </button>
@@ -8079,13 +7403,13 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
                 <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 12, display: 'flex', justifyContent: 'center' }}>
                   {confirmDeleteTag ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: 10, color: 'var(--text-secondary)', fontWeight: 600 }}>¿Eliminar esta etiqueta?</span>
-                      <button onClick={handleDeleteTag} style={{ height: 26, padding: '0 12px', borderRadius: 6, border: 'none', background: '#EF4444', color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>Eliminar</button>
-                      <button onClick={() => setConfirmDeleteTag(false)} style={{ height: 26, padding: '0 12px', borderRadius: 6, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-muted)', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}>Cancelar</button>
+                      <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600 }}>¿Eliminar esta etiqueta?</span>
+                      <button data-ui-control="" onClick={handleDeleteTag} style={{ height: 26, padding: '0 12px', borderRadius: 6, border: 'none', background: '#EF4444', color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Eliminar</button>
+                      <button data-app-action="secondary" data-ui-control="" onClick={() => setConfirmDeleteTag(false)} style={{ height: 26, padding: '0 12px', borderRadius: 6, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-muted)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>Cancelar</button>
                     </div>
                   ) : (
-                    <button onClick={() => setConfirmDeleteTag(true)}
-                      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 18px', borderRadius: 8, border: '1px solid rgba(239,68,68,0.25)', background: 'transparent', color: 'rgba(239,68,68,0.75)', fontSize: 10, fontWeight: 600, cursor: 'pointer', transition: 'all 150ms' }}
+                    <button data-app-action="danger" data-ui-control="" onClick={() => setConfirmDeleteTag(true)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 18px', borderRadius: 8, border: '1px solid rgba(239,68,68,0.25)', background: 'transparent', color: 'rgba(239,68,68,0.75)', fontSize: 11, fontWeight: 600, cursor: 'pointer', transition: 'all 150ms' }}
                       onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; e.currentTarget.style.borderColor = 'rgba(239,68,68,0.5)'; e.currentTarget.style.color = '#EF4444'; }}
                       onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'rgba(239,68,68,0.25)'; e.currentTarget.style.color = 'rgba(239,68,68,0.75)'; }}>
                       <Trash2 size={11} /> Eliminar etiqueta
@@ -8097,6 +7421,7 @@ const treeNode: React.CSSProperties = { display: 'flex', alignItems: 'center', g
           </div>
       </div>
       )}
+      </div>, document.body)}
       </div>
     );
   }

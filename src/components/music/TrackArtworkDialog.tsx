@@ -1,0 +1,10 @@
+import React,{useRef,useState} from 'react';
+import {createPortal} from 'react-dom';
+import {ImagePlus,X,Music} from 'lucide-react';
+import {useAppSlice} from '../../store/AppContext';
+import {useDialogFocus} from '../../hooks/useDialogFocus';
+import toast from 'react-hot-toast';
+export default function TrackArtworkDialog(){const a=useAppSlice(['coverModalTrackId','setCoverModalTrackId','tracks','updateTrack']),track=a.tracks.find(t=>t.id===a.coverModalTrackId),dialog=useRef<HTMLDivElement>(null),file=useRef<HTMLInputElement>(null),[saving,setSaving]=useState(false);const close=()=>a.setCoverModalTrackId(null);useDialogFocus(dialog,!!track,close);if(!track)return null;
+ const image=track.coverImage||track.coverUrl;
+ return createPortal(<div className="desktop-edit-backdrop" onPointerDown={e=>{if(e.target===e.currentTarget)close();}}><div ref={dialog} className="track-artwork-dialog" role="dialog" aria-modal="true" aria-label="Portada de canción"><header><h2>{track.title}</h2><button aria-label="Cerrar portada" onClick={close}><X size={18}/></button></header><div className="track-artwork-preview">{image?<img src={image} alt={'Portada de '+track.title}/>:<Music size={60} strokeWidth={1}/>}</div><p>{track.artist}</p><input ref={file} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={e=>{const f=e.target.files?.[0];if(!f)return;if(f.size>5_000_000){toast.error('Elige una imagen de hasta 5 MB.');return;}setSaving(true);const reader=new FileReader();reader.onload=async()=>{try{await a.updateTrack(track.id,{coverImage:String(reader.result)},true);toast.success('Portada actualizada');}finally{setSaving(false);}};reader.onerror=()=>{setSaving(false);toast.error('No se pudo leer la imagen.');};reader.readAsDataURL(f);}}/><footer><button className="btn-secondary" disabled={saving} onClick={()=>file.current?.click()}><ImagePlus size={16}/>Cambiar portada</button><button className="btn-primary" onClick={close}>Listo</button></footer></div></div>,document.body);
+}

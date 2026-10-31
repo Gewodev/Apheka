@@ -1,4 +1,4 @@
-# 🧠 OWA STUDIO — MASTER DESIGN SYSTEM (v2.0)
+# 🧠 APHEKA — MASTER DESIGN SYSTEM (v2.0)
 
 ## Creative North Star: "Cognitive Control Interface"
 
@@ -370,3 +370,25 @@ Temas principales | Recursos del curso
 > Cada pixel tiene un propósito. Si no lo tiene, se elimina.
 > La densidad de información es alta, pero la carga cognitiva es baja.
 > El diseño no impresiona — **funciona**.
+
+
+## APHEKA — desktop refinement, 2026-10-12
+The desktop workspace uses restrained neobrutalist blocks: 5–6px corners, visible borders, small solid offset shadows and flat surfaces. Shared WorkspaceHeader and workspace.css define the current system. Keep the existing logo, accent customization, and Estudio composition. APHEKA lettering is larger, matte and separated with subtle cuts. Settings use top categories and a searchable contextual index. Support dark/light themes and compact 1200×800 desktop windows. Fonts are bundled for offline use.
+
+
+### Current finish (supersedes the earlier solid-shadow pass)
+Preserve the familiar desktop composition. Use quiet borders, 7–9px corners, flat soft surfaces and no hard offset shadows. `refinement.css` is the final finish. Planner controls remain in their original positions, with icon view buttons. APHEKA uses the bundled Inter Tight face and tiny internal cuts, rather than hand-drawn glyphs. DurationControl is shared by Settings and the small right-click pomodoro popup; no circular selector or additional study header button. Use container width for time-control density and maintain layouts with the sidebar expanded/collapsed.
+
+Final desktop details: Inicio keeps its three overview blocks in one row at desktop widths; appearance opacity applies to workspace surfaces while dialogs stay opaque. Music uses flat bordered tiles, subtle hover borders and a stable expanded cover without 3D tilt. Course tools share the same readable dialog spacing and explicit color choices.
+
+6.7.1 desktop correction: WorkspaceClock defines the shared 42–46px thin clock; keep titles at 34–36px and metrics around 96px high. Main content must have min-width:0. Planner keeps one toolbar row; use compact date/year and accessible icon actions only when the container is narrow. Dialogs and shared popovers render through portals; popover layers follow their owner and scrolling repositions the menu instead of closing it prematurely.
+
+
+## Revisión de escritorio 6.7.2
+
+El reloj analógico queda dentro del emergente de clic derecho del pomodoro, con hora actual y final elegido. Inicio usa cifras finas de 48–52 px; Estudio, 42–44 px. Las métricas y los tres bloques originales mantienen su organización. Curso/prioridad se identifican con bordes y tintes discretos. El editor usa Inter Tight 16,5 px / 1,85, guarda los espacios intencionales y conserva el cursor de forma estructural. Banners directos con encuadre opcional; avisos de 16 px en un panel propio. El diálogo de actualización mantiene el wordmark y acredita a Gewodev sin efectos metálicos. Véase `docs/APHEKA-6.7.2.md`.
+### Última revisión de Cursos e instalación (13 de octubre)
+
+Los controles de alta de tareas usan filas de 44 px y separación de 10 px. Tareas y apuntes conservan dos columnas cuando disponen de ancho suficiente y pasan a una columna si el menú reduce el espacio útil. En el modo de estudio, materiales, sesiones y agrupaciones conservan tres columnas en ventanas amplias; en ventanas menores se distribuyen sin comprimir las gráficas. Los emergentes se montan fuera del contenedor animado y mantienen el centro de la ventana.
+
+El instalador usa Segoe UI, español, superficies claras planas y el logo existente. La banda lateral y el encabezado se generan con `scripts/create-installer-art.ps1`; los recursos originales del logo no se modifican.

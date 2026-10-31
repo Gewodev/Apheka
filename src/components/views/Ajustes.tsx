@@ -1,11 +1,21 @@
+import MusicConnectionSettings from '../music/MusicConnectionSettings';
+import AppearanceStudio from '../ui/AppearanceStudio';
+import {useAppSlice} from "../../store/AppContext";
+import BackgroundGallery from '../ui/BackgroundGallery';
+import WorkspaceAppearance from '../ui/WorkspaceAppearance';
+import BackgroundMotionControls from '../ui/BackgroundMotionControls';
+import { FLOATING_FONTS } from '../../lib/floatingFonts';
+import FloatingVisibilityControls from '../ui/FloatingVisibilityControls';
+import DurationControl from '../ui/DurationControl';
+import WorkspaceHeader from '../ui/WorkspaceHeader';
 ﻿import React, { useEffect, useState, useRef, useMemo } from 'react';
 import LiveClock from '../ui/LiveClock';
 import {
-  User, Palette, Brain, Download, Bell,
+  User, Palette, Brain, Download, Bell, Search,
   Moon, Sun,
   Timer, Zap,
   RefreshCw, Shield, ShieldCheck,
-  Sliders, Music,
+  Sliders, Music, Plug,
   Database, Upload,
   Wifi, WifiOff, Image, Coffee, X, Trash2, Save,
   Monitor, Activity, Sparkles, LogOut, Eye, EyeOff, CalendarDays, Clock, ChevronDown,
@@ -30,7 +40,7 @@ import {
 } from '../../lib/google/index';
 import { isTauri } from '../../lib/tauri';
 import { exportOwaBackup, pickAndImportOwaBackup, importOwaBackupFromFile, getOwaDataFolder, revealOwaDataFolder } from '../../lib/owaBackup';
-import { downloadYtDlp } from '../../lib/musicApi';
+import ToolsRepairCard from '../ui/ToolsRepairCard';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 const GOOGLE_CLIENT_SECRET = import.meta.env.VITE_GOOGLE_CLIENT_SECRET || '';
@@ -41,7 +51,7 @@ const TABS: { id: SettingsTab; label: string; desc: string; icon: React.Componen
   { id: 'perfil', label: 'Perfil', desc: 'Tu nombre, portada y cuenta', icon: User },
   { id: 'apariencia', label: 'Apariencia', desc: 'Tema, tipografía y estilo', icon: Palette },
   { id: 'estudio', label: 'Estudio', desc: 'Pomodoro, metas y enfoque', icon: Brain },
-  { id: 'musica', label: 'Música', desc: 'Reproductor, biblioteca y yt-dlp', icon: Music },
+  { id: 'musica', label: 'Música', desc: 'Reproducción, biblioteca y descargas', icon: Music },
   { id: 'sistema', label: 'Sistema', desc: 'Datos, respaldos y herramientas', icon: Shield },
   { id: 'notificaciones', label: 'Sonidos y Alertas', desc: 'Tonos y avisos por sección', icon: Bell },
 ];
@@ -118,76 +128,6 @@ function Toggle({ checked, onChange, label, desc }: { checked: boolean; onChange
   );
 }
 
-// Slider dinámico: botones −/+ (mantener pulsado repite) y teclado completo —
-// ↑/↓ y ←/→ ajustan ±step, con Shift saltan ×5, Inicio/Fin van a los extremos,
-// RePág/AvPág dan saltos grandes. Todo con clamp y aria.
-function RangeSlider({ label, value, min, max, step = 1, unit, onChange, color }: {
-  label: string; value: number; min: number; max: number; step?: number; unit: string;
-  onChange: (v: number) => void; color: string;
-}) {
-  const clamp = (v: number) => Math.max(min, Math.min(max, v));
-  const apply = (v: number) => onChange(clamp(v));
-  const holdRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const valRef = useRef(value);
-  valRef.current = value;
-  const startHold = (dir: 1 | -1) => {
-    apply(valRef.current + dir * step);
-    holdRef.current = setInterval(() => apply(valRef.current + dir * step), 110);
-  };
-  const stopHold = () => { if (holdRef.current) { clearInterval(holdRef.current); holdRef.current = null; } };
-  const pct = ((value - min) / (max - min)) * 100;
-  const btnBase = { width: 26, height: 26, borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 130ms', padding: 0 } as React.CSSProperties;
-  return (
-    <div
-      tabIndex={0}
-      role="slider"
-      aria-label={label}
-      aria-valuemin={min} aria-valuemax={max} aria-valuenow={value}
-      onKeyDown={e => {
-        const jump = e.shiftKey || e.key === 'PageUp' || e.key === 'PageDown';
-        const d = jump ? step * 5 : step;
-        if (e.key === 'ArrowUp' || e.key === 'ArrowRight') { e.preventDefault(); apply(value + d); }
-        else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') { e.preventDefault(); apply(value - d); }
-        else if (e.key === 'Home') { e.preventDefault(); apply(min); }
-        else if (e.key === 'End') { e.preventDefault(); apply(max); }
-      }}
-      style={{ display: 'flex', flexDirection: 'column', gap: 6, outline: 'none', borderRadius: 10, padding: '4px 2px', transition: 'box-shadow 150ms' }}
-      onFocus={e => { e.currentTarget.style.boxShadow = `0 0 0 2px ${color}33`; }}
-      onBlur={e => { e.currentTarget.style.boxShadow = 'none'; stopHold(); }}
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.03em' }}>{label}</span>
-        <span style={{ fontSize: 12, fontWeight: 700, color, fontVariantNumeric: 'tabular-nums' }}>{value}{unit}</span>
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <button
-          onPointerDown={() => startHold(-1)} onPointerUp={stopHold} onPointerLeave={stopHold}
-          onClick={() => apply(valRef.current - step)} aria-label={`${label}: menos`} title="Menos (mantén pulsado para repetir)"
-          style={{ ...btnBase, border: '1px solid var(--border-soft)', background: 'var(--bg-deep)', color: 'var(--text-secondary)' }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = `${color}55`; e.currentTarget.style.color = color; }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
-          <Minus size={12} />
-        </button>
-        <input type="range" min={min} max={max} step={step} value={value} onChange={e => onChange(Number(e.target.value))}
-          style={{
-            flex: 1, height: 4, borderRadius: 2, outline: 'none', cursor: 'pointer',
-            background: `linear-gradient(90deg, ${color}60, ${color} ${pct}%, var(--bg-deep) ${pct}%)`,
-            WebkitAppearance: 'none', appearance: 'none', accentColor: color,
-          }}
-          className="range-slider" />
-        <button
-          onPointerDown={() => startHold(1)} onPointerUp={stopHold} onPointerLeave={stopHold}
-          onClick={() => apply(valRef.current + step)} aria-label={`${label}: más`} title="Más (mantén pulsado para repetir)"
-          style={{ ...btnBase, border: `1px solid ${color}45`, background: `${color}0d`, color }}
-          onMouseEnter={e => { e.currentTarget.style.background = `${color}1a`; e.currentTarget.style.borderColor = `${color}70`; }}
-          onMouseLeave={e => { e.currentTarget.style.background = `${color}0d`; e.currentTarget.style.borderColor = `${color}45`; }}>
-          <Plus size={12} />
-        </button>
-      </div>
-    </div>
-  );
-}
-
 function CardHeader({ icon, title, desc }: { icon: React.ReactNode; title: string; desc?: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
@@ -199,7 +139,7 @@ function CardHeader({ icon, title, desc }: { icon: React.ReactNode; title: strin
         boxShadow: '0 2px 8px color-mix(in srgb, var(--accent) 10%, transparent)',
       }}>{icon}</span>
       <div style={{ minWidth: 0 }}>
-        <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase', display: 'block', lineHeight: 1.2 }}>{title}</span>
+        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase', display: 'block', lineHeight: 1.2 }}>{title}</span>
         {desc && <span style={{ fontSize: 12, color: 'var(--text-primary)', display: 'block', marginTop: 3, fontWeight: 400 }}>{desc}</span>}
       </div>
     </div>
@@ -256,7 +196,7 @@ async function measureDownSpeed(latencyMs: number | null): Promise<number | null
 function CopyButton({ text, size }: { text: string; size?: number }) {
   const [copied, setCopied] = useState(false);
   return (
-    <button onClick={async (e) => {
+    <button data-ui-control="" onClick={async (e) => {
       e.stopPropagation();
       try {
         await navigator.clipboard.writeText(text);
@@ -281,10 +221,17 @@ export default function Ajustes() {
     events, tasks, notes, clearAllMusicData, addNotification, deleteCompletedTasks,
     exportMusicLibrary, importMusicLibrary,
     tracks, updateTrack, addTrack, courses, studySessions, plannedSessions, artists, playlists,
-  } = useApp();
+  } = useAppSlice(["settings","updateSettings","googleConnected","setGoogleConnected","setCalendarSyncEnabled","lastCalendarSync","setLastCalendarSync","calendarSyncEnabled","triggerCalendarSync","importGoogleEvents","syncCalendarTwoWay","syncTasksTwoWay","triggerTasksSync","importGoogleTasks","loadGoogleProfile","importClassroomCourses","importClassroomAssignments","triggerDriveBackup","exportNotesToGoogleDoc","exportStatsToGoogleSheets","events","tasks","notes","clearAllMusicData","addNotification","deleteCompletedTasks","exportMusicLibrary","importMusicLibrary","tracks","updateTrack","addTrack","courses","studySessions","plannedSessions","artists","playlists"]);
   const [pesoTick, setPesoTick] = useState(0);
 
-  const [activeTab, setActiveTab] = useState<SettingsTab>('perfil');
+  const [settingsSearch, setSettingsSearch] = useState('');
+  const [settingsOutline, setSettingsOutline] = useState<{id:string;label:string}[]>([]);
+  const settingsContentRef = useRef<HTMLElement>(null);
+  const [activeTab, setActiveTab] = useState<SettingsTab>(()=>{try {const saved=localStorage.getItem('owa_settings_category_v1');return TABS.some(tab=>tab.id===saved) ? saved as SettingsTab : 'perfil';}catch{return 'perfil';}});
+  useEffect(()=>{try{localStorage.setItem('owa_settings_category_v1',activeTab);}catch{}},[activeTab]);
+
+  useEffect(()=>{const open=()=>{setActiveTab('musica');setSettingsSearch('');};window.addEventListener('apheka:open-music-network-settings',open);return()=>window.removeEventListener('apheka:open-music-network-settings',open);},[]);
+  useEffect(()=>{const open=()=>{setActiveTab('sistema');setSettingsSearch('');requestAnimationFrame(()=>document.getElementById('charvis-settings-title')?.scrollIntoView({block:'start'}));};window.addEventListener('apheka:charvis-settings',open);return()=>window.removeEventListener('apheka:charvis-settings',open);},[]);
 
   type HideMode = 'off' | 'now' | '10m' | '1h' | '6h' | '24h' | '48h';
   const [hideMode, setHideMode] = useState<HideMode>(() => {
@@ -512,7 +459,7 @@ export default function Ajustes() {
   // Cargar información real de la app (no del equipo)
   useEffect(() => {
     if (!isTauri()) {
-      setAppInfo({ name: 'OWA Studio', version: '1.0.0', tauriVersion: '—' });
+      setAppInfo({ name: 'APHEKA', version: '1.0.0', tauriVersion: '—' });
       return;
     }
     (async () => {
@@ -710,167 +657,39 @@ export default function Ajustes() {
     document.documentElement.style.setProperty('--font-primary', font);
   };
 
+  useEffect(() => {
+    const cards=Array.from(settingsContentRef.current?.querySelectorAll('.bento-card') || []);
+    const headings=cards.filter(card=>!card.parentElement?.closest('.bento-card')).map(card=>({element:card,label:card.getAttribute('data-settings-title') || (card.querySelector('h3') || card.querySelector('span'))?.textContent?.trim() || ''}));
+    setSettingsOutline(headings.map((heading,i)=>{
+      const id=heading.element.id||`settings-${activeTab}-${i}`;heading.element.id=id;
+      return {id,label:heading.label};
+    }).filter(item=>item.label));
+  },[activeTab,googleConnected]);
+
   return (
-    <div className="page-container" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto' }}>
+    <div className="page-container apheka-settings" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto' }}>
       
       {/* ── HEADER ── */}
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 26, paddingTop: 6 }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <h1 style={{ fontSize: 26, fontWeight: 300, color: 'var(--text-primary)', lineHeight: 1.1, letterSpacing: '-0.03em', fontFamily: "'Inter Tight', sans-serif", margin: 0 }}>Configuración</h1>
-            <Sliders size={17} style={{ color: 'var(--accent)', opacity: 0.9 }} />
-          </div>
-          <p style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: 5, fontWeight: 300, letterSpacing: '0.03em' }}>Personaliza cada aspecto de tu entorno</p>
-        </div>
+      <WorkspaceHeader title="Ajustes">
+        <button className="btn-secondary" onClick={()=>{setActiveTab('sistema');setSettingsSearch('');requestAnimationFrame(()=>document.getElementById('mcp-settings-title')?.scrollIntoView({block:'start'}));}}><Plug size={16}/>Conectores IA</button>
+        <span className="workspace-status"><span className={netInfo.online ? 'is-online' : ''} />{netInfo.online ? 'Conectado' : 'Sin conexión'}</span>
+      </WorkspaceHeader>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          {/* Internet status — datos reales medidos de la conexión */}
-          <div ref={netRef} style={{ position: 'relative' }}>
-            <button onClick={() => { setShowNet(!showNet); if (!showNet && navigator.onLine) refreshNet(); }} className="btn-ghost"
-              style={{
-                display: 'flex', alignItems: 'center', gap: 8, padding: '7px 13px', borderRadius: 12,
-                border: `1px solid ${netInfo.online ? 'var(--border-default)' : 'rgba(239,68,68,0.4)'}`,
-                background: netInfo.online ? 'var(--bg-elevated-alpha, var(--bg-elevated))' : 'rgba(239,68,68,0.08)',
-                cursor: 'pointer', transition: 'all 200ms', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)',
-              }}>
-              {netInfo.online ? <Wifi size={15} style={{ color: '#10B981' }} /> : <WifiOff size={15} style={{ color: '#EF4444' }} />}
-              <span style={{ color: netInfo.online ? '#10B981' : '#EF4444' }}>{netInfo.online ? 'Conectado' : 'Sin conexión'}</span>
-              {netInfo.online && netInfo.latency != null && (
-                <span style={{ fontSize: 9.5, fontWeight: 500, color: 'var(--text-tertiary)', fontFamily: "'JetBrains Mono', monospace", paddingLeft: 8, borderLeft: '1px solid var(--border-subtle)' }}>
-                  {netInfo.latency} ms
-                </span>
-              )}
-              <ChevronDown size={13} style={{ color: 'var(--text-tertiary)', transform: showNet ? 'rotate(180deg)' : 'none', transition: 'transform 200ms' }} />
-            </button>
-
-            {showNet && (
-              <div style={{
-                position: 'absolute', right: 0, top: 'calc(100% + 8px)', width: 280, zIndex: 60,
-                background: 'color-mix(in srgb, var(--bg-elevated) 96%, transparent)', border: '1px solid var(--border-default)',
-                borderRadius: 14, padding: 16, boxShadow: '0 18px 44px rgba(0,0,0,0.28)', backdropFilter: 'blur(14px)',
-                display: 'flex', flexDirection: 'column', gap: 6,
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 10, borderBottom: '1px solid var(--border-subtle)' }}>
-                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: netInfo.online ? '#10B981' : '#EF4444', boxShadow: `0 0 8px ${netInfo.online ? '#10B981' : '#EF4444'}` }} />
-                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>{netInfo.online ? 'Conexión activa' : 'Sin conexión a internet'}</span>
-                </div>
-                {[
-                  { label: 'Estado', value: netInfo.online ? 'En línea' : 'Desconectado', color: netInfo.online ? '#10B981' : '#EF4444' },
-                  { label: 'Tipo de red', value: netInfo.type ? ({ wifi: 'Wi-Fi', ethernet: 'Ethernet (cable)', cellular: 'Datos móviles', wimax: 'WiMax', bluetooth: 'Bluetooth', other: 'Otra', none: 'Sin red', unknown: 'Desconocida' } as Record<string, string>)[netInfo.type] || netInfo.type : '—' },
-                  { label: 'Conectividad', value: netInfo.effectiveType ? ({ 'slow-2g': '2G lenta', '2g': '2G', '3g': '3G', '4g': '4G / 5G' } as Record<string, string>)[netInfo.effectiveType] || netInfo.effectiveType.toUpperCase() : '—' },
-                  { label: 'Latencia (medida)', value: netInfo.latency != null ? `${netInfo.latency} ms` : (netInfo.checking ? 'Midiendo…' : '—'), color: netInfo.latency != null ? (netInfo.latency < 60 ? '#10B981' : netInfo.latency < 150 ? '#F59E0B' : '#EF4444') : undefined },
-                  { label: 'Descarga (medida)', value: speedTesting ? 'Probando…' : netInfo.downSpeed != null ? `${netInfo.downSpeed} Mbps` : 'Pulsa "Medir"', color: netInfo.downSpeed != null ? (netInfo.downSpeed >= 10 ? '#10B981' : netInfo.downSpeed >= 3 ? '#F59E0B' : '#EF4444') : undefined },
-                  { label: 'Ahorro de datos', value: netInfo.saveData ? 'Activado' : 'Desactivado' },
-                ].map(row => (
-                  <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, fontSize: 11, padding: '2px 0' }}>
-                    <span style={{ color: 'var(--text-tertiary)', fontWeight: 500 }}>{row.label}</span>
-                    <span style={{ color: row.color || 'var(--text-primary)', fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", fontSize: 10, textAlign: 'right' }}>{row.value}</span>
-                  </div>
-                ))}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 10, borderTop: '1px solid var(--border-subtle)' }}>
-                  <button onClick={() => refreshNet({ speed: true })} disabled={speedTesting || !netInfo.online}
-                    style={{
-                      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 0', borderRadius: 8, fontSize: 10.5, fontWeight: 600, cursor: 'pointer',
-                      background: 'color-mix(in srgb, var(--accent) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', color: 'var(--accent)',
-                      opacity: speedTesting || !netInfo.online ? 0.5 : 1, transition: 'all 150ms',
-                    }}>
-                    <RefreshCcw size={12} /> {speedTesting ? 'Midiendo…' : 'Medir conexión'}
-                  </button>
-                </div>
-                <div style={{ fontSize: 9, color: 'var(--text-muted)', lineHeight: 1.4, paddingTop: 4 }}>
-                  {netInfo.lastChecked ? `Comprobado a las ${netInfo.lastChecked} · medición real, no estimada.` : 'Latencia y descarga se miden en tiempo real.'}
-                </div>
-              </div>
-            )}
-          </div>
-
-          <NotificationBell />
-
-          <div style={{ textAlign: 'right', borderLeft: '1px solid var(--border-subtle)', paddingLeft: 16, position: 'relative' }}>
-            {/* Clock background illumination */}
-            <div style={{
-              position: 'absolute',
-              top: '50%',
-              right: 0,
-              width: 110,
-              height: 72,
-              background: 'radial-gradient(circle at center, var(--accent-dim) 0%, transparent 70%)',
-              opacity: 0.35,
-              transform: 'translateY(-50%)',
-              pointerEvents: 'none',
-              zIndex: 0
-            }} />
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, justifyContent: 'flex-end', position: 'relative', zIndex: 1 }}>
-              <LiveClock>{now => {
-                const dateStr = format(now, "EEEE, d 'de' MMMM, yyyy", { locale: es as any });
-                return (
-                  <>
-                    <div className="led-display" style={{ fontSize: 25, lineHeight: 1, color: 'var(--accent)', textShadow: '0 0 15px var(--accent-glow)' }}>{format(now, 'HH:mm')}</div>
-                    <div className="led-seconds" style={{ fontSize: 13, color: 'var(--accent)', opacity: 0.8 }}>{format(now, 'ss')}</div>
-                    <div style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: 4, position: 'relative', zIndex: 1 }}>
-                      {dateStr.charAt(0).toUpperCase() + dateStr.slice(1)}
-                    </div>
-                  </>
-                );
-              }}</LiveClock>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* MAIN CONTENT AREA (SIDEBAR + SETTINGS PANELS) */}
-      <div style={{ display: 'flex', flex: 1, gap: 24, minHeight: 600, alignItems: 'flex-start' }}>
-        
-        {/* INNER SIDEBAR — navegación con tiles, descripciones y flechas ↑↓ */}
-        <aside className="bento-card" style={{ width: 250, padding: '18px 12px', display: 'flex', flexDirection: 'column', gap: 4, flexShrink: 0, alignSelf: 'stretch', position: 'sticky', top: 0 }}
-          onKeyDown={e => {
-            if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
-            e.preventDefault();
-            const i = TABS.findIndex(t => t.id === activeTab);
-            const next = e.key === 'ArrowDown' ? (i + 1) % TABS.length : (i - 1 + TABS.length) % TABS.length;
-            setActiveTab(TABS[next].id);
-          }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 10, padding: '0 10px' }}>
-            Categorías
-          </div>
-          {TABS.map(tab => {
-            const Icon = tab.icon;
-            const active = activeTab === tab.id;
-            return (
-              <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                onMouseEnter={e => { if (activeTab !== tab.id) { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.borderColor = 'var(--border-subtle)'; } }}
-                onMouseLeave={e => { if (activeTab !== tab.id) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'transparent'; } }}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 11, padding: '9px 10px', borderRadius: 12,
-                  background: active ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'transparent',
-                  border: `1px solid ${active ? 'color-mix(in srgb, var(--accent) 26%, transparent)' : 'transparent'}`,
-                  color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
-                  cursor: 'pointer', textAlign: 'left', width: '100%', transition: 'all 180ms',
-                }}>
-                <span style={{
-                  width: 30, height: 30, borderRadius: 9, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: active ? 'var(--accent)' : 'var(--bg-deep)',
-                  border: `1px solid ${active ? 'var(--accent)' : 'var(--border-subtle)'}`,
-                  color: active ? '#fff' : 'var(--text-tertiary)',
-                  boxShadow: active ? '0 3px 10px color-mix(in srgb, var(--accent) 30%, transparent)' : 'none',
-                  transition: 'all 180ms',
-                }}>
-                  <Icon size={15} />
-                </span>
-                <span style={{ fontSize: 12.5, fontWeight: 700, fontFamily: "'Inter Tight', sans-serif" }}>{tab.label}</span>
-              </button>
-            );
-          })}
-        </aside>
-
+      <nav className="settings-category-nav" aria-label="Categorías de ajustes">
+        {TABS.map(tab => { const Icon=tab.icon;return <button data-ui-control="" key={tab.id} aria-current={activeTab===tab.id?'page':undefined}
+          onClick={()=>{setActiveTab(tab.id);setSettingsSearch('');}}>
+          <Icon size={18} /><span>{tab.label}</span>
+        </button>;})}
+      </nav>
+      <div className={`settings-workspace ${activeTab==='perfil' ? 'settings-profile' : ''}`}>
         {/* MAIN AREA */}
-        <main className="bento-card" style={{ flex: 1, padding: '32px 40px', minHeight: 600 }}>
-          <div style={{ maxWidth: 680, margin: '0 auto' }}>
-          <div key={activeTab} style={{ animation: 'fadeInUp 240ms cubic-bezier(0.16,1,0.3,1)' }}>
+        <main ref={settingsContentRef} className="apheka-settings-content" data-category={activeTab}>
+          <div className="settings-panels">
+          <div key={activeTab}>
 
             {/* â•â•â•â•â•â•â•â•â•â•â• PERFIL â•â•â•â•â•â•â•â•â•â•â• */}
             {activeTab === 'perfil' && (
-              <section style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+              <section className="settings-profile-content" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
                     <span style={{ width: 32, height: 32, borderRadius: 10, background: 'color-mix(in srgb, var(--accent) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 2px 8px color-mix(in srgb, var(--accent) 12%, transparent)' }}>
@@ -878,7 +697,7 @@ export default function Ajustes() {
                     </span>
                     <h2 style={{ fontSize: 18, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em', margin: 0 }}>Perfil de Usuario</h2>
                   </div>
-                  <p style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 300, letterSpacing: '0.02em' }}>Tu identidad y conexiones en OWA Studio</p>
+                  <p style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 500, letterSpacing: '0.02em' }}>Tu identidad y conexiones en APHEKA</p>
                 </div>
 
                 {/* Avatar + Nombre + Foto */}
@@ -889,7 +708,7 @@ export default function Ajustes() {
                         <img src={settings.profilePhoto} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }} />
                       </div>
                     ) : (
-                      <div style={{ width: 108, height: 108, borderRadius: '50%', background: 'var(--accent-dim)', border: '2px solid var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 40, fontWeight: 300, color: 'var(--accent)', fontFamily: "'Inter Tight', sans-serif" }}>
+                      <div style={{ width: 108, height: 108, borderRadius: '50%', background: 'var(--accent-dim)', border: '2px solid var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 40, fontWeight: 500, color: 'var(--accent)', fontFamily: "'Inter Tight', sans-serif" }}>
                         {settings.userName ? settings.userName.charAt(0).toUpperCase() : 'O'}
                       </div>
                     )}
@@ -897,22 +716,22 @@ export default function Ajustes() {
                   </div>
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
                     <div>
-                      <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Nombre</label>
-                      <input type="text" value={settings.userName}
+                      <label style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Nombre</label>
+                      <input type="text" aria-label="Tu nombre" maxLength={80} value={settings.userName}
                         onChange={e => updateSettings({ userName: e.target.value })}
                         className="input-base" style={{ width: '100%', height: 40, fontSize: 14, fontWeight: 500 }}
                         placeholder="Tu nombre" />
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                      <button onClick={() => profilePhotoInputRef.current?.click()} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 16px', borderRadius: 8, fontSize: 11.5, fontWeight: 600, cursor: 'pointer', background: 'color-mix(in srgb, var(--accent) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 28%, transparent)', color: 'var(--accent)', transition: 'all 150ms' }}>
+                      <button data-ui-control="" onClick={() => profilePhotoInputRef.current?.click()} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 16px', borderRadius: 8, fontSize: 11.5, fontWeight: 600, cursor: 'pointer', background: 'color-mix(in srgb, var(--accent) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 28%, transparent)', color: 'var(--accent)', transition: 'all 150ms' }}>
                         <Image size={14} /> {settings.profilePhoto ? 'Cambiar foto' : 'Subir foto desde tu equipo'}
                       </button>
                       {settings.profilePhoto && (
-                        <button onClick={() => updateSettings({ profilePhoto: undefined })} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 14px', borderRadius: 8, fontSize: 11.5, fontWeight: 600, cursor: 'pointer', background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.18)', color: '#EF4444', transition: 'all 150ms' }}>
+                        <button data-ui-control="" onClick={() => updateSettings({ profilePhoto: undefined })} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 14px', borderRadius: 8, fontSize: 11.5, fontWeight: 600, cursor: 'pointer', background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.18)', color: '#EF4444', transition: 'all 150ms' }}>
                           <Trash2 size={13} /> Quitar
                         </button>
                       )}
-                      <span style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.4, maxWidth: 200 }}>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.4, maxWidth: 200 }}>
                         Se guarda localmente en tu dispositivo. JPG, PNG o WebP (máx. 5 MB).
                       </span>
                     </div>
@@ -940,18 +759,18 @@ export default function Ajustes() {
                         )}
                         <div>
                           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{googleProfile?.displayName || 'Google'}</span>
-                          <span style={{ fontSize: 10, color: googleConnected ? '#10B981' : 'var(--text-tertiary)', display: 'block', marginTop: 1 }}>{googleConnected ? (googleProfile?.email || 'Conectado') : 'Desconectado'}</span>
+                          <span style={{ fontSize: 11, color: googleConnected ? '#10B981' : 'var(--text-tertiary)', display: 'block', marginTop: 1 }}>{googleConnected ? (googleProfile?.email || 'Conectado') : 'Desconectado'}</span>
                         </div>
                       </div>
-                      <button onClick={() => { if (googleConnected) { handleGoogleSignOut(); } else { setShowGoogleModal(true); } }}
-                        style={{ fontSize: 10, fontWeight: 600, padding: '0 14px', height: 30, borderRadius: 6, cursor: 'pointer', border: googleConnected ? '1px solid rgba(239,68,68,0.2)' : 'none', background: googleConnected ? 'rgba(239,68,68,0.08)' : '#4285F4', color: googleConnected ? '#EF4444' : '#fff', transition: 'all 150ms' }}>
+                      <button data-ui-control="" onClick={() => { if (googleConnected) { handleGoogleSignOut(); } else { setShowGoogleModal(true); } }}
+                        style={{ fontSize: 11, fontWeight: 600, padding: '0 14px', height: 30, borderRadius: 6, cursor: 'pointer', border: googleConnected ? '1px solid rgba(239,68,68,0.2)' : 'none', background: googleConnected ? 'rgba(239,68,68,0.08)' : '#4285F4', color: googleConnected ? '#EF4444' : '#fff', transition: 'all 150ms' }}>
                         {googleConnected ? 'Desconectar' : 'Conectar'}
                       </button>
                     </div>
                   </div>
                   {googleConnected && (
                     <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border-subtle)' }}>
-                      <button onClick={() => { signOut(); setGoogleConnected(false); setCalendarSyncEnabled(false); setLastCalendarSync(null); setGoogleProfile(null); addNotification('Google desconectado exitosamente', 'success'); }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 16px', borderRadius: 8, fontSize: 11.5, fontWeight: 600, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.22)', color: '#EF4444', cursor: 'pointer', transition: 'all 200ms', width: 'fit-content' }}>
+                      <button data-ui-control="" onClick={() => { signOut(); setGoogleConnected(false); setCalendarSyncEnabled(false); setLastCalendarSync(null); setGoogleProfile(null); addNotification('Google desconectado exitosamente', 'success'); }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 16px', borderRadius: 8, fontSize: 11.5, fontWeight: 600, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.22)', color: '#EF4444', cursor: 'pointer', transition: 'all 200ms', width: 'fit-content' }}>
                         <LogOut size={14} /> Cerrar sesión de Google
                       </button>
                     </div>
@@ -964,9 +783,9 @@ export default function Ajustes() {
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
                       <div>
                         <h3 style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em', marginBottom: 4 }}>Servicios de Google</h3>
-                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Cada servicio explica cómo se usa dentro de OWA</span>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Cada servicio explica cómo se usa dentro de APHEKA</span>
                       </div>
-                      <button onClick={syncAllGoogle}
+                      <button data-ui-control="" onClick={syncAllGoogle}
                         disabled={!!googleBusy}
                         style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 14px', borderRadius: 8, fontSize: 11.5, fontWeight: 600, cursor: 'pointer', background: 'color-mix(in srgb, var(--accent) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 28%, transparent)', color: 'var(--accent)', opacity: googleBusy ? 0.6 : 1, transition: 'all 150ms' }}>
                         <RefreshCcw size={13} className={googleBusy ? 'spin' : ''} /> Sincronizar todo
@@ -975,7 +794,7 @@ export default function Ajustes() {
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '12px 14px', borderRadius: 10, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', marginBottom: 12, cursor: 'pointer' }} onClick={() => { setCalendarSyncEnabled(!calendarSyncEnabled); if (!calendarSyncEnabled) addNotification('Sincronización automática activada', 'success'); }}>
                       <div>
                         <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)', display: 'block' }}>Sincronización automática</span>
-                        <span style={{ fontSize: 10.5, color: 'var(--text-muted)', display: 'block', marginTop: 2, lineHeight: 1.4 }}>Calendar y Tasks se sincronizan al iniciar la app y cada 15 minutos</span>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginTop: 2, lineHeight: 1.4 }}>Calendar y Tasks se sincronizan al iniciar la app y cada 15 minutos</span>
                       </div>
                       <div style={{ position: 'relative', width: 40, height: 22, borderRadius: 11, background: calendarSyncEnabled ? 'var(--accent)' : 'var(--bg-deep)', border: '1px solid var(--border-default)', transition: 'all 200ms', flexShrink: 0, display: 'flex', alignItems: 'center', padding: 2 }}>
                         <div style={{ width: 16, height: 16, borderRadius: '50%', background: '#fff', transform: calendarSyncEnabled ? 'translateX(18px)' : 'translateX(0)', transition: 'all 200ms', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }} />
@@ -996,12 +815,12 @@ export default function Ajustes() {
                               </span>
                               <div style={{ minWidth: 0 }}>
                                 <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)', display: 'block' }}>{s.name}</span>
-                                <span style={{ fontSize: 9.5, color: 'var(--text-tertiary)', display: 'block', lineHeight: 1.35 }}>{okLabel || 'No sincronizado aún'}</span>
+                                <span style={{ fontSize: 11, color: 'var(--text-tertiary)', display: 'block', lineHeight: 1.35 }}>{okLabel || 'No sincronizado aún'}</span>
                               </div>
                             </div>
-                            <span style={{ fontSize: 10.5, color: 'var(--text-muted)', lineHeight: 1.5, flex: 1 }}>{s.desc}</span>
-                            <button onClick={() => runGoogleService(s.id)} disabled={!!googleBusy}
-                              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, height: 28, borderRadius: 7, fontSize: 10.5, fontWeight: 600, cursor: 'pointer', background: `color-mix(in srgb, ${s.color} 8%, transparent)`, border: `1px solid color-mix(in srgb, ${s.color} 26%, transparent)`, color: s.color, opacity: googleBusy ? 0.6 : 1, transition: 'all 150ms' }}>
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5, flex: 1 }}>{s.desc}</span>
+                            <button data-ui-control="" onClick={() => runGoogleService(s.id)} disabled={!!googleBusy}
+                              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, height: 28, borderRadius: 7, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: `color-mix(in srgb, ${s.color} 8%, transparent)`, border: `1px solid color-mix(in srgb, ${s.color} 26%, transparent)`, color: s.color, opacity: googleBusy ? 0.6 : 1, transition: 'all 150ms' }}>
                               {busy ? <Loader2 size={12} className="spin" /> : s.id === 'drive' || s.id === 'docs' ? <ExternalLink size={12} /> : <RefreshCcw size={12} />}
                               {busy ? 'Trabajando…' : s.id === 'calendar' ? 'Sincronizar ahora' : s.id === 'tasks' ? 'Sincronizar ahora' : s.id === 'classroom' ? 'Importar cursos' : s.id === 'drive' ? 'Crear respaldo' : s.id === 'docs' ? 'Exportar notas' : 'Actualizar perfil'}
                             </button>
@@ -1015,612 +834,7 @@ export default function Ajustes() {
             )}
 
             {/* Apariencia */}
-            {activeTab === 'apariencia' && (
-              <section style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-                        <span style={{ width: 32, height: 32, borderRadius: 10, background: 'color-mix(in srgb, var(--accent) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 2px 8px color-mix(in srgb, var(--accent) 12%, transparent)' }}>
-                          <Palette size={15} />
-                        </span>
-                        <h2 style={{ fontSize: 18, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em', margin: 0 }}>Apariencia y Diseño</h2>
-                      </div>
-                      <p style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 300, letterSpacing: '0.02em' }}>Personaliza cada aspecto visual de OWA Studio</p>
-                    </div>
-
-                {/* Selector de modo: Clásico vs 3 Colores */}
-                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                    <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-                      Sistema de Color
-                    </span>
-                    <span style={{ fontSize: 9, color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                      {settings.useThreeColors ? 'Modo 3 Colores' : 'Modo Clásico'}
-                    </span>
-                  </div>
-
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 10, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', marginBottom: 16, cursor: 'pointer' }}>
-                    <div style={{ flex: 1 }}>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', display: 'block' }}>Modo 3 Colores</span>
-                      <span style={{ fontSize: 10, color: 'var(--text-tertiary)', display: 'block', marginTop: 2 }}>Define fondo, acento y secundario en un solo lugar</span>
-                    </div>
-                    <div style={{ position: 'relative', width: 40, height: 22, borderRadius: 11, background: settings.useThreeColors ? 'var(--accent)' : 'var(--bg-base)', border: '1px solid var(--border-default)', transition: 'all 200ms', flexShrink: 0, display: 'flex', alignItems: 'center', padding: 2 }}>
-                      <div style={{ width: 16, height: 16, borderRadius: '50%', background: '#fff', transform: settings.useThreeColors ? 'translateX(18px)' : 'translateX(0)', transition: 'all 200ms', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
-                      <input type="checkbox" checked={settings.useThreeColors ?? false} onChange={e => updateSettings({ useThreeColors: e.target.checked, selectedThemePreset: e.target.checked ? null : settings.selectedThemePreset })} style={{ display: 'none' }} />
-                    </div>
-                  </label>
-
-                  {/* MODO CLÁSICO (useThreeColors = false) */}
-                  {!settings.useThreeColors && (
-                    <>
-                      {/* Modo Visual - tema de fondo */}
-                      <div style={{ marginBottom: 20 }}>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 10 }}>Fondo de la App</span>
-                        <div style={{ display: 'flex', gap: 12 }}>
-                          {[
-                            { id: 'oscuro' as const, label: 'Oscuro', icon: Moon, desc: 'Fondo oscuro profesional' },
-                            { id: 'claro' as const, label: 'Claro', icon: Sun, desc: 'Fondo claro limpio' },
-                            { id: 'vibrante' as const, label: 'Vibrante', icon: Sparkles, desc: 'Colores intensos y vivos' },
-                          ].map(t => {
-                            const Icon = t.icon;
-                            const active = settings.theme === t.id;
-                            return (
-                              <button key={t.id} onClick={() => updateSettings({ theme: t.id })} className="hover-lift" style={{
-                                flex: 1, padding: '16px', borderRadius: 12, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
-                                background: active ? 'var(--accent)' : 'var(--bg-deep)', border: '1px solid var(--border-default)',
-                                color: active ? '#fff' : 'var(--text-secondary)', fontSize: 14, fontWeight: 500, cursor: 'pointer', letterSpacing: '0.02em',
-                                transition: 'all 200ms',
-                              }}>
-                                <Icon size={20} />
-                                <span>{t.label}</span>
-                                <span style={{ fontSize: 9, fontWeight: 300, opacity: 0.7 }}>{t.desc}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {/* Color de Acento - 14 círculos */}
-                      <div style={{ marginBottom: 16 }}>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 10 }}>Color de Acento</span>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-                          {ACCENT_COLORS.map(color => {
-                            const active = settings.accentColor === color;
-                            return (
-                              <button key={color} onClick={() => updateSettings({ accentColor: color, selectedThemePreset: null })} style={{
-                                width: 32, height: 32, borderRadius: '50%', border: active ? '2px solid #fff' : '2px solid transparent',
-                                background: color, cursor: 'pointer', transition: 'all 200ms',
-                                outline: active ? `2px solid ${color}` : 'none',
-                                outlineOffset: 2,
-                                boxShadow: active ? `0 0 12px ${color}60` : '0 1px 3px rgba(0,0,0,0.2)',
-                              }} />
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {/* Separador */}
-                      <div style={{ height: 1, background: 'var(--border-subtle)', margin: '12px 0' }} />
-
-                      {/* Color Primario - picker */}
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                          <div style={{ width: 10, height: 10, borderRadius: '50%', background: settings.accentColor, flexShrink: 0 }} />
-                          <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)' }}>Personalizar</span>
-                        </div>
-                        <input type="color" value={settings.accentColor}
-                          onChange={e => updateSettings({ accentColor: e.target.value, selectedThemePreset: null })}
-                          style={{ width: '100%', height: 40, borderRadius: 8, border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }} />
-                        <span style={{ fontSize: 8, color: 'var(--text-muted)', lineHeight: 1.3, display: 'block', marginTop: 4 }}>
-                          Navegación, botones, encabezados
-                        </span>
-                      </div>
-                    </>
-                  )}
-
-                  {/* MODO 3 COLORES (useThreeColors = true) */}
-                  {settings.useThreeColors && (
-                    <>
-                      {/* Paletas predefinidas de 3 colores */}
-                      <div style={{ marginBottom: 20 }}>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 10 }}>Paletas de Color</span>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-                          {THEME_PRESETS.map(theme => {
-                            const active = settings.selectedThemePreset === theme.name;
-                            return (
-                              <button key={theme.name} onClick={() => {
-                                updateSettings({
-                                  selectedThemePreset: theme.name,
-                                  accentColor: theme.colors[0],
-                                  secondaryColor: theme.colors[1] || theme.colors[0],
-                                  surfaceColor: theme.colors[2] || '#1a1a22',
-                                });
-                              }} style={{
-                                padding: '14px', borderRadius: 10, cursor: 'pointer',
-                                background: active ? 'var(--bg-elevated)' : 'var(--bg-deep)',
-                                border: active ? `1.5px solid ${theme.colors[0]}` : '1px solid var(--border-default)',
-                                transition: 'all 200ms', textAlign: 'left',
-                                boxShadow: active ? `0 0 20px ${theme.colors[0]}30` : 'none',
-                              }}>
-                                <div style={{ display: 'flex', gap: 3, marginBottom: 6 }}>
-                                  {theme.colors.map((c, i) => (
-                                    <div key={i} style={{
-                                      flex: 1, height: 14, borderRadius: 3,
-                                      background: c,
-                                      boxShadow: i === 0 && active ? `0 0 6px ${c}` : 'none',
-                                    }} />
-                                  ))}
-                                </div>
-                                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', display: 'block', fontFamily: "'Inter Tight', sans-serif" }}>{theme.name}</span>
-                                <span style={{ fontSize: 9, fontWeight: 300, color: 'var(--text-tertiary)', display: 'block', marginTop: 1 }}>{theme.desc}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {/* Separador */}
-                      <div style={{ height: 1, background: 'var(--border-subtle)', margin: '12px 0' }} />
-
-                      {/* 3 Color Pickers */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>
-                          Tus 3 Colores
-                        </span>
-                        <span style={{ fontSize: 8, fontWeight: 600, padding: '2px 8px', borderRadius: 4, background: `${settings.accentColor}20`, color: settings.accentColor, border: `1px solid ${settings.accentColor}40`, letterSpacing: '0.04em' }}>
-                          PERSONALIZAR
-                        </span>
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <div style={{ width: 10, height: 10, borderRadius: '50%', background: settings.accentColor, flexShrink: 0 }} />
-                            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)' }}>1 · Acento</span>
-                          </div>
-                          <input type="color" value={settings.accentColor}
-                            onChange={e => updateSettings({ accentColor: e.target.value, selectedThemePreset: null })}
-                            style={{ width: '100%', height: 40, borderRadius: 8, border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }} />
-                          <span style={{ fontSize: 8, color: 'var(--text-muted)', lineHeight: 1.3 }}>
-                            Botones, navegación, acentos principales
-                          </span>
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <div style={{ width: 10, height: 10, borderRadius: '50%', background: settings.secondaryColor || '#3B82F6', flexShrink: 0 }} />
-                            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)' }}>2 · Efectos</span>
-                          </div>
-                          <input type="color" value={settings.secondaryColor || '#3B82F6'}
-                            onChange={e => updateSettings({ secondaryColor: e.target.value, selectedThemePreset: null })}
-                            style={{ width: '100%', height: 40, borderRadius: 8, border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }} />
-                          <span style={{ fontSize: 8, color: 'var(--text-muted)', lineHeight: 1.3 }}>
-                            Efectos visuales, detalles secundarios
-                          </span>
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <div style={{ width: 10, height: 10, borderRadius: '50%', background: settings.surfaceColor || '#1a1a22', flexShrink: 0 }} />
-                            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)' }}>3 · Fondo</span>
-                          </div>
-                          <input type="color" value={settings.surfaceColor || '#1a1a22'}
-                            onChange={e => updateSettings({ surfaceColor: e.target.value, selectedThemePreset: null })}
-                            style={{ width: '100%', height: 40, borderRadius: 8, border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }} />
-                          <span style={{ fontSize: 8, color: 'var(--text-muted)', lineHeight: 1.3 }}>
-                            Fondo de toda la interfaz
-                          </span>
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                {/* Tipografía */}
-                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
-                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16, display: 'block' }}>Familia Tipográfica</span>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-                    {FONTS.map(font => {
-                      const active = settings.fontFamily === font.family;
-                      return (
-                        <button key={font.name} onClick={() => handleFontChange(font.family)} className="hover-lift" style={{
-                          padding: '18px 12px', borderRadius: 12, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-                          background: active ? 'var(--accent)' : 'var(--bg-deep)', border: active ? '1px solid var(--accent)' : '1px solid var(--border-default)',
-                          color: active ? '#fff' : 'var(--text-primary)', cursor: 'pointer', transition: 'all 200ms'
-                        }}>
-                          <div style={{ fontSize: 22, fontWeight: 500, fontFamily: font.family, lineHeight: 1, letterSpacing: '-0.02em' }}>Aa</div>
-                          <div style={{ fontSize: 10, fontWeight: 500, opacity: active ? 1 : 0.6, fontFamily: font.family }}>{font.name}</div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Fondo de la Aplicación y Paneles */}
-                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
-                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16, display: 'block' }}>Fondo y Apariencia de Paneles</span>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                    {settings.backgroundImage && (
-                      <div style={{ width: '100%', height: 160, borderRadius: 12, overflow: 'hidden', position: 'relative', border: '1px solid var(--border-subtle)' }}>
-                        <img src={settings.backgroundImage} alt="Fondo" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.8 }} />
-                        <button onClick={() => { updateSettings({ backgroundImage: undefined, backgroundImagePath: undefined }); }} style={{ position: 'absolute', top: 10, right: 10, background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 11, fontWeight: 500, backdropFilter: 'blur(4px)' }}>
-                          Remover Fondo
-                        </button>
-                      </div>
-                    )}
-                    <input ref={bgInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      const reader = new FileReader();
-                      reader.onload = (ev) => {
-                        const dataUrl = ev.target?.result as string;
-                        updateSettings({ backgroundImage: dataUrl, backgroundImagePath: undefined });
-                      };
-                      reader.readAsDataURL(file);
-                      e.target.value = '';
-                    }} />
-                    <button onClick={async () => {
-                      if (isTauri()) {
-                        try {
-                          const selected = await open({
-                            multiple: false,
-                            filters: [{ name: 'Imágenes', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'svg', 'avif', 'tiff', 'heic'] }]
-                          });
-                          if (selected && typeof selected === 'string') {
-                            try {
-                              const appData = await appCacheDir();
-                              const hasDir = await exists(appData);
-                              if (!hasDir) await mkdir(appData, { recursive: true });
-                              const ext = await extname(selected);
-                              const cleanExt = ext.startsWith('.') ? ext.slice(1) : ext;
-                              const filename = `background_${Date.now()}.${cleanExt}`;
-                              const dest = await join(appData, filename);
-                              await copyFile(selected, dest);
-                              const imageData = await readFile(dest);
-                              const mimeMap: Record<string, string> = {
-                                jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
-                                gif: 'image/gif', bmp: 'image/bmp', webp: 'image/webp',
-                                svg: 'image/svg+xml', avif: 'image/avif', tiff: 'image/tiff', heic: 'image/heic',
-                              };
-                              const mime = mimeMap[cleanExt.toLowerCase()] || 'application/octet-stream';
-                              const uint8 = new Uint8Array(imageData);
-                              const chunks: string[] = [];
-                              const chunkSize = 8192;
-                              for (let i = 0; i < uint8.length; i += chunkSize) {
-                                chunks.push(String.fromCharCode(...uint8.subarray(i, i + chunkSize)));
-                              }
-                              const base64 = btoa(chunks.join(''));
-                              const dataUrl = `data:${mime};base64,${base64}`;
-                              updateSettings({ backgroundImagePath: dest, backgroundImage: dataUrl });
-                            } catch (e) {
-                              console.error('Error al procesar imagen de fondo:', e);
-                              addNotification('Error al procesar la imagen', 'error');
-                            }
-                          }
-                        } catch (e) {
-                          addNotification('Error al seleccionar la imagen', 'error');
-                          console.error(e);
-                        }
-                      } else {
-                        bgInputRef.current?.click();
-                      }
-                    }} style={{ padding: '12px 24px', borderRadius: 10, fontSize: 12, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8, border: '1px solid var(--border-default)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)', cursor: 'pointer', width: 'fit-content' }}>
-                      <Image size={16} /> {settings.backgroundImage ? 'Cambiar Imagen de Fondo' : 'Cargar Imagen de Fondo'}
-                    </button>
-
-                    {settings.backgroundImage && (
-                      <div>
-                        <label style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8, display: 'block', fontWeight: 400 }}>Ajuste de Imagen</label>
-                        <div style={{ display: 'flex', gap: 6 }}>
-                          {[
-                            { id: 'cover' as const, label: 'Cubrir' },
-                            { id: 'contain' as const, label: 'Contener' },
-                            { id: 'fill' as const, label: 'Llenar' },
-                            { id: 'tile' as const, label: 'Mosaico' },
-                          ].map(opt => {
-                            const isActive = (settings.backgroundSize || 'cover') === opt.id;
-                            return (
-                              <button key={opt.id} onClick={() => updateSettings({ backgroundSize: opt.id })}
-                                style={{ flex: 1, padding: '8px 12px', borderRadius: 8, fontSize: 11, fontWeight: 600, border: `1px solid ${isActive ? 'var(--accent)' : 'var(--border-subtle)'}`, background: isActive ? 'var(--accent-soft)' : 'var(--bg-deep)', color: isActive ? 'var(--accent)' : 'var(--text-secondary)', cursor: 'pointer', transition: 'all 150ms' }}>
-                                {opt.label}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    <div>
-                      <label style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8, display: 'flex', justifyContent: 'space-between', fontWeight: 400 }}>
-                        <span>Opacidad de Paneles</span>
-                        <span>{Math.round((settings.uiOpacity ?? 0.85) * 100)}%</span>
-                      </label>
-                      <input type="range" min="0.1" max="1" step="0.05"
-                        value={settings.uiOpacity ?? 0.85}
-                        onChange={(e) => updateSettings({ uiOpacity: parseFloat(e.target.value) })}
-                        style={{ width: '100%', accentColor: 'var(--accent)' }} />
-                    </div>
-
-                    <div>
-                      <label style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8, display: 'flex', justifyContent: 'space-between', fontWeight: 400 }}>
-                        <span>Brillo del Fondo</span>
-                        <span>{settings.backgroundBrightness ?? 100}%</span>
-                      </label>
-                      <input type="range" min="30" max="200" step="5"
-                        value={settings.backgroundBrightness ?? 100}
-                        onChange={e => updateSettings({ backgroundBrightness: parseInt(e.target.value) })}
-                        style={{ width: '100%', accentColor: 'var(--accent)' }} />
-                    </div>
-
-                    <div>
-                      <label style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8, display: 'flex', justifyContent: 'space-between', fontWeight: 400 }}>
-                        <span>Desenfoque de Paneles</span>
-                        <span>{settings.backgroundBlur ?? 0}px</span>
-                      </label>
-                      <input type="range" min="0" max="30" step="1"
-                        value={settings.backgroundBlur ?? 0}
-                        onChange={e => updateSettings({ backgroundBlur: parseInt(e.target.value) })}
-                        style={{ width: '100%', accentColor: 'var(--accent)' }} />
-                    </div>
-
-                    <div>
-                      <label style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8, display: 'flex', justifyContent: 'space-between', fontWeight: 400 }}>
-                        <span>Oscurecer Fondo</span>
-                        <span>{settings.backgroundOverlay ?? 0}%</span>
-                      </label>
-                      <input type="range" min="0" max="80" step="5"
-                        value={settings.backgroundOverlay ?? 0}
-                        onChange={e => updateSettings({ backgroundOverlay: parseInt(e.target.value) })}
-                        style={{ width: '100%', accentColor: 'var(--accent)' }} />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Vista de Portada Grande */}
-                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
-                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16, display: 'block' }}>
-                    Vista de Portada Grande
-                  </span>
-                  <span style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block', marginBottom: 12, lineHeight: 1.4 }}>
-                    Fondo de la pantalla completa al hacer clic en una portada
-                  </span>
-                  <div style={{ display: 'flex', gap: 10 }}>
-                    {[
-                      { id: 'auto' as const, label: 'Desde portada', desc: 'Color extraído' },
-                      { id: 'black' as const, label: 'Negro', desc: 'Fondo oscuro neutro' },
-                      { id: 'gray' as const, label: 'Gris', desc: 'Gris medio neutro' },
-                      { id: 'theme' as const, label: 'Del tema', desc: 'Según acento/ fondo' },
-                    ].map(opt => {
-                      const active = (settings.coverBgMode ?? 'auto') === opt.id;
-                      return (
-                        <button key={opt.id} onClick={() => updateSettings({ coverBgMode: opt.id })} style={{
-                          flex: 1, padding: '14px 12px', borderRadius: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-                          background: active ? 'var(--accent)' : 'var(--bg-deep)', border: '1px solid var(--border-default)',
-                          color: active ? '#fff' : 'var(--text-secondary)', fontSize: 11, fontWeight: 500, cursor: 'pointer',
-                          transition: 'all 200ms',
-                        }}>
-                          <span>{opt.label}</span>
-                          <span style={{ fontSize: 9, fontWeight: 300, opacity: 0.65 }}>{opt.desc}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Barra de Reproducción Personalizable */}
-                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
-                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16, display: 'block' }}>
-                    Barra de Reproducción
-                  </span>
-
-                  <Toggle
-                    checked={settings.playerBarEnabled ?? false}
-                    onChange={v => updateSettings({ playerBarEnabled: v })}
-                    label="Diseño Personalizado de Barra"
-                    desc="Personaje, colores, bordes, fondos y más"
-                  />
-
-                  {settings.playerBarEnabled && (
-                    <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 28 }}>
-                      {/* ===== SECCION 1: PERSONAJE ===== */}
-                      <div style={{ padding: '18px 20px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 12 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                          <div style={{ width: 3, height: 18, borderRadius: 2, background: 'var(--accent)' }} />
-                          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
-                            Personaje
-                          </span>
-                          <span style={{ fontSize: 10, color: 'var(--text-tertiary)', fontWeight: 400 }}>
-                            — el que viaja sobre la barra
-                          </span>
-                        </div>
-
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                          {/* GIF URL */}
-                          <div>
-                            <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', display: 'block', marginBottom: 4, letterSpacing: '0.03em' }}>
-                              URL del GIF
-                            </label>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 96px', gap: 10 }}>
-                              <input type="text" value={settings.playerBarCharacterUrl || ''}
-                                onChange={e => updateSettings({ playerBarCharacterUrl: e.target.value })}
-                                placeholder="https://ejemplo.com/mi-personaje.gif"
-                                style={{ width: '100%', height: 36, borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 12px', fontSize: 12, fontFamily: 'monospace', outline: 'none' }} />
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-deep)', borderRadius: 8, border: '1px solid var(--border-default)', height: 36 }}>
-                                {settings.playerBarCharacterUrl ? (
-                                  <img src={settings.playerBarCharacterUrl} alt=""
-                                    style={{ maxWidth: 32, maxHeight: 32, objectFit: 'contain', borderRadius: 4 }} />
-                                ) : (
-                                  <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>Vacio</span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          {/* Draw frames */}
-                          <div>
-                            <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', display: 'block', marginBottom: 4, letterSpacing: '0.03em' }}>
-                              Dibujo animado — {((settings.playerBarCharacterDraw || '').split('|').filter(Boolean).length) || 0} frame(s)
-                            </label>
-                            <button onClick={() => setShowDrawModal(true)}
-                              style={{
-                                width: '100%', padding: '10px', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                                background: 'var(--accent)', border: 'none', color: '#fff',
-                              }}>
-                              {((settings.playerBarCharacterDraw || '').split('|').filter(Boolean).length) > 0 ? 'Editar dibujo' : 'Dibujar personaje'}
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Source selector */}
-                        <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-                          {(['url', 'draw'] as const).map(src => (
-                            <button key={src} onClick={() => updateSettings({ playerBarCharacterSource: src })}
-                              style={{
-                                flex: 1, padding: '8px 10px', borderRadius: 6, fontSize: 10, fontWeight: 500, cursor: 'pointer',
-                                background: (settings.playerBarCharacterSource || 'url') === src ? 'var(--accent)' : 'var(--bg-deep)',
-                                border: '1px solid var(--border-default)',
-                                color: (settings.playerBarCharacterSource || 'url') === src ? '#fff' : 'var(--text-secondary)',
-                                transition: 'all 150ms',
-                              }}>
-                              Usar: {src === 'url' ? 'GIF' : 'Dibujo'}
-                            </button>
-                          ))}
-                        </div>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 16 }}>
-                          <SliderRow label="Tamano" value={settings.playerBarCharacterSize ?? 40} min={16} max={120} step={2} unit="px"
-                            onChange={v => updateSettings({ playerBarCharacterSize: v })} accent="var(--accent)" />
-                          <SliderRow label="Sombra" value={settings.playerBarCharacterShadow ?? 6} min={0} max={30} step={1} unit="px"
-                            onChange={v => updateSettings({ playerBarCharacterShadow: v })} accent="var(--accent)" />
-                          <SliderRow label="Offset Vertical" value={settings.playerBarCharacterOffsetY ?? 0} min={-30} max={30} step={2} unit="px"
-                            onChange={v => updateSettings({ playerBarCharacterOffsetY: v })} accent="var(--accent)" />
-                        </div>
-                      </div>
-
-                      {/* ===== SECCION 2: BARRA (TRACK FILL) — Solo GIF ===== */}
-                      <div style={{ padding: '18px 20px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 12 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                          <div style={{ width: 3, height: 18, borderRadius: 2, background: 'var(--accent)' }} />
-                          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
-                            Barra
-                          </span>
-                          <span style={{ fontSize: 10, color: 'var(--text-tertiary)', fontWeight: 400 }}>
-                            — GIF que se revela con el progreso
-                          </span>
-                        </div>
-
-                        <div>
-                          <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', display: 'block', marginBottom: 4, letterSpacing: '0.03em' }}>
-                            URL del GIF
-                          </label>
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 96px', gap: 10 }}>
-                            <input type="text" value={settings.playerBarTrackUrl || ''}
-                              onChange={e => updateSettings({ playerBarTrackUrl: e.target.value })}
-                              placeholder="https://ejemplo.com/mi-barra.gif"
-                              style={{ width: '100%', height: 36, borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 12px', fontSize: 12, fontFamily: 'monospace', outline: 'none' }} />
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-deep)', borderRadius: 8, border: '1px solid var(--border-default)', height: 36 }}>
-                              {settings.playerBarTrackUrl ? (
-                                <img src={settings.playerBarTrackUrl} alt=""
-                                  style={{ maxWidth: 32, maxHeight: 32, objectFit: 'contain', borderRadius: 4 }} />
-                              ) : (
-                                <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>Vacio</span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* ===== SECCION 3: ESTADO ===== */}
-                      <div style={{ padding: '18px 20px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 12 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                          <div style={{ width: 3, height: 18, borderRadius: 2, background: 'var(--accent)' }} />
-                          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
-                            Estado
-                          </span>
-                          <span style={{ fontSize: 10, color: 'var(--text-tertiary)', fontWeight: 400 }}>
-                            — qué se muestra en cada parte
-                          </span>
-                        </div>
-
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '12px 16px', borderRadius: 10, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)' }}>
-                          <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-primary)' }}>
-                            Personaje: {settings.playerBarCharacterSource === 'url' ? 'Modo GIF' : 'Modo Dibujo'}
-                          </div>
-                          <div style={{ fontSize: 9, color: 'var(--text-tertiary)' }}>
-                            Barra: {settings.playerBarTrackSource === 'url' ? 'Modo GIF' : 'Modo Dibujo'}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* ===== SECCION 3: VISTA PREVIA ===== */}
-                      <div style={{ padding: '20px', borderRadius: 12, background: 'var(--bg-deep)', border: '1px solid var(--border-default)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-                          <div style={{ width: 3, height: 18, borderRadius: 2, background: 'var(--accent)' }} />
-                          <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
-                            Vista Previa
-                          </span>
-                          <span style={{ fontSize: 10, color: 'var(--text-tertiary)', fontWeight: 400 }}>
-                            — se actualiza al instante
-                          </span>
-                        </div>
-
-                        <div style={{ position: 'relative', height: 64, display: 'flex', alignItems: 'center', padding: '0 4px' }}>
-                            <div style={{
-                              flex: 1, height: 3, borderRadius: 2,
-                              background: 'rgba(255,255,255,0.06)',
-                              position: 'relative', overflow: 'visible',
-                            }}>
-                              <div style={{
-                                width: '45%', height: '100%',
-                                borderRadius: 2,
-                                backgroundColor: settings.playerBarTrackColor || 'var(--accent)',
-                                backgroundImage: (() => {
-                                  const src = settings.playerBarTrackSource || 'url';
-                                  if (src === 'url') return settings.playerBarTrackUrl ? `url(${settings.playerBarTrackUrl})` : undefined;
-                                  const frames = (settings.playerBarTrackDraw || '').split('|').filter(Boolean);
-                                  return frames.length > 0 ? `url(${frames[0]})` : undefined;
-                                })(),
-                                backgroundSize: 'cover',
-                                backgroundPosition: 'center',
-                                backgroundRepeat: 'no-repeat',
-                              }} />
-                            </div>
-
-                            <PreviewCharacter
-                              source={settings.playerBarCharacterSource || 'url'}
-                              drawData={settings.playerBarCharacterDraw || ''}
-                              gifUrl={settings.playerBarCharacterUrl || ''}
-                              size={settings.playerBarCharacterSize ?? 40}
-                              offsetY={settings.playerBarCharacterOffsetY ?? 0}
-                              shadow={settings.playerBarCharacterShadow ?? 6}
-                              speeds={settings.playerBarFrameSpeeds || ''}
-                            />
-                        </div>
-
-                        <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 8, background: 'var(--bg-base)', border: '1px dashed var(--border-default)' }}>
-                          <div style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 8 }}>Limites visuales</div>
-                          <div style={{ display: 'flex', gap: 16, fontSize: 10, color: 'var(--text-tertiary)', flexWrap: 'wrap' }}>
-                            <span>Personaje: {settings.playerBarCharacterSize ?? 40}x{settings.playerBarCharacterSize ?? 40}px</span>
-                            <span>Sombra: {settings.playerBarCharacterShadow ?? 6}px</span>
-                            <span>Offset Y: {settings.playerBarCharacterOffsetY ?? 0}px</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Drawing Modal for Character */}
-                  {showDrawModal && (
-                    <CharacterDrawModal
-                      currentDraw={settings.playerBarCharacterDraw || ''}
-                      currentSpeeds={settings.playerBarFrameSpeeds || ''}
-                      characterSize={settings.playerBarCharacterSize ?? 40}
-                      onSave={(dataUrl, speedsStr) => {
-                        updateSettings({ playerBarCharacterDraw: dataUrl, playerBarFrameSpeeds: speedsStr });
-                        setShowDrawModal(false);
-                      }}
-                      onClose={() => setShowDrawModal(false)}
-                    />
-                  )}
-
-                </div>
-              </section>
-            )}
+            {activeTab === 'apariencia' && <AppearanceStudio/>}
 
             {/* â•â•â•â•â•â•â•â•â•â•â• ESTUDIO â•â•â•â•â•â•â•â•â•â•â• */}
             {activeTab === 'estudio' && (
@@ -1632,16 +846,16 @@ export default function Ajustes() {
                     </span>
                     <h2 style={{ fontSize: 18, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em', margin: 0 }}>Tiempos y Metas de Estudio</h2>
                   </div>
-                  <p style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 300, letterSpacing: '0.02em' }}>Configura los intervalos de tu método Pomodoro y objetivos</p>
+                  <p style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 500, letterSpacing: '0.02em' }}>Configura los intervalos de tu método Pomodoro y objetivos</p>
                 </div>
 
-                <div className="bento-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
-                    <RangeSlider label="Enfoque" value={settings.pomodoroTime / 60} min={10} max={120} unit="min" onChange={v => updateSettings({ pomodoroTime: v * 60 })} color="#E11D48" />
-                    <RangeSlider label="Cronómetro (meta por ronda)" value={(settings.chronoGoal || 1500) / 60} min={25} max={180} unit="min" onChange={v => updateSettings({ chronoGoal: v * 60 })} color="#3B82F6" />
-                    <RangeSlider label="Meta Diaria" value={settings.dailyGoal} min={30} max={600} unit="min" onChange={v => updateSettings({ dailyGoal: v })} color="#8B5CF6" />
-                    <p style={{ fontSize: 9.5, color: 'var(--text-muted)', lineHeight: 1.5, marginTop: -2 }}>
-                      Consejo: usa las flechas ↑↓ del teclado para ajustar, con Shift saltas de 5 en 5, o mantén pulsados los botones −/+.
+                <div className="bento-card" data-settings-title="Tiempos y descansos" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+                  <div className="study-duration-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
+                    <DurationControl presets={[25,45,60]} label="Enfoque" value={settings.pomodoroTime / 60} min={1} max={120} unit="min" onChange={v => updateSettings({ pomodoroTime: v * 60 })} />
+                    <DurationControl presets={[0,25,45,60]} label="Cronómetro (meta por ronda)" description="0 min: medición libre, sin rondas" value={(settings.chronoGoal ?? 1500) / 60} min={0} max={180} unit="min" onChange={v => updateSettings({ chronoGoal: v * 60 })} />
+                    <DurationControl presets={[120,240,360]} step={5} label="Meta Diaria" value={settings.dailyGoal} min={30} max={600} unit="min" onChange={v => updateSettings({ dailyGoal: v })} />
+                    <p style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5, marginTop: -2 }}>
+                      Escribe los minutos, usa las flechas o elige un intervalo. Los cambios se guardan automáticamente.
                     </p>
                   </div>
 
@@ -1649,7 +863,7 @@ export default function Ajustes() {
                   <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 20 }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
                       <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Ciclo de Descansos</span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 6, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)' }}>
+                      <div className="pomodoro-cycle-preview" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 6, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)' }}>
                         {Array.from({ length: settings.pomodoroGoal || 4 }, (_, i) => (
                           <div key={i} style={{
                             width: 16, height: 16, borderRadius: 4,
@@ -1657,69 +871,22 @@ export default function Ajustes() {
                             opacity: 0.7, display: 'flex', alignItems: 'center', justifyContent: 'center',
                             boxShadow: i === (settings.pomodoroGoal || 4) - 1 ? '0 0 6px #F59E0B60' : 'none',
                           }}>
-                            <span style={{ fontSize: 7, fontWeight: 700, color: '#fff' }}>{i + 1}</span>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: '#fff' }}>{i + 1}</span>
                           </div>
                         ))}
                       </div>
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-                      <div style={{ padding: '12px 14px', borderRadius: 10, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                          <div style={{ width: 3, height: 3, borderRadius: '50%', background: '#10B981', boxShadow: '0 0 4px #10B98180' }} />
-                          <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-secondary)' }}>CORTOS</span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ fontSize: 18, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>
-                            {settings.shortBreakTime / 60}<span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>min</span>
-                          </span>
-                          <input type="range" min={1} max={30} value={settings.shortBreakTime / 60} onChange={e => updateSettings({ shortBreakTime: Number(e.target.value) * 60 })}
-                            style={{ flex: 1, height: 6, cursor: 'pointer', WebkitAppearance: 'none', appearance: 'none', outline: 'none', borderRadius: 3, background: `linear-gradient(90deg, #10B98160, #10B981 ${((settings.shortBreakTime / 60 - 1) / 29) * 100}%, var(--bg-hover) ${((settings.shortBreakTime / 60 - 1) / 29) * 100}%)` }}
-                            className="range-slider" />
-                        </div>
-                        <div style={{ fontSize: 8, color: 'var(--text-tertiary)', marginTop: 4 }}>×{settings.pomodoroGoal - 1 || 3} entre ciclos</div>
-                      </div>
-                      <div style={{ padding: '12px 14px', borderRadius: 10, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', position: 'relative', overflow: 'hidden' }}>
-                        <div style={{ position: 'absolute', top: 0, right: 0, width: 60, height: 60, background: 'radial-gradient(circle, #F59E0B08 0%, transparent 70%)', pointerEvents: 'none' }} />
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                          <div style={{ width: 3, height: 3, borderRadius: '50%', background: '#F59E0B', boxShadow: '0 0 4px #F59E0B80' }} />
-                          <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-secondary)' }}>LARGO</span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ fontSize: 18, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>
-                            {settings.longBreakTime / 60}<span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>min</span>
-                          </span>
-                          <input type="range" min={5} max={60} value={settings.longBreakTime / 60} onChange={e => updateSettings({ longBreakTime: Number(e.target.value) * 60 })}
-                            style={{ flex: 1, height: 6, cursor: 'pointer', WebkitAppearance: 'none', appearance: 'none', outline: 'none', borderRadius: 3, background: `linear-gradient(90deg, #F59E0B60, #F59E0B ${((settings.longBreakTime / 60 - 5) / 55) * 100}%, var(--bg-hover) ${((settings.longBreakTime / 60 - 5) / 55) * 100}%)` }}
-                            className="range-slider" />
-                        </div>
-                        <div style={{ fontSize: 8, color: 'var(--text-tertiary)', marginTop: 4 }}>Cada {settings.pomodoroGoal} ciclos</div>
-                      </div>
-                      <div style={{ padding: '12px 14px', borderRadius: 10, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                          <div style={{ width: 3, height: 3, borderRadius: '50%', background: '#6366F1', boxShadow: '0 0 4px #6366F180' }} />
-                          <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-secondary)' }}>CICLOS</span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ fontSize: 18, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>
-                            {settings.pomodoroGoal}<span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>×</span>
-                          </span>
-                          <input type="range" min={1} max={20} value={settings.pomodoroGoal} onChange={e => updateSettings({ pomodoroGoal: Number(e.target.value) })}
-                            style={{ flex: 1, height: 6, cursor: 'pointer', WebkitAppearance: 'none', appearance: 'none', outline: 'none', borderRadius: 3, background: `linear-gradient(90deg, #6366F160, #6366F1 ${((settings.pomodoroGoal - 1) / 19) * 100}%, var(--bg-hover) ${((settings.pomodoroGoal - 1) / 19) * 100}%)` }}
-                            className="range-slider" />
-                        </div>
-                        <div style={{ fontSize: 8, color: 'var(--text-tertiary)', marginTop: 4 }}>
-                          {settings.pomodoroGoal > 1
-                            ? `${settings.pomodoroGoal - 1} cortos + 1 largo`
-                            : 'Solo descanso largo'}
-                        </div>
-                      </div>
+                    <div className="study-break-grid">
+                      <DurationControl label="Descanso corto" value={settings.shortBreakTime / 60} min={1} max={30} presets={[5,10,15]} onChange={value=>updateSettings({shortBreakTime:value*60})}/>
+                      <DurationControl label="Descanso largo" value={settings.longBreakTime / 60} min={5} max={60} presets={[15,20,30]} onChange={value=>updateSettings({longBreakTime:value*60})}/>
+                      <DurationControl label="Ciclos" value={settings.pomodoroGoal} min={1} max={20} unit="ses." presets={[2,4,6]} description="Sesiones antes del descanso largo" onChange={value=>updateSettings({pomodoroGoal:value})}/>
                     </div>
                   </div>
                 </div>
 
                 {/* Colores de Temporizadores */}
                 <div className="bento-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>Colores de Temporizadores</span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>Colores de Temporizadores</span>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
                     {[
                       { key: 'timerFocusColor', label: 'Enfoque', def: '#E11D48' },
@@ -1737,7 +904,7 @@ export default function Ajustes() {
                               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
                             </div>
                           </div>
-                          <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.02em' }}>{c.label}</span>
+                          <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.02em' }}>{c.label}</span>
                         </label>
                       );
                     })}
@@ -1754,9 +921,9 @@ export default function Ajustes() {
                     display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20,
                   }}>
                     <div>
-                      <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Timer Flotante</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Timer Flotante</span>
                       <h3 style={{ fontSize: 16, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", margin: '4px 0 2px' }}>Ventana independiente</h3>
-                      <p style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 300, margin: 0 }}>Aparece al iniciar un enfoque desde el panel de estudio</p>
+                      <p style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 500, margin: 0 }}>Aparece al iniciar un enfoque desde el panel de estudio</p>
                     </div>
                     <div style={{
                       width: 80, height: 44, borderRadius: 8,
@@ -1767,8 +934,8 @@ export default function Ajustes() {
                     }}>
                       <span style={{ fontSize: 6, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)' }}>ENFOQUE</span>
                       <span style={{
-                        fontSize: 13, fontWeight: 300, lineHeight: 1, letterSpacing: '0.04em',
-                        fontFamily: ({ led: "'Share Tech Mono', monospace", outfit: "'Outfit', sans-serif", 'dm-sans': "'DM Sans', sans-serif", playfair: "'Playfair Display', serif", space: "'Space Grotesk', sans-serif", jakarta: "'Plus Jakarta Sans', sans-serif", sora: "'Sora', sans-serif", inter: "'Inter', sans-serif" } as Record<string,string>)[settings.floatingFont] || "'Share Tech Mono', monospace",
+                        fontSize: 13, fontWeight: 500, lineHeight: 1, letterSpacing: '0.04em',
+                        fontFamily: FLOATING_FONTS[settings.floatingFont]?.family || FLOATING_FONTS.led.family,
                       }}>25:00</span>
                     </div>
                   </div>
@@ -1779,15 +946,15 @@ export default function Ajustes() {
                     {/* Background mode */}
                     <div>
                       <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)' }}>Fondo</span>
-                      <span style={{ fontSize: 9, fontWeight: 400, color: 'var(--text-tertiary)', marginLeft: 8 }}>Color de la app o personalizado</span>
+                      <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-tertiary)', marginLeft: 8 }}>Color de la app o personalizado</span>
                       <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
                         {[
                           { value: 'app', label: 'App' },
                           { value: 'custom', label: 'Personalizado' },
                         ].map(o => (
-                          <button key={o.value} onClick={() => updateSettings({ floatingBgMode: o.value as any })}
+                          <button data-ui-control="" key={o.value} aria-pressed={(settings.floatingBgMode || 'custom')===o.value} onClick={() => updateSettings({ floatingBgMode: o.value as any })}
                             style={{
-                              padding: '7px 16px', borderRadius: 8, fontSize: 10, fontWeight: 500,
+                              padding: '7px 16px', borderRadius: 8, fontSize: 11, fontWeight: 500,
                               border: (settings.floatingBgMode || 'custom') === o.value ? '1px solid var(--accent)' : '1px solid var(--border-default)',
                               background: (settings.floatingBgMode || 'custom') === o.value ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : 'var(--bg-deep)',
                               color: (settings.floatingBgMode || 'custom') === o.value ? 'var(--accent)' : 'var(--text-secondary)',
@@ -1798,7 +965,7 @@ export default function Ajustes() {
                       {settings.floatingBgMode === 'custom' && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
                           <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Color</span>
-                          <span style={{ fontSize: 9, fontFamily: 'monospace', color: 'var(--text-tertiary)' }}>{settings.floatingBgColor || '#020203'}</span>
+                          <span style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-tertiary)' }}>{settings.floatingBgColor || '#020203'}</span>
                           <label style={{ position: 'relative', width: 28, height: 28, borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border-default)', cursor: 'pointer' }}>
                             <div style={{ position: 'absolute', inset: 0, background: settings.floatingBgColor || '#020203' }} />
                             <input type="color" value={settings.floatingBgColor || '#020203'} onChange={e => updateSettings({ floatingBgColor: e.target.value })}
@@ -1811,23 +978,14 @@ export default function Ajustes() {
                     {/* Typography grid */}
                     <div>
                       <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)' }}>Tipografía</span>
-                      <span style={{ fontSize: 9, fontWeight: 400, color: 'var(--text-tertiary)', marginLeft: 8 }}>Elige el estilo del reloj</span>
+                      <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-tertiary)', marginLeft: 8 }}>Elige el estilo del reloj</span>
                       <div style={{
                         display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginTop: 8,
                       }}>
-                        {[
-                          { value: 'led', label: 'LED', preview: '88:88', font: "'Share Tech Mono', monospace" },
-                          { value: 'outfit', label: 'Outfit', preview: '88:88', font: "'Outfit', sans-serif" },
-                          { value: 'dm-sans', label: 'DM Sans', preview: '88:88', font: "'DM Sans', sans-serif" },
-                          { value: 'playfair', label: 'Playfair', preview: '88:88', font: "'Playfair Display', serif" },
-                          { value: 'space', label: 'Space G.', preview: '88:88', font: "'Space Grotesk', sans-serif" },
-                          { value: 'jakarta', label: 'Jakarta', preview: '88:88', font: "'Plus Jakarta Sans', sans-serif" },
-                          { value: 'sora', label: 'Sora', preview: '88:88', font: "'Sora', sans-serif" },
-                          { value: 'inter', label: 'Inter', preview: '88:88', font: "'Inter', sans-serif" },
-                        ].map(opt => (
-                          <button key={opt.value} onClick={() => updateSettings({ floatingFont: opt.value })}
+                        {Object.entries(FLOATING_FONTS).map(([value,font])=>({value,label:font.name,preview:'88:88',font:font.family})).map(opt => (
+                          <button data-ui-control="" key={opt.value} aria-pressed={settings.floatingFont===opt.value} onClick={() => updateSettings({ floatingFont: opt.value })}
                             style={{
-                              padding: '10px 6px', borderRadius: 8, fontSize: 10,
+                              padding: '10px 6px', borderRadius: 8, fontSize: 11,
                               border: settings.floatingFont === opt.value ? '1px solid var(--accent)' : '1px solid var(--border-default)',
                               background: settings.floatingFont === opt.value ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : 'var(--bg-deep)',
                               color: settings.floatingFont === opt.value ? 'var(--accent)' : 'var(--text-secondary)',
@@ -1835,12 +993,13 @@ export default function Ajustes() {
                               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
                             }}>
                             <span style={{ fontFamily: opt.font, fontSize: 16, fontWeight: 400, lineHeight: 1, color: 'currentColor' }}>{opt.preview}</span>
-                            <span style={{ fontSize: 8, fontWeight: 500, opacity: 0.7, letterSpacing: '0.02em' }}>{opt.label}</span>
+                            <span style={{ fontSize: 11, fontWeight: 500, opacity: 0.7, letterSpacing: '0.02em' }}>{opt.label}</span>
                           </button>
                         ))}
                       </div>
                     </div>
 
+                    <FloatingVisibilityControls hidden={!!settings.floatingHideInFocus} animation={settings.floatingAnimationType || 'plant'} color={settings.timerFocusColor || '#E11D48'} font={settings.floatingFont || 'led'} onChange={updateSettings}/>
                     {/* Ventanas: retirado — la gestión vive en la extensión del navegador (v2.0) */}
                   </div>
                 </div>
@@ -1857,29 +1016,31 @@ export default function Ajustes() {
                     </span>
                     <h2 style={{ fontSize: 18, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em', margin: 0 }}>Configuración de Música</h2>
                   </div>
-                  <p style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 300, letterSpacing: '0.02em' }}>Preferencias de audio, descargas y reproducción</p>
+                  <p style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 500, letterSpacing: '0.02em' }}>Preferencias de audio, descargas y reproducción</p>
                 </div>
 
+                <MusicConnectionSettings/>
                 {/* Audio Format */}
                 <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
-                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16, display: 'block' }}>
+                  <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16, display: 'block' }}>
                     Formato de Descarga
                   </span>
                   <div style={{ display: 'flex', gap: 10 }}>
                     {[
                       { id: 'mp3' as const, label: 'MP3', desc: 'Compatibilidad universal' },
-                      { id: 'm4a' as const, label: 'M4A', desc: 'Mejor calidad por tamaño' },
+                      { id: 'm4a' as const, label: 'M4A', desc: 'Audio compacto' },
+                      { id: 'mp4' as const, label: 'MP4', desc: 'Vídeo' },
                     ].map(opt => {
                       const active = (settings.downloadFormat || 'mp3') === opt.id;
                       return (
-                        <button key={opt.id} onClick={() => updateSettings({ downloadFormat: opt.id })} style={{
+                        <button data-ui-control="" key={opt.id} onClick={() => updateSettings({ downloadFormat: opt.id })} style={{
                           flex: 1, padding: '14px 12px', borderRadius: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
                           background: active ? 'var(--accent)' : 'var(--bg-deep)', border: '1px solid var(--border-default)',
                           color: active ? '#fff' : 'var(--text-secondary)', fontSize: 11, fontWeight: 600, cursor: 'pointer',
                           transition: 'all 200ms',
                         }}>
                           <span>{opt.label}</span>
-                          <span style={{ fontSize: 9, fontWeight: 300, opacity: 0.65 }}>{opt.desc}</span>
+                          <span style={{ fontSize: 11, fontWeight: 500, opacity: 0.65 }}>{opt.desc}</span>
                         </button>
                       );
                     })}
@@ -1888,25 +1049,25 @@ export default function Ajustes() {
 
                 {/* Audio Quality */}
                 <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
-                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16, display: 'block' }}>
-                    Calidad de Audio
+                  <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16, display: 'block' }}>
+                    {settings.downloadFormat==='mp4'?'Calidad de vídeo':'Calidad de audio'}
                   </span>
                   <div style={{ display: 'flex', gap: 10 }}>
-                    {[
-                      { id: '3', label: 'Normal', desc: '128-192 kbps' },
-                      { id: '2', label: 'Alta', desc: '192-256 kbps' },
-                      { id: '1', label: 'Extrema', desc: '256-320 kbps' },
-                    ].map(opt => {
-                      const active = (settings.audioQuality || '3') === opt.id;
+                    {(settings.downloadFormat==='mp4'?[{id:'720',label:'720p',desc:'Menos espacio'},{id:'1080',label:'1080p',desc:'Alta definición'},{id:'best',label:'Hasta 4K',desc:'Según la fuente'}]:[
+                      { id: '5', label: 'Estándar', desc: 'Menos espacio' },
+                      { id: '3', label: 'Alta', desc: 'Equilibrada' },
+                      { id: '0', label: 'Máxima', desc: 'Según la fuente' },
+                    ]).map(opt => {
+                      const active = (settings.downloadFormat==='mp4'?(settings.downloadVideoQuality||'1080'):(settings.audioQuality || '3')) === opt.id;
                       return (
-                        <button key={opt.id} onClick={() => updateSettings({ audioQuality: opt.id })} style={{
+                        <button data-ui-control="" key={opt.id} onClick={() => updateSettings(settings.downloadFormat==='mp4'?{downloadVideoQuality:opt.id as '720'|'1080'|'best'}:{ audioQuality: opt.id })} style={{
                           flex: 1, padding: '14px 12px', borderRadius: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
                           background: active ? 'var(--accent)' : 'var(--bg-deep)', border: '1px solid var(--border-default)',
                           color: active ? '#fff' : 'var(--text-secondary)', fontSize: 11, fontWeight: 600, cursor: 'pointer',
                           transition: 'all 200ms',
                         }}>
                           <span>{opt.label}</span>
-                          <span style={{ fontSize: 9, fontWeight: 300, opacity: 0.65 }}>{opt.desc}</span>
+                          <span style={{ fontSize: 11, fontWeight: 500, opacity: 0.65 }}>{opt.desc}</span>
                         </button>
                       );
                     })}
@@ -1915,7 +1076,7 @@ export default function Ajustes() {
 
                 {/* Reproducción — grouped card for toggles + info */}
                 <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
-                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16, display: 'block' }}>
+                  <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16, display: 'block' }}>
                     Reproducción y Descargas
                   </span>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -1929,44 +1090,11 @@ export default function Ajustes() {
                   </div>
                 </div>
 
-                {/* yt-dlp Installer */}
-                <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
-                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 16, display: 'block' }}>
-                    Motor de Descarga (yt-dlp)
-                  </span>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                    <div>
-                      <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Motor de descarga (yt-dlp)</div>
-                      <div style={{ fontSize: 10, color: 'var(--text-tertiary)', lineHeight: 1.4 }}>Si las descargas fallan, Windows Defender pudo haber eliminado <code style={{ background: 'rgba(0,0,0,0.2)', padding: '1px 5px', borderRadius: 4, fontSize: 9 }}>yt-dlp.exe</code>. Descarga la última versión automáticamente.</div>
-                    </div>
-                    <button
-                      onClick={async () => {
-                        try {
-                          const msg = await downloadYtDlp();
-                          addNotification(msg, 'success');
-                        } catch (e: any) {
-                          addNotification(e?.message || 'Error instalando yt-dlp', 'error');
-                        }
-                      }}
-                      style={{
-                        height: 36, padding: '0 16px', borderRadius: 8,
-                        background: 'var(--accent)',
-                        border: 'none', color: '#fff', fontSize: 11, fontWeight: 600,
-                        cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
-                        boxShadow: '0 4px 14px color-mix(in srgb, var(--accent) 35%, transparent)',
-                        transition: 'all 150ms',
-                      }}
-                      onMouseEnter={e => { e.currentTarget.style.filter = 'brightness(1.08)'; }}
-                      onMouseLeave={e => { e.currentTarget.style.filter = 'none'; }}
-                    >
-                      <Download size={12} /> Instalar yt-dlp
-                    </button>
-                  </div>
-                </div>
+                <ToolsRepairCard />
 
                 {/* Import / Export metadata */}
                 <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
-                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>
+                  <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>
                     Importar / Exportar Metadatos
                   </span>
                   <p style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.5, marginBottom: 14 }}>
@@ -1974,7 +1102,7 @@ export default function Ajustes() {
                     Al importar, cada canción se reconoce por su ID, su ruta o su nombre.
                   </p>
                   <div style={{ display: 'flex', gap: 10 }}>
-                    <button onClick={async () => {
+                    <button data-ui-control="" onClick={async () => {
                       try {
                         const dest = await save({
                           filters: [{ name: 'JSON', extensions: ['json'] }],
@@ -2006,7 +1134,7 @@ export default function Ajustes() {
                     }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.15)', color: '#3B82F6' }}>
                       <Upload size={14} /> Exportar metadatos
                     </button>
-                    <button onClick={async () => {
+                    <button data-ui-control="" onClick={async () => {
                       try {
                         const src = await open({
                           filters: [{ name: 'JSON', extensions: ['json'] }],
@@ -2091,7 +1219,7 @@ export default function Ajustes() {
 
                 {/* Biblioteca completa: audios + nombres idénticos */}
                 <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
-                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>
+                  <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>
                     Biblioteca completa de música
                   </span>
                   <p style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.5, marginBottom: 14 }}>
@@ -2099,7 +1227,7 @@ export default function Ajustes() {
                     entorno, cada canción se detecta y queda con su nombre idéntico al exportado.
                   </p>
                   <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                    <button onClick={async () => {
+                    <button data-ui-control="" onClick={async () => {
                       if (!isTauri()) { addNotification('Disponible en la app instalada', 'info'); return; }
                       try {
                         const dir = await open({ directory: true, title: 'Carpeta para descargar toda la música' });
@@ -2140,7 +1268,7 @@ export default function Ajustes() {
                     }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.15)', color: '#3B82F6' }}>
                       <Download size={14} /> Descargar toda la música
                     </button>
-                    <button onClick={async () => {
+                    <button data-ui-control="" onClick={async () => {
                       if (!isTauri()) { addNotification('Disponible en la app instalada', 'info'); return; }
                       try {
                         const dir = await open({ directory: true, title: 'Carpeta con la música a importar' });
@@ -2201,11 +1329,11 @@ export default function Ajustes() {
                   </div>
                   <p style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.5, marginBottom: 14 }}>Acciones destructivas sobre tu biblioteca y datos de tareas. No se pueden deshacer.</p>
                   <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                    <button onClick={() => setShowClearAllMusic(true)}
+                    <button data-ui-control="" onClick={() => setShowClearAllMusic(true)}
                       style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 8, fontSize: 12, fontWeight: 500, background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)', color: '#EF4444', cursor: 'pointer', transition: 'all 200ms' }}>
                       <Music size={14} /> Borrar toda la música
                     </button>
-                    <button onClick={() => {
+                    <button data-ui-control="" onClick={() => {
                       const completedCount = tasks.filter(t => t.status === 'completado').length;
                       if (completedCount === 0) { addNotification('No hay tareas completadas para eliminar', 'info'); return; }
                       if (confirm(`¿Eliminar ${completedCount} tarea${completedCount !== 1 ? 's' : ''} completada${completedCount !== 1 ? 's' : ''}? Esta acción no se puede deshacer.`)) {
@@ -2228,12 +1356,12 @@ export default function Ajustes() {
                     </span>
                     <h2 style={{ fontSize: 18, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em', margin: 0 }}>Sonidos y Alertas de Sistema</h2>
                   </div>
-                  <p style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 300, letterSpacing: '0.02em' }}>Controla el comportamiento acústico y notificaciones del entorno de estudio</p>
+                  <p style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 500, letterSpacing: '0.02em' }}>Controla el comportamiento acústico y notificaciones del entorno de estudio</p>
                 </div>
 
                 {/* General Toggles */}
                 <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
-                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 14, display: 'block' }}>Configuración General</span>
+                  <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 14, display: 'block' }}>Configuración General</span>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     <Toggle checked={settings.notifications} onChange={v => updateSettings({ notifications: v })}
                       label="Notificaciones Visuales del Temporizador" desc="Mostrar notificación nativa al finalizar ciclos de estudio o descansos programados." />
@@ -2244,7 +1372,7 @@ export default function Ajustes() {
 
                 {/* Event-specific settings */}
                 <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
-                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 14, display: 'block' }}>Eventos de Temporizador</span>
+                  <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 14, display: 'block' }}>Eventos de Temporizador</span>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {[
                       { id: 'pomodoro', label: 'Fin de Pomodoro', desc: 'Al completar un ciclo de concentración', color: '#E11D48' },
@@ -2259,7 +1387,7 @@ export default function Ajustes() {
                             <div style={{ width: 8, height: 8, borderRadius: '50%', background: ev.color, flexShrink: 0, boxShadow: `0 0 6px ${ev.color}50` }} />
                             <div>
                               <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{ev.label}</span>
-                              <span style={{ fontSize: 9, color: 'var(--text-tertiary)', display: 'block', marginTop: 1 }}>{ev.desc}</span>
+                              <span style={{ fontSize: 11, color: 'var(--text-tertiary)', display: 'block', marginTop: 1 }}>{ev.desc}</span>
                             </div>
                           </div>
                           <label style={{ position: 'relative', width: 36, height: 20, borderRadius: 10, background: enabled ? ev.color : 'var(--bg-surface)', border: '1px solid var(--border-default)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', padding: 2, transition: 'all 200ms' }}>
@@ -2274,14 +1402,14 @@ export default function Ajustes() {
 
                 {/* Alertas y Notificaciones */}
                 <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
-                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 14, display: 'block' }}>Alertas y Notificaciones</span>
+                  <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 14, display: 'block' }}>Alertas y Notificaciones</span>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
                       <div>
                         <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>Notificaciones nativas del sistema</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>Aparecen fuera de la app con el icono de OWA Studio</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>Aparecen fuera de la app con el icono de APHEKA</div>
                       </div>
-                      <button onClick={async () => {
+                      <button data-app-action="primary" data-ui-control="" onClick={async () => {
                         const { requestNativePermission } = await import('../../lib/notifications');
                         const ok = await requestNativePermission();
                         addNotification(ok ? 'Permiso concedido' : 'Permiso denegado', ok ? 'success' : 'error');
@@ -2290,17 +1418,17 @@ export default function Ajustes() {
                       </button>
                     </div>
                     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                      <button onClick={async () => {
+                      <button data-app-action="primary" data-ui-control="" onClick={async () => {
                         const { sendNativeNotification } = await import('../../lib/notifications');
-                        sendNativeNotification('OWA Studio', 'Notificación nativa de prueba enviada');
+                        sendNativeNotification('APHEKA', 'Notificación nativa de prueba enviada');
                       }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'var(--accent)', border: 'none', color: '#fff', transition: 'all 200ms' }}>
                         <Bell size={14} /> Probar Nativa
                       </button>
-                      <button onClick={() => { addNotification('Notificación de prueba enviada', 'success'); }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)', transition: 'all 200ms' }}>
+                      <button data-app-action="secondary" data-ui-control="" onClick={() => { addNotification('Notificación de prueba enviada', 'success'); }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)', transition: 'all 200ms' }}>
                         <Bell size={14} /> Probar Toast
                       </button>
                     </div>
-                    <p style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.5 }}>Los recordatorios reales (tareas por vencer, tareas vencidas, eventos y sesiones de estudio) llegan solos cuando corresponde, una vez por ocurrencia.</p>
+                    <p style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>Los recordatorios reales (tareas por vencer, tareas vencidas, eventos y sesiones de estudio) llegan solos cuando corresponde, una vez por ocurrencia.</p>
                   </div>
                 </div>
               </section>
@@ -2316,14 +1444,16 @@ export default function Ajustes() {
                     </span>
                     <h2 style={{ fontSize: 18, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em', margin: 0 }}>Sistema</h2>
                   </div>
-                  <p style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 300, letterSpacing: '0.02em' }}>Información de la aplicación, sus datos y almacenamiento local</p>
+                  <p style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 500, letterSpacing: '0.02em' }}>Información de la aplicación, sus datos y almacenamiento local</p>
                 </div>
 
+                <PointerSettings />
+                <AssistantWorkspace />
                 {/* App info */}
                 <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
-                  <CardHeader icon={<AppWindow size={14} />} title="Sobre OWA" desc="Aplicación instalada" />
+                  <CardHeader icon={<AppWindow size={14} />} title="Sobre APHEKA" desc="Aplicación instalada" />
                   <div>
-                    <InfoRow label="Nombre" value={appInfo?.name || 'OWA Studio'} mono />
+                    <InfoRow label="Nombre" value={appInfo?.name || 'APHEKA'} mono />
                     <InfoRow label="Versión" value={appInfo?.version || '6.7'} mono />
                     <InfoRow label="Tauri" value={appInfo?.tauriVersion || '—'} mono />
                     <InfoRow label="Entorno" value={isTauri() ? 'Aplicación nativa (Tauri)' : 'Navegador web'} last />
@@ -2344,7 +1474,7 @@ export default function Ajustes() {
                           <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)' }}>Peso total</span>
                           <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Share Tech Mono', monospace" }}>{fmtBytes(grand)}</span>
-                            <button onClick={() => setPesoTick(t => t + 1)} title="Volver a medir" style={{ display: 'flex', alignItems: 'center', gap: 5, height: 26, padding: '0 10px', borderRadius: 7, fontSize: 10, fontWeight: 600, cursor: 'pointer', background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>
+                            <button data-ui-control="" onClick={() => setPesoTick(t => t + 1)} title="Volver a medir" style={{ display: 'flex', alignItems: 'center', gap: 5, height: 26, padding: '0 10px', borderRadius: 7, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>
                               <RefreshCw size={11} /> Actualizar
                             </button>
                           </span>
@@ -2352,8 +1482,8 @@ export default function Ajustes() {
                         {quota > 0 && (
                           <div style={{ marginBottom: 16 }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
-                              <span style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Uso de almacenamiento</span>
-                              <span style={{ fontSize: 9.5, fontFamily: "'Share Tech Mono', monospace", color: totalColor }}>{totalPct.toFixed(1)}% de {fmtBytes(quota)}</span>
+                              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Uso de almacenamiento</span>
+                              <span style={{ fontSize: 11, fontFamily: "'Share Tech Mono', monospace", color: totalColor }}>{totalPct.toFixed(1)}% de {fmtBytes(quota)}</span>
                             </div>
                             <div style={{ height: 8, borderRadius: 6, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
                               <div style={{ height: '100%', width: `${Math.max(0.6, totalPct)}%`, borderRadius: 6, background: totalColor, transition: 'width 400ms ease' }} />
@@ -2365,11 +1495,11 @@ export default function Ajustes() {
                           return (
                             <div key={r.label} style={{ marginBottom: 12 }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5, gap: 10 }}>
-                                <span style={{ fontSize: 10.5, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                                <span style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
                                   <span style={{ width: 9, height: 9, borderRadius: 3, background: r.color, flexShrink: 0 }} />
                                   {r.label}
                                 </span>
-                                <span style={{ fontSize: 10, fontFamily: "'Share Tech Mono', monospace", color: 'var(--text-muted)', flexShrink: 0 }}>
+                                <span style={{ fontSize: 11, fontFamily: "'Share Tech Mono', monospace", color: 'var(--text-muted)', flexShrink: 0 }}>
                                   {fmtBytes(r.size)} <span style={{ color: r.color }}>· {pct.toFixed(1)}%</span>
                                 </span>
                               </div>
@@ -2379,7 +1509,7 @@ export default function Ajustes() {
                             </div>
                           );
                         })}
-                        <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.5 }}>
+                        <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.5 }}>
                           {keyCount} claves en localStorage · {idb > 0 ? `la base de datos IndexedDB ocupa ${fmtBytes(idb)}` : 'la base de datos IndexedDB no está disponible en este navegador'}.
                         </p>
                       </>
@@ -2389,7 +1519,7 @@ export default function Ajustes() {
 
                 {/* App folders */}
                 <div className="bento-card" style={{ padding: '24px', border: '1px solid var(--border-subtle)' }}>
-                  <CardHeader icon={<FolderOpen size={14} />} title="Rutas de la aplicación" desc="Dónde guarda OWA sus datos" />
+                  <CardHeader icon={<FolderOpen size={14} />} title="Rutas de la aplicación" desc="Dónde guarda APHEKA sus datos" />
                   {isTauri() ? (
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                       {appDirs.map((d, i) => (
@@ -2398,11 +1528,11 @@ export default function Ajustes() {
                             {d.root ? <Boxes size={13} /> : <HardDrive size={13} />}
                           </span>
                           <div style={{ minWidth: 0, flex: 1 }}>
-                            <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{d.label}</div>
+                            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{d.label}</div>
                             <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontFamily: "'JetBrains Mono', monospace", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={d.path}>{d.path}</div>
                           </div>
                           <CopyButton text={d.path} />
-                          <button onClick={() => { openPath(d.path).catch(() => addNotification('No se pudo abrir la carpeta', 'error')); }}
+                          <button data-ui-control="" onClick={() => { openPath(d.path).catch(() => addNotification('No se pudo abrir la carpeta', 'error')); }}
                             title="Abrir en el Explorador" style={{ width: 24, height: 24, borderRadius: 6, flexShrink: 0, background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', color: 'var(--accent)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             <FolderOpen size={12} />
                           </button>
@@ -2439,12 +1569,12 @@ export default function Ajustes() {
                           </div>
                           {items.sort((a, b) => b.size - a.size).slice(0, 6).map(it => (
                             <div key={it.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 0' }}>
-                              <span style={{ fontSize: 10, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{it.key}</span>
-                              <span style={{ fontSize: 10, fontFamily: "'Share Tech Mono', monospace", color: 'var(--text-muted)', flexShrink: 0, marginLeft: 8 }}>{fmtBytes(it.size)}</span>
+                              <span style={{ fontSize: 11, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{it.key}</span>
+                              <span style={{ fontSize: 11, fontFamily: "'Share Tech Mono', monospace", color: 'var(--text-muted)', flexShrink: 0, marginLeft: 8 }}>{fmtBytes(it.size)}</span>
                             </div>
                           ))}
                           {items.length > 6 && (
-                            <span style={{ fontSize: 9, color: 'var(--text-muted)', textAlign: 'center' }}>… y {items.length - 6} entradas más</span>
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center' }}>… y {items.length - 6} entradas más</span>
                           )}
                         </>
                       );
@@ -2457,7 +1587,7 @@ export default function Ajustes() {
                       Los datos cacheados (imágenes de horario, ajustes temporales) se pueden regenerar. 
                       Esto <strong>no</strong> elimina carátulas, canciones, archivos ni descargas.
                     </div>
-                    <button onClick={() => {
+                    <button data-ui-control="" onClick={() => {
                       if (!confirm('¿Limpiar caché temporal? Las imágenes de horario y datos regenerables se eliminarán. Los archivos descargados no se verán afectados.')) return;
                       del('owa_sched_images_v3').then(() => {
                         addNotification('Caché temporal limpiado correctamente', 'success');
@@ -2472,23 +1602,9 @@ export default function Ajustes() {
                   </div>
                 </div>
 
-                {/* Formato de Hora */}
-                <div className="bento-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>Formato de Hora</span>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    {(['24h', '12h'] as const).map(f => (
-                      <button key={f} onClick={() => updateSettings({ timeFormat: f })}
-                        style={{ flex: 1, padding: '12px 0', borderRadius: 12, fontSize: 14, fontWeight: 600, border: `1px solid ${(settings.timeFormat || '24h') === f ? 'var(--accent)' : 'var(--border-soft)'}`, background: (settings.timeFormat || '24h') === f ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : 'var(--bg-deep)', color: (settings.timeFormat || '24h') === f ? 'var(--accent)' : 'var(--text-secondary)', cursor: 'pointer', transition: 'all 200ms' }}>
-                        {f === '24h' ? '24 horas (00:00 – 23:59)' : '12 horas (AM / PM)'}
-                      </button>
-                    ))}
-                  </div>
-                  <p style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>Afecta a todo el planificador, horario, eventos, cabeceras y tiempos en toda la app.</p>
-                </div>
-
                 {/* Respaldo y migración */}
                 <div className="bento-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>Respaldo y migración de datos</span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>Respaldo y migración de datos</span>
                   <div style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.6 }}>
                     Exporta todo tu contenido (notas, tareas, cursos, eventos, hábitos, música, ajustes) a un archivo
                     para pasarlo a otra computadora o a una futura versión. Al instalar una versión nueva sobre esta
@@ -2496,24 +1612,24 @@ export default function Ajustes() {
                     respaldo por seguridad (se reconectan al importar).
                   </div>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    <button onClick={handleExportBackup} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'color-mix(in srgb, var(--accent) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 35%, transparent)', color: 'var(--accent)' }}>
+                    <button data-ui-control="" onClick={handleExportBackup} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'color-mix(in srgb, var(--accent) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 35%, transparent)', color: 'var(--accent)' }}>
                       <Download size={14} /> Exportar respaldo
                     </button>
-                    <button onClick={handleImportBackup} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-secondary)' }}>
+                    <button data-ui-control="" onClick={handleImportBackup} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-secondary)' }}>
                       <Upload size={14} /> Importar respaldo
                     </button>
-                    <button onClick={handleRevealData} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-secondary)' }}>
+                    <button data-ui-control="" onClick={handleRevealData} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'var(--bg-deep)', border: '1px solid var(--border-soft)', color: 'var(--text-secondary)' }}>
                       <FolderOpen size={14} /> Abrir carpeta de datos
                     </button>
                   </div>
                   {dataFolder && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                      <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: "'Share Tech Mono', monospace", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }} title={dataFolder}>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: "'Share Tech Mono', monospace", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }} title={dataFolder}>
                         {dataFolder}
                       </div>
                       {dataFolder && (
-                        <button onClick={() => openPath(dataFolder).catch(() => { })} title="Abrir la carpeta raíz de datos de OWA Studio en el explorador"
-                          style={{ height: 26, padding: '0 11px', borderRadius: 7, border: '1px solid var(--border-soft)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 10, fontWeight: 600, flexShrink: 0, fontFamily: "'Inter Tight', sans-serif" }}>
+                        <button data-app-action="secondary" data-ui-control="" onClick={() => openPath(dataFolder).catch(() => { })} title="Abrir la carpeta raíz de datos de APHEKA en el explorador"
+                          style={{ height: 26, padding: '0 11px', borderRadius: 7, border: '1px solid var(--border-soft)', background: 'var(--bg-elevated)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 11, fontWeight: 600, flexShrink: 0, fontFamily: "'Inter Tight', sans-serif" }}>
                           Abrir carpeta
                         </button>
                       )}
@@ -2527,7 +1643,7 @@ export default function Ajustes() {
 
                 {/* Hecho por */}
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, padding: '18px 0 6px' }}>
-                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Hecho por</span>
+                  <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Hecho por</span>
                   <span style={{ fontSize: 17, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em' }}>MaxCB</span>
                 </div>
 
@@ -2537,6 +1653,16 @@ export default function Ajustes() {
 
           </div>
         </main>
+        {activeTab!=='perfil' && <aside className="settings-outline">
+          <p className="workspace-eyebrow">En esta sección</p>
+          <label className="settings-search"><Search size={15}/><input aria-label="Buscar opción en esta sección" value={settingsSearch} onChange={e=>setSettingsSearch(e.target.value)} placeholder="Buscar opción…" /></label>
+          <nav aria-label="Opciones de la categoría">
+            {settingsOutline.filter(item=>item.label.toLocaleLowerCase().includes(settingsSearch.toLocaleLowerCase())).map(item=><button data-ui-control="" key={item.id}
+              onClick={()=>document.getElementById(item.id)?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'})}>{item.label}</button>)}
+            {settingsSearch.trim().length>0 && !settingsOutline.some(item=>item.label.toLocaleLowerCase().includes(settingsSearch.toLocaleLowerCase())) && <p>No hay coincidencias en esta categoría.</p>}
+          </nav>
+        </aside>}
+
       </div>
 
       {/* Google Connect Modal */}
@@ -2553,7 +1679,7 @@ export default function Ajustes() {
                 </svg>
                 Conectar con Google
               </h2>
-              <button onClick={() => setShowGoogleModal(false)} style={{ width: 28, height: 28, borderRadius: 6, background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer' }}><X size={16} /></button>
+              <button data-ui-control="" onClick={() => setShowGoogleModal(false)} style={{ width: 28, height: 28, borderRadius: 6, background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer' }}><X size={16} /></button>
             </div>
 
             {googleProfile ? (
@@ -2572,16 +1698,16 @@ export default function Ajustes() {
                   </div>
                   <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#10B981', marginLeft: 'auto', boxShadow: '0 0 6px rgba(16,185,129,0.5)' }} />
                 </div>
-                <button onClick={handleGoogleSignOut} style={{ width: '100%', padding: '10px', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: '1px solid rgba(239,68,68,0.2)', background: 'rgba(239,68,68,0.06)', color: '#EF4444' }}>
+                <button data-ui-control="" onClick={handleGoogleSignOut} style={{ width: '100%', padding: '10px', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: '1px solid rgba(239,68,68,0.2)', background: 'rgba(239,68,68,0.06)', color: '#EF4444' }}>
                   Desconectar Google
                 </button>
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <p style={{ fontSize: 13, color: 'var(--text-tertiary)', lineHeight: 1.5 }}>
-                  Conecta tu cuenta de Google para usar tu identidad en OWA Studio.
+                  Conecta tu cuenta de Google para usar tu identidad en APHEKA.
                 </p>
-                <button onClick={handleGoogleSignIn} style={{ width: '100%', padding: '12px', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer', border: 'none', background: '#4285F4', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                <button data-ui-control="" onClick={handleGoogleSignIn} style={{ width: '100%', padding: '12px', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer', border: 'none', background: '#4285F4', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                   <svg viewBox="0 0 24 24" style={{ width: 18, height: 18 }}><path fill="#fff" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/></svg>
                   Iniciar sesión con Google
                 </button>
@@ -2605,8 +1731,8 @@ export default function Ajustes() {
               placeholder="DeseoBorrarTodo"
               style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-deep)', color: 'var(--text-primary)', fontSize: 12, outline: 'none', marginBottom: 16 }} />
             <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-              <button onClick={() => { setShowClearAllMusic(false); setClearAllMusicText(''); }} className="btn-secondary" style={{ height: 38, padding: '0 20px', fontSize: 12 }}>Cancelar</button>
-              <button onClick={() => {
+              <button data-ui-control="" onClick={() => { setShowClearAllMusic(false); setClearAllMusicText(''); }} className="btn-secondary" style={{ height: 38, padding: '0 20px', fontSize: 12 }}>Cancelar</button>
+              <button data-ui-control="" onClick={() => {
                 if (clearAllMusicText.trim() !== 'DeseoBorrarTodo') return;
                 clearAllMusicData();
                 setShowClearAllMusic(false);
@@ -2878,7 +2004,7 @@ function CharacterDrawModal({ currentDraw, currentSpeeds, characterSize, onSave,
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>Dibujar personaje</span>
-          <button onClick={onClose} className="btn-ghost" style={{ padding: 6, borderRadius: '50%' }}><X size={18} /></button>
+          <button data-ui-control="" onClick={onClose} className="btn-ghost" style={{ padding: 6, borderRadius: '50%' }}><X size={18} /></button>
         </div>
 
         {/* Canvas */}
@@ -2899,21 +2025,21 @@ function CharacterDrawModal({ currentDraw, currentSpeeds, characterSize, onSave,
         {/* Tools */}
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 16 }}>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>Color:</span>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Color:</span>
             <input type="color" value={drawColor} onChange={e => { setDrawColor(e.target.value); setIsEraser(false); }}
               style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid var(--border-default)', background: 'transparent', padding: 1, cursor: 'pointer' }} />
           </div>
 
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>Grosor:</span>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Grosor:</span>
             <input type="range" min={2} max={20} step={1} value={brushSize} onChange={e => setBrushSize(parseInt(e.target.value))}
               style={{ width: 60, accentColor: 'var(--accent)' }} />
-            <span style={{ fontSize: 9, color: 'var(--text-muted)', minWidth: 16 }}>{brushSize}</span>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', minWidth: 16 }}>{brushSize}</span>
           </div>
 
-          <button onClick={() => setIsEraser(!isEraser)}
+          <button data-ui-control="" onClick={() => setIsEraser(!isEraser)}
             style={{
-              padding: '4px 10px', borderRadius: 6, fontSize: 10, fontWeight: 500, cursor: 'pointer',
+              padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 500, cursor: 'pointer',
               background: isEraser ? 'var(--accent)' : 'var(--bg-deep)',
               border: '1px solid var(--border-default)',
               color: isEraser ? '#fff' : 'var(--text-secondary)',
@@ -2921,18 +2047,18 @@ function CharacterDrawModal({ currentDraw, currentSpeeds, characterSize, onSave,
             {isEraser ? 'Borrando' : 'Dibujar'}
           </button>
 
-          <button onClick={clearFrame}
+          <button data-ui-control="" onClick={clearFrame}
             style={{
-              padding: '4px 10px', borderRadius: 6, fontSize: 10, fontWeight: 500, cursor: 'pointer',
+              padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 500, cursor: 'pointer',
               background: 'var(--bg-deep)', border: '1px solid var(--border-default)',
               color: 'var(--text-muted)',
             }}>
             Limpiar
           </button>
 
-          <button onClick={saveCurrentFrame}
+          <button data-ui-control="" onClick={saveCurrentFrame}
             style={{
-              padding: '4px 10px', borderRadius: 6, fontSize: 10, fontWeight: 500, cursor: 'pointer',
+              padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 500, cursor: 'pointer',
               background: hasDrawn ? 'var(--accent)' : 'var(--bg-deep)',
               border: '1px solid var(--border-default)',
               color: hasDrawn ? '#fff' : 'var(--text-muted)',
@@ -2944,10 +2070,10 @@ function CharacterDrawModal({ currentDraw, currentSpeeds, characterSize, onSave,
         {/* Frames / Layers */}
         <div style={{ marginBottom: 16 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.03em' }}>Fotogramas (se rotan en bucle)</span>
-            <button onClick={addFrame}
+            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.03em' }}>Fotogramas (se rotan en bucle)</span>
+            <button data-app-action="primary" data-ui-control="" onClick={addFrame}
               style={{
-                padding: '3px 10px', borderRadius: 6, fontSize: 10, fontWeight: 600, cursor: 'pointer',
+                padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
                 background: 'var(--accent)', border: 'none', color: '#fff',
               }}>
               + Agregar frame
@@ -2969,34 +2095,34 @@ function CharacterDrawModal({ currentDraw, currentSpeeds, characterSize, onSave,
                 {f ? (
                   <img src={f} alt={`Frame ${idx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 ) : (
-                  <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7, color: 'var(--text-muted)' }}>Vacio</div>
+                  <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: 'var(--text-muted)' }}>Vacio</div>
                 )}
               </div>
 
               {/* Frame number */}
-              <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-tertiary)', minWidth: 20 }}>#{idx + 1}</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', minWidth: 20 }}>#{idx + 1}</span>
 
               {/* Speed slider */}
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 8, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Vel:</span>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Vel:</span>
                 <input type="range" min={100} max={3000} step={100} value={speeds[idx] || 1000}
                   onChange={e => updateSpeed(idx, parseInt(e.target.value))}
                   style={{ flex: 1, height: 3, accentColor: 'var(--accent)', cursor: 'pointer' }} />
-                <span style={{ fontSize: 9, color: 'var(--text-secondary)', minWidth: 40, textAlign: 'right', fontFamily: 'monospace' }}>
+                <span style={{ fontSize: 11, color: 'var(--text-secondary)', minWidth: 40, textAlign: 'right', fontFamily: 'monospace' }}>
                   {(speeds[idx] || 1000)}ms
                 </span>
               </div>
 
               {/* Delete */}
               {frames.length > 1 && (
-                <button onClick={(e) => { e.stopPropagation(); removeFrame(idx); }}
-                  style={{ width: 20, height: 20, borderRadius: '50%', background: 'rgba(255,50,50,0.2)', border: 'none', color: 'var(--error)', fontSize: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <button data-ui-control="" onClick={(e) => { e.stopPropagation(); removeFrame(idx); }}
+                  style={{ width: 20, height: 20, borderRadius: '50%', background: 'rgba(255,50,50,0.2)', border: 'none', color: 'var(--error)', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   X
                 </button>
               )}
             </div>
           ))}
-          <div style={{ fontSize: 9, color: 'var(--text-tertiary)', marginTop: 8 }}>
+          <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 8 }}>
             {frameCount > 1
               ? `Ciclo: ${speeds.slice(0, frameCount).map((s, i) => `F${i + 1} (${s}ms)`).join(' → ')} → vuelve al inicio`
               : 'Un solo frame (sin ciclo)'}
@@ -3005,7 +2131,7 @@ function CharacterDrawModal({ currentDraw, currentSpeeds, characterSize, onSave,
 
         {/* Preview within bar */}
         <div style={{ padding: '14px', borderRadius: 10, background: 'var(--bg-deep)', border: '1px solid var(--border-default)', marginBottom: 16 }}>
-          <div style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 10 }}>Preview en la barra</div>
+          <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 10 }}>Preview en la barra</div>
           <div style={{ position: 'relative', height: 48, display: 'flex', alignItems: 'center', padding: '0 4px' }}>
             <div style={{ flex: 1, height: 3, borderRadius: 2, background: 'rgba(255,255,255,0.06)', position: 'relative' }}>
               <div style={{ width: '45%', height: '100%', borderRadius: 2, background: 'var(--accent)' }} />
@@ -3022,10 +2148,10 @@ function CharacterDrawModal({ currentDraw, currentSpeeds, characterSize, onSave,
 
         {/* Actions */}
         <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-          <button onClick={onClose} style={{ padding: '10px 20px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'var(--bg-deep)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)' }}>
+          <button data-ui-control="" onClick={onClose} style={{ padding: '10px 20px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'var(--bg-deep)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)' }}>
             Cancelar
           </button>
-          <button onClick={saveAll} style={{ padding: '10px 24px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'var(--accent)', border: 'none', color: '#fff' }}>
+          <button data-app-action="primary" data-ui-control="" onClick={saveAll} style={{ padding: '10px 24px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'var(--accent)', border: 'none', color: '#fff' }}>
             Guardar y cerrar
           </button>
         </div>
@@ -3041,7 +2167,7 @@ function SliderRow({ label, value, min, max, step, unit, onChange, accent, displ
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-        <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.03em' }}>{label}</span>
+        <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.03em' }}>{label}</span>
         <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)' }}>
           {displayMap ? displayMap[value] ?? `${value}${unit}` : `${value}${unit}`}
         </span>
@@ -3059,7 +2185,7 @@ function SliderRow({ label, value, min, max, step, unit, onChange, accent, displ
 
 // ── Zona de riesgo: desinstalación con confirmación escrita ──────────────────
 function UninstallSection() {
-  const CONFIRM = 'DESINSTALAR OWA';
+  const CONFIRM = 'DESINSTALAR APHEKA';
   const [text, setText] = useState('');
   const [wiping, setWiping] = useState(false);
   const [status, setStatus] = useState('');
@@ -3082,7 +2208,7 @@ function UninstallSection() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '16px 18px', borderRadius: 12, border: '1px solid rgba(239,68,68,0.22)', background: 'rgba(239,68,68,0.03)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <Trash2 size={14} style={{ color: '#EF4444', flexShrink: 0 }} />
-        <span style={{ fontSize: 13, fontWeight: 700, color: '#EF4444', fontFamily: "'Inter Tight', sans-serif" }}>Desinstalar OWA Studio</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: '#EF4444', fontFamily: "'Inter Tight', sans-serif" }}>Desinstalar APHEKA</span>
       </div>
       <div style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.6 }}>
         Para desinstalar por completo: <b style={{ color: 'var(--text-secondary)' }}>1)</b> exporta tu respaldo arriba, <b style={{ color: 'var(--text-secondary)' }}>2)</b> escribe la confirmación y abre el desinstalador de Windows — elimina el programa y todos sus paquetes. Opcionalmente, borra también tus datos locales antes de salir.
@@ -3090,20 +2216,20 @@ function UninstallSection() {
       <input value={text} onChange={e => setText(e.target.value)} placeholder={`Escribe "${CONFIRM}" para confirmar`}
         style={{ width: '100%', boxSizing: 'border-box', height: 36, borderRadius: 9, border: `1px solid ${confirmed ? '#EF444455' : 'var(--border-soft)'}`, background: 'var(--bg-deep)', color: confirmed ? '#EF4444' : 'var(--text-primary)', padding: '0 12px', fontSize: 12, outline: 'none', fontFamily: "'JetBrains Mono', monospace" }} />
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <button
+        <button data-ui-control=""
           onClick={() => { if (confirmed) { setStatus('Abriendo el desinstalador de Windows…'); openUrl('ms-settings:appsfeatures').catch(() => setStatus('No se pudo abrir Ajustes de Windows.')); } }}
           disabled={!confirmed}
           style={{ flex: 1, minWidth: 170, height: 36, borderRadius: 9, border: 'none', background: confirmed ? '#EF4444' : 'var(--border-subtle)', color: confirmed ? '#fff' : 'var(--text-muted)', fontSize: 11.5, fontWeight: 700, cursor: confirmed ? 'pointer' : 'default', opacity: confirmed ? 1 : 0.55, fontFamily: "'Inter Tight', sans-serif" }}>
           Abrir desinstalador de Windows
         </button>
-        <button
+        <button data-ui-control=""
           onClick={() => { if (confirmed && !wiping) doWipe(); }}
           disabled={!confirmed || wiping}
           style={{ flex: 1, minWidth: 170, height: 36, borderRadius: 9, border: '1px solid rgba(239,68,68,0.35)', background: 'transparent', color: confirmed ? '#EF4444' : 'var(--text-muted)', fontSize: 11.5, fontWeight: 600, cursor: confirmed && !wiping ? 'pointer' : 'default', opacity: confirmed && !wiping ? 1 : 0.55 }}>
           Borrar mis datos y cerrar
         </button>
       </div>
-      {status && <div style={{ fontSize: 10.5, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{status}</div>}
+      {status && <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{status}</div>}
     </div>
   );
 }
@@ -3124,13 +2250,13 @@ function ColorRow({ label, value, onChange }: { label: string; value: string; on
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'space-between' }}>
-      <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.03em' }}>{label}</span>
+      <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)', letterSpacing: '0.03em' }}>{label}</span>
       <div ref={pickerRef} style={{ position: 'relative' }}>
         <div onClick={() => setIsOpen(!isOpen)}
           style={{
             width: 32, height: 24, borderRadius: 6, cursor: 'pointer', border: '2px solid var(--border-default)',
             background: value || 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 8, color: 'var(--text-muted)',
+            fontSize: 11, color: 'var(--text-muted)',
           }}>
           {!value && <span>—</span>}
         </div>
@@ -3149,9 +2275,9 @@ function ColorRow({ label, value, onChange }: { label: string; value: string; on
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
               <input type="text" value={value} onChange={e => onChange(e.target.value)}
                 placeholder="#hex"
-                style={{ flex: 1, height: 28, borderRadius: 6, border: '1px solid var(--border-default)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 8px', fontSize: 10, fontFamily: 'monospace', outline: 'none' }} />
-              <button onClick={() => { onChange(''); setIsOpen(false); }}
-                style={{ height: 28, padding: '0 8px', borderRadius: 6, border: '1px solid var(--border-default)', background: 'var(--bg-deep)', color: 'var(--text-muted)', fontSize: 9, cursor: 'pointer' }}>
+                style={{ flex: 1, height: 28, borderRadius: 6, border: '1px solid var(--border-default)', background: 'var(--bg-deep)', color: 'var(--text-primary)', padding: '0 8px', fontSize: 11, fontFamily: 'monospace', outline: 'none' }} />
+              <button data-ui-control="" onClick={() => { onChange(''); setIsOpen(false); }}
+                style={{ height: 28, padding: '0 8px', borderRadius: 6, border: '1px solid var(--border-default)', background: 'var(--bg-deep)', color: 'var(--text-muted)', fontSize: 11, cursor: 'pointer' }}>
                 Limpiar
               </button>
             </div>
@@ -3162,3 +2288,5 @@ function ColorRow({ label, value, onChange }: { label: string; value: string; on
   );
 }
 
+import AssistantWorkspace from '../ui/AssistantWorkspace';
+import PointerSettings from '../ui/PointerSettings';

@@ -1,8 +1,12 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Default capabilities for OWA Studio",
-  "windows": ["main", "floating-timer", "pdf-viewer"],
+  "description": "APHEKA desktop capabilities",
+  "windows": [
+    "main",
+    "floating-timer",
+    "pdf-viewer"
+  ],
   "permissions": [
     "core:default",
     "core:window:default",
@@ -22,6 +26,7 @@
     "core:window:allow-maximize",
     "core:window:allow-unmaximize",
     "core:webview:allow-create-webview-window",
+    "core:webview:allow-set-webview-focus",
     "core:event:default",
     "core:event:allow-emit",
     "core:event:allow-emit-to",
@@ -34,88 +39,558 @@
     {
       "identifier": "opener:allow-open-path",
       "allow": [
-        { "path": "$APPDATA/**" },
-        { "path": "$APPDATA" },
-        { "path": "$HOME/**" },
-        { "path": "$HOME" },
-        { "path": "$RESOURCE/**" },
-        { "path": "$RESOURCE" },
-        { "path": "C:/Users/USER/AppData/Local/com.owa.studio/**" },
-        { "path": "C:/Users/USER/AppData/Local/com.owa.studio" },
-        { "path": "C:/**" },
-        { "path": "C:" },
-        { "path": "D:/**" },
-        { "path": "D:" },
-        { "path": "**" }
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$APPDATA"
+        },
+        {
+          "path": "$HOME/**"
+        },
+        {
+          "path": "$HOME"
+        },
+        {
+          "path": "$RESOURCE/**"
+        },
+        {
+          "path": "$RESOURCE"
+        },
+        {
+          "path": "C:/Users/USER/AppData/Local/com.owa.studio/**"
+        },
+        {
+          "path": "C:/Users/USER/AppData/Local/com.owa.studio"
+        },
+        {
+          "path": "C:/**"
+        },
+        {
+          "path": "C:"
+        },
+        {
+          "path": "D:/**"
+        },
+        {
+          "path": "D:"
+        },
+        {
+          "path": "**"
+        }
       ]
     },
     {
       "identifier": "http:default",
       "allow": [
-        { "url": "https://opencode.ai/zen/v1/**" },
-        { "url": "https://opencode.ai/**" },
-        { "url": "https://openrouter.ai/api/v1/**" },
-        { "url": "https://**" }
+        {
+          "url": "https://opencode.ai/zen/v1/**"
+        },
+        {
+          "url": "https://opencode.ai/**"
+        },
+        {
+          "url": "https://openrouter.ai/api/v1/**"
+        },
+        {
+          "url": "https://**"
+        }
       ]
     },
     {
       "identifier": "fs:default",
       "allow": [
-        { "path": "$APPCACHE/**" },
-        { "path": "$APPCACHE" },
-        { "path": "$APPDATA/**" },
-        { "path": "$APPDATA" },
-        { "path": "$RESOURCE/**" },
-        { "path": "$RESOURCE" },
-        { "path": "$HOME/**" },
-        { "path": "$HOME" },
-        { "path": "C:/Users/USER/AppData/Local/com.owa.studio/**" },
-        { "path": "C:/Users/USER/AppData/Local/com.owa.studio" }
+        {
+          "path": "$APPCACHE/**"
+        },
+        {
+          "path": "$APPCACHE"
+        },
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$APPDATA"
+        },
+        {
+          "path": "$RESOURCE/**"
+        },
+        {
+          "path": "$RESOURCE"
+        },
+        {
+          "path": "$HOME/**"
+        },
+        {
+          "path": "$HOME"
+        },
+        {
+          "path": "C:/Users/USER/AppData/Local/com.owa.studio/**"
+        },
+        {
+          "path": "C:/Users/USER/AppData/Local/com.owa.studio"
+        }
       ]
     },
     {
       "identifier": "fs:allow-write-text-file",
-      "allow": [{ "path": "$APPCACHE/**" }, { "path": "$APPCACHE" }, { "path": "$APPDATA/**" }, { "path": "$APPDATA" }, { "path": "$RESOURCE/**" }, { "path": "$RESOURCE" }, { "path": "$HOME/**" }, { "path": "$HOME" }, { "path": "C:/Users/USER/AppData/Local/com.owa.studio/**" }, { "path": "C:/Users/USER/AppData/Local/com.owa.studio" }, { "path": "C:/**" }, { "path": "D:/**" }, { "path": "**" }]
+      "allow": [
+        {
+          "path": "$APPCACHE/**"
+        },
+        {
+          "path": "$APPCACHE"
+        },
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$APPDATA"
+        },
+        {
+          "path": "$RESOURCE/**"
+        },
+        {
+          "path": "$RESOURCE"
+        },
+        {
+          "path": "$HOME/**"
+        },
+        {
+          "path": "$HOME"
+        },
+        {
+          "path": "C:/Users/USER/AppData/Local/com.owa.studio/**"
+        },
+        {
+          "path": "C:/Users/USER/AppData/Local/com.owa.studio"
+        },
+        {
+          "path": "C:/**"
+        },
+        {
+          "path": "D:/**"
+        },
+        {
+          "path": "**"
+        }
+      ]
     },
     {
       "identifier": "fs:allow-write-file",
-      "allow": [{ "path": "$APPCACHE/**" }, { "path": "$APPCACHE" }, { "path": "$APPDATA/**" }, { "path": "$APPDATA" }, { "path": "$RESOURCE/**" }, { "path": "$RESOURCE" }, { "path": "$HOME/**" }, { "path": "$HOME" }, { "path": "C:/Users/USER/AppData/Local/com.owa.studio/**" }, { "path": "C:/Users/USER/AppData/Local/com.owa.studio" }, { "path": "C:/**" }, { "path": "D:/**" }, { "path": "**" }]
+      "allow": [
+        {
+          "path": "$APPCACHE/**"
+        },
+        {
+          "path": "$APPCACHE"
+        },
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$APPDATA"
+        },
+        {
+          "path": "$RESOURCE/**"
+        },
+        {
+          "path": "$RESOURCE"
+        },
+        {
+          "path": "$HOME/**"
+        },
+        {
+          "path": "$HOME"
+        },
+        {
+          "path": "C:/Users/USER/AppData/Local/com.owa.studio/**"
+        },
+        {
+          "path": "C:/Users/USER/AppData/Local/com.owa.studio"
+        },
+        {
+          "path": "C:/**"
+        },
+        {
+          "path": "D:/**"
+        },
+        {
+          "path": "**"
+        }
+      ]
     },
     {
       "identifier": "fs:allow-write-text-file",
-      "allow": [{ "path": "$APPCACHE/**" }, { "path": "$APPCACHE" }, { "path": "$APPDATA/**" }, { "path": "$APPDATA" }, { "path": "$HOME/**" }, { "path": "$HOME" }, { "path": "C:/Users/USER/AppData/Local/com.owa.studio/**" }, { "path": "C:/Users/USER/AppData/Local/com.owa.studio" }, { "path": "C:/**" }, { "path": "D:/**" }, { "path": "**" }]
+      "allow": [
+        {
+          "path": "$APPCACHE/**"
+        },
+        {
+          "path": "$APPCACHE"
+        },
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$APPDATA"
+        },
+        {
+          "path": "$HOME/**"
+        },
+        {
+          "path": "$HOME"
+        },
+        {
+          "path": "C:/Users/USER/AppData/Local/com.owa.studio/**"
+        },
+        {
+          "path": "C:/Users/USER/AppData/Local/com.owa.studio"
+        },
+        {
+          "path": "C:/**"
+        },
+        {
+          "path": "D:/**"
+        },
+        {
+          "path": "**"
+        }
+      ]
     },
     {
       "identifier": "fs:allow-read",
-      "allow": [{ "path": "$APPCACHE/**" }, { "path": "$APPCACHE" }, { "path": "$APPDATA/**" }, { "path": "$APPDATA" }, { "path": "$RESOURCE/**" }, { "path": "$RESOURCE" }, { "path": "$HOME/**" }, { "path": "$HOME" }, { "path": "C:/Users/USER/AppData/Local/com.owa.studio/**" }, { "path": "C:/Users/USER/AppData/Local/com.owa.studio" }, { "path": "C:/**" }, { "path": "D:/**" }, { "path": "E:/**" }, { "path": "F:/**" }, { "path": "G:/**" }, { "path": "H:/**" }, { "path": "I:/**" }, { "path": "**" }]
+      "allow": [
+        {
+          "path": "$APPCACHE/**"
+        },
+        {
+          "path": "$APPCACHE"
+        },
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$APPDATA"
+        },
+        {
+          "path": "$RESOURCE/**"
+        },
+        {
+          "path": "$RESOURCE"
+        },
+        {
+          "path": "$HOME/**"
+        },
+        {
+          "path": "$HOME"
+        },
+        {
+          "path": "C:/Users/USER/AppData/Local/com.owa.studio/**"
+        },
+        {
+          "path": "C:/Users/USER/AppData/Local/com.owa.studio"
+        },
+        {
+          "path": "C:/**"
+        },
+        {
+          "path": "D:/**"
+        },
+        {
+          "path": "E:/**"
+        },
+        {
+          "path": "F:/**"
+        },
+        {
+          "path": "G:/**"
+        },
+        {
+          "path": "H:/**"
+        },
+        {
+          "path": "I:/**"
+        },
+        {
+          "path": "**"
+        }
+      ]
     },
     {
       "identifier": "fs:allow-write",
-      "allow": [{ "path": "$APPCACHE/**" }, { "path": "$APPCACHE" }, { "path": "$APPDATA/**" }, { "path": "$APPDATA" }, { "path": "$HOME/**" }, { "path": "$HOME" }, { "path": "C:/Users/USER/AppData/Local/com.owa.studio/**" }, { "path": "C:/Users/USER/AppData/Local/com.owa.studio" }]
+      "allow": [
+        {
+          "path": "$APPCACHE/**"
+        },
+        {
+          "path": "$APPCACHE"
+        },
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$APPDATA"
+        },
+        {
+          "path": "$HOME/**"
+        },
+        {
+          "path": "$HOME"
+        },
+        {
+          "path": "C:/Users/USER/AppData/Local/com.owa.studio/**"
+        },
+        {
+          "path": "C:/Users/USER/AppData/Local/com.owa.studio"
+        }
+      ]
     },
     {
       "identifier": "fs:allow-exists",
-      "allow": [{ "path": "$APPCACHE/**" }, { "path": "$APPCACHE" }, { "path": "$APPDATA/**" }, { "path": "$APPDATA" }, { "path": "$RESOURCE/**" }, { "path": "$RESOURCE" }, { "path": "$HOME/**" }, { "path": "$HOME" }, { "path": "C:/Users/USER/AppData/Local/com.owa.studio/**" }, { "path": "C:/Users/USER/AppData/Local/com.owa.studio" }, { "path": "C:/**" }, { "path": "D:/**" }, { "path": "E:/**" }, { "path": "F:/**" }, { "path": "G:/**" }, { "path": "H:/**" }, { "path": "I:/**" }, { "path": "**" }]
+      "allow": [
+        {
+          "path": "$APPCACHE/**"
+        },
+        {
+          "path": "$APPCACHE"
+        },
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$APPDATA"
+        },
+        {
+          "path": "$RESOURCE/**"
+        },
+        {
+          "path": "$RESOURCE"
+        },
+        {
+          "path": "$HOME/**"
+        },
+        {
+          "path": "$HOME"
+        },
+        {
+          "path": "C:/Users/USER/AppData/Local/com.owa.studio/**"
+        },
+        {
+          "path": "C:/Users/USER/AppData/Local/com.owa.studio"
+        },
+        {
+          "path": "C:/**"
+        },
+        {
+          "path": "D:/**"
+        },
+        {
+          "path": "E:/**"
+        },
+        {
+          "path": "F:/**"
+        },
+        {
+          "path": "G:/**"
+        },
+        {
+          "path": "H:/**"
+        },
+        {
+          "path": "I:/**"
+        },
+        {
+          "path": "**"
+        }
+      ]
     },
     {
       "identifier": "fs:allow-stat",
-      "allow": [{ "path": "$APPCACHE/**" }, { "path": "$APPCACHE" }, { "path": "$APPDATA/**" }, { "path": "$APPDATA" }, { "path": "$RESOURCE/**" }, { "path": "$RESOURCE" }, { "path": "$HOME/**" }, { "path": "$HOME" }, { "path": "C:/Users/USER/AppData/Local/com.owa.studio/**" }, { "path": "C:/Users/USER/AppData/Local/com.owa.studio" }, { "path": "C:/**" }, { "path": "D:/**" }, { "path": "E:/**" }, { "path": "F:/**" }, { "path": "G:/**" }, { "path": "H:/**" }, { "path": "I:/**" }, { "path": "**" }]
+      "allow": [
+        {
+          "path": "$APPCACHE/**"
+        },
+        {
+          "path": "$APPCACHE"
+        },
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$APPDATA"
+        },
+        {
+          "path": "$RESOURCE/**"
+        },
+        {
+          "path": "$RESOURCE"
+        },
+        {
+          "path": "$HOME/**"
+        },
+        {
+          "path": "$HOME"
+        },
+        {
+          "path": "C:/Users/USER/AppData/Local/com.owa.studio/**"
+        },
+        {
+          "path": "C:/Users/USER/AppData/Local/com.owa.studio"
+        },
+        {
+          "path": "C:/**"
+        },
+        {
+          "path": "D:/**"
+        },
+        {
+          "path": "E:/**"
+        },
+        {
+          "path": "F:/**"
+        },
+        {
+          "path": "G:/**"
+        },
+        {
+          "path": "H:/**"
+        },
+        {
+          "path": "I:/**"
+        },
+        {
+          "path": "**"
+        }
+      ]
     },
     {
       "identifier": "fs:allow-read-dir",
-      "allow": [{ "path": "$APPCACHE/**" }, { "path": "$APPCACHE" }, { "path": "$APPDATA/**" }, { "path": "$APPDATA" }, { "path": "$RESOURCE/**" }, { "path": "$RESOURCE" }, { "path": "$HOME/**" }, { "path": "$HOME" }, { "path": "C:/Users/USER/AppData/Local/com.owa.studio/**" }, { "path": "C:/Users/USER/AppData/Local/com.owa.studio" }, { "path": "C:/**" }, { "path": "D:/**" }, { "path": "E:/**" }, { "path": "F:/**" }, { "path": "G:/**" }, { "path": "H:/**" }, { "path": "I:/**" }, { "path": "**" }]
+      "allow": [
+        {
+          "path": "$APPCACHE/**"
+        },
+        {
+          "path": "$APPCACHE"
+        },
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$APPDATA"
+        },
+        {
+          "path": "$RESOURCE/**"
+        },
+        {
+          "path": "$RESOURCE"
+        },
+        {
+          "path": "$HOME/**"
+        },
+        {
+          "path": "$HOME"
+        },
+        {
+          "path": "C:/Users/USER/AppData/Local/com.owa.studio/**"
+        },
+        {
+          "path": "C:/Users/USER/AppData/Local/com.owa.studio"
+        },
+        {
+          "path": "C:/**"
+        },
+        {
+          "path": "D:/**"
+        },
+        {
+          "path": "E:/**"
+        },
+        {
+          "path": "F:/**"
+        },
+        {
+          "path": "G:/**"
+        },
+        {
+          "path": "H:/**"
+        },
+        {
+          "path": "I:/**"
+        },
+        {
+          "path": "**"
+        }
+      ]
     },
     {
       "identifier": "fs:allow-mkdir",
-      "allow": [{ "path": "$APPCACHE/**" }, { "path": "$APPCACHE" }, { "path": "$APPDATA/**" }, { "path": "$APPDATA" }, { "path": "$HOME/**" }, { "path": "$HOME" }]
+      "allow": [
+        {
+          "path": "$APPCACHE/**"
+        },
+        {
+          "path": "$APPCACHE"
+        },
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$APPDATA"
+        },
+        {
+          "path": "$HOME/**"
+        },
+        {
+          "path": "$HOME"
+        }
+      ]
     },
     {
       "identifier": "fs:allow-remove",
-      "allow": [{ "path": "$APPCACHE/**" }, { "path": "$APPCACHE" }, { "path": "$APPDATA/**" }, { "path": "$APPDATA" }, { "path": "$HOME/**" }, { "path": "$HOME" }]
+      "allow": [
+        {
+          "path": "$APPCACHE/**"
+        },
+        {
+          "path": "$APPCACHE"
+        },
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$APPDATA"
+        },
+        {
+          "path": "$HOME/**"
+        },
+        {
+          "path": "$HOME"
+        }
+      ]
     },
     {
       "identifier": "fs:allow-copy-file",
-      "allow": [{ "path": "$APPCACHE/**" }, { "path": "$APPCACHE" }, { "path": "$APPDATA/**" }, { "path": "$APPDATA" }, { "path": "$HOME/**" }, { "path": "$HOME" }]
+      "allow": [
+        {
+          "path": "$APPCACHE/**"
+        },
+        {
+          "path": "$APPCACHE"
+        },
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$APPDATA"
+        },
+        {
+          "path": "$HOME/**"
+        },
+        {
+          "path": "$HOME"
+        }
+      ]
     },
     "shell:default",
     "notification:default",
@@ -124,6 +599,7 @@
     "notification:allow-notify",
     "notification:allow-permission-state",
     "notification:allow-register-action-types",
-    "notification:allow-check-permissions"
+    "notification:allow-check-permissions",
+    "core:window:allow-set-skip-taskbar"
   ]
 }

@@ -3,8 +3,19 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import FloatingTimer from "./components/FloatingTimer";
 import PdfViewerWindow from "./components/PdfViewerWindow";
-import YouTubeFloatingPlayer from "./components/YouTubeFloatingPlayer";
+import {invoke,isTauri} from "@tauri-apps/api/core";
+import {retireMediaState} from "./lib/retiredMedia";
+import "./fonts.css";
 import "./index.css";
+import "./apheka.css";
+import "./workspace.css";
+import "./refinement.css";
+import "./desktop.css";
+import "./studio.css";
+import "./quiet.css";
+import "./interface.css";
+import "./interaction-refinement.css";
+import "./workspace-622.css";
 import ErrorBoundary from "./components/ErrorBoundary";
 
 // Parche global anti-cuota: NINGÚN localStorage.setItem de la app puede volver
@@ -46,19 +57,9 @@ function getWindowLabel(): string {
 
 const rootEl = document.getElementById("root") as HTMLElement;
 const label = getWindowLabel();
-
-try {
-  const ERROR_LOG_KEY = "owa_error_log_v1";
-  const logErr = (kind: string, message: string, stack?: string) => {
-    try {
-      const prev = JSON.parse(localStorage.getItem(ERROR_LOG_KEY) || "[]");
-      prev.push({ at: new Date().toISOString(), kind, message, stack: stack || "", href: window.location.hash || "" });
-      localStorage.setItem(ERROR_LOG_KEY, JSON.stringify(prev.slice(-10)));
-    } catch { /* noop */ }
-  };
-  window.addEventListener("error", (e) => logErr("window", e.message || String(e.error), e.error?.stack));
-  window.addEventListener("unhandledrejection", (e) => logErr("promise", String(e.reason?.message || e.reason), e.reason?.stack));
-} catch { /* noop */ }
+retireMediaState();
+// Retired windows never mount an iframe or restore pending playback.
+if (isTauri()) void invoke("retire_legacy_media_windows").catch(()=>{});
 
 try {
   const ERROR_LOG_KEY = "owa_error_log_v1";
@@ -78,7 +79,7 @@ if (label === "floating-timer") {
 } else if (label === "pdf-viewer") {
   ReactDOM.createRoot(rootEl).render(<PdfViewerWindow />);
 } else if (label === "youtube-player") {
-  ReactDOM.createRoot(rootEl).render(<YouTubeFloatingPlayer />);
+  rootEl.replaceChildren();
 } else {
   ReactDOM.createRoot(rootEl).render(
     <ErrorBoundary>

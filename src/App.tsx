@@ -1,4 +1,21 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react';
+import {nextMusicSelection} from './lib/musicRadio';
+import {useYouTubeRecovery} from './hooks/useYouTubeRecovery';
+import {primeStudyAlarm} from './lib/studyAlarm';
+import MediaDownloadBridge from './components/music/MediaDownloadBridge';
+import CatalogDownloadBridge from './components/music/CatalogDownloadBridge';
+import {useWallpaperPalette} from './hooks/useWallpaperPalette';
+import {useAppSlice} from './store/AppContext';
+import {useWorkspaceNavigation} from './hooks/useWorkspaceNavigation';
+import {useAutoDock} from './hooks/useAutoDock';
+import WorkspaceLauncher from './components/ui/WorkspaceLauncher';
+import AnimatedWallpaper from './components/AnimatedWallpaper';
+import EditorBlockMenu from './components/ui/EditorBlockMenu';
+import ReleaseNotice from './components/ui/ReleaseNotice';
+import McpBridge from './components/McpBridge';
+import CharvisSidebar from './components/ui/CharvisSidebar';
+import { useFullscreenLifecycle } from './hooks/useWindowFullscreen';
+import AphekaWordmark from './components/ui/AphekaWordmark';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react';
 import {
   Home, NotebookPen, Clock, ListTodo, Settings,
   Music,
@@ -23,8 +40,7 @@ const CursosHub = lazy(() => import('./components/views/CursosHub'));
 import OAuthCallback from './components/OAuthCallback';
 import GlobalPlayer from './components/GlobalPlayer';
 import DownloadManager from './components/ui/DownloadManager';
-import NowPlayingView from './components/NowPlayingView';
-import VideoPiP from './components/VideoPiP';
+import TrackArtworkDialog from './components/music/TrackArtworkDialog';
 import ImageContextMenu from './components/ui/ImageContextMenu';
 
 type ViewId = 'inicio' | 'estudio' | 'tareas' | 'notas' | 'musica' | 'planificacion' | 'cursos' | 'ajustes' | 'curso_detalle';
@@ -34,25 +50,22 @@ interface AppContentProps {
 }
 
 function AppContent() {
-  const { settings, courses, addCourse, navigateTo, setNavigateTo, importState, updateSettings, toastMessage, deleteOldCompletedTasks, youtubeVideoUrl, setYoutubeVideoUrl, isPlayingMusic, musicVolume, musicProgress, musicDuration, setMusicDuration, setMusicProgressRaw, setIsPlayingMusic, playTrack, musicQueue, setMusicQueue, shuffleMode, repeatMode, tracks, currentTrackId, setRepeatMode, coverModalTrackId, showRestPrompt, handlePomodoroBannerClick, queueSource, pipUrl, pipTitle, pipAutoplay, setPipUrl, pipPlaying, setPipPlaying, pipAfterQueue, setPipAfterQueue, courseDeepLink, setCourseDeepLink, addNotification } = useApp();
-  // Restablece el modo ahorro de recursos (retirado): la app vuelve a sus efectos normales
-  useEffect(() => {
-    try { localStorage.removeItem('owa_resource_saver'); } catch { }
-    document.body.classList.remove('owa-resource-saver');
-  }, []);
+  useWallpaperPalette();
+  const reportFullscreenError = useCallback((message: string) => { toast.error(message); }, []);
+  useFullscreenLifecycle(reportFullscreenError);
+  const { hydrated, settings, courses, addCourse, navigateTo, setNavigateTo, importState, updateSettings, toastMessage, deleteOldCompletedTasks, youtubeVideoUrl, setYoutubeVideoUrl, isPlayingMusic, musicVolume, setMusicDuration, setMusicProgressRaw, setIsPlayingMusic, playTrack, musicQueue, setMusicQueue, shuffleMode, repeatMode, tracks, currentTrackId, setRepeatMode, coverModalTrackId, showRestPrompt, handlePomodoroBannerClick, queueSource, trackHistory, playCounts, courseDeepLink, setCourseDeepLink, addNotification } = useAppSlice(["hydrated","settings","courses","addCourse","navigateTo","setNavigateTo","importState","updateSettings","toastMessage","deleteOldCompletedTasks","youtubeVideoUrl","setYoutubeVideoUrl","isPlayingMusic","musicVolume","setMusicDuration","setMusicProgressRaw","setIsPlayingMusic","playTrack","musicQueue","setMusicQueue","shuffleMode","repeatMode","tracks","currentTrackId","setRepeatMode","coverModalTrackId","showRestPrompt","handlePomodoroBannerClick","queueSource","trackHistory","playCounts","courseDeepLink","setCourseDeepLink","addNotification"]);
+  useEffect(()=>{if(!toastMessage)return;const options={id:"apheka-system-notice"};if(toastMessage.type==='success')toast.success(toastMessage.message,options);else if(toastMessage.type==='error')toast.error(toastMessage.message,options);else toast(toastMessage.message,{...options,className:"apheka-toast-info"});},[toastMessage]);
   // Suspender Música: oculta el apartado sin borrar nada; el click derecho en la barra la devuelve
   const [musicSuspended, setMusicSuspended] = useState<boolean>(() => { try { return localStorage.getItem('owa_music_suspended') === '1'; } catch { return false; } });
   useEffect(() => { try { localStorage.setItem('owa_music_suspended', musicSuspended ? '1' : '0'); } catch { } }, [musicSuspended]);
   // Ventanas: la gestión vive íntegramente en la extensión v2.0 (independiente
   // de la app). El servidor local y la barra lateral de la app se retiraron.
-  const [activeView, setActiveView] = useState<ViewId>(() => {
-    try {
-      const saved = localStorage.getItem('owa_active_view_v1');
-      if (saved === 'inicio' || saved === 'estudio' || saved === 'tareas' || saved === 'notas' || saved === 'musica' || saved === 'planificacion' || saved === 'cursos' || saved === 'ajustes') return saved as ViewId;
-      if (saved === 'curso_detalle' && localStorage.getItem('owa_selected_course_id')) return 'curso_detalle';
-    } catch {}
-    return 'inicio';
-  });
+  const workspace=useWorkspaceNavigation(),activeView=workspace.view,setActiveView=workspace.setView;
+  const timerState=useAppSlice(['isTimerActive']);
+  const [studyMounted,setStudyMounted]=useState(activeView==='estudio');
+  useEffect(()=>{if(activeView==='estudio'||timerState.isTimerActive)setStudyMounted(true);},[activeView,timerState.isTimerActive]);
+  useEffect(()=>{window.addEventListener('pointerdown',primeStudyAlarm,{once:true});return()=>window.removeEventListener('pointerdown',primeStudyAlarm);},[]);
+  const dock=useAutoDock(),[launcherOpen,setLauncherOpen]=useState(false);
 
   useEffect(() => {
     try { localStorage.setItem('owa_active_view_v1', activeView); } catch {}
@@ -61,78 +74,34 @@ function AppContent() {
   // Auto-clean completed tasks older than 2 months on startup
   useEffect(() => { deleteOldCompletedTasks(); }, []);
 
-  // ══ Motor YouTube del reproductor GENERAL — MISMA lógica que el emergente
-  // (VideoPiP): IFrame API imperativa, video oculto detrás con tamaño real.
+  // One persistent YouTube engine serves the integrated music player.
   const ytHolderRef = useRef<HTMLDivElement>(null);
   const ytPlayerRef = useRef<any>(null);
   const pendingLoadRef = useRef<string | null>(null);
+  const ytReadyRef=useRef(false);
+  const youtubeSourceRef=useRef(youtubeVideoUrl);youtubeSourceRef.current=youtubeVideoUrl;
   const [ytMode, setYtMode] = useState<'api' | 'fallback'>('api');
+  const ytRecovery=useYouTubeRecovery({track:tracks.find(track=>track.id===currentTrackId),url:youtubeVideoUrl,onUrl:setYoutubeVideoUrl,onStop:()=>setIsPlayingMusic(false),onNotice:text=>addNotification(text,'error')});
+  const musicVolumeRef=useRef(musicVolume);musicVolumeRef.current=musicVolume;
   const isPlayingMusicRef = useRef(isPlayingMusic);
   isPlayingMusicRef.current = isPlayingMusic;
 
-  // Precarga el API de YouTube al montar → el primer play arranca sin esperar el script
-  useEffect(() => { ensureYouTubeApi(); }, []);
+  // The provider loads only when used, never while opening unrelated study views.
   const ytFallbackSrc = useMemo(() => {
     if (!youtubeVideoUrl || ytMode !== 'fallback') return null;
     const ytId = extractYouTubeId(youtubeVideoUrl);
     const ytList = extractPlaylistId(youtubeVideoUrl);
-    if (ytList) return `https://www.youtube.com/embed/videoseries?list=${ytList}&autoplay=1&loop=1&rel=0&modestbranding=1&controls=1`;
-    if (ytId) return `https://www.youtube.com/embed/${ytId}?autoplay=1&loop=1&playlist=${ytId}&rel=0&modestbranding=1&controls=1`;
+    if (ytList) return `https://www.youtube.com/embed/videoseries?list=${ytList}&autoplay=1&loop=0&rel=0&modestbranding=1&controls=1`;
+    if (ytId) return `https://www.youtube.com/embed/${ytId}?autoplay=1&loop=0&rel=0&modestbranding=1&controls=1`;
     return null;
   }, [youtubeVideoUrl, ytMode]);
 
   const handleYtEnded = useCallback(() => {
-    if (pipAfterQueue.length > 0) {
-      const [next, ...rest] = pipAfterQueue;
-      setPipAfterQueue(rest);
-      setPipUrl(next.url, next.title, true);
-      return;
-    }
-    // Canción online (YouTube) activa: participa de la misma lógica de cola que
-    // un track local. Bucle de una canción la recarga; la cola avanza a la
-    // siguiente; aleatorio o bucle de todo rellenan desde el pool del contexto.
-    if (youtubeVideoUrl) {
-      if (repeatMode === 'one') {
-        const u = youtubeVideoUrl;
-        setYoutubeVideoUrl(null);
-        setTimeout(() => setYoutubeVideoUrl(u), 30);
-        return;
-      }
-      const q = musicQueue;
-      if (q.length > 0) {
-        setMusicQueue(q.slice(1));
-        playTrack(q[0]);
-        return;
-      }
-      if (shuffleMode || repeatMode === 'all') {
-        const sourcePool = queueSource?.pool ?? tracks.map(t => t.id);
-        const restPool = sourcePool.filter(tid => tid !== currentTrackId);
-        const refilled = shuffleMode ? [...restPool].sort(() => Math.random() - 0.5) : restPool;
-        if (refilled.length > 0) { setMusicQueue(refilled.slice(1)); playTrack(refilled[0]); return; }
-      }
-      return; // sin cola ni pool: el loop del iframe repite la misma canción
-    }
-    if (tracks.length > 0 && currentTrackId) {
-      if (repeatMode === 'one') {
-        playTrack(currentTrackId);
-        setRepeatMode('none');
-        return;
-      }
-      let nextId: string | null = null;
-      const q = musicQueue;
-      if (q.length > 0) {
-        setMusicQueue(q.slice(1));
-        nextId = q[0];
-      } else if (shuffleMode || repeatMode === 'all') {
-        const sourcePool = queueSource?.pool ?? tracks.map(t => t.id);
-        const restPool = sourcePool.filter(tid => tid !== currentTrackId);
-        const refilled = shuffleMode ? [...restPool].sort(() => Math.random() - 0.5) : restPool;
-        if (refilled.length > 0) { setMusicQueue(refilled.slice(1)); nextId = refilled[0]; }
-      }
-      if (nextId) playTrack(nextId);
-      else setIsPlayingMusic(false);
-    }
-  }, [pipAfterQueue, setPipAfterQueue, setPipUrl, tracks, currentTrackId, repeatMode, playTrack, musicQueue, setMusicQueue, shuffleMode, queueSource, setIsPlayingMusic, youtubeVideoUrl, setYoutubeVideoUrl]);
+    const selected=nextMusicSelection({tracks,currentId:currentTrackId,queue:musicQueue,sourcePool:queueSource?.pool,shuffle:shuffleMode,repeat:repeatMode,history:trackHistory,counts:playCounts,offline:settings.musicOffline});
+    setMusicQueue(selected.queue);
+    if(selected.id===currentTrackId&&selected.id&&youtubeVideoUrl){generalYtControl.seekTo?.(0);generalYtControl.playVideo?.();setIsPlayingMusic(true);return;}
+    if(selected.id)playTrack(selected.id,true);else setIsPlayingMusic(false);
+  },[tracks,currentTrackId,musicQueue,queueSource,shuffleMode,repeatMode,trackHistory,playCounts,settings.musicOffline,setMusicQueue,youtubeVideoUrl,setYoutubeVideoUrl,playTrack,setIsPlayingMusic]);
   const handleYtEndedRef = useRef(handleYtEnded);
   handleYtEndedRef.current = handleYtEnded;
 
@@ -142,31 +111,14 @@ function AppContent() {
     if (!url || !wrap) {
       pendingLoadRef.current = null;
       try { ytPlayerRef.current?.destroy?.(); } catch { /* noop */ }
-      ytPlayerRef.current = null;
-      generalYtControl.seekTo = undefined;
-      return;
-    }
-    // CAMBIO DE CANCIÓN RÁPIDO: si el player ya está listo, REUTILIZAR el iframe
-    // (loadVideoById) en vez de destruirlo y crearlo de nuevo (tarda muchísimo).
-    const existing = ytPlayerRef.current;
-    if (existing && typeof existing.loadVideoById === 'function') {
-      pendingLoadRef.current = null;
-      // Resetear la barra ya: la duración/progreso anteriores son de la canción vieja
-      setMusicProgressRaw(0);
-      setMusicDuration(0);
-      const ytId = extractYouTubeId(url);
-      const ytList = extractPlaylistId(url);
-      try {
-        if (ytList && typeof existing.loadPlaylist === 'function') existing.loadPlaylist({ list: ytList, listType: 'playlist' });
-        else if (ytId) existing.loadVideoById(ytId);
-        if (isPlayingMusicRef.current) existing.playVideo();
-      } catch { /* noop */ }
+      ytPlayerRef.current = null;ytReadyRef.current=false;
+      generalYtControl.seekTo = undefined;generalYtControl.getTime=undefined;generalYtControl.getDuration=undefined;generalYtControl.playVideo=undefined;generalYtControl.pauseVideo=undefined;
       return;
     }
     // Sin player todavía → crearlo (la creación pendiente guarda el URL por si cambia antes del ready)
     pendingLoadRef.current = url;
     setYtMode('api');
-    setMusicProgressRaw(0);
+    setMusicProgressRaw(generalYtControl.pendingSeek?.url===url?generalYtControl.pendingSeek.ratio:0);
     setMusicDuration(0);
     let cancelled = false;
     ensureYouTubeApi().then((ok) => {
@@ -184,14 +136,22 @@ function AppContent() {
         const ytList = extractPlaylistId(url);
         const cfg: any = {
           width: '640px', height: '360px',
-          playerVars: { autoplay: isPlayingMusicRef.current ? 1 : 0, loop: 1, rel: 0, modestbranding: 1, controls: 0, playsinline: 1 },
+          playerVars: { origin:window.location.origin,widget_referrer:'https://com.owa.studio/', autoplay: isPlayingMusicRef.current ? 1 : 0, loop: 0, rel: 0, modestbranding: 1, controls: 0, playsinline: 1, disablekb: 1, fs: 0 },
           events: {
             onReady: (e: any) => {
               if (cancelled) return;
-              ytPlayerRef.current = e.target;
+              ytPlayerRef.current = e.target;ytReadyRef.current=true;e.target.setVolume?.(Math.round(musicVolumeRef.current*100));
+              e.target.getIframe?.()?.setAttribute('tabindex', '-1');e.target.getIframe?.()?.setAttribute('referrerpolicy','strict-origin-when-cross-origin');e.target.getIframe?.()?.setAttribute('allow','autoplay; encrypted-media');
               const d = e.target.getDuration?.() || 0;
               if (d) setMusicDuration(d);
               // La barra de progreso del reproductor general busca DENTRO del iframe
+              generalYtControl.getTime=()=>{const p=ytPlayerRef.current,actual=p?.getVideoData?.()?.video_id,expected=extractYouTubeId(youtubeSourceRef.current||'');return actual&&expected&&actual!==expected?Number.NaN:(p?.getCurrentTime?.()||0);};
+              generalYtControl.getDuration=()=>ytPlayerRef.current?.getDuration?.()||0;
+              generalYtControl.restorePosition=()=>{
+                const pending=generalYtControl.pendingSeek,p=ytPlayerRef.current,duration=p?.getDuration?.()||0;
+                if(!pending||pending.url!==youtubeSourceRef.current||extractYouTubeId(pending.url)!==p?.getVideoData?.()?.video_id||duration<=0)return;
+                try{p.seekTo(pending.ratio*duration,true);setMusicProgressRaw(pending.ratio);setMusicDuration(duration);generalYtControl.pendingSeek=undefined;}catch{/* Retry on the next player state once the recording is ready. */}
+              };
               generalYtControl.seekTo = (ratio: number) => {
                 const p = ytPlayerRef.current;
                 const dur = p?.getDuration?.() || 0;
@@ -225,12 +185,15 @@ function AppContent() {
               } else {
                 pendingLoadRef.current = null;
               }
+              generalYtControl.restorePosition?.();
               if (isPlayingMusicRef.current) {
                 try { e.target.playVideo?.(); } catch { /* noop */ }
               }
             },
+            onError:(e:any)=>{if(!cancelled)ytRecovery.onError(e);},
             onStateChange: (e: any) => {
               if (cancelled) return;
+              generalYtControl.restorePosition?.();
               if (e.data === 1) {
                 const d = ytPlayerRef.current?.getDuration?.() || 0;
                 if (d) setMusicDuration(d);
@@ -242,6 +205,7 @@ function AppContent() {
                 try { e.target.pauseVideo?.(); } catch { /* noop */ }
               }
               if (e.data === 0) {
+                const actual=e.target.getVideoData?.()?.video_id,expected=extractYouTubeId(youtubeSourceRef.current||'');if(actual&&expected&&actual!==expected)return;
                 // ENDED → cola / "después de la actual" / loop — misma lógica del general
                 handleYtEndedRef.current();
               }
@@ -262,10 +226,11 @@ function AppContent() {
     return () => {
       cancelled = true;
       try { ytPlayerRef.current?.destroy?.(); } catch { /* noop */ }
-      ytPlayerRef.current = null;
-      generalYtControl.seekTo = undefined;
+      ytPlayerRef.current = null;ytReadyRef.current=false;generalYtControl.restorePosition=undefined;
+      generalYtControl.seekTo = undefined;generalYtControl.getTime=undefined;generalYtControl.getDuration=undefined;generalYtControl.playVideo=undefined;generalYtControl.pauseVideo=undefined;
     };
-  }, [youtubeVideoUrl, setMusicDuration, setMusicProgressRaw]);
+  }, [!!youtubeVideoUrl, ytRecovery.generation, setMusicDuration, setMusicProgressRaw]);
+  useEffect(()=>{if(!youtubeVideoUrl)return;pendingLoadRef.current=youtubeVideoUrl;setMusicProgressRaw(generalYtControl.pendingSeek?.url===youtubeVideoUrl?generalYtControl.pendingSeek.ratio:0);setMusicDuration(0);const player=ytPlayerRef.current;if(!player||!ytReadyRef.current)return;const id=extractYouTubeId(youtubeVideoUrl),list=extractPlaylistId(youtubeVideoUrl);try{if(list)player.loadPlaylist({list,listType:'playlist'});else if(id)player.loadVideoById(id);pendingLoadRef.current=null;generalYtControl.restorePosition?.();if(!isPlayingMusicRef.current)player.pauseVideo();}catch{setIsPlayingMusic(false);addNotification('No se pudo cambiar de canción. Vuelve a intentarlo.','error');}},[youtubeVideoUrl,setMusicDuration,setMusicProgressRaw]);
 
   // Play/Pausa del botón del reproductor general → playVideo/pauseVideo del iframe
   useEffect(() => {
@@ -280,19 +245,22 @@ function AppContent() {
     } catch { /* noop */ }
   }, [isPlayingMusic, youtubeVideoUrl]);
 
-  // Progreso de la barra del reproductor general (polling 200ms, más fluido en la nube)
+  useEffect(()=>{try{ytPlayerRef.current?.setVolume?.(Math.round(musicVolume*100));}catch{}},[musicVolume,youtubeVideoUrl]);
+
+  // A second-resolution clock avoids redrawing the whole workspace five times a second.
   useEffect(() => {
     if (!youtubeVideoUrl || !isPlayingMusic) return;
     const t = window.setInterval(() => {
       const p = ytPlayerRef.current;
       if (!p || typeof p.getCurrentTime !== 'function') return;
-      const cur = p.getCurrentTime() || 0;
+      const cur = generalYtControl.getTime?.();
+      if (!Number.isFinite(cur)) return;
       const d = p.getDuration?.() || 0;
       if (d > 0) {
-        setMusicProgressRaw(Math.min(1, cur / d));
+        setMusicProgressRaw(Math.min(1, cur! / d));
         setMusicDuration(d);
       }
-    }, 200);
+    }, 1000);
     return () => window.clearInterval(t);
   }, [youtubeVideoUrl, isPlayingMusic, setMusicProgressRaw, setMusicDuration]);
 
@@ -313,16 +281,9 @@ function AppContent() {
     }
   }, [navigateTo, setNavigateTo, courseDeepLink]);
 
-  const [isCollapsed, setIsCollapsed] = useState(() => {
-    try { return localStorage.getItem('owa_sidebar_collapsed') === 'true'; } catch { return false; }
-  });
-  const toggleSidebar = useCallback(() => {
-    setIsCollapsed(prev => {
-      const next = !prev;
-      try { localStorage.setItem('owa_sidebar_collapsed', String(next)); } catch {}
-      return next;
-    });
-  }, []);
+  const autoNav=settings.navigationMode!=='pinned',isCollapsed=!autoNav&&!!settings.navigationCollapsed;
+  const toggleSidebar=()=>autoNav?dock.hide():updateSettings({navigationCollapsed:!isCollapsed});
+  useEffect(()=>{const note=(e:Event)=>{if(activeView==='notas')workspace.update({noteId:(e as CustomEvent).detail.id});},task=(e:Event)=>{if(activeView==='tareas')workspace.update({taskId:(e as CustomEvent).detail.id});};window.addEventListener('apheka:note-focus',note);window.addEventListener('apheka:task-focus',task);return()=>{window.removeEventListener('apheka:note-focus',note);window.removeEventListener('apheka:task-focus',task);};},[activeView,workspace.update]);
   const [isOAuthCallback, setIsOAuthCallback] = useState(false);
 
   useEffect(() => {
@@ -343,9 +304,14 @@ function AppContent() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(() => {
-    try { return localStorage.getItem('owa_selected_course_id'); } catch { return null; }
+    return workspace.current.courseId;
   });
   const [selectedCourseTab, setSelectedCourseTab] = useState<string>('overview');
+  useEffect(()=>{workspace.update({courseId:selectedCourseId});},[selectedCourseId,workspace.update]);
+  const openNote=useCallback((id:string)=>{window.dispatchEvent(new Event('apheka:flush-editors'));sessionStorage.setItem('apheka_open_note',id);workspace.update({noteId:id});setActiveView('notas');window.dispatchEvent(new Event('apheka:open-note'));},[setActiveView]);
+  const openTask=useCallback((id:string)=>{sessionStorage.setItem('apheka_open_task',id);workspace.update({taskId:id});setActiveView('tareas');window.dispatchEvent(new Event('apheka:open-task'));},[setActiveView]);
+  useLayoutEffect(()=>{const initial=workspace.current;if(initial.view==='notas'&&initial.noteId)sessionStorage.setItem('apheka_open_note',initial.noteId);if(initial.view==='tareas'&&initial.taskId)sessionStorage.setItem('apheka_open_task',initial.taskId);},[]);
+  useEffect(()=>{const key=(e:KeyboardEvent)=>{if(document.querySelector('[role="dialog"][aria-modal="true"]'))return;const editable=(e.target as Element)?.closest?.('input,textarea,[contenteditable="true"]');if((e.ctrlKey||e.metaKey)&&(e.code==='Space'||(!editable&&e.key.toLowerCase()==='k'))){e.preventDefault();setLauncherOpen(true);}if((e.ctrlKey||e.metaKey)&&!editable&&e.key.toLowerCase()==='b'){e.preventDefault();if(autoNav)dock.show();else toggleSidebar();}};const room=(e:Event)=>{sessionStorage.setItem('apheka_music_studio_main',JSON.stringify('escuchando'));setActiveView('musica');window.dispatchEvent(new CustomEvent('apheka:music-room',{detail:(e as CustomEvent).detail}));};window.addEventListener('keydown',key);window.addEventListener('apheka:open-music-room',room);return()=>{window.removeEventListener('keydown',key);window.removeEventListener('apheka:open-music-room',room);};},[autoNav,isCollapsed,setActiveView]);
   useEffect(() => {
     try {
       if (selectedCourseId) localStorage.setItem('owa_selected_course_id', selectedCourseId);
@@ -381,7 +347,7 @@ function AppContent() {
     const clamp = (v: number) => Math.max(0, Math.min(255, Math.round(v)));
 
     if (settings.useThreeColors) {
-      root.removeAttribute('data-theme');
+      root.setAttribute('data-theme',((0.2126*parseInt(settings.surfaceColor?.slice(1,3)||'0a',16)+0.7152*parseInt(settings.surfaceColor?.slice(3,5)||'0a',16)+0.0722*parseInt(settings.surfaceColor?.slice(5,7)||'0c',16))/255)<.5?'oscuro':'claro');
       const c1 = settings.accentColor;
       const c2 = settings.secondaryColor || c1;
       const c3 = settings.surfaceColor || '#0a0a0c';
@@ -393,6 +359,7 @@ function AppContent() {
 
       // Color 1 — accent
       root.style.setProperty('--accent', c1);
+      const accentRGB=h2r(c1);root.style.setProperty('--accent-text',(accentRGB.r*.2126+accentRGB.g*.7152+accentRGB.b*.0722)>155?'#102026':'#ffffff');
       root.style.setProperty('--theme-secondary', c2);
       root.style.setProperty('--theme-tertiary', c3);
       const a1 = h2r(c1);
@@ -419,9 +386,9 @@ function AppContent() {
 
       const textBase = isDark ? 255 : 0;
       root.style.setProperty('--text-primary', `rgba(${textBase},${textBase},${textBase},0.92)`);
-      root.style.setProperty('--text-secondary', `rgba(${textBase},${textBase},${textBase},0.55)`);
-      root.style.setProperty('--text-tertiary', `rgba(${textBase},${textBase},${textBase},0.35)`);
-      root.style.setProperty('--text-muted', `rgba(${textBase},${textBase},${textBase},0.18)`);
+      root.style.setProperty('--text-secondary', `rgba(${textBase},${textBase},${textBase},0.70)`);
+      root.style.setProperty('--text-tertiary', `rgba(${textBase},${textBase},${textBase},0.54)`);
+      root.style.setProperty('--text-muted', `rgba(${textBase},${textBase},${textBase},0.42)`);
 
       const borderAlpha = isDark ? 0.06 : 0.08;
       root.style.setProperty('--border-default', `rgba(${textBase},${textBase},${textBase},${borderAlpha})`);
@@ -445,6 +412,7 @@ function AppContent() {
       }
       const c = settings.accentColor;
       root.style.setProperty('--accent', c);
+      const accentRGB=h2r(c);root.style.setProperty('--accent-text',(accentRGB.r*.2126+accentRGB.g*.7152+accentRGB.b*.0722)>155?'#102026':'#ffffff');
       const { r, g, b } = h2r(c);
       root.style.setProperty('--accent-soft', `rgba(${r},${g},${b},0.12)`);
       root.style.setProperty('--accent-glow', `rgba(${r},${g},${b},0.30)`);
@@ -494,6 +462,14 @@ function AppContent() {
       root.style.setProperty('--select-scheme', selectScheme);
     }
 
+    // Read the current theme before freezing opaque surface colors. A previous
+    // inline snapshot otherwise overrides the new theme's raw color variables.
+    const surfaceNames=['base','surface','elevated','deep'];
+    for(const name of surfaceNames)root.style.removeProperty('--bg-'+name+'-raw');
+    const resolved=getComputedStyle(root);
+    const opaqueSurfaces=surfaceNames.map(name=>[name,resolved.getPropertyValue('--bg-'+name).trim()] as const);
+    for(const [name,value] of opaqueSurfaces)root.style.setProperty('--bg-'+name+'-raw',value);
+    root.style.backgroundColor=resolved.getPropertyValue('--bg-base').trim();document.body.style.backgroundColor=resolved.getPropertyValue('--bg-base').trim();
     root.style.setProperty('--font-primary', settings.fontFamily);
     
     const applyBg = (url: string) => {
@@ -505,7 +481,7 @@ function AppContent() {
       root.style.removeProperty('--app-bg-blend');
     };
 
-    if (settings.backgroundImage) {
+    if (settings.backgroundImage && settings.appearanceMode!=='colors') {
       applyBg(settings.backgroundImage);
       document.documentElement.dataset.hasBg = 'true';
     } else {
@@ -519,7 +495,7 @@ function AppContent() {
     root.style.setProperty('--bg-overlay', `${(settings.backgroundOverlay ?? 0) / 100}`);
     root.style.setProperty('--bg-size', settings.backgroundSize === 'tile' ? 'auto' : (settings.backgroundSize || 'cover'));
     root.style.setProperty('--bg-repeat', settings.backgroundSize === 'tile' ? 'repeat' : 'no-repeat');
-  }, [settings.theme, settings.accentColor, settings.fontFamily, settings.backgroundImage, settings.uiOpacity, settings.backgroundBrightness, settings.backgroundBlur, settings.backgroundOverlay, settings.backgroundSize, settings.useThreeColors, settings.secondaryColor, settings.surfaceColor]);
+  }, [settings.theme, settings.accentColor, settings.fontFamily, settings.backgroundImage, settings.uiOpacity, settings.backgroundBrightness, settings.backgroundBlur, settings.backgroundOverlay, settings.backgroundSize,settings.appearanceMode, settings.useThreeColors, settings.secondaryColor, settings.surfaceColor]);
 
   const initials = settings.userName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
@@ -565,13 +541,18 @@ function AppContent() {
   };
 
   return (
-    <div className="app-layout">
-      <aside className={`sidebar ${isCollapsed ? 'collapsed' : ''}${coverModalTrackId ? ' cover-tinted' : ''}`}>
+    <div className={'app-layout studio-environment single-environment '+(autoNav?'nav-auto':'nav-pinned')+(isCollapsed?' nav-collapsed':'')} data-auto-dock={autoNav} style={{'--navigation-width':(isCollapsed?64:224)+'px'} as React.CSSProperties}>
+      <AnimatedWallpaper/>
+      <McpBridge /><CatalogDownloadBridge/><CharvisSidebar/>
+      <EditorBlockMenu/>
+      
+      {autoNav&&<><button ref={dock.trigger} className="app-navigation-handle" aria-label="Abrir navegación" onClick={dock.show}><span aria-hidden="true"/></button><div className="desktop-dock-edge" aria-hidden="true" onPointerEnter={dock.show} onPointerLeave={dock.leave}/></>}
+      <aside id="apheka-navigation-dock" ref={dock.root} inert={autoNav&&!dock.open} aria-hidden={autoNav&&!dock.open} data-open={!autoNav||dock.open} onPointerEnter={dock.cancel} onPointerLeave={dock.leave} onFocusCapture={dock.show} onBlurCapture={e=>{if(!e.currentTarget.contains(e.relatedTarget))dock.leave();}} onClick={e=>{if(autoNav&&(e.target as Element).closest('.sidebar-nav-btn'))dock.hide();}} className={`sidebar ${isCollapsed ? 'collapsed' : ''}${coverModalTrackId ? ' cover-tinted' : ''}`}>
 
         {/* ─── Logo / Home Anchor (click to toggle) ─── */}
-        <div className="sidebar-logo" onClick={toggleSidebar} style={{ cursor: 'pointer' }}>
-          <img src="/owa_logo.png" alt="OWA Studio" className="sidebar-logo-img" />
-          {!isCollapsed && <span className="sidebar-logo-text">OWA Studio</span>}
+        <div className="sidebar-logo" role="button" tabIndex={0} aria-label={isCollapsed ? 'Expandir menú' : 'Contraer menú'} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSidebar();}}} onClick={toggleSidebar} style={{ cursor: 'pointer' }}>
+          <img src="/owa_logo.png" alt="APHEKA" className="sidebar-logo-img" />
+          {!isCollapsed && <AphekaWordmark />}
         </div>
 
         {/* ─── Navigation ─── */}
@@ -590,7 +571,7 @@ function AppContent() {
                   onPointerLeave={handleCoursesPointerEnd}
                   onClick={handleCollapsedCoursesClick}
                   className={`sidebar-nav-btn ${activeView === 'cursos' || activeView === 'curso_detalle' ? 'active' : ''}`}
-                  title={item.label}
+                  aria-label={item.label} title={item.label}
                   style={activeView === 'curso_detalle' && activeCourse ? {
                     boxShadow: `inset 0 0 0 1px ${activeCourse.color}`,
                     background: `linear-gradient(135deg, color-mix(in srgb, ${activeCourse.color} 16%, transparent), color-mix(in srgb, ${activeCourse.color} 7%, transparent))`,
@@ -611,7 +592,7 @@ function AppContent() {
                     }
                   }}
                   className={`sidebar-nav-btn ${activeView === item.id ? 'active' : ''}`}
-                  title={item.id === 'cursos' ? item.label : undefined}
+                  aria-label={item.label} title={isCollapsed ? item.label : undefined}
                 >
                   <item.icon size={20} strokeWidth={1.5} />
                   {!isCollapsed && <span className="sidebar-nav-label">{item.label}</span>}
@@ -658,7 +639,7 @@ function AppContent() {
 
         {/* ─── Settings (always at bottom) ─── */}
         <div className="sidebar-footer">
-          <button onClick={() => setActiveView('ajustes')} className={`sidebar-nav-btn ${activeView === 'ajustes' ? 'active' : ''}`}>
+          <button aria-label="Ajustes" title={isCollapsed ? 'Ajustes' : undefined} onClick={() => setActiveView('ajustes')} className={`sidebar-nav-btn ${activeView === 'ajustes' ? 'active' : ''}`}>
             <Settings size={20} strokeWidth={1.5} />
             {!isCollapsed && <span className="sidebar-nav-label">Ajustes</span>}
           </button>
@@ -666,19 +647,6 @@ function AppContent() {
       </aside>
 
       <main className="main-area" style={{ position: 'relative' }}>
-        {toastMessage && (
-          <div style={{
-            position: 'absolute', top: 16, left: '50%', transform: 'translateX(-50%)', zIndex: 9999,
-            padding: '12px 24px', borderRadius: 12, backdropFilter: 'blur(16px)',
-            background: toastMessage.type === 'error' ? 'rgba(239,68,68,0.15)' : toastMessage.type === 'success' ? 'rgba(16,185,129,0.15)' : 'rgba(59,130,246,0.15)',
-            border: toastMessage.type === 'error' ? '1px solid rgba(239,68,68,0.3)' : toastMessage.type === 'success' ? '1px solid rgba(16,185,129,0.3)' : '1px solid rgba(59,130,246,0.3)',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.3)', color: '#fff',
-            fontSize: 13, fontWeight: 500, fontFamily: "'Inter Tight', sans-serif",
-            pointerEvents: 'none', animation: 'fadeInDown 300ms ease-out',
-          }}>
-            {toastMessage.message}
-          </div>
-        )}
         {showRestPrompt && activeView !== 'estudio' && (
           <div onClick={() => { handlePomodoroBannerClick(); setActiveView('estudio'); }}
             style={{
@@ -694,16 +662,17 @@ function AppContent() {
             <span style={{ color: '#fff', fontSize: 12.5, fontWeight: 500, fontFamily: "'Inter', sans-serif", letterSpacing: '0.01em', whiteSpace: 'nowrap' }}>Te espera un descanso</span>
           </div>
         )}
-        {isOAuthCallback ? (
+        <div className="desktop-stage">
+        {!hydrated ? (<div className="desktop-startup" role="status"><Loader2 size={20} className="spin"/><span>Preparando tu espacio…</span></div>) : isOAuthCallback ? (
           <OAuthCallback />
         ) : (
-          <div key={activeView} className="fade-in-animation" style={{ flex: 1, overflow: 'hidden' }}>
+          <div key={activeView} data-apheka-view={activeView} className="fade-in-animation" style={{ flex: 1, overflow: 'hidden',display:activeView==='estudio'?'none':undefined }}>
             <Suspense fallback={<div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Loader2 className="spin" size={22} style={{ color: 'var(--text-tertiary)' }} /></div>}>
               {activeView === 'inicio' && <Inicio />}
-              {activeView === 'estudio' && <Estudio />}
+              
               {activeView === 'tareas' && <Tareas />}
               {activeView === 'notas' && <Notas />}
-              {activeView === 'musica' && <Musica />}
+              {activeView === 'musica' && <Musica workspaceId="main"/>}
               {activeView === 'planificacion' && <Planificacion />}
               {activeView === 'cursos' && <CursosHub onSelectCourse={(courseId) => { setSelectedCourseId(courseId); setActiveView('curso_detalle'); }} onTabSelect={(courseId, tab) => { setSelectedCourseId(courseId); setSelectedCourseTab(tab); setActiveView('curso_detalle'); }} />}
               {activeView === 'ajustes' && <Ajustes />}
@@ -711,34 +680,39 @@ function AppContent() {
             </Suspense>
           </div>
         )}
-        {youtubeVideoUrl && <div ref={ytHolderRef} style={{ position: 'fixed', top: 0, left: -10000, width: 640, height: 360, zIndex: -1, opacity: 0.01, pointerEvents: 'none' }} />}
+        
+        {hydrated&&studyMounted&&!isOAuthCallback&&<div data-apheka-view="estudio" style={{display:activeView==="estudio"?"flex":"none",flex:1,minHeight:0,overflow:"hidden"}}><Suspense fallback={null}><Estudio/></Suspense></div>}
+        </div>
+        {launcherOpen&&<WorkspaceLauncher onClose={()=>setLauncherOpen(false)} onNavigate={(view,courseId)=>{if(courseId){setSelectedCourseId(courseId);setSelectedCourseTab('overview');}setActiveView(view);}} onOpenNote={openNote} onOpenTask={openTask}/>}
+        {youtubeVideoUrl && <div inert aria-hidden="true" ref={ytHolderRef} style={{ position: 'fixed', top: 0, left: -10000, width: 640, height: 360, zIndex: -1, opacity: 0.01, pointerEvents: 'none' }} />}
         {ytFallbackSrc && (
-          <iframe src={ytFallbackSrc} title="YouTube" allow="autoplay; encrypted-media"
+          <iframe tabIndex={-1} aria-hidden="true" inert src={ytFallbackSrc} title="YouTube" allow="autoplay; encrypted-media"
             style={{ position: 'fixed', top: 0, left: -10000, width: 640, height: 360, border: 0, zIndex: -1, opacity: 0.01, pointerEvents: 'none' }} />
         )}
-        <GlobalPlayer sidebarCollapsed={isCollapsed} />
-        <NowPlayingView sidebarCollapsed={isCollapsed} activeView={activeView} />
+        <ReleaseNotice/>
+        <MediaDownloadBridge/><GlobalPlayer sidebarCollapsed={isCollapsed} />
+        <TrackArtworkDialog/>
 
         {/* Contenedor global de avisos (react-hot-toast) — sin esto ningún toast() se muestra */}
         <Toaster
-          position="bottom-right"
+          position="top-center"
           gutter={8}
           toastOptions={{
             duration: 2800,
             style: {
-              background: '#0b0c0f',
-              color: '#EAEAEA',
-              border: '1px solid #26262b',
+              background: 'var(--bg-elevated-raw)',
+              color: 'var(--text-primary)',
+              border: '1px solid var(--border-default)',
               borderRadius: 11,
               fontSize: 12,
               fontWeight: 500,
               fontFamily: "'Inter', sans-serif",
               padding: '10px 14px',
-              boxShadow: '0 8px 30px rgba(0,0,0,0.45)',
-              maxWidth: 360,
+              boxShadow: '0 6px 20px rgba(0,0,0,0.12)',
+              maxWidth: 480,
             },
-            success: { iconTheme: { primary: '#10B981', secondary: '#0b0c0f' } },
-            error: { iconTheme: { primary: '#EF4444', secondary: '#0b0c0f' } },
+            success: { style:{background:'color-mix(in srgb, #10b981 14%, var(--bg-elevated-raw))',border:'1px solid color-mix(in srgb, #10b981 32%, var(--border-default))'},iconTheme: { primary: '#10B981', secondary: '#0b0c0f' } },
+            error: { style:{background:'color-mix(in srgb, #ef4444 14%, var(--bg-elevated-raw))',border:'1px solid color-mix(in srgb, #ef4444 32%, var(--border-default))'},iconTheme: { primary: '#EF4444', secondary: '#0b0c0f' } },
           }}
         />
       </main>
@@ -1066,7 +1040,6 @@ function AppContent() {
       )}
 
       {/* PiP Video Player */}
-      <VideoPiP url={pipUrl} title={pipTitle} autoplay={pipAutoplay} onPlayingChange={setPipPlaying} onClose={() => setPipUrl(null)} pipAfterQueue={pipAfterQueue} setPipAfterQueue={setPipAfterQueue} onPipPlayNext={(u, t) => setPipUrl(u, t, true)} />
 
       {/* Menú contextual global de imágenes (copiar/descargar) */}
       <ImageContextMenu />

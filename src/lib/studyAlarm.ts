@@ -1,0 +1,5 @@
+let context:AudioContext|undefined,primed=false;
+export function primeStudyAlarm(){if(primed)return;primed=true;try{context=new AudioContext();void context.resume().then(()=>context?.suspend()).catch(()=>{});}catch{}}
+export function playStudyAlarm(kind:'focus'|'break'){
+ try{context=context||new AudioContext();const audio=context;void audio.resume().then(()=>{const start=audio.currentTime;for(let repeat=0;repeat<3;repeat++)for(let step=0;step<3;step++){const oscillator=audio.createOscillator(),gain=audio.createGain(),at=start+repeat*.72+step*.17;oscillator.type='sine';oscillator.frequency.value=(kind==='focus'?[659,784,988]:[784,659,523])[step];gain.gain.setValueAtTime(0,at);gain.gain.linearRampToValueAtTime(.16,at+.015);gain.gain.exponentialRampToValueAtTime(.001,at+.16);oscillator.connect(gain);gain.connect(audio.destination);oscillator.start(at);oscillator.stop(at+.18);oscillator.onended=()=>{oscillator.disconnect();gain.disconnect();};}setTimeout(()=>{if(audio.state==='running')void audio.suspend();},2500);}).catch(()=>{});}catch{}
+}

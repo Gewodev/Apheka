@@ -11,7 +11,7 @@ import {
   Cell,
 } from 'recharts';
 import { motion, AnimatePresence } from 'framer-motion';
-import { format, subDays } from 'date-fns';
+import { generateWeekData, generateHourData, productiveSessions, seconds } from '../../lib/studyAnalytics';
 import { es } from 'date-fns/locale';
 
 interface StudySession {
@@ -23,6 +23,7 @@ interface StudySession {
   taskId?: string;
   pauseCount?: number;
   pauseDuration?: number;
+  isDistraction?: boolean;
 }
 
 interface Task {
@@ -58,50 +59,15 @@ const tooltipStyle = {
   border: '1px solid var(--border-soft)',
   borderRadius: 8,
   padding: '8px 12px',
-  boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+  boxShadow: 'none',
 };
-
-function generateWeekData(studySessions: StudySession[]) {
-  const dayNames = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = subDays(new Date(), 6 - i);
-    const dayStr = format(d, 'yyyy-MM-dd');
-    const daySessions = studySessions.filter(s => s.startedAt.startsWith(dayStr));
-    const productive = daySessions.reduce((a, s) => a + s.duration, 0);
-    const paused = daySessions.reduce((a, s) => a + (s.pauseDuration || 0), 0);
-    return {
-      day: dayNames[i],
-      productive: Math.round(productive / 60),
-      paused: Math.round(paused / 60),
-      sessions: daySessions.length,
-      date: dayStr,
-    };
-  });
-}
-
-function generateHourData(studySessions: StudySession[]) {
-  return Array.from({ length: 24 }, (_, i) => {
-    const hour = `${i.toString().padStart(2, '0')}:00`;
-    const hs = studySessions.filter(s => new Date(s.startedAt).getHours() === i);
-    return {
-      hour,
-      completions: hs.filter(s => s.duration > 0).length,
-      avgDuration: hs.length > 0
-        ? Math.round(hs.reduce((a, s) => a + s.duration, 0) / hs.length / 60)
-        : 0,
-      efficiency: hs.length > 0
-        ? Math.round(hs.filter(s => (s.pauseDuration || 0) === 0).length / hs.length * 100)
-        : 0,
-    };
-  });
-}
 
 function generateCourseBreakdown(tasks: Task[]) {
   const courses = [...new Set(tasks.map(t => t.course))];
   return courses.map(c => {
     const ct = tasks.filter(t => t.course === c);
     return {
-      course: c.length > 14 ? c.slice(0, 14) + '…' : c,
+      course: (c || 'Sin curso').length > 14 ? c.slice(0, 14) + '…' : (c || 'Sin curso'),
       completadas: ct.filter(t => t.status === 'completado').length,
       progreso: ct.filter(t => t.status === 'progreso').length,
       pendientes: ct.filter(t => t.status === 'inicio').length,
@@ -159,7 +125,7 @@ function MiniStat({ label, value, color, icon: Icon }: { label: string; value: s
     <div style={{ padding: '10px 12px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 10 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
         <Icon size={9} style={{ color }} />
-        <span style={{ fontSize: 8, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
+        <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
       </div>
       <span style={{ fontSize: 22, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em' }}>{value}</span>
     </div>
@@ -183,7 +149,7 @@ function Section({ children, style }: { children: React.ReactNode; style?: React
   return (
     <div style={{
       padding: '10px 12px',
-      background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)',
+      background: 'var(--bg-surface)',
       border: '1px solid var(--border-subtle)',
       borderRadius: 10,
       ...style,
@@ -197,7 +163,7 @@ function FlowSVG({ data }: { data: ReturnType<typeof generateFlowData> }) {
   const { nodes, links } = data;
   const [hoveredLink, setHoveredLink] = useState<number | null>(null);
 
-  if (nodes.length === 0) return <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)', fontSize: 11 }}>Sin datos</div>;
+  if (links.length === 0) return <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)', fontSize: 11 }}>Añade tareas para ver cómo se distribuyen por curso y estado.</div>;
 
   const w = 380;
   const gap = 22;
@@ -251,7 +217,7 @@ function FlowSVG({ data }: { data: ReturnType<typeof generateFlowData> }) {
               style={{ transition: 'opacity 200ms' }}
             />
             {isHovered && (
-              <text x={midX} y={(y1 + y2) / 2} textAnchor="middle" fill="#fff" fontSize={9} fontWeight={700}
+              <text x={midX} y={(y1 + y2) / 2} textAnchor="middle" fill="#fff" fontSize={11} fontWeight={700}
                 style={{ pointerEvents: 'none', textShadow: '0 1px 4px rgba(0,0,0,0.6)' }}>
                 {l.value} tarea{l.value !== 1 ? 's' : ''}
               </text>
@@ -262,13 +228,13 @@ function FlowSVG({ data }: { data: ReturnType<typeof generateFlowData> }) {
       {nodes.slice(0, leftCount).map((n, i) => (
         <g key={`ln-${i}`}>
           <rect x={colX1} y={leftYs[i]} width={6} height={20} rx={3} fill={n.color} />
-          <text x={colX1 + 12} y={leftYs[i] + 14} fill="var(--text-primary)" fontSize={9} fontWeight={600}>{n.name}</text>
+          <text x={colX1 + 12} y={leftYs[i] + 14} fill="var(--text-primary)" fontSize={11} fontWeight={600}>{n.name}</text>
         </g>
       ))}
       {nodes.slice(leftCount).map((n, i) => (
         <g key={`rn-${i}`}>
           <rect x={colX2 - 6} y={rightYs[i]} width={6} height={20} rx={3} fill={n.color} />
-          <text x={colX2 - 12} y={rightYs[i] + 14} fill="var(--text-primary)" fontSize={9} fontWeight={600} textAnchor="end">{n.name}</text>
+          <text x={colX2 - 12} y={rightYs[i] + 14} fill="var(--text-primary)" fontSize={11} fontWeight={600} textAnchor="end">{n.name}</text>
         </g>
       ))}
     </svg>
@@ -297,17 +263,19 @@ const AnalyticsDrawer = React.memo(function AnalyticsDrawer({ isOpen, onClose, s
   const [pillState, setPillState] = useState(false);
   const pillTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const weekData = useMemo(() => generateWeekData(studySessions), [studySessions]);
+  const focusSessions = useMemo(() => productiveSessions(studySessions), [studySessions]);
+  const today = new Date().toDateString();
+  const weekData = useMemo(() => generateWeekData(studySessions), [studySessions, today]);
   const hourData = useMemo(() => generateHourData(studySessions), [studySessions]);
   const funnelData = useMemo(() => generateFunnelData(tasks), [tasks]);
   const courseData = useMemo(() => generateCourseBreakdown(tasks), [tasks]);
   const flowData = useMemo(() => generateFlowData(tasks), [tasks]);
 
-  const totalStudyMin = useMemo(() => Math.round(studySessions.reduce((a, s) => a + s.duration, 0) / 60), [studySessions]);
+  const totalStudyMin = useMemo(() => Math.round(focusSessions.reduce((a, s) => a + seconds(s.duration), 0) / 60), [studySessions]);
   const completedToday = useMemo(() => tasks.filter(t => t.status === 'completado').length, [tasks]);
   const pendingToday = useMemo(() => tasks.filter(t => t.status !== 'completado').length, [tasks]);
-  const avgSession = useMemo(() => studySessions.length > 0
-    ? Math.round((studySessions.reduce((a, s) => a + s.duration, 0) / studySessions.length) / 60)
+  const avgSession = useMemo(() => focusSessions.length > 0
+    ? Math.round((focusSessions.reduce((a, s) => a + seconds(s.duration), 0) / focusSessions.length) / 60)
     : 0, [studySessions]);
 
   const clearTimer = useCallback(() => { if (pillTimer.current) { clearTimeout(pillTimer.current); pillTimer.current = null; } }, []);
@@ -347,11 +315,11 @@ const AnalyticsDrawer = React.memo(function AnalyticsDrawer({ isOpen, onClose, s
             pointerEvents: (pillState || isOpen) ? 'auto' : 'none',
           }}
         >
-          <button onClick={handlePillClick}
+          <button data-ui-control="" onClick={handlePillClick}
             style={{
               width: 32, height: 72,
               borderRadius: '10px 0 0 10px',
-              background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)',
+              background: 'var(--bg-surface)',
               border: '1px solid var(--border-soft)',
               borderRight: 'none',
               color: 'var(--accent)',
@@ -379,13 +347,13 @@ const AnalyticsDrawer = React.memo(function AnalyticsDrawer({ isOpen, onClose, s
           position: 'absolute',
           right: 0, top: 0, bottom: 0,
           width: 'min(50vw, 680px)',
-          minWidth: 500,
+          minWidth: 480,
           background: 'var(--bg-elevated)',
           borderLeft: '1px solid var(--border-default)',
           zIndex: 20,
           display: 'flex',
           flexDirection: 'column',
-          boxShadow: '-8px 0 40px rgba(0,0,0,0.35)',
+          boxShadow: 'none',
           overflow: 'hidden',
           willChange: 'transform',
         }}
@@ -395,7 +363,7 @@ const AnalyticsDrawer = React.memo(function AnalyticsDrawer({ isOpen, onClose, s
           padding: '14px 18px 12px',
           borderBottom: '1px solid var(--border-subtle)',
           flexShrink: 0,
-          background: 'linear-gradient(180deg, var(--bg-elevated) 0%, var(--bg-base) 100%)',
+          background: 'var(--bg-elevated)',
           backdropFilter: 'blur(24px)',
           WebkitBackdropFilter: 'blur(24px)',
         }}>
@@ -404,10 +372,10 @@ const AnalyticsDrawer = React.memo(function AnalyticsDrawer({ isOpen, onClose, s
               <div style={{ width: 3, height: 18, borderRadius: 2, background: 'var(--accent)', boxShadow: '0 0 14px var(--accent-glow)' }} />
               <div>
                 <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.01em' }}>Estadísticas</span>
-                <span style={{ fontSize: 9, color: 'var(--text-tertiary)', marginLeft: 8, fontWeight: 500 }}>{studySessions.length} sesiones</span>
+                <span style={{ fontSize: 11, color: 'var(--text-tertiary)', marginLeft: 8, fontWeight: 500 }}>{focusSessions.length} sesiones</span>
               </div>
             </div>
-            <button onClick={onClose}
+            <button data-ui-control="" aria-label="Cerrar estadísticas" onClick={onClose}
               style={{ width: 28, height: 28, borderRadius: 7, background: 'var(--bg-hover)', border: '1px solid var(--border-soft)', color: 'var(--text-tertiary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms' }}
               className="hover:text-white hover:brightness-125">
               <X size={12} />
@@ -416,14 +384,14 @@ const AnalyticsDrawer = React.memo(function AnalyticsDrawer({ isOpen, onClose, s
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
             {[
               { label: 'Estudio', value: `${totalStudyMin}m`, color: 'var(--accent)', icon: Clock },
-              { label: 'Sesiones', value: studySessions.length, color: '#8B5CF6', icon: Activity },
+              { label: 'Sesiones', value: focusSessions.length, color: '#8B5CF6', icon: Activity },
               { label: 'Completadas', value: completedToday, color: '#10B981', icon: CheckCircle },
               { label: 'Promedio', value: `${avgSession}m`, color: '#F59E0B', icon: Zap },
             ].map(m => (
               <div key={m.label} style={{ padding: '6px 8px', background: 'rgba(255,255,255,0.02)', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 3, marginBottom: 1 }}>
                   <m.icon size={7} style={{ color: m.color }} />
-                  <span style={{ fontSize: 7, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{m.label}</span>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{m.label}</span>
                 </div>
                 <span style={{ fontSize: 16, fontWeight: 300, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>{m.value}</span>
               </div>
@@ -437,11 +405,11 @@ const AnalyticsDrawer = React.memo(function AnalyticsDrawer({ isOpen, onClose, s
             const active = activeTab === tab.id;
             const Icon = tab.icon;
             return (
-              <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+              <button data-ui-control="" key={tab.id} onClick={() => setActiveTab(tab.id)}
                 style={{
                   flex: 1,
                   padding: '8px 4px 6px',
-                  fontSize: 9,
+                  fontSize: 11,
                   fontWeight: 600,
                   letterSpacing: '0.04em',
                   cursor: 'pointer',
@@ -474,37 +442,37 @@ const AnalyticsDrawer = React.memo(function AnalyticsDrawer({ isOpen, onClose, s
             {activeTab === 'time' && (
               <TabContent tabId="time">
                 <Section>
-                  <SectionTitle icon={BarChart3}>Distribución Semanal</SectionTitle>
+                  <SectionTitle icon={BarChart3}>Últimos 7 días · minutos</SectionTitle>
                   <ChartContainer>
-                    <ResponsiveContainer width="100%" height={164}>
+                    <ResponsiveContainer debounce={80} width="100%" height={164}>
                       <BarChart data={weekData} margin={{ top: 8, right: 4, bottom: 0, left: -12 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
-                        <XAxis dataKey="day" tick={{ fontSize: 9, fill: chartTextColor }} axisLine={false} tickLine={false} />
-                        <YAxis tick={{ fontSize: 8, fill: chartTextColor }} axisLine={false} tickLine={false} />
+                        <XAxis dataKey="day" tick={{ fontSize: 11, fill: chartTextColor }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 10, fill: chartTextColor }} axisLine={false} tickLine={false} />
                         <Tooltip contentStyle={tooltipStyle} labelStyle={{ fontSize: 10, color: 'var(--text-primary)' }} />
-                        <Bar dataKey="productive" name="Tiempo de estudio" fill="var(--accent)" radius={[3, 3, 0, 0]} maxBarSize={26} />
+                        <Bar isAnimationActive={false} dataKey="productive" name="Tiempo de estudio" fill="var(--accent)" radius={[3, 3, 0, 0]} maxBarSize={26} />
                       </BarChart>
                     </ResponsiveContainer>
                   </ChartContainer>
                   <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 6 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                       <div style={{ width: 8, height: 8, borderRadius: 2, background: 'var(--accent)' }} />
-                      <span style={{ fontSize: 8, color: 'var(--text-secondary)' }}>Estudio: {weekData.reduce((a, d) => a + d.productive, 0)}m</span>
+                      <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>Estudio: {weekData.reduce((a, d) => a + d.productive, 0)}m</span>
                     </div>
                   </div>
                 </Section>
 
                 <Section>
-                  <SectionTitle icon={TrendingUp}>Eficiencia por Hora</SectionTitle>
+                  <SectionTitle icon={TrendingUp}>Tiempo de enfoque por hora · %</SectionTitle>
                   <ChartContainer>
-                    <ResponsiveContainer width="100%" height={164}>
+                    <ResponsiveContainer debounce={80} width="100%" height={164}>
                       <AreaChart data={hourData} margin={{ top: 8, right: 4, bottom: 0, left: -12 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
-                        <XAxis dataKey="hour" tick={{ fontSize: 8, fill: chartTextColor }} axisLine={false} tickLine={false} interval={3} />
-                        <YAxis tick={{ fontSize: 8, fill: chartTextColor }} axisLine={false} tickLine={false} />
+                        <XAxis dataKey="hour" tick={{ fontSize: 10, fill: chartTextColor }} axisLine={false} tickLine={false} interval={3} />
+                        <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: chartTextColor }} axisLine={false} tickLine={false} />
                         <Tooltip contentStyle={tooltipStyle} labelStyle={{ fontSize: 10, color: 'var(--text-primary)' }} />
-                        <Area type="monotone" dataKey="efficiency" name="Eficiencia %" stroke="#8B5CF6" fill="#8B5CF6" fillOpacity={0.2} strokeWidth={2} />
-                        <Area type="monotone" dataKey="avgDuration" name="Duración prom. (min)" stroke="var(--accent)" fill="var(--accent)" fillOpacity={0.1} strokeWidth={1.5} />
+                        <Area isAnimationActive={false} connectNulls={false} dot={{ r: 2 }} type="linear" dataKey="efficiency" name="Enfoque %" stroke="#8B5CF6" fill="#8B5CF6" fillOpacity={0.2} strokeWidth={2} />
+                        <Area isAnimationActive={false} connectNulls={false} dot={{ r: 2 }} type="linear" dataKey="avgDuration" name="Duración prom. (min)" stroke="var(--accent)" fill="var(--accent)" fillOpacity={0.1} strokeWidth={1.5} />
                       </AreaChart>
                     </ResponsiveContainer>
                   </ChartContainer>
@@ -518,7 +486,7 @@ const AnalyticsDrawer = React.memo(function AnalyticsDrawer({ isOpen, onClose, s
                       const pct = Math.min(100, Math.round((d.productive / goalMin) * 100));
                       return (
                         <div key={d.day} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-primary)', width: 24, flexShrink: 0 }}>{d.day}</span>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', width: 24, flexShrink: 0 }}>{d.day}</span>
                           <div style={{ flex: 1, height: 7, background: 'var(--bg-deep)', borderRadius: 4, overflow: 'hidden' }}>
                             <motion.div
                               initial={{ width: 0 }}
@@ -527,8 +495,8 @@ const AnalyticsDrawer = React.memo(function AnalyticsDrawer({ isOpen, onClose, s
                               style={{ height: '100%', background: pct >= 100 ? '#10B981' : 'var(--accent)', borderRadius: 4 }}
                             />
                           </div>
-                          <span style={{ fontSize: 9, fontWeight: 500, color: pct >= 100 ? '#10B981' : 'var(--text-secondary)', width: 30, textAlign: 'right', fontFamily: "'JetBrains Mono', monospace" }}>{d.productive}m</span>
-                          <span style={{ fontSize: 8, color: 'var(--text-muted)', fontFamily: "'JetBrains Mono', monospace", width: 16, textAlign: 'right' }}>{d.sessions}s</span>
+                          <span style={{ fontSize: 11, fontWeight: 500, color: pct >= 100 ? '#10B981' : 'var(--text-secondary)', width: 30, textAlign: 'right', fontFamily: "'JetBrains Mono', monospace" }}>{d.productive}m</span>
+                          <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: "'JetBrains Mono', monospace", width: 40, textAlign: 'right' }}>{d.sessions} ses.</span>
                         </div>
                       );
                     })}
@@ -542,13 +510,13 @@ const AnalyticsDrawer = React.memo(function AnalyticsDrawer({ isOpen, onClose, s
                 <Section>
                   <SectionTitle icon={Target}>Embudo de Tareas</SectionTitle>
                   <ChartContainer height={150}>
-                    <ResponsiveContainer width="100%" height={150}>
+                    <ResponsiveContainer debounce={80} width="100%" height={150}>
                       <BarChart data={funnelData} layout="vertical" margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" horizontal={false} />
-                        <XAxis type="number" tick={{ fontSize: 9, fill: chartTextColor }} axisLine={false} tickLine={false} />
-                        <YAxis dataKey="name" type="category" tick={{ fontSize: 9, fill: chartTextColor }} axisLine={false} tickLine={false} width={80} />
+                        <XAxis type="number" tick={{ fontSize: 11, fill: chartTextColor }} axisLine={false} tickLine={false} />
+                        <YAxis dataKey="name" type="category" tick={{ fontSize: 11, fill: chartTextColor }} axisLine={false} tickLine={false} width={80} />
                         <Tooltip contentStyle={tooltipStyle} labelStyle={{ fontSize: 10, color: 'var(--text-primary)' }} />
-                        <Bar dataKey="value" name="Tareas" radius={[0, 4, 4, 0]} maxBarSize={26}>
+                        <Bar isAnimationActive={false} dataKey="value" name="Tareas" radius={[0, 4, 4, 0]} maxBarSize={26}>
                           {funnelData.map((e, i) => <Cell key={i} fill={e.color} />)}
                         </Bar>
                       </BarChart>
@@ -558,7 +526,7 @@ const AnalyticsDrawer = React.memo(function AnalyticsDrawer({ isOpen, onClose, s
                     {funnelData.map(s => (
                       <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                         <div style={{ width: 6, height: 6, borderRadius: '50%', background: s.color }} />
-                        <span style={{ fontSize: 8, color: 'var(--text-secondary)' }}>{s.name}: {s.value}</span>
+                        <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>{s.name}: {s.value}</span>
                       </div>
                     ))}
                   </div>
@@ -567,15 +535,15 @@ const AnalyticsDrawer = React.memo(function AnalyticsDrawer({ isOpen, onClose, s
                 <Section>
                   <SectionTitle icon={Layers}>Distribución por Curso</SectionTitle>
                   <ChartContainer height={Math.max(100, courseData.length * 28 + 16)}>
-                    <ResponsiveContainer width="100%" height={Math.max(100, courseData.length * 28 + 16)}>
+                    <ResponsiveContainer debounce={80} width="100%" height={Math.max(100, courseData.length * 28 + 16)}>
                       <BarChart data={courseData} layout="vertical" margin={{ top: 4, right: 8, bottom: 0, left: -8 }} barCategoryGap={4}>
                         <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" horizontal={false} />
-                        <XAxis type="number" tick={{ fontSize: 8, fill: chartTextColor }} axisLine={false} tickLine={false} />
-                        <YAxis dataKey="course" type="category" tick={{ fontSize: 8, fill: chartTextColor }} axisLine={false} tickLine={false} width={72} />
+                        <XAxis type="number" tick={{ fontSize: 10, fill: chartTextColor }} axisLine={false} tickLine={false} />
+                        <YAxis dataKey="course" type="category" tick={{ fontSize: 10, fill: chartTextColor }} axisLine={false} tickLine={false} width={72} />
                         <Tooltip contentStyle={tooltipStyle} labelStyle={{ fontSize: 10, color: 'var(--text-primary)' }} />
-                        <Bar dataKey="completadas" name="Completadas" stackId="a" fill="#10B981" maxBarSize={16} />
-                        <Bar dataKey="progreso" name="En Progreso" stackId="a" fill="#3B82F6" maxBarSize={16} />
-                        <Bar dataKey="pendientes" name="Pendientes" stackId="a" fill="#F59E0B" radius={[0, 3, 3, 0]} maxBarSize={16} />
+                        <Bar isAnimationActive={false} dataKey="completadas" name="Completadas" stackId="a" fill="#10B981" maxBarSize={16} />
+                        <Bar isAnimationActive={false} dataKey="progreso" name="En Progreso" stackId="a" fill="#3B82F6" maxBarSize={16} />
+                        <Bar isAnimationActive={false} dataKey="pendientes" name="Pendientes" stackId="a" fill="#F59E0B" radius={[0, 3, 3, 0]} maxBarSize={16} />
                       </BarChart>
                     </ResponsiveContainer>
                   </ChartContainer>
@@ -588,7 +556,7 @@ const AnalyticsDrawer = React.memo(function AnalyticsDrawer({ isOpen, onClose, s
                       {courseData.filter(c => c.pendientes > 0).map(c => (
                         <div key={c.course} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 6px', borderRadius: 6, background: 'var(--bg-hover)' }}>
                           <div style={{ width: 4, height: 4, borderRadius: '50%', background: c.color, flexShrink: 0 }} />
-                          <span style={{ flex: 1, fontSize: 9, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.course}</span>
+                          <span style={{ flex: 1, fontSize: 11, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.course}</span>
                           <span style={{ fontSize: 10, fontWeight: 700, color: '#F59E0B', fontFamily: "'JetBrains Mono', monospace" }}>{c.pendientes}</span>
                           <div style={{ width: 40, height: 4, background: 'var(--bg-deep)', borderRadius: 2, overflow: 'hidden' }}>
                             <motion.div
@@ -619,7 +587,7 @@ const AnalyticsDrawer = React.memo(function AnalyticsDrawer({ isOpen, onClose, s
                   <SectionTitle icon={Activity}>Métricas Clave</SectionTitle>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                     <MiniStat label="Finalización" value={tasks.length > 0 ? `${Math.round((completedToday / tasks.length) * 100)}%` : '0%'} color="#10B981" icon={CheckCircle} />
-                    <MiniStat label="Sesiones/Día" value={studySessions.length > 0 ? `${Math.round(studySessions.length / Math.max(1, Math.ceil((Date.now() - new Date(studySessions[0]?.startedAt || Date.now()).getTime()) / 86400000)))}` : '0'} color="#8B5CF6" icon={Activity} />
+                    <MiniStat label="Sesiones/Día" value={focusSessions.length > 0 ? `${Math.round(focusSessions.length / Math.max(1, Math.ceil((Date.now() - new Date(studySessions[0]?.startedAt || Date.now()).getTime()) / 86400000)))}` : '0'} color="#8B5CF6" icon={Activity} />
                     <MiniStat label="Min/Sesión" value={`${avgSession}m`} color="var(--accent)" icon={Clock} />
                     <MiniStat label="Pendientes" value={tasks.length > 0 ? `${Math.round((pendingToday / tasks.length) * 100)}%` : '0%'} color="#F59E0B" icon={AlertTriangle} />
                   </div>

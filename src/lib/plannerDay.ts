@@ -46,6 +46,7 @@ export function usePlannerDay(courseId?: string | null): PlannerDay {
         if (last && last.courseId === courseId && typeof last.date === 'string' && ISO_DAY_RE.test(last.date)) {
           setPlannerDate(last.date);
           try { localStorage.setItem(dateKey(courseId), last.date); } catch { /* noop */ }
+          try { localStorage.setItem(manualKey(courseId), format(new Date(), 'yyyy-MM-dd')); } catch { /* noop */ }
           return;
         }
       }

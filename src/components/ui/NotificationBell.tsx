@@ -1,75 +1,32 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Bell, X, Check, Info, AlertTriangle, CheckCircle, AlertCircle } from 'lucide-react';
-import { format } from 'date-fns';
-import { useApp, fmtClock } from '../../store/AppContext';
+import {useAppSlice} from "../../store/AppContext";
+import React,{useEffect,useLayoutEffect,useRef,useState} from 'react';
+import {createPortal} from 'react-dom';
+import {Bell,X,Info,CheckCircle,AlertCircle} from 'lucide-react';
+import {format} from 'date-fns';
+import {useApp,fmtClock} from '../../store/AppContext';
 
-export default function NotificationBell() {
-  const { notifications, removeNotification, clearNotifications, settings } = useApp();
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
-
-  const iconMap: Record<string, React.ReactNode> = {
-    success: <CheckCircle size={14} style={{ color: '#10B981', flexShrink: 0 }} />,
-    error: <AlertCircle size={14} style={{ color: '#EF4444', flexShrink: 0 }} />,
-    info: <Info size={14} style={{ color: '#3B82F6', flexShrink: 0 }} />,
-  };
-
-  return (
-    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
-      <button onClick={() => setOpen(!open)}
-        style={{ position: 'relative', padding: 8, borderRadius: '50%', background: 'var(--bg-deep)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms' }}
-        className="hover:border-borderStrong hover:text-white">
-        <Bell size={16} />
-        {notifications.length > 0 && (
-          <span style={{ position: 'absolute', top: 2, right: 2, width: 16, height: 16, borderRadius: '50%', background: '#EF4444', color: '#fff', fontSize: 8, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid var(--bg-base)', lineHeight: 1 }}>
-            {notifications.length > 9 ? '9+' : notifications.length}
-          </span>
-        )}
-      </button>
-
-      {open && (
-        <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 8, width: 340, maxHeight: 400, background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 12, boxShadow: '0 16px 48px rgba(0,0,0,0.5)', overflow: 'hidden', zIndex: 100, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: '1px solid var(--border-subtle)' }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif" }}>Notificaciones</span>
-            <div style={{ display: 'flex', gap: 6 }}>
-              {notifications.length > 0 && (
-                <button onClick={() => { if (confirm('¿Limpiar todas las notificaciones?')) clearNotifications(); }} style={{ padding: '4px 10px', borderRadius: 6, fontSize: 10, fontWeight: 500, background: 'var(--bg-deep)', border: '1px solid var(--border-default)', color: 'var(--text-tertiary)', cursor: 'pointer' }}>
-                  Limpiar
-                </button>
-              )}
-            </div>
-          </div>
-          <div style={{ flex: 1, overflowY: 'auto', padding: 4 }}>
-            {notifications.length === 0 ? (
-              <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 11, fontWeight: 400 }}>
-                Sin notificaciones
-              </div>
-            ) : (
-              [...notifications].reverse().map((n, i) => (
-                <div key={n.id || i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 12px', borderRadius: 8, margin: '2px 0', transition: 'background 150ms' }} className="hover:bg-white/[0.02]">
-                  {iconMap[n.type] || iconMap.info}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-primary)', lineHeight: 1.4, margin: 0 }}>{n.message}</p>
-                    <p style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 3, margin: 0 }}>
-                      {(()=>{try{return fmtClock(format(new Date(n.timestamp),'HH:mm'),settings?.timeFormat)}catch{return '—'}})()}
-                    </p>
-                  </div>
-                  <X size={10} style={{ color: 'var(--text-muted)', cursor: 'pointer', flexShrink: 0, marginTop: 2 }} onClick={() => removeNotification(n.id)} />
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
+export default function NotificationBell(){
+ const {notifications,removeNotification,clearNotifications,settings}=useAppSlice(["notifications","removeNotification","clearNotifications","settings"]);
+ const [open,setOpen]=useState(false),[position,setPosition]=useState({top:0,left:0});
+ const trigger=useRef<HTMLButtonElement>(null),panel=useRef<HTMLDivElement>(null);
+ useLayoutEffect(()=>{
+  if(!open)return;
+  const place=()=>{const r=trigger.current?.getBoundingClientRect();if(!r)return;setPosition({top:Math.max(12,Math.min(r.bottom+10,innerHeight-360)),left:Math.max(12,Math.min(r.right-360,innerWidth-372))});};
+  place();window.addEventListener('resize',place);window.addEventListener('scroll',place,true);
+  return()=>{window.removeEventListener('resize',place);window.removeEventListener('scroll',place,true);};
+ },[open]);
+ useEffect(()=>{
+  if(!open)return;
+  const close=(e:PointerEvent)=>{if(!panel.current?.contains(e.target as Node)&&!trigger.current?.contains(e.target as Node))setOpen(false);};
+  const key=(e:KeyboardEvent)=>{if(e.key==='Escape'){e.stopPropagation();setOpen(false);trigger.current?.focus({preventScroll:true});}};
+  document.addEventListener('pointerdown',close);document.addEventListener('keydown',key);
+  return()=>{document.removeEventListener('pointerdown',close);document.removeEventListener('keydown',key);};
+ },[open]);
+ const icons={success:<CheckCircle size={16}/>,error:<AlertCircle size={16}/>,info:<Info size={16}/>};
+ return <><button ref={trigger} className="notification-trigger" aria-label="Notificaciones" aria-expanded={open} aria-controls="notification-panel" onClick={()=>setOpen(!open)}><Bell size={17}/>{notifications.length>0&&<span>{notifications.length>9?'9+':notifications.length}</span>}</button>
+ {open&&createPortal(<div ref={panel} id="notification-panel" role="dialog" aria-label="Notificaciones" className="notification-panel" style={position}>
+  <div className="notification-panel-header"><h2>Notificaciones</h2><div>{notifications.length>0&&<button onClick={clearNotifications}>Limpiar</button>}<button aria-label="Cerrar notificaciones" onClick={()=>setOpen(false)}><X size={16}/></button></div></div>
+  <div className="notification-list">{notifications.length===0?<p className="notification-empty">No tienes avisos pendientes.</p>:[...notifications].reverse().map(n=><article key={n.id} className={`notification-item notification-${n.type}`}>
+   <span aria-hidden="true">{icons[n.type as keyof typeof icons]||icons.info}</span><div><p>{n.message}</p><time>{(()=>{try{return fmtClock(format(new Date(n.timestamp),'HH:mm'),settings.timeFormat)}catch{return '—'}})()}</time></div><button aria-label={`Eliminar aviso: ${n.message}`} onClick={()=>removeNotification(n.id)}><X size={14}/></button>
+  </article>)}</div></div>,document.body)}</>;
 }

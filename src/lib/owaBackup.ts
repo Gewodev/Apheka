@@ -1,3 +1,6 @@
+import { isStateSnapshot, snapshotScore } from './stateSnapshot';
+import { loadPlanner, savePlanner } from './plannerStore';
+import { readFeatured, hydrateFeatured, setFeaturedEvent } from './featuredEvent';
 import { get, set } from 'idb-keyval';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { readTextFile, writeTextFile } from '@tauri-apps/plugin-fs';
@@ -10,6 +13,12 @@ import type { Track } from '../store/AppContext';
 
 const STATE_KEY = 'owa_studio_data';
 const SECRET_RE = /token|secret|credential|google|supabase/i;
+function withoutLegacySecrets(value:unknown):unknown{
+  if(!value||typeof value!=='object'||Array.isArray(value))return value;
+  const state=value as Record<string,unknown>,settings=state.settings;
+  if(!settings||typeof settings!=='object'||Array.isArray(settings))return value;
+  return {...state,settings:Object.fromEntries(Object.entries(settings as Record<string,unknown>).filter(([key])=>!/api.?key|token|secret|credential/i.test(key)))};
+}
 
 export interface OwaBackupFile {
   format: 'owa-studio-backup';
@@ -39,9 +48,11 @@ function lsEntries(): Record<string, string> {
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i);
     if (!k) continue;
-    if (!k.startsWith('owa_')) continue;
+    if (!k.startsWith('owa_')&&!k.startsWith('apheka_')) continue;
+    if(k.startsWith('apheka_mcp_')||k==='owa_charvis_providers_v1')continue;
     if (SECRET_RE.test(k)) continue;
-    out[k] = localStorage.getItem(k) || '';
+    const value=localStorage.getItem(k)||'';
+    if(k===STATE_KEY){try{out[k]=JSON.stringify(withoutLegacySecrets(JSON.parse(value)));}catch{out[k]=value;}}else out[k]=value;
   }
   return out;
 }
@@ -51,6 +62,16 @@ export async function collectBackup(): Promise<OwaBackupFile> {
   try {
     idbValue = await get(STATE_KEY);
   } catch { /* noop */ }
+  // Prefer the latest complete snapshot, including a deliberately empty one.
+  const candidates: Record<string, unknown>[] = [];
+  for (const raw of [idbValue, localStorage.getItem(STATE_KEY)]) {
+    try {
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (isStateSnapshot(parsed)) candidates.push(parsed);
+    } catch { /* A corrupt mirror must not hide the durable snapshot. */ }
+  }
+  candidates.sort((a,b) => snapshotScore(b) - snapshotScore(a));
+  if (candidates.length) idbValue = withoutLegacySecrets(candidates[0]);
   // Eventos explícitos: del estado IDB o, en su defecto, del espejo local.
   // Así el JSON trae TODOS los eventos colocados, garantizado.
   let stateEvents: any[] | null = null;
@@ -59,21 +80,21 @@ export async function collectBackup(): Promise<OwaBackupFile> {
       (idbValue !== null && idbValue !== undefined)
         ? idbValue
         : JSON.parse(localStorage.getItem(STATE_KEY) || 'null');
-    const evs = rawState && Array.isArray(rawState.events) ? rawState.events : null;
-    if (evs && evs.length > 0) stateEvents = evs;
+    const parsed = typeof rawState === 'string' ? JSON.parse(rawState) : rawState;
+    stateEvents = parsed && Array.isArray(parsed.events) ? parsed.events : null;
   } catch { /* noop */ }
   // Planificador explícito (eventos con repetición, clases, etc.).
   let plannerV3: string | null = null;
-  try {
-    plannerV3 = localStorage.getItem('owa_planner_v3');
-    if (!plannerV3) plannerV3 = null;
-  } catch { /* noop */ }
+  try { plannerV3 = JSON.stringify(await loadPlanner()); } catch { /* Keep the export usable if this store is unavailable. */ }
+  await hydrateFeatured();
+  const localEntries = lsEntries();
+  localEntries.owa_featured_v2 = JSON.stringify(readFeatured());
   return {
     format: 'owa-studio-backup',
     version: 2,
     exportedAt: new Date().toISOString(),
     appVersion: '6.7',
-    localStorage: lsEntries(),
+    localStorage: localEntries,
     idb: idbValue !== null && idbValue !== undefined ? { key: STATE_KEY, value: idbValue } : null,
     plannerV3,
     stateEvents,
@@ -85,7 +106,7 @@ export async function exportOwaBackup(): Promise<BackupResult> {
   const backup = await collectBackup();
   const json = JSON.stringify(backup);
   const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
-  const fileName = `owa-respaldo-${stamp}.json`;
+  const fileName = `apheka-respaldo-${stamp}.json`;
   if (isTauri()) {
     try {
       const dest = await save({
@@ -112,7 +133,7 @@ export const RESTORE_MARKER = 'owa_restore_pending';
 
 export async function applyBackup(backup: OwaBackupFile): Promise<{ ok: boolean; message: string }> {
   if (!backup || backup.format !== 'owa-studio-backup') {
-    return { ok: false, message: 'El archivo no es un respaldo válido de Owa Studio' };
+    return { ok: false, message: 'El archivo no es un respaldo válido de APHEKA' };
   }
   // Marcador anti-pisado: el auto-guardado (cada segundo por el temporizador)
   // NO debe sobrescribir lo restaurado antes de la recarga. Se limpia al
@@ -134,22 +155,47 @@ export async function applyBackup(backup: OwaBackupFile): Promise<{ ok: boolean;
     // de nuevo con liberación de cuota por si el bucle la saltó.
     safeSet('owa_planner_v3', ls['owa_planner_v3']);
   }
+  const plannerRaw = backup.plannerV3 || ls.owa_planner_v3;
+  if (plannerRaw) {
+    try {
+      const planner = JSON.parse(plannerRaw);
+      if (!Array.isArray(planner.events) || !Array.isArray(planner.classes)) throw new Error('Formato inválido');
+      await savePlanner(planner.events, planner.classes);
+    } catch {
+      try { sessionStorage.removeItem(RESTORE_MARKER); } catch {}
+      return { ok: false, message: 'No se pudo restaurar el planificador. Conserva el archivo de respaldo y vuelve a intentarlo.' }; }
+  }
+  try {
+    const selection = JSON.parse(ls.owa_featured_v2 || 'null');
+    const legacy = JSON.parse(ls.owa_planned_goal_data || 'null');
+    const planner = plannerRaw ? JSON.parse(plannerRaw) : null;
+    await setFeaturedEvent(selection ? selection.event : legacy || planner?.events?.find((e: any) => e.id === ls.owa_planned_goal) || null);
+    if (ls.owa_timer_link_v1) await set('owa_timer_link_v1', JSON.parse(ls.owa_timer_link_v1));
+  } catch { /* Older backups may have no selection metadata. */ }
   // Estado fusionado: el respaldo manda sus eventos explícitos dentro del
   // estado (local + IDB + disco), para que aparezcan al recargar.
   let mergedState: any = (backup as any).idb ? (backup as any).idb.value : null;
   if ((mergedState === null || mergedState === undefined) && ls[STATE_KEY]) {
     try { mergedState = JSON.parse(ls[STATE_KEY]); } catch { mergedState = null; }
   }
-  if (Array.isArray((backup as any).stateEvents) && (backup as any).stateEvents.length > 0) {
+  if (typeof mergedState === 'string') { try { mergedState = JSON.parse(mergedState); } catch {} }
+  if (Array.isArray((backup as any).stateEvents)) {
     try {
       const base = (mergedState && typeof mergedState === 'object') ? { ...(mergedState as any) } : {};
       base.events = (backup as any).stateEvents;
       mergedState = base;
     } catch { /* noop */ }
   }
+  if (mergedState && typeof mergedState === 'object') mergedState = { ...mergedState, _savedAt: Date.now() };
   if (mergedState !== null && mergedState !== undefined) {
-    try { await set(STATE_KEY, mergedState); } catch { /* noop */ }
-    try { localStorage.setItem(STATE_KEY, typeof mergedState === 'string' ? mergedState : JSON.stringify(mergedState)); } catch { /* noop */ }
+    let durable = false;
+    try { await set(STATE_KEY, mergedState); durable = true; } catch { /* Try the local mirror next. */ }
+    const raw = typeof mergedState === 'string' ? mergedState : JSON.stringify(mergedState);
+    try { localStorage.setItem(STATE_KEY, raw); durable = durable || localStorage.getItem(STATE_KEY) === raw; } catch {}
+    if (!durable) {
+      try { sessionStorage.removeItem(RESTORE_MARKER); } catch {}
+      return { ok: false, message: 'No se pudo guardar el respaldo restaurado. Conserva el archivo y vuelve a intentarlo.' };
+    }
   } else if (backup.idb) {
     try { await set(backup.idb.key, backup.idb.value); } catch { /* noop */ }
   }

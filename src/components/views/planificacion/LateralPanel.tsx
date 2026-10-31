@@ -1,3 +1,6 @@
+import {useAppSlice} from "../../../store/AppContext";
+import { sessionLinkUnavailable } from '../../../lib/linkEligibility';
+import { readFeatured, hydrateFeatured, setFeaturedEvent, FEATURED_CHANGED } from '../../../lib/featuredEvent';
 import React from 'react';
 import { X, Calendar, CalendarPlus, Clock, BookOpen, FileText, ExternalLink, Trash2, CheckCircle2, Repeat, Plus, Star, Video, Music, Image, FileSpreadsheet, File, Globe, Play, Pencil, Check, Folder } from 'lucide-react';
 import { format } from 'date-fns';
@@ -30,7 +33,7 @@ interface LateralPanelProps {
 }
 
 export default function LateralPanel({ item, onClose, onSelectEvent, onEditEvent, onDeleteEvent, onViewTask, onAddEvent, onAddPlanSession, onEditPlanSession, onSelectSession, onFileMoved }: LateralPanelProps) {
-  const { settings, tasks, setPipUrl } = useApp();
+  const { settings, tasks } = useAppSlice(["settings","tasks"]);
   const tf = settings?.timeFormat;
   if (!item) return null;
 
@@ -105,7 +108,7 @@ export default function LateralPanel({ item, onClose, onSelectEvent, onEditEvent
 
 function DayDetails({ item, onSelectEvent, onViewTask, timeFormat, onAddEvent, onAddPlanSession, onSelectSession }: { item: Extract<SelectedItem, {type: 'day'}>, onSelectEvent?: (ev: PlanEvent) => void, onViewTask?: (taskId: string) => void, timeFormat?: '24h' | '12h', onAddEvent?: (date: Date) => void, onAddPlanSession?: (date: Date) => void, onSelectSession?: (session: any) => void }) {
   const { date, events, tasks, sessions } = item;
-  const { courses } = useApp();
+  const { courses } = useAppSlice(["courses"]);
   const formattedDate = format(date, "EEEE d 'de' MMMM", { locale: es });
 
   return (
@@ -272,24 +275,26 @@ function DayDetails({ item, onSelectEvent, onViewTask, timeFormat, onAddEvent, o
 }
 
 const GOAL_KEY = 'owa_planned_goal';
+const GOAL_DATA_KEY = 'owa_planned_goal_data';
 
 function EventDetails({ item, onEdit, onDelete, timeFormat, tasks, onViewTask, onFileMoved }: { item: Extract<SelectedItem, {type: 'event'}>, onEdit?: (ev: PlanEvent) => void, onDelete?: (evId: string) => void, timeFormat?: '24h' | '12h', tasks?: any[], onViewTask?: (taskId: string) => void, onFileMoved?: (evId: string, oldUrl: string, newPath: string) => void }) {
   const { event } = item;
-  const { setPipUrl, addNotification } = useApp();
+  const { addNotification } = useAppSlice(["addNotification"]);
 
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
-  const [goalId, setGoalId] = React.useState(() => localStorage.getItem(GOAL_KEY) || '');
+  const [goalId, setGoalId] = React.useState(() => readFeatured().id || '');
   const isGoal = goalId === event.id;
 
+  React.useEffect(() => {
+    const update = () => setGoalId(readFeatured().id || '');
+    window.addEventListener(FEATURED_CHANGED, update);
+    void hydrateFeatured().then(update);
+    return () => window.removeEventListener(FEATURED_CHANGED, update);
+  }, []);
   const toggleGoal = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (isGoal) {
-      localStorage.removeItem(GOAL_KEY);
-      setGoalId('');
-    } else {
-      try { localStorage.setItem(GOAL_KEY, event.id); } catch { /* cuota */ }
-      setGoalId(event.id);
-    }
+    // Preserve the existing full snapshot; the shared record survives navigation and quota failures.
+    void setFeaturedEvent(isGoal ? null : event).catch(() => addNotification('No se pudo guardar el destacado. Exporta un respaldo antes de cerrar.', 'error'));
   };
 
   return (
@@ -298,7 +303,7 @@ function EventDetails({ item, onEdit, onDelete, timeFormat, tasks, onViewTask, o
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
           <div style={{ width: 10, height: 10, borderRadius: '50%', background: event.color, boxShadow: `0 0 16px ${event.color}80` }} />
           <span style={{ fontSize: 11, fontWeight: 700, color: event.color, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Evento programado</span>
-          <button onClick={toggleGoal} title={isGoal ? 'Quitar meta planificada' : 'Marcar como meta planificada'}
+          <button onClick={toggleGoal} aria-pressed={isGoal} aria-label={isGoal ? 'Quitar destacado de Inicio' : 'Destacar en Inicio'} title={isGoal ? 'Quitar destacado de Inicio' : 'Destacar en Inicio'}
             style={{ marginLeft: 'auto', padding: 6, borderRadius: 8, background: isGoal ? `${event.color}18` : 'transparent', border: `1px solid ${isGoal ? event.color : 'transparent'}`, cursor: 'pointer', color: isGoal ? event.color : 'var(--text-tertiary)', transition: 'all 200ms', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             onMouseEnter={e => { e.currentTarget.style.background = isGoal ? `${event.color}25` : 'var(--bg-hover)'; }}
             onMouseLeave={e => { e.currentTarget.style.background = isGoal ? `${event.color}18` : 'transparent'; }}>
@@ -398,7 +403,7 @@ function EventDetails({ item, onEdit, onDelete, timeFormat, tasks, onViewTask, o
 
               const handleCardClick = async (e: React.MouseEvent) => {
                 e.preventDefault();
-                try { await openFileSmart(file.url, file.name, { onMedia: (u, n) => setPipUrl(u, n), onError: (m) => addNotification(m, 'error'), onMoved: (np) => onFileMoved?.(event.id, file.url, np) }); } catch { /* noop */ }
+                try { await openFileSmart(file.url, file.name, { onError: (m) => addNotification(m, 'error'), onMoved: (np) => onFileMoved?.(event.id, file.url, np) }); } catch { /* noop */ }
               };
 
               const s = (d: string, c: string) => <svg viewBox="0 0 24 24" width={17} height={17} fill={c} style={{ flexShrink: 0, display: 'block' }}><path d={d} /></svg>;
@@ -571,7 +576,7 @@ function LinkRow({ icon, label, name, color, active, onClick, title }: { icon: R
 
 function PlanSessionDetails({ item, onEdit }: { item: Extract<SelectedItem, {type: 'plansession'}>, onEdit?: (session:any)=>void }) {
   const { session } = item;
-  const { settings, courses, linkPlannedSessionToTimer, setNavigateTo, navigateToCourse, activeTaskId, addNotification, setPipUrl } = useApp();
+  const { settings, courses, linkPlannedSessionToTimer, setNavigateTo, navigateToCourse, activeTaskId, addNotification } = useAppSlice(["settings","courses","linkPlannedSessionToTimer","setNavigateTo","navigateToCourse","activeTaskId","addNotification"]);
   const tf = settings?.timeFormat;
   const course = courses.find(c => c.id === session.courseId);
   const col = course?.color || '#9CA3AF';
@@ -590,11 +595,9 @@ function PlanSessionDetails({ item, onEdit }: { item: Extract<SelectedItem, {typ
     return `${fmtTimeRange(session.startTime, `${String(eh).padStart(2, '0')}:${String(em).padStart(2, '0')}`, tf)} · ${durationMin} min`;
   };
 
+  const unavailable = sessionLinkUnavailable(session) || (!course ? 'El curso de esta sesión ya no existe.' : null);
   const start = () => {
-    if (activeTaskId) {
-      addNotification('Hay una tarea vinculada al temporizador. Desvincula esa tarea para iniciar esta sesión.', 'info');
-      return;
-    }
+    if (unavailable) return;
     linkPlannedSessionToTimer(session.id);
     setNavigateTo('estudio');
   };
@@ -689,16 +692,16 @@ function PlanSessionDetails({ item, onEdit }: { item: Extract<SelectedItem, {typ
       })()}
 <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 'auto', paddingBottom: 8 }}>
           <button
-            onClick={start}
-            title={activeTaskId ? 'Hay una tarea vinculada al temporizador' : 'Vincular al temporizador y abrir Estudio'}
+            onClick={start} disabled={!!unavailable} className="workspace-session-start"
+            title={activeTaskId ? 'Cambiar de la tarea actual a esta sesión' : 'Vincular al temporizador y abrir Estudio'}
             style={{
               width: '100%', padding: '14px 20px', borderRadius: 12, fontSize: 12, fontWeight: 400,
               fontFamily: "'Inter Tight',sans-serif", letterSpacing: '0.14em', textTransform: 'uppercase',
-              border: 'none', cursor: activeTaskId ? 'not-allowed' : 'pointer',
-              background: activeTaskId ? 'var(--surface-elevated)' : col,
-              color: activeTaskId ? 'var(--text-muted)' : '#fff',
-              boxShadow: activeTaskId ? 'none' : `0 2px 10px ${col}2e`,
-              opacity: activeTaskId ? 0.6 : 1,
+              border: 'none', cursor: 'pointer',
+              background: col,
+              color: '#fff',
+              boxShadow: 'none',
+              opacity: 1,
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
               transition: 'all 200ms',
             }}
@@ -706,7 +709,7 @@ function PlanSessionDetails({ item, onEdit }: { item: Extract<SelectedItem, {typ
             onMouseLeave={e => { if (!activeTaskId) { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = `0 2px 10px ${col}2e`; } }}
           >
             <Play size={12} fill="currentColor" strokeWidth={1.5} />
-            {activeTaskId ? 'Tarea vinculada activa' : 'Empezar sesión'}
+            {unavailable ? (session.completed ? 'Sesión completada' : 'Reprograma para estudiar') : activeTaskId ? 'Cambiar a esta sesión' : 'Empezar sesión'}
           </button>
         </div>
     </div>

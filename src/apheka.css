@@ -1,0 +1,96 @@
+/* APHEKA: same identity, calmer surfaces and precise type. */
+:root {
+  --font-heading: 'Inter Tight', 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', Consolas, monospace;
+  --shadow-card: 0 1px 2px rgb(5 5 9 / 12%);
+}
+body { font-kerning: normal; text-rendering: optimizeLegibility; }
+button, input, select, textarea { font-family: inherit; }
+button:focus-visible, a:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 3px;
+}
+.apheka-wordmark {
+  display:inline-flex; align-items:center; flex-shrink:0; gap:.09em;
+  font-family:var(--font-mono); font-size:18px; font-weight:600;
+  color:var(--text-primary); letter-spacing:.015em; line-height:1.25;
+}
+.apheka-wordmark > span { position:relative; }
+.apheka-wordmark > span:not(:last-child)::after {
+  content:''; position:absolute; right:-.07em; top:14%; height:72%; width:1px;
+  background:var(--bg-base); transform:rotate(16deg);
+}
+.apheka-event-grid { display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.4fr); gap: 28px; }
+.apheka-event-grid > * { min-width: 0; }
+.apheka-event-duration { display:flex; align-items:center; flex-wrap:wrap; gap:12px; padding-top:8px; }
+.apheka-event-duration > div:last-child { flex-basis:100%; }
+.apheka-time-input { width:54px; height:34px; text-align:center; font-family:var(--font-mono); font-size:18px; font-weight:500; color:var(--text-primary); background:transparent; border:0; border-radius:4px; appearance:textfield; }
+.apheka-time-input::-webkit-inner-spin-button { appearance:none; }
+.apheka-event-dialog { overscroll-behavior:contain; }
+.apheka-settings-layout { display:flex; flex:1; gap:24px; min-height:600px; align-items:flex-start; }
+.apheka-settings-layout > aside { width:212px !important; align-self:flex-start !important; }
+.apheka-settings-layout > :last-child { min-width:0; }
+.notes-preview-area, .notes-editor-area { line-height:1.75; overflow-wrap:anywhere; }
+.notes-preview-area h1, .notes-editor-area h1 { font-weight:600; font-size:26px; line-height:1.3; }
+.notes-preview-area h2, .notes-editor-area h2 { font-weight:600; font-size:21px; line-height:1.4; }
+.notes-preview-area pre, .notes-editor-area pre { border:1px solid var(--border-default); border-radius:8px; padding:16px; }
+.note-card { border-radius:12px; transition:border-color 160ms ease-out, background-color 160ms ease-out; }
+@media (max-width: 900px) {
+  .apheka-settings-layout { flex-direction:column; }
+  .apheka-settings-layout > aside { width:100% !important; position:static !important; flex-direction:row !important; flex-wrap:wrap; }
+  .apheka-settings-layout > aside > div:first-child { display:none; }
+  .apheka-settings-layout > aside button { width:auto !important; }
+  .apheka-settings-layout > :last-child { width:100%; }
+}
+@media (max-width: 640px) {
+  .apheka-event-grid { grid-template-columns:minmax(0,1fr); gap:20px; }
+  .apheka-event-dialog > div { padding-left:20px !important; padding-right:20px !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; scroll-behavior:auto !important; }
+}
+
+:root[data-theme='oscuro'] {
+  --text-primary: oklch(94% .006 275);
+  --text-secondary: oklch(77% .009 275);
+  --text-tertiary: oklch(66% .009 275);
+  --text-muted: oklch(60% .008 275);
+  --border-default: oklch(70% .009 275 / 15%);
+  --border-subtle: oklch(70% .009 275 / 10%);
+}
+.owa-nsidebar { gap:4px; }
+.owa-nsidebar button { min-height:32px; }
+.owa-nsidebar input { min-height:34px; }
+
+.apheka-event-schedule { display:flex; flex-direction:column; gap:14px; }
+.apheka-event-section-head { display:flex; align-items:center; justify-content:space-between; font-size:13px; font-weight:600; }
+.apheka-inline-check { display:flex; gap:8px; align-items:center; font-size:12px; font-weight:400; color:var(--text-secondary); cursor:pointer; }
+.apheka-inline-check input { accent-color:var(--accent); width:15px; height:15px; }
+.apheka-schedule-fields { display:grid; grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) minmax(0,1.15fr); gap:16px; }
+.apheka-schedule-fields.all-day { grid-template-columns:1fr; }
+.apheka-field { display:flex; flex-direction:column; gap:8px; font-size:11px; font-weight:500; color:var(--text-secondary); min-width:0; }
+.apheka-field > input, .apheka-time-control, .apheka-duration-control { height:44px; width:100%; min-width:0; border:1px solid var(--border-default); border-radius:8px; background:var(--surface-elevated); color:var(--text-primary); }
+.apheka-field > input { padding:0 12px; font-size:13px; }
+.apheka-time-control, .apheka-duration-control { display:flex; align-items:center; justify-content:center; gap:4px; padding:0 4px; }
+.apheka-time-control .apheka-time-input { width:35px; font-size:16px; }
+.apheka-time-arrows { display:flex; flex-direction:column; margin-left:auto; }
+.apheka-time-arrows button { height:20px; width:25px; border:0; border-radius:4px; color:var(--text-secondary); background:transparent; display:grid; place-items:center; cursor:pointer; }
+.apheka-duration-control button { display:grid; place-items:center; width:28px; height:32px; border:0; border-radius:5px; background:transparent; color:var(--text-secondary); cursor:pointer; }
+.apheka-duration-control input { width:40px; min-width:0; border:0; background:transparent; color:var(--text-primary); text-align:center; font:500 15px var(--font-mono); appearance:textfield; }
+.apheka-duration-control input::-webkit-inner-spin-button { appearance:none; }
+.apheka-duration-control span { font-size:11px; color:var(--text-tertiary); }
+.apheka-time-arrows button:hover, .apheka-duration-control button:hover { background:var(--bg-hover); color:var(--text-primary); }
+.apheka-schedule-summary { display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:12px; color:var(--text-secondary); }
+.apheka-schedule-summary strong { font:500 12px var(--font-mono); color:var(--text-primary); }
+.apheka-schedule-summary > div { display:flex; gap:5px; }
+.apheka-schedule-summary button { padding:5px 8px; border-radius:5px; border:1px solid var(--border-subtle); background:transparent; color:var(--text-secondary); font:11px var(--font-mono); cursor:pointer; }
+.apheka-schedule-summary button[aria-pressed='true'] { color:var(--accent); border-color:var(--accent); background:var(--accent-dim); }
+@media(max-width:640px) { .apheka-schedule-fields { grid-template-columns:1fr 1fr; } .apheka-schedule-fields > :first-child { grid-column:1/-1; } .apheka-schedule-summary { flex-wrap:wrap; } }
+
+/* Desktop blocks: flat surfaces, clear structure, quiet motion. */
+[data-apheka-view]:not([data-apheka-view='estudio']) .bento-card {
+  border-radius:10px; box-shadow:0 1px 0 var(--border-subtle);
+}
+[data-apheka-view='notas'] .apheka-note-card { min-height:150px; }
+.apheka-event-dialog { border-radius:12px !important; }
+.apheka-event-dialog button:disabled { opacity:.4; cursor:default; }
+.apheka-settings-content .bento-card { border-radius:10px; }

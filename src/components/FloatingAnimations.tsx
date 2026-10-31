@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { Sprout, BookOpen, Sparkles, Waves, Leaf, Circle, type LucideIcon } from 'lucide-react';
 
 const stylesheet = `
 @keyframes plantBreathe {
@@ -193,11 +194,11 @@ export const BreathingAnimation = memo(({ color }: { color: string }) => (
   </div>
 ));
 
-export const ANIMATIONS: Record<string, { component: typeof PlantAnimation; label: string; icon: string }> = {
-  plant: { component: PlantAnimation, label: 'Planta', icon: '🌱' },
-  books: { component: BooksAnimation, label: 'Libros', icon: '📚' },
-  stars: { component: StarsAnimation, label: 'Estrellas', icon: '✨' },
-  waves: { component: WavesAnimation, label: 'Ondas', icon: '〰️' },
-  leaves: { component: LeavesAnimation, label: 'Hojas', icon: '🍃' },
-  breathing: { component: BreathingAnimation, label: 'Respiración', icon: '○' },
+export const ANIMATIONS: Record<string, { component: typeof PlantAnimation; label: string; icon: LucideIcon }> = {
+  plant: { component: PlantAnimation, label: 'Planta', icon: Sprout },
+  books: { component: BooksAnimation, label: 'Libros', icon: BookOpen },
+  stars: { component: StarsAnimation, label: 'Estrellas', icon: Sparkles },
+  waves: { component: WavesAnimation, label: 'Ondas', icon: Waves },
+  leaves: { component: LeavesAnimation, label: 'Hojas', icon: Leaf },
+  breathing: { component: BreathingAnimation, label: 'Respiración', icon: Circle },
 };

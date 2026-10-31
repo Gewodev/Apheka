@@ -1,5 +1,6 @@
+import { localPathFromUrl } from './externalTarget';
 import { openUrl, openPath } from '@tauri-apps/plugin-opener';
-import { convertFileSrc, isTauri } from '@tauri-apps/api/core';
+import { isTauri } from '@tauri-apps/api/core';
 
 async function saveDataUrlToTempFile(dataUrl: string, fileName: string): Promise<string | null> {
   try {
@@ -46,6 +47,7 @@ async function blobToDataUrl(url: string): Promise<string | null> {
       fr.onload = () => res(fr.result as string);
       fr.onerror = () => rej(new Error('read failed'));
       fr.onloadend = () => { if (!fr.result) rej(new Error('no result')); };
+      fr.readAsDataURL(blob);
     });
   } catch { return null; }
 }
@@ -98,7 +100,6 @@ function downloadDataUrl(dataUrl: string, fileName: string): boolean {
 }
 
 export interface OpenFileSmartOpts {
-  onMedia?: (url: string, fileName: string) => void;
   onError?: (message: string) => void;
   onMoved?: (newPath: string) => void;
   onResolving?: () => void;
@@ -288,16 +289,13 @@ export async function resolveLocalPath(originalPath: string, fileName: string): 
 }
 
 export async function openFileSmart(url: string, fileName: string, opts: OpenFileSmartOpts = {}): Promise<void> {
-  const { onMedia, onError, onMoved, onResolving, onResolvingDone } = opts;
+  const { onError, onMoved, onResolving, onResolvingDone } = opts;
   const fail = (msg: string) => { try { onError?.(msg); } catch { /* noop */ } };
 
   if (!url) { fail('El archivo no tiene una ruta de apertura'); return; }
 
-  // URL del asset protocol (convertFileSrc) → ruta local real
-  const assetMatch = url.match(/^https?:\/\/asset\.localhost\/(.+)$/);
-  if (assetMatch) {
-    try { url = decodeURIComponent(assetMatch[1]); } catch { url = assetMatch[1]; }
-  }
+  // Recover persisted legacy/file URLs before native opening.
+  try { url = localPathFromUrl(url) || url; } catch { fail('La ruta del archivo está dañada.'); return; }
 
   // blob: (archivos guardados en sesiones anteriores) → rescate a dataURL y redespacho
   if (url.startsWith('blob:')) {
@@ -316,19 +314,9 @@ export async function openFileSmart(url: string, fileName: string, opts: OpenFil
     const ext = (fileName || url).split('.').pop()?.toLowerCase() || '';
     const isImg = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'bmp'].includes(ext) || (isData && url.startsWith('data:image'));
     const isPdf = ext === 'pdf';
-    const isAudio = ['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a'].includes(ext) || (isData && url.startsWith('data:audio'));
-    const isVideo = ['mp4', 'webm', 'avi', 'mov', 'mkv'].includes(ext) || (isData && url.startsWith('data:video'));
-    const isYouTube = isLink && (url.includes('youtube.com') || url.includes('youtu.be'));
     const inTauri = isTauri();
 
-    // ─── Media: YouTube/video → PiP. El AUDIO abre en el reproductor del sistema ───
-    if (onMedia && (isYouTube || isVideo)) {
-      let playUrl = url;
-      if (inTauri && !isLink) playUrl = convertFileSrc(url);
-      onMedia(playUrl, fileName);
-      return;
-    }
-
+    // Media attachments use the native application or browser, without a persistent overlay.
     // ─── Tauri: apertura nativa (app del sistema) ───
     if (inTauri) {
       if (isLink) {
@@ -353,14 +341,6 @@ export async function openFileSmart(url: string, fileName: string, opts: OpenFil
               await openPath(resolved);
               try { onMoved?.(resolved); } catch { /* noop */ }
               return;
-            } catch { /* sigue */ }
-          }
-          // 3) Fallback webview "file://" (como en la web): PDF e imágenes se muestran
-          //    dentro de la app vía asset protocol, aunque el sistema no los asocie.
-          if (isPdf || isImg) {
-            try {
-              const assetUrl = convertFileSrc(url);
-              if (openInNewTab(assetUrl)) return;
             } catch { /* sigue */ }
           }
           // 4) Último recurso: abrir el diálogo nativo de selección de archivo — el usuario
@@ -410,4 +390,22 @@ export async function openFileSmart(url: string, fileName: string, opts: OpenFil
   } catch {
     fail('No se pudo abrir el material');
   }
+}
+
+/** Resolve a real disk file for an external browser/PDF viewer, preserving moved-file recovery. */
+export async function resolveExternalResource(url: string, fileName: string, onMoved?: (path: string) => void): Promise<string> {
+  const local = localPathFromUrl(url);
+  if (local) {
+    if (await statSafe(local)) return local;
+    const resolved = await resolveLocalPath(local, fileName);
+    if (!resolved) throw new Error('No se encontró el archivo en su ubicación guardada. Vuelve a seleccionarlo desde el curso.');
+    onMoved?.(resolved);
+    return resolved;
+  }
+  if (/^https?:\/\//i.test(url)) return url;
+  const data = url.startsWith('blob:') ? await blobToDataUrl(url) : url;
+  if (!data?.startsWith('data:')) throw new Error('El recurso no tiene una ruta válida.');
+  const saved = await saveDataUrlToTempFile(data, fileName);
+  if (!saved) throw new Error('No se pudo preparar el archivo para abrirlo.');
+  return saved;
 }

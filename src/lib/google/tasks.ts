@@ -50,11 +50,11 @@ export async function listTaskLists(): Promise<TaskList[]> {
 
 export async function createDefaultList(): Promise<string> {
   const lists = await listTaskLists();
-  const owa = lists.find(l => l.title === 'OWA Studio');
+  const owa = lists.find(l => l.title === 'APHEKA') || lists.find(l => l.title === 'OWA Studio');
   if (owa) return owa.id;
   const created = await apiFetch<TaskList>('/tasks/v1/users/@me/lists', {
     method: 'POST',
-    body: JSON.stringify({ title: 'OWA Studio' }),
+    body: JSON.stringify({ title: 'APHEKA' }),
   });
   return created.id;
 }

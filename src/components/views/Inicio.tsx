@@ -1,10 +1,15 @@
+import LiveClock from '../ui/LiveClock';
+import WorkspaceClock from '../ui/WorkspaceClock';
+import { calculateStreak, getGoalForDay } from '../../lib/studyStreak';
 ﻿import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   Music, CheckSquare, FileText, Flame,
   Target, Star, Lock, Check, X, Calendar, Timer } from 'lucide-react';
-import { useApp, fmtClock } from '../../store/AppContext';
+import { useAppSlice } from '../../store/AppContext';
 import { format, subDays, subWeeks, addDays, addWeeks, startOfWeek, parseISO, isBefore } from 'date-fns';
-import { get as idbGet } from 'idb-keyval';
+import { loadPlanner, peekPlanner, PLANNER_CHANGED } from '../../lib/plannerStore';
+import { readFeatured, hydrateFeatured, setFeaturedEvent, FEATURED_CHANGED } from '../../lib/featuredEvent';
+import { nextOccurrence } from '../../lib/eventOccurrence';
 import { es } from 'date-fns/locale';
 import { getWeeklyPhrase } from '../../data/phrases';
 import NotificationBell from '../ui/NotificationBell';
@@ -57,39 +62,7 @@ function LEDTime({ time, color, digitWidth = 80, digitHeight = 130, colonWidth =
 }
 
 /** Convert a UTC ISO timestamp to local YYYY-MM-DD */
-function getGoalForDay(dayStr: string, currentGoal: number, dailyGoalHistory?: Record<string, number>, initialDailyGoal?: number): number {
-  const changeDates = Object.keys(dailyGoalHistory || {}).filter(k => /^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
-  for (let i = changeDates.length - 1; i >= 0; i--) {
-    if (changeDates[i] <= dayStr) return dailyGoalHistory![changeDates[i]];
-  }
-  return initialDailyGoal ?? currentGoal;
-}
 
-function calculateStreak(dailyTotals: Record<string, number>, dailyGoalMin: number, dailyGoalHistory?: Record<string, number>, initialDailyGoal?: number): number {
-  const todayStr = format(new Date(), 'yyyy-MM-dd');
-  const yesterdayStr = format(subDays(new Date(), 1), 'yyyy-MM-dd');
-
-  const metGoal = (dayStr: string): boolean => {
-    const goalForDay = getGoalForDay(dayStr, dailyGoalMin, dailyGoalHistory, initialDailyGoal);
-    if (goalForDay <= 0) return false;
-    const studied = dailyTotals[dayStr];
-    return studied !== undefined && studied > 0 && studied >= goalForDay * 60;
-  };
-
-  const startDay = metGoal(todayStr) ? todayStr :
-                   metGoal(yesterdayStr) ? yesterdayStr : null;
-
-  if (!startDay) return 0;
-
-  let s = 1;
-  let d = subDays(new Date(startDay), 1);
-  let maxLookback = 365;
-  while (maxLookback-- > 0 && metGoal(format(d, 'yyyy-MM-dd'))) {
-    s++;
-    d = subDays(d, 1);
-  }
-  return s;
-}
 
 interface GoalEvent {
   id: string;
@@ -112,7 +85,7 @@ const GOAL_KEY = 'owa_planned_goal';
 // Mapea una sesión de estudio planificada al shape de GoalEvent (para
 // "Siguientes" y para que el Destacado pueda apuntar a una sesión).
 function mapSessionToGoal(s: any, courses: any[]): GoalEvent | null {
-  if (!s || !s.date) return null;
+  if (!s || !s.date || s.completed) return null;
   const color = courses.find((c: any) => c.id === s.courseId)?.color || '#8B5CF6';
   return {
     id: s.id, title: s.title, date: s.date, startTime: s.startTime || undefined, allDay: false,
@@ -121,76 +94,15 @@ function mapSessionToGoal(s: any, courses: any[]): GoalEvent | null {
   };
 }
 
-// Proyecta el evento destacado (Destacado) sobre la fecha de SU PRÓXIMA
-// ocurrencia, buscando en TODO el conjunto — no en la lista acotada de
-// "Siguientes" (si el evento queda fuera de los primeros 5, igual sigue
-// destacado). Devuelve null si el evento no existe o ya expiró sin repetición.
-function projectGoal(events: any[], gid: string | null, courses: any[] = []): GoalEvent | null {
-  if (!gid) return null;
-  const e = events.find(x => x && x.id === gid);
-  if (!e || !e.date) return null;
-  const today = format(new Date(), 'yyyy-MM-dd');
-  const applyOv = (ee: any, d: string) => {
-    const ov = ee.occurrenceOverrides?.[d];
-    if (!ov) return ee;
-    return { ...ee, ...ov, occurrenceOverrides: ee.occurrenceOverrides };
-  };
-  if (!e.repeat || e.repeat === 'none') {
-    if (e.date < today) return null; // expiró sin repetición → fuera
-    return applyOv(e, e.date);
-  }
-  if (e.repeatUntil && e.repeatUntil < today) return null;
-  if (e.date >= today) return applyOv(e, e.date);
-  const base = new Date(e.date + 'T12:00:00');
-  const tgt = new Date(today + 'T12:00:00');
-  const isExcepted = (d: Date) => (e.exceptions || []).includes(format(d, 'yyyy-MM-dd'));
-  const isOvMoved = (d: Date) => {
-    const ov = e.occurrenceOverrides?.[format(d, 'yyyy-MM-dd')];
-    return ov && ov.date && ov.date !== format(d, 'yyyy-MM-dd');
-  };
-  let next: Date | null = null;
-  if (e.repeat === 'daily') {
-    for (let i = 0; i < 7; i++) { const d = addDays(tgt, i); if (!isExcepted(d) && !isOvMoved(d)) { next = d; break; } }
-  } else if (e.repeat === 'weekly') {
-    for (let i = 0; i < 7; i++) { const d = addDays(tgt, i); if (d.getDay() === base.getDay() && !isExcepted(d) && !isOvMoved(d)) { next = d; break; } }
-  } else if (e.repeat === 'custom_days' && e.repeatDays?.length) {
-    const jsToday = (tgt.getDay() + 6) % 7;
-    for (let i = 0; i < 7; i++) { const d = addDays(tgt, i); if (e.repeatDays.includes((jsToday + i) % 7) && !isExcepted(d) && !isOvMoved(d)) { next = d; break; } }
-  }
-  if (!next) return null;
-  return applyOv({ ...e, date: format(next, 'yyyy-MM-dd') }, format(next, 'yyyy-MM-dd'));
-}
-
-// Fuente de verdad del planificador: IndexedDB. El espejo localStorage puede
-// quedarse viejo (cuota) — para "Siguientes" y el Destacado se lee IDB y se
-// gana el superset, igual que hace Planificacion.
-async function loadPlannerEvents(): Promise<any[]> {
-  try {
-    const idbJson = await idbGet('owa_planner_v3') as string | null;
-    const ls = (() => { try { return localStorage.getItem('owa_planner_v3'); } catch { return null; } })();
-    const parse = (raw: string | null) => { try { const d = JSON.parse(raw || '{}'); return Array.isArray(d.events) ? d.events : []; } catch { return []; } };
-    const a = parse(idbJson); const b = parse(ls);
-    return a.length >= b.length ? a : b;
-  } catch { return []; }
-}
-
-const STORE_KEY = 'owa_planner_v3';
-
 function loadGoalEvent(): GoalEvent | null {
-  try {
-    const goalId = localStorage.getItem(GOAL_KEY);
-    if (!goalId) return null;
-    const raw = localStorage.getItem(STORE_KEY);
-    if (!raw) return null;
-    const data = JSON.parse(raw);
-    const ev = (data.events || []).find((e: any) => e.id === goalId);
-    if (!ev) return null;
-    return { id: ev.id, title: ev.title, date: ev.date, startTime: ev.startTime, allDay: ev.allDay, color: ev.color, repeat: ev.repeat, repeatDays: ev.repeatDays, repeatUntil: ev.repeatUntil, exceptions: ev.exceptions };
-  } catch { return null; }
+  const selected = readFeatured();
+  if (!selected.id) return null;
+  const event = peekPlanner()?.events.find(e => e.id === selected.id) || selected.event;
+  return event ? (nextOccurrence(event) || event) as GoalEvent : null;
 }
 
 const hl = (l: number) =>
-  l === 0 ? 'var(--bg-deep)' : l === 1 ? 'var(--accent-dim)' : l === 2 ? 'color-mix(in srgb, var(--accent) 35%, transparent)' : l === 3 ? 'color-mix(in srgb, var(--accent) 65%, transparent)' : 'var(--accent)';
+  l === 0 ? 'color-mix(in srgb,var(--text-primary) 7%,var(--bg-base))' : l === 1 ? 'var(--accent-dim)' : l === 2 ? 'color-mix(in srgb, var(--accent) 35%, transparent)' : l === 3 ? 'color-mix(in srgb, var(--accent) 65%, transparent)' : 'var(--accent)';
 
 const pc: Record<string, string> = { high: '#E11D48', medium: '#F59E0B', low: '#10B981', none: 'var(--text-tertiary)' };
 const pcl: Record<string, string> = { high: 'Alta', medium: 'Media', low: 'Baja', none: 'Sin pri.' };
@@ -207,19 +119,42 @@ function timeAgo(d: string): string {
   try { return format(new Date(d), 'd MMM', { locale: es }); } catch { return ''; }
 }
 
+const FeaturedCountdown=React.memo(function FeaturedCountdown({event}:{event:GoalEvent}){
+ return <LiveClock>{now=>{
+  const target=new Date(event.date+'T'+(event.allDay?'23:59:59':event.startTime||'23:59:59')).getTime();
+  const diff=Number.isFinite(target)?Math.max(0,target-now.getTime()):0;
+  const countdown={days:Math.floor(diff/86400000),hours:Math.floor(diff%86400000/3600000),minutes:Math.floor(diff%3600000/60000),seconds:Math.floor(diff%60000/1000)};
+  return (<div className="home-featured-countdown" style={{ display: 'flex', gap: 8, justifyContent: 'center', padding: '12px 0 16px', fontFamily: "'Inter Tight', sans-serif" }}>
+                {[
+                  { val: countdown.days, label: 'dias' },
+                  { val: countdown.hours, label: 'hrs' },
+                  { val: countdown.minutes, label: 'min' },
+                  { val: countdown.seconds, label: 'seg' },
+                ].map((u, i) => {
+                  const isZero = u.val === 0 && i < 3;
+                  return (
+                    <React.Fragment key={u.label}>
+                      {i > 0 && <div className="home-countdown-separator" aria-hidden="true" style={{ alignSelf: 'center', fontSize: 22, fontWeight: 500, color: `${event.color}40`, paddingBottom: 14 }}>:</div>}
+                      <div style={{ textAlign: 'center', minWidth: 48 }}>
+                        <div style={{ fontSize: 34, fontWeight: 500, lineHeight: 1, color: isZero ? 'var(--text-tertiary)' : event.color, letterSpacing: '-0.02em', transition: 'color 200ms' }}>
+                          {String(u.val).padStart(2, '0')}
+                        </div>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginTop: 4 }}>{u.label}</div>
+                      </div>
+                    </React.Fragment>
+                  );
+                })}
+              </div>);
+ }}</LiveClock>;
+});
+
 export default function Inicio() {
-  const app = useApp();
   const {
     tasks = [],
     notes = [],
-    sessionTime = 0,
     settings,
     dailyStudyTime = 0,
     weeklyStudyTime = {},
-    toggleTimer,
-    isTimerActive = false,
-    isRest = false,
-    sessionType = 'pomodoro',
     tracks = [],
     trackHistory = [],
     updateSettings,
@@ -228,167 +163,51 @@ export default function Inicio() {
     setFocusedTaskId,
     plannedSessions = [],
     courses = [],
-  } = app || {};
+  } = useAppSlice(["tasks","notes","settings","dailyStudyTime","weeklyStudyTime","tracks","trackHistory","updateSettings","setNavigateTo","setFocusedEventId","setFocusedTaskId","plannedSessions","courses"]);
   const [ct, setCt] = useState(new Date());
 
   const [goalEvent, setGoalEvent] = useState<GoalEvent | null>(() => loadGoalEvent());
-  const [goalCountdown, setGoalCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-  const [goalExpired, setGoalExpired] = useState(false);
   const [upcomingEvents, setUpcomingEvents] = useState<GoalEvent[]>([]);
-  // Tolerancia del Destacado: una lectura IDB stale NO desancla. Solo 3
-  // fallos consecutivos (evento realmente inexistente) limpian el anclaje.
-  const goalMissRef = useRef(0);
-  const lastGoalRef = useRef<GoalEvent | null>(null);
-
-  const updateGoalFromStorage = useCallback(() => setGoalEvent(loadGoalEvent()), []);
-
-  const computeUpcomingFrom = useCallback((events: any[], sessions: any[]) => {
-    try {
-      const today = format(new Date(), 'yyyy-MM-dd');
-      const applyOv = (ee: any, d: string) => {
-        const ov = ee.occurrenceOverrides?.[d];
-        if (!ov) return ee;
-        return { ...ee, ...ov, occurrenceOverrides: ee.occurrenceOverrides };
-      };
-      const out: any[] = [];
-      // EVENTOS (misma lógica de ocurrencias que antes)
-      (events || []).forEach((e: any) => {
-        if (!e || !e.date) return;
-        if (!e.repeat || e.repeat === 'none') {
-          if (e.date >= today) out.push(applyOv(e, e.date));
-          return;
-        }
-        if (e.repeatUntil && e.repeatUntil < today) return;
-        if (e.date >= today) { out.push(applyOv(e, e.date)); return; }
-        const base = new Date(e.date + 'T12:00:00');
-        const tgt = new Date(today + 'T12:00:00');
-        const isExcepted = (d: Date) => (e.exceptions || []).includes(format(d, 'yyyy-MM-dd'));
-        const isOvMoved = (d: Date) => {
-          const ov = e.occurrenceOverrides?.[format(d, 'yyyy-MM-dd')];
-          return ov && ov.date && ov.date !== format(d, 'yyyy-MM-dd');
-        };
-        let next: Date | null = null;
-        if (e.repeat === 'daily') {
-          for (let i = 0; i < 7; i++) { const d = addDays(tgt, i); if (!isExcepted(d) && !isOvMoved(d)) { next = d; break; } }
-        } else if (e.repeat === 'weekly') {
-          for (let i = 0; i < 7; i++) { const d = addDays(tgt, i); if (d.getDay() === base.getDay() && !isExcepted(d) && !isOvMoved(d)) { next = d; break; } }
-        } else if (e.repeat === 'custom_days' && e.repeatDays?.length) {
-          const jsToday = (tgt.getDay() + 6) % 7;
-          for (let i = 0; i < 7; i++) { const d = addDays(tgt, i); if (e.repeatDays.includes((jsToday + i) % 7) && !isExcepted(d) && !isOvMoved(d)) { next = d; break; } }
-        }
-        if (next) out.push(applyOv({ ...e, date: format(next, 'yyyy-MM-dd') }, format(next, 'yyyy-MM-dd')));
-      });
-      // SESIONES DE ESTUDIO PROGRAMADAS (misma lógica; color del curso)
-      const courseColorOf = (cid: string) => courses.find(c => c.id === cid)?.color || '#8B5CF6';
-      (sessions || []).forEach((s: any) => {
-        if (!s || !s.date || s.completed) return;
-        const mapped = (date: string) => ({
-          id: s.id, title: s.title, date, startTime: s.startTime || undefined, allDay: false,
-          color: courseColorOf(s.courseId), repeat: s.repeat, repeatDays: s.repeatDays,
-          repeatUntil: s.repeatUntil, exceptions: s.exceptions, occurrenceOverrides: undefined,
-          _session: true, durationMinutes: s.durationMinutes,
-        });
-        if (!s.repeat || s.repeat === 'none') {
-          if (s.date >= today) out.push(mapped(s.date));
-          return;
-        }
-        if (s.repeatUntil && s.repeatUntil < today) return;
-        const base = new Date(s.date + 'T12:00:00');
-        const tgt = new Date(today + 'T12:00:00');
-        const isExcepted = (d: Date) => (s.exceptions || []).includes(format(d, 'yyyy-MM-dd'));
-        let next: Date | null = null;
-        if (s.repeat === 'daily') {
-          for (let i = 0; i < 7; i++) { const d = addDays(tgt, i); if (!isExcepted(d)) { next = d; break; } }
-        } else if (s.repeat === 'weekly') {
-          for (let i = 0; i < 7; i++) { const d = addDays(tgt, i); if (d.getDay() === base.getDay() && !isExcepted(d)) { next = d; break; } }
-        } else if (s.repeat === 'custom_days' && s.repeatDays?.length) {
-          const jsToday = (tgt.getDay() + 6) % 7;
-          for (let i = 0; i < 7; i++) { const d = addDays(tgt, i); if (s.repeatDays.includes((jsToday + i) % 7) && !isExcepted(d)) { next = d; break; } }
-        }
-        if (next) out.push(mapped(format(next, 'yyyy-MM-dd')));
-      });
-      return out.sort((a, b) => a.date.localeCompare(b.date) || (a.startTime || '').localeCompare(b.startTime || '')).slice(0, 5);
-    } catch { return []; }
-  }, [courses]);
-
-  // Reloj + Destacado + Siguientes: TODO lee IDB (fuente de verdad) con la
-  // lógica unificada. El Destacado se AUTO-AVANZA: cuando su fecha/hora pasa,
-  // se despega y apunta al siguiente elemento de la lista (sin quedarse
-  // pegado en el pasado, sin vínculos vacíos).
+  // Data refresh is independent from the clock. Reading never clears a user's pin.
   useEffect(() => {
     let alive = true;
+    let request = 0;
     const refresh = async () => {
-      const evs = await loadPlannerEvents();
-      if (!alive) return;
-      const list = computeUpcomingFrom(evs, plannedSessions);
-      const sessMapped = (plannedSessions || []).map((s: any) => mapSessionToGoal(s, courses)).filter(Boolean);
-      setUpcomingEvents(list);
-      // Destacado: se proyecta sobre TODO el conjunto de eventos (la lista de
-      // "Siguientes" está acotada a 5 y no decide si el destacado vive o muere).
-      // Una lectura stale de IDB no desancla: se toleran hasta 3 fallos
-      // consecutivos mostrando el último estado conocido.
+      const token = ++request;
       try {
-        const gid = localStorage.getItem(GOAL_KEY);
-        if (gid) {
-          const projected = projectGoal([...evs, ...sessMapped], gid);
-          if (projected) {
-            goalMissRef.current = 0;
-            lastGoalRef.current = projected;
-            setGoalEvent(projected);
-          } else {
-            goalMissRef.current += 1;
-            if (goalMissRef.current >= 3) {
-              localStorage.removeItem(GOAL_KEY);
-              setGoalEvent(null);
-            } else if (lastGoalRef.current) {
-              setGoalEvent(lastGoalRef.current);
-            }
-          }
-        }
-      } catch { }
+        const { events } = await loadPlanner();
+        if (!alive || token !== request) return;
+        const sessions = (plannedSessions || []).map(s => mapSessionToGoal(s, courses)).filter(Boolean) as GoalEvent[];
+        const all = [...events, ...sessions];
+        const selection = readFeatured();
+        const upcoming = all.filter(e => e.id !== selection.id).map(e => nextOccurrence(e)).filter(Boolean) as GoalEvent[];
+        setUpcomingEvents(upcoming.sort((a,b) => a.date.localeCompare(b.date) || (a.startTime || '').localeCompare(b.startTime || '')).slice(0,5));
+        const source = all.find(e => e.id === selection.id) || selection.event;
+        setGoalEvent(selection.id && source ? (nextOccurrence(source) || source) as GoalEvent : null);
+      } catch { /* A read failure must never erase the pin or last displayed data. */ }
     };
-    const ti = setInterval(() => {
-      setCt(new Date());
-      void refresh();
-    }, 1000);
+    void hydrateFeatured().then(refresh);
     void refresh();
-    const cd = setInterval(() => {
-      if (!goalEvent) { setGoalCountdown({ days: 0, hours: 0, minutes: 0, seconds: 0 }); setGoalExpired(false); return; }
-      const t = new Date(goalEvent.date + 'T' + (goalEvent.startTime || '23:59'));
-      const diff = t.getTime() - Date.now();
-      if (diff <= 0) {
-        // La HORA pasó hoy → se queda anclado (estado expirado visible);
-        // solo cuando la FECHA es estrictamente anterior se libera del todo.
-        const todayStr = format(new Date(), 'yyyy-MM-dd');
-        if (goalEvent.date < todayStr) {
-          try { localStorage.removeItem(GOAL_KEY); } catch { }
-          setGoalEvent(null);
-          setGoalExpired(false);
-        } else {
-          setGoalExpired(true);
-        }
-        setGoalCountdown({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-        return;
-      }
-      setGoalExpired(false);
-      setGoalCountdown({
-        days: Math.floor(diff / 86400000),
-        hours: Math.floor((diff % 86400000) / 3600000),
-        minutes: Math.floor((diff % 3600000) / 60000),
-        seconds: Math.floor((diff % 60000) / 1000),
-      });
-    }, 1000);
-    const up = setInterval(() => { void refresh(); }, 5000);
-    window.addEventListener('storage', updateGoalFromStorage);
-    return () => { alive = false; clearInterval(ti); clearInterval(cd); clearInterval(up); window.removeEventListener('storage', updateGoalFromStorage); };
-  }, [goalEvent, upcomingEvents, plannedSessions, updateGoalFromStorage, computeUpcomingFrom]);
+    const timer = setInterval(() => { void refresh(); }, 30000);
+    window.addEventListener(FEATURED_CHANGED, refresh);
+    window.addEventListener(PLANNER_CHANGED, refresh);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+      window.removeEventListener(FEATURED_CHANGED, refresh);
+      window.removeEventListener(PLANNER_CHANGED, refresh);
+    };
+  }, [plannedSessions, courses]);
 
-  const timeStr = fmtClock(format(ct, 'HH:mm'), settings?.timeFormat);
-  const secStr = format(ct, 'ss');
-  const dateStr = format(ct, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es as any });
-  const dateCap = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
+  // Greeting, heatmap and dates change by minute. Seconds stay inside LiveClock.
+  useEffect(()=>{
+    let timer:ReturnType<typeof setTimeout>;
+    const tick=()=>{const now=new Date();setCt(now);timer=setTimeout(tick,60000-now.getSeconds()*1000-now.getMilliseconds());};
+    tick();return()=>clearTimeout(timer);
+  },[]);
 
-  const streak = useMemo(() => calculateStreak(weeklyStudyTime, settings?.dailyGoal || 240, settings?.dailyGoalHistory, settings?.initialDailyGoal), [weeklyStudyTime, settings?.dailyGoal, settings?.dailyGoalHistory, settings?.initialDailyGoal]);
+
+  const streak = useMemo(() => calculateStreak(weeklyStudyTime, settings?.dailyGoal ?? 240, settings?.dailyGoalHistory, settings?.initialDailyGoal), [weeklyStudyTime, settings?.dailyGoal, settings?.dailyGoalHistory, settings?.initialDailyGoal, format(new Date(), 'yyyy-MM-dd')]);
   const phrase = useMemo(() => getWeeklyPhrase(), []);
   const [phraseEditing, setPhraseEditing] = useState(false);
   const [phraseDraft, setPhraseDraft] = useState('');
@@ -454,7 +273,7 @@ export default function Inicio() {
         const secondsStudied = weeklyStudyTime[dayStr] || 0;
         const isFuture = targetDate.getTime() > today.getTime();
 
-        const goalForDay = getGoalForDay(dayStr, settings?.dailyGoal || 240, settings?.dailyGoalHistory, settings?.initialDailyGoal);
+        const goalForDay = getGoalForDay(dayStr, settings?.dailyGoal ?? 240, settings?.dailyGoalHistory, settings?.initialDailyGoal);
         const goalSeconds = goalForDay * 60;
 
         const met = secondsStudied >= goalSeconds && secondsStudied > 0;
@@ -473,44 +292,41 @@ export default function Inicio() {
       grid.push(rowCells);
     }
     return grid;
-  }, [weeklyStudyTime, settings?.heatmapStartDate, settings?.dailyGoal, settings?.dailyGoalHistory, settings?.initialDailyGoal]);
+  }, [weeklyStudyTime, settings?.heatmapStartDate, settings?.dailyGoal, settings?.dailyGoalHistory, settings?.initialDailyGoal, format(ct,'yyyy-MM-dd')]);
 
   const ts = useMemo(() => ({
     active: tasks.filter(t => t.status !== 'completado').length,
     total: notes.filter(n => !n.deletedAt && !n.isCoursePrivate && (n.title || n.content)).length,
   }), [tasks, notes]);
 
-  const dailyGoalMinutes = settings?.dailyGoal || 240;
+  const dailyGoalMinutes = settings?.dailyGoal ?? 240;
   const dailyPct = useMemo(() => {
     if (!dailyGoalMinutes || dailyGoalMinutes <= 0) return 0;
     return Math.min(100, Math.round((dailyStudyTime / (dailyGoalMinutes * 60)) * 100));
   }, [dailyStudyTime, dailyGoalMinutes]);
-  const todayAchieved = dailyStudyTime >= dailyGoalMinutes * 60;
+  const todayAchieved = dailyGoalMinutes > 0 && dailyStudyTime >= dailyGoalMinutes * 60;
 
   const recentTracks = useMemo(() => {
     const seen = new Set<string>();
     const result: typeof tracks = [];
+    const byId=new Map(tracks.map(track=>[track.id,track]));
     for (const id of trackHistory) {
       if (seen.has(id)) continue;
       seen.add(id);
-      const t = tracks.find(track => track.id === id);
+      const t = byId.get(id);
       if (t) result.push(t);
       if (result.length >= 4) break;
     }
     return result;
   }, [trackHistory, tracks]);
 
-  const timerM = Math.floor(sessionTime / 60);
-  const timerS = sessionTime % 60;
-  const timerStr = sessionTime > 0
-    ? `${timerM.toString().padStart(2, '0')}:${timerS.toString().padStart(2, '0')}`
-    : '25:00';
+
 
   return (
     <div className="page-container flex flex-col h-full overflow-y-auto custom-scroll" style={{ gap: 20 }}>
 
       {/* HEADER */}
-      <header className="flex justify-between items-end gap-6 pt-1" style={{ paddingBottom: 10, marginBottom: 2 }}>
+      <header className="workspace-home-header flex justify-between items-end gap-6 pt-1" style={{ paddingBottom: 10, marginBottom: 2 }}>
         <div className="flex-1 min-w-0">
           <div className="hidden sm:flex items-center gap-2" style={{ fontSize: 12, fontWeight: 500, marginBottom: 6, color: 'var(--text-tertiary)', letterSpacing: '0.02em' }}>
             {(() => {
@@ -522,21 +338,21 @@ export default function Inicio() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, maxWidth: '100%' }}>
               <input value={phraseDraft} onChange={e => setPhraseDraft(e.target.value)} autoFocus
                 onKeyDown={e => { if (e.key === 'Enter') handleSavePhrase(); if (e.key === 'Escape') handleCancelPhrase(); }}
-                style={{ flex: 1, minWidth: 0, height: 38, borderRadius: 8, padding: '0 12px', fontSize: 15, fontFamily: "'Inter Tight', sans-serif", fontWeight: 350, border: '1px solid var(--border-soft)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', outline: 'none' }} />
-              <button onClick={togglePhraseLock} title={phraseLocked ? 'Desbloquear frase' : 'Bloquear frase'}
+                style={{ flex: 1, minWidth: 0, height: 38, borderRadius: 8, padding: '0 12px', fontSize: 15, fontFamily: "'Inter Tight', sans-serif", fontWeight: 500, border: '1px solid var(--border-soft)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', outline: 'none' }} />
+              <button data-ui-control="" onClick={togglePhraseLock} title={phraseLocked ? 'Desbloquear frase' : 'Bloquear frase'}
                 style={{ width: 32, height: 32, borderRadius: 8, background: 'none', border: '1px solid var(--border-subtle)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: phraseLocked ? '#F59E0B' : 'var(--text-muted)', flexShrink: 0, transition: 'all 150ms' }}>
                 <Lock size={13} />
               </button>
-              <button onClick={handleSavePhrase} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'var(--accent)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', flexShrink: 0 }}>
+              <button data-ui-control="" onClick={handleSavePhrase} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'var(--accent)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', flexShrink: 0 }}>
                 <Check size={14} />
               </button>
-              <button onClick={handleCancelPhrase} style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-tertiary)', flexShrink: 0 }}>
+              <button data-ui-control="" onClick={handleCancelPhrase} style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-tertiary)', flexShrink: 0 }}>
                 <X size={14} />
               </button>
             </div>
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', maxWidth: '100%' }} onClick={() => { setPhraseDraft(displayPhrase); setPhraseEditing(true); }}>
-              <h1 className="truncate" style={{ fontFamily: "'Inter Tight', sans-serif", fontWeight: 350, fontSize: 'clamp(18px, 3.2vw, 34px)', lineHeight: 1.5, letterSpacing: '0.01em', color: 'var(--text-secondary)', margin: 0 }}>
+              <h1 className="home-study-phrase" style={{ fontFamily: "'Inter Tight', sans-serif", fontWeight: 500, fontSize: 'clamp(18px, 3.2vw, 34px)', lineHeight: 1.5, letterSpacing: '0.01em', color: 'var(--text-secondary)', margin: 0 }}>
                 {displayPhrase}
               </h1>
             </div>
@@ -545,33 +361,21 @@ export default function Inicio() {
 
         <div className="flex items-center gap-3 flex-shrink-0">
           <NotificationBell />
-          <div style={{ textAlign: 'right', paddingLeft: 16, borderLeft: '1px solid var(--border-subtle)' }}>
-            <div className="flex items-baseline gap-2 justify-end">
-              <span style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 'clamp(38px, 7.5vw, 82px)', fontWeight: 220, lineHeight: 0.85, color: 'var(--accent)', letterSpacing: '-0.03em', textShadow: '0 0 30px var(--accent-glow)' }}>
-                {timeStr}
-              </span>
-              <span className="hidden sm:block" style={{ fontFamily: "'Inter Tight', sans-serif", fontSize: 'clamp(12px, 2vw, 22px)', fontWeight: 300, color: 'var(--accent)', opacity: 0.35, letterSpacing: '0.02em' }}>
-                {secStr}
-              </span>
-            </div>
-            <div className="hidden xs:block" style={{ fontSize: 'clamp(8px, 0.8vw, 10px)', fontWeight: 500, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.16em', marginTop: 3 }}>
-              {dateCap}
-            </div>
-          </div>
+          <WorkspaceClock className="home-clock"/>
         </div>
       </header>
 
       {/* ROW 1: STAT CARDS + META DIARIA */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="home-metrics grid grid-cols-2 lg:grid-cols-5 gap-3">
         {[
-          { label: 'TAREAS', val: ts.active, sub: 'Pendientes', color: '#3B82F6', IconC: CheckSquare },
-          { label: 'NOTAS', val: ts.total, sub: 'Guardadas', color: '#10B981', IconC: FileText },
-          { label: 'RACHA', val: streak, sub: 'días', color: '#F59E0B', IconC: Flame },
+          { label: 'Tareas', val: ts.active, sub: 'Pendientes', color: '#3B82F6', IconC: CheckSquare },
+          { label: 'Notas', val: ts.total, sub: 'Guardadas', color: '#10B981', IconC: FileText },
+          { label: 'Racha', val: streak, sub: 'días', color: '#F59E0B', IconC: Flame },
         ].map((s, i) => {
           const active = i === 2 && streak > 0 && todayAchieved;
           const c = s.color;
           return (
-            <div key={i} className={(i === 2 ? "col-span-2 lg:col-span-1" : "col-span-1") + " bento-card"}
+            <div key={i} className={(i === 2 ? "col-span-2 lg:col-span-1" : "col-span-1") + " bento-card home-stat-card"}
               style={{
                 display: 'flex', overflow: 'hidden',
                 background: `linear-gradient(135deg, var(--bg-elevated) 0%, color-mix(in srgb, ${c}02, var(--bg-base)) 100%)`,
@@ -597,20 +401,16 @@ export default function Inicio() {
                 width: 64, flexShrink: 0,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
-                <s.IconC size={24} style={{
+                <s.IconC size={21} style={{
                   color: active ? '#F59E0B' : c,
                   opacity: active ? 1 : 0.7,
                   fill: i === 2 && active ? '#F59E0B' : 'transparent',
                   filter: active ? `drop-shadow(0 0 8px ${c}50)` : 'none',
                 }} />
               </div>
-              <div style={{ flex: 1, padding: '12px 16px', minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                <div style={{ fontSize: 30, fontWeight: 650, color: active ? '#F59E0B' : 'var(--text-primary)', lineHeight: 1.05, letterSpacing: '-0.02em', fontFamily: "'Inter Tight', sans-serif", overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', marginBottom: 3 }}>{s.val}</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: 9, fontWeight: 650, color: c, letterSpacing: '0.08em', whiteSpace: 'nowrap', textTransform: 'uppercase' }}>{s.label}</span>
-                  <span style={{ width: 3, height: 3, borderRadius: '50%', background: 'var(--border-default)', flexShrink: 0 }} />
-                  <span style={{ fontSize: 10, color: 'var(--text-tertiary)', fontWeight: 500, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', minWidth: 0 }}>{s.sub}</span>
-                </div>
+              <div className="home-stat-copy">
+                <div className="home-stat-heading"><strong>{s.val}</strong><span style={{color:c}}>{s.label}</span></div>
+                <span className="home-stat-description">{s.sub}</span>
               </div>
             </div>
           );
@@ -618,14 +418,16 @@ export default function Inicio() {
 
         {/* META DIARIA */}
         {(() => {
-          const goalM = (settings?.dailyGoal || 240);
-          const doneM = Math.round(dailyStudyTime / 60);
-          const pct = Math.min(100, (dailyStudyTime / (goalM * 60)) * 100);
-          const rem = Math.max(0, goalM - doneM);
+          const configuredGoal = settings?.dailyGoal ?? 240;
+          const goalM = Number.isFinite(configuredGoal) ? Math.max(0, configuredGoal) : 240;
+          const seconds = Number.isFinite(dailyStudyTime) ? Math.max(0, dailyStudyTime) : 0;
+          const doneM = Math.floor(seconds / 60);
+          const pct = goalM > 0 ? Math.min(100, seconds / (goalM * 60) * 100) : 0;
+          const rem = Math.max(0, Math.ceil((goalM * 60 - seconds) / 60));
           const a = settings?.accentColor || 'var(--accent)';
-          const met = rem <= 0;
+          const met = goalM > 0 && seconds >= goalM * 60;
           return (
-            <div className="col-span-2 bento-card"
+            <div className="col-span-2 bento-card home-daily-goal"
               style={{
                 padding: '16px 20px',
                 display: 'flex', flexDirection: 'column', justifyContent: 'center',
@@ -642,11 +444,11 @@ export default function Inicio() {
                   <div style={{ width: 28, height: 28, borderRadius: 8, background: `${a}10`, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${a}14` }}>
                     <Target size={13} style={{ color: a }} />
                   </div>
-                  <span style={{ fontSize: 9, fontWeight: 650, color: 'var(--text-tertiary)', letterSpacing: '0.10em', textTransform: 'uppercase' }}>META DIARIA</span>
+                  <span style={{ fontSize: 11, fontWeight: 650, color: 'var(--text-tertiary)', letterSpacing: '0.10em', textTransform: 'uppercase' }}>META DIARIA</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
                   <span style={{ fontSize: 22, fontWeight: 600, color: met ? a : 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", lineHeight: 1, letterSpacing: '-0.03em' }}>{doneM}</span>
-                  <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-tertiary)' }}>/{goalM} min</span>
+                  <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-tertiary)' }}>/{goalM} min</span>
                 </div>
               </div>
               <div style={{ marginBottom: 8 }}>
@@ -655,13 +457,13 @@ export default function Inicio() {
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 10, fontWeight: 600, color: met ? a : 'var(--text-secondary)' }}>
-                  {rem <= 0 ? 'Meta cumplida' : `Restan ${rem} min`}
+                <span style={{ fontSize: 11, fontWeight: 600, color: met ? a : 'var(--text-secondary)' }}>
+                  {goalM === 0 ? 'Configura tu meta en Ajustes' : met ? 'Meta cumplida' : `Restan ${rem} min`}
                 </span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {met && <span style={{ fontSize: 9, color: '#10B981', fontWeight: 600 }}>{'\u2713'} Completada</span>}
+                  {met && <span style={{ fontSize: 11, color: '#10B981', fontWeight: 600 }}>{'\u2713'} Completada</span>}
                   <span style={{
-                    fontSize: 10, fontWeight: 600, color: 'var(--text-tertiary)',
+                    fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)',
                     fontFamily: "'JetBrains Mono', monospace",
                     background: met ? `${a}0a` : 'var(--bg-hover)',
                     padding: '2px 8px', borderRadius: 4,
@@ -680,19 +482,19 @@ export default function Inicio() {
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-12 gap-4 items-stretch">
 
         {/* HEATMAP */}
-        <div className="xl:col-span-6 bento-card" style={{ padding: '18px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 12 }}>
+        <div className="xl:col-span-6 bento-card home-activity" style={{ padding: '18px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 12 }}>
           <div>
-            <span className="block" style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em' }}>ACTIVIDAD (4 MESES)</span>
+            <span className="block" style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em' }}>ACTIVIDAD (4 MESES)</span>
           </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 14 }}>
-            <div className="hidden sm:flex" style={{ flexDirection: 'column', justifyContent: 'space-between', height: 130, color: 'var(--text-tertiary)', fontSize: 9, fontWeight: 600 }}><span>L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span><span>D</span></div>
-            <div style={{ display: 'grid', gridTemplateRows: 'repeat(7, 1fr)', gridTemplateColumns: 'repeat(16, 1fr)', gap: 4, flex: 1, height: 130 }}>
+          <div className="home-activity-grid" style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 14 }}>
+            <div className="home-activity-days hidden sm:flex" style={{ flexDirection: 'column', justifyContent: 'space-between', height: 130, color: 'var(--text-tertiary)', fontSize: 11, fontWeight: 600 }}><span>L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span><span>D</span></div>
+            <div className="home-activity-matrix" style={{ display: 'grid', gridTemplateRows: 'repeat(7, 1fr)', gridTemplateColumns: 'repeat(16, 1fr)', gap: 4, flex: 1, height: 130 }}>
               {heatmapData.flatMap((r, ri) => r.map((cell, ci) => (
-                <div key={`${ri}-${ci}`} title={cell.tooltip} style={{ borderRadius: 2, background: hl(cell.level), boxShadow: cell.level >= 3 ? '0 0 6px var(--accent-glow)' : 'none', transition: 'all 120ms' }} className="hover:scale-110 cursor-pointer" />
+                <div key={`${ri}-${ci}`} data-level={cell.level} title={cell.tooltip} style={{ borderRadius: 2, background: hl(cell.level), '--heatmap-cell': hl(cell.level), boxShadow: cell.level >= 3 ? '0 0 6px var(--accent-glow)' : 'none', transition: 'all 120ms' } as React.CSSProperties} className="hover:scale-110 cursor-pointer" />
               )))}
             </div>
           </div>
-          <div className="hidden sm:flex" style={{ justifyContent: 'flex-end', alignItems: 'center', gap: 4, marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border-soft)', fontSize: 9, color: 'var(--text-tertiary)', fontWeight: 600 }}>
+          <div className="hidden sm:flex" style={{ justifyContent: 'flex-end', alignItems: 'center', gap: 4, marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border-soft)', fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600 }}>
             <span>Menos</span>
             {[0, 1, 2, 3, 4].map(l => <div key={l} style={{ width: 10, height: 10, borderRadius: 2, background: hl(l) }} />)}
             <span>Mas</span>
@@ -702,13 +504,13 @@ export default function Inicio() {
         {/* RECIENTES: Canciones */}
         <div className="xl:col-span-6 hidden sm:flex bento-card" style={{ padding: '18px', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 12, flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-            <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em' }}>RECIENTES</span>
-            <span onClick={() => setNavigateTo?.('musica')} style={{ fontSize: 10, fontWeight: 600, color: 'var(--accent)', cursor: 'pointer' }} className="hover:opacity-80">Ir a Musica</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em' }}>RECIENTES</span>
+            <span onClick={() => setNavigateTo?.('musica')} style={{ fontSize: 11, fontWeight: 600, color: 'var(--accent)', cursor: 'pointer' }} className="hover:opacity-80">Ir a Musica</span>
           </div>
 
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+            gridTemplateColumns: recentTracks.length ? 'repeat(4, minmax(0, 1fr))' : '1fr',
             gap: 12,
             flex: 1,
             justifyContent: 'center',
@@ -729,8 +531,8 @@ export default function Inicio() {
                   width: '100%'
                 }}>
                   <div style={{ width: '100%', aspectRatio: '1/1', borderRadius: 6, overflow: 'hidden', background: 'var(--bg-surface)' }}>
-                    {track.coverImage ? (
-                      <img src={track.coverImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                    {track.coverImage||track.coverUrl ? (
+                      <img src={track.coverImage||track.coverUrl} loading="lazy" decoding="async" alt={'Portada de '+track.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                     ) : (
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
                         <Music size={20} style={{ color: 'var(--text-muted)', opacity: 0.3 }} />
@@ -739,46 +541,33 @@ export default function Inicio() {
                   </div>
                   <div style={{ textAlign: 'center', overflow: 'hidden' }}>
                     <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{track.title}</div>
-                    <div style={{ fontSize: 9, color: 'var(--text-tertiary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{track.artist}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{track.artist}</div>
                   </div>
                 </div>
               ))
             ) : (
-              Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className={i >= 3 ? 'hidden lg:block' : ''} style={{
-                  background: 'var(--bg-deep)',
-                  borderRadius: 10,
-                  border: '1px dashed var(--border-subtle)',
-                  aspectRatio: '1/1',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  opacity: 0.4,
-                  maxWidth: '160px',
-                  margin: '0 auto',
-                  width: '100%'
-                }}>
-                  <Music size={20} style={{ color: 'var(--text-muted)', opacity: 0.2 }} />
-                  <span style={{ fontSize: 8, marginTop: 4, color: 'var(--text-tertiary)' }}>Vacio</span>
-                </div>
-              ))
+              <div className="home-music-empty">
+                <Music size={28} strokeWidth={1.5} />
+                <strong>Tu música, a mano</strong>
+                <p>Las canciones que escuches aparecerán aquí.</p>
+                <button data-ui-control="" className="btn-secondary" onClick={() => setNavigateTo?.('musica')}>Abrir biblioteca</button>
+              </div>
             )}
           </div>
         </div>
       </div>
 
       {/* â'€â'€ ROW 3: TASKS + NOTES + SYSTEM â'€â'€ */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-12 gap-4 mb-2">
+      <div className="home-overview-grid grid gap-4 mb-2">
 
         {/* TASKS */}
-        <div className="xl:col-span-4 md:col-span-1 bento-card" style={{ padding: '18px', position: 'relative', overflow: 'hidden', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 12, display: 'flex', flexDirection: 'column' }}>
+        <div className="home-overview-card bento-card" style={{ padding: '18px', position: 'relative', overflow: 'hidden', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 12, display: 'flex', flexDirection: 'column' }}>
           <div style={{ position: 'absolute', right: 8, bottom: 8, opacity: 0.07, pointerEvents: 'none', lineHeight: 0 }}>
             <CheckSquare size={120} strokeWidth={1} color="#3B82F6" />
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 12, borderBottom: '1px solid var(--border-soft)', position: 'relative', zIndex: 1 }}>
-            <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em' }}>TAREAS</span>
-            <span onClick={() => setNavigateTo?.('tareas')} style={{ fontSize: 10, fontWeight: 600, color: 'var(--accent)', cursor: 'pointer' }} className="hover:opacity-80">Ver todas</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em' }}>TAREAS</span>
+            <span onClick={() => setNavigateTo?.('tareas')} style={{ fontSize: 11, fontWeight: 600, color: 'var(--accent)', cursor: 'pointer' }} className="hover:opacity-80">Ver todas</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {tasks.filter(t => t.status !== 'completado').slice(0, 4).map(t => {
@@ -793,46 +582,46 @@ export default function Inicio() {
                     <div style={{ fontSize: 11, fontWeight: 600, color: isDone ? 'var(--text-muted)' : 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textDecoration: isDone ? 'line-through' : 'none' }}>{t.title}</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 1 }}>
                       <span style={{ width: 4, height: 4, borderRadius: '50%', background: t.courseColor, flexShrink: 0 }} />
-                      <span style={{ fontSize: 9, color: 'var(--text-tertiary)' }}>{t.course}</span>
+                      <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{t.course}</span>
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    {tr && <span className="hidden lg:inline" style={{ fontSize: 8, color: 'var(--text-muted)', fontFamily: "'JetBrains Mono', monospace" }}>{tr}</span>}
-                    <span style={{ fontSize: 8, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: `${pc[t.priority]}20`, color: pc[t.priority] }}>{pcl[t.priority]}</span>
+                    {tr && <span className="hidden lg:inline" style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: "'JetBrains Mono', monospace" }}>{tr}</span>}
+                    <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: `${pc[t.priority]}20`, color: pc[t.priority] }}>{pcl[t.priority]}</span>
                   </div>
                 </div>
               );
             })}
             {tasks.filter(t => t.status !== 'completado').length === 0 && (
-              <div style={{ padding: '16px 0', textAlign: 'center', fontSize: 10, color: 'var(--text-muted)' }}>Sin tareas pendientes</div>
+              <div style={{ padding: '16px 0', textAlign: 'center', fontSize: 11, color: 'var(--text-muted)' }}>Sin tareas pendientes</div>
             )}
           </div>
         </div>
 
         {/* NOTES */}
-        <div className="xl:col-span-4 md:col-span-1 bento-card" style={{ padding: '18px', position: 'relative', overflow: 'hidden', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 12, display: 'flex', flexDirection: 'column' }}>
+        <div className="home-overview-card bento-card" style={{ padding: '18px', position: 'relative', overflow: 'hidden', background: 'linear-gradient(135deg, var(--bg-elevated) 0%, var(--bg-base) 100%)', border: '1px solid var(--border-subtle)', borderRadius: 12, display: 'flex', flexDirection: 'column' }}>
           <div style={{ position: 'absolute', right: 8, bottom: 8, opacity: 0.07, pointerEvents: 'none', lineHeight: 0 }}>
             <FileText size={120} strokeWidth={1} color="#10B981" />
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 12, borderBottom: '1px solid var(--border-soft)', position: 'relative', zIndex: 1 }}>
-            <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em' }}>NOTAS</span>
-            <span onClick={() => setNavigateTo?.('apuntes')} style={{ fontSize: 10, fontWeight: 600, color: 'var(--accent)', cursor: 'pointer' }} className="hover:opacity-80">Ver todas</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em' }}>NOTAS</span>
+            <span onClick={() => setNavigateTo?.('apuntes')} style={{ fontSize: 11, fontWeight: 600, color: 'var(--accent)', cursor: 'pointer' }} className="hover:opacity-80">Ver todas</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {notes.filter(n => !n.deletedAt && !n.isCoursePrivate && (n.title || n.content)).slice(0, 5).map(n => (
               <div key={n.id} onClick={() => { try { localStorage.setItem('owa_focused_note_id', n.id); } catch {} setNavigateTo?.('apuntes'); }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', borderRadius: 8, cursor: 'pointer', transition: 'all 150ms' }} className="hover:border-borderDark/60 group">
                 <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n.title || n.content?.slice(0, 40) || 'Sin titulo'}</div>
-                <span style={{ fontSize: 9, color: 'var(--text-tertiary)', flexShrink: 0 }}>{timeAgo(n.updatedAt)}</span>
+                <span style={{ fontSize: 11, color: 'var(--text-tertiary)', flexShrink: 0 }}>{timeAgo(n.updatedAt)}</span>
               </div>
             ))}
             {notes.filter(n => !n.deletedAt && !n.isCoursePrivate && (n.title || n.content)).length === 0 && (
-              <div style={{ padding: '16px 0', textAlign: 'center', fontSize: 10, color: 'var(--text-muted)' }}>Sin notas aun</div>
+              <div style={{ padding: '16px 0', textAlign: 'center', fontSize: 11, color: 'var(--text-muted)' }}>Sin notas aun</div>
             )}
           </div>
         </div>
 
-        {/* GOAL / META PLANIFICADA */}
-        <div className="xl:col-span-4 hidden xl:block bento-card" style={{ padding: '24px', background: `linear-gradient(135deg, var(--bg-elevated) 0%, color-mix(in srgb, ${goalEvent?.color || 'var(--accent)'}06, var(--bg-elevated)) 100%)`, border: `1px solid ${goalEvent ? `${goalEvent.color}30` : 'var(--border-subtle)'}`, borderRadius: 14, display: 'flex', flexDirection: 'column', boxShadow: '0 1px 2px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04)' }}>
+        {/* GOAL / DESTACADO */}
+        <div className="home-overview-card home-featured-card bento-card" style={{ padding: '24px', background: 'var(--bg-surface)', border: `1px solid ${goalEvent ? `${goalEvent.color}30` : 'var(--border-subtle)'}`, borderRadius: 14, display: 'flex', flexDirection: 'column', boxShadow: '0 1px 2px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04)' }}>
 
           {goalEvent ? (
             <>
@@ -842,47 +631,28 @@ export default function Inicio() {
                   <Star size={17} fill={goalEvent.color} style={{ color: goalEvent.color }} />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', marginBottom: 3 }}>META PLANIFICADA</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', marginBottom: 3 }}>DESTACADO</div>
                   <div style={{ fontSize: 14, fontWeight: 600, color: goalEvent.color, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{goalEvent.title}</div>
                 </div>
+                <button data-ui-control="" className="btn-ghost" aria-label="Quitar destacado" title="Quitar destacado" onClick={() => { void setFeaturedEvent(null).catch(console.error); }}><X size={16} /></button>
               </div>
 
               {/* Big countdown */}
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'center', padding: '12px 0 16px', fontFamily: "'Inter Tight', sans-serif" }}>
-                {[
-                  { val: goalCountdown.days, label: 'dias' },
-                  { val: goalCountdown.hours, label: 'hrs' },
-                  { val: goalCountdown.minutes, label: 'min' },
-                  { val: goalCountdown.seconds, label: 'seg' },
-                ].map((u, i) => {
-                  const isZero = u.val === 0 && i < 3;
-                  return (
-                    <React.Fragment key={u.label}>
-                      {i > 0 && <div style={{ alignSelf: 'center', fontSize: 22, fontWeight: 200, color: `${goalEvent.color}40`, paddingBottom: 14 }}>:</div>}
-                      <div style={{ textAlign: 'center', minWidth: 48 }}>
-                        <div style={{ fontSize: 34, fontWeight: 250, lineHeight: 1, color: isZero ? 'var(--text-tertiary)' : goalEvent.color, letterSpacing: '-0.02em', transition: 'color 200ms' }}>
-                          {String(u.val).padStart(2, '0')}
-                        </div>
-                        <div style={{ fontSize: 8, fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginTop: 4 }}>{u.label}</div>
-                      </div>
-                    </React.Fragment>
-                  );
-                })}
-              </div>
+              <FeaturedCountdown event={goalEvent}/>
 
               {/* Date label or expired message */}
               {(() => {
                 try {
-                  const d = new Date(goalEvent.date + 'T' + (goalEvent.startTime || '23:59'));
+                  const d = new Date(goalEvent.date + 'T' + (goalEvent.allDay ? '23:59:59' : goalEvent.startTime || '23:59'));
                   const diff = d.getTime() - Date.now();
                   if (diff <= 0) return (
                     <div style={{ textAlign: 'center', padding: '2px 0' }}>
-                      <div style={{ fontSize: 10, color: '#10B981', fontWeight: 600 }}>Ha llegado el dia de tu meta</div>
-                      <div style={{ fontSize: 8, color: 'var(--text-tertiary)', fontStyle: 'italic', marginTop: 4 }}>Se desanclara automaticamente manana</div>
+                      <div style={{ fontSize: 11, color: '#10B981', fontWeight: 600 }}>Este evento ya comenzó</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontStyle: 'italic', marginTop: 4 }}>Conservado hasta que lo quites de destacados</div>
                     </div>
                   );
                   return (
-                    <div style={{ fontSize: 10, color: 'var(--text-tertiary)', textAlign: 'center', fontFamily: "'JetBrains Mono', monospace" }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)', textAlign: 'center', fontFamily: "'JetBrains Mono', monospace" }}>
                       {format(d, "EEEE d 'de' MMMM", { locale: es as any })}
                       {goalEvent.startTime && !goalEvent.allDay ? ` · ${goalEvent.startTime}` : ''}
                     </div>
@@ -890,12 +660,12 @@ export default function Inicio() {
                 } catch { return null; }
               })()}
 
-              {/* Upcoming events (2) */}
+              {/* Upcoming event beside the pinned event */}
               {upcomingEvents.length > 0 && (
                 <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border-soft)' }}>
-                  <div style={{ fontSize: 8, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10 }}>Siguientes</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10 }}>Siguientes</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {upcomingEvents.map(ev => {
+                    {upcomingEvents.slice(0,1).map(ev => {
                       const evDate = (() => { try { return new Date(ev.date + 'T' + (ev.startTime || '12:00')); } catch { return null; } })();
                       if ((ev as any)._session) return (
                         <div key={ev.id} style={{
@@ -911,11 +681,11 @@ export default function Inicio() {
                           </span>
                           <span style={{ flex: 1, minWidth: 0 }}>
                             <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-primary)', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.title}</span>
-                            <span style={{ fontSize: 8.5, fontWeight: 700, color: ev.color, letterSpacing: '0.07em', textTransform: 'uppercase' }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: ev.color, letterSpacing: '0.07em', textTransform: 'uppercase' }}>
                               Sesión{ev.durationMinutes ? ` · ${ev.durationMinutes} min` : ''}
                             </span>
                           </span>
-                          <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', fontFamily: "'JetBrains Mono', monospace", flexShrink: 0 }}>{ev.startTime}</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', fontFamily: "'JetBrains Mono', monospace", flexShrink: 0 }}>{ev.startTime}</span>
                         </div>
                       );
                       return (
@@ -928,23 +698,23 @@ export default function Inicio() {
                           onMouseEnter={e => { e.currentTarget.style.borderColor = `${ev.color}30`; e.currentTarget.style.background = `${ev.color}0a`; }}
                           onMouseLeave={e => { e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.background = 'transparent'; }}>
                           <div style={{ width: 36, height: 36, borderRadius: 10, background: `${ev.color}10`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                            <div style={{ fontSize: 8, fontWeight: 700, color: ev.color, textTransform: 'uppercase', lineHeight: 1, letterSpacing: '0.03em' }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: ev.color, textTransform: 'uppercase', lineHeight: 1, letterSpacing: '0.03em' }}>
                               {evDate ? format(evDate, 'MMM', { locale: es as any }) : ''}
                             </div>
                             <div style={{ fontSize: 14, fontWeight: 700, color: ev.color, lineHeight: 1, marginTop: 2, fontFamily: "'Inter Tight', sans-serif" }}>
-                              {evDate ? format(ev.date, 'd') : ''}
+                              {evDate ? format(evDate, 'd') : ''}
                             </div>
                           </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.title}</div>
-                            <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 3, display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3, display: 'flex', alignItems: 'center', gap: 5 }}>
                               {ev.startTime && !ev.allDay ? (
-                                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: 'var(--text-tertiary)' }}>{ev.startTime}</span>
+                                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: 'var(--text-tertiary)' }}>{ev.startTime}</span>
                               ) : (
                                 <span style={{ color: 'var(--text-tertiary)' }}>Todo el dia</span>
                               )}
                               <span style={{ color: 'var(--text-muted)', opacity: 0.4 }}>-</span>
-                              <span style={{ color: 'var(--text-tertiary)', fontSize: 9 }}>
+                              <span style={{ color: 'var(--text-tertiary)', fontSize: 11 }}>
                                 {evDate ? format(evDate, 'd MMM', { locale: es as any }) : ''}
                               </span>
                             </div>
@@ -963,8 +733,8 @@ export default function Inicio() {
                 <Calendar size={120} strokeWidth={1} color="var(--accent)" />
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 12, borderBottom: '1px solid var(--border-soft)', position: 'relative', zIndex: 1 }}>
-                <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em' }}>PROXIMOS EVENTOS</span>
-                <span onClick={() => setNavigateTo?.('flujo')} style={{ fontSize: 10, fontWeight: 600, color: 'var(--accent)', cursor: 'pointer' }} className="hover:opacity-80">Ver todo</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em' }}>PROXIMOS EVENTOS</span>
+                <span onClick={() => setNavigateTo?.('flujo')} style={{ fontSize: 11, fontWeight: 600, color: 'var(--accent)', cursor: 'pointer' }} className="hover:opacity-80">Ver todo</span>
               </div>
               {/* Events */}
               {upcomingEvents.length > 0 ? (
@@ -985,13 +755,13 @@ export default function Inicio() {
                           </span>
                           <span style={{ flex: 1, minWidth: 0 }}>
                             <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.title}</span>
-                            <span style={{ fontSize: 8.5, fontWeight: 700, color: ev.color, letterSpacing: '0.07em', textTransform: 'uppercase' }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: ev.color, letterSpacing: '0.07em', textTransform: 'uppercase' }}>
                               Sesión de estudio{ev.durationMinutes ? ` · ${ev.durationMinutes} min` : ''}
                             </span>
                           </span>
                           <span style={{ textAlign: 'right', flexShrink: 0 }}>
-                            <span style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', fontFamily: "'JetBrains Mono', monospace" }}>{ev.startTime}</span>
-                            <span style={{ display: 'block', fontSize: 8.5, color: 'var(--text-muted)' }}>{evDate ? format(evDate, 'd MMM', { locale: es as any }) : ''}</span>
+                            <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', fontFamily: "'JetBrains Mono', monospace" }}>{ev.startTime}</span>
+                            <span style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)' }}>{evDate ? format(evDate, 'd MMM', { locale: es as any }) : ''}</span>
                           </span>
                         </div>
                     );
@@ -1005,23 +775,23 @@ export default function Inicio() {
                           onMouseEnter={e => { e.currentTarget.style.borderColor = `${ev.color}30`; e.currentTarget.style.background = `${ev.color}0a`; }}
                           onMouseLeave={e => { e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.background = 'transparent'; }}>
                         <div style={{ width: 36, height: 36, borderRadius: 10, background: `${ev.color}10`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                          <div style={{ fontSize: 8, fontWeight: 700, color: ev.color, textTransform: 'uppercase', lineHeight: 1, letterSpacing: '0.03em' }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: ev.color, textTransform: 'uppercase', lineHeight: 1, letterSpacing: '0.03em' }}>
                             {evDate ? format(evDate, 'MMM', { locale: es as any }) : ''}
                           </div>
                           <div style={{ fontSize: 14, fontWeight: 700, color: ev.color, lineHeight: 1, marginTop: 2, fontFamily: "'Inter Tight', sans-serif" }}>
-                            {evDate ? format(ev.date, 'd') : ''}
+                            {evDate ? format(evDate, 'd') : ''}
                           </div>
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.title}</div>
-                          <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 3, display: 'flex', alignItems: 'center', gap: 5 }}>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3, display: 'flex', alignItems: 'center', gap: 5 }}>
                             {ev.startTime && !ev.allDay ? (
-                              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: 'var(--text-tertiary)' }}>{ev.startTime}</span>
+                              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: 'var(--text-tertiary)' }}>{ev.startTime}</span>
                             ) : (
                               <span style={{ color: 'var(--text-tertiary)' }}>Todo el dia</span>
                             )}
                             <span style={{ color: 'var(--text-muted)', opacity: 0.4 }}>-</span>
-                            <span style={{ color: 'var(--text-tertiary)', fontSize: 9 }}>
+                            <span style={{ color: 'var(--text-tertiary)', fontSize: 11 }}>
                               {evDate ? format(evDate, 'd MMM', { locale: es as any }) : ''}
                             </span>
                           </div>

@@ -1,6 +1,6 @@
 {
-  "productName": "OWA Studio",
-  "version": "6.7.0",
+  "productName": "APHEKA",
+  "version": "6.22.0",
   "identifier": "com.owa.studio",
   "build": {
     "beforeDevCommand": "pnpm run dev",
@@ -11,7 +11,7 @@
   "app": {
     "windows": [
       {
-        "title": "OWA Studio",
+        "title": "APHEKA",
         "width": 1200,
         "height": 800,
         "resizable": true,
@@ -25,6 +25,7 @@
     "security": {
       "csp": null,
       "assetProtocol": {
+        "enable": true,
         "scope": [
           "**"
         ]
@@ -32,7 +33,11 @@
     }
   },
   "bundle": {
-      "resources": ["bin/*.exe"],
+    "resources": {
+      "bin/yt-dlp-x86_64-pc-windows-msvc.exe": "bin/yt-dlp.exe",
+      "bin/ffmpeg-x86_64-pc-windows-msvc.exe": "bin/ffmpeg.exe",
+      "bin/ffprobe-x86_64-pc-windows-msvc.exe": "bin/ffprobe.exe"
+    },
     "active": true,
     "targets": "all",
     "icon": [
@@ -41,19 +46,32 @@
       "icons/icon.png",
       "icons/icon.ico"
     ],
-    "externalBin": [
-      "bin/yt-dlp",
-      "bin/ffmpeg",
-      "bin/ffprobe"
-    ],
     "windows": {
+      "allowDowngrades": false,
       "webviewInstallMode": {
         "type": "downloadBootstrapper"
       },
       "nsis": {
-        "installMode": "both"
+        "template": "installer-template.nsi",
+        "installMode": "both",
+        "installerHooks": "installer-hooks.nsh",
+        "languages": [
+          "Spanish"
+        ],
+        "customLanguageFiles": {
+          "Spanish": "installer-assets/Spanish.nsh"
+        },
+        "headerImage": "installer-assets/header.bmp",
+        "sidebarImage": "installer-assets/sidebar.bmp",
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico"
+      },
+      "wix": {
+        "upgradeCode": "2c58d5ce-7ade-517b-ae4c-6a57e15f39fd"
       }
-    }
+    },
+    "publisher": "owa",
+    "copyright": "Hecho por Gewodev"
   },
   "plugins": {
     "shell": {

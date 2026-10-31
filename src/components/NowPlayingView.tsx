@@ -1,9 +1,9 @@
+import {useAppSlice} from "../store/AppContext";
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, X, Music, Heart, Edit2 } from 'lucide-react';
-import { useApp, globalAudio, getAudioLevel, initAudioAnalyser, disposeAudioAnalyser } from '../store/AppContext';
+import { useApp, globalAudio } from '../store/AppContext';
 
-const AURA_CANVAS_SIZE = 1000;
-const SIDEBAR_EXPANDED = 220;
+const SIDEBAR_EXPANDED = 236;
 const SIDEBAR_COLLAPSED = 64;
 
 export default function NowPlayingView({ sidebarCollapsed, activeView }: { sidebarCollapsed: boolean; activeView?: string }) {
@@ -13,57 +13,20 @@ export default function NowPlayingView({ sidebarCollapsed, activeView }: { sideb
     shuffleMode, repeatMode, toggleMusicPlayback, playTrack,
     setShuffleMode, setRepeatMode, setMusicProgress,
     settings, musicQueue, trackHistory, toggleTrackFavorite, updateTrack, queueSource,
-  } = useApp();
+  } = useAppSlice(["coverModalTrackId","setCoverModalTrackId","tracks","currentTrackId","isPlayingMusic","shuffleMode","repeatMode","toggleMusicPlayback","playTrack","setShuffleMode","setRepeatMode","setMusicProgress","settings","musicQueue","trackHistory","toggleTrackFavorite","updateTrack","queueSource"]);
 
   const track = tracks.find(t => t.id === coverModalTrackId);
+  const artwork=track?.coverImage||track?.coverUrl;
   const [editing, setEditing] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const [editArtist, setEditArtist] = useState('');
-  const [tilt, setTilt] = useState({ x: 0, y: 0 });
   const [mouseInside, setMouseInside] = useState(false);
   const visible = !!coverModalTrackId;
   const [progress, setProgress] = useState(0);
   const [dominantColor, setDominantColor] = useState('#000');
-  const coverRef = useRef<HTMLDivElement>(null);
-  const auraCanvasRef = useRef<HTMLCanvasElement>(null);
-  const rafRef = useRef<number>(0);
-  const halfSideRef = useRef(100);
-
-  // Keep halfSide in sync with actual cover rendered size
-  useEffect(() => {
-    const updateHalf = () => {
-      if (!coverRef.current || !auraCanvasRef.current) return;
-      const coverW = coverRef.current.offsetWidth;
-      const canvasCSS = coverW + 800;
-      const nativeCover = AURA_CANVAS_SIZE * coverW / canvasCSS;
-      halfSideRef.current = nativeCover / 2;
-    };
-    updateHalf();
-    const ro = new ResizeObserver(updateHalf);
-    if (coverRef.current) ro.observe(coverRef.current);
-    return () => ro.disconnect();
-  }, [coverModalTrackId]);
   const sidebarW = sidebarCollapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED;
 
-  // Track transition crossfade
-  const prevCoverRef = useRef<string | undefined>(undefined);
-  const [fadeCover, setFadeCover] = useState<string | undefined>(undefined);
-  const [fadingOut, setFadingOut] = useState(false);
-  const prevTrackIdRef = useRef<string | undefined>(undefined);
-
-  useEffect(() => {
-    if (!coverModalTrackId) return;
-    if (coverModalTrackId !== prevTrackIdRef.current) {
-      // Track changed — capture old cover for crossfade
-      const oldTrack = prevTrackIdRef.current ? tracks.find(t => t.id === prevTrackIdRef.current) : undefined;
-      if (oldTrack?.coverImage && track?.coverImage && oldTrack.coverImage !== track.coverImage) {
-        setFadeCover(oldTrack.coverImage);
-        setFadingOut(true);
-        setTimeout(() => { setFadingOut(false); setFadeCover(undefined); }, 700);
-      }
-      prevTrackIdRef.current = coverModalTrackId;
-    }
-  }, [coverModalTrackId, tracks]);
+  useEffect(() => { setEditing(false); setEditTitle(''); setEditArtist(''); }, [coverModalTrackId]);
 
   useEffect(() => {
     if (!coverModalTrackId) return;
@@ -87,7 +50,7 @@ export default function NowPlayingView({ sidebarCollapsed, activeView }: { sideb
 
   // Extract dominant color from cover
   useEffect(() => {
-    if (!track?.coverImage) {
+    if (!artwork) {
       setDominantColor('#000');
       return;
     }
@@ -99,7 +62,8 @@ export default function NowPlayingView({ sidebarCollapsed, activeView }: { sideb
       const ctx2 = c.getContext('2d');
       if (!ctx2) return;
       ctx2.drawImage(img, 0, 0, 50, 50);
-      const d = ctx2.getImageData(0, 0, 50, 50).data;
+      let d: Uint8ClampedArray;
+      try { d = ctx2.getImageData(0, 0, 50, 50).data; } catch { setDominantColor('#202024'); return; }
       let r = 0, g = 0, b = 0, count = 0;
       for (let i = 0; i < d.length; i += 4) {
         r += d[i]; g += d[i + 1]; b += d[i + 2]; count++;
@@ -109,179 +73,29 @@ export default function NowPlayingView({ sidebarCollapsed, activeView }: { sideb
         setDominantColor(hex);
       }
     };
-    img.src = track.coverImage;
+    img.src = artwork;
     return () => { img.onload = null; };
-  }, [track?.coverImage]);
+  }, [artwork]);
 
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!coverRef.current) return;
-    const rect = coverRef.current.getBoundingClientRect();
-    const cx = rect.left + rect.width / 2;
-    const cy = rect.top + rect.height / 2;
-    const dx = (e.clientX - cx) / (rect.width / 2);
-    const dy = (e.clientY - cy) / (rect.height / 2);
-    setTilt({ x: dy * -8, y: dx * 8 });
-    setMouseInside(true);
-  }, []);
-
-  const handleMouseLeave = useCallback(() => {
-    setTilt({ x: 0, y: 0 });
-    setMouseInside(false);
-  }, []);
+  const handleMouseMove = useCallback(() => { setMouseInside(true); }, []);
+  const handleMouseLeave = useCallback(() => { setMouseInside(false); }, []);
 
   useEffect(() => {
-    if (!coverModalTrackId) return;
-    const interval = setInterval(() => {
-      if (globalAudio && !globalAudio.paused && globalAudio.duration) {
-        setProgress(globalAudio.currentTime / globalAudio.duration);
+    if (!coverModalTrackId || coverModalTrackId !== currentTrackId) { setProgress(0); return; }
+    const sync = () => {
+      if (Number.isFinite(globalAudio.duration) && globalAudio.duration > 0) {
+        setProgress(Math.max(0, Math.min(1, globalAudio.currentTime / globalAudio.duration)));
       }
-    }, 250);
-    return () => clearInterval(interval);
-  }, [coverModalTrackId]);
-
-  // Aura plasma orgánico permanente — fluye detrás de la portada
-  useEffect(() => {
-    if (!coverModalTrackId) return;
-    initAudioAnalyser();
-
-    const canvas = auraCanvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    let prevSmooth = 0;
-    let phase = 0;
-    let firePhase = 0;
-
-    const draw = () => {
-      const raw = getAudioLevel();
-      const w = canvas!.width;
-      const h = canvas!.height;
-      ctx!.clearRect(0, 0, w, h);
-
-      // Sensibilidad mejorada — ataque rápido
-      const level = raw > prevSmooth
-        ? prevSmooth + (raw - prevSmooth) * 0.80
-        : prevSmooth + (raw - prevSmooth) * 0.03;
-      prevSmooth = level;
-
-      phase += 0.008 + level * 0.06;
-      firePhase += 0.015 + level * 0.05;
-
-      const cx = w / 2;
-      const cy = h / 2;
-      const halfSide = halfSideRef.current;
-      const inten = Math.min(1, level * 4.0);
-
-      // ─── 5 burbujas plasmáticas superpuestas ───
-      const numBlobs = 5;
-      for (let b = 0; b < numBlobs; b++) {
-        const driftX = Math.sin(phase * (0.03 + b * 0.02)) * halfSide * 0.4;
-        const driftY = Math.cos(phase * (0.04 + b * 0.015)) * halfSide * 0.4;
-        const bx = cx + driftX;
-        const by = cy + driftY;
-        const blobPhase = phase * (0.15 + b * 0.06);
-        const size = halfSide * (0.25 + b * 0.20) + level * halfSide * 0.12;
-        const amp = size * (0.25 + inten * 0.18);
-
-        const pts: [number, number][] = [];
-        const npts = 50 + b * 5;
-        for (let i = 0; i < npts; i++) {
-          const θ = (i / npts) * Math.PI * 2;
-          const n = (
-            Math.sin(θ * 2.0 + blobPhase) * 0.30 +
-            Math.sin(θ * 3.5 - blobPhase * 0.7) * 0.25 +
-            Math.sin(θ * 5.0 + blobPhase * 0.5) * 0.18 +
-            Math.cos(θ * 1.5 + blobPhase * 0.3) * 0.15 +
-            Math.sin(θ * 7.0 + blobPhase * 1.2) * 0.12
-          );
-          const r = Math.max(1, size + n * amp);
-          pts.push([bx + Math.cos(θ) * r, by + Math.sin(θ) * r]);
-        }
-
-        const alpha = Math.max(0, 0.02 + inten * 0.025 - b * 0.003);
-        if (alpha < 0.005) continue;
-
-        ctx!.save();
-        ctx!.filter = `blur(${4 + b * 4 + level * 2}px)`;
-        ctx!.fillStyle = `rgba(255,255,255,${alpha})`;
-        ctx!.beginPath();
-        ctx!.moveTo(pts[0][0], pts[0][1]);
-        for (let i = 1; i < pts.length; i++) {
-          ctx!.lineTo(pts[i][0], pts[i][1]);
-        }
-        ctx!.closePath();
-        ctx!.fill();
-        ctx!.restore();
-      }
-
-      // ─── Luz central que rellena el hueco de la portada ───
-      {
-        const glowR = halfSide * (0.30 + Math.sin(phase * 0.3) * 0.05 + level * 0.10);
-        const coreR = halfSide * (0.08 + level * 0.06);
-        const g = ctx!.createRadialGradient(cx, cy, 0, cx, cy, glowR);
-        g.addColorStop(0, `rgba(255,255,255,${0.06 + inten * 0.08})`);
-        g.addColorStop(0.2, `rgba(255,255,255,${0.03 + inten * 0.05})`);
-        g.addColorStop(0.5, `rgba(255,255,255,${0.01 + inten * 0.02})`);
-        g.addColorStop(1, `rgba(255,255,255,0)`);
-        ctx!.save();
-        ctx!.filter = `blur(${2 + level * 3}px)`;
-        ctx!.fillStyle = g;
-        ctx!.beginPath();
-        ctx!.arc(cx, cy, glowR, 0, Math.PI * 2);
-        ctx!.fill();
-        ctx!.restore();
-
-        // Core más brillante
-        const core = ctx!.createRadialGradient(cx, cy, 0, cx, cy, coreR);
-        core.addColorStop(0, `rgba(255,255,255,${0.08 + inten * 0.12})`);
-        core.addColorStop(0.5, `rgba(255,255,255,${0.03 + inten * 0.06})`);
-        core.addColorStop(1, `rgba(255,255,255,0)`);
-        ctx!.save();
-        ctx!.fillStyle = core;
-        ctx!.beginPath();
-        ctx!.arc(cx, cy, coreR, 0, Math.PI * 2);
-        ctx!.fill();
-        ctx!.restore();
-      }
-
-      // ─── Aura lumínica tenue desde los bordes ───
-      {
-        const auraInten = Math.min(1, level * 2.0) * 0.04 + 0.005;
-        if (auraInten > 0.005) {
-          for (let si = 0; si < 8; si++) {
-            const angle = firePhase * 0.15 + si * 1.256;
-            const sx = cx + Math.cos(angle) * halfSide * 0.7;
-            const sy = cy + Math.sin(angle) * halfSide * 0.7;
-            const ss = halfSide * (0.15 + si * 0.08);
-            const sg = ctx!.createRadialGradient(sx, sy, 0, sx, sy, ss);
-            const sa = auraInten * (0.12 - si * 0.01);
-            if (sa < 0.002) continue;
-            sg.addColorStop(0, `rgba(255,255,255,${sa * 0.3})`);
-            sg.addColorStop(1, `rgba(255,255,255,0)`);
-            ctx!.save();
-            ctx!.filter = `blur(${8 + si * 3}px)`;
-            ctx!.fillStyle = sg;
-            ctx!.beginPath();
-            ctx!.arc(sx, sy, ss, 0, Math.PI * 2);
-            ctx!.fill();
-            ctx!.restore();
-          }
-        }
-      }
-
-      rafRef.current = requestAnimationFrame(draw);
     };
-    draw();
-
-    return () => {
-      cancelAnimationFrame(rafRef.current);
-      disposeAudioAnalyser();
-    };
-  }, [coverModalTrackId]);
+    sync();
+    const update = () => { if (!document.hidden) sync(); };
+    globalAudio.addEventListener('timeupdate', update);globalAudio.addEventListener('loadedmetadata', update);document.addEventListener('visibilitychange', update);
+    return () => {globalAudio.removeEventListener('timeupdate', update);globalAudio.removeEventListener('loadedmetadata', update);document.removeEventListener('visibilitychange', update);};
+  }, [coverModalTrackId, currentTrackId]);
 
   const handleProgressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = parseFloat(e.target.value);
+    if (coverModalTrackId !== currentTrackId || !Number.isFinite(globalAudio.duration) || globalAudio.duration <= 0) return;
+    const val = Math.max(0, Math.min(1, parseFloat(e.target.value)));
     setProgress(val);
     if (globalAudio && globalAudio.duration) {
       globalAudio.currentTime = val * globalAudio.duration;
@@ -297,8 +111,8 @@ export default function NowPlayingView({ sidebarCollapsed, activeView }: { sideb
   };
 
   const isCurrentTrack = track && track.id === currentTrackId;
-  const currentTime = progress * (globalAudio?.duration || 1);
-  const totalDuration = globalAudio?.duration || track?.duration || 0;
+  const totalDuration = isCurrentTrack && Number.isFinite(globalAudio.duration) && globalAudio.duration > 0 ? globalAudio.duration : Math.max(0, track?.duration || 0);
+  const currentTime = isCurrentTrack ? progress * totalDuration : 0;
   const acC = settings.accentColor || '#E11D48';
 
   const isLight = (hex: string) => {
@@ -311,7 +125,7 @@ export default function NowPlayingView({ sidebarCollapsed, activeView }: { sideb
 
   if (!track) return null;
 
-  const bgImage = track.coverImage;
+  const bgImage = artwork;
   const hasCover = !!bgImage;
   const isDarkMode = settings.theme === 'oscuro' || (settings.theme === 'sistema' && window.matchMedia('(prefers-color-scheme: dark)').matches) || settings.theme === 'vibrante';
   const coverBgMode = settings.coverBgMode || 'auto';
@@ -333,13 +147,13 @@ export default function NowPlayingView({ sidebarCollapsed, activeView }: { sideb
   const showBlurredCover = coverBgMode === 'auto' && hasCover;
   // Theme mode: show app bg image behind
   const showThemeBg = coverBgMode === 'theme' && !!settings.backgroundImage;
-  const isLightBg = hasCover ? isLight(dominantColor) : !isDarkMode;
+  const isLightBg = isLight(coverBaseBg);
   const textMain = isLightBg ? '#1a1a1a' : '#fff';
   const textMuted = isLightBg ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.5)';
-  const textLow = isLightBg ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.3)';
+  const textLow = isLightBg ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.6)';
 
   return (
-    <div
+    <div className="now-playing-view" role="dialog" aria-modal="true" aria-label="Portada ampliada"
       style={{
         position: 'fixed',
         inset: 0,
@@ -360,10 +174,10 @@ export default function NowPlayingView({ sidebarCollapsed, activeView }: { sideb
         <div
           style={{
             position: 'absolute',
-            inset: -200,
+            inset: -24,
             background: `url(${bgImage}) center/cover no-repeat`,
-            filter: 'blur(120px) saturate(2.2)',
-            transform: visible ? 'scale(1.3)' : 'scale(1.5)',
+            filter: 'blur(18px) saturate(.8)',
+            transform: 'none',
             transition: 'background-image 600ms ease, transform 500ms ease',
           }}
         />
@@ -374,26 +188,11 @@ export default function NowPlayingView({ sidebarCollapsed, activeView }: { sideb
         <div
           style={{
             position: 'absolute',
-            inset: -200,
+            inset: -24,
             background: `url(${settings.backgroundImage}) center/cover no-repeat`,
-            filter: 'blur(80px) brightness(var(--bg-brightness, 100%))',
-            transform: visible ? 'scale(1.3)' : 'scale(1.5)',
+            filter: 'blur(18px) brightness(var(--bg-brightness, 100%))',
+            transform: 'none',
             transition: 'transform 500ms ease',
-          }}
-        />
-      )}
-
-      {/* Fading old cover for crossfade (auto mode only) */}
-      {showBlurredCover && fadeCover && (
-        <div
-          style={{
-            position: 'absolute',
-            inset: -200,
-            background: `url(${fadeCover}) center/cover no-repeat`,
-            filter: 'blur(120px) saturate(2.2)',
-            opacity: fadingOut ? 0 : 1,
-            transition: 'opacity 700ms ease',
-            zIndex: 1,
           }}
         />
       )}
@@ -412,7 +211,7 @@ export default function NowPlayingView({ sidebarCollapsed, activeView }: { sideb
       />
 
       {/* Close button */}
-      <button
+      <button aria-label="Cerrar portada ampliada"
         onClick={handleClose}
         style={{
           position: 'absolute',
@@ -423,12 +222,12 @@ export default function NowPlayingView({ sidebarCollapsed, activeView }: { sideb
           borderRadius: '50%',
           border: 'none',
           background: 'rgba(255,255,255,0.06)',
-          color: '#fff',
+          color: textMain,
           cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          backdropFilter: 'blur(8px)',
+          backdropFilter: 'none',
           zIndex: 20,
           transition: 'background 200ms',
         }}
@@ -456,7 +255,7 @@ export default function NowPlayingView({ sidebarCollapsed, activeView }: { sideb
           margin: '0 auto',
         }}
       >
-        {/* LEFT: Cover art with 3D tilt and square audio-reactive aura */}
+        {/* LEFT: Static artwork, without a continuous rendering loop */}
         <div
           style={{
             flex: '0 0 min(48vw, 450px)',
@@ -465,25 +264,9 @@ export default function NowPlayingView({ sidebarCollapsed, activeView }: { sideb
             position: 'relative',
           }}
         >
-          {/* Square aura canvas layer — unlimited extent */}
-          <canvas
-            ref={auraCanvasRef}
-            width={AURA_CANVAS_SIZE}
-            height={AURA_CANVAS_SIZE}
-            style={{
-              position: 'absolute',
-              inset: '50% 0 0 50%',
-              width: 'calc(100% + 800px)',
-              height: 'calc(100% + 800px)',
-              transform: 'translate(-50%, -50%)',
-              pointerEvents: 'none',
-              zIndex: 2,
-            }}
-          />
-
-          {/* Cover image with 3D tilt */}
+          {/* Cover image */}
           <div
-            ref={coverRef}
+            className="now-playing-cover"
             onMouseMove={handleMouseMove}
             onMouseLeave={handleMouseLeave}
             onClick={handleClose}
@@ -497,7 +280,7 @@ export default function NowPlayingView({ sidebarCollapsed, activeView }: { sideb
               boxShadow: mouseInside
                 ? '0 24px 64px rgba(0,0,0,0.6), 0 0 80px rgba(255,255,255,0.04)'
                 : '0 16px 48px rgba(0,0,0,0.5)',
-              transform: `perspective(1000px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg)`,
+              transform: 'none',
               transition: mouseInside ? 'box-shadow 100ms' : 'transform 500ms ease, box-shadow 500ms ease',
               cursor: 'pointer',
             }}
@@ -517,7 +300,7 @@ export default function NowPlayingView({ sidebarCollapsed, activeView }: { sideb
                 width: 40, height: 40,
                 borderRadius: '50%',
                 background: 'rgba(255,255,255,0.12)',
-                backdropFilter: 'blur(8px)',
+                backdropFilter: 'none',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 color: '#fff',
                 transform: mouseInside ? 'scale(1) translateY(0)' : 'scale(0.8) translateY(8px)',
@@ -527,9 +310,9 @@ export default function NowPlayingView({ sidebarCollapsed, activeView }: { sideb
               </div>
             </div>
 
-            {track.coverImage ? (
+            {artwork ? (
               <img
-                src={track.coverImage}
+                src={artwork}
                 alt=""
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
               />
@@ -633,10 +416,10 @@ export default function NowPlayingView({ sidebarCollapsed, activeView }: { sideb
 
           {editing && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, background: 'rgba(0,0,0,0.04)', borderRadius: 10, padding: 14 }}>
-              <input value={editTitle} onChange={e => setEditTitle(e.target.value)}
+              <input aria-label="Título de la canción" value={editTitle} onChange={e => setEditTitle(e.target.value)}
                 style={{ background: '#fff', border: '1px solid #ddd', borderRadius: 6, padding: '8px 10px', fontSize: 13, color: '#1a1a1a', outline: 'none' }}
                 placeholder="Título" autoFocus />
-              <input value={editArtist} onChange={e => setEditArtist(e.target.value)}
+              <input aria-label="Artista de la canción" value={editArtist} onChange={e => setEditArtist(e.target.value)}
                 style={{ background: '#fff', border: '1px solid #ddd', borderRadius: 6, padding: '8px 10px', fontSize: 13, color: '#1a1a1a', outline: 'none' }}
                 placeholder="Artista" />
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
@@ -644,7 +427,7 @@ export default function NowPlayingView({ sidebarCollapsed, activeView }: { sideb
                   style={{ background: 'none', border: '1px solid rgba(0,0,0,0.15)', borderRadius: 6, padding: '6px 14px', fontSize: 12, cursor: 'pointer', color: textMuted }}>
                   Cancelar
                 </button>
-                <button onClick={() => { updateTrack(track.id, { title: editTitle, artist: editArtist }); setEditing(false); }}
+                <button disabled={!editTitle.trim()} onClick={async () => { if (!editTitle.trim()) return; await updateTrack(track.id, { title: editTitle.trim(), artist: editArtist.trim() }); setEditing(false); }}
                   style={{ background: acC, border: 'none', borderRadius: 6, padding: '6px 14px', fontSize: 12, cursor: 'pointer', color: '#fff', fontWeight: 600 }}>
                   Guardar
                 </button>
@@ -655,7 +438,7 @@ export default function NowPlayingView({ sidebarCollapsed, activeView }: { sideb
           {/* Progress bar */}
           <div>
             <input
-              type="range"
+              aria-label="Posición de reproducción" disabled={!isCurrentTrack || !Number.isFinite(globalAudio.duration) || globalAudio.duration <= 0} type="range"
               min={0}
               max={1}
               step={0.001}
@@ -702,7 +485,7 @@ export default function NowPlayingView({ sidebarCollapsed, activeView }: { sideb
             }}
           >
             {/* Shuffle */}
-            <button
+            <button aria-label="Reproducción aleatoria" aria-pressed={shuffleMode}
               onClick={() => setShuffleMode(!shuffleMode)}
               style={{
                 background: 'none',
@@ -720,7 +503,7 @@ export default function NowPlayingView({ sidebarCollapsed, activeView }: { sideb
             </button>
 
             {/* Prev — from history */}
-            <button
+            <button aria-label="Canción anterior"
               onClick={() => {
                 if (track.id !== currentTrackId) {
                   return playTrack(track.id);
@@ -754,7 +537,7 @@ export default function NowPlayingView({ sidebarCollapsed, activeView }: { sideb
             </button>
 
             {/* Play/Pause — clean, polished */}
-            <button
+            <button aria-label={isPlayingMusic && isCurrentTrack ? "Pausar canción" : "Reproducir canción"}
               onClick={() => {
                 if (track.id !== currentTrackId) {
                   playTrack(track.id);
@@ -801,7 +584,7 @@ export default function NowPlayingView({ sidebarCollapsed, activeView }: { sideb
             </button>
 
             {/* Next — use queue */}
-            <button
+            <button aria-label="Canción siguiente"
               onClick={() => {
                 if (track.id !== currentTrackId) {
                   return playTrack(track.id);
@@ -845,7 +628,7 @@ export default function NowPlayingView({ sidebarCollapsed, activeView }: { sideb
             </button>
 
             {/* Repeat */}
-            <button
+            <button aria-label={`Repetición: ${repeatMode}`} aria-pressed={repeatMode!=="none"}
               onClick={() => {
                 const modes: ('none' | 'all' | 'one')[] = ['none', 'all', 'one'];
                 const idx = modes.indexOf(repeatMode);

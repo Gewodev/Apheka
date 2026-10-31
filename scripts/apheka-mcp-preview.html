@@ -1,0 +1,6 @@
+<!doctype html><html lang="es" data-theme="oscuro"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>APHEKA · MCP QA</title></head><body><div id="root"></div><script type="module">
+import '/src/fonts.css';import '/src/index.css';import '/src/apheka.css';import '/src/workspace.css';import '/src/refinement.css';
+import '/src/quiet.css';import '/src/interface.css';
+import {mountMcp,request} from '/scripts/apheka-mcp-harness.tsx';
+window.__mcpRequest=request;mountMcp(new URLSearchParams(location.search).get('view')||undefined,new URLSearchParams(location.search).get('courseId')||undefined);
+</script></body></html>
