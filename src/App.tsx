@@ -12,13 +12,12 @@ import AnimatedWallpaper from './components/AnimatedWallpaper';
 import EditorBlockMenu from './components/ui/EditorBlockMenu';
 import ReleaseNotice from './components/ui/ReleaseNotice';
 import McpBridge from './components/McpBridge';
-import CharvisSidebar from './components/ui/CharvisSidebar';
 import { useFullscreenLifecycle } from './hooks/useWindowFullscreen';
 import AphekaWordmark from './components/ui/AphekaWordmark';
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react';
 import {
   Home, NotebookPen, Clock, ListTodo, Settings,
-  Music,
+  Music, Bot,
   Calendar, Layers, Plus, GraduationCap, X, Image as ImageIcon,
   Loader2,
 } from 'lucide-react';
@@ -37,13 +36,15 @@ const Planificacion = lazy(() => import('./components/views/Planificacion'));
 const Ajustes = lazy(() => import('./components/views/Ajustes'));
 const Cursos = lazy(() => import('./components/views/Cursos'));
 const CursosHub = lazy(() => import('./components/views/CursosHub'));
+const CharvisSidebar = lazy(() => import('./components/ui/CharvisSidebar'));
+const IA = lazy(() => import('./components/views/IA'));
 import OAuthCallback from './components/OAuthCallback';
 import GlobalPlayer from './components/GlobalPlayer';
 import DownloadManager from './components/ui/DownloadManager';
 import TrackArtworkDialog from './components/music/TrackArtworkDialog';
 import ImageContextMenu from './components/ui/ImageContextMenu';
 
-type ViewId = 'inicio' | 'estudio' | 'tareas' | 'notas' | 'musica' | 'planificacion' | 'cursos' | 'ajustes' | 'curso_detalle';
+type ViewId = 'inicio' | 'estudio' | 'tareas' | 'notas' | 'musica' | 'planificacion' | 'cursos' | 'ia' | 'ajustes' | 'curso_detalle';
 
 interface AppContentProps {
   setGlobalView: (view: ViewId) => void;
@@ -507,6 +508,7 @@ function AppContent() {
     { id: 'musica', label: 'Música', icon: Music },
     { id: 'planificacion', label: 'Planificador', icon: Calendar },
     { id: 'cursos', label: 'Cursos', icon: Layers },
+    { id: 'ia', label: 'IA', icon: Bot },
   ];
 
   const handleCourseClick = (courseId: string) => {
@@ -543,7 +545,7 @@ function AppContent() {
   return (
     <div className={'app-layout studio-environment single-environment '+(autoNav?'nav-auto':'nav-pinned')+(isCollapsed?' nav-collapsed':'')} data-auto-dock={autoNav} style={{'--navigation-width':(isCollapsed?64:224)+'px'} as React.CSSProperties}>
       <AnimatedWallpaper/>
-      <McpBridge /><CatalogDownloadBridge/><CharvisSidebar/>
+      <McpBridge /><CatalogDownloadBridge/><Suspense fallback={null}><CharvisSidebar pageActive={activeView==='ia'} activeView={activeView}/></Suspense>
       <EditorBlockMenu/>
       
       {autoNav&&<><button ref={dock.trigger} className="app-navigation-handle" aria-label="Abrir navegación" onClick={dock.show}><span aria-hidden="true"/></button><div className="desktop-dock-edge" aria-hidden="true" onPointerEnter={dock.show} onPointerLeave={dock.leave}/></>}
@@ -677,6 +679,7 @@ function AppContent() {
               {activeView === 'cursos' && <CursosHub onSelectCourse={(courseId) => { setSelectedCourseId(courseId); setActiveView('curso_detalle'); }} onTabSelect={(courseId, tab) => { setSelectedCourseId(courseId); setSelectedCourseTab(tab); setActiveView('curso_detalle'); }} />}
               {activeView === 'ajustes' && <Ajustes />}
             {activeView === 'curso_detalle' && <Cursos initialCourseId={selectedCourseId || undefined} initialTab={selectedCourseTab as any} onNavigate={(v) => setActiveView(v as ViewId)} />}
+            {activeView === 'ia' && <IA/>}
             </Suspense>
           </div>
         )}
@@ -711,7 +714,7 @@ function AppContent() {
               boxShadow: '0 6px 20px rgba(0,0,0,0.12)',
               maxWidth: 480,
             },
-            success: { style:{background:'color-mix(in srgb, #10b981 14%, var(--bg-elevated-raw))',border:'1px solid color-mix(in srgb, #10b981 32%, var(--border-default))'},iconTheme: { primary: '#10B981', secondary: '#0b0c0f' } },
+            success: { icon: null, style:{background:'color-mix(in srgb, #10b981 14%, var(--bg-elevated-raw))',border:'1px solid color-mix(in srgb, #10b981 32%, var(--border-default))'},iconTheme: { primary: '#10B981', secondary: '#0b0c0f' } },
             error: { style:{background:'color-mix(in srgb, #ef4444 14%, var(--bg-elevated-raw))',border:'1px solid color-mix(in srgb, #ef4444 32%, var(--border-default))'},iconTheme: { primary: '#EF4444', secondary: '#0b0c0f' } },
           }}
         />

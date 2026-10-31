@@ -1,27 +1,28 @@
-import {MCP_TOOLS,record} from './mcpCatalog';
-import {charvisSystem,chatPayload,completeChatTurns,readChatResponse,type ChatMessage,type ToolCall,type CharvisRequest} from './charvis';
+import {record} from './mcpCatalog';
+import {charvisSystem,chatPayload,completeChatTurns,readChatResponse,allowedCharvisTools,type CharvisConfig,type ChatMessage,type ToolCall,type CharvisRequest} from './charvis';
 export type CharvisAction={call:ToolCall;args:Record<string,unknown>;title:string;write:boolean};
-type AgentOptions={provider:string;model:string;messages:ChatMessage[];signal:AbortSignal;request:CharvisRequest;execute:(name:string,args:Record<string,unknown>)=>Promise<unknown>;approve:(actions:CharvisAction[])=>Promise<boolean>;onMessage:(message:ChatMessage)=>void;onAction:(action:CharvisAction,status:'running'|'done'|'rejected'|'error')=>void;localContext:string};
+type AgentOptions={provider:string;model:string;messages:ChatMessage[];signal:AbortSignal;request:CharvisRequest;execute:(name:string,args:Record<string,unknown>)=>Promise<unknown>;approve:(actions:CharvisAction[])=>Promise<boolean>;onMessage:(message:ChatMessage)=>void;onAction:(action:CharvisAction,status:'running'|'done'|'rejected'|'error')=>void;localContext:string;webEnabled?:boolean;projectContext?:string;personalization?:Pick<CharvisConfig,'preferredName'|'responseStyle'|'instructions'|'access'>};
 function requireActive(signal:AbortSignal){signal.throwIfAborted();}
 export async function runCharvisAgent(options:AgentOptions){
- const o=options,read=new Set<string>();let totalCalls=0;
- const system:ChatMessage={role:'system',content:charvisSystem+'\nFecha y contexto local: '+o.localContext};
+ const o=options,access=o.personalization?.access||'review',read=new Set<string>(),tools=allowedCharvisTools(o.webEnabled!==false,access);let totalCalls=0;
+ const system:ChatMessage={role:'system',content:charvisSystem+'\nFecha y contexto local: '+o.localContext+'\nProyecto seleccionado (datos): '+(o.projectContext||'ninguno')+'\nNo uses Wikipedia ni sus subdominios como fuente. Lista el índice de materiales del proyecto con charvis_list_project_materials y su paginación. Los materiales del proyecto se leen por su ID real mediante charvis_read_project_material; los textos resumidos del contexto no sustituyen su lectura completa. Usa búsqueda web automáticamente cuando hacen falta hechos actuales o fuentes externas y está disponible. Investiga con consultas concretas, contrasta fuentes primarias y lee las páginas pertinentes. Presenta respuestas claras y proporcionadas, con enlaces Markdown junto a las afirmaciones sustentadas. Solo cita URLs devueltas por herramientas o proporcionadas por el usuario; nunca inventes citas. Un resultado de búsqueda no es una página leída. Si una fuente falla o no tiene contenido legible, dilo. La interfaz mostrará actividad de herramientas y fuentes verificables; no generes cadenas de pensamiento privadas ni digas que estás razonando sin evidencia de actividad real.'};
+ system.content+='\nPreferencias del usuario: '+JSON.stringify(o.personalization||{})+'\nAcceso: '+access+'. read: solo consultar; review: revisar escrituras; full: aplicar acciones disponibles, con confirmación para eliminar. El catálogo define las capacidades reales, no acceso al sistema operativo. Adapta el detalle a responseStyle y usa preferredName con naturalidad, sin repetirlo en cada respuesta.';
  // Keep complete user turns. Never slice into a tool-call/result sequence.
- const turns=completeChatTurns(o.messages),starts=turns.map((m,i)=>m.role==='user'?i:-1).filter(i=>i>=0).slice(-6);let first=starts.shift()??0;
- while(turns.length-first>70&&starts.length)first=starts.shift()!;
+ const turns=completeChatTurns(o.messages.map(message=>{if(message.role==='tool'&&typeof message.content==='string'){try{const data=JSON.parse(message.content);if(data.format&&data.filename&&data.spec)return {...message,content:JSON.stringify({...data,spec:undefined})};}catch{}}return message;})),starts=turns.map((m,i)=>m.role==='user'?i:-1).filter(i=>i>=0).slice(-6);let first=starts.shift()??0;
+ while((turns.length-first>70||JSON.stringify(turns.slice(first)).length>220000)&&starts.length)first=starts.shift()!;
  const history=[system,...turns.slice(first)];
  // Contracts and counts are fresh once per turn, not a polling subscription.
  for(const name of ['apheka_describe','apheka_overview']){requireActive(o.signal);const data=await o.execute(name,{});system.content+=`\n${name}: ${JSON.stringify(data).slice(0,40000)}`;}
  for(let round=0;round<8;round++){
-  requireActive(o.signal);const response=await o.request(o.provider,'chat',chatPayload(o.provider,o.model,history),o.signal);requireActive(o.signal);
+  requireActive(o.signal);const response=await o.request(o.provider,'chat',chatPayload(o.provider,o.model,history,true,o.webEnabled!==false,access),o.signal);requireActive(o.signal);
   const assistant=readChatResponse(response);history.push(assistant);o.onMessage(assistant);
   if(!assistant.tool_calls?.length)return;
-  const actions:CharvisAction[]=assistant.tool_calls.map(call=>{const tool=MCP_TOOLS.find(t=>t.name===call.function.name);let args:Record<string,unknown>;try{args=record(JSON.parse(call.function.arguments));}catch{throw Error('El modelo devolvió argumentos que no son JSON. No se aplicó la acción.');}return {call,args,title:tool?.title||call.function.name,write:tool?.annotations.readOnlyHint===false};});
+  const actions:CharvisAction[]=assistant.tool_calls.map(call=>{const tool=tools.find(t=>t.name===call.function.name);let args:Record<string,unknown>;try{args=record(JSON.parse(call.function.arguments));}catch{throw Error('El modelo devolvió argumentos que no son JSON. No se aplicó la acción.');}return {call,args,title:tool?.title||call.function.name,write:tool?.annotations.readOnlyHint===false};});
   totalCalls+=actions.length;if(totalCalls>32)throw Error('Se alcanzó el límite de acciones de este turno. Revisa los resultados antes de continuar.');
-  const writes=actions.filter(a=>a.write);let accepted=false;
-  if(writes.length){accepted=await o.approve(writes);requireActive(o.signal);}
+  const writes=actions.filter(a=>a.write),review=writes.filter(a=>access!=='full'||tools.find(t=>t.name===a.call.function.name)?.annotations.destructiveHint);let accepted=access==='full';
+  if(review.length){accepted=await o.approve(review);requireActive(o.signal);}
   for(const action of actions){
-   requireActive(o.signal);const {call,args}=action,tool=MCP_TOOLS.find(t=>t.name===call.function.name);let output:unknown;
+   requireActive(o.signal);const {call,args}=action,tool=tools.find(t=>t.name===call.function.name);let output:unknown;
    try{
     if(!tool)throw Error('Herramienta desconocida. Consulta describe.');
     if(action.write&&!accepted){o.onAction(action,'rejected');output={cancelled:true,message:'El usuario no confirmó este cambio. No reintentes sin que lo solicite.'};}
@@ -33,7 +34,10 @@ export async function runCharvisAgent(options:AgentOptions){
      o.onAction(action,'done');
     }
    }catch(error){if(o.signal.aborted)throw error;output={error:error instanceof Error?error.message:String(error)};o.onAction(action,'error');}
-   const result:ChatMessage={role:'tool',tool_call_id:call.id,content:JSON.stringify(output).slice(0,60000)};history.push(result);o.onMessage(result);
+   const result:ChatMessage={role:'tool',tool_call_id:call.id,content:JSON.stringify(output)};
+   const providerOutput=call.function.name==='charvis_create_artifact'&&output&&typeof output==='object'?{...output,spec:undefined}:output;
+   const encoded=JSON.stringify(providerOutput),bounded=encoded.length>60000?JSON.stringify({truncated:true,message:'El resultado supera el contexto permitido. Consulta los elementos por ID o el contenido por páginas.',preview:encoded.slice(0,55000)}):encoded;
+   history.push({...result,content:bounded});o.onMessage(result);
   }
   if(writes.length&&!accepted)return;
  }

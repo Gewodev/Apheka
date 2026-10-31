@@ -13,6 +13,8 @@ export function resumeLibraryQueue(ids:readonly string[],currentId:string|null,s
  const custom=!!intent.source&&!['Tu biblioteca','Mis canciones','Descubrir'].includes(intent.source.name||'');
  const pool=custom?intent.source!.pool.filter(id=>valid.has(id)):intent.manual&&intent.source?intent.source.pool.filter(id=>valid.has(id)):Array.from(valid);
  if(custom||intent.manual)return {queue:clean(saved).filter(id=>pool.includes(id)),source:{pool,name:custom?intent.source!.name:'Tu biblioteca'}};
+ // A daily library display must not rewrite the queue the user was listening to.
+ const restored=clean(saved);if(restored.length)return {queue:restored,source:{pool:currentId&&valid.has(currentId)?[currentId,...pool.filter(id=>id!==currentId)]:pool,name:'Tu biblioteca'}};
  let queue=dailyMusicOrder(pool.filter(id=>id!==currentId).map(id=>({id})),seed).map(row=>row.id);
  // Even a coincidental identical draw must not repeat the same automatic opening.
  const previous=clean(saved);if(queue.length>1&&queue.slice(0,5).join('|')===previous.slice(0,5).join('|'))queue=[...queue.slice(1),queue[0]];

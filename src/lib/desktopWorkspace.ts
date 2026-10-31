@@ -1,4 +1,4 @@
-export const WORKSPACE_VIEWS=['inicio','estudio','tareas','notas','musica','planificacion','cursos','ajustes','curso_detalle'] as const;
+export const WORKSPACE_VIEWS=['inicio','estudio','tareas','notas','musica','planificacion','cursos','ia','ajustes','curso_detalle'] as const;
 export type WorkspaceView=typeof WORKSPACE_VIEWS[number];
 export const COMPANIONS=['none','timer','notes','tasks','lyrics'] as const;
 export type Companion=typeof COMPANIONS[number];

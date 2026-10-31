@@ -480,7 +480,7 @@ interface AppState {
   settings: Settings;
 }
 
-export type ViewId = 'inicio' | 'tareas' | 'apuntes' | 'estudio' | 'cursos' | 'analiticas' | 'chat' | 'ajustes' | 'musica' | 'flujo' | 'canvas';
+export type ViewId = 'inicio' | 'tareas' | 'apuntes' | 'estudio' | 'cursos' | 'ia' | 'analiticas' | 'chat' | 'ajustes' | 'musica' | 'flujo' | 'canvas';
 
 interface AppContextType extends AppState {
   persistWorkspace: () => Promise<void>;

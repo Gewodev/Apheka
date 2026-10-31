@@ -10,6 +10,8 @@ export function useMusicTransport(){
  const pool=useMemo(()=>(a.queueSource?.pool||library).filter(id=>available.has(id)),[library,a.queueSource,available]),at=pool.indexOf(a.currentTrackId||'');
  const upcoming=useMemo(()=>{const scope=new Set(pool);return [...new Set(a.musicQueue)].filter(id=>available.has(id)&&scope.has(id)&&id!==a.currentTrackId);},[a.musicQueue,pool,a.currentTrackId,available]);
  const next=()=>{const result=nextMusicSelection({tracks:a.tracks,currentId:a.currentTrackId,queue:a.musicQueue,sourcePool:a.queueSource?.pool,shuffle:a.shuffleMode,repeat:a.repeatMode,history:a.trackHistory,counts:a.playCounts,offline:a.settings.musicOffline},true);if(result.id){a.setMusicQueue(result.queue);a.playTrack(result.id,true);}};
- const previousId=a.trackHistory.find(id=>id!==a.currentTrackId&&pool.includes(id))||pool[at-1];
+ // History is a playback trail, not a library filter. A discovery preview can be
+ // the actual previous recording even while the next songs come from a playlist.
+ const previousId=a.trackHistory.find(id=>id!==a.currentTrackId&&a.tracks.some(t=>t.id===id&&(!a.settings.musicOffline||canPlayOffline(t))))||pool[at-1];
  return {next,previous:()=>{if(previousId)a.playTrack(previousId,true);},upcoming,hasNext:upcoming.length>0||(a.repeatMode==='all'&&pool.length>0),hasPrevious:!!previousId};
 }

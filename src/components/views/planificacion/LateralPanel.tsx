@@ -39,26 +39,26 @@ export default function LateralPanel({ item, onClose, onSelectEvent, onEditEvent
 
   return (
     <>
-      <div 
-        style={{ position: 'fixed', inset: 0, zIndex: 1200, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }} 
-        onClick={onClose} 
+      <div
+        style={{ position: 'fixed', inset: 0, zIndex: 1200, background: 'rgba(0,0,0,0.3)' }}
+        onClick={onClose}
       />
-      
-      <div className="bento-card"
-        style={{ 
-          position: 'fixed', 
-          top: 0, 
-          bottom: 0, 
-          right: 0, 
-          width: 440, padding: 0,
-          background: 'var(--surface)', 
+
+      <div className="bento-card planner-day-panel" role="dialog" aria-modal="true" aria-label="Detalle del planificador"
+        style={{
+          position: 'fixed',
+          top: 0,
+          bottom: 0,
+          right: 0,
+          width: 'min(440px, 100vw)', padding: 0,
+          background: 'var(--bg-elevated-raw)',
           borderLeft: '1px solid var(--border-soft)',
           borderRight: 'none', borderTop: 'none', borderBottom: 'none',
           zIndex: 1300,
-          boxShadow: '-32px 0 64px rgba(0,0,0,0.5)',
+          boxShadow: '-8px 0 24px rgba(0,0,0,0.15)',
           display: 'flex',
           flexDirection: 'column',
-          animation: 'slideInRight 300ms cubic-bezier(0.16, 1, 0.3, 1) forwards'
+          animation: 'slideInRight 160ms cubic-bezier(0.16, 1, 0.3, 1) forwards'
         }}
       >
         <style>{`
@@ -67,7 +67,7 @@ export default function LateralPanel({ item, onClose, onSelectEvent, onEditEvent
             to { transform: translateX(0); }
           }
         `}</style>
-        
+
         {/* Header */}
         <div style={{ padding: '28px 36px', borderBottom: '1px solid var(--border-soft)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>
@@ -76,8 +76,8 @@ export default function LateralPanel({ item, onClose, onSelectEvent, onEditEvent
             {item.type === 'task' && 'Detalle de Tarea'}
             {item.type === 'plansession' && 'Sesión de estudio'}
           </div>
-          <button 
-            onClick={onClose} 
+          <button
+            onClick={onClose} aria-label="Cerrar detalle del planificador"
             style={{ padding: 8, borderRadius: 10, background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', transition: 'all 200ms' }}
             onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface-elevated)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
             onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
@@ -130,8 +130,8 @@ function DayDetails({ item, onSelectEvent, onViewTask, timeFormat, onAddEvent, o
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {events.map(ev => (
-                <div 
-                  key={ev.id} 
+                <div
+                  key={ev.id}
                   onClick={() => onSelectEvent?.(ev)}
                   style={{ padding: '16px 20px', background: 'var(--surface-elevated)', border: '1px solid var(--border-soft)', borderRadius: 14, borderLeft: `3px solid ${ev.color}`, cursor: 'pointer', transition: 'all 200ms' }}
                   onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface-hover)'; e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.2)'; }}
@@ -156,8 +156,8 @@ function DayDetails({ item, onSelectEvent, onViewTask, timeFormat, onAddEvent, o
               {tasks.map(t => {
                 const done = t.status === 'completado';
                 return (
-                <div 
-                  key={t.id} 
+                <div
+                  key={t.id}
                   onClick={() => onViewTask?.(t.id)}
                   style={{ padding: '16px 20px', background: 'var(--surface-elevated)', border: '1px dashed var(--border-soft)', borderRadius: 14, borderLeft: `3px solid ${t.courseColor || 'var(--text-muted)'}`, cursor: 'pointer', transition: 'all 200ms', opacity: done ? 0.55 : 1 }}
                   onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface-hover)'; e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.2)'; }}
@@ -463,7 +463,7 @@ function EventDetails({ item, onEdit, onDelete, timeFormat, tasks, onViewTask, o
       )}
 
 <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 'auto', paddingTop: 24 }}>
-        <button 
+        <button
           onClick={() => onEdit?.(event)}
           style={{ width: '100%', padding: '14px 20px', borderRadius: 14, fontSize: 15, fontWeight: 600, border: 'none', background: 'var(--accent)', color: '#fff', cursor: 'pointer', transition: 'all 200ms', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
           onMouseEnter={e => { e.currentTarget.style.opacity = '0.9'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
@@ -492,7 +492,7 @@ function EventDetails({ item, onEdit, onDelete, timeFormat, tasks, onViewTask, o
 
 function TaskDetails({ item, onViewTask }: { item: Extract<SelectedItem, {type: 'task'}>, onViewTask?: (taskId: string) => void }) {
   const { task } = item;
-  
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 40, height: '100%' }}>
       <div>
@@ -510,7 +510,7 @@ function TaskDetails({ item, onViewTask }: { item: Extract<SelectedItem, {type: 
         <DetailRow icon={<CheckCircle2 size={18} strokeWidth={1.5} />} label="Estado" value={task.status === 'completado' ? 'Completado' : task.status === 'en-curso' ? 'En curso' : 'Pendiente'} />
       </div>
 
-      <button 
+      <button
         onClick={() => onViewTask?.(task.id)}
         className="btn-primary"
         style={{ marginTop: 'auto', width: '100%', padding: '16px', borderRadius: 14, fontSize: 15, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}

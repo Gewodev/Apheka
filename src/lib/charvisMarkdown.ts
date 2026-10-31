@@ -1,0 +1,12 @@
+import {marked} from 'marked';
+import {sanitizePastedHtml} from './editorHtml';
+import {renderFormula} from './latex';
+/** Protect TeX from Markdown punctuation, then insert trusted KaTeX output only into text nodes. */
+export function renderChatMarkdown(source:string){
+ const math=new Map<string,{raw:string;html:string|null}>(),prefix='APHKMATH'+crypto.randomUUID().replace(/-/g,'');let count=0;
+ const text=source.split(/(```[\s\S]*?```|`[^`\n]*`)/g).map((part,index)=>index%2?part:part.replace(/\$\$([\s\S]+?)\$\$|\\\[([\s\S]+?)\\\]|\\\(([\s\S]+?)\\\)|(?<!\\)\$([^$\n]+?)\$/g,(raw,a,b,c,d)=>{const token=prefix+(count++)+'END';math.set(token,{raw,html:renderFormula(a??b??c??d,!!(a||b))});return token;})).join('');
+ const html=sanitizePastedHtml(marked.parse(text,{async:false}) as string);if(!math.size)return html;const doc=new DOMParser().parseFromString(html,'text/html'),walker=doc.createTreeWalker(doc.body,NodeFilter.SHOW_TEXT),nodes:Text[]=[];
+ while(walker.nextNode()){const node=walker.currentNode as Text;if(node.data.includes(prefix)&&!node.parentElement?.closest('pre,code'))nodes.push(node);}
+ const pattern=new RegExp(prefix+'\\d+END','g');for(const node of nodes){const fragment=doc.createDocumentFragment();let last=0;for(const match of node.data.matchAll(pattern)){fragment.append(doc.createTextNode(node.data.slice(last,match.index)));const value=math.get(match[0])!;if(value.html){const template=doc.createElement('template');template.innerHTML=value.html;for(const el of template.content.querySelectorAll('[data-latex-source]')){el.removeAttribute('contenteditable');el.removeAttribute('title');}fragment.append(template.content);}else fragment.append(doc.createTextNode(value.raw));last=match.index!+match[0].length;}fragment.append(doc.createTextNode(node.data.slice(last)));node.replaceWith(fragment);}
+ return doc.body.innerHTML;
+}

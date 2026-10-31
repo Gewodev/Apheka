@@ -1,7 +1,7 @@
 import {useCallback,useEffect,useState} from 'react';
 import type {WorkspaceView} from '../lib/desktopWorkspace';
 type Route={view:WorkspaceView;courseId:string|null;noteId?:string;taskId?:string};
-const views=new Set(['inicio','estudio','tareas','notas','musica','planificacion','cursos','curso_detalle','ajustes']);
+const views=new Set(['inicio','estudio','tareas','notas','musica','planificacion','cursos','ia','curso_detalle','ajustes']);
 export function readWorkspaceRoute():Route {
  try{const current=JSON.parse(localStorage.getItem('apheka_route_v2')||'null');if(current&&views.has(current.view))return current;
  const old=JSON.parse(localStorage.getItem('apheka_desktops_v1')||'null'),active=old?.desktops?.find((d:any)=>d.id===old.activeId);

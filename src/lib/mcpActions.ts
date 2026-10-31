@@ -72,7 +72,7 @@ const mutable:Record<McpEntity,string[]> = {
   note_folders:['name','color','description'],courses:['name','color','description','teacher','teacherName','room','code','level','credits'],
   habits:['name','isArchived'],planner_events:['title','date','allDay','startTime','endTime','courseId','color','description','taskId','repeat','repeatDays','repeatUntil'],
   planned_sessions:['title','courseId','date','startTime','durationMinutes','type','completed','intensity','groupId','topicId','repeat','repeatDays','repeatUntil'],
-  study_sessions:[],tracks:['title','artist','isFavorite','lyricsOffsetSeconds'],playlists:['name','trackIds'],artists:['name'],groups:['name'],
+  study_sessions:[],tracks:['title','artist','isFavorite','librarySaved','lyricsOffsetSeconds'],playlists:['name','trackIds'],artists:['name'],groups:['name'],
   topics:['title','groupId','status','reviewLevel','nextReview'],
   materials:['type','columnIndex','name','title','content','word','meaning','question','answer','description','clarification','sourceUrl','toolMode','deck','color','groupName','tagIds','generalOnly','topicOnly'],
   tools:['title','name','toolMode','deck','content','question','answer','word','meaning','description','clarification','color','groupName','tagIds','columnIndex'],
@@ -86,7 +86,7 @@ function patch(app:App,entity:McpEntity,input:unknown,existing?:Item):McpArgs {
     if(['contentFormat','deck','diagram'].includes(key))continue;
     if(key==='toolMode'){out[key]=studyToolMode(v);continue;}
     if(key==='sourceUrl'){out.dataUrl=sourceUrl(v);continue;}
-    if(['urgent','important','isPinned','isCoursePrivate','completed','isArchived','isFavorite','allDay','generalOnly','topicOnly'].includes(key))out[key]=bool(v,key);
+    if(['urgent','important','isPinned','isCoursePrivate','completed','isArchived','isFavorite','librarySaved','allDay','generalOnly','topicOnly'].includes(key))out[key]=bool(v,key);
     else if(['color','coverColor'].includes(key))out[key]=color(v);
     else if(key==='status')out[key]=choice(v,entity==='tasks'?['inicio','progreso','completado']:['pending','studying','done'],key);
     else if(key==='priority')out[key]=choice(v,entity==='tasks'?['none','low','medium','high']:['low','medium','high'],key);
@@ -224,12 +224,12 @@ export async function runMcpTool(env:McpEnvironment,name:string,args:McpArgs):Pr
     }
     case 'apheka_timer_reset':env.mutate(()=>a.resetTimer());return {reset:true};
     case 'apheka_music': {
-      const action=choice(args.action,['play','play_catalog','download_catalog','downloads','cancel_download','retry_download','pause','stop','next','previous','volume','seek','shuffle','repeat','queue'],'Acción');
-      if((action==='play_catalog'||action==='download_catalog')&&String(args.catalogId).startsWith('ytm:')){if(a.settings.musicOffline)throw Error('Sin conexión a Internet.');const {verifiedMusicSong,songTrack}=await import('./youtubeMusic');const song=await verifiedMusicSong(id(args.catalogId));env.assertActive?.();if(action==='play_catalog'){let trackId='';env.mutate(()=>{trackId=a.addTrack(songTrack(song));});env.mutate(()=>env.app().playTrack(trackId));return {trackId};}let jobId='';env.mutate(()=>{jobId=a.addToDownloadQueue({title:song.title,artist:song.artist,url:'https://www.youtube.com/watch?v='+song.id,type:'video',totalItems:1,thumbnail:song.cover,duration:song.duration});});return {jobId};}
+      const action=choice(args.action,['play','play_catalog','save_catalog','download_catalog','downloads','cancel_download','retry_download','pause','stop','next','previous','volume','seek','shuffle','repeat','queue'],'Acción');
+      if((action==='play_catalog'||action==='save_catalog'||action==='download_catalog')&&String(args.catalogId).startsWith('ytm:')){if(a.settings.musicOffline)throw Error('Sin conexión a Internet.');const {verifiedMusicSong,songTrack}=await import('./youtubeMusic');const song=await verifiedMusicSong(id(args.catalogId));env.assertActive?.();if(action==='play_catalog'||action==='save_catalog'){let trackId='';env.mutate(()=>{trackId=a.addTrack({...songTrack(song),...(action==='save_catalog'?{librarySaved:true}:{})});});if(action==='play_catalog')env.mutate(()=>env.app().playTrack(trackId));return {trackId,saved:action==='save_catalog'};}let jobId='';env.mutate(()=>{jobId=a.addToDownloadQueue({title:song.title,artist:song.artist,url:'https://www.youtube.com/watch?v='+song.id,type:'video',totalItems:1,thumbnail:song.cover,duration:song.duration});});return {jobId};}
       if(action==='downloads')return {jobs:[...a.downloadQueue.map(job=>({id:job.id,title:job.title,status:job.status,progress:job.progress,error:job.errorMessage})),...(await import('./catalogDownloads')).catalogDownloads.snapshot().map(job=>({id:job.id,title:job.item.title,status:job.status,bytes:job.bytes,total:job.total,error:job.error}))]};
       if((action==='cancel_download'||action==='retry_download')&&a.downloadQueue.some(job=>job.id===args.jobId)){const job=a.downloadQueue.find(job=>job.id===args.jobId)!;if(action==='cancel_download'){if(job.status==='downloading'){const {cancelDownload}=await import('./musicApi');await cancelDownload(job.id);}env.mutate(()=>a.updateDownloadStatus(job.id,'cancelled'));return {id:job.id,status:'cancelled'};}if(!['error','cancelled'].includes(job.status))throw Error('La descarga todavía está en curso o ya terminó.');let jobId='';env.mutate(()=>{jobId=a.addToDownloadQueue({title:job.title,artist:job.artist,url:job.url,type:job.type,totalItems:1,thumbnail:job.thumbnail,duration:job.duration});});return {jobId};}
       if(['download_catalog','downloads','cancel_download','retry_download'].includes(action)){const {catalogDownloads}=await import('./catalogDownloads');if(action==='download_catalog'){if(a.settings.musicOffline)throw Error('Activa la conexión para descargar.');const {getCatalogTrack}=await import('./musicCatalog');const item=await getCatalogTrack(id(args.catalogId),AbortSignal.timeout(12000));env.assertActive?.();env.mutate(()=>catalogDownloads.enqueue(item));}else if(action==='cancel_download'||action==='retry_download'){const jobId=id(args.jobId);if(!catalogDownloads.snapshot().some(j=>j.id===jobId))throw Error('Descarga no encontrada.');env.assertActive?.();env.mutate(()=>action==='cancel_download'?catalogDownloads.cancel(jobId):catalogDownloads.retry(jobId));}return {jobs:catalogDownloads.snapshot().map(j=>({id:j.id,catalogId:j.item.id,title:j.item.title,status:j.status,bytes:j.bytes,total:j.total,error:j.error}))};}
-      if(action==='play_catalog'){if(a.settings.musicOffline)throw Error('La música online está desactivada.');const {getCatalogTrack,catalogTrack}=await import('./musicCatalog');const item=await getCatalogTrack(id(args.catalogId),AbortSignal.timeout(12000));env.assertActive?.();let trackId='';env.mutate(()=>{trackId=a.addTrack(catalogTrack(item));});env.mutate(()=>env.app().playTrack(trackId));}
+      if(action==='play_catalog'||action==='save_catalog'){if(a.settings.musicOffline)throw Error('La música online está desactivada.');const {getCatalogTrack,catalogTrack}=await import('./musicCatalog');const item=await getCatalogTrack(id(args.catalogId),AbortSignal.timeout(12000));env.assertActive?.();let trackId='';env.mutate(()=>{trackId=a.addTrack({...catalogTrack(item),...(action==='save_catalog'?{librarySaved:true}:{})});});if(action==='play_catalog')env.mutate(()=>env.app().playTrack(trackId));}
       else if(action==='play') {const trackId=args.trackId===undefined?a.currentTrackId:id(args.trackId);if(!trackId||!a.tracks.some(t=>t.id===trackId))throw new Error('Selecciona una canción existente.');env.mutate(()=>{if(trackId!==a.currentTrackId)a.playTrack(trackId);else if(!a.isPlayingMusic)a.toggleMusicPlayback();});}
       else if(action==='pause'){if(a.isPlayingMusic)env.mutate(()=>a.toggleMusicPlayback());}
       else if(action==='stop')env.mutate(()=>a.clearCurrentTrack());
@@ -241,8 +241,8 @@ export async function runMcpTool(env:McpEnvironment,name:string,args:McpArgs):Pr
           env.mutate(()=>{a.setMusicQueue(result.queue);a.playTrack(result.id!,true);});
         }else{
           const pool=(a.queueSource?.pool||a.tracks.filter(isLibraryTrack).map(track=>track.id)).filter(trackId=>playable.has(trackId)),index=pool.indexOf(a.currentTrackId||'');
-          const previous=a.trackHistory.find(trackId=>trackId!==a.currentTrackId&&playable.has(trackId))||pool[index-1];
-          if(!previous)return {accepted:false,reason:'No hay otra canción en esta dirección.'};env.mutate(()=>a.playTrack(previous));
+          const previous=a.trackHistory.find(trackId=>trackId!==a.currentTrackId&&a.tracks.some(t=>t.id===trackId&&(!a.settings.musicOffline||canPlayOffline(t))))||pool[index-1];
+          if(!previous)return {accepted:false,reason:'No hay otra canción en esta dirección.'};env.mutate(()=>a.playTrack(previous,true));
         }
       }
       else if(action==='volume'||action==='seek') {const v=number(args.value,'value',0,1);if(action==='seek'&&(!a.currentTrackId||!a.musicDuration))throw new Error('No hay una canción preparada para buscar una posición.');env.mutate(()=>action==='volume'?a.setMusicVolume(v):a.setMusicProgress(v));}
@@ -252,7 +252,7 @@ export async function runMcpTool(env:McpEnvironment,name:string,args:McpArgs):Pr
       return {accepted:true,playing:env.app().isPlayingMusic,trackId:env.app().currentTrackId};
     }
     case 'apheka_navigate': {
-      const view=choice(args.view,['inicio','estudio','tareas','notas','musica','planificacion','cursos','ajustes'],'Vista');
+      const view=choice(args.view,['inicio','estudio','tareas','notas','musica','planificacion','cursos','ia','ajustes'],'Vista');
       if(args.courseId!==undefined) {const c=course(a,args.courseId);if(view!=='cursos')throw new Error('courseId requiere la vista cursos.');env.mutate(()=>a.navigateToCourse(c.id));}
       else {if(args.taskId!==undefined){if(view!=='tareas')throw new Error('taskId requiere la vista tareas.');await find(a,{entity:'tasks',id:args.taskId});}env.mutate(()=>{if(args.taskId)a.setFocusedTaskId(id(args.taskId));a.setNavigateTo(({notas:'apuntes',planificacion:'flujo'} as Record<string,string>)[view] as App['navigateTo']||view as App['navigateTo']);});}
       return {opened:view};
@@ -299,7 +299,7 @@ async function crud(env:McpEnvironment,name:string,args:McpArgs):Promise<unknown
   const before=new Set((await items(a,args)).map(i=>i.id));
   env.mutate(()=>{
     if(remove) {switch(entity){case 'tasks':a.deleteTask(old!.id);break;case 'notes':a.deleteNote(old!.id);break;case 'note_folders':a.deleteNoteFolder(old!.id);break;case 'courses':a.deleteCourse(old!.id);break;case 'habits':a.deleteHabit(old!.id);break;case 'planned_sessions':a.deletePlannedSession(old!.id);break;case 'playlists':a.deletePlaylist(old!.id);break;case 'artists':a.deleteArtist(old!.id);break;}return;}
-    if(!create){switch(entity){case 'tasks':a.updateTask(old!.id,data);break;case 'notes':a.updateNote(old!.id,data);break;case 'note_folders':a.updateNoteFolder(old!.id,data);break;case 'courses':a.updateCourse(old!.id,data);break;case 'habits':a.updateHabit(old!.id,data);break;case 'planned_sessions':a.updatePlannedSession(old!.id,data);break;case 'tracks':if(old!.isFavorite!==data.isFavorite)a.toggleTrackFavorite(old!.id);break;case 'playlists':a.updatePlaylist(old!.id,data);break;case 'artists':a.updateArtist(old!.id,data);break;}return;}
+    if(!create){switch(entity){case 'tasks':a.updateTask(old!.id,data);break;case 'notes':a.updateNote(old!.id,data);break;case 'note_folders':a.updateNoteFolder(old!.id,data);break;case 'courses':a.updateCourse(old!.id,data);break;case 'habits':a.updateHabit(old!.id,data);break;case 'planned_sessions':a.updatePlannedSession(old!.id,data);break;case 'playlists':a.updatePlaylist(old!.id,data);break;case 'artists':a.updateArtist(old!.id,data);break;}return;}
     switch(entity) {
       case 'tasks':a.addTask({course:'',courseColor:'#737373',priority:'none',urgent:false,important:false,...data} as Parameters<App['addTask']>[0]);break;
       case 'notes':a.addNote({course:'',courseColor:'#737373',isPinned:false,content:'',...data} as Omit<Note,'id'|'createdAt'|'updatedAt'>);break;

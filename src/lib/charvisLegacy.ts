@@ -1,6 +1,6 @@
 import {invoke,isTauri} from '@tauri-apps/api/core';
 import {CHARVIS_PROVIDERS,charvisConfig} from './charvis';
-import {get,set} from 'idb-keyval';
+import {protectedGet as get,protectedSet as set} from './charvisStorage';
 /** Move old plaintext credentials into the OS vault only after a successful write. */
 export async function migrateLegacyCharvis(){
  if(!isTauri())return;

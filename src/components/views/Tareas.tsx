@@ -123,7 +123,7 @@ function getFileIcon(type: string, size = 14) {
 function SortableTaskRow({ task, children }: { task: Task; children: (dragProps: { isDragging: boolean }) => React.ReactNode }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
   const style = { transform: isDragging ? 'none' : CSS.Translate.toString(transform), transition };
-  return <div ref={setNodeRef} style={style} {...attributes} {...listeners}>{children({ isDragging })}</div>;
+  return <div className="task-sortable-row" ref={setNodeRef} style={style} {...attributes} {...listeners}>{children({ isDragging })}</div>;
 }
 
 function DraggableCalendarTask({ id, children }: { id: string; children: (props: { attributes: any; listeners: any; setNodeRef: any; isDragging: boolean; transform: any }) => React.ReactNode }) {
@@ -684,7 +684,7 @@ export default function Tareas() {
                 <span style={{ width: 30, flexShrink: 0 }} />
               </div>
               {/* Rows */}
-              <div className="no-scrollbar" style={{ display: 'flex', flexDirection: 'column', overflowY: 'auto', flex: 1 }}>
+              <div className="no-scrollbar task-list-scroll" data-drag-active={!!activeDragId} style={{ display: 'flex', flexDirection: 'column', overflowY: 'auto', flex: 1 }}>
                 {isInitialLoading ? [1,2,3,4,5,6].map((_, i) => (
                   <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 0, padding: '0', minHeight: 50, borderBottom: '1px solid var(--border-soft)' }}>
                     <div style={{ width: 24, minHeight: 50, flexShrink: 0 }} />
@@ -811,7 +811,7 @@ export default function Tareas() {
           {viewMode==='board'&&<TaskBoard tasks={filteredTasks} assessments={assessments} onOpen={handleOpenDetail} onStatus={changeStatus} onAdd={()=>setShowNewModal(true)}/>}
           {viewMode==='urgency'&&<TaskUrgencyMatrix tasks={filteredTasks} assessments={assessments} onOpen={handleOpenDetail} onStatus={changeStatus}/>}
         </div>
-        <TaskOverview tasks={scopedTasks} assessments={assessments} courseFilter={courseFilter} onCourse={setCourseFilter} onOpen={handleOpenDetail}/>
+        <TaskOverview courses={courses} tasks={scopedTasks} assessments={assessments} courseFilter={courseFilter} onCourse={setCourseFilter} onOpen={handleOpenDetail}/>
       </div>
       {showPicker&&<TaskStudyPicker tasks={tasks} assessments={assessments} onClose={()=>setShowPicker(false)} onOpen={id=>{setShowPicker(false);handleOpenDetail(id);}} onStudy={id=>beginRecommendedStudy(id)} hasCourse={task=>courses.some(course=>course.name===task.course)} onCourse={task=>{const course=courses.find(course=>course.name===task.course);if(course){setShowPicker(false);intelligence.navigateToCourse(course.id);}}}/>}
 
@@ -857,7 +857,7 @@ export default function Tareas() {
                   )}
                 </div>
                 <div>
-                  <TaskDurationField value={taskMinutes(newTaskMinutes||60)} onChange={value=>{setNewTaskMinutes(String(value));if(newTaskSteps.length)setNewTaskSteps(distributeSubtaskMinutes(value,newTaskSteps));}}/>
+                  <TaskDurationField minimum={Math.max(1,newTaskSteps.length)} value={taskMinutes(newTaskMinutes||60)} onChange={value=>{setNewTaskMinutes(String(value));if(newTaskSteps.length)setNewTaskSteps(distributeSubtaskMinutes(value,newTaskSteps));}}/>
                 </div>
               </div>
               {(Number(newTaskMinutes)>120||newTaskSteps.length>0)&&<section className="task-step-planner" aria-label="Dividir tarea en subtareas"><header><span>Subtareas{Number(newTaskMinutes)>120?' · bloques de hasta 120 min':''}</span>{Number(newTaskMinutes)>120&&<button type="button" className="btn-secondary" onClick={()=>setNewTaskSteps(suggestTaskSteps(Number(newTaskMinutes),(document.getElementById('new-task-title') as HTMLInputElement)?.value||'',newTaskSteps))}>Dividir en subtareas</button>}</header>{newTaskSteps.map((sub,index)=><div className="task-draft-step" key={sub.id}><span>{index+1}</span><input aria-label={'Subtarea propuesta '+(index+1)} placeholder="Nombre de la subtarea" value={sub.title} onChange={event=>setNewTaskSteps(steps=>steps.map(s=>s.id===sub.id?{...s,title:event.target.value}:s))}/><label><input key={sub.estimatedMinutes} type="number" min={1} max={120} defaultValue={sub.estimatedMinutes||25} aria-label={'Minutos de subtarea propuesta '+(index+1)} onBlur={event=>{const value=Math.max(1,Math.min(120,Math.round(Number(event.target.value)||25)));event.target.value=String(value);const steps=newTaskSteps.map(s=>s.id===sub.id?{...s,estimatedMinutes:value}:s);setNewTaskSteps(steps);setNewTaskMinutes(String(steps.reduce((sum,s)=>sum+(s.estimatedMinutes||25),0)));}}/>min</label><button type="button" aria-label={'Quitar subtarea propuesta '+(index+1)} onClick={()=>{const steps=newTaskSteps.filter(s=>s.id!==sub.id);setNewTaskSteps(steps);if(steps.length)setNewTaskMinutes(String(steps.reduce((sum,s)=>sum+(s.estimatedMinutes||25),0)));}}><X size={13}/></button></div>)}</section>}
@@ -996,7 +996,7 @@ export default function Tareas() {
                         {hasTime?<TimeControl label="Hora límite de la tarea" value={timeVal} onChange={time=>updateTask(selectedTask.id,{dueDate:time?dateVal+'T'+time:dateVal})}/>:<span className="task-time-empty">{dateVal?'Sin hora':'Elige una fecha'}</span>}
                       </div>
                       {/* Estado (vence en / atrasado) — chip aparte */}
-                      <div className="task-property task-study-duration" data-label="Estudio"><TaskDurationField compact value={taskMinutes(selectedTask.estimatedMinutes)} onChange={estimatedMinutes=>updateTask(selectedTask.id,{estimatedMinutes,...(estimatedMinutes>120?{subtasks:suggestTaskSteps(estimatedMinutes,selectedTask.title,selectedTask.subtasks)}:selectedTask.subtasks.length?{subtasks:distributeSubtaskMinutes(estimatedMinutes,selectedTask.subtasks)}:{})})}/></div>
+                      <div className="task-property task-study-duration" data-label="Estudio"><TaskDurationField compact minimum={Math.max(1,selectedTask.subtasks.length)} value={taskMinutes(selectedTask.estimatedMinutes)} onChange={estimatedMinutes=>updateTask(selectedTask.id,{estimatedMinutes,...(estimatedMinutes>120?{subtasks:suggestTaskSteps(estimatedMinutes,selectedTask.title,selectedTask.subtasks)}:selectedTask.subtasks.length?{subtasks:distributeSubtaskMinutes(estimatedMinutes,selectedTask.subtasks)}:{})})}/></div>
                       {tr && (
                         <div className="task-deadline-status" style={{ ...pillBase, gap: 6, height: 30, padding: '0 11px', background: tr.overdue ? 'rgba(239,68,68,0.08)' : tr.urgent ? 'rgba(245,158,11,0.08)' : 'var(--bg-elevated)', border: `1px solid ${tr.overdue ? 'rgba(239,68,68,0.3)' : tr.urgent ? 'rgba(245,158,11,0.3)' : 'var(--border-soft)'}` }}>
                           {tr.overdue && <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#EF4444', flexShrink: 0, boxShadow: '0 0 6px rgba(239,68,68,0.5)' }} />}

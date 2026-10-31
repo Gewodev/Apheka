@@ -673,7 +673,7 @@ export default function Inicio() {
                           background: `${ev.color}0a`, border: `1px solid ${ev.color}30`,
                           transition: 'all 200ms ease', cursor: 'pointer',
                         }}
-                          onClick={() => { setNavigateTo('flujo'); }}
+                          onClick={() => {sessionStorage.setItem('apheka_planner_focus_date',ev.date);setFocusedEventId(ev.id);setNavigateTo('flujo');}}
                           onMouseEnter={e => { e.currentTarget.style.borderColor = `${ev.color}60`; e.currentTarget.style.background = `${ev.color}14`; }}
                           onMouseLeave={e => { e.currentTarget.style.borderColor = `${ev.color}30`; e.currentTarget.style.background = `${ev.color}0a`; }}>
                           <span style={{ width: 28, height: 28, borderRadius: 8, background: `${ev.color}16`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -747,7 +747,7 @@ export default function Inicio() {
                           background: `${ev.color}0a`, border: `1px solid ${ev.color}30`,
                           transition: 'all 200ms ease', cursor: 'pointer',
                         }}
-                          onClick={() => { setNavigateTo('flujo'); }}
+                          onClick={() => {sessionStorage.setItem('apheka_planner_focus_date',ev.date);setFocusedEventId(ev.id);setNavigateTo('flujo');}}
                           onMouseEnter={e => { e.currentTarget.style.borderColor = `${ev.color}60`; e.currentTarget.style.background = `${ev.color}14`; }}
                           onMouseLeave={e => { e.currentTarget.style.borderColor = `${ev.color}30`; e.currentTarget.style.background = `${ev.color}0a`; }}>
                           <span style={{ width: 30, height: 30, borderRadius: 9, background: `${ev.color}16`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>

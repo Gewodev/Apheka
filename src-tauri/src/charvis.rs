@@ -42,7 +42,7 @@ fn payload_valid(operation:&str,payload:&Value)->Result<(),String>{
    let bytes=audio.ok_or("No hay audio para transcribir.")?;if bytes.is_empty()||bytes.len()>20*1024*1024{return Err("El audio debe ocupar como máximo 20 MB.".into());}
    let kind=mime.as_deref().unwrap_or("audio/webm").split(';').next().unwrap_or("audio/webm");let ext=match kind{"audio/webm"|"video/webm"=>"webm","audio/mp4"|"audio/x-m4a"|"video/mp4"=>"mp4","audio/mpeg"=>"mp3","audio/wav"|"audio/x-wav"=>"wav","audio/ogg"=>"ogg",_=>return Err("Formato de audio no admitido. Usa WebM, MP3, M4A, WAV u OGG.".into())};
    let file=reqwest::multipart::Part::bytes(bytes).file_name(format!("audio.{ext}")).mime_str(kind).map_err(|_|"Audio no válido.")?;
-   let model=if provider=="groq"{"whisper-large-v3-turbo"}else{"whisper-1"};let form=reqwest::multipart::Form::new().part("file",file).text("model",model).text("response_format","json");req=req.multipart(form);
+   let model=if provider=="groq"{"whisper-large-v3-turbo"}else{"whisper-1"};let mut form=reqwest::multipart::Form::new().part("file",file).text("model",model).text("response_format","json");if let Some(prompt)=payload["prompt"].as_str(){form=form.text("prompt",prompt.chars().take(800).collect::<String>());}req=req.multipart(form);
   }else if operation=="chat"{req=req.json(&payload);}else{req=req.timeout(Duration::from_secs(15));}
   bounded(req.send().await.map_err(|error|if error.is_timeout(){"La consulta agotó el tiempo de espera. Puedes volver a enviarla."}else{"No se pudo conectar por HTTPS con el proveedor."})?).await
  };

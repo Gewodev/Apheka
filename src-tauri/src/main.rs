@@ -2,6 +2,9 @@
 mod music_network;
 mod jev;
 mod charvis;
+mod charvis_web;
+mod charvis_artifacts;
+mod charvis_vault;
 mod media_source;
 mod youtube_identity;
 
@@ -784,6 +787,7 @@ fn main() {
         .manage(music_network::MusicNetwork::default())
         .manage(jev::JevState::default())
         .manage(charvis::CharvisState::default())
+        .manage(charvis_web::WebState::default())
         .manage(mcp::McpState::default())
         .manage(catalog_download::CatalogDownloads::default())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -809,6 +813,9 @@ fn main() {
             music_network::music_catalog_request, music_network::cancel_music_catalog_request,
             jev::jev_status, jev::jev_connect, jev::jev_disconnect, jev::jev_decide,
             charvis::charvis_credential, charvis::charvis_request, charvis::charvis_cancel,
+            charvis_web::charvis_web_request, charvis_web::charvis_web_cancel,
+            charvis_artifacts::charvis_create_artifact, charvis_artifacts::charvis_artifact_bytes,
+            charvis_vault::charvis_vault,
             catalog_download::download_catalog_track, catalog_download::cancel_catalog_download, catalog_download::catalog_download_usage,
             mcp::mcp_status, mcp::mcp_start, mcp::mcp_stop, mcp::mcp_register,
             mcp::mcp_connection, mcp::mcp_rotate, mcp::mcp_claim, mcp::mcp_resolve,

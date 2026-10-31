@@ -37,6 +37,7 @@ import LateralPanel, { SelectedItem } from './planificacion/LateralPanel';
 import { fuzzyMatch } from '../../lib/fuzzy';
 import { safeSet } from '../../lib/safeStorage';
 import { loadPlanner as loadStore, savePlanner as saveStore } from '../../lib/plannerStore';
+import {holdAmbientMotion} from '../../lib/ambientMotion';
 import { clearFeaturedEvent } from '../../lib/featuredEvent';
 
 const H_START = 0;
@@ -182,6 +183,7 @@ export default function Planificacion() {
   const [planOccurrenceDate, setPlanOccurrenceDate] = useState<string | null>(null);
   const [planScope, setPlanScope] = useState<'all' | 'one'>('all');
   const [confirmDeleteSession, setConfirmDeleteSession] = useState(false);
+  useEffect(()=>{if(selectedItem||showEventModal||showPlanModal)return holdAmbientMotion();},[!!selectedItem,showEventModal,showPlanModal]);
   useEffect(()=>{if(!showPlanModal)return;const dismiss=(event:KeyboardEvent)=>{if(event.key==='Escape')setShowPlanModal(false);};document.addEventListener('keydown',dismiss);return()=>document.removeEventListener('keydown',dismiss);},[showPlanModal]);
 
   const allCourseGroups = useMemo(() => (courses || []).flatMap(c => (c.groups || []).map(g => ({ ...g, courseId: c.id }))), [courses]);
@@ -313,13 +315,14 @@ export default function Planificacion() {
   }, [planSyncTick, planEvents, planSyncImports]);
 
   useEffect(() => {
-    if (!focusedEventId || events.length === 0) return;
-    const ev = events.find(e => e.id === focusedEventId);
-    if (ev) {
-      setSelectedItem({ type: 'event', event: ev });
-    }
-    setFocusedEventId(null);
-  }, [focusedEventId, events]);
+    if (!focusedEventId) return;
+    const session=plannedSessions.find(s=>s.id===focusedEventId),event=events.find(e=>e.id===focusedEventId);
+    if(!session&&!event)return;
+    const occurrence=sessionStorage.getItem('apheka_planner_focus_date');sessionStorage.removeItem('apheka_planner_focus_date');
+    const iso=occurrence&&/^\d{4}-\d{2}-\d{2}$/.test(occurrence)?occurrence:(session?.date||event?.date);
+    if(iso){setNavDate(new Date(iso+'T12:00:00'));if(session)setPlanOccurrenceDate(iso);else setOccurrenceDate(iso);}
+    setSelectedItem(session?{type:'plansession',session}:{type:'event',event:event!});setFocusedEventId(null);
+  },[focusedEventId,events,plannedSessions]);
   useEffect(() => {
     if (!loadedRef.current) return; // nada se guarda antes de la primera carga
     void saveStore(events, classes).catch(() => {
@@ -327,6 +330,8 @@ export default function Planificacion() {
     });
   }, [events, classes]);
 
+  const dayCache=useMemo(()=>new Map<string,any[]>(),[events,classes,plannedSessions,studySessions]);
+  const studyDates=useMemo(()=>studySessions.flatMap(s=>{if(!s.startedAt||!Number.isFinite(Date.parse(s.startedAt)))return [];const start=format(new Date(s.startedAt),'yyyy-MM-dd'),end=s.endedAt&&Number.isFinite(Date.parse(s.endedAt))?format(new Date(s.endedAt),'yyyy-MM-dd'):start;return [{s,start,end}];}),[studySessions]);
   const weekStart = startOfWeek(navDate, { weekStartsOn: 1 });
   const weekDays  = eachDayOfInterval({ start: weekStart, end: addDays(weekStart, 6) });
   const monthStart = startOfMonth(navDate);
@@ -375,7 +380,7 @@ export default function Planificacion() {
   }, [planView, navDate, weekDays]);
 
   function getEventsForDate(iso: string): PlanEvent[] {
-    return events.filter(e => {
+    const key='events:'+iso;if(dayCache.has(key))return dayCache.get(key) as PlanEvent[];const result=events.filter(e => {
       // Excluded occurrence (edited as "only this event")
       if (e.exceptions && e.exceptions.includes(iso)) return false;
       // Check repeat bounds
@@ -399,7 +404,7 @@ export default function Planificacion() {
     }).map(e => {
       const ov = e.occurrenceOverrides?.[iso];
       return ov ? { ...e, ...ov } : e;
-    });
+    });dayCache.set(key,result);return result;
   }
 
   function getTimedEventsForDate(iso: string): PlanEvent[] { return getEventsForDate(iso).filter(e => !e.allDay); }
@@ -412,21 +417,10 @@ export default function Planificacion() {
     return !isNaN(t);
   }
 
-  function getStudySessionsForDate(iso: string) {
-    return studySessions.filter(s => {
-      if (!isValidDateStr(s.startedAt)) return false;
-      const sDate = format(new Date(s.startedAt), 'yyyy-MM-dd');
-      if (sDate === iso) return true;
-      if (isValidDateStr(s.endedAt)) {
-        const eDate = format(new Date(s.endedAt), 'yyyy-MM-dd');
-        return sDate <= iso && eDate >= iso;
-      }
-      return false;
-    });
-  }
+  function getStudySessionsForDate(iso:string){const key='study:'+iso;if(dayCache.has(key))return dayCache.get(key) as typeof studySessions;const result=studyDates.filter(row=>row.start<=iso&&row.end>=iso).map(row=>row.s);dayCache.set(key,result);return result;}
 
   function getPlannedSessionsForDate(iso: string) {
-    return (plannedSessions || []).filter(s => {
+    const key='planned:'+iso;if(dayCache.has(key))return dayCache.get(key) as typeof plannedSessions;const result=(plannedSessions || []).filter(s => {
       if (s.exceptions && s.exceptions.includes(iso)) return false;
       if (s.repeatUntil && isBefore(new Date(s.repeatUntil + 'T23:59:59'), new Date(iso + 'T00:00:00'))) return false;
       if (s.date === iso) return true;
@@ -443,7 +437,7 @@ export default function Planificacion() {
         return s.repeatDays.includes(mappedDay) && !isBefore(tgt, orig);
       }
       return false;
-    });
+    });dayCache.set(key,result);return result;
   }
 
   /* Distribuye bloques de tiempo (sesiones registradas + planificadas) en

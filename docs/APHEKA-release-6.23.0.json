@@ -1,0 +1,343 @@
+{
+  "version": "6.23.0",
+  "date": "2026-10-31",
+  "baseCommit": "c0967ae",
+  "status": "validated_installer_built",
+  "frontend": {
+    "command": "pnpm run build",
+    "exitCode": 0,
+    "viteSeconds": 36.88,
+    "mainChunkKB": 504.36,
+    "mainChunkGzipKB": 160.25,
+    "log": "release/frontend-6.23.0.log",
+    "warnings": [
+      "pre-existing eval warning in file-type/audio metadata dependency",
+      "mixed static/dynamic imports and empty react-vendor chunk"
+    ]
+  },
+  "native": {
+    "command": "cargo test --manifest-path src-tauri/Cargo.toml -- --nocapture",
+    "passed": 33,
+    "failed": 0,
+    "ignored": 1,
+    "livePublicHttps": "passed separately earlier in this session"
+  },
+  "checksPassed": [
+    "chat permissions/read-before-write/deletion cancellation",
+    "encrypted preferences/history/attachments and reload",
+    "web source deduplication/read status/Wikipedia exclusion with controlled transport",
+    "projects, direct files, nested dialogs, unlink-only and explicit course deletion with backup",
+    "safe Markdown/LaTeX/Unicode",
+    "quotes, branch-on-edit preserving the original, recent files and preview tabs",
+    "actual DOCX/XLSX/PPTX extraction, independent Office package verification and byte-identical exports",
+    "PDF thumbnail, page navigation and one document worker",
+    "native bounded DOCX/XLSX/PPTX/SVG generation and SVG injection rejection",
+    "microphone pause/resume, level meter, stop/final transcription and cancellation with controlled capture/ASR",
+    "100 music cycles with full scoped membership, unsaved playlist members, offline/online, repeat-one/all/none",
+    "9/10 library page ranges, playlist mosaic/custom cover, artist identity and song save with controlled catalog",
+    "last song/progress/manual queue after complete browser restart",
+    "per-subtask custom durations, dynamic total, arrow stepping while typing and real study links",
+    "150-row list drag/drop, final-row reveal/open and current course colors",
+    "notes borders/no overlap, linked task and source note navigation",
+    "course session preview, actual recorded study, recurrence, edit/completion/cancel-delete, reduced motion and narrow layouts",
+    "Home opens exact study session, planner day 139 ms, no idle long task in 2.2 s with 150 tasks / 250 sessions",
+    "10 application views without runtime errors/horizontal overflow"
+  ],
+  "installer": {
+    "built": true,
+    "path": "release/apheka_FINAL.exe",
+    "version": "6.23.0",
+    "bytes": 80460775,
+    "sha256": "CDBBDD77202C4FCB600F93AEF742654E865A975D71A2B5075E210CAA398D21F1",
+    "manifest": "release/apheka_FINAL.json"
+  },
+  "unverified": [
+    "live model/provider account",
+    "live ASR provider account",
+    "Jev without a supplied API key",
+    "external Codex MCP connection: no callable apheka_describe/apheka_overview in this runtime",
+    "native Explorer action on the installed 6.23 application; installer not generated"
+  ],
+  "artifacts": {
+    "gallery": "release/qa-623-gallery.html",
+    "sectionSamples": "release/qa-623-sections.json",
+    "idleAndScroll": "release/qa-623-idle-performance.json",
+    "taskScrollAfter": "release/qa-623-task-scroll-after.json",
+    "musicClock": "release/music-performance-621.json"
+  },
+  "caveat": "Controlled transport fixtures verify routing/UI contracts; they do not establish playback rights, catalog completeness, provider availability, exact lyric timing for every recording, laptop power/temperature, or zero lag on every device.",
+  "sectionSamples": [
+    {
+      "view": "inicio",
+      "performance": {
+        "idleSampleMs": 1212,
+        "idleLongTasks": 0,
+        "scrollLongTasks": 0,
+        "scrollFrames": 0,
+        "scrollFrameP95Ms": null,
+        "longestTaskMs": 0,
+        "heapMiB": 11
+      }
+    },
+    {
+      "view": "estudio",
+      "performance": {
+        "idleSampleMs": 1213,
+        "idleLongTasks": 0,
+        "scrollLongTasks": 0,
+        "scrollFrames": 0,
+        "scrollFrameP95Ms": null,
+        "longestTaskMs": 0,
+        "heapMiB": 15
+      }
+    },
+    {
+      "view": "tareas",
+      "performance": {
+        "idleSampleMs": 1204,
+        "idleLongTasks": 0,
+        "scrollLongTasks": 0,
+        "scrollFrames": 0,
+        "scrollFrameP95Ms": null,
+        "longestTaskMs": 0,
+        "heapMiB": 11
+      }
+    },
+    {
+      "view": "notas",
+      "performance": {
+        "idleSampleMs": 1215,
+        "idleLongTasks": 0,
+        "scrollLongTasks": 0,
+        "scrollFrames": 0,
+        "scrollFrameP95Ms": null,
+        "longestTaskMs": 0,
+        "heapMiB": 11
+      }
+    },
+    {
+      "view": "musica",
+      "performance": {
+        "idleSampleMs": 1210,
+        "idleLongTasks": 0,
+        "scrollLongTasks": 0,
+        "scrollFrames": 0,
+        "scrollFrameP95Ms": null,
+        "longestTaskMs": 0,
+        "heapMiB": 10
+      }
+    },
+    {
+      "view": "planificacion",
+      "performance": {
+        "idleSampleMs": 1204,
+        "idleLongTasks": 0,
+        "scrollLongTasks": 0,
+        "scrollFrames": 0,
+        "scrollFrameP95Ms": null,
+        "longestTaskMs": 0,
+        "heapMiB": 12
+      }
+    },
+    {
+      "view": "cursos",
+      "performance": {
+        "idleSampleMs": 1215,
+        "idleLongTasks": 0,
+        "scrollLongTasks": 0,
+        "scrollFrames": 0,
+        "scrollFrameP95Ms": null,
+        "longestTaskMs": 0,
+        "heapMiB": 10
+      }
+    },
+    {
+      "view": "curso_detalle",
+      "performance": {
+        "idleSampleMs": 1211,
+        "idleLongTasks": 0,
+        "scrollLongTasks": 0,
+        "scrollFrames": 0,
+        "scrollFrameP95Ms": null,
+        "longestTaskMs": 0,
+        "heapMiB": 15
+      }
+    },
+    {
+      "view": "ia",
+      "chatHeight": 944,
+      "nav": []
+    },
+    {
+      "view": "ia",
+      "performance": {
+        "idleSampleMs": 1212,
+        "idleLongTasks": 0,
+        "scrollLongTasks": 0,
+        "scrollFrames": 0,
+        "scrollFrameP95Ms": null,
+        "longestTaskMs": 0,
+        "heapMiB": 11
+      }
+    },
+    {
+      "view": "ajustes",
+      "performance": {
+        "idleSampleMs": 1209,
+        "idleLongTasks": 0,
+        "scrollLongTasks": 0,
+        "scrollFrames": 36,
+        "scrollFrameP95Ms": 60.5,
+        "longestTaskMs": 0,
+        "heapMiB": 11
+      }
+    }
+  ],
+  "idleAndScroll": {
+    "environment": "isolated headless Edge; production frontend; 150 tasks / 250 sessions; external network disabled; renderer CPU time, not laptop power/temperature",
+    "report": [
+      {
+        "view": "inicio",
+        "scrollFrames": 0,
+        "idleSampleMs": 2200,
+        "rendererTaskMs": 10,
+        "scriptMs": 3,
+        "layoutMs": 1,
+        "heapMiB": 9,
+        "domNodes": 700
+      },
+      {
+        "view": "estudio",
+        "scrollFrames": 0,
+        "idleSampleMs": 2200,
+        "rendererTaskMs": 40,
+        "scriptMs": 10,
+        "layoutMs": 1,
+        "heapMiB": 13,
+        "domNodes": 1151
+      },
+      {
+        "view": "tareas",
+        "scrollFrames": 45,
+        "scrollFrameP95Ms": 40.1,
+        "scrollFrameMaxMs": 108.1,
+        "idleSampleMs": 2200,
+        "rendererTaskMs": 27,
+        "scriptMs": 2,
+        "layoutMs": 1,
+        "heapMiB": 13,
+        "domNodes": 4154
+      },
+      {
+        "view": "notas",
+        "scrollFrames": 0,
+        "idleSampleMs": 2200,
+        "rendererTaskMs": 8,
+        "scriptMs": 3,
+        "layoutMs": 1,
+        "heapMiB": 9,
+        "domNodes": 485
+      },
+      {
+        "view": "musica",
+        "scrollFrames": 0,
+        "idleSampleMs": 2200,
+        "rendererTaskMs": 11,
+        "scriptMs": 3,
+        "layoutMs": 2,
+        "heapMiB": 8,
+        "domNodes": 561
+      },
+      {
+        "view": "planificacion",
+        "scrollFrames": 45,
+        "scrollFrameP95Ms": 30.5,
+        "scrollFrameMaxMs": 57.5,
+        "idleSampleMs": 2200,
+        "rendererTaskMs": 13,
+        "scriptMs": 2,
+        "layoutMs": 1,
+        "heapMiB": 10,
+        "domNodes": 1512
+      },
+      {
+        "view": "cursos",
+        "scrollFrames": 0,
+        "idleSampleMs": 2200,
+        "rendererTaskMs": 12,
+        "scriptMs": 6,
+        "layoutMs": 1,
+        "heapMiB": 9,
+        "domNodes": 415
+      },
+      {
+        "view": "ia",
+        "scrollFrames": 0,
+        "idleSampleMs": 2200,
+        "rendererTaskMs": 3,
+        "scriptMs": 1,
+        "layoutMs": 0,
+        "heapMiB": 9,
+        "domNodes": 859
+      },
+      {
+        "view": "ajustes",
+        "scrollFrames": 0,
+        "idleSampleMs": 2200,
+        "rendererTaskMs": 11,
+        "scriptMs": 3,
+        "layoutMs": 2,
+        "heapMiB": 8,
+        "domNodes": 495
+      }
+    ]
+  },
+  "taskScrollAfter": {
+    "environment": "isolated headless Edge; production frontend; 150 tasks / 250 sessions; external network disabled; renderer CPU time, not laptop power/temperature",
+    "report": [
+      {
+        "view": "tareas",
+        "scrollFrames": 45,
+        "scrollFrameP95Ms": 44.9,
+        "scrollFrameMaxMs": 55.8,
+        "idleSampleMs": 2200,
+        "rendererTaskMs": 18,
+        "scriptMs": 2,
+        "layoutMs": 1,
+        "heapMiB": 13,
+        "domNodes": 4154
+      },
+      {
+        "view": "tareas",
+        "scrollFrames": 45,
+        "scrollFrameP95Ms": 9.4,
+        "scrollFrameMaxMs": 10.4,
+        "idleSampleMs": 2200,
+        "rendererTaskMs": 20,
+        "scriptMs": 2,
+        "layoutMs": 2,
+        "heapMiB": 13,
+        "domNodes": 4153
+      },
+      {
+        "view": "tareas",
+        "scrollFrames": 45,
+        "scrollFrameP95Ms": 9.9,
+        "scrollFrameMaxMs": 11.2,
+        "idleSampleMs": 2200,
+        "rendererTaskMs": 29,
+        "scriptMs": 4,
+        "layoutMs": 2,
+        "heapMiB": 13,
+        "domNodes": 4154
+      }
+    ]
+  },
+  "musicClock": {
+    "sampleMilliseconds": 5000,
+    "youtubeClockReads": 25,
+    "blurredImages": 0,
+    "animations": 0,
+    "environment": "isolated Edge with controlled provider and 24 synthetic songs"
+  }
+}

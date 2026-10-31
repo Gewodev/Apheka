@@ -1,0 +1,39 @@
+import {del} from 'idb-keyval';
+import {protectedGet as get,protectedSet as set} from './charvisStorage';
+import type {ResearchSource} from './webResearch';
+import type {ChatMessage,CharvisAttachment} from './charvis';
+export type ChatEntry={id:string;message:ChatMessage;html?:string;attachments?:CharvisAttachment[];displayText?:string;at?:number;quote?:{text:string;author:string}};
+export type ChatThread={id:string;title:string;projectId?:string;createdAt:number;updatedAt:number;preview?:string;savedSources?:ResearchSource[];savedAttachments?:CharvisAttachment[];attachmentIndex?:Array<{id:string;name:string;kind?:CharvisAttachment['kind'];readStatus?:string}>;sourceIndex?:ResearchSource[]};
+export type ChatProject={id:string;name:string;courseId?:string;createdAt:number;icon?:'folder'|'book'|'globe';resourceIds?:string[];color?:string;materials?:CharvisAttachment[]};
+export const PROJECT_COLORS=['#7F9C92','#8D9FC1','#B198B9','#BF9D7A','#A6AF7F','#A78E95'];
+export function projectColor(project:ChatProject){let hash=0;for(const char of project.id)hash=(hash*31+char.charCodeAt(0))>>>0;return project.color||PROJECT_COLORS[hash%PROJECT_COLORS.length];}
+type Index={version:1;threads:ChatThread[];projects:ChatProject[]};
+type FileReference=Pick<CharvisAttachment,'id'|'name'|'kind'|'readStatus'>&{__charvisStoredAttachment:1};
+const storedFiles=new WeakMap<CharvisAttachment,Promise<FileReference>>();
+function packFile(file:CharvisAttachment):Promise<FileReference>{let task=storedFiles.get(file);if(!task){task=set('apheka_charvis_file_'+file.id,file).then(()=>({__charvisStoredAttachment:1 as const,id:file.id,name:file.name,kind:file.kind,readStatus:file.readStatus}));storedFiles.set(file,task);void task.catch(()=>storedFiles.delete(file));}return task;}
+async function unpackFile(file:CharvisAttachment|FileReference):Promise<CharvisAttachment>{if('__charvisStoredAttachment'in file){let value:CharvisAttachment|undefined;try{value=await get<CharvisAttachment>('apheka_charvis_file_'+file.id);}catch{/* Preserve unreadable ciphertext and keep the rest of the workspace usable. */}value=value||{id:file.id,name:file.name,kind:file.kind,readStatus:'No se pudo recuperar este adjunto. El archivo almacenado se conserva; vuelve a abrir el chat o adjunta el original.'};storedFiles.set(value,Promise.resolve(file));return value;}return file;}
+async function packIndex(value:Index){return {...value,threads:await Promise.all(value.threads.map(async thread=>({...thread,savedAttachments:thread.savedAttachments?await Promise.all(thread.savedAttachments.map(packFile)):undefined}))),projects:await Promise.all(value.projects.map(async project=>({...project,materials:project.materials?await Promise.all(project.materials.map(packFile)):undefined})))};}
+async function unpackIndex(value:Index):Promise<Index>{return {...value,threads:await Promise.all(value.threads.map(async thread=>({...thread,savedAttachments:thread.savedAttachments?await Promise.all(thread.savedAttachments.map(unpackFile)):undefined}))),projects:await Promise.all(value.projects.map(async project=>({...project,materials:project.materials?await Promise.all(project.materials.map(unpackFile)):undefined})))};}
+const INDEX='apheka_charvis_workspace_v2',threadKey=(id:string)=>'apheka_charvis_thread_'+id;
+let index:Index={version:1,threads:[],projects:[]},loaded:Promise<Index>|undefined,queue=Promise.resolve();
+export async function loadChatWorkspace(){if(!loaded)loaded=get<Index>(INDEX).then(async saved=>{if(saved?.version===1)index=await unpackIndex({version:1,threads:Array.isArray(saved.threads)?saved.threads:[],projects:Array.isArray(saved.projects)?saved.projects:[]});return index;});await loaded;return index;}
+function update(action:()=>Promise<void>){queue=queue.catch(()=>{}).then(action);return queue;}
+export async function saveChatThread(thread:ChatThread,entries:ChatEntry[]){await loadChatWorkspace();return update(async()=>{
+ const messages=await Promise.all(entries.map(async e=>({id:e.id,message:e.message,attachments:e.attachments?await Promise.all(e.attachments.map(packFile)):undefined,displayText:e.displayText,at:e.at,quote:e.quote})));await set(threadKey(thread.id),messages);
+ const next={...index,threads:[thread,...index.threads.filter(t=>t.id!==thread.id)].sort((a,b)=>b.updatedAt-a.updatedAt)};await set(INDEX,await packIndex(next));index=next;return;
+ });}
+export async function readChatThread(id:string){await queue.catch(()=>{});const entries=await get<ChatEntry[]>(threadKey(id))||[];return Promise.all(entries.map(async entry=>({...entry,attachments:entry.attachments?await Promise.all(entry.attachments.map(unpackFile)):undefined})));}
+export async function saveChatIndex(threads:ChatThread[],projects:ChatProject[]){await loadChatWorkspace();return update(async()=>{const next:Index={version:1,threads,projects};await set(INDEX,await packIndex(next));index=next;});}
+export async function addWorkspaceProject(project:ChatProject){await loadChatWorkspace();await update(async()=>{const next={...index,projects:[...index.projects.filter(item=>item.id!==project.id),project]};await set(INDEX,await packIndex(next));index=next;});return index.projects;}
+export async function renameWorkspaceThread(id:string,title:string,fallback?:ChatThread){await loadChatWorkspace();await update(async()=>{const old=index.threads.find(thread=>thread.id===id)||fallback;if(!old)return;const next={...index,threads:index.threads.some(thread=>thread.id===id)?index.threads.map(thread=>thread.id===id?{...thread,title}:thread):[{...old,title},...index.threads]};await set(INDEX,await packIndex(next));index=next;});return index.threads;}
+export async function patchChatProject(id:string,patch:Partial<Pick<ChatProject,'name'|'color'|'icon'|'resourceIds'|'materials'>>){await loadChatWorkspace();await update(async()=>{const next={...index,projects:index.projects.map(project=>project.id===id?{...project,...patch}:project)};await set(INDEX,await packIndex(next));index=next;});return index.projects;}
+export async function appendProjectFiles(id:string,files:CharvisAttachment[]){await loadChatWorkspace();await update(async()=>{const project=index.projects.find(item=>item.id===id);if(!project)throw Error('El proyecto ya no existe.');const materials=[...new Map([...(project.materials||[]),...files].map(file=>[file.id,file])).values()];if(materials.length>20)throw Error('El proyecto admite 20 archivos propios. Los materiales existentes se conservan.');const next={...index,projects:index.projects.map(item=>item.id===id?{...item,materials}:item)};await set(INDEX,await packIndex(next));index=next;});return index.projects;}
+export async function deleteChatThread(id:string){await loadChatWorkspace();return update(async()=>{const next={...index,threads:index.threads.filter(t=>t.id!==id)};await set(INDEX,await packIndex(next));index=next;await del(threadKey(id));});}
+export function chatGreeting(hour:number,pending:number,project?:string,name?:string,seed=''){
+ const phrases=hour<6?['Una idea, con calma.','¿Qué quieres explorar?']:hour<12?['Demos forma a tu mañana.','Una buena idea para empezar.','¿Por dónde empezamos hoy?']:hour<18?['Una idea clara para esta tarde.','¿Qué quieres resolver hoy?','Sigamos con lo que importa.']:['Cierra el día con una idea clara.','¿Qué trabajamos esta noche?','Un paso más, a tu ritmo.'];
+ let hash=new Date().getDate();for(const c of seed)hash=(hash*31+c.charCodeAt(0))>>>0;
+ if(project)return [`¿Qué trabajamos en ${project}?`,`Volvamos a ${project}.`][hash%2];
+ if(name&&hash%3===0)return `${hour<12?'Buenos días':hour<19?'Buenas tardes':'Buenas noches'}, ${name}.`;
+ if(pending>0&&hash%4===0)return 'Un siguiente paso, bien elegido.';
+ return phrases[hash%phrases.length];
+}

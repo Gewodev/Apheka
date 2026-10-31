@@ -26,6 +26,7 @@ export async function readMcpResource(item:Record<string,any>,args:McpArgs,asser
   assertActive?.();
   const name=String(item.name||''),limit=integer(args.limit,'limit',30000,1,30000),offset=integer(args.offset,'offset',0,0,10000000);
   const slice=(text:string)=>({totalCharacters:text.length,offset,text:text.slice(offset,offset+limit),nextOffset:offset+limit<text.length?offset+limit:null});
+  if(/\.(docx|xlsx|pptx)$/i.test(name)){const {readOfficeAttachment}=await import('./officeAttachments'),attachment=await readOfficeAttachment(new File([bytes],name));return {id:item.id,name,kind:'office',...slice(attachment.text||''),note:attachment.readStatus};}
   if(new TextDecoder().decode(bytes.slice(0,5))==='%PDF-') {
     const pdfjs=await import('pdfjs-dist');
     const worker=await import('pdfjs-dist/build/pdf.worker.min.mjs?url');
