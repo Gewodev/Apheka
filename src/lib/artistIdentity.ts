@@ -3,7 +3,7 @@ export const artistKey=(name:string)=>name.normalize('NFKD').replace(/\p{M}/gu,'
 export function creditedArtist(credits:string,name:string){
  const key=artistKey(name);if(!key)return false;
  const whole=artistKey(credits);if(whole===key)return true;
- return credits.split(/\s*(?:,|;|\bfeat\.?|\bft\.?|\bfeaturing\b|\bwith\b|\bx\b|&|\by\b)\s*/i).some(part=>artistKey(part)===key);
+ return credits.split(/[,;]/).some(credit=>artistKey(credit)===key||credit.split(/\s*(?:\bfeat\.?|\bft\.?|\bfeaturing\b|\bwith\b|\bcon\b|\band\b|\bx\b|&|\by\b)\s*/i).some(part=>artistKey(part)===key));
 }
 export type SavedMusicArtist={id:string;name:string;profileImage?:string;catalogId?:string;origin?:'catalog';trackIds?:string[]};
 export function pinnedArtists(artists:SavedMusicArtist[]){

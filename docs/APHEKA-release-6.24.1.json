@@ -1,0 +1,220 @@
+{
+  "version": "6.24.1",
+  "date": "2026-11-04",
+  "baseCommit": "cf5cb24",
+  "status": "validated_installer_built",
+  "frontend": {
+    "exitCode": 0,
+    "viteSeconds": 25.86,
+    "mainChunkKB": 4.04,
+    "mainChunkGzipKB": 1.61,
+    "log": "release/build-6.24.1.log"
+  },
+  "native": {
+    "passed": 37,
+    "failed": 0,
+    "ignored": 1
+  },
+  "browserChecks": {
+    "chat": {
+      "log": "release\\chat-6.24.1.log",
+      "result": "PASS 6.24 project inline composer / free-chat scope / inline rename / source groups / live stream / compact bubble / search / project instructions; controlled provider"
+    },
+    "music": {
+      "log": "release\\music-6.24.1.log",
+      "result": "PASS exact 9/10 library ranges, four-cover mosaic, custom cover, song/artist discovery, actual artist identity filter and artist/song library save; catalog transport controlled fixtures"
+    },
+    "controls": {
+      "log": "release\\controls-6.24.1.log",
+      "result": "PASS independent library queue / toggle keeps queue / only pinned deduplicated artists / collaboration membership / scoped artist loop / task panel control bounds at 420,620,1366 / direct time input / course legend toggle"
+    },
+    "continuity": {
+      "log": "release\\continuity-6.24.1.log",
+      "result": "PASS Gemini signatures across tools and encrypted reload, provider isolation, named cancelled results, response after action, honest failure/cancellation summaries; controlled provider responses"
+    },
+    "transport": {
+      "log": "release\\transport-6.24.1.log",
+      "result": "PASS rejected parameter retry only once, streaming fallback, no auth retry, exact compact audio IPC, required reasoning field, cancelled tool turn continuity; local simulated transport"
+    },
+    "visual": {
+      "log": "release\\visual-6.24.1.log",
+      "result": "PASS welcome 420/900/1440 without horizontal overflow, nine locally loaded provider logos and no floating robot"
+    },
+    "production": {
+      "log": "release\\production-6.24.1.log",
+      "result": "PASS 10 application views measured and captured, AI workspace mounted at full height, no runtime errors or horizontal document overflow; isolated sample data"
+    },
+    "voice": {
+      "log": "release\\voice-6.24.1.log",
+      "result": "PASS audio-sensitive meter, pause/resume, view continuity, one transcription after stopping, track/context cleanup and cancellation; capture and ASR transport controlled fixtures"
+    },
+    "composer": {
+      "log": "release\\composer-6.24.1.log",
+      "result": "PASS horizontal compact composer, bounded growth/shrink, IME guard, full attachment menu and one Enter send; controlled provider"
+    },
+    "retrieval": {
+      "log": "release\\retrieval-6.24.1.log",
+      "result": "PASS relevant local passages beyond initial prefix, bounded lexical retrieval, cancellation, actual request integration, project isolation, local font and hidden web toggle in established chat; controlled provider"
+    },
+    "interruption": {
+      "log": "release\\interruption-6.24.1.log",
+      "result": "PASS partial response retained and persisted after connection failure or Stop, explicit interruption labels and no automatic retry; controlled provider"
+    }
+  },
+  "productionSamples": [
+    {
+      "view": "inicio",
+      "performance": {
+        "idleSampleMs": 1212,
+        "idleLongTasks": 0,
+        "scrollLongTasks": 0,
+        "scrollFrames": 0,
+        "scrollFrameP95Ms": null,
+        "longestTaskMs": 0,
+        "heapMiB": 11
+      }
+    },
+    {
+      "view": "estudio",
+      "performance": {
+        "idleSampleMs": 1208,
+        "idleLongTasks": 0,
+        "scrollLongTasks": 0,
+        "scrollFrames": 0,
+        "scrollFrameP95Ms": null,
+        "longestTaskMs": 0,
+        "heapMiB": 15
+      }
+    },
+    {
+      "view": "tareas",
+      "performance": {
+        "idleSampleMs": 1204,
+        "idleLongTasks": 0,
+        "scrollLongTasks": 0,
+        "scrollFrames": 0,
+        "scrollFrameP95Ms": null,
+        "longestTaskMs": 0,
+        "heapMiB": 11
+      }
+    },
+    {
+      "view": "notas",
+      "performance": {
+        "idleSampleMs": 1206,
+        "idleLongTasks": 0,
+        "scrollLongTasks": 0,
+        "scrollFrames": 0,
+        "scrollFrameP95Ms": null,
+        "longestTaskMs": 0,
+        "heapMiB": 11
+      }
+    },
+    {
+      "view": "musica",
+      "performance": {
+        "idleSampleMs": 1207,
+        "idleLongTasks": 0,
+        "scrollLongTasks": 0,
+        "scrollFrames": 0,
+        "scrollFrameP95Ms": null,
+        "longestTaskMs": 0,
+        "heapMiB": 10
+      }
+    },
+    {
+      "view": "planificacion",
+      "performance": {
+        "idleSampleMs": 1207,
+        "idleLongTasks": 0,
+        "scrollLongTasks": 0,
+        "scrollFrames": 0,
+        "scrollFrameP95Ms": null,
+        "longestTaskMs": 0,
+        "heapMiB": 12
+      }
+    },
+    {
+      "view": "cursos",
+      "performance": {
+        "idleSampleMs": 1218,
+        "idleLongTasks": 0,
+        "scrollLongTasks": 0,
+        "scrollFrames": 0,
+        "scrollFrameP95Ms": null,
+        "longestTaskMs": 0,
+        "heapMiB": 10
+      }
+    },
+    {
+      "view": "curso_detalle",
+      "performance": {
+        "idleSampleMs": 1203,
+        "idleLongTasks": 0,
+        "scrollLongTasks": 0,
+        "scrollFrames": 0,
+        "scrollFrameP95Ms": null,
+        "longestTaskMs": 0,
+        "heapMiB": 15
+      }
+    },
+    {
+      "view": "ia",
+      "chatHeight": 944,
+      "nav": []
+    },
+    {
+      "view": "ia",
+      "performance": {
+        "idleSampleMs": 1216,
+        "idleLongTasks": 0,
+        "scrollLongTasks": 0,
+        "scrollFrames": 0,
+        "scrollFrameP95Ms": null,
+        "longestTaskMs": 0,
+        "heapMiB": 11
+      }
+    },
+    {
+      "view": "ajustes",
+      "performance": {
+        "idleSampleMs": 1210,
+        "idleLongTasks": 0,
+        "scrollLongTasks": 0,
+        "scrollFrames": 36,
+        "scrollFrameP95Ms": 260,
+        "longestTaskMs": 0,
+        "heapMiB": 10
+      }
+    }
+  ],
+  "sampleLimits": "Isolated small dataset; heap is browser JavaScript heap, not total app memory. Idle/scroll samples do not establish temperature, every interaction, or performance on all hardware.",
+  "providerLimits": "Controlled provider/catalog/ASR responses. No live provider account or exhaustive discography availability verified.",
+  "installer": {
+    "product": "APHEKA",
+    "version": "6.24.1",
+    "identifier": "com.owa.studio",
+    "file": "apheka_FINAL.exe",
+    "bytes": 80505622,
+    "sha256": "898B1F9966D1F7E73D8650E87067FE2D91B7D84A1398E7CC54B4676007DA93CB",
+    "modifiedAtUtc": "2026-11-04T19:28:23.1812201Z",
+    "sourceLatestEditUtc": "2026-11-04T19:16:28.5869370Z",
+    "manifestRewrittenBeforeFrontend": false,
+    "buildCommand": "pnpm tauri build --config src-tauri/tauri.prod.conf.json --bundles nsis",
+    "embeddedFrontendAssets": [
+      "assets/index-_UZWRVsH.js",
+      "assets/charts-DQ4Dkqgr.js",
+      "assets/anim-DmwEpK7h.js",
+      "assets/tauri-Du2YxjyO.js",
+      "assets/storage-DwnyWBFG.js",
+      "assets/audio-meta-CT9Hv6Ta.js",
+      "assets/date-COeAPjBE.js",
+      "assets/index-C15cWAKv.css"
+    ],
+    "legacyUpgrade": "Exact NSIS product identities and MSI upgrade GUIDs; /UPDATE preserves AppData",
+    "dataDirectory": "com.owa.studio (existing desktop data directory retained)",
+    "finishedAtUtc": "2026-11-04T19:28:25.9170074Z",
+    "sourceAndToolsUnchangedDuringBuild": true
+  },
+  "gallery": "release/qa-624-gallery.html"
+}

@@ -5,7 +5,7 @@ use std::{collections::HashMap,sync::Mutex,time::Duration};
 pub struct CharvisState{client:Result<reqwest::Client,reqwest::Error>,requests:Mutex<HashMap<String,tokio::sync::oneshot::Sender<()>>>,slots:tokio::sync::Semaphore}
 impl Default for CharvisState{fn default()->Self{Self{client:reqwest::Client::builder().https_only(true).redirect(reqwest::redirect::Policy::none()).connect_timeout(Duration::from_secs(8)).timeout(Duration::from_secs(90)).pool_idle_timeout(Duration::from_secs(90)).build(),requests:Mutex::new(HashMap::new()),slots:tokio::sync::Semaphore::new(2)}}}
 fn base(provider:&str)->Result<&'static str,String>{match provider{
- "opencode"=>Ok("https://opencode.ai/zen/v1"),"openai"=>Ok("https://api.openai.com/v1"),"gemini"=>Ok("https://generativelanguage.googleapis.com/v1beta/openai"),"anthropic"=>Ok("https://api.anthropic.com/v1"),"deepseek"=>Ok("https://api.deepseek.com"),"kimi"=>Ok("https://api.moonshot.ai/v1"),"mistral"=>Ok("https://api.mistral.ai/v1"),"groq"=>Ok("https://api.groq.com/openai/v1"),"xai"=>Ok("https://api.x.ai/v1"),_=>Err("Proveedor de Charvis no reconocido.".into())}}
+ "opencode"=>Ok("https://opencode.ai/inference/openai/v1"),"openai"=>Ok("https://api.openai.com/v1"),"gemini"=>Ok("https://generativelanguage.googleapis.com/v1beta/openai"),"anthropic"=>Ok("https://api.anthropic.com/v1"),"deepseek"=>Ok("https://api.deepseek.com"),"kimi"=>Ok("https://api.moonshot.ai/v1"),"mistral"=>Ok("https://api.mistral.ai/v1"),"groq"=>Ok("https://api.groq.com/openai/v1"),"xai"=>Ok("https://api.x.ai/v1"),_=>Err("Proveedor de Charvis no reconocido.".into())}}
 fn main_only(window:&tauri::WebviewWindow)->Result<(),String>{if window.label()=="main"{Ok(())}else{Err("Charvis solo está disponible en la ventana principal.".into())}}
 fn target(provider:&str)->Result<String,String>{base(provider)?;Ok(format!("APHEKA/Charvis/{provider}"))}
 #[cfg(windows)]fn read_key(provider:&str)->Option<String>{use windows_sys::Win32::Security::Credentials::*;let name:Vec<u16>=target(provider).ok()?.encode_utf16().chain(Some(0)).collect();let mut value=std::ptr::null_mut();unsafe{if CredReadW(name.as_ptr(),CRED_TYPE_GENERIC,0,&mut value)==0||value.is_null(){return None;}let result=if (*value).CredentialBlobSize>0&&(*value).CredentialBlobSize<=2048&&!(*value).CredentialBlob.is_null(){String::from_utf8(std::slice::from_raw_parts((*value).CredentialBlob,(*value).CredentialBlobSize as usize).to_vec()).ok()}else{None};CredFree(value.cast());result}}
@@ -57,7 +57,7 @@ fn payload_valid(operation:&str,payload:&Value)->Result<(),String>{
  let query=async{
   let _slot=state.slots.acquire().await.map_err(|_|"Charvis se cerró.")?;let client=state.client.as_ref().map_err(|_|"No se pudo preparar la conexión HTTPS.")?;
   let path=match operation.as_str(){"models"=>"models","chat"=>"chat/completions",_=>"audio/transcriptions"};
-  let mut req=if operation=="models"{client.get(format!("{endpoint}/{path}"))}else{client.post(format!("{endpoint}/{path}"))};
+  let mut req=if operation=="models"{client.get(if provider=="opencode"{"https://opencode.ai/inference/v1/models".to_owned()}else{format!("{endpoint}/{path}")})}else{client.post(format!("{endpoint}/{path}"))};
   req=req.bearer_auth(&key);if provider=="anthropic"{req=req.header("x-api-key",&key).header("anthropic-version","2023-06-01");}
   if operation=="transcribe"{
    if !matches!(provider.as_str(),"groq"|"openai"){return Err("Selecciona OpenAI o Groq para transcribir audio.".into());}

@@ -1,0 +1,5 @@
+Manrope, Latin variable subset. Distributed under SIL OFL 1.1.
+Official project: https://github.com/googlefonts/manrope
+Font source: https://fonts.gstatic.com/s/manrope/v23/xn7gYHE41ni1AdIRggexSg.woff2
+CSS source: https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap
+SHA-256: 8c2def024c1bf31aacf3624ae3c4d701269b4ec3dc765c04830839f0d36b2d9e

@@ -3,6 +3,17 @@
 
 # Summary
 
+## Sesión 2026-11-04 — APHEKA 6.24.1: continuidad Gemini/OpenCode y ajustes finales
+- Gemini: se preservan `extra_content`/firmas y metadatos opacos por proveedor en SSE, herramientas e historial cifrado; resultados cancelados con nombre; llamadas paralelas sin índice se resuelven por ID, sin adivinar fragmentos ambiguos.
+- OpenCode: rutas actuales `/inference/openai/v1/chat/completions` y `/inference/v1/models`; selección automática no prioriza Big Pickle/modelos `-free`. Se conservan errores reales de credencial, saldo y disponibilidad.
+- Charvis responde después de aplicar acciones. Ante fallo posterior, deja confirmación factual de cambios completados y conserva el error; sin reintentar escrituras. Agrupación de actividad memorizada; buscador transparente sin borde interior duplicado.
+- Música: acciones horizontales junto a portada, sin fondo y separadas del texto. Búsqueda de canciones debajo del encabezado del artista y consulta de artistas fuera de él. Catálogo por créditos y colaboraciones; continuaciones conservadas y guardado paginado con cesión del hilo, cancelación y límites explícitos. Sin corte silencioso tras dos páginas.
+- IA final: Manrope local (24 532 bytes, OFL), compositor horizontal con crecimiento hasta 176 px, web automática sin icono en chats existentes y márgenes de proyectos mayores. Recuperación léxica de hasta cuatro fragmentos de fuentes del chat/proyecto actual, con presupuesto y cancelación; prueba de aislamiento entre proyectos. Gráficas de tareas recuperan anillos gruesos y cinco cursos con Ver más/Ver menos sin filtrar.
+- Verificación nativa: 37 correctas / 0 fallidas / 1 consulta web omitida; pruebas de navegador con respuestas controladas para firmas, cifrado, acciones, buscadores, listas, colas y tareas adaptables. Sin claves de usuario utilizadas ni verificación real de todas las cuentas.
+- Build final 6.24.1: frontend 25.86 s y Rust optimizado 5 min 52 s; NSIS finalizado 2026-11-04T19:28:25Z. El empaquetador verificó versión, integridad y recursos del frontend, sin cambios de fuentes/herramientas durante el build.
+- Entrega y límites detallados en `docs/APHEKA-6.24.1.md`; metadatos definitivos del instalador en `release/apheka_FINAL.json`. Preservados cambios ajenos en extensión y `scripts/test-latex.ts`; no incluidos en el commit de esta revisión.
+
+
 ## Sesión 2026-11-04 — APHEKA 6.24.0, chat extendido, continuidad de consultas y cola independiente (instalador NSIS verificado)
 - Charvis: compositor de proyecto y chat libre separados, nombre editable en cabecera y prioridad al nombre manual, instrucciones de proyecto, búsqueda propia, fuentes por turno y panel ampliable; se retiran robot flotante, punto rojo y citas. SSE nativo con acumulación de herramientas/continuidad y transporte de audio compacto; recuperación única de parámetros expresamente rechazados por el proveedor, sin reintentar autenticación ni tiempos agotados. No hay prueba de cuenta real de IA/ASR; MCP externo sigue pendiente de describe/overview.
 - Música: solo artistas anclados del catálogo, unificación de créditos completos y colaboraciones, ampliación acotada de catálogo, asignación manual sin renombrar artistas/canciones; bucle por artista. Elegir canción no reconstruye la cola y desactivar aleatorio conserva su orden. Portada ambiental procesada una vez, en caché.
