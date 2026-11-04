@@ -1,4 +1,4 @@
-import {invoke,isTauri} from '@tauri-apps/api/core';
+import {invoke,isTauri,Channel} from '@tauri-apps/api/core';
 import {protectedGet,protectedSet} from './charvisStorage';
 import {CHARVIS_TOOLS} from './charvisCatalog';
 export const CHARVIS_PROVIDERS=[
@@ -25,20 +25,25 @@ export type ChatPart={type:'text';text:string}|{type:'image_url';image_url:{url:
 export type ToolCall={id:string;type:'function';function:{name:string;arguments:string}};
 export type ChatMessage={role:'system'|'user'|'assistant'|'tool';content:string|ChatPart[]|null;tool_calls?:ToolCall[];tool_call_id?:string;reasoning_content?:string};
 export type CharvisAttachment={id:string;name:string;text?:string;image?:string;url?:string;kind?:'file'|'image'|'link';thumbnail?:string;pdfData?:Uint8Array;binaryData?:Uint8Array;office?:{format:'docx'|'xlsx'|'pptx';spec:Record<string,any>};pages?:number;readStatus?:string;};
-export type CharvisRequest=(provider:string,operation:'models'|'chat'|'transcribe',payload:Record<string,unknown>,signal?:AbortSignal,audio?:Uint8Array,mime?:string)=>Promise<any>;
-export const requestCharvis:CharvisRequest=async(provider,operation,payload,signal,audio,mime)=>{
+export type CharvisRequest=(provider:string,operation:'models'|'chat'|'transcribe',payload:Record<string,unknown>,signal?:AbortSignal,audio?:Uint8Array,mime?:string,onText?:(text:string)=>void)=>Promise<any>;
+export const requestCharvis:CharvisRequest=async(provider,operation,payload,signal,audio,mime,onText)=>{
  if(!isTauri())throw Error('Las conexiones de Charvis se configuran en la aplicación de escritorio.');
  signal?.throwIfAborted();const requestId=crypto.randomUUID(),abort=()=>void invoke('charvis_cancel',{requestId}).catch(()=>{});
  let rejectAbort:((cause:unknown)=>void)|undefined;
  const cancel=()=>{abort();rejectAbort?.(new DOMException('Consulta cancelada','AbortError'));};
- const pending=invoke('charvis_request',{provider,operation,payload,requestId,audio:audio?Array.from(audio):undefined,mime});
+ const audioBase64=audio?await encodeAudioForIpc(audio,signal):undefined;signal?.throwIfAborted();
+ const events=new Channel<{type:string;text?:string}>();events.onmessage=event=>{if(!signal?.aborted&&event.type==='text'&&typeof event.text==='string')onText?.(event.text);};
+ let params:Record<string,unknown>=operation==='chat'?{...payload,stream:true}:payload;
+ const call=()=>invoke('charvis_request',{provider,operation,payload:params,requestId,audioBase64,mime,onEvent:events});
+ // Retry only an explicitly rejected compatibility parameter, never a timed-out call or tool action.
+ const pending=call().catch(async cause=>{const detail=String(cause);if(operation!=='chat'||!/(HTTP 400|HTTP 422)/i.test(detail))throw cause;signal?.throwIfAborted();if(/(?:unsupported|unknown|unrecognized|not supported|not permitted|not allowed)/i.test(detail)&&detail.includes('max_completion_tokens')){params={...params,max_tokens:params.max_completion_tokens};delete params.max_completion_tokens;return call();}if(/(?:unsupported|unknown|unrecognized|not supported|not permitted|not allowed)/i.test(detail)&&/\bstream\b/i.test(detail)){params={...params,stream:false};return call();}throw cause;});
  signal?.addEventListener('abort',cancel,{once:true});
  try{const value=await Promise.race([pending,new Promise<never>((_,reject)=>{rejectAbort=reject;if(signal?.aborted)cancel();})]);signal?.throwIfAborted();return value;}finally{signal?.removeEventListener('abort',cancel);}
 };
 export async function charvisModels(provider:string,request=requestCharvis){const response=await request(provider,'models',{});const models=(Array.isArray(response.data)?response.data:[]).filter((model:any)=>model?.capabilities?.completion_chat!==false).map((m:any)=>m.id).filter((id:unknown):id is string=>typeof id==='string'&&id.length>0&&id.length<160&&!/embedding|^whisper|^tts|^dall-e|^gpt-image|moderation|^sora|^imagen/i.test(id));if(!models.length)throw Error('El proveedor no devolvió modelos de chat. Puedes introducir un ID compatible y probarlo.');return [...new Set<string>(models)].sort();}
 export function allowedCharvisTools(webEnabled=true,access:CharvisAccess='review') {return CHARVIS_TOOLS.filter(tool=>(webEnabled||!['charvis_web_search','charvis_read_url'].includes(tool.name))&&(access!=='read'||tool.annotations.readOnlyHint));}
 export function chatPayload(provider:string,model:string,messages:ChatMessage[],tools=true,webEnabled=true,access:CharvisAccess='review'){
- return {model,messages:messages.map(message=>{const {reasoning_content,...base}=message;return {...base,...(reasoning_content&&['deepseek','opencode'].includes(provider)?{reasoning_content}:{})};}),stream:false,...(provider==='openai'?{max_completion_tokens:4096}:{max_tokens:4096}),...(tools?{tools:allowedCharvisTools(webEnabled,access).map(tool=>({type:'function',function:{name:tool.name,description:tool.description,parameters:tool.inputSchema}})),tool_choice:'auto'}:{})};
+ return {model,messages:messages.map(message=>{const {reasoning_content,...base}=message;return {...base,...(message.role==='assistant'&&['deepseek','opencode','kimi'].includes(provider)?{reasoning_content:reasoning_content||''}:{})};}),stream:false,...(provider==='openai'?{max_completion_tokens:8192}:{max_tokens:8192}),...(tools?{tools:allowedCharvisTools(webEnabled,access).map(tool=>({type:'function',function:{name:tool.name,description:tool.description,parameters:tool.inputSchema}})),tool_choice:'auto'}:{})};
 }
 /** A stopped turn must not leave unresolved calls in the next provider request. */
 export function completeChatTurns(messages:ChatMessage[]):ChatMessage[]{
@@ -48,7 +53,7 @@ export function completeChatTurns(messages:ChatMessage[]):ChatMessage[]{
  close();return result;
 }
 export function readChatResponse(response:any):ChatMessage{
- const item=response?.choices?.[0]?.message;if(!item||(!item.content&&!item.tool_calls?.length))throw Error('El modelo no devolvió texto ni acciones. Revisa que admita chat y herramientas.');
+ const item=response?.choices?.[0]?.message;if(!item||(!item.content&&!item.tool_calls?.length))throw Error(response?.choices?.[0]?.finish_reason==='length'?'El modelo agotó su límite antes de completar la respuesta. Elige un modelo de chat o reduce la extensión de la consulta.':'El modelo no devolvió texto ni acciones. Revisa que admita chat y herramientas.');
  const content=typeof item.content==='string'?item.content:Array.isArray(item.content)?item.content.filter((part:any)=>part.type==='text').map((part:any)=>part.text).join('\n'):null;
  const calls:ToolCall[]=(Array.isArray(item.tool_calls)?item.tool_calls:[]).map((call:any)=>{if(typeof call.id!=='string'||typeof call.function?.name!=='string'||typeof call.function.arguments!=='string')throw Error('El modelo devolvió una acción incompleta.');return {id:call.id,type:'function',function:{name:call.function.name,arguments:call.function.arguments}};});
  if(calls.length>12)throw Error('El modelo solicitó demasiadas acciones en una sola respuesta.');
@@ -60,3 +65,5 @@ export function userMessage(text:string,attachments:CharvisAttachment[]):ChatMes
  const body=text+documentText,images=attachments.filter(a=>a.image);
  return {role:'user',content:images.length?[{type:'text',text:body||'Consulta los adjuntos.'},...images.map(a=>({type:'image_url' as const,image_url:{url:a.image!}}))]:body};
 }
+
+async function encodeAudioForIpc(bytes:Uint8Array,signal?:AbortSignal){if(bytes.byteLength>20*1024*1024)throw Error('El audio supera 20 MB.');const chunks:string[]=[];for(let at=0;at<bytes.length;at+=8192){signal?.throwIfAborted();chunks.push(String.fromCharCode(...bytes.subarray(at,at+8192)));if(at&&at%1048576===0)await new Promise<void>(resolve=>setTimeout(resolve,0));}return btoa(chunks.join(''));}

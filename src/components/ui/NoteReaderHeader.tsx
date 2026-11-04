@@ -13,7 +13,7 @@ export default function NoteReaderHeader(p:Props){
   </div></div>
   <div className="note-reader-heading"><h2 title={p.title}>{p.title||'Nota sin título'}</h2></div>
   {menu&&<div className="note-reader-actions" role="menu" aria-label="Acciones de la nota">
-   {p.onFloat&&<button type="button" role="menuitem" onClick={()=>{setMenu(false);p.onFloat?.();}}><PictureInPicture2 size={16}/>Abrir lectura flotante</button>}
+
    <button type="button" role="menuitem" onClick={()=>{setMenu(false);p.onExpand();}}>{p.expanded?<Minimize2 size={16}/>:<Maximize2 size={16}/>}{p.expanded?'Restaurar ancho':'Ampliar lectura'}</button>
    {p.onPin&&<button type="button" role="menuitem" onClick={()=>{setMenu(false);p.onPin?.();}}><Pin size={16}/>{p.pinned?'Desfijar nota':'Fijar nota'}</button>}
    {p.onMove&&<button type="button" role="menuitem" onClick={()=>{setMenu(false);p.onMove?.();}}><Folder size={16}/>Mover a carpeta</button>}

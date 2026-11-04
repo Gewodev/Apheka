@@ -1,4 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+mod charvis_stream;
 mod music_network;
 mod jev;
 mod charvis;

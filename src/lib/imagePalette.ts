@@ -34,5 +34,8 @@ export async function paletteFromImage(src: string, dark = true) {
     if (!context)
         throw Error('La lectura de color no está disponible.');
     context.drawImage(image, 0, 0, 64, 64);
-    return paletteFromPixels(context.getImageData(0, 0, 64, 64).data, dark);
+    const pixels=context.getImageData(0,0,64,64).data,palette=paletteFromPixels(pixels,dark);
+    let sumX=0,sumY=0,weight=0;for(let i=0;i<pixels.length;i+=16){const spread=Math.max(pixels[i],pixels[i+1],pixels[i+2])-Math.min(pixels[i],pixels[i+1],pixels[i+2]);sumX+=((i/4)%64)*spread;sumY+=Math.floor(i/256)*spread;weight+=spread;}
+    const backdrop=document.createElement('canvas');backdrop.width=128;backdrop.height=128;const paint=backdrop.getContext('2d');if(paint){paint.filter='blur(8px)';paint.drawImage(image,-16,-16,160,160);}
+    return {...palette,backdrop:paint?backdrop.toDataURL('image/webp',.7):undefined,position:(weight?Math.round(sumX/weight/64*100):50)+'% '+(weight?Math.round(sumY/weight/64*100):50)+'%'};
 }

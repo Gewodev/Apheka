@@ -993,7 +993,7 @@ export default function Tareas() {
                       </div>
                       <div className="task-property task-time-property" style={{...pillBase,border:'1px solid var(--workspace-line)'}}>
                         <label className="task-time-toggle-row"><span>Hora de entrega</span><input type="checkbox" role="switch" aria-label="Activar hora de entrega" disabled={!dateVal} checked={!!hasTime} onChange={e=>updateTask(selectedTask.id,{dueDate:e.target.checked?dateVal+'T'+timeVal:dateVal})}/></label>
-                        {hasTime?<TimeControl label="Hora límite de la tarea" value={timeVal} onChange={time=>updateTask(selectedTask.id,{dueDate:time?dateVal+'T'+time:dateVal})}/>:<span className="task-time-empty">{dateVal?'Sin hora':'Elige una fecha'}</span>}
+                        {hasTime?<input className="task-inline-time" type="time" aria-label="Hora límite de la tarea" value={timeVal} onChange={e=>{if(e.target.value)updateTask(selectedTask.id,{dueDate:dateVal+'T'+e.target.value});}}/>:<span className="task-time-empty">{dateVal?'Sin hora':'Elige una fecha'}</span>}
                       </div>
                       {/* Estado (vence en / atrasado) — chip aparte */}
                       <div className="task-property task-study-duration" data-label="Estudio"><TaskDurationField compact minimum={Math.max(1,selectedTask.subtasks.length)} value={taskMinutes(selectedTask.estimatedMinutes)} onChange={estimatedMinutes=>updateTask(selectedTask.id,{estimatedMinutes,...(estimatedMinutes>120?{subtasks:suggestTaskSteps(estimatedMinutes,selectedTask.title,selectedTask.subtasks)}:selectedTask.subtasks.length?{subtasks:distributeSubtaskMinutes(estimatedMinutes,selectedTask.subtasks)}:{})})}/></div>

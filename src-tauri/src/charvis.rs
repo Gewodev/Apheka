@@ -17,17 +17,39 @@ fn target(provider:&str)->Result<String,String>{base(provider)?;Ok(format!("APHE
  "save"=>{let key=api_key.as_deref().unwrap_or_default().trim();if key.len()<8||key.len()>2048||key.chars().any(char::is_whitespace){return Err("Escribe una clave válida, sin espacios.".into());}save_key(&provider,key)?;},
  "remove"=>{#[cfg(windows)]{use windows_sys::Win32::Security::Credentials::*;let name:Vec<u16>=target(&provider)?.encode_utf16().chain(Some(0)).collect();if read_key(&provider).is_some()&&unsafe{CredDeleteW(name.as_ptr(),CRED_TYPE_GENERIC,0)}==0{return Err("No se pudo retirar la clave guardada.".into());}}},
  _=>return Err("Acción de credencial no permitida.".into())};Ok(json!({"configured":read_key(&provider).is_some()}))}
-async fn bounded(mut response:reqwest::Response)->Result<Value,String>{
- let status=response.status().as_u16();if !(200..300).contains(&status){return Err(match status{401|403=>"El proveedor rechazó la clave o los permisos. Revisa la cuenta.",402=>"El proveedor requiere saldo para este modelo.",429=>"El proveedor alcanzó su límite. Espera antes de volver a enviar.",404=>"Ese modelo o ruta ya no está disponible en el proveedor.",_=>"El proveedor no pudo responder. No se aplicó ningún cambio nuevo."}.to_string()+&format!(" (HTTP {status})"));}
- let mut bytes=Vec::new();while let Some(chunk)=response.chunk().await.map_err(|_|"La respuesta de Charvis se interrumpió.")?{if bytes.len()+chunk.len()>4*1024*1024{return Err("La respuesta supera el límite de Charvis.".into());}bytes.extend_from_slice(&chunk);}serde_json::from_slice(&bytes).map_err(|_|"El proveedor devolvió una respuesta no válida.".into())
+async fn bounded(mut response:reqwest::Response,on_event:Option<&tauri::ipc::Channel<Value>>,key:&str)->Result<Value,String>{
+ let status=response.status().as_u16();
+ if !(200..300).contains(&status){
+  let mut bytes=Vec::new();while let Ok(Some(chunk))=response.chunk().await{if bytes.len()+chunk.len()>16384{break;}bytes.extend_from_slice(&chunk);}
+  let error=serde_json::from_slice::<Value>(&bytes).unwrap_or(Value::Null);
+  let detail=error["error"]["message"].as_str().or_else(||error["message"].as_str()).unwrap_or("").replace(key,"[clave protegida]");
+  let detail=detail.chars().filter(|c|!c.is_control()).take(450).collect::<String>();
+  let title=match status{400|422=>"El proveedor rechazó un parámetro del modelo.",401|403=>"El proveedor rechazó la clave o sus permisos.",402=>"El modelo requiere saldo en el proveedor.",429=>"El proveedor alcanzó su límite. Espera antes de reenviar.",404=>"El modelo o ruta seleccionados no están disponibles.",_=>"El proveedor no pudo completar la consulta."};
+  return Err(format!("{title} (HTTP {status}) {}",detail));
+ }
+ let streaming=response.headers().get(reqwest::header::CONTENT_TYPE).and_then(|v|v.to_str().ok()).is_some_and(|v|v.contains("text/event-stream"));
+ let mut bytes=Vec::new();let mut total=0usize;
+ if !streaming{while let Some(chunk)=response.chunk().await.map_err(|_|"La respuesta se interrumpió.")?{total+=chunk.len();if total>4*1024*1024{return Err("La respuesta supera el límite de Charvis.".into());}bytes.extend_from_slice(&chunk);}return serde_json::from_slice(&bytes).map_err(|_|"El proveedor devolvió una respuesta no válida.".into());}
+ let mut completion=crate::charvis_stream::Completion::default();let mut data=String::new();let mut last=std::time::Instant::now();
+ while let Some(chunk)=response.chunk().await.map_err(|_|"La respuesta en directo se interrumpió.")?{
+  total+=chunk.len();if total>4*1024*1024{return Err("La respuesta supera el límite de Charvis.".into());}bytes.extend_from_slice(&chunk);
+  while let Some(end)=bytes.iter().position(|b|*b==b'\n'){
+   let line=bytes.drain(..=end).collect::<Vec<_>>();let line=std::str::from_utf8(&line).map_err(|_|"El proveedor devolvió texto no válido.")?.trim_end_matches(['\r','\n']);
+   if line.is_empty(){if !data.is_empty(){completion.accept(data.trim_end())?;data.clear();}}else if let Some(part)=line.strip_prefix("data:"){data.push_str(part.trim_start());data.push('\n');}
+  }
+  if last.elapsed()>=Duration::from_millis(100){if let Some(channel)=on_event{let _=channel.send(json!({"type":"text","text":completion.text}));}last=std::time::Instant::now();}
+ }
+ if !data.is_empty(){completion.accept(data.trim_end())?;}
+ if let Some(channel)=on_event{let _=channel.send(json!({"type":"text","text":completion.text}));}
+ completion.response()
 }
 fn payload_valid(operation:&str,payload:&Value)->Result<(),String>{
  if payload.to_string().len()>10*1024*1024{return Err("Los adjuntos superan el límite del mensaje.".into());}
- if operation=="chat"{let messages=payload["messages"].as_array().ok_or("Faltan los mensajes del chat.")?;if messages.is_empty()||messages.len()>100||payload["stream"]==true{return Err("Mensajes de Charvis fuera de los límites.".into());}let model=payload["model"].as_str().unwrap_or("");if model.is_empty()||model.len()>160{return Err("Selecciona un modelo del proveedor.".into());}}
+ if operation=="chat"{let messages=payload["messages"].as_array().ok_or("Faltan los mensajes del chat.")?;if messages.is_empty()||messages.len()>100{return Err("Mensajes de Charvis fuera de los límites.".into());}let model=payload["model"].as_str().unwrap_or("");if model.is_empty()||model.len()>160{return Err("Selecciona un modelo del proveedor.".into());}}
  Ok(())
 }
 #[tauri::command]pub fn charvis_cancel(window:tauri::WebviewWindow,state:tauri::State<'_,CharvisState>,request_id:String)->Result<(),String>{main_only(&window)?;if let Some(cancel)=state.requests.lock().map_err(|_|"Consulta ocupada.")?.remove(&request_id){let _=cancel.send(());}Ok(())}
-#[tauri::command]pub async fn charvis_request(window:tauri::WebviewWindow,state:tauri::State<'_,CharvisState>,provider:String,operation:String,payload:Value,request_id:String,audio:Option<Vec<u8>>,mime:Option<String>)->Result<Value,String>{
+#[tauri::command]pub async fn charvis_request(window:tauri::WebviewWindow,state:tauri::State<'_,CharvisState>,provider:String,operation:String,payload:Value,request_id:String,audio:Option<Vec<u8>>,audio_base64:Option<String>,mime:Option<String>,on_event:tauri::ipc::Channel<Value>)->Result<Value,String>{
  main_only(&window)?;let endpoint=base(&provider)?;if !matches!(operation.as_str(),"models"|"chat"|"transcribe"){return Err("Operación no permitida.".into());}payload_valid(&operation,&payload)?;
  if request_id.is_empty()||request_id.len()>64||!request_id.bytes().all(|b|b.is_ascii_alphanumeric()||b==b'-'){return Err("Identificador de consulta no válido.".into());}
  let key=read_key(&provider).ok_or("Guarda la clave de este proveedor en Ajustes → Sistema → Charvis.")?;
@@ -39,13 +61,13 @@ fn payload_valid(operation:&str,payload:&Value)->Result<(),String>{
   req=req.bearer_auth(&key);if provider=="anthropic"{req=req.header("x-api-key",&key).header("anthropic-version","2023-06-01");}
   if operation=="transcribe"{
    if !matches!(provider.as_str(),"groq"|"openai"){return Err("Selecciona OpenAI o Groq para transcribir audio.".into());}
-   let bytes=audio.ok_or("No hay audio para transcribir.")?;if bytes.is_empty()||bytes.len()>20*1024*1024{return Err("El audio debe ocupar como máximo 20 MB.".into());}
+   let bytes=if let Some(encoded)=audio_base64{use base64::Engine;if encoded.len()>28*1024*1024{return Err("El audio supera el límite de transporte.".into());}base64::engine::general_purpose::STANDARD.decode(encoded).map_err(|_|"El audio recibido no es válido.")?}else{audio.ok_or("No hay audio para transcribir.")?};if bytes.is_empty()||bytes.len()>20*1024*1024{return Err("El audio debe ocupar como máximo 20 MB.".into());}
    let kind=mime.as_deref().unwrap_or("audio/webm").split(';').next().unwrap_or("audio/webm");let ext=match kind{"audio/webm"|"video/webm"=>"webm","audio/mp4"|"audio/x-m4a"|"video/mp4"=>"mp4","audio/mpeg"=>"mp3","audio/wav"|"audio/x-wav"=>"wav","audio/ogg"=>"ogg",_=>return Err("Formato de audio no admitido. Usa WebM, MP3, M4A, WAV u OGG.".into())};
    let file=reqwest::multipart::Part::bytes(bytes).file_name(format!("audio.{ext}")).mime_str(kind).map_err(|_|"Audio no válido.")?;
    let model=if provider=="groq"{"whisper-large-v3-turbo"}else{"whisper-1"};let mut form=reqwest::multipart::Form::new().part("file",file).text("model",model).text("response_format","json");if let Some(prompt)=payload["prompt"].as_str(){form=form.text("prompt",prompt.chars().take(800).collect::<String>());}req=req.multipart(form);
   }else if operation=="chat"{req=req.json(&payload);}else{req=req.timeout(Duration::from_secs(15));}
-  bounded(req.send().await.map_err(|error|if error.is_timeout(){"La consulta agotó el tiempo de espera. Puedes volver a enviarla."}else{"No se pudo conectar por HTTPS con el proveedor."})?).await
+  bounded(req.send().await.map_err(|error|if error.is_timeout(){"La consulta agotó el tiempo de espera. Puedes volver a enviarla."}else{"No se pudo conectar por HTTPS con el proveedor."})?,Some(&on_event),&key).await
  };
  let result=tokio::select!{_=cancelled=>Err("Consulta cancelada.".into()),result=query=>result};if let Ok(mut pending)=state.requests.lock(){pending.remove(&request_id);}result
 }
-#[cfg(test)]mod tests{use super::*;#[test]fn fixed_routes_and_bounded_messages(){assert!(base("openai").unwrap().starts_with("https://"));assert!(base("https://evil.test").is_err());assert!(payload_valid("chat",&json!({"model":"chosen","messages":[{"role":"user","content":"test"}]})).is_ok());assert!(payload_valid("chat",&json!({"model":"chosen","messages":[],"stream":true})).is_err());}}
+#[cfg(test)]mod tests{use super::*;#[test]fn fixed_routes_and_bounded_messages(){assert!(base("openai").unwrap().starts_with("https://"));assert!(base("https://evil.test").is_err());assert!(payload_valid("chat",&json!({"model":"chosen","messages":[{"role":"user","content":"test"}]})).is_ok());assert!(payload_valid("chat",&json!({"model":"chosen","messages":[],"stream":true})).is_err());assert!(payload_valid("chat",&json!({"model":"chosen","messages":[{"role":"user","content":"test"}],"stream":true})).is_ok());}}

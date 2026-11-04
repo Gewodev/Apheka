@@ -2,7 +2,7 @@ import {recordingUnavailable} from './recordingAvailability';
 import {canSearchLyricFragment,lyricFragment,verifyLyricCandidates} from './lyricFragmentSearch';
 import {musicRecommendationSeeds,rankMusicRecommendations,rankMusicSearch} from './musicPreferences';
 import type {Track} from '../store/AppContext';
-import {searchMusicCatalog,searchLyricCatalog,musicRecommendations,type MusicResult,type MusicSong} from './youtubeMusic';
+import {discoverArtists,searchMusicCatalog,searchLyricCatalog,musicRecommendations,type MusicResult,type MusicSong} from './youtubeMusic';
 import {loadCatalog,type CatalogTrack} from './musicCatalog';
 import {cleanMusicQuery,curateSongs} from './musicSearch';
 export type DiscoverSong=MusicSong|CatalogTrack;
@@ -14,6 +14,7 @@ export function mergeMusic(primary:MusicSong[],secondary:CatalogTrack[],query=''
 }
 export async function discoverMusic(query:string,kind:'all'|'song'|'artist'|'album',preferences:{tracks:Track[];history?:string[];playCounts?:Record<string,number>},signal:AbortSignal,onPartial?:(value:MusicResult&{items:DiscoverSong[]})=>void):Promise<MusicResult&{items:DiscoverSong[]}>{
  const clean=cleanMusicQuery(query),seed=musicRecommendationSeeds(preferences)[0];
+ if(kind==='artist'){const result=await discoverArtists(preferences,clean,signal);return {...result,items:result.songs};}
  const explicit=/^\s*(?:letra|lyrics)\s*:|^["“]/i.test(query)&&canSearchLyricFragment(query);
  if(explicit){const songs=await verifyLyricCandidates(query,await searchLyricCatalog(lyricFragment(query),signal),signal);return {songs,items:songs,artists:[],albums:[]};}
  const primary=clean?searchMusicCatalog(clean,kind,signal):musicRecommendations(preferences.tracks,preferences.history,preferences.playCounts,signal);

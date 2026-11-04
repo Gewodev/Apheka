@@ -1,3 +1,5 @@
+import type {SavedMusicArtist} from '../lib/artistIdentity';
+import {artistKey} from '../lib/artistIdentity';
 import {readQueueIntent,rememberQueueSource,resumeLibraryQueue} from '../lib/queueResume';
 import {prepareTaskSteps,appendTaskStep,taskMinutes} from '../lib/taskStudyPlan';
 import {isLibraryTrack,libraryRadioOrder,nextMusicSelection,radioTracks} from '../lib/musicRadio';
@@ -556,7 +558,7 @@ interface AppContextType extends AppState {
   playCounts: Record<string, number>;
   musicQueue: string[];
   queueSource: { pool: string[]; name?: string } | null;
-  artists: { id: string; name: string; profileImage?: string }[];
+  artists: SavedMusicArtist[];
   downloadQueue: DownloadItem[];
   downloadPath: string;
   setDownloadPathCtx: (path: string) => void;
@@ -574,8 +576,8 @@ interface AppContextType extends AppState {
   clearAllMusicData: () => void;
   exportMusicLibrary: (destDir: string) => Promise<number>;
   importMusicLibrary: (srcDir: string) => Promise<number>;
-  addArtist: (name: string, profileImage?: string) => void;
-  updateArtist: (id: string, updates: { name?: string; profileImage?: string }) => void;
+  addArtist: (name: string, profileImage?: string, catalogId?:string) => void;
+  updateArtist: (id: string, updates: Partial<Pick<SavedMusicArtist,'name'|'profileImage'|'trackIds'>>) => void;
   deleteArtist: (id: string) => void;
   playlists: Playlist[];
   addPlaylist: (name: string, trackIds: string[], coverImage?: string, isPublic?: boolean) => void;
@@ -917,9 +919,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (mode) {
       const selected=radioTracks(tracksRef.current,queueSourceRef.current?.pool);const source={pool:selected.map(t=>t.id),name:queueSourceRef.current?.name||'Tu biblioteca'};queueSourceRef.current=source;setQueueSource(source);
       // Library radio ignores unsaved discovery previews.
-      const radio=libraryRadioOrder(selected,currentTrackIdRef.current,trackHistoryRef.current,playCounts,playbackSettingsRef.current.musicOffline);
+      const radio=libraryRadioOrder(selected,currentTrackIdRef.current,trackHistoryRef.current,playCounts,playbackSettingsRef.current.musicOffline,Math.random,!!queueSourceRef.current?.pool);
       musicQueueRef.current=radio;setMusicQueue(radio);
-    }else{const pool=queueSourceRef.current?.pool||tracksRef.current.filter(isLibraryTrack).map(t=>t.id);const valid=new Set(tracksRef.current.map(t=>t.id)),current=currentTrackIdRef.current;const queue=pool.filter(id=>valid.has(id)&&id!==current);musicQueueRef.current=queue;setMusicQueue(queue);}
+    }else{const valid=new Set(tracksRef.current.map(track=>track.id)),current=currentTrackIdRef.current;const queue=musicQueueRef.current.filter(id=>valid.has(id)&&id!==current);musicQueueRef.current=queue;setMusicQueue(queue);}
   }, [playCounts]);
    const setRepeatMode = useCallback((mode: 'none' | 'all' | 'one') => {
     _setRepeatMode(mode);repeatModeRef.current=mode;
@@ -939,7 +941,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const weightedShuffle=(ids:string[],counts:Record<string,number>)=>{const allowed=new Set(ids);return libraryRadioOrder(tracksRef.current.filter(t=>allowed.has(t.id)),currentTrackIdRef.current,trackHistoryRef.current,counts,playbackSettingsRef.current.musicOffline);};
    const [trackPlayDurations, setTrackPlayDurations] = useState<Record<string, number>>({});
    const [currentTrackStartTime, setCurrentTrackStartTime] = useState<number | null>(null);
-   const [artists, setArtists] = useState<{ id: string; name: string }[]>([]);
+   const [artists, setArtists] = useState<SavedMusicArtist[]>([]);
    const [playlists, setPlaylists] = useState<Playlist[]>([]);
 
   const [musicQueue, setMusicQueue] = useState<string[]>([]);
@@ -1721,6 +1723,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // eliminó a pedido (contaba distracción por usar otra ventana sin pausar).
   // Regla vigente: pausa manual + reanudar tras >10 min a mitad de sesión.
 
+  // Large collections are serialized only when they change, not on every timer tick.
+  const structuralJson=useMemo(()=>JSON.stringify({tasks,habits,notes,noteFolders,courses,events,studySessions,plannedSessions,settings,artists,playlists,downloadPath,youtubeVideoUrl}),[tasks,habits,notes,noteFolders,courses,events,studySessions,plannedSessions,settings,artists,playlists,downloadPath,youtubeVideoUrl]);
+  const savedStructureRef=useRef(''),lastCounterMirrorRef=useRef(0),lastCounterStoreRef=useRef(0);
   // Debounced save
   useEffect(() => {
     if (!hydrated) return;
@@ -1728,17 +1733,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Restauración pendiente de recarga: no pisar lo restaurado.
       if (sessionStorage.getItem('owa_restore_pending')) return;
     } catch { /* noop */ }
-    const json = JSON.stringify({
+    const runtimeJson = JSON.stringify({
       _savedAt: Date.now(),
-      tasks, habits, notes, noteFolders, courses, events, studySessions, plannedSessions,
-        settings, sessionTime, sessionType, isRest, isTimerActive, weeklyStudyTime, dailyStudyTime, dailyStudyDate, pomodoroSessions,
-        trackHistory, playCounts, musicQueue, musicVolume, shuffleMode, repeatMode, artists, playlists,
+        sessionTime, sessionType, isRest, isTimerActive, weeklyStudyTime, dailyStudyTime, dailyStudyDate, pomodoroSessions,
+        trackHistory, playCounts, musicQueue, musicVolume, shuffleMode, repeatMode,
         currentTrackId, isPlayingMusic: isPlayingMusic && !globalAudio.paused, musicListeningTime, musicListeningDate, dailyMusicTime,
-        musicProgress, musicDuration, downloadPath, youtubeVideoUrl,
+        musicProgress, musicDuration,
         accumulatedPauseTime, pauseStartTime, distractionCount,
         focusPomodoroTime, focusChronoTime, breakTime, dailyBreakTime,
         dailyFocusPomodoro, dailyFocusChrono, dailyPerformances,
     });
+    const json=runtimeJson.slice(0,-1)+','+structuralJson.slice(1);
+    const structureChanged=savedStructureRef.current!==structuralJson;savedStructureRef.current=structuralJson;
     // El último estado queda disponible AL INSTANTE para el flush síncrono de cierre
     // (beforeunload/pagehide). Antes se asignaba DENTRO del debounce de 300ms: si la
     // app se cerraba antes, el flush no tenía nada que escribir y la sesión recién
@@ -1747,9 +1753,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Espejo síncrono en localStorage: el dato sobrevive a un cierre instantáneo
     // (IDB y backup/disco siguen en el debounce, como capas secundarias).
     try {
-      if (json.length <= 5_000_000) {
+      if (json.length <= 5_000_000 && (structureChanged||Date.now()-lastCounterMirrorRef.current>=10000)) {
+        lastCounterMirrorRef.current=Date.now();
         localStorage.setItem(STORAGE_KEY, json);
-      } else if (!mirrorQuotaWarnedRef.current) {
+      } else if (json.length>5_000_000&&!mirrorQuotaWarnedRef.current) {
         console.warn('Espejo local omitido por tamaño (los datos viven en IndexedDB)');
         mirrorQuotaWarnedRef.current = true;
       }
@@ -1759,6 +1766,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         mirrorQuotaWarnedRef.current = true;
       }
     }
+    if(!structureChanged&&Date.now()-lastCounterStoreRef.current<5000)return;
+    lastCounterStoreRef.current=Date.now();
     const t = setTimeout(() => {
       try { if (sessionStorage.getItem('owa_restore_pending')) return; } catch {}
       set(STORAGE_KEY, json).catch((e: any) => console.error("Error saving data:", e));
@@ -4245,13 +4254,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setShuffleMode, setRepeatMode, setMusicQueue, setQueueSource:setQueueSourcePersisted, clearAllMusicData,
     exportMusicLibrary, importMusicLibrary,
     setCoverModalTrackId,
-    addArtist: useCallback((name: string, profileImage?: string) => {
+    addArtist: useCallback((name: string, profileImage?: string, catalogId?:string) => {
       setArtists(prev => {
-        if (prev.some(a => a.name.toLowerCase() === name.toLowerCase())) return prev;
-        return [...prev, { id: Date.now().toString(), name, ...(profileImage ? { profileImage } : {}) }];
+        if (prev.some(a => artistKey(a.name) === artistKey(name))) return prev.map(a=>artistKey(a.name)===artistKey(name)?{...a,origin:'catalog' as const,...(catalogId?{catalogId}:{}),...(profileImage?{profileImage}:{})}:a);
+        return [...prev, { id: crypto.randomUUID(), name, origin:'catalog' as const, catalogId, ...(profileImage ? { profileImage } : {}) }];
       });
     }, []),
-    updateArtist: useCallback((id: string, updates: { name?: string; profileImage?: string }) => {
+    updateArtist: useCallback((id: string, updates: Partial<Pick<SavedMusicArtist,'name'|'profileImage'|'trackIds'>>) => {
       setArtists(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
     }, []),
     deleteArtist: useCallback((id: string) => {

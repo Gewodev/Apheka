@@ -1,0 +1,212 @@
+{
+  "version": "6.24.0",
+  "date": "2026-11-04",
+  "baseCommit": "971a5d6",
+  "status": "validated_installer_built",
+  "frontend": {
+    "exitCode": 0,
+    "viteSeconds": 26.85,
+    "mainChunkKB": 506.82,
+    "mainChunkGzipKB": 161.11,
+    "log": "release/build-6.24.0.log"
+  },
+  "native": {
+    "passed": 35,
+    "failed": 0,
+    "ignored": 1,
+    "finalCharvisPassed": 8,
+    "finalCharvisFailed": 0,
+    "finalCharvisIgnored": 1
+  },
+  "browserChecks": [
+    "project composer and independent chat scope",
+    "inline and automatic title/manual title precedence",
+    "per-query source groups and resize panel",
+    "live text with controlled provider",
+    "project instructions and typed-name deletion",
+    "transport parameter retry only on explicit HTTP rejection",
+    "no auth or timeout retry",
+    "compact audio IPC byte identity",
+    "required tool-turn fields and cancellation continuity",
+    "queue unchanged by choosing library song",
+    "queue unchanged when disabling shuffle",
+    "pinned artists only, deduplicated names and collaboration membership",
+    "artist scoped repeat-all",
+    "task control bounds at 420/620/1366 and direct deadline time",
+    "course legend visibility without filtering",
+    "note editor and note/task link",
+    "individual subtask durations",
+    "real document/PDF preview and thumbnail",
+    "playlist cover/mosaic and artist catalog save",
+    "recording pause/resume/cancel and transcription after Stop",
+    "welcome layouts 420/900/1440 and nine local provider logos",
+    "last song/progress and manual five-song queue across complete browser restart on production frontend"
+  ],
+  "transport": "controlled fixtures; no live provider credentials were used",
+  "installer": {
+    "built": true,
+    "path": "release/apheka_FINAL.exe",
+    "version": "6.24.0",
+    "bytes": 80474956,
+    "sha256": "253DEFC353224098F5B4109E9E947F06827A0784D01A96B126A878A072A3EDF9",
+    "manifest": "release/apheka_FINAL.json",
+    "finishedAtUtc": "2026-11-04T12:32:41.1438068Z",
+    "sourceAndToolsUnchangedDuringBuild": true,
+    "embeddedFrontendAssets": [
+      "assets/index-DVTc4Jz3.js",
+      "assets/charts-DQ4Dkqgr.js",
+      "assets/anim-DmwEpK7h.js",
+      "assets/tauri-Du2YxjyO.js",
+      "assets/storage-DwnyWBFG.js",
+      "assets/audio-meta-CT9Hv6Ta.js",
+      "assets/date-COeAPjBE.js",
+      "assets/index-DpF-TCEi.css"
+    ]
+  },
+  "unverified": [
+    "live AI provider account and provider/model-specific permission",
+    "live ASR account",
+    "external Codex MCP describe/overview calls",
+    "universal recording availability",
+    "laptop power/temperature or all-hardware frame rates"
+  ],
+  "limitations": [
+    "external sites keep their access policies; no disguised requests",
+    "safe static SVG figures; no arbitrary HTML widget execution",
+    "original working files and user exports are readable copies outside the encrypted Charvis vault"
+  ],
+  "compiledViews": {
+    "passed": 10,
+    "runtimeErrors": 0,
+    "horizontalOverflow": false,
+    "environment": "production frontend at 127.0.0.1:1424; Edge isolated fixtures; not a laptop power/temperature benchmark",
+    "samples": [
+      {
+        "view": "inicio",
+        "performance": {
+          "idleSampleMs": 1219,
+          "idleLongTasks": 0,
+          "scrollLongTasks": 0,
+          "scrollFrames": 0,
+          "scrollFrameP95Ms": null,
+          "longestTaskMs": 0,
+          "heapMiB": 11
+        }
+      },
+      {
+        "view": "estudio",
+        "performance": {
+          "idleSampleMs": 1216,
+          "idleLongTasks": 0,
+          "scrollLongTasks": 0,
+          "scrollFrames": 0,
+          "scrollFrameP95Ms": null,
+          "longestTaskMs": 0,
+          "heapMiB": 15
+        }
+      },
+      {
+        "view": "tareas",
+        "performance": {
+          "idleSampleMs": 1210,
+          "idleLongTasks": 0,
+          "scrollLongTasks": 0,
+          "scrollFrames": 0,
+          "scrollFrameP95Ms": null,
+          "longestTaskMs": 0,
+          "heapMiB": 11
+        }
+      },
+      {
+        "view": "notas",
+        "performance": {
+          "idleSampleMs": 1215,
+          "idleLongTasks": 0,
+          "scrollLongTasks": 0,
+          "scrollFrames": 0,
+          "scrollFrameP95Ms": null,
+          "longestTaskMs": 0,
+          "heapMiB": 11
+        }
+      },
+      {
+        "view": "musica",
+        "performance": {
+          "idleSampleMs": 1216,
+          "idleLongTasks": 0,
+          "scrollLongTasks": 0,
+          "scrollFrames": 0,
+          "scrollFrameP95Ms": null,
+          "longestTaskMs": 0,
+          "heapMiB": 10
+        }
+      },
+      {
+        "view": "planificacion",
+        "performance": {
+          "idleSampleMs": 1210,
+          "idleLongTasks": 0,
+          "scrollLongTasks": 0,
+          "scrollFrames": 0,
+          "scrollFrameP95Ms": null,
+          "longestTaskMs": 0,
+          "heapMiB": 12
+        }
+      },
+      {
+        "view": "cursos",
+        "performance": {
+          "idleSampleMs": 1215,
+          "idleLongTasks": 0,
+          "scrollLongTasks": 0,
+          "scrollFrames": 0,
+          "scrollFrameP95Ms": null,
+          "longestTaskMs": 0,
+          "heapMiB": 10
+        }
+      },
+      {
+        "view": "curso_detalle",
+        "performance": {
+          "idleSampleMs": 1216,
+          "idleLongTasks": 0,
+          "scrollLongTasks": 0,
+          "scrollFrames": 0,
+          "scrollFrameP95Ms": null,
+          "longestTaskMs": 0,
+          "heapMiB": 15
+        }
+      },
+      {
+        "view": "ia",
+        "chatHeight": 944,
+        "nav": []
+      },
+      {
+        "view": "ia",
+        "performance": {
+          "idleSampleMs": 1202,
+          "idleLongTasks": 0,
+          "scrollLongTasks": 0,
+          "scrollFrames": 0,
+          "scrollFrameP95Ms": null,
+          "longestTaskMs": 0,
+          "heapMiB": 11
+        }
+      },
+      {
+        "view": "ajustes",
+        "performance": {
+          "idleSampleMs": 1216,
+          "idleLongTasks": 0,
+          "scrollLongTasks": 0,
+          "scrollFrames": 36,
+          "scrollFrameP95Ms": 27.7,
+          "longestTaskMs": 0,
+          "heapMiB": 11
+        }
+      }
+    ]
+  },
+  "gallery": "release/qa-624-gallery.html"
+}

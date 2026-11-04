@@ -1332,12 +1332,7 @@ export default function Notas() {
   const [iconPickerTarget, setIconPickerTarget] = useState<string | null>(null);
 
   // ── Lector flotante de nota (anclado a la derecha; solo lectura) ──
-  const [floatNoteId, setFloatNoteId] = useState<string | null>(() => { try { return localStorage.getItem('owa_float_note') || null; } catch { return null; } });
-  const [floatWide, setFloatWide] = useState<boolean>(() => { try { return localStorage.getItem('owa_float_wide') === '1'; } catch { return false; } });
-  const [floatMin, setFloatMin] = useState<boolean>(false);
-  useEffect(() => { try { localStorage.setItem('owa_float_note', floatNoteId || ''); } catch { } }, [floatNoteId]);
-  useEffect(() => { try { localStorage.setItem('owa_float_wide', floatWide ? '1' : '0'); } catch { } }, [floatWide]);
-  const floatNote = floatNoteId ? notes.find(n => n.id === floatNoteId) || null : null;
+  useEffect(()=>{localStorage.removeItem('owa_float_note');localStorage.removeItem('owa_float_wide');},[]);
 
   // Library views navigation
   const [activeSidebarTab, setActiveSidebarTab] = useState("all");
@@ -2765,6 +2760,13 @@ const noteLiveAtts = useMemo(
                     <ArrowLeft size={14} /> Volver
                   </button>
 
+                {/* Rich formatting Toolbar */}
+                <div className="note-toolbar-strip" style={{ padding: 0, flex: 1, minWidth: 0 }}>
+                  <NoteEditorToolbar key={selectedNote?.id} processImage={compressImageForNote} onFormat={handleFormat}
+                    onUndo={() => { if (histRef.current.undo()){if(saveTimeoutRef.current)clearTimeout(saveTimeoutRef.current);captureEditorDraft();handleSaveNote(editorRef.current?.innerHTML);} }}
+                    onRedo={() => { if (histRef.current.redo()){if(saveTimeoutRef.current)clearTimeout(saveTimeoutRef.current);captureEditorDraft();handleSaveNote(editorRef.current?.innerHTML);} }} />
+                </div>
+
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <span style={{
                       display: "flex", alignItems: "center", gap: 4, fontSize: 11,
@@ -2803,13 +2805,6 @@ const noteLiveAtts = useMemo(
                   }
                   e.target.value = "";
                 }} />
-
-                {/* Rich formatting Toolbar */}
-                <div className="note-toolbar-strip" style={{ padding: "8px 16px", borderBottom: "1px solid var(--border-default)", flexShrink: 0 }}>
-                  <NoteEditorToolbar key={selectedNote?.id} processImage={compressImageForNote} onFormat={handleFormat}
-                    onUndo={() => { if (histRef.current.undo()){if(saveTimeoutRef.current)clearTimeout(saveTimeoutRef.current);captureEditorDraft();handleSaveNote(editorRef.current?.innerHTML);} }}
-                    onRedo={() => { if (histRef.current.redo()){if(saveTimeoutRef.current)clearTimeout(saveTimeoutRef.current);captureEditorDraft();handleSaveNote(editorRef.current?.innerHTML);} }} />
-                </div>
 
                 {/* Write panel — adaptive margins */}
                 <div className="note-writing-sheet" style={{
@@ -3565,7 +3560,7 @@ const noteLiveAtts = useMemo(
                       <div className="notes-drawer-header">
                         <NoteReaderHeader key={selectedNote.id} title={selectedNote.title} folder={folders.find(folder=>folder.id===selectedNote.folderId)?.name||selectedNote.course}
                           pinned={selectedNote.isPinned} expanded={isMaximized} onClose={()=>setSelectedNoteId(null)}
-                          onEdit={()=>handleOpenNote(selectedNote.id)} onFloat={()=>{setFloatNoteId(selectedNote.id);setFloatMin(false);}}
+                          onEdit={()=>handleOpenNote(selectedNote.id)}
                           onExpand={()=>setIsMaximized(value=>!value)} onPin={()=>updateNote(selectedNote.id,{isPinned:!selectedNote.isPinned})}
                           onMove={()=>setShowMoveModal(true)} onDelete={()=>setDeleteConfirmNoteId(selectedNote.id)}/>
 
@@ -3997,30 +3992,6 @@ const noteLiveAtts = useMemo(
         </div>,
         document.body
       )}
-      {floatNote && createPortal(
-        <div className="note-floating-reader" role="dialog" aria-label="Lectura flotante de nota" aria-modal="false" style={{ position: 'fixed', top: 0, right: floatMin ? -400 : 0, bottom: 0, width: floatWide ? '50vw' : 480, maxWidth: '96vw', zIndex: 98500, background: 'var(--bg-primary)', borderLeft: '1px solid var(--border-default)', boxShadow: '-20px 0 60px rgba(0,0,0,0.5)', display: floatMin ? 'none' : 'flex', flexDirection: 'column', transition: 'right 260ms cubic-bezier(0.16,1,0.3,1), width 220ms cubic-bezier(0.16,1,0.3,1)' }}>
-          <NoteReaderHeader key={floatNote.id} floating title={floatNote.title} folder={folders.find(folder=>folder.id===floatNote.folderId)?.name||floatNote.course}
-            expanded={floatWide} onClose={()=>setFloatNoteId(null)} onMinimize={()=>setFloatMin(true)} onExpand={()=>setFloatWide(value=>!value)}
-            onEdit={()=>{handleOpenNote(floatNote.id);setFloatNoteId(null);}}/>
-          <div className="notes-preview-area" style={{ flex: 1, overflowY: 'auto', padding: '20px 22px 30px', fontSize: 14.5, lineHeight: 1.8, color: 'var(--text-primary)', fontFamily: "var(--font-primary)", wordBreak: 'break-word' }}
-            dangerouslySetInnerHTML={{ __html: floatNote.content || '<p style="color:var(--text-muted);font-style:italic">Nota vacía</p>' }} />
-        </div>,
-        document.body
-      )}
-
-      {floatMin && floatNote && createPortal(
-        <button data-ui-control="" onClick={() => setFloatMin(false)}
-          title={'Restaurar: ' + (floatNote.title || 'Nota')}
-          style={{ position: 'fixed', bottom: 18, right: 18, zIndex: 98500, display: 'flex', alignItems: 'center', gap: 8, padding: '9px 15px', borderRadius: 999, background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', boxShadow: '0 8px 30px rgba(0,0,0,0.4)', cursor: 'pointer', maxWidth: 300 }}>
-          <span style={{ width: 7, height: 7, borderRadius: '50%', background: (floatNote.folderId && folders.find(f => f.id === floatNote.folderId)?.color) || 'var(--accent)', flexShrink: 0 }} />
-          <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {floatNote.title || 'Nota sin título'}
-          </span>
-          <Maximize2 size={11} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
-        </button>,
-        document.body
-      )}
-
       {/* ===== MOVE FOLDER MODAL ===== */}
       {showMoveModal && (
         <div style={{
