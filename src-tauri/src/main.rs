@@ -1,4 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+mod local_asr;
 mod charvis_stream;
 mod music_network;
 mod jev;
@@ -773,6 +774,7 @@ fn open_url_in_browser(exe: String, url: String) -> Result<(), String> {
 }
 
 fn main() {
+    if std::env::args().nth(1).as_deref()==Some("--apheka-asr-worker"){local_asr::worker_main();return;}
     if std::env::args().any(|arg| arg == "--mcp") { mcp::stdio_main(); return; }
     let context=tauri::generate_context!();
     let rendering=rendering::configure(&context.config().identifier);
@@ -813,7 +815,7 @@ fn main() {
             retire_legacy_media_windows,
             music_network::music_catalog_request, music_network::cancel_music_catalog_request,
             jev::jev_status, jev::jev_connect, jev::jev_disconnect, jev::jev_decide,
-            charvis::charvis_credential, charvis::charvis_request, charvis::charvis_cancel,
+            charvis::charvis_credential, charvis::charvis_request, local_asr::charvis_local_transcribe, local_asr::charvis_asr_cancel, charvis::charvis_cancel,
             charvis_web::charvis_web_request, charvis_web::charvis_web_cancel,
             charvis_artifacts::charvis_create_artifact, charvis_artifacts::charvis_artifact_bytes,
             charvis_vault::charvis_vault,
@@ -842,6 +844,7 @@ fn main() {
             // Auxiliary windows cannot keep a headless main instance alive.
             // Main's close-requested handler flushes the editors before this event.
             if window.label()=="main" && matches!(event,tauri::WindowEvent::Destroyed) {
+                local_asr::stop_all();
                 let mut children:Vec<_>=window.state::<DownloadState>().active.lock().map(|mut active|active.drain().map(|(_,child)|child).collect()).unwrap_or_default();
                 for child in &mut children {stop_download_child(child); }
                 for (label,auxiliary) in window.app_handle().webview_windows() {

@@ -269,6 +269,7 @@ export interface Track {
   librarySaved?: boolean; // false only for a preview not explicitly saved to the library
   localAudioPath?: string;
   catalogId?: string;
+  artistCatalogIds?: string[];
   lyricsOffsetSeconds?: number;
   lyricsHidden?: boolean;
   id: string;
@@ -4256,7 +4257,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setCoverModalTrackId,
     addArtist: useCallback((name: string, profileImage?: string, catalogId?:string) => {
       setArtists(prev => {
-        if (prev.some(a => artistKey(a.name) === artistKey(name))) return prev.map(a=>artistKey(a.name)===artistKey(name)?{...a,origin:'catalog' as const,...(catalogId?{catalogId}:{}),...(profileImage?{profileImage}:{})}:a);
+        const matches=(a:SavedMusicArtist)=>catalogId&&a.catalogId?a.catalogId===catalogId:artistKey(a.name)===artistKey(name);
+        if (prev.some(matches)) return prev.map(a=>matches(a)?{...a,origin:'catalog' as const,...(catalogId?{catalogId}:{}),...(profileImage?{profileImage}:{})}:a);
         return [...prev, { id: crypto.randomUUID(), name, origin:'catalog' as const, catalogId, ...(profileImage ? { profileImage } : {}) }];
       });
     }, []),

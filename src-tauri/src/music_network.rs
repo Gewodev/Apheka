@@ -15,6 +15,7 @@ fn catalog_target(value:&str)->Result<reqwest::Url,String>{
     if url.scheme()!="https"||!url.username().is_empty()||url.password().is_some(){return Err("El catálogo requiere HTTPS sin credenciales en la dirección".into());}
     let permitted=match url.host_str().unwrap_or_default(){
         "music.youtube.com"|"www.youtube.com"=>url.path().starts_with("/youtubei/")||url.path()=="/sw.js_data",
+        "itunes.apple.com"=>matches!(url.path(),"/search"|"/lookup"),
         "api.audius.co"=>url.path().starts_with("/v1/")&&!url.path().contains("/stream")&&!url.path().contains("/download"),
         "lrclib.net"=>url.path().starts_with("/api/"),
         "api.lyrics.ovh"=>url.path().starts_with("/v1/")&&url.path().split('/').count()==4,

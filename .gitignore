@@ -39,3 +39,6 @@ src-tauri/gen
 # OS
 .DS_Store
 Thumbs.db
+
+# Reproducible offline dictation assets (scripts/prepare-local-asr.py)
+src-tauri/resources/asr/

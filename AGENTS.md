@@ -3,6 +3,15 @@
 
 # Summary
 
+## Sesión 2026-11-04 — APHEKA 6.25.0: consultas acotadas, recuperación y dictado local
+- Web: fuentes pertinentes con diversidad de dominios y prioridad institucional; Wikipedia excluida. Lecturas inaccesibles con estado explícito y caché breve, tres búsquedas/seis lecturas por turno, límite global de tres minutos y pausa por HTTP 429/Retry-After. Reintento dentro del chat, conservación de resultados y reutilización de escrituras confirmadas; sin llamada adicional para titular.
+- Chats/proyectos: renombrado de chats vacíos persistente, títulos manuales preservados, materiales de proyectos sin abrir recuperados bajo demanda, más iconos y títulos mayores; menús compactos, actividad y ajustes de conexión coherentes. Cinco cursos desplegables conservando su capitalización.
+- Dictado: Moonshine Tiny Streaming Spanish MIT, Voice 0.1.5/ABI 30000, recursos locales fijados por SHA-256 y proceso auxiliar cancelable, un hilo, carga al usar y liberación al terminar; sin API de Groq/OpenAI. Grabaciones limitadas a 180 s/18 MB. Recursos regenerables con scripts/prepare-local-asr.py; no se versionan pesos ni DLL.
+- Música: identificadores de todos los créditos y colaboraciones, separación de homónimos/Sous-Sol frente a Sous Sol, corroboración acotada de títulos con metadatos de Apple, caché y rechazo de versiones ajenas/recuentos bajos conocidos. Sin inventar popularidad ausente. Perfiles circulares adaptables, buscador interno, botones de guardado precisos y continuación de catálogos grandes.
+- Validación: TypeScript y producción correctos (40.23 s), Rust optimizado 6 min; 37 pruebas nativas correctas/0 fallidas/1 omitida. Pruebas de navegador de chat, recuperación, proveedores, proyectos, audio, artistas, colas y tareas correctas; diez vistas compiladas capturadas sin errores de ejecución ni desbordamiento horizontal. Dictado real en español comprobado en ejecutable optimizado, silencio sin texto; no se usaron claves privadas para cuentas reales de IA.
+- NSIS 6.25.0 final verificado, 115408209 bytes, SHA-256 C8531D90D43DC1A1417A98317188DEEF2C4D4C1643D1CB29CE8727AE9B12A1DD. Se reutilizó una caché NSIS verificada para completar el empaquetado. Informe docs/APHEKA-6.25.0.md y docs/APHEKA-release-6.25.0.json; galería release/qa-625-gallery.html. Se preservan cambios ajenos en extension/*, scripts/test-latex.ts y archivos previos; sin push.
+
+
 ## Sesión 2026-11-04 — APHEKA 6.24.1: continuidad Gemini/OpenCode y ajustes finales
 - Gemini: se preservan `extra_content`/firmas y metadatos opacos por proveedor en SSE, herramientas e historial cifrado; resultados cancelados con nombre; llamadas paralelas sin índice se resuelven por ID, sin adivinar fragmentos ambiguos.
 - OpenCode: rutas actuales `/inference/openai/v1/chat/completions` y `/inference/v1/models`; selección automática no prioriza Big Pickle/modelos `-free`. Se conservan errores reales de credencial, saldo y disponibilidad.

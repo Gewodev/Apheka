@@ -7,7 +7,7 @@ function Get-ArtifactSha256([string]$Path) {
   finally { $stream.Dispose(); $algorithm.Dispose() }
 }
 function Get-SourceSignature {
-  $files = @(& rg --files src public src-tauri/src src-tauri/installer-assets) + @('src-tauri/tauri.conf.json','src-tauri/tauri.prod.conf.json','src-tauri/installer-hooks.nsh','src-tauri/installer-tools.nsh','src-tauri/installer-template.nsi','src-tauri/capabilities/default.json','src-tauri/Cargo.toml','src-tauri/Cargo.lock','package.json','pnpm-lock.yaml','vite.config.ts','tsconfig.json','tsconfig.node.json')
+  $files = @(& rg --files src public src-tauri/src src-tauri/installer-assets src-tauri/resources/asr) + @('src-tauri/asr-manifest.json','src-tauri/tauri.conf.json','src-tauri/tauri.prod.conf.json','src-tauri/installer-hooks.nsh','src-tauri/installer-tools.nsh','src-tauri/installer-template.nsi','src-tauri/capabilities/default.json','src-tauri/Cargo.toml','src-tauri/Cargo.lock','package.json','pnpm-lock.yaml','vite.config.ts','tsconfig.json','tsconfig.node.json')
   return [string]::Join("`n", @($files | Sort-Object | ForEach-Object { $_ + ':' + (Get-ArtifactSha256 (Join-Path $repo $_)) }))
 }
 function Get-ToolSignature {
@@ -20,6 +20,8 @@ $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 Push-Location $repo
 try {
   if ($Build) {
+    $asr=Get-Content -LiteralPath (Join-Path $repo 'src-tauri/asr-manifest.json') -Raw | ConvertFrom-Json
+    foreach($entry in $asr.files){$resource=Join-Path $repo ('src-tauri/resources/asr/'+$entry.file);if(!(Test-Path -LiteralPath $resource) -or (Get-ArtifactSha256 $resource) -ne $entry.sha256.ToUpperInvariant()){throw 'Offline dictation resource missing or corrupted; run scripts/prepare-local-asr.py'}}
     & (Join-Path $PSScriptRoot 'update-tool-hashes.ps1')
     $sourceBeforeBuild = Get-SourceSignature
     $toolsBeforeBuild = Get-ToolSignature
@@ -31,7 +33,7 @@ try {
   $source = Join-Path $repo "src-tauri/target/release/bundle/nsis/APHEKA_${version}_x64-setup.exe"
   $binary = Get-Item -LiteralPath $source
   if ($binary.VersionInfo.ProductName -ne 'APHEKA' -or $binary.VersionInfo.ProductVersion -ne $version) { throw 'Installer version mismatch' }
-  $sourceFiles = @(& rg --files src public src-tauri/src src-tauri/installer-assets) + @('src-tauri/tauri.conf.json','src-tauri/tauri.prod.conf.json','src-tauri/installer-hooks.nsh','src-tauri/installer-tools.nsh','src-tauri/installer-template.nsi','src-tauri/capabilities/default.json','src-tauri/Cargo.toml','src-tauri/Cargo.lock','package.json','pnpm-lock.yaml','vite.config.ts','tsconfig.json','tsconfig.node.json')
+  $sourceFiles = @(& rg --files src public src-tauri/src src-tauri/installer-assets src-tauri/resources/asr) + @('src-tauri/asr-manifest.json','src-tauri/tauri.conf.json','src-tauri/tauri.prod.conf.json','src-tauri/installer-hooks.nsh','src-tauri/installer-tools.nsh','src-tauri/installer-template.nsi','src-tauri/capabilities/default.json','src-tauri/Cargo.toml','src-tauri/Cargo.lock','package.json','pnpm-lock.yaml','vite.config.ts','tsconfig.json','tsconfig.node.json')
   $latestSource = ($sourceFiles | ForEach-Object { (Get-Item -LiteralPath (Join-Path $repo $_)).LastWriteTimeUtc } | Sort-Object -Descending | Select-Object -First 1)
   $manifestRewrittenBeforeFrontend=$false
   if ($Build) {

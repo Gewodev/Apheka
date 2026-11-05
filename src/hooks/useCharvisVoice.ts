@@ -1,4 +1,3 @@
-import {invoke,isTauri} from '@tauri-apps/api/core';
 import {useEffect,useRef,useState} from 'react';
 import {charvisConfig,type CharvisRequest} from '../lib/charvis';
 /** Merge one-second audio overlap without repeating words in the draft. */
@@ -19,7 +18,7 @@ export function useCharvisVoice(request:CharvisRequest,onSegment:(text:string)=>
  const resume=()=>{const rec=recorder.current;if(rec?.state==='paused'){rec.resume();setPaused(false);}};
  const start=async(source:'microphone'|'system')=>{
   if(active.current||starting.current||job.current)return;if(pending.current){setError('Reintenta o cancela la grabación pendiente antes de iniciar otra.');return;}starting.current=true;const token=++generation.current;setError('');
-  try{await charvisConfig.ready();if(!navigator.mediaDevices||typeof MediaRecorder==='undefined')throw Error('La captura de audio no está disponible aquí. Adjunta un archivo de audio.');if(isTauri()){const status=await invoke<{configured:boolean}>('charvis_credential',{provider:charvisConfig.getSnapshot().voiceProvider,action:'status'});if(!status.configured)throw Error('Configura el proveedor de transcripción en Configuración antes de grabar.');}
+  try{await charvisConfig.ready();if(!navigator.mediaDevices||typeof MediaRecorder==='undefined')throw Error('La captura de audio no está disponible aquí. Adjunta un archivo de audio.');
    if(token!==generation.current||!mounted.current)return;const stream=source==='microphone'?await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true},video:false}):await navigator.mediaDevices.getDisplayMedia({audio:true,video:true});if(token!==generation.current||!mounted.current){stream.getTracks().forEach(t=>t.stop());return;}if(!stream.getAudioTracks().length){stream.getTracks().forEach(t=>t.stop());throw Error('Selecciona una pantalla o pestaña y comparte su audio.');}media.current=stream;
    const mime=['audio/webm;codecs=opus','audio/webm','audio/mp4'].find(type=>MediaRecorder.isTypeSupported(type)),rec=new MediaRecorder(new MediaStream(stream.getAudioTracks()),mime?{mimeType:mime}:undefined),chunks:BlobPart[]=[];let bytes=0;recorder.current=rec;active.current=true;
    rec.ondataavailable=event=>{if(token!==generation.current)return;if(event.data.size){bytes+=event.data.size;if(bytes>18*1024*1024){setError('La grabación alcanzó el límite de tamaño.');stop();return;}chunks.push(event.data);}};

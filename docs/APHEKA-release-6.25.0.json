@@ -1,0 +1,216 @@
+{
+  "version": "6.25.0",
+  "date": "2026-11-04",
+  "baseCommit": "6b4aa7b",
+  "status": "validated_installer_built",
+  "frontend": {
+    "typescript": "passed",
+    "production": "passed",
+    "viteSeconds": 40.23
+  },
+  "logic": {
+    "status": "passed",
+    "log": "release/qa-625-logic.log",
+    "scope": "Actual modules with controlled OS, storage and network transports; not performance benchmarks"
+  },
+  "nativeASR": {
+    "spanish": "passed_real_public_audio",
+    "silence": "passed_empty_text",
+    "engine": "Moonshine Tiny Streaming Spanish 26_08_24 / Voice 0.1.5",
+    "language": "es",
+    "requiresAPIKey": false,
+    "resourcesBytes": 56100146,
+    "optimizedExecutable": "passed_real_spanish_audio"
+  },
+  "browser": {
+    "core625": "passed",
+    "interruption": "passed",
+    "transport": "passed",
+    "chatAndProjects": "passed",
+    "retrieval": "passed",
+    "music": "passed",
+    "controls": "passed",
+    "voice": "passed",
+    "composer": "passed",
+    "continuity": "passed",
+    "responsiveCaptures": "passed",
+    "gallery": "release/qa-625-gallery.html"
+  },
+  "liveProviderAccounts": "not_tested_no_private_keys_used",
+  "unrelatedFilesPreserved": [
+    "extension/background.js",
+    "extension/block.html",
+    "extension/manifest.json",
+    "extension/popup.html",
+    "scripts/test-latex.ts"
+  ],
+  "installer": {
+    "product": "APHEKA",
+    "version": "6.25.0",
+    "identifier": "com.owa.studio",
+    "file": "apheka_FINAL.exe",
+    "bytes": 115408209,
+    "sha256": "C8531D90D43DC1A1417A98317188DEEF2C4D4C1643D1CB29CE8727AE9B12A1DD",
+    "modifiedAtUtc": "2026-11-05T00:50:19.2637295Z",
+    "sourceLatestEditUtc": "2026-11-05T00:11:55.7665158Z",
+    "manifestRewrittenBeforeFrontend": false,
+    "buildCommand": "pnpm tauri build --config src-tauri/tauri.prod.conf.json --bundles nsis",
+    "embeddedFrontendAssets": [
+      "assets/index-D_m6ZHuj.js",
+      "assets/charts-DQ4Dkqgr.js",
+      "assets/anim-DmwEpK7h.js",
+      "assets/tauri-Du2YxjyO.js",
+      "assets/storage-DwnyWBFG.js",
+      "assets/audio-meta-CT9Hv6Ta.js",
+      "assets/date-COeAPjBE.js",
+      "assets/index-BhpxTRe2.css"
+    ],
+    "legacyUpgrade": "Exact NSIS product identities and MSI upgrade GUIDs; /UPDATE preserves AppData",
+    "dataDirectory": "com.owa.studio (existing desktop data directory retained)",
+    "bundleCommand": "pnpm tauri bundle --config src-tauri/tauri.prod.conf.json --config Temp/tauri-625-tools.json --bundles nsis",
+    "offlineVoice": {
+      "engine": "Moonshine Tiny Streaming Spanish",
+      "language": "es",
+      "bundled": true,
+      "integrityVerified": true
+    }
+  },
+  "native": {
+    "passed": 37,
+    "failed": 0,
+    "ignored": 1
+  },
+  "production": {
+    "status": "passed",
+    "views": 10,
+    "runtimeErrors": 0,
+    "horizontalDocumentOverflow": 0,
+    "samples": [
+      {
+        "view": "inicio",
+        "performance": {
+          "idleSampleMs": 1214,
+          "idleLongTasks": 0,
+          "scrollLongTasks": 0,
+          "scrollFrames": 0,
+          "scrollFrameP95Ms": null,
+          "longestTaskMs": 0,
+          "heapMiB": 11
+        }
+      },
+      {
+        "view": "estudio",
+        "performance": {
+          "idleSampleMs": 1212,
+          "idleLongTasks": 0,
+          "scrollLongTasks": 0,
+          "scrollFrames": 0,
+          "scrollFrameP95Ms": null,
+          "longestTaskMs": 0,
+          "heapMiB": 15
+        }
+      },
+      {
+        "view": "tareas",
+        "performance": {
+          "idleSampleMs": 1204,
+          "idleLongTasks": 0,
+          "scrollLongTasks": 0,
+          "scrollFrames": 0,
+          "scrollFrameP95Ms": null,
+          "longestTaskMs": 0,
+          "heapMiB": 11
+        }
+      },
+      {
+        "view": "notas",
+        "performance": {
+          "idleSampleMs": 1217,
+          "idleLongTasks": 0,
+          "scrollLongTasks": 0,
+          "scrollFrames": 0,
+          "scrollFrameP95Ms": null,
+          "longestTaskMs": 0,
+          "heapMiB": 11
+        }
+      },
+      {
+        "view": "musica",
+        "performance": {
+          "idleSampleMs": 1208,
+          "idleLongTasks": 0,
+          "scrollLongTasks": 0,
+          "scrollFrames": 0,
+          "scrollFrameP95Ms": null,
+          "longestTaskMs": 0,
+          "heapMiB": 10
+        }
+      },
+      {
+        "view": "planificacion",
+        "performance": {
+          "idleSampleMs": 1204,
+          "idleLongTasks": 0,
+          "scrollLongTasks": 0,
+          "scrollFrames": 0,
+          "scrollFrameP95Ms": null,
+          "longestTaskMs": 0,
+          "heapMiB": 12
+        }
+      },
+      {
+        "view": "cursos",
+        "performance": {
+          "idleSampleMs": 1217,
+          "idleLongTasks": 0,
+          "scrollLongTasks": 0,
+          "scrollFrames": 0,
+          "scrollFrameP95Ms": null,
+          "longestTaskMs": 0,
+          "heapMiB": 10
+        }
+      },
+      {
+        "view": "curso_detalle",
+        "performance": {
+          "idleSampleMs": 1206,
+          "idleLongTasks": 0,
+          "scrollLongTasks": 0,
+          "scrollFrames": 0,
+          "scrollFrameP95Ms": null,
+          "longestTaskMs": 0,
+          "heapMiB": 15
+        }
+      },
+      {
+        "view": "ia",
+        "chatHeight": 944,
+        "nav": []
+      },
+      {
+        "view": "ia",
+        "performance": {
+          "idleSampleMs": 1215,
+          "idleLongTasks": 0,
+          "scrollLongTasks": 0,
+          "scrollFrames": 0,
+          "scrollFrameP95Ms": null,
+          "longestTaskMs": 0,
+          "heapMiB": 11
+        }
+      },
+      {
+        "view": "ajustes",
+        "performance": {
+          "idleSampleMs": 1212,
+          "idleLongTasks": 0,
+          "scrollLongTasks": 0,
+          "scrollFrames": 36,
+          "scrollFrameP95Ms": 103.2,
+          "longestTaskMs": 0,
+          "heapMiB": 11
+        }
+      }
+    ]
+  }
+}

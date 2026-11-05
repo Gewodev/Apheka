@@ -104,3 +104,16 @@
 
 .charvis-chat-refined .charvis-projects-page{padding-inline:clamp(28px,3vw,44px)!important}.charvis-chat-refined .charvis-chat-feed{padding-inline:28px!important}.charvis-chat-refined .charvis-composer-wrap{padding-inline:28px}.charvis-chat-refined .charvis-project-composer .charvis-composer-wrap{padding-inline:0}
 @container charvis (max-width:650px){.charvis-chat-refined .charvis-projects-page{padding-inline:20px!important}.charvis-chat-refined .charvis-chat-feed{padding-inline:16px!important}.charvis-chat-refined .charvis-composer-wrap{padding-inline:14px}.charvis-chat-refined .charvis-project-composer .charvis-composer-wrap{padding-inline:0}}
+
+/* Compact menus and quieter, readable workspace hierarchy. */
+.charvis-global-context{min-width:174px!important;width:190px!important;padding:5px!important;border-radius:12px!important}
+.charvis-global-context>button{min-height:33px!important;padding:7px 10px!important;margin:0!important}
+.charvis-project-grid>button>strong{font-size:23px!important;line-height:1.25!important;letter-spacing:-.025em;overflow-wrap:anywhere}
+.charvis-project-grid>button{min-height:168px;gap:12px;transition:transform 180ms ease,background-color 180ms ease}
+.charvis-project-personality>div:first-child{display:flex;flex-wrap:wrap;gap:8px}
+.charvis-project-personality button[aria-pressed=true]{color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.charvis-key-summary{display:flex;align-items:center;gap:12px;padding:14px 0;min-width:0}.charvis-key-summary>span{flex:1;min-width:0}.charvis-key-summary small,.charvis-local-voice small{display:block;color:var(--text-secondary);font-size:12px;overflow-wrap:anywhere}
+.charvis-chat-error{align-items:center;gap:12px}.charvis-chat-error>span{flex:1;min-width:0}.charvis-chat-error button:not([aria-label]){border:0;background:transparent;color:var(--text-primary);white-space:nowrap;font:500 12px var(--font-primary);padding:8px}
+.charvis-phase-label{display:inline-block;animation:charvis-phase-in 320ms ease both}.charvis-consultation-toggle{min-height:34px}
+@keyframes charvis-phase-in{from{opacity:.25;transform:translateY(3px);clip-path:inset(0 70% 0 0)}to{opacity:1;transform:none;clip-path:inset(0)}}
+@media(prefers-reduced-motion:reduce){.charvis-phase-label{animation:none}.charvis-project-grid>button{transition:none}}

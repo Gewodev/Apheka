@@ -1,5 +1,5 @@
 /** Match complete credited names, including collaborations, without substring identity guesses. */
-export const artistKey=(name:string)=>name.normalize('NFKD').replace(/\p{M}/gu,'').toLocaleLowerCase().replace(/\s*[-–]\s*topic\s*$/i,'').replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+export const artistKey=(name:string)=>name.normalize('NFKD').replace(/\p{M}/gu,'').toLocaleLowerCase().replace(/\s*[-–]\s*topic\s*$/i,'').replace(/[–—]/g,'-').replace(/[^\p{L}\p{N}-]+/gu,' ').replace(/\s*-\s*/g,'-').trim();
 export function creditedArtist(credits:string,name:string){
  const key=artistKey(name);if(!key)return false;
  const whole=artistKey(credits);if(whole===key)return true;
@@ -7,5 +7,7 @@ export function creditedArtist(credits:string,name:string){
 }
 export type SavedMusicArtist={id:string;name:string;profileImage?:string;catalogId?:string;origin?:'catalog';trackIds?:string[]};
 export function pinnedArtists(artists:SavedMusicArtist[]){
- const names=new Set<string>();return artists.filter(artist=>{const key=artistKey(artist.name);if(!key||names.has(key)||(!artist.origin&&!artist.profileImage&&!artist.catalogId))return false;names.add(key);return true;});
+ const names=new Set<string>();return artists.filter(artist=>{const key=artist.catalogId||artistKey(artist.name);if(!key||names.has(key)||(!artist.origin&&!artist.profileImage&&!artist.catalogId))return false;names.add(key);return true;});
 }
+
+export function libraryArtistMatch(track:{artist:string;artistCatalogIds?:string[]},artist:SavedMusicArtist){return track.artistCatalogIds?.length&&artist.catalogId?track.artistCatalogIds.includes(artist.catalogId):creditedArtist(track.artist,artist.name);}

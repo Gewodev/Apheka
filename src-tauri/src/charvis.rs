@@ -20,12 +20,13 @@ fn target(provider:&str)->Result<String,String>{base(provider)?;Ok(format!("APHE
 async fn bounded(mut response:reqwest::Response,on_event:Option<&tauri::ipc::Channel<Value>>,key:&str)->Result<Value,String>{
  let status=response.status().as_u16();
  if !(200..300).contains(&status){
+  let retry_after=response.headers().get(reqwest::header::RETRY_AFTER).and_then(|value|value.to_str().ok()).and_then(|value|value.parse::<u64>().ok()).unwrap_or(30).clamp(1,86400);
   let mut bytes=Vec::new();while let Ok(Some(chunk))=response.chunk().await{if bytes.len()+chunk.len()>16384{break;}bytes.extend_from_slice(&chunk);}
   let error=serde_json::from_slice::<Value>(&bytes).unwrap_or(Value::Null);
   let detail=error["error"]["message"].as_str().or_else(||error["message"].as_str()).unwrap_or("").replace(key,"[clave protegida]");
   let detail=detail.chars().filter(|c|!c.is_control()).take(450).collect::<String>();
   let title=match status{400|422=>"El proveedor rechazó un parámetro del modelo.",401|403=>"El proveedor rechazó la clave o sus permisos.",402=>"El modelo requiere saldo en el proveedor.",429=>"El proveedor alcanzó su límite. Espera antes de reenviar.",404=>"El modelo o ruta seleccionados no están disponibles.",_=>"El proveedor no pudo completar la consulta."};
-  return Err(format!("{title} (HTTP {status}) {}",detail));
+  return Err(format!("{title} (HTTP {status}) {}{}",if status==429{format!("[retry-after={retry_after}] ")}else{String::new()},detail));
  }
  let streaming=response.headers().get(reqwest::header::CONTENT_TYPE).and_then(|v|v.to_str().ok()).is_some_and(|v|v.contains("text/event-stream"));
  let mut bytes=Vec::new();let mut total=0usize;

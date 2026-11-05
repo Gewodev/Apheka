@@ -1,6 +1,6 @@
 {
   "productName": "APHEKA",
-  "version": "6.24.1",
+  "version": "6.25.0",
   "identifier": "com.owa.studio",
   "build": {
     "beforeDevCommand": "pnpm run dev",
@@ -36,7 +36,8 @@
     "resources": {
       "bin/yt-dlp-x86_64-pc-windows-msvc.exe": "bin/yt-dlp.exe",
       "bin/ffmpeg-x86_64-pc-windows-msvc.exe": "bin/ffmpeg.exe",
-      "bin/ffprobe-x86_64-pc-windows-msvc.exe": "bin/ffprobe.exe"
+      "bin/ffprobe-x86_64-pc-windows-msvc.exe": "bin/ffprobe.exe",
+      "resources/asr/": "asr/"
     },
     "active": true,
     "targets": "all",
