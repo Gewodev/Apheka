@@ -15,7 +15,7 @@ impl Completion {
     pub fn accept(&mut self, data: &str) -> Result<(), String> {
         if data.trim() == "[DONE]" { self.finished = true; return Ok(()); }
         let value: Value = serde_json::from_str(data).map_err(|_| "El proveedor interrumpió el formato del stream.")?;
-        if value.get("error").is_some() { return Err("El proveedor interrumpió la consulta. Los cambios ya confirmados se conservan.".into()); }
+        if value.get("error").is_some() {let status=crate::charvis::error_status(&value,502);return Err(format!("El proveedor interrumpió la consulta (HTTP {status}). {}Los cambios ya confirmados se conservan.",if status==429{format!("[retry-after={}] ",crate::charvis::retry_seconds(None,&value))}else{String::new()}));}
         let Some(choice) = value["choices"].as_array().and_then(|items|items.first()) else { return Ok(()); };
         let delta = &choice["delta"];
         if let Some(text) = delta["content"].as_str() { self.text.push_str(text); }
@@ -94,3 +94,5 @@ mod tests {
         assert_eq!(calls[1]["extra_content"]["google"]["thought_signature"],"second-signature");
     }
 }
+
+#[cfg(test)] mod quota_stream_tests {use super::*;#[test] fn stream_429_preserves_cooldown(){let mut response=Completion::default();let error=response.accept(r#"{"error":{"code":429,"details":[{"retryDelay":"70s"}]}}"#).unwrap_err();assert!(error.contains("HTTP 429"));assert!(error.contains("[retry-after=70]"));}}

@@ -117,3 +117,30 @@
 .charvis-phase-label{display:inline-block;animation:charvis-phase-in 320ms ease both}.charvis-consultation-toggle{min-height:34px}
 @keyframes charvis-phase-in{from{opacity:.25;transform:translateY(3px);clip-path:inset(0 70% 0 0)}to{opacity:1;transform:none;clip-path:inset(0)}}
 @media(prefers-reduced-motion:reduce){.charvis-phase-label{animation:none}.charvis-project-grid>button{transition:none}}
+
+/* Quiet native scrolling, with full keyboard and wheel behavior retained. */
+.charvis-chat-app *{scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--text-secondary) 38%,transparent) transparent}
+.charvis-chat-app ::-webkit-scrollbar{width:6px;height:6px}.charvis-chat-app ::-webkit-scrollbar-track,.charvis-chat-app ::-webkit-scrollbar-corner{background:transparent}.charvis-chat-app ::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--text-secondary) 34%,transparent);border:1px solid transparent;border-radius:8px;background-clip:padding-box}.charvis-chat-app ::-webkit-scrollbar-thumb:hover{background:var(--text-secondary)}.charvis-chat-app ::-webkit-scrollbar-button{display:none;width:0;height:0}
+.charvis-chat-app .charvis-chat-feed,.charvis-chat-app .charvis-rail-conversations{overscroll-behavior:contain}
+.charvis-chat-app .charvis-chat-rail{padding:22px 16px 16px;transition:opacity 160ms ease-out,transform 160ms ease-out;animation:charvis-rail-enter 180ms ease-out both}
+.charvis-chat-rail[data-open=false]{opacity:0;transform:translateX(-12px);pointer-events:none}.charvis-chat-app .charvis-rail-projects{margin-top:22px}.charvis-chat-app .charvis-thread-row{margin:4px 0}.charvis-chat-app .charvis-thread-row>button{padding:10px 12px}.charvis-chat-app .charvis-rail-projects>header{padding:0 4px 9px}.charvis-chat-app .charvis-rail-section-label{margin:22px 8px 10px}
+.charvis-project-color-field{border:0;padding:0;margin:8px 0 20px;min-width:0}.charvis-project-color-field>legend{font:500 12px var(--font-primary);color:var(--text-secondary);margin-bottom:12px}.charvis-project-color-field .charvis-project-colors{display:flex;gap:12px;flex-wrap:wrap}
+.charvis-chat-refined .charvis-composer-entry>.charvis-voice-progress{display:flex;align-items:center;gap:10px;flex:1;min-width:0;width:auto;padding:0;margin:0;border:0;background:transparent;min-height:32px}
+.charvis-chat-refined .charvis-voice-progress>span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:500 12px var(--font-primary);color:var(--text-secondary)}.charvis-chat-refined .charvis-voice-progress>time{font:12px var(--font-primary);font-variant-numeric:tabular-nums;color:var(--text-secondary);flex:none}.charvis-chat-refined .charvis-voice-progress>div:last-child{display:flex;align-items:center;gap:3px;flex:none}
+.charvis-chat-refined .charvis-voice-progress button{display:grid;place-items:center;width:28px;height:30px;padding:0;border:0;background:transparent;color:var(--text-secondary);border-radius:6px}.charvis-chat-refined .charvis-voice-progress button:hover{background:var(--bg-hover);color:var(--text-primary)}
+.charvis-chat-refined .charvis-voice-meter{display:flex;align-items:center;gap:2px;width:50px;height:25px;flex:none;overflow:hidden}.charvis-chat-refined .charvis-voice-meter>i{display:block;width:2px;height:22px;background:var(--accent);border-radius:2px;transform:scaleY(.16);transform-origin:center;transition:transform 110ms linear}
+.charvis-chat-refined .charvis-voice-progress[data-phase=transcribing] .charvis-voice-meter>i{animation:charvis-audio-process 1.2s ease-in-out infinite}.charvis-chat-refined .charvis-voice-progress[data-phase=transcribing] .charvis-voice-meter>i:nth-child(3n){animation-delay:-.4s}.charvis-chat-refined .charvis-voice-progress[data-phase=transcribing] .charvis-voice-meter>i:nth-child(3n+1){animation-delay:-.8s}
+@keyframes charvis-audio-process{0%,100%{transform:scaleY(.18)}50%{transform:scaleY(.65)}}@keyframes charvis-rail-enter{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.charvis-chat-app .charvis-chat-rail,.charvis-chat-refined .charvis-voice-meter>i{animation:none!important;transition:none!important}}
+@media(forced-colors:active){.charvis-chat-app *{scrollbar-color:auto;scrollbar-width:auto}}
+
+.charvis-chat-app .charvis-chat-rail[data-open=false]{animation:none;opacity:0;transform:translateX(-12px)}
+
+/* A single blurred workspace layer, rather than a filter on every message. */
+[data-has-bg] .charvis-chat-app{background:color-mix(in srgb,var(--bg-base) calc(var(--ui-opacity,.85)*100%),transparent)!important;backdrop-filter:blur(clamp(6px,var(--bg-blur,8px),18px));-webkit-backdrop-filter:blur(clamp(6px,var(--bg-blur,8px),18px))}
+[data-has-bg] .charvis-chat-app .charvis-chat-main,[data-has-bg] .charvis-chat-app .charvis-chat-body,[data-has-bg] .charvis-chat-app .charvis-chat-feed{background:transparent!important}
+[data-has-bg] .charvis-chat-app :is(.charvis-chat-rail,.charvis-inspector-dock,.charvis-evidence-panel,.charvis-document-panel){background:color-mix(in srgb,var(--bg-surface) calc(var(--ui-opacity,.85)*100%),transparent)!important}
+[data-has-bg] .charvis-chat-app :is(.charvis-composer-v2,.charvis-turn[data-role=user],.charvis-artifact-card,.charvis-project-grid>button,.charvis-source-list>article,.charvis-project-empty-action){background:color-mix(in srgb,var(--bg-elevated-raw) calc(max(.45,var(--ui-opacity,.85))*100%),transparent)!important}
+.charvis-chat-refined :is(.charvis-composer-v2,.charvis-thread-row>button,.charvis-project-tabs>button){transition:background-color 180ms ease-out,border-color 180ms ease-out,color 180ms ease-out}
+.charvis-chat-refined .charvis-inspector-dock{animation:charvis-inspector-in 190ms cubic-bezier(.16,1,.3,1)}
+@media(prefers-reduced-motion:reduce){.charvis-chat-refined :is(.charvis-composer-v2,.charvis-thread-row>button,.charvis-project-tabs>button){transition:none}.charvis-chat-refined .charvis-inspector-dock{animation:none}}

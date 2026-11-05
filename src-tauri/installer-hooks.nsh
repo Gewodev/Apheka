@@ -4,14 +4,21 @@
 !include FileFunc.nsh
 !include "${__FILEDIR__}\installer-tools.nsh"
 SetFont "Segoe UI" 10
-!define MUI_BGCOLOR "F7F9F5"
-!define MUI_TEXTCOLOR "283333"
-!define MUI_INSTALLCOLORS "283333 F7F9F5"
-!define MUI_INSTFILESPAGE_COLORS "283333 F7F9F5"
-!define MUI_WELCOMEPAGE_TITLE "Bienvenido a APHEKA"
-!define MUI_WELCOMEPAGE_TEXT "Todo tu estudio, en un solo espacio.$\r$\n$\r$\nEste asistente instala APHEKA o actualiza tu versión anterior. Si encuentra OWA Studio, sustituirá sus archivos de aplicación y conservará tus datos.$\r$\n$\r$\nHecho por Gewodev."
-!define MUI_FINISHPAGE_TITLE "APHEKA está lista"
-!define MUI_FINISHPAGE_TEXT "La instalación ha terminado.$\r$\n$\r$\nTus notas, cursos, tareas y archivos siguen en su carpeta de datos habitual.$\r$\n$\r$\nYa puedes abrir APHEKA."
+!define MUI_BGCOLOR "F3F5F2"
+!define MUI_TEXTCOLOR "252A2E"
+!define MUI_INSTALLCOLORS "252A2E F3F5F2"
+!define MUI_INSTFILESPAGE_COLORS "252A2E F3F5F2"
+!define MUI_WELCOMEPAGE_TITLE "Tu espacio, a tu ritmo."
+!define MUI_HEADERIMAGE_RIGHT
+!define MUI_WELCOMEPAGE_TEXT "APHEKA ${VERSION} · Windows 64 bits$\r$\n$\r$\nEstudio, materiales, tareas y música, en un mismo espacio.$\r$\n$\r$\nIncluye Charvis con dictado local en español y una biblioteca musical más clara.$\r$\n$\r$\nTus notas, cursos, archivos y conversaciones se conservan.$\r$\n$\r$\nPulsa Continuar para revisar la instalación."
+!define MUI_DIRECTORYPAGE_TEXT_TOP "Elige la carpeta de la aplicación. Tus materiales y conversaciones permanecen en su ubicación habitual."
+!define MUI_INSTFILESPAGE_HEADER_TEXT "Preparando APHEKA"
+!define MUI_INSTFILESPAGE_HEADER_SUBTEXT "Instalando los archivos de la aplicación y el dictado local."
+!define MUI_FINISHPAGE_TITLE "Tu espacio está listo"
+!define MUI_FINISHPAGE_TEXT "APHEKA ${VERSION} ya está preparada.$\r$\n$\r$\nPuedes continuar con tus cursos, conversaciones y música. Los datos existentes permanecen en su carpeta habitual."
+!define MUI_FINISHPAGE_RUN_TEXT "Abrir APHEKA"
+Var AphekaWelcomeTitleFont
+
 !define MUI_CUSTOMFUNCTION_GUIINIT APHEKA_CAPTURE_HISTORY
 Var AphekaHadPrevious
 Var AphekaPreviousName

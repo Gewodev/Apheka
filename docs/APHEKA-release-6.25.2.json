@@ -1,0 +1,34 @@
+{
+  "product": "APHEKA",
+  "version": "6.25.2",
+  "identifier": "com.owa.studio",
+  "file": "apheka_FINAL.exe",
+  "bytes": 115436154,
+  "sha256": "D6E5B48905FB3996E1E39179D294DF75C7374649DA45BDBF7927E07B934EEFFB",
+  "modifiedAtUtc": "2026-11-05T18:38:51.2069790Z",
+  "sourceLatestEditUtc": "2026-11-05T18:04:37.2201493Z",
+  "manifestRewrittenBeforeFrontend": true,
+  "buildCommand": "pnpm tauri build --config src-tauri/tauri.prod.conf.json --bundles nsis",
+  "embeddedFrontendAssets": [
+    "assets/index-Cz9DOncp.js",
+    "assets/charts-DQ4Dkqgr.js",
+    "assets/anim-DmwEpK7h.js",
+    "assets/tauri-Du2YxjyO.js",
+    "assets/storage-DwnyWBFG.js",
+    "assets/audio-meta-CT9Hv6Ta.js",
+    "assets/date-COeAPjBE.js",
+    "assets/index-BfwgKFaj.css"
+  ],
+  "legacyUpgrade": "Exact NSIS product identities and MSI upgrade GUIDs; /UPDATE preserves AppData",
+  "dataDirectory": "com.owa.studio (existing desktop data directory retained)",
+  "deliveryFile": "APHEKA_6.25.2_Instalador_x64.exe",
+  "validation": {
+    "nativePassed": 41,
+    "nativeFailed": 0,
+    "nativeIgnored": 1,
+    "compiledViews": 10,
+    "actualArtistSongs": 98,
+    "freeToolModelsInPublicCatalog": 11,
+    "privateProviderKeysUsed": false
+  }
+}

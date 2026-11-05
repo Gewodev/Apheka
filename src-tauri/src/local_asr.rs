@@ -31,7 +31,12 @@ impl Drop for TempAudio {
         let _ = std::fs::remove_dir_all(&self.0);
     }
 }
-fn run(mut command: Command, cancel: &AtomicBool, seconds: u64) -> Result<Vec<u8>, String> {
+fn run(
+    mut command: Command,
+    cancel: &AtomicBool,
+    seconds: u64,
+    failure: &str,
+) -> Result<Vec<u8>, String> {
     command
         .stdin(Stdio::null())
         .stderr(Stdio::null())
@@ -76,9 +81,16 @@ fn run(mut command: Command, cancel: &AtomicBool, seconds: u64) -> Result<Vec<u8
     };
     let bytes = reader.join().unwrap_or_default();
     if !status.success() {
-        return Err(
-            "No se pudo procesar el audio local. Comprueba que la grabación contiene voz.".into(),
-        );
+        if let Ok(value) = serde_json::from_slice::<Value>(&bytes) {
+            if let Some(error) = value["error"].as_str() {
+                return Err(error.chars().take(500).collect());
+            }
+        }
+        return Err(format!(
+            "{} (código {}).",
+            failure,
+            status.code().unwrap_or(-1)
+        ));
     }
     Ok(bytes)
 }
@@ -147,7 +159,12 @@ pub async fn charvis_local_transcribe(
                 "-t", "181", "-vn", "-ac", "1", "-ar", "16000", "-f", "f32le",
             ])
             .arg(&pcm);
-        run(decode, &flag, 25)?;
+        run(
+            decode,
+            &flag,
+            25,
+            "No se pudo leer la grabación. Prueba a grabar de nuevo",
+        )?;
         if std::fs::metadata(&pcm)
             .map_err(|_| "No hay audio legible.")?
             .len()
@@ -163,7 +180,12 @@ pub async fn charvis_local_transcribe(
             .arg(&pcm)
             .env("MOONSHINE_ORT_SINGLE_THREAD", "1")
             .env("OMP_NUM_THREADS", "1");
-        let out = run(worker, &flag, 100)?;
+        let out = run(
+            worker,
+            &flag,
+            100,
+            "El motor de dictado se cerró antes de terminar",
+        )?;
         let value: Value =
             serde_json::from_slice(&out).map_err(|_| "El dictado no devolvió texto válido.")?;
         if value["text"].as_str().unwrap_or("").trim().is_empty() {
@@ -240,7 +262,10 @@ fn transcribe(root: &Path, pcm: &Path) -> Result<Value, String> {
         return Err("Audio no válido.".into());
     }
     assert_eq!(std::mem::size_of::<Line>(), 88);
-    let path = CString::new(root.join("model").to_string_lossy().as_bytes())
+    let model_path = root.join("model");
+    // The native PathResolver may return a verbatim Windows path. Moonshine
+    // uses legacy file APIs, so adapt only the FFI path, preserving Unicode.
+    let path = CString::new(dunce::simplified(&model_path).to_string_lossy().as_bytes())
         .map_err(|_| "Ruta de modelo no válida.")?;
     unsafe {
         let _ort = libloading::Library::new(root.join("onnxruntime.dll"))
@@ -313,7 +338,7 @@ pub fn worker_main() {
     match result {
         Ok(value) => println!("{}", value),
         Err(error) => {
-            eprintln!("{}", error);
+            println!("{}", json!({"error":error}));
             std::process::exit(1);
         }
     }

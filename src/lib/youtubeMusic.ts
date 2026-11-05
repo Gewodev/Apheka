@@ -6,7 +6,7 @@ import {catalogFetch} from './musicNetwork';
 import type {Track} from '../store/AppContext';
 import {musicRelevance,cleanMusicQuery,curateSongs,musicPlayCount} from './musicSearch';
 export type MusicSong={id:string;title:string;artist:string;artistId?:string;artistIds?:string[];album?:string;albumId?:string;duration:number;cover:string;provider:'youtube';playCount?:number};
-export type MusicEntity={id:string;name:string;artist:string;cover:string;kind:'artist'|'album'};
+export type MusicEntity={id:string;name:string;artist:string;cover:string;listeners?:number;kind:'artist'|'album'};
 export type MusicResult={songs:MusicSong[];artists:MusicEntity[];albums:MusicEntity[];continuation?:string;correction?:string};
 let session:Promise<any>|undefined;
 const searchInFlight=new Map<string,Promise<MusicResult>>();
@@ -32,12 +32,12 @@ async function transport(input:RequestInfo|URL,init?:RequestInit){
 async function client(){if(!session)session=import('youtubei.js/web.bundle').then(async({Innertube,Log})=>{Log.setLevel(Log.Level.ERROR);return Innertube.create({lang:'es',location:'PE',retrieve_player:false,generate_session_locally:true,fetch:transport});}).catch(error=>{session=undefined;throw error;});return session;}
 const title=(value:any)=>typeof value==='string'?value:String(value?.toString?.()||'');
 const catalogPlays=(node:any)=>{const text=title(node.views)||(node.flex_columns||[]).map((column:any)=>title(column.title)).find((text:string)=>/reproducciones|views|plays|escuchas|streams/i.test(text))||'';return /\d/.test(text)?musicPlayCount(text):undefined;};
-const cover=(value:any)=>{const images=Array.isArray(value)?value:value?.contents?.[0]?.image||value?.image||[];return [...images].sort((a,b)=>(b.width||0)-(a.width||0))[0]?.url?.replace(/=w\d+[^?]*/, '=w600-h600-l90-rj')||'';};
+const cover=(value:any)=>{const images=Array.isArray(value)?value:Array.isArray(value?.contents)?value.contents.flatMap((item:any)=>Array.isArray(item.image)?item.image:item.url?[item]:[]):Array.isArray(value?.image)?value.image:[];return [...images].sort((a,b)=>(b.width||0)-(a.width||0))[0]?.url?.replace(/=w\d+[^?]*/, '=w600-h600-l90-rj')||'';};
 export function normalizeMusicNodes(nodes:any[]):MusicResult{
  const songs=new Map<string,MusicSong>(),artists=new Map<string,MusicEntity>(),albums=new Map<string,MusicEntity>();
  for(const n of nodes){const kind=n.item_type,artist=(n.artists||[]).map((v:any)=>v.name).filter(Boolean).join(', '),id=n.id||n.endpoint?.payload?.browseId,name=title(n.title||n.name),image=cover(n.thumbnails||n.thumbnail),duration=Number(n.duration?.seconds||0);
  if(kind==='song'&&!recordingUnavailable(id)&&/^[\w-]{11}$/.test(id||'')&&name&&artist&&image&&duration>=20&&duration<=7200)songs.set(id,{id,title:name,artist,artistId:n.artists?.[0]?.channel_id,artistIds:(n.artists||[]).map((a:any)=>a.channel_id||a.id).filter((id:unknown)=>typeof id==='string'),album:n.album?.name,albumId:n.album?.id,duration,cover:image,provider:'youtube',playCount:catalogPlays(n)});
- if(kind==='artist'&&id&&name&&n.endpoint?.payload?.browseEndpointContextSupportedConfigs?.browseEndpointContextMusicConfig?.pageType!=='MUSIC_PAGE_TYPE_USER_CHANNEL')artists.set(id,{id,name,artist:'',cover:image,kind:'artist'});
+ if(kind==='artist'&&id&&name&&n.endpoint?.payload?.browseEndpointContextSupportedConfigs?.browseEndpointContextMusicConfig?.pageType!=='MUSIC_PAGE_TYPE_USER_CHANNEL')artists.set(id,{id,name,artist:'',cover:image,listeners:/\d/.test(title(n.subtitle||n.subscribers))?musicPlayCount(title(n.subtitle||n.subscribers)):undefined,kind:'artist'});
  if(kind==='album'&&id&&name)albums.set(id,{id,name,artist,cover:image,kind:'album'});
  // Artist cards are returned separately from regular song shelves.
  if(n.type==='MusicCardShelf'&&n.on_tap?.payload?.browseId?.startsWith('UC')){const aid=n.on_tap.payload.browseId;artists.set(aid,{id:aid,name,artist:'',cover:cover(n.thumbnail),kind:'artist'});}
@@ -59,8 +59,36 @@ export async function searchMusicCatalog(query:string,kind:'all'|'song'|'artist'
  if(!signal)return task;
  return new Promise((resolve,reject)=>{const abort=()=>{signal.removeEventListener('abort',abort);reject(new DOMException('Cancelado','AbortError'));};signal.addEventListener('abort',abort,{once:true});task!.then(value=>{signal.removeEventListener('abort',abort);if(signal.aborted)abort();else resolve(value);},error=>{signal.removeEventListener('abort',abort);reject(error);});if(signal.aborted)abort();});
 }
-export async function moreMusicCatalog(key:string){const saved=sessions.get(key);if(!saved)throw Error('Repite la búsqueda para cargar más resultados.');const result=await parsed(await saved.page.getContinuation(),saved.query);sessions.delete(key);return result;}
-export async function musicCollection(entity:MusicEntity,signal?:AbortSignal){signal?.throwIfAborted();if(!/^(UC|MPR)[\w-]{4,100}$/.test(entity.id))throw Error('Colección no válida.');const yt=await client(),page=await yt.actions.execute('/browse',{browseId:entity.id,client:'YTMUSIC',parse:true}),result=await parsed(page);if(entity.kind==='artist'){const songs=await searchMusicCatalog(entity.name,'song',signal);signal?.throwIfAborted();result.songs=await filterArtistCatalog(entity,[...new Map([...result.songs,...songs.songs].map(song=>[song.id,song])).values()],signal);result.continuation=songs.continuation;}else{const {YTNodes}=await import('youtubei.js/web.bundle'),memo=page.contents_memo,header=memo?.getType(YTNodes.MusicResponsiveHeader)?.[0]||memo?.getType(YTNodes.MusicDetailHeader)?.[0],runs=header?.strapline_text_one?.runs||header?.subtitle?.runs||[],artists=runs.filter((run:any)=>run.endpoint?.payload?.browseId?.startsWith('UC')).map((run:any)=>({name:run.text,channel_id:run.endpoint.payload.browseId}));const rows=(memo?.getType(YTNodes.MusicResponsiveListItem)||[]).filter((row:any)=>row.duration?.seconds&&/^[\w-]{11}$/.test(row.id||''));result.songs=normalizeMusicNodes(rows.map((row:any)=>({item_type:'song',id:row.id,title:row.title,artists:row.artists?.length?row.artists:row.authors?.length?row.authors:artists.length?artists:entity.artist?[{name:entity.artist}]:[],duration:row.duration,thumbnails:[{url:entity.cover,width:600}],album:{id:entity.id,name:entity.name}}))).songs;}result.songs=curateSongs(result.songs);return result;}
+const continuationResults=new Map<string,Promise<MusicResult>>();
+export async function moreMusicCatalog(key:string){
+ let pending=continuationResults.get(key);if(pending)return pending;
+ const saved=sessions.get(key);if(!saved)throw Error('Repite la búsqueda para cargar más resultados.');
+ pending=(async()=>{const result=await parsed(await saved.page.getContinuation(),saved.query);if(saved.artist){result.songs=await filterArtistCatalog(saved.artist,result.songs);if(result.continuation){const next=sessions.get(result.continuation);if(next)next.artist=saved.artist;}}return result;})();
+ if(continuationResults.size>=30)continuationResults.delete(continuationResults.keys().next().value!);continuationResults.set(key,pending);void pending.catch(()=>continuationResults.delete(key));return pending;
+}
+const artistCollections=new Map<string,{at:number;value:MusicResult}>();
+export async function musicCollection(entity:MusicEntity,signal?:AbortSignal){
+ signal?.throwIfAborted();if(!/^(UC|MPR)[\w-]{4,100}$/.test(entity.id))throw Error('Colección no válida.');
+ const cached=entity.kind==='artist'?artistCollections.get(entity.id):undefined;if(cached&&Date.now()-cached.at<300000&&(!cached.value.continuation||sessions.has(cached.value.continuation)||continuationResults.has(cached.value.continuation)))return cached.value;
+ const yt=await client(),page=await yt.actions.execute('/browse',{browseId:entity.id,client:'YTMUSIC',parse:true}),result=await parsed(page);
+ if(entity.kind==='artist'){
+  const {YTNodes}=await import('youtubei.js/web.bundle');
+  // The artist's complete top-song playlist includes joint releases. The small
+  // profile shelf and the first search page are previews, not the discography.
+  const shelf=page.contents_memo?.getType(YTNodes.MusicShelf)?.find((row:any)=>row.endpoint?.payload?.browseId?.startsWith('VL'));
+  let complete:MusicResult|undefined;try{if(shelf){signal?.throwIfAborted();complete=await parsed(await yt.music.getPlaylist(shelf.endpoint.payload.browseId));}}catch{signal?.throwIfAborted();}
+  const songs=await searchMusicCatalog(entity.name,'song',signal);signal?.throwIfAborted();
+  result.songs=await filterArtistCatalog(entity,[...new Map([...result.songs,...(complete?.songs||[]),...songs.songs].map(song=>[song.id,song])).values()],signal);
+  result.continuation=complete?.continuation||songs.continuation;
+  if(result.continuation){const next=sessions.get(result.continuation);if(next)next.artist=entity;}
+  if(artistCollections.size>=12)artistCollections.delete(artistCollections.keys().next().value!);artistCollections.set(entity.id,{at:Date.now(),value:result});
+ }else{
+  const {YTNodes}=await import('youtubei.js/web.bundle'),memo=page.contents_memo,header=memo?.getType(YTNodes.MusicResponsiveHeader)?.[0]||memo?.getType(YTNodes.MusicDetailHeader)?.[0],runs=header?.strapline_text_one?.runs||header?.subtitle?.runs||[],artists=runs.filter((run:any)=>run.endpoint?.payload?.browseId?.startsWith('UC')).map((run:any)=>({name:run.text,channel_id:run.endpoint.payload.browseId}));
+  const rows=(memo?.getType(YTNodes.MusicResponsiveListItem)||[]).filter((row:any)=>row.duration?.seconds&&/^[\w-]{11}$/.test(row.id||''));
+  result.songs=normalizeMusicNodes(rows.map((row:any)=>({item_type:'song',id:row.id,title:row.title,artists:row.artists?.length?row.artists:row.authors?.length?row.authors:artists.length?artists:entity.artist?[{name:entity.artist}]:[],duration:row.duration,thumbnails:[{url:entity.cover,width:600}],album:{id:entity.id,name:entity.name}}))).songs;
+ }
+ result.songs=curateSongs(result.songs);return result;
+}
 export async function verifiedMusicSong(catalogId:string){const id=catalogId.replace(/^ytm:/,'');for(const {value} of cache.values()){const song=value.songs.find(s=>s.id===id);if(song)return song;}throw Error('Busca primero la canción para confirmar su identificador de catálogo.');}
 let trendsPending:Promise<MusicResult>|undefined;
 async function musicTrends(){
@@ -100,12 +128,17 @@ export async function searchLyricCatalog(phrase:string,signal:AbortSignal){
 }
 
 export async function discoverArtists(preferences:{tracks:Track[];history?:string[];playCounts?:Record<string,number>},query:string,signal:AbortSignal):Promise<MusicResult>{
- const seeds=query.trim()?[query]:musicRecommendationSeeds(preferences).slice(0,3);
- if(!seeds.length){const trend=await musicTrends();for(const song of trend.songs){const name=song.artist.split(/,|;| feat\.? | ft\.? /i)[0].trim();if(name&&!seeds.includes(name))seeds.push(name);if(seeds.length===3)break;}}
- const pages=await Promise.allSettled(seeds.map(seed=>searchMusicCatalog(seed,'all',signal)));signal.throwIfAborted();
- const songs=new Map<string,MusicSong>(),artists=new Map<string,MusicEntity>();
- for(const page of pages)if(page.status==='fulfilled'){for(const song of page.value.songs)songs.set(song.id,song);for(const artist of page.value.artists){if(artist.cover&&!artists.has(artist.id))artists.set(artist.id,artist);}}
- const candidates=[...artists.values()].map(artist=>({artist,matches:[...songs.values()].filter(song=>(song.artistIds||[song.artistId]).includes(artist.id))})).filter(row=>row.matches.length>=2).sort((a,b)=>b.matches.length-a.matches.length);
- if(!query.trim()&&!candidates.length&&seeds.length){const trend=await musicTrends();signal.throwIfAborted();const names=[...new Set(trend.songs.map(song=>song.artist.split(/,|;/)[0].trim()))].slice(0,2);if(names.length){const extra=await Promise.allSettled(names.map(name=>searchMusicCatalog(name,'all',signal)));for(const result of extra)if(result.status==='fulfilled')for(const artist of result.value.artists)if(artist.cover&&result.value.songs.filter(song=>(song.artistIds||[song.artistId]).includes(artist.id)).length>=2&&!candidates.some(row=>row.artist.id===artist.id))candidates.push({artist,matches:result.value.songs});}}
- return {songs:[...songs.values()],artists:candidates.slice(0,12).map(row=>row.artist),albums:[]};
+ const sameName=(a:string,b:string)=>artistKey(a).replace(/-/g,' ')===artistKey(b).replace(/-/g,' ');const explicit=query.trim(),seeds=explicit?[explicit]:musicRecommendationSeeds(preferences).slice(0,3),artists=new Map<string,MusicEntity>(),songs=new Map<string,MusicSong>();let succeeded=false;
+ const add=(page:MusicResult)=>{succeeded=true;for(const song of page.songs)songs.set(song.id,song);for(const artist of page.artists)if(/^UC[\w-]{4,100}$/.test(artist.id)&&artist.name.trim())artists.set(artist.id,artist);};
+ // Artist-category results already identify catalog profiles. Song-credit aliases
+ // are verified on opening the profile, not used to hide discovery results.
+ const lookups=await Promise.allSettled(seeds.map(seed=>searchMusicCatalog(seed,'artist',signal)));signal.throwIfAborted();for(const [index,page] of lookups.entries())if(page.status==='fulfilled')add(explicit?page.value:{...page.value,artists:page.value.artists.filter(artist=>sameName(artist.name,seeds[index])||creditedArtist(seeds[index],artist.name))});
+ if(explicit&&!artists.size){try{add(await searchMusicCatalog(explicit,'all',signal));}catch{signal.throwIfAborted();}}
+ if(!explicit){let trend:MusicResult|undefined;try{trend=await musicTrends();signal.throwIfAborted();add(trend);}catch{signal.throwIfAborted();}
+  const names=[...new Set([...(trend?.songs||[]),...(trend?.albums||[])].flatMap(song=>song.artist.split(/,|;| feat\.? | ft\.? /i)).map(name=>name.trim()).filter(Boolean))].filter(name=>!seeds.some(seed=>artistKey(seed)===artistKey(name))).slice(0,5);
+  if(artists.size<12){const extra=await Promise.allSettled(names.map(name=>searchMusicCatalog(name,'artist',signal)));signal.throwIfAborted();for(const [index,page] of extra.entries())if(page.status==='fulfilled')add({...page.value,artists:page.value.artists.filter(artist=>sameName(artist.name,names[index])||creditedArtist(names[index],artist.name))});}
+ }
+ if(!succeeded)throw Error('No se pudo consultar el catálogo de artistas. Revisa la conexión o vuelve a intentarlo.');
+ const exact=explicit?[...artists.values()].filter(artist=>sameName(artist.name,explicit)):[],exactKnown=exact.filter(artist=>artist.listeners===undefined||artist.listeners>=1000);const list=(exact.length?(exactKnown.length?exactKnown:exact):[...artists.values()]).filter(artist=>explicit||artist.listeners===undefined||artist.listeners>=1000);if(!explicit)list.sort((a,b)=>Number(seeds.some(seed=>artistKey(seed)===artistKey(b.name)))-Number(seeds.some(seed=>artistKey(seed)===artistKey(a.name)))||(b.listeners||0)-(a.listeners||0));if(explicit)list.sort((a,b)=>Number(artistKey(b.name)===artistKey(explicit))-Number(artistKey(a.name)===artistKey(explicit))||musicRelevance(explicit,b.name,'')-musicRelevance(explicit,a.name,''));
+ return {songs:[...songs.values()],artists:list.slice(0,18),albums:[]};
 }

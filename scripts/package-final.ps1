@@ -20,6 +20,7 @@ $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 Push-Location $repo
 try {
   if ($Build) {
+    & (Join-Path $PSScriptRoot 'create-installer-art.ps1')
     $asr=Get-Content -LiteralPath (Join-Path $repo 'src-tauri/asr-manifest.json') -Raw | ConvertFrom-Json
     foreach($entry in $asr.files){$resource=Join-Path $repo ('src-tauri/resources/asr/'+$entry.file);if(!(Test-Path -LiteralPath $resource) -or (Get-ArtifactSha256 $resource) -ne $entry.sha256.ToUpperInvariant()){throw 'Offline dictation resource missing or corrupted; run scripts/prepare-local-asr.py'}}
     & (Join-Path $PSScriptRoot 'update-tool-hashes.ps1')

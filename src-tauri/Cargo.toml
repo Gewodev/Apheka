@@ -1,6 +1,6 @@
 [package]
 name = "owa-studio"
-version = "6.25.0"
+version = "6.25.2"
 description = "A premium study workspace"
 authors = ["Gewodev"]
 edition = "2021"
@@ -25,6 +25,8 @@ zip = "2"
 base64 = "0.22"
 sha2 = "0.10"
 libloading = "0.8"
+dunce = "1"
+httpdate = "1"
 tokio = { version = "1", features = ["time", "rt-multi-thread", "net", "sync", "macros"] }
 axum = "0.8"
 uuid = { version = "1", features = ["v4"] }

@@ -1,0 +1,44 @@
+/* Artist profiles share one image slot and one readable hierarchy. */
+.music-artists,.music-discover{min-width:0;padding-bottom:24px}
+.music-artists .artist-library-grid,.music-discover .discover-artists-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:28px 18px;padding:22px 0;align-items:start}
+.artist-library-grid>article{min-width:0;position:relative}
+.music-artists .artist-library-open,.music-discover .discover-artists-grid>button{position:static;display:flex;flex-direction:column;align-items:center;gap:10px;width:100%;height:auto;padding:10px 8px 14px;border:1px solid transparent;background:transparent;border-radius:12px;color:var(--text-primary);text-align:center;cursor:pointer;transition:background-color 160ms ease-out,border-color 160ms ease-out}
+.music-artists .artist-library-open:hover,.music-discover .discover-artists-grid>button:hover{background:var(--bg-hover);border-color:var(--border-subtle)}
+.music-artists .artist-library-open:focus-visible,.music-discover .discover-artists-grid>button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.music-artists .artist-library-open>strong,.music-discover .discover-artists-grid>button>strong{display:block;width:100%;font:550 16px/1.45 var(--font-primary);overflow-wrap:anywhere;white-space:normal;color:var(--text-primary)}
+.music-artists .artist-library-open>small{font:12px/1.5 var(--font-primary);color:var(--text-secondary)}
+.music-identity-image{display:grid;place-items:center;overflow:hidden;flex:none;background:var(--bg-elevated);color:var(--text-tertiary);border:1px solid var(--border-subtle);box-sizing:border-box}
+.music-identity-image>img{display:block;width:100%;height:100%;object-fit:cover}
+.music-identity-artist{width:min(160px,100%);aspect-ratio:1;border-radius:50%}
+.music-identity-song{width:42px;height:42px;border-radius:6px}
+.artist-profile-navigation{display:flex;align-items:center;padding:2px 0 18px}
+.artist-profile-navigation>button{display:inline-flex;align-items:center;gap:7px;min-height:32px;padding:4px 0;background:transparent;border:0;color:var(--text-secondary);font:500 12px var(--font-primary);cursor:pointer}
+.artist-profile-navigation>button:hover{color:var(--text-primary)}
+.music-artists .artist-profile,.music-discover .artist-profile{display:grid;grid-template-columns:144px minmax(0,1fr) auto;align-items:center;gap:26px;padding:0 0 24px;margin:0}
+.artist-profile>.music-identity-artist{width:144px;height:144px}
+.artist-profile-identity{min-width:0}.artist-profile-identity>h2{font:600 30px/1.25 var(--font-primary);letter-spacing:-.03em;margin:0 0 10px;overflow-wrap:anywhere}.artist-profile-identity>span{font:13px/1.5 var(--font-primary);color:var(--text-secondary)}
+.artist-profile-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}.artist-profile-actions>button{display:inline-flex;align-items:center;justify-content:center;gap:7px;white-space:nowrap;min-height:36px}
+.music-artists .artist-track-list{display:grid;gap:5px;margin-top:14px;padding-bottom:12px}
+.music-artists .artist-track-list>button{display:grid;grid-template-columns:42px minmax(0,1fr) auto;align-items:center;gap:14px;width:100%;padding:9px 10px;border:1px solid transparent;background:transparent;border-radius:8px;color:var(--text-primary);text-align:left;cursor:pointer}
+.music-artists .artist-track-list>button:hover{background:var(--bg-hover)}
+.music-artists .artist-track-list>button>strong{min-width:0;font:500 14px/1.55 var(--font-primary);overflow-wrap:anywhere}.music-artists .artist-track-list>button>time{font:12px var(--font-primary);font-variant-numeric:tabular-nums;color:var(--text-secondary)}
+.music-studio-content{container:music-content / inline-size}
+@container music-content (max-width:850px){.music-artists .artist-library-grid,.music-discover .discover-artists-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.music-artists .artist-profile,.music-discover .artist-profile{grid-template-columns:120px minmax(0,1fr);gap:20px}.artist-profile>.music-identity-artist{width:120px;height:120px}.artist-profile-actions{grid-column:2;justify-content:flex-start}.artist-profile-identity>h2{font-size:28px}}
+@container music-content (max-width:560px){.music-artists .artist-library-grid,.music-discover .discover-artists-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 10px}.music-artists .artist-profile,.music-discover .artist-profile{grid-template-columns:88px minmax(0,1fr);gap:16px}.artist-profile>.music-identity-artist{width:88px;height:88px}.artist-profile-identity>h2{font-size:24px}.artist-profile-actions{grid-column:1/-1;gap:8px}.artist-profile-actions>button{font-size:12px}.music-artists .artist-library-open>strong,.music-discover .discover-artists-grid>button>strong{font-size:14px}}
+@media(prefers-reduced-motion:reduce){.music-artists .artist-library-open,.music-discover .discover-artists-grid>button{transition:none}}
+
+.music-artists .artist-library-open>.music-identity-artist,.music-discover .discover-artists-grid>button>.music-identity-artist{width:min(160px,100%);height:auto;aspect-ratio:1}
+
+.queue-track-art>.music-identity-song{width:100%;height:100%;border:0;border-radius:inherit}.music-current-widget>div:first-child>button>.music-identity-song{width:100%;height:100%;border:0;border-radius:inherit}.music-current-widget .music-identity-song>svg{width:28px;height:28px}
+
+.music-discover .discover-artists-grid>button>small{font:12px/1.5 var(--font-primary);color:var(--text-secondary)}
+
+.artist-discovery-context{font:500 12px/1.5 var(--font-primary);color:var(--text-secondary);margin:20px 0 0}
+
+/* Keep intrinsic remote image dimensions out of the circular slot's sizing. */
+.music-identity-image{position:relative;min-inline-size:0;min-block-size:0}
+.music-identity-image>img{position:absolute;inset:0;inline-size:100%;block-size:100%;max-inline-size:none;max-block-size:none;object-fit:cover}
+.music-identity-artist{aspect-ratio:1/1;border-radius:50%;overflow:hidden}
+.music-artists .artist-library-open>.music-identity-artist,.music-discover .discover-artists-grid>button>.music-identity-artist{flex:0 0 auto;inline-size:min(160px,100%);block-size:auto;min-block-size:0;aspect-ratio:1/1}
+
+.artist-catalog-status{font:12px/1.6 var(--font-primary);color:var(--text-secondary);margin:12px 0}.artist-catalog-more{margin:16px 0 24px}

@@ -1,3 +1,4 @@
+import MusicIdentityImage from './MusicIdentityImage';
 import {markQueueManual} from '../../lib/queueResume';
 import {useLayoutEffect,useRef,useState,useMemo} from 'react';
 import {DndContext,PointerSensor,TouchSensor,KeyboardSensor,useSensor,useSensors,useDroppable,pointerWithin,closestCenter} from '@dnd-kit/core';
@@ -5,14 +6,14 @@ import {SortableContext,useSortable,arrayMove,verticalListSortingStrategy,sortab
 import {CSS} from '@dnd-kit/utilities';
 import {restrictToVerticalAxis} from '@dnd-kit/modifiers';
 import MusicNowPlayingCard from './MusicNowPlayingCard';
-import {AlignLeft,Shuffle,X,Music} from 'lucide-react';
+import {AlignLeft,Shuffle,X} from 'lucide-react';
 import {useAppSlice,type Track} from '../../store/AppContext';
 import {useMusicTransport} from '../../lib/musicTransport';
 import LyricsPanel from './LyricsPanel';
 function QueueEnd({active}:{active:boolean}){const {setNodeRef,isOver}=useDroppable({id:'queue-end'});return <div ref={setNodeRef} className="queue-drop-end" data-active={active} data-over={isOver} aria-label="Final de la cola visible"/>;}
 function QueueRow({track,index,onPlay,onRemove,onMove}:{track:Track;index:number;onPlay:()=>void;onRemove:()=>void;onMove:(direction:number)=>void}){
  const sort=useSortable({id:track.id});
- return <article ref={sort.setNodeRef} className="queue-sortable-row" data-track-id={track.id} data-dragging={sort.isDragging} style={{transform:CSS.Transform.toString(sort.transform),transition:sort.transition}}><button className="queue-drag-handle" {...sort.attributes} {...sort.listeners} aria-label={'Reordenar '+track.title} title="Reordenar" onKeyDown={event=>{if(event.altKey&&['ArrowUp','ArrowDown'].includes(event.key)){event.preventDefault();onMove(event.key==='ArrowUp'?-1:1);}else sort.listeners?.onKeyDown?.(event);}}><span className="queue-track-art">{track.coverImage||track.coverUrl?<img src={track.coverImage||track.coverUrl} alt="" loading="lazy" decoding="async"/>:<Music size={16}/>}</span></button><button className="queue-track-play" aria-label={'Reproducir siguiente: '+track.title} onClick={onPlay}><span><strong>{track.title}</strong><small>{track.artist}</small></span></button><button className="queue-remove" aria-label={'Quitar '+track.title+' de la cola'} onClick={onRemove}><X size={14}/></button></article>;
+ return <article ref={sort.setNodeRef} className="queue-sortable-row" data-track-id={track.id} data-dragging={sort.isDragging} style={{transform:CSS.Transform.toString(sort.transform),transition:sort.transition}}><button className="queue-drag-handle" {...sort.attributes} {...sort.listeners} aria-label={'Reordenar '+track.title} title="Reordenar" onKeyDown={event=>{if(event.altKey&&['ArrowUp','ArrowDown'].includes(event.key)){event.preventDefault();onMove(event.key==='ArrowUp'?-1:1);}else sort.listeners?.onKeyDown?.(event);}}><span className="queue-track-art"><MusicIdentityImage src={track.coverImage||track.coverUrl} name={track.title} kind="song"/></span></button><button className="queue-track-play" aria-label={'Reproducir siguiente: '+track.title} onClick={onPlay}><span><strong>{track.title}</strong><small>{track.artist}</small></span></button><button className="queue-remove" aria-label={'Quitar '+track.title+' de la cola'} onClick={onRemove}><X size={14}/></button></article>;
 }
 export default function MusicQueuePanel({suspended=false}:{suspended?:boolean}){
  const a=useAppSlice(['tracks','currentTrackId','playTrack','musicQueue','setMusicQueue','queueSource','setQueueSource','shuffleMode','updateTrack']),transport=useMusicTransport(),track=a.tracks.find(t=>t.id===a.currentTrackId);

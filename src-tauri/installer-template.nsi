@@ -76,7 +76,8 @@ Var WixMode
 Var OldMainBinaryName
 
 Name "${PRODUCTNAME}"
-BrandingText "${COPYRIGHT}"
+BrandingText "APHEKA ${VERSION} · Gewodev"
+Caption "APHEKA ${VERSION} · Instalar y actualizar"
 OutFile "${OUTFILE}"
 
 ; We don't actually use this value as default install path,
@@ -87,7 +88,8 @@ InstallDir "${PLACEHOLDER_INSTALL_DIR}"
 
 VIProductVersion "${VERSIONWITHBUILD}"
 VIAddVersionKey "ProductName" "${PRODUCTNAME}"
-VIAddVersionKey "FileDescription" "${PRODUCTNAME}"
+VIAddVersionKey "FileDescription" "APHEKA · Instalador de escritorio"
+VIAddVersionKey "Comments" "Estudio, organización y Charvis en un solo espacio."
 VIAddVersionKey "LegalCopyright" "${COPYRIGHT}"
 VIAddVersionKey "FileVersion" "${VERSION}"
 VIAddVersionKey "ProductVersion" "${VERSION}"
@@ -166,7 +168,15 @@ VIAddVersionKey "ProductVersion" "${VERSION}"
 ; Installer pages, must be ordered as they appear
 ; 1. Welcome Page
 !define MUI_PAGE_CUSTOMFUNCTION_PRE SkipIfPassive
+!define MUI_PAGE_CUSTOMFUNCTION_SHOW APHEKA_WELCOME_STYLE
 !insertmacro MUI_PAGE_WELCOME
+
+Function APHEKA_WELCOME_STYLE
+  CreateFont $AphekaWelcomeTitleFont "Segoe UI" 16 600
+  SendMessage $mui.WelcomePage.Title ${WM_SETFONT} $AphekaWelcomeTitleFont 1
+  GetDlgItem $0 $HWNDPARENT 1
+  SendMessage $0 ${WM_SETTEXT} 0 "STR:Continuar"
+FunctionEnd
 
 ; 2. License Page (if defined)
 !if "${LICENSE}" != ""

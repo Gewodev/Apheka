@@ -2810,11 +2810,13 @@ dependencies = [
 
 [[package]]
 name = "owa-studio"
-version = "6.25.0"
+version = "6.25.2"
 dependencies = [
  "axum",
  "base64 0.22.1",
  "dirs 5.0.1",
+ "dunce",
+ "httpdate",
  "libloading 0.8.9",
  "reqwest 0.12.28",
  "serde",

@@ -3,6 +3,24 @@
 
 # Summary
 
+## Sesión 2026-11-05 — APHEKA 6.25.2: conexión explícita, cuotas y colaboraciones
+- Proveedores: Conectar guarda la clave del proveedor y consulta modelos; Aplicar espera el guardado protegido del proveedor/modelo y confirma la selección en uso, sin consulta generativa de prueba. Modelo local en edición, carga inicial esperada y claves rechazadas 401/403 bloqueadas. Sin cambio silencioso a OpenCode. Diez proveedores comprobados con credenciales ficticias.
+- OpenRouter Gratis requiere clave propia. Se verifica /api/v1/key antes del catálogo público; se ofrecen el router gratuito y modelos :free de precio cero con herramientas. Frontera nativa y configuración rechazan modelos de pago. Catálogo público real consultado: once modelos gratuitos con herramientas; ninguna clave privada utilizada.
+- 429: Retry-After en segundos/fecha HTTP y retryDelay de Gemini, errores JSON/SSE incluso tras HTTP 200, conservación de espera y errores sin repetir escrituras ni consultas generativas. Las cuotas externas siguen vigentes.
+- Grupo Frontera: reproducido perfil de ocho canciones; lectura de lista completa enlazada por el artista, 98 canciones verificadas, incluida La Del Proceso con Manuel Turizo. Artistas guardados recuperan canciones faltantes en lotes de veinte, sin crear colaboradores; continuación preservada y caché acotada. Imágenes remotas no alteran la geometría circular.
+- Apariencia: barras de desplazamiento ocultas globalmente conservando rueda/teclado y controles de alto contraste. Charvis respeta opacidad y fondo con una capa de difuminado y transiciones de movimiento reducido; Ajustes adapta su cuadrícula de proveedores.
+- Instalador final 6.25.2 verificado: 115436154 bytes, SHA-256 D6E5B48905FB3996E1E39179D294DF75C7374649DA45BDBF7927E07B934EEFFB. Entrega release/APHEKA_6.25.2_Instalador_x64.exe.
+- Validación: TypeScript y producción correctos; 41 pruebas nativas correctas/0 fallidas/1 omitida. Conectar/Aplicar, persistencia, envío al proveedor seleccionado, cuotas, credenciales rechazadas, filtración gratuita y catálogos reales comprobados. Informe docs/APHEKA-6.25.2.md y galería release/qa-6252-gallery.html. Incluye los cambios locales 6.25.1 pendientes de commit; se conservan extension/* y scripts/test-latex.ts. Sin push.
+
+
+## Sesión 2026-11-05 — APHEKA 6.25.1: artistas, dictado real y presentación del instalador
+- Artistas: corregido selector heredado que reducía toda la tarjeta a un botón de 30 px. Perfiles circulares grandes en cuadrícula adaptable, nombres visibles, portadas ausentes uniformes, regreso sobre el encabezado, buscador interno y canciones alineadas. Corregida extracción de miniaturas reales y búsqueda de entidades de artista; recomendaciones acotadas con preferencias y tendencias sin exigir canciones previamente coincidentes.
+- Charvis: barra lateral comprimida persistente con apertura/cierre suave y desplazamiento fino propio. Proyectos nuevos solo nombre y color, mismo icono de carpeta. Captura y controles de voz en la horizontal del compositor; medidor activo solo al grabar y error nativo conservado al reintentar.
+- Dictado: reproducido fallo real de Moonshine con rutas extendidas Windows; normalización del directorio del modelo antes de la llamada nativa. Errores estructurados del proceso auxiliar. Comprobación completa en WebView2/Tauri/FFmpeg/Moonshine con audio público español y prueba del ejecutable optimizado con ruta extendida correctas.
+- Instalador: nueva bienvenida, cierre, panel oscuro y encabezado con logotipo original. La imagen obsoleta 6.19.0 se sustituye por gráficos regenerados automáticamente desde la versión del producto en cada build. Identificador y datos conservados.
+- Verificación: TypeScript y producción correctos, 37 pruebas nativas correctas/0 fallidas/1 omitida, diez vistas compiladas sin errores de ejecución ni desbordamiento horizontal. Interacciones, reintento, proveedores controlados y catálogo público real verificados. Informe docs/APHEKA-6.25.1.md; galería release/qa-6251-gallery.html. Se preservan extension/*, scripts/test-latex.ts y archivos ajenos; sin push.
+
+
 ## Sesión 2026-11-04 — APHEKA 6.25.0: consultas acotadas, recuperación y dictado local
 - Web: fuentes pertinentes con diversidad de dominios y prioridad institucional; Wikipedia excluida. Lecturas inaccesibles con estado explícito y caché breve, tres búsquedas/seis lecturas por turno, límite global de tres minutos y pausa por HTTP 429/Retry-After. Reintento dentro del chat, conservación de resultados y reutilización de escrituras confirmadas; sin llamada adicional para titular.
 - Chats/proyectos: renombrado de chats vacíos persistente, títulos manuales preservados, materiales de proyectos sin abrir recuperados bajo demanda, más iconos y títulos mayores; menús compactos, actividad y ajustes de conexión coherentes. Cinco cursos desplegables conservando su capitalización.

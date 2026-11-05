@@ -5,7 +5,7 @@ use std::{collections::HashMap,sync::Mutex,time::Duration};
 pub struct CharvisState{client:Result<reqwest::Client,reqwest::Error>,requests:Mutex<HashMap<String,tokio::sync::oneshot::Sender<()>>>,slots:tokio::sync::Semaphore}
 impl Default for CharvisState{fn default()->Self{Self{client:reqwest::Client::builder().https_only(true).redirect(reqwest::redirect::Policy::none()).connect_timeout(Duration::from_secs(8)).timeout(Duration::from_secs(90)).pool_idle_timeout(Duration::from_secs(90)).build(),requests:Mutex::new(HashMap::new()),slots:tokio::sync::Semaphore::new(2)}}}
 fn base(provider:&str)->Result<&'static str,String>{match provider{
- "opencode"=>Ok("https://opencode.ai/inference/openai/v1"),"openai"=>Ok("https://api.openai.com/v1"),"gemini"=>Ok("https://generativelanguage.googleapis.com/v1beta/openai"),"anthropic"=>Ok("https://api.anthropic.com/v1"),"deepseek"=>Ok("https://api.deepseek.com"),"kimi"=>Ok("https://api.moonshot.ai/v1"),"mistral"=>Ok("https://api.mistral.ai/v1"),"groq"=>Ok("https://api.groq.com/openai/v1"),"xai"=>Ok("https://api.x.ai/v1"),_=>Err("Proveedor de Charvis no reconocido.".into())}}
+ "openrouter"=>Ok("https://openrouter.ai/api/v1"),"opencode"=>Ok("https://opencode.ai/inference/openai/v1"),"openai"=>Ok("https://api.openai.com/v1"),"gemini"=>Ok("https://generativelanguage.googleapis.com/v1beta/openai"),"anthropic"=>Ok("https://api.anthropic.com/v1"),"deepseek"=>Ok("https://api.deepseek.com"),"kimi"=>Ok("https://api.moonshot.ai/v1"),"mistral"=>Ok("https://api.mistral.ai/v1"),"groq"=>Ok("https://api.groq.com/openai/v1"),"xai"=>Ok("https://api.x.ai/v1"),_=>Err("Proveedor de Charvis no reconocido.".into())}}
 fn main_only(window:&tauri::WebviewWindow)->Result<(),String>{if window.label()=="main"{Ok(())}else{Err("Charvis solo está disponible en la ventana principal.".into())}}
 fn target(provider:&str)->Result<String,String>{base(provider)?;Ok(format!("APHEKA/Charvis/{provider}"))}
 #[cfg(windows)]fn read_key(provider:&str)->Option<String>{use windows_sys::Win32::Security::Credentials::*;let name:Vec<u16>=target(provider).ok()?.encode_utf16().chain(Some(0)).collect();let mut value=std::ptr::null_mut();unsafe{if CredReadW(name.as_ptr(),CRED_TYPE_GENERIC,0,&mut value)==0||value.is_null(){return None;}let result=if (*value).CredentialBlobSize>0&&(*value).CredentialBlobSize<=2048&&!(*value).CredentialBlob.is_null(){String::from_utf8(std::slice::from_raw_parts((*value).CredentialBlob,(*value).CredentialBlobSize as usize).to_vec()).ok()}else{None};CredFree(value.cast());result}}
@@ -17,20 +17,29 @@ fn target(provider:&str)->Result<String,String>{base(provider)?;Ok(format!("APHE
  "save"=>{let key=api_key.as_deref().unwrap_or_default().trim();if key.len()<8||key.len()>2048||key.chars().any(char::is_whitespace){return Err("Escribe una clave válida, sin espacios.".into());}save_key(&provider,key)?;},
  "remove"=>{#[cfg(windows)]{use windows_sys::Win32::Security::Credentials::*;let name:Vec<u16>=target(&provider)?.encode_utf16().chain(Some(0)).collect();if read_key(&provider).is_some()&&unsafe{CredDeleteW(name.as_ptr(),CRED_TYPE_GENERIC,0)}==0{return Err("No se pudo retirar la clave guardada.".into());}}},
  _=>return Err("Acción de credencial no permitida.".into())};Ok(json!({"configured":read_key(&provider).is_some()}))}
+pub(crate) fn retry_seconds(header:Option<&str>,error:&Value)->u64{
+ let from_header=header.and_then(|v|v.parse::<f64>().ok().filter(|s|s.is_finite()).map(|s|s.ceil().clamp(1.0,86400.0) as u64).or_else(||httpdate::parse_http_date(v).ok().map(|date|date.duration_since(std::time::SystemTime::now()).map(|d|d.as_secs()+u64::from(d.subsec_nanos()>0)).unwrap_or(1).clamp(1,86400))));
+ let details=error["error"]["details"].as_array().into_iter().flatten().filter_map(|item|item["retryDelay"].as_str().and_then(|v|v.trim_end_matches('s').parse::<f64>().ok()).map(|s|s.ceil().clamp(1.0,86400.0) as u64)).max();
+ from_header.into_iter().chain(details).max().unwrap_or(30)
+}
+pub(crate) fn error_status(error:&Value,fallback:u16)->u16{error["error"]["code"].as_u64().and_then(|v|u16::try_from(v).ok()).or_else(||error["error"]["code"].as_str().and_then(|v|v.parse().ok())).unwrap_or(if error["error"]["status"]=="RESOURCE_EXHAUSTED"||error["error"]["type"]=="rate_limit_error"||error["error"]["code"]=="rate_limit_exceeded"{429}else{fallback})}
+fn provider_failure(status:u16,error:&Value,retry:Option<&str>,key:&str)->String{
+ let detail=error["error"]["message"].as_str().or_else(||error["message"].as_str()).unwrap_or("").replace(key,"[clave protegida]");
+ let detail=detail.chars().filter(|c|!c.is_control()).take(450).collect::<String>();
+ let title=match status{400|422=>"El proveedor rechazó un parámetro del modelo.",401|403=>"El proveedor rechazó la clave o sus permisos.",402=>"El modelo requiere saldo en el proveedor.",429=>"El proveedor alcanzó su límite. Espera antes de reenviar.",404=>"El modelo o ruta seleccionados no están disponibles.",_=>"El proveedor no pudo completar la consulta."};
+ format!("{title} (HTTP {status}) {}{}",if status==429{format!("[retry-after={}] ",retry_seconds(retry,error))}else{String::new()},detail)
+}
 async fn bounded(mut response:reqwest::Response,on_event:Option<&tauri::ipc::Channel<Value>>,key:&str)->Result<Value,String>{
  let status=response.status().as_u16();
  if !(200..300).contains(&status){
-  let retry_after=response.headers().get(reqwest::header::RETRY_AFTER).and_then(|value|value.to_str().ok()).and_then(|value|value.parse::<u64>().ok()).unwrap_or(30).clamp(1,86400);
+  let retry=response.headers().get(reqwest::header::RETRY_AFTER).and_then(|value|value.to_str().ok()).map(str::to_owned);
   let mut bytes=Vec::new();while let Ok(Some(chunk))=response.chunk().await{if bytes.len()+chunk.len()>16384{break;}bytes.extend_from_slice(&chunk);}
   let error=serde_json::from_slice::<Value>(&bytes).unwrap_or(Value::Null);
-  let detail=error["error"]["message"].as_str().or_else(||error["message"].as_str()).unwrap_or("").replace(key,"[clave protegida]");
-  let detail=detail.chars().filter(|c|!c.is_control()).take(450).collect::<String>();
-  let title=match status{400|422=>"El proveedor rechazó un parámetro del modelo.",401|403=>"El proveedor rechazó la clave o sus permisos.",402=>"El modelo requiere saldo en el proveedor.",429=>"El proveedor alcanzó su límite. Espera antes de reenviar.",404=>"El modelo o ruta seleccionados no están disponibles.",_=>"El proveedor no pudo completar la consulta."};
-  return Err(format!("{title} (HTTP {status}) {}{}",if status==429{format!("[retry-after={retry_after}] ")}else{String::new()},detail));
+  return Err(provider_failure(status,&error,retry.as_deref(),key));
  }
  let streaming=response.headers().get(reqwest::header::CONTENT_TYPE).and_then(|v|v.to_str().ok()).is_some_and(|v|v.contains("text/event-stream"));
  let mut bytes=Vec::new();let mut total=0usize;
- if !streaming{while let Some(chunk)=response.chunk().await.map_err(|_|"La respuesta se interrumpió.")?{total+=chunk.len();if total>4*1024*1024{return Err("La respuesta supera el límite de Charvis.".into());}bytes.extend_from_slice(&chunk);}return serde_json::from_slice(&bytes).map_err(|_|"El proveedor devolvió una respuesta no válida.".into());}
+ if !streaming{while let Some(chunk)=response.chunk().await.map_err(|_|"La respuesta se interrumpió.")?{total+=chunk.len();if total>4*1024*1024{return Err("La respuesta supera el límite de Charvis.".into());}bytes.extend_from_slice(&chunk);}let value:Value=serde_json::from_slice(&bytes).map_err(|_|"El proveedor devolvió una respuesta no válida.")?;if value.get("error").is_some(){return Err(provider_failure(error_status(&value,502),&value,None,key));}return Ok(value);}
  let mut completion=crate::charvis_stream::Completion::default();let mut data=String::new();let mut last=std::time::Instant::now();
  while let Some(chunk)=response.chunk().await.map_err(|_|"La respuesta en directo se interrumpió.")?{
   total+=chunk.len();if total>4*1024*1024{return Err("La respuesta supera el límite de Charvis.".into());}bytes.extend_from_slice(&chunk);
@@ -53,10 +62,17 @@ fn payload_valid(operation:&str,payload:&Value)->Result<(),String>{
 #[tauri::command]pub async fn charvis_request(window:tauri::WebviewWindow,state:tauri::State<'_,CharvisState>,provider:String,operation:String,payload:Value,request_id:String,audio:Option<Vec<u8>>,audio_base64:Option<String>,mime:Option<String>,on_event:tauri::ipc::Channel<Value>)->Result<Value,String>{
  main_only(&window)?;let endpoint=base(&provider)?;if !matches!(operation.as_str(),"models"|"chat"|"transcribe"){return Err("Operación no permitida.".into());}payload_valid(&operation,&payload)?;
  if request_id.is_empty()||request_id.len()>64||!request_id.bytes().all(|b|b.is_ascii_alphanumeric()||b==b'-'){return Err("Identificador de consulta no válido.".into());}
+ if provider=="openrouter"&&operation=="chat"{let model=payload["model"].as_str().unwrap_or_default();if model!="openrouter/free"&&!model.ends_with(":free"){return Err("Esta conexión admite únicamente modelos gratuitos de OpenRouter.".into());}}
  let key=read_key(&provider).ok_or("Guarda la clave de este proveedor en Ajustes → Sistema → Charvis.")?;
  let (sender,cancelled)=tokio::sync::oneshot::channel();{let mut pending=state.requests.lock().map_err(|_|"Consulta ocupada.")?;if pending.len()>=4||pending.contains_key(&request_id){return Err("Charvis ya tiene consultas en curso.".into());}pending.insert(request_id.clone(),sender);}
  let query=async{
   let _slot=state.slots.acquire().await.map_err(|_|"Charvis se cerró.")?;let client=state.client.as_ref().map_err(|_|"No se pudo preparar la conexión HTTPS.")?;
+  // OpenRouter's model catalog is public. Authenticate the key separately so
+  // a successful catalog response is never mistaken for an authorized account.
+  if provider=="openrouter"&&operation=="models"{
+   let response=client.get(format!("{endpoint}/key")).bearer_auth(&key).timeout(Duration::from_secs(15)).send().await.map_err(|_|"No se pudo verificar la clave de OpenRouter por HTTPS.")?;
+   let account=bounded(response,None,&key).await?;if !account["data"].is_object(){return Err("OpenRouter no confirmó esta clave API.".into());}
+  }
   let path=match operation.as_str(){"models"=>"models","chat"=>"chat/completions",_=>"audio/transcriptions"};
   let mut req=if operation=="models"{client.get(if provider=="opencode"{"https://opencode.ai/inference/v1/models".to_owned()}else{format!("{endpoint}/{path}")})}else{client.post(format!("{endpoint}/{path}"))};
   req=req.bearer_auth(&key);if provider=="anthropic"{req=req.header("x-api-key",&key).header("anthropic-version","2023-06-01");}
@@ -72,3 +88,10 @@ fn payload_valid(operation:&str,payload:&Value)->Result<(),String>{
  let result=tokio::select!{_=cancelled=>Err("Consulta cancelada.".into()),result=query=>result};if let Ok(mut pending)=state.requests.lock(){pending.remove(&request_id);}result
 }
 #[cfg(test)]mod tests{use super::*;#[test]fn fixed_routes_and_bounded_messages(){assert!(base("openai").unwrap().starts_with("https://"));assert!(base("https://evil.test").is_err());assert!(payload_valid("chat",&json!({"model":"chosen","messages":[{"role":"user","content":"test"}]})).is_ok());assert!(payload_valid("chat",&json!({"model":"chosen","messages":[],"stream":true})).is_err());assert!(payload_valid("chat",&json!({"model":"chosen","messages":[{"role":"user","content":"test"}],"stream":true})).is_ok());}}
+
+#[cfg(test)] mod limit_tests {
+ use super::*;
+ #[test] fn quota_delay_preserves_header_and_gemini_retry_info(){let error=json!({"error":{"details":[{"retryDelay":"45.2s"}]}});assert_eq!(retry_seconds(Some("20"),&error),46);assert_eq!(retry_seconds(None,&json!({})),30);let date=httpdate::fmt_http_date(std::time::SystemTime::now()+Duration::from_secs(120));assert!((118..=120).contains(&retry_seconds(Some(&date),&json!({}))));}
+ #[test] fn rate_errors_are_recognized_in_successful_http_streams(){assert_eq!(error_status(&json!({"error":{"code":429}}),502),429);assert_eq!(error_status(&json!({"error":{"type":"rate_limit_error"}}),502),429);assert_eq!(error_status(&json!({"error":{"status":"RESOURCE_EXHAUSTED"}}),502),429);let text=provider_failure(429,&json!({"error":{"message":"fixture-secret"}}),Some("90"),"fixture-secret");assert!(text.contains("[retry-after=90]"));assert!(!text.contains("fixture-secret"));}
+ #[test] fn all_configured_providers_use_fixed_independent_routes(){for id in ["openrouter","opencode","openai","gemini","anthropic","deepseek","kimi","mistral","groq","xai"]{assert!(base(id).unwrap().starts_with("https://"));assert!(target(id).unwrap().ends_with(id));}assert_eq!(base("openrouter").unwrap(),"https://openrouter.ai/api/v1");}
+}
