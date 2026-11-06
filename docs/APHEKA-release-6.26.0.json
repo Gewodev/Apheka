@@ -1,0 +1,49 @@
+{
+  "product": "APHEKA",
+  "version": "6.26.0",
+  "identifier": "com.owa.studio",
+  "file": "APHEKA_6.26.0_Instalador_x64.exe",
+  "bytes": 115457350,
+  "sha256": "81227846C74192EE1285C30E2518F834C92C1A6B6A088B89BFE2890888608E72",
+  "modifiedAtUtc": "2026-11-06T14:10:08.2075269Z",
+  "sourceLatestEditUtc": "2026-11-06T13:54:49.3709120Z",
+  "manifestRewrittenBeforeFrontend": false,
+  "buildCommand": "pnpm tauri build --config src-tauri/tauri.prod.conf.json --bundles nsis",
+  "embeddedFrontendAssets": [
+    "assets/index-Dpy6muYh.js",
+    "assets/charts-DQ4Dkqgr.js",
+    "assets/anim-DmwEpK7h.js",
+    "assets/tauri-Du2YxjyO.js",
+    "assets/storage-DwnyWBFG.js",
+    "assets/audio-meta-CT9Hv6Ta.js",
+    "assets/date-COeAPjBE.js",
+    "assets/index-DhoM6xqN.css"
+  ],
+  "legacyUpgrade": "Exact NSIS product identities and MSI upgrade GUIDs; /UPDATE preserves AppData",
+  "dataDirectory": "com.owa.studio (existing desktop data directory retained)",
+  "build": {
+    "exitCode": 0,
+    "startedAtUtc": "2026-11-06T13:54:48.9073745Z",
+    "processId": 45560,
+    "finishedAtUtc": "2026-11-06T14:10:11.6775011Z",
+    "state": "complete",
+    "mode": "build"
+  },
+  "checks": {
+    "nativePassed": 43,
+    "nativeFailed": 0,
+    "nativeIgnored": 1,
+    "productionViews": 10,
+    "runtimeErrors": 0,
+    "sameChatEdit": true,
+    "largeSnapshotCharacters": 1470000,
+    "allCoursesExpandable": true,
+    "formulaFamilies": 6
+  },
+  "gallery": "release/qa-626-gallery.html",
+  "limitations": [
+    "No private provider accounts used for authenticated generation.",
+    "Native Windows toast activation was compiled and validated, not clicked in the installed app.",
+    "No guarantee of zero delays on every machine or external-service availability."
+  ]
+}

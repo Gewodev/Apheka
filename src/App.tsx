@@ -1,3 +1,5 @@
+import NotificationNavigation from './components/NotificationNavigation';
+import {ViewActivity} from './lib/viewActivity';
 import {nextMusicSelection} from './lib/musicRadio';
 import {useYouTubeRecovery} from './hooks/useYouTubeRecovery';
 import {primeStudyAlarm} from './lib/studyAlarm';
@@ -27,17 +29,17 @@ import toast, { Toaster } from 'react-hot-toast';
 import ErrorBoundary from './components/ErrorBoundary';
 import { ensureYouTubeApi, extractYouTubeId, extractPlaylistId, generalYtControl } from './lib/ytEngine';
 
-const Inicio = lazy(() => import('./components/views/Inicio'));
-const Estudio = lazy(() => import('./components/views/Estudio'));
-const Tareas = lazy(() => import('./components/views/Tareas'));
-const Notas = lazy(() => import('./components/views/Notas'));
-const Musica = lazy(() => import('./components/views/Musica'));
-const Planificacion = lazy(() => import('./components/views/Planificacion'));
-const Ajustes = lazy(() => import('./components/views/Ajustes'));
-const Cursos = lazy(() => import('./components/views/Cursos'));
-const CursosHub = lazy(() => import('./components/views/CursosHub'));
-const CharvisSidebar = lazy(() => import('./components/ui/CharvisSidebar'));
-const IA = lazy(() => import('./components/views/IA'));
+const Inicio = React.memo(lazy(() => import('./components/views/Inicio')));
+const Estudio = React.memo(lazy(() => import('./components/views/Estudio')));
+const Tareas = React.memo(lazy(() => import('./components/views/Tareas')));
+const Notas = React.memo(lazy(() => import('./components/views/Notas')));
+const Musica = React.memo(lazy(() => import('./components/views/Musica')));
+const Planificacion = React.memo(lazy(() => import('./components/views/Planificacion')));
+const Ajustes = React.memo(lazy(() => import('./components/views/Ajustes')));
+const Cursos = React.memo(lazy(() => import('./components/views/Cursos')));
+const CursosHub = React.memo(lazy(() => import('./components/views/CursosHub')));
+const CharvisSidebar = React.memo(lazy(() => import('./components/ui/CharvisSidebar')));
+const IA = React.memo(lazy(() => import('./components/views/IA')));
 import OAuthCallback from './components/OAuthCallback';
 import GlobalPlayer from './components/GlobalPlayer';
 import DownloadManager from './components/ui/DownloadManager';
@@ -50,13 +52,16 @@ interface AppContentProps {
   setGlobalView: (view: ViewId) => void;
 }
 
-function AppContent() {
+export function AppContent() {
   useWallpaperPalette();
   const reportFullscreenError = useCallback((message: string) => { toast.error(message); }, []);
   useFullscreenLifecycle(reportFullscreenError);
   const { hydrated, settings, courses, addCourse, navigateTo, setNavigateTo, importState, updateSettings, toastMessage, deleteOldCompletedTasks, youtubeVideoUrl, setYoutubeVideoUrl, isPlayingMusic, musicVolume, setMusicDuration, setMusicProgressRaw, setIsPlayingMusic, playTrack, musicQueue, setMusicQueue, shuffleMode, repeatMode, tracks, currentTrackId, setRepeatMode, coverModalTrackId, showRestPrompt, handlePomodoroBannerClick, queueSource, trackHistory, playCounts, courseDeepLink, setCourseDeepLink, addNotification } = useAppSlice(["hydrated","settings","courses","addCourse","navigateTo","setNavigateTo","importState","updateSettings","toastMessage","deleteOldCompletedTasks","youtubeVideoUrl","setYoutubeVideoUrl","isPlayingMusic","musicVolume","setMusicDuration","setMusicProgressRaw","setIsPlayingMusic","playTrack","musicQueue","setMusicQueue","shuffleMode","repeatMode","tracks","currentTrackId","setRepeatMode","coverModalTrackId","showRestPrompt","handlePomodoroBannerClick","queueSource","trackHistory","playCounts","courseDeepLink","setCourseDeepLink","addNotification"]);
   useEffect(()=>{if(!toastMessage)return;const options={id:"apheka-system-notice"};if(toastMessage.type==='success')toast.success(toastMessage.message,options);else if(toastMessage.type==='error')toast.error(toastMessage.message,options);else toast(toastMessage.message,{...options,className:"apheka-toast-info"});},[toastMessage]);
   // Suspender Música: oculta el apartado sin borrar nada; el click derecho en la barra la devuelve
+  const [aiSuspended,setAiSuspended]=useState(()=>localStorage.getItem('apheka_ai_suspended')==='1');
+  useEffect(()=>{localStorage.setItem('apheka_ai_suspended',aiSuspended?'1':'0');},[aiSuspended]);
+  const toggleAiSuspension=()=>{if(!aiSuspended){window.dispatchEvent(new Event('apheka:charvis-suspend'));if(activeView==='ia')setNavigateTo('inicio');}setAiSuspended(value=>!value);};
   const [musicSuspended, setMusicSuspended] = useState<boolean>(() => { try { return localStorage.getItem('owa_music_suspended') === '1'; } catch { return false; } });
   useEffect(() => { try { localStorage.setItem('owa_music_suspended', musicSuspended ? '1' : '0'); } catch { } }, [musicSuspended]);
   // Ventanas: la gestión vive íntegramente en la extensión v2.0 (independiente
@@ -545,7 +550,7 @@ function AppContent() {
   return (
     <div className={'app-layout studio-environment single-environment '+(autoNav?'nav-auto':'nav-pinned')+(isCollapsed?' nav-collapsed':'')} data-auto-dock={autoNav} style={{'--navigation-width':(isCollapsed?64:224)+'px'} as React.CSSProperties}>
       <AnimatedWallpaper/>
-      <McpBridge /><CatalogDownloadBridge/><Suspense fallback={null}><CharvisSidebar pageActive={activeView==='ia'} activeView={activeView}/></Suspense>
+      <NotificationNavigation/><McpBridge /><CatalogDownloadBridge/>{!aiSuspended&&<Suspense fallback={null}><CharvisSidebar pageActive={activeView==='ia'} activeView={activeView}/></Suspense>}
       <EditorBlockMenu/>
       
       {autoNav&&<><button ref={dock.trigger} className="app-navigation-handle" aria-label="Abrir navegación" onClick={dock.show}><span aria-hidden="true"/></button><div className="desktop-dock-edge" aria-hidden="true" onPointerEnter={dock.show} onPointerLeave={dock.leave}/></>}
@@ -565,7 +570,7 @@ function AppContent() {
         }}>
           {NAV_ITEMS.filter(item => !(musicSuspended && item.id === 'musica')).map(item => (
             <div key={item.id} style={{ position: 'relative' }}
-              onContextMenu={item.id === 'musica' ? (e => { e.preventDefault(); e.stopPropagation(); setMusicSuspended(true); if (activeView === 'musica') setNavigateTo('inicio'); }) : undefined}>
+              data-suspended={item.id==='ia'&&aiSuspended} onContextMenu={item.id==='ia'?(e=>{e.preventDefault();e.stopPropagation();toggleAiSuspension();}):item.id === 'musica' ? (e => { e.preventDefault(); e.stopPropagation(); setMusicSuspended(true); if (activeView === 'musica') setNavigateTo('inicio'); }) : undefined}>
               {item.id === 'cursos' && isCollapsed ? (
                 <button
                   onPointerDown={handleCoursesPointerDown}
@@ -585,6 +590,7 @@ function AppContent() {
               ) : (
                 <button
                   onClick={() => {
+                    if(item.id==='ia'&&aiSuspended)setAiSuspended(false);
                     if (item.id === 'cursos') {
                       setShowCoursesPopup(false);
                       setActiveView('cursos');
@@ -594,7 +600,7 @@ function AppContent() {
                     }
                   }}
                   className={`sidebar-nav-btn ${activeView === item.id ? 'active' : ''}`}
-                  aria-label={item.label} title={isCollapsed ? item.label : undefined}
+                  aria-label={item.id==='ia'&&aiSuspended?'IA suspendida':item.label} title={item.id==='ia'?'IA · clic derecho para '+(aiSuspended?'reactivar':'suspender'):isCollapsed?item.label:undefined}
                 >
                   <item.icon size={20} strokeWidth={1.5} />
                   {!isCollapsed && <span className="sidebar-nav-label">{item.label}</span>}
@@ -679,12 +685,12 @@ function AppContent() {
               {activeView === 'cursos' && <CursosHub onSelectCourse={(courseId) => { setSelectedCourseId(courseId); setActiveView('curso_detalle'); }} onTabSelect={(courseId, tab) => { setSelectedCourseId(courseId); setSelectedCourseTab(tab); setActiveView('curso_detalle'); }} />}
               {activeView === 'ajustes' && <Ajustes />}
             {activeView === 'curso_detalle' && <Cursos initialCourseId={selectedCourseId || undefined} initialTab={selectedCourseTab as any} onNavigate={(v) => setActiveView(v as ViewId)} />}
-            {activeView === 'ia' && <IA/>}
+            {activeView === 'ia' && !aiSuspended && <IA/>}
             </Suspense>
           </div>
         )}
         
-        {hydrated&&studyMounted&&!isOAuthCallback&&<div data-apheka-view="estudio" style={{display:activeView==="estudio"?"flex":"none",flex:1,minHeight:0,overflow:"hidden"}}><Suspense fallback={null}><Estudio/></Suspense></div>}
+        {hydrated&&studyMounted&&!isOAuthCallback&&<div data-apheka-view="estudio" style={{display:activeView==="estudio"?"flex":"none",flex:1,minHeight:0,overflow:"hidden"}}><Suspense fallback={null}><ViewActivity.Provider value={activeView==='estudio'}><Estudio/></ViewActivity.Provider></Suspense></div>}
         </div>
         {launcherOpen&&<WorkspaceLauncher onClose={()=>setLauncherOpen(false)} onNavigate={(view,courseId)=>{if(courseId){setSelectedCourseId(courseId);setSelectedCourseTab('overview');}setActiveView(view);}} onOpenNote={openNote} onOpenTask={openTask}/>}
         {youtubeVideoUrl && <div inert aria-hidden="true" ref={ytHolderRef} style={{ position: 'fixed', top: 0, left: -10000, width: 640, height: 360, zIndex: -1, opacity: 0.01, pointerEvents: 'none' }} />}

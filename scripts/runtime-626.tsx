@@ -1,0 +1,16 @@
+import '../src/session-polish.css';
+import '../src/scroll-surfaces.css';
+import '../src/fonts.css';
+import '../src/index.css';
+import '../src/apheka.css';
+import '../src/workspace.css';
+import '../src/refinement.css';
+import '../src/desktop.css';
+import '../src/studio.css';
+import '../src/quiet.css';
+import '../src/interface.css';
+import '../src/interaction-refinement.css';
+import '../src/workspace-622.css';
+import React,{useLayoutEffect,useState} from 'react';import {createRoot} from 'react-dom/client';import {AppContent} from '../src/App';import {AppProvider,useAppSnapshot} from '../src/store/AppContext';import CharvisDocumentPanel from '../src/components/ui/CharvisDocumentPanel';import AnalyticsDrawer from '../src/components/ui/AnalyticsDrawer';import {DeckRunner} from '../src/components/views/cursos/ToolDecks';
+function Harness(){const snapshot=useAppSnapshot(),[story,setStory]=useState<string|null>(null);useLayoutEffect(()=>{Object.assign(window,{__qaApp:snapshot,__qaStory:setStory});},[snapshot]);return story==='docx'?<div className="charvis-chat-refined" style={{height:'100dvh',width:'100vw',display:'flex',justifyContent:'center',padding:24}}><CharvisDocumentPanel onClose={()=>setStory(null)} preview={{artifact:{id:'a0000000-0000-4000-8000-000000000001',format:'docx',filename:'Informe.docx',title:'Informe de Física',bytes:5000,spec:{title:'Informe de Física',blocks:[{type:'heading',text:'Energía y medición'},{type:'paragraph',text:'**Energía cinética** y `E = ½mv²`\nUnidades: J = kg·m²·s⁻²; α, Δx.'},{type:'numbered',items:['Medir la masa','Registrar la velocidad']},{type:'table',rows:[['Magnitud','Unidad'],['Energía','J'],['Masa','kg']]}]}}}}/></div>:story==='analytics'?<div style={{position:'relative',height:'100dvh'}}><AnalyticsDrawer isOpen onClose={()=>setStory(null)} studySessions={snapshot().studySessions} tasks={snapshot().tasks}/></div>:story?.startsWith('tool:')?<div style={{height:'100dvh',padding:24}}><DeckRunner mat={{id:'qa-tool',toolMode:story.slice(5),title:'Práctica de prueba',content:JSON.stringify({cards:[{q:'¿Qué magnitud mide la masa?',a:'La cantidad de materia'},{q:'Unidad de fuerza',a:'Newton'}],questions:[{q:'Unidad de fuerza',options:['Newton','Julio','Metro','Segundo'],correct:0}],pairs:[{a:'Fuerza',b:'Newton'},{a:'Energía',b:'Julio'}],items:story==='tool:clozeDeck'?[{text:'La fuerza se mide en ____.',answers:['newtons']}]:story==='tool:catDeck'?[{item:'Newton',cat:'Fuerza'},{item:'Julio',cat:'Energía'}]:[{text:'La energía se conserva.',answer:true}],seqs:[{name:'Resolver',steps:['Leer','Calcular','Comprobar']}],concepts:[{concept:'Energía',source:'Capacidad de realizar trabajo',points:['Conservación','Unidades']}]})}} accent="#a0b1a7" onClose={()=>setStory(null)}/></div>:<AppContent/>;}
+createRoot(document.getElementById('root')!).render(<AppProvider><Harness/></AppProvider>);

@@ -1,4 +1,5 @@
-import {useAppSlice} from "../../store/AppContext";
+import StudySessionControls from '../ui/StudySessionControls';
+import {useTaskPresentationSlice} from "../../store/AppContext";
 import TimeControl from '../ui/TimeControl';
 import DurationControl from '../ui/DurationControl';
 import {clockMinutes,clockFromMinutes,sessionTimingError} from '../../lib/timeControl';
@@ -147,7 +148,7 @@ function getMergedClasses(classes: ScheduleClass[]) {
 export default function Planificacion() {
   const { tasks, courses, setNavigateTo, addNotification, settings, studySessions, plannedSessions, addPlannedSession, updatePlannedSession, deletePlannedSession, focusedEventId, setFocusedEventId,
     planEvents, setPlanEvents, planSyncTick, planSyncImports, syncPlanEventToGoogle, deletePlanEventFromGoogle,
-    googleConnected, calendarSyncEnabled } = useAppSlice(["tasks","courses","setNavigateTo","addNotification","settings","studySessions","plannedSessions","addPlannedSession","updatePlannedSession","deletePlannedSession","focusedEventId","setFocusedEventId","planEvents","setPlanEvents","planSyncTick","planSyncImports","syncPlanEventToGoogle","deletePlanEventFromGoogle","googleConnected","calendarSyncEnabled"]);
+    googleConnected, calendarSyncEnabled } = useTaskPresentationSlice(["tasks","courses","setNavigateTo","addNotification","settings","studySessions","plannedSessions","addPlannedSession","updatePlannedSession","deletePlannedSession","focusedEventId","setFocusedEventId","planEvents","setPlanEvents","planSyncTick","planSyncImports","syncPlanEventToGoogle","deletePlanEventFromGoogle","googleConnected","calendarSyncEnabled"]);
 
   const [planView, setPlanView] = useState<PlanView>(() => {
     try { return (localStorage.getItem('owa_planner_view') as PlanView) || 'week'; }
@@ -1466,33 +1467,7 @@ export default function Planificacion() {
                     <label>Fecha de la sesión<input type="date" aria-label="Fecha de la sesión" value={modalDate} onChange={event=>setPlanDate(event.target.value)}/></label>
                     <div className="session-end-summary"><span>Finaliza</span><strong>{clockFromMinutes(((clockMinutes(planStartTime)??540)+planDuration)%1440)}</strong></div>
                   </div>
-                  <div className="session-time-grid">
-                    <div className="session-start-control"><label>Hora de inicio</label><TimeControl label="Hora de inicio de la sesión" value={planStartTime} onChange={setPlanStartTime} clearable={false}/></div>
-                    <DurationControl label="Duración de la sesión" value={planDuration} min={5} max={240} step={5} presets={[25,45,60]} showRange={false} onChange={setPlanDuration}/>
-                  </div>
-
-                  <div style={{ borderRadius: 11, border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', padding: '13px 14px', display: 'flex', flexDirection: 'column', gap: 9 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Intensidad esperada</label>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: planIntensity > 0 ? REVIEW_LEVEL_COLORS[planIntensity - 1] : 'var(--text-tertiary)', fontFamily: "'Inter Tight', sans-serif" }}>
-                        {planIntensity <= 3 ? 'Suave' : planIntensity <= 6 ? 'Media' : planIntensity <= 8 ? 'Intensa' : 'Máxima'}
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', gap: 4, alignItems: 'stretch' }}>
-                      {REVIEW_LEVEL_COLORS.map((col, i) => {
-                        const v = i + 1;
-                        const on = v <= planIntensity;
-                        return (
-                          <button data-ui-control="" className="session-intensity-step" data-filled={on} aria-label={`Intensidad ${v} de 10`} aria-pressed={v===planIntensity} key={v} onClick={() => setPlanIntensity(v)} title={`Intensidad ${v}`}
-                            style={{flex:1,height:32,borderRadius:5,cursor:'pointer',border:`1px solid ${on?col+'55':'var(--workspace-line)'}`,background:on?`color-mix(in srgb,${col} 10%,transparent)`:'transparent',color:on?col:'var(--text-secondary)',transition:'background-color 150ms,border-color 150ms'}}>{v}</button>
-                        );
-                      })}
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', letterSpacing: '0.05em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Suave</span>
-                      <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', letterSpacing: '0.05em', textTransform: 'uppercase', fontFamily: "'Inter Tight', sans-serif" }}>Máxima</span>
-                    </div>
-                  </div>
+                  <StudySessionControls startTime={planStartTime} duration={planDuration} intensity={planIntensity} onStart={setPlanStartTime} onDuration={setPlanDuration} onIntensity={setPlanIntensity}/>
 
                   {(selGroups.length>0||planGroupId||planTopicId)&&(
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>

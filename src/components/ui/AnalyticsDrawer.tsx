@@ -1,3 +1,5 @@
+import {sameTaskPresentation} from '../../lib/viewSnapshots';
+import './analytics-refined.css';
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import {
   X, BarChart3, Clock, Activity,
@@ -159,86 +161,10 @@ function Section({ children, style }: { children: React.ReactNode; style?: React
   );
 }
 
-function FlowSVG({ data }: { data: ReturnType<typeof generateFlowData> }) {
-  const { nodes, links } = data;
-  const [hoveredLink, setHoveredLink] = useState<number | null>(null);
-
-  if (links.length === 0) return <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)', fontSize: 11 }}>Añade tareas para ver cómo se distribuyen por curso y estado.</div>;
-
-  const w = 380;
-  const gap = 22;
-  const leftCount = nodes.length - 3;
-  const h = Math.max(gap * (leftCount + 3) + 28, leftCount * gap + 130);
-  const colX1 = 16;
-  const colX2 = w - 16;
-  const pad = 10;
-
-  const leftYs = nodes.slice(0, leftCount).map((_, i) => pad + i * gap);
-  const rightYs = nodes.slice(leftCount).map((_, i) => {
-    const totalRight = nodes.length - leftCount;
-    const startY = (h - totalRight * gap) / 2;
-    return startY + i * gap;
-  });
-
-  const maxVal = Math.max(...links.map(l => l.value), 1);
-
-  return (
-    <svg width={w} height={h} style={{ display: 'block', margin: '0 auto', overflow: 'visible' }}>
-      <defs>
-        {links.map((l, i) => (
-          <linearGradient key={i} id={`fl-${i}`} x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor={l.sourceColor} stopOpacity={hoveredLink === i ? 0.9 : 0.55} />
-            <stop offset="100%" stopColor={l.targetColor} stopOpacity={hoveredLink === i ? 0.9 : 0.55} />
-          </linearGradient>
-        ))}
-        {links.map((l, i) => (
-          <filter key={`shadow-${i}`} id={`shadow-${i}`}>
-            <feDropShadow dx={0} dy={1} stdDeviation={2} floodOpacity={0.3} />
-          </filter>
-        ))}
-      </defs>
-      {links.map((l, i) => {
-        const x1 = colX1 + 72;
-        const x2 = colX2 - 72;
-        const y1 = leftYs[l.source] + 10;
-        const y2 = rightYs[l.target - leftCount] + 10;
-        const thickness = Math.max(3, (l.value / maxVal) * 36);
-        const midX = (x1 + x2) / 2;
-        const isHovered = hoveredLink === i;
-        return (
-          <g key={i} style={{ cursor: 'pointer' }}>
-            <path
-              d={`M ${x1} ${y1 - thickness / 2} C ${midX} ${y1 - thickness / 2}, ${midX} ${y2 - thickness / 2}, ${x2} ${y2 - thickness / 2} L ${x2} ${y2 + thickness / 2} C ${midX} ${y2 + thickness / 2}, ${midX} ${y1 + thickness / 2}, ${x1} ${y1 + thickness / 2} Z`}
-              fill={`url(#fl-${i})`}
-              opacity={hoveredLink === null ? 0.85 : (isHovered ? 1 : 0.2)}
-              filter={isHovered ? `url(#shadow-${i})` : undefined}
-              onMouseEnter={() => setHoveredLink(i)}
-              onMouseLeave={() => setHoveredLink(null)}
-              style={{ transition: 'opacity 200ms' }}
-            />
-            {isHovered && (
-              <text x={midX} y={(y1 + y2) / 2} textAnchor="middle" fill="#fff" fontSize={11} fontWeight={700}
-                style={{ pointerEvents: 'none', textShadow: '0 1px 4px rgba(0,0,0,0.6)' }}>
-                {l.value} tarea{l.value !== 1 ? 's' : ''}
-              </text>
-            )}
-          </g>
-        );
-      })}
-      {nodes.slice(0, leftCount).map((n, i) => (
-        <g key={`ln-${i}`}>
-          <rect x={colX1} y={leftYs[i]} width={6} height={20} rx={3} fill={n.color} />
-          <text x={colX1 + 12} y={leftYs[i] + 14} fill="var(--text-primary)" fontSize={11} fontWeight={600}>{n.name}</text>
-        </g>
-      ))}
-      {nodes.slice(leftCount).map((n, i) => (
-        <g key={`rn-${i}`}>
-          <rect x={colX2 - 6} y={rightYs[i]} width={6} height={20} rx={3} fill={n.color} />
-          <text x={colX2 - 12} y={rightYs[i] + 14} fill="var(--text-primary)" fontSize={11} fontWeight={600} textAnchor="end">{n.name}</text>
-        </g>
-      ))}
-    </svg>
-  );
+function FlowSVG({data}:{data:ReturnType<typeof generateFlowData>}){
+ const courses=data.nodes.slice(0,-3),statuses=data.nodes.slice(-3);
+ if(!data.links.length)return <p className="analytics-empty">Añade tareas para ver su distribución por curso y estado.</p>;
+ return <div className="analytics-course-flow"><div className="analytics-flow-legend">{statuses.map(status=><span key={status.name}><i style={{background:status.color}}/>{status.name}</span>)}</div>{courses.map((course,index)=>{const rows=data.links.filter(link=>link.source===index),total=rows.reduce((sum,row)=>sum+row.value,0);return <section key={course.name||index}><header><span><i style={{background:course.color}}/>{course.name||'Sin curso'}</span><output>{total} {total===1?'tarea':'tareas'}</output></header><div className="analytics-flow-track" role="img" aria-label={rows.map(row=>statuses[row.target-courses.length].name+': '+row.value).join(', ')}>{statuses.map((status,i)=>{const count=rows.find(row=>row.target===courses.length+i)?.value||0;return count?<span key={status.name} style={{width:count/total*100+'%',background:status.color}} title={status.name+': '+count}>{count/total>.12?count:''}</span>:null;})}</div><footer>{statuses.map((status,i)=><span key={status.name}>{rows.find(row=>row.target===courses.length+i)?.value||0}<small>{status.name}</small></span>)}</footer></section>})}</div>;
 }
 
 const TAB_SPRING = { type: 'spring' as const, stiffness: 280, damping: 30 };
@@ -258,7 +184,7 @@ function TabContent({ children, tabId }: { children: React.ReactNode; tabId: str
   );
 }
 
-const AnalyticsDrawer = React.memo(function AnalyticsDrawer({ isOpen, onClose, studySessions, tasks }: AnalyticsDrawerProps) {
+const AnalyticsDrawer = React.memo(function AnalyticsDrawer({ isOpen, onClose, studySessions, tasks, settings }: AnalyticsDrawerProps) {
   const [activeTab, setActiveTab] = useState('time');
   const [pillState, setPillState] = useState(false);
   const pillTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -339,10 +265,10 @@ const AnalyticsDrawer = React.memo(function AnalyticsDrawer({ isOpen, onClose, s
       </div>
 
       {/* ── Drawer panel ── */}
-      <motion.div
+      <motion.div className="analytics-drawer"
         initial={false}
         animate={{ x: isOpen ? 0 : 'calc(100% + 16px)' }}
-        transition={{ type: 'spring', stiffness: 260, damping: 28, mass: 0.8 }}
+        transition={{ duration:.2,ease:[.16,1,.3,1] }}
         style={{
           position: 'absolute',
           right: 0, top: 0, bottom: 0,
@@ -463,7 +389,7 @@ const AnalyticsDrawer = React.memo(function AnalyticsDrawer({ isOpen, onClose, s
                 </Section>
 
                 <Section>
-                  <SectionTitle icon={TrendingUp}>Tiempo de enfoque por hora · %</SectionTitle>
+                  <SectionTitle icon={TrendingUp}>Duración media por hora · minutos</SectionTitle>
                   <ChartContainer>
                     <ResponsiveContainer debounce={80} width="100%" height={164}>
                       <AreaChart data={hourData} margin={{ top: 8, right: 4, bottom: 0, left: -12 }}>
@@ -482,7 +408,8 @@ const AnalyticsDrawer = React.memo(function AnalyticsDrawer({ isOpen, onClose, s
                   <SectionTitle icon={Target}>Progreso Diario</SectionTitle>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                     {weekData.map(d => {
-                      const goalMin = 240;
+                      const weekday=new Date(d.date+'T12:00:00').getDay();
+                      const goalMin = Math.max(1,settings?.studyGoals?.[['sunday','monday','tuesday','wednesday','thursday','friday','saturday'][weekday]]??settings?.dailyGoal??240);
                       const pct = Math.min(100, Math.round((d.productive / goalMin) * 100));
                       return (
                         <div key={d.day} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -508,7 +435,7 @@ const AnalyticsDrawer = React.memo(function AnalyticsDrawer({ isOpen, onClose, s
             {activeTab === 'tasks' && (
               <TabContent tabId="tasks">
                 <Section>
-                  <SectionTitle icon={Target}>Embudo de Tareas</SectionTitle>
+                  <SectionTitle icon={Target}>Estado de las tareas</SectionTitle>
                   <ChartContainer height={150}>
                     <ResponsiveContainer debounce={80} width="100%" height={150}>
                       <BarChart data={funnelData} layout="vertical" margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
@@ -579,7 +506,7 @@ const AnalyticsDrawer = React.memo(function AnalyticsDrawer({ isOpen, onClose, s
             {activeTab === 'flow' && (
               <TabContent tabId="flow">
                 <Section>
-                  <SectionTitle icon={GitBranch}>Curso → Estado</SectionTitle>
+                  <SectionTitle icon={GitBranch}>Distribución por curso</SectionTitle>
                   <FlowSVG data={flowData} />
                 </Section>
 
@@ -599,6 +526,6 @@ const AnalyticsDrawer = React.memo(function AnalyticsDrawer({ isOpen, onClose, s
       </motion.div>
     </>
   );
-});
+},(previous,next)=>previous.isOpen===next.isOpen&&previous.onClose===next.onClose&&previous.studySessions===next.studySessions&&previous.settings===next.settings&&sameTaskPresentation(previous.tasks,next.tasks));
 
 export default AnalyticsDrawer;

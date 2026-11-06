@@ -60,12 +60,52 @@ fn types(overrides: &[(&str, &str)]) -> String {
             .collect::<String>()
     )
 }
+fn text_run(text: &str, properties: &str) -> String {
+    let body = text
+        .split('\n')
+        .map(|line| format!(r#"<w:t xml:space="preserve">{}</w:t>"#, xml(line)))
+        .collect::<Vec<_>>()
+        .join("<w:br/>");
+    format!("<w:r><w:rPr>{properties}</w:rPr>{body}</w:r>")
+}
+/// A small, deterministic inline grammar: preserve Unicode and line breaks.
+fn formatted_runs(text: &str) -> String {
+    let mut out = String::new();
+    let mut rest = text;
+    while !rest.is_empty() {
+        let next = [
+            ("**", "<w:b/>"),
+            (
+                "`",
+                r#"<w:rFonts w:ascii="Consolas" w:hAnsi="Consolas"/><w:sz w:val="20"/>"#,
+            ),
+        ]
+        .iter()
+        .filter_map(|(delimiter, style)| rest.find(delimiter).map(|at| (at, *delimiter, *style)))
+        .min_by_key(|row| row.0);
+        let Some((at, delimiter, style)) = next else {
+            out += &text_run(rest, "");
+            break;
+        };
+        out += &text_run(&rest[..at], "");
+        let body = &rest[at + delimiter.len()..];
+        if let Some(end) = body.find(delimiter) {
+            out += &text_run(&body[..end], style);
+            rest = &body[end + delimiter.len()..];
+        } else {
+            out += &text_run(&rest[at..], "");
+            break;
+        }
+    }
+    out
+}
 fn paragraph(text: &str, style: &str) -> String {
     format!(
-        r#"<w:p><w:pPr><w:pStyle w:val="{style}"/><w:spacing w:after="140" w:line="280" w:lineRule="auto"/></w:pPr><w:r><w:t xml:space="preserve">{}</w:t></w:r></w:p>"#,
-        xml(text)
+        r#"<w:p><w:pPr><w:pStyle w:val="{style}"/><w:widowControl/><w:spacing w:after="140" w:line="280" w:lineRule="auto"/></w:pPr>{}</w:p>"#,
+        formatted_runs(text)
     )
 }
+
 fn docx(z: &mut ZipWriter<Cursor<Vec<u8>>>, s: &Value) -> Result<(), String> {
     let blocks = array(s, "blocks", 500)?;
     let mut body = paragraph(&string(s, "title", 180)?, "Title");
@@ -83,15 +123,16 @@ fn docx(z: &mut ZipWriter<Cursor<Vec<u8>>>, s: &Value) -> Result<(), String> {
                 )
             }
             "paragraph" => body += &paragraph(&string(b, "text", 20000)?, "Normal"),
-            "bullets" => {
+            "bullets" | "numbered" => {
                 for item in array(b, "items", 100)? {
                     let text = item.as_str().ok_or("Cada viñeta debe ser texto")?;
                     if text.len() > 10000 {
                         return Err("Viñeta demasiado larga".into());
                     }
                     body += &format!(
-                        r#"<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr><w:spacing w:after="100"/></w:pPr><w:r><w:t>{}</w:t></w:r></w:p>"#,
-                        xml(text)
+                        r#"<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="{}"/></w:numPr><w:spacing w:after="100"/><w:widowControl/></w:pPr>{}</w:p>"#,
+                        if kind == "numbered" { 2 } else { 1 },
+                        formatted_runs(text)
                     );
                 }
             }
@@ -100,19 +141,42 @@ fn docx(z: &mut ZipWriter<Cursor<Vec<u8>>>, s: &Value) -> Result<(), String> {
                 let mut table = String::from(
                     r#"<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/><w:tblBorders><w:top w:val="single" w:sz="4" w:color="CED4DC"/><w:left w:val="single" w:sz="4" w:color="CED4DC"/><w:bottom w:val="single" w:sz="4" w:color="CED4DC"/><w:right w:val="single" w:sz="4" w:color="CED4DC"/><w:insideH w:val="single" w:sz="4" w:color="CED4DC"/><w:insideV w:val="single" w:sz="4" w:color="CED4DC"/></w:tblBorders><w:tblCellMar><w:top w:w="100" w:type="dxa"/><w:left w:w="120" w:type="dxa"/><w:bottom w:w="100" w:type="dxa"/><w:right w:w="120" w:type="dxa"/></w:tblCellMar></w:tblPr>"#,
                 );
+                let columns = rows
+                    .iter()
+                    .filter_map(Value::as_array)
+                    .map(Vec::len)
+                    .max()
+                    .unwrap_or(0);
+                if columns == 0 || columns > 12 {
+                    return Err("Entre 1 y 12 columnas en DOCX".into());
+                }
+                table += &format!(
+                    "<w:tblGrid>{}</w:tblGrid>",
+                    (0..columns)
+                        .map(|_| format!(r#"<w:gridCol w:w="{}"/>"#, 9638 / columns))
+                        .collect::<String>()
+                );
                 for (i, r) in rows.iter().enumerate() {
                     let cells = r.as_array().ok_or("Fila de tabla no válida")?;
                     if cells.len() > 12 {
                         return Err("Máximo 12 columnas en DOCX".into());
                     }
-                    table += "<w:tr>";
-                    for cell in cells {
-                        let text = cell.as_str().ok_or("Las celdas DOCX deben ser texto")?;
+                    table += if i == 0 {
+                        "<w:tr><w:trPr><w:tblHeader/><w:cantSplit/></w:trPr>"
+                    } else {
+                        "<w:tr><w:trPr><w:cantSplit/></w:trPr>"
+                    };
+                    for column in 0..columns {
+                        let text = match cells.get(column) {
+                            Some(cell) => cell.as_str().ok_or("Las celdas DOCX deben ser texto")?,
+                            None => "",
+                        };
                         if text.len() > 10000 {
                             return Err("Celda demasiado larga".into());
                         }
                         table += &format!(
-                            "<w:tc><w:tcPr>{}</w:tcPr>{}</w:tc>",
+                            "<w:tc><w:tcPr><w:tcW w:w=\"{}\" w:type=\"dxa\"/>{}</w:tcPr>{}</w:tc>",
+                            9638 / columns,
                             if i == 0 {
                                 r#"<w:shd w:fill="EDF1F5"/>"#
                             } else {
@@ -135,6 +199,10 @@ fn docx(z: &mut ZipWriter<Cursor<Vec<u8>>>, s: &Value) -> Result<(), String> {
         "[Content_Types].xml",
         types(&[
             (
+                "word/footer1.xml",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml",
+            ),
+            (
                 "word/document.xml",
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml",
             ),
@@ -153,16 +221,17 @@ fn docx(z: &mut ZipWriter<Cursor<Vec<u8>>>, s: &Value) -> Result<(), String> {
         z,
         "word/_rels/document.xml.rels",
         format!(
-            r#"<Relationships xmlns="{REL}"><Relationship Id="rId1" Type="{OFFICE}/styles" Target="styles.xml"/><Relationship Id="rId2" Type="{OFFICE}/numbering" Target="numbering.xml"/></Relationships>"#
+            r#"<Relationships xmlns="{REL}"><Relationship Id="rId1" Type="{OFFICE}/styles" Target="styles.xml"/><Relationship Id="rId2" Type="{OFFICE}/numbering" Target="numbering.xml"/><Relationship Id="rId3" Type="{OFFICE}/footer" Target="footer1.xml"/></Relationships>"#
         ),
     )?;
-    add(z,"word/styles.xml",r#"<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="22"/><w:color w:val="202A36"/></w:rPr></w:rPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style><w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:rPr><w:b/><w:sz w:val="38"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:pPr><w:keepNext/><w:spacing w:before="280"/></w:pPr><w:rPr><w:b/><w:sz w:val="28"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:pPr><w:keepNext/></w:pPr><w:rPr><w:b/><w:sz w:val="24"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Heading3"><w:rPr><w:b/></w:rPr></w:style></w:styles>"#.into())?;
-    add(z,"word/numbering.xml",r#"<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:abstractNum w:abstractNumId="0"><w:multiLevelType w:val="singleLevel"/><w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="bullet"/><w:lvlText w:val="•"/><w:pPr><w:tabs><w:tab w:val="num" w:pos="360"/></w:tabs><w:ind w:left="360" w:hanging="180"/></w:pPr></w:lvl></w:abstractNum><w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num></w:numbering>"#.into())?;
+    add(z,"word/styles.xml",r#"<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:cs="Calibri"/><w:sz w:val="22"/><w:color w:val="202A36"/></w:rPr></w:rPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:pPr><w:widowControl/></w:pPr></w:style><w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:rPr><w:b/><w:sz w:val="48"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:pPr><w:keepNext/><w:spacing w:before="280"/></w:pPr><w:rPr><w:b/><w:sz w:val="28"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:pPr><w:keepNext/></w:pPr><w:rPr><w:b/><w:sz w:val="24"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Heading3"><w:rPr><w:b/></w:rPr></w:style></w:styles>"#.into())?;
+    add(z,"word/numbering.xml",r#"<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:abstractNum w:abstractNumId="0"><w:multiLevelType w:val="singleLevel"/><w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="bullet"/><w:lvlText w:val="•"/><w:pPr><w:tabs><w:tab w:val="num" w:pos="360"/></w:tabs><w:ind w:left="360" w:hanging="180"/></w:pPr></w:lvl></w:abstractNum><w:abstractNum w:abstractNumId="1"><w:multiLevelType w:val="singleLevel"/><w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/><w:pPr><w:ind w:left="360" w:hanging="180"/></w:pPr></w:lvl></w:abstractNum><w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num><w:num w:numId="2"><w:abstractNumId w:val="1"/></w:num></w:numbering>"#.into())?;
+    add(z,"word/footer1.xml",r#"<w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:rPr><w:sz w:val="18"/><w:color w:val="68717A"/></w:rPr><w:t>Página </w:t></w:r><w:fldSimple w:instr="PAGE"><w:r><w:t>1</w:t></w:r></w:fldSimple></w:p></w:ftr>"#.into())?;
     add(
         z,
         "word/document.xml",
         format!(
-            r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>{body}<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134"/></w:sectPr></w:body></w:document>"#
+            r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body>{body}<w:sectPr><w:footerReference w:type="default" r:id="rId3"/><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134"/></w:sectPr></w:body></w:document>"#
         ),
     )
 }
@@ -402,28 +471,64 @@ fn pptx(z: &mut ZipWriter<Cursor<Vec<u8>>>, s: &Value) -> Result<(), String> {
 fn figure(spec: &Value) -> Result<Vec<u8>, String> {
     fn number(v: &Value, key: &str, fallback: f64, max: f64) -> Result<f64, String> {
         let n = v.get(key).and_then(Value::as_f64).unwrap_or(fallback);
-        if !n.is_finite() || n < 0.0 || n > max { return Err(format!("{key}: valor no válido")); }
+        if !n.is_finite() || n < 0.0 || n > max {
+            return Err(format!("{key}: valor no válido"));
+        }
         Ok(n)
     }
     fn color(v: &Value, key: &str, fallback: &str) -> Result<String, String> {
         let s = v.get(key).and_then(Value::as_str).unwrap_or(fallback);
-        if s == "none" || (s.starts_with('#') && [4,7,9].contains(&s.len()) && s[1..].chars().all(|c| c.is_ascii_hexdigit())) { Ok(s.to_string()) } else { Err("Color no válido; usa hexadecimal".into()) }
+        if s == "none"
+            || (s.starts_with('#')
+                && [4, 7, 9].contains(&s.len())
+                && s[1..].chars().all(|c| c.is_ascii_hexdigit()))
+        {
+            Ok(s.to_string())
+        } else {
+            Err("Color no válido; usa hexadecimal".into())
+        }
     }
-    let width = number(spec,"width",960.0,2400.0)?;
-    let height = number(spec,"height",600.0,2400.0)?;
-    if width < 160.0 || height < 120.0 { return Err("Lienzo demasiado pequeño".into()); }
-    let mut content = format!(r#"<title>{}</title><rect width="100%" height="100%" fill="{}"/>"#,xml(&string(spec,"title",180)?),color(spec,"background","#ffffff")?);
-    for shape in array(spec,"elements",400)? {
+    let width = number(spec, "width", 960.0, 2400.0)?;
+    let height = number(spec, "height", 600.0, 2400.0)?;
+    if width < 160.0 || height < 120.0 {
+        return Err("Lienzo demasiado pequeño".into());
+    }
+    let mut content = format!(
+        r#"<title>{}</title><rect width="100%" height="100%" fill="{}"/>"#,
+        xml(&string(spec, "title", 180)?),
+        color(spec, "background", "#ffffff")?
+    );
+    for shape in array(spec, "elements", 400)? {
         let kind = shape.get("type").and_then(Value::as_str).unwrap_or("");
-        let fill=color(shape,"fill","none")?;let stroke=color(shape,"stroke","#233247")?;let sw=number(shape,"strokeWidth",2.0,20.0)?;
-        let x=number(shape,"x",0.0,width)?;let y=number(shape,"y",0.0,height)?;
-        let attrs=format!(r#"fill="{fill}" stroke="{stroke}" stroke-width="{sw}""#);
+        let fill = color(shape, "fill", "none")?;
+        let stroke = color(shape, "stroke", "#233247")?;
+        let sw = number(shape, "strokeWidth", 2.0, 20.0)?;
+        let x = number(shape, "x", 0.0, width)?;
+        let y = number(shape, "y", 0.0, height)?;
+        let attrs = format!(r#"fill="{fill}" stroke="{stroke}" stroke-width="{sw}""#);
         content += &match kind {
-            "rect" => format!(r#"<rect x="{x}" y="{y}" width="{}" height="{}" rx="{}" {attrs}/>"#,number(shape,"width",100.0,width)?,number(shape,"height",60.0,height)?,number(shape,"radius",0.0,100.0)?),
-            "circle" => format!(r#"<circle cx="{x}" cy="{y}" r="{}" {attrs}/>"#,number(shape,"radius",30.0,width.max(height))?),
-            "line" => format!(r#"<line x1="{x}" y1="{y}" x2="{}" y2="{}" {attrs}/>"#,number(shape,"x2",0.0,width)?,number(shape,"y2",0.0,height)?),
-            "text" => format!(r#"<text x="{x}" y="{y}" fill="{}" font-family="Arial,sans-serif" font-size="{}">{}</text>"#,color(shape,"fill","#233247")?,number(shape,"fontSize",20.0,120.0)?,xml(&string(shape,"text",1000)?)),
-            _ => return Err("Figura no admitida; usa rect, circle, line o text".into())
+            "rect" => format!(
+                r#"<rect x="{x}" y="{y}" width="{}" height="{}" rx="{}" {attrs}/>"#,
+                number(shape, "width", 100.0, width)?,
+                number(shape, "height", 60.0, height)?,
+                number(shape, "radius", 0.0, 100.0)?
+            ),
+            "circle" => format!(
+                r#"<circle cx="{x}" cy="{y}" r="{}" {attrs}/>"#,
+                number(shape, "radius", 30.0, width.max(height))?
+            ),
+            "line" => format!(
+                r#"<line x1="{x}" y1="{y}" x2="{}" y2="{}" {attrs}/>"#,
+                number(shape, "x2", 0.0, width)?,
+                number(shape, "y2", 0.0, height)?
+            ),
+            "text" => format!(
+                r#"<text x="{x}" y="{y}" fill="{}" font-family="Arial,sans-serif" font-size="{}">{}</text>"#,
+                color(shape, "fill", "#233247")?,
+                number(shape, "fontSize", 20.0, 120.0)?,
+                xml(&string(shape, "text", 1000)?)
+            ),
+            _ => return Err("Figura no admitida; usa rect, circle, line o text".into()),
         };
     }
     Ok(format!(r#"<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">{content}</svg>"#).into_bytes())
@@ -432,7 +537,9 @@ pub fn generate(format: &str, spec: &Value) -> Result<Vec<u8>, String> {
     if serde_json::to_vec(spec).map_err(|e| e.to_string())?.len() > 2_000_000 {
         return Err("El documento supera 2 MB de contenido".into());
     }
-    if format == "svg" { return figure(spec); }
+    if format == "svg" {
+        return figure(spec);
+    }
     let mut z = ZipWriter::new(Cursor::new(Vec::new()));
     match format {
         "docx" => docx(&mut z, spec)?,
@@ -544,12 +651,52 @@ mod tests {
     }
     #[test]
     fn figures_are_bounded_static_svg() {
-        let value=json!({"title":"Movimiento <seguro>","width":800,"height":500,"elements":[{"type":"rect","x":10,"y":20,"width":100,"height":80,"fill":"#dfeaff"},{"type":"text","x":30,"y":60,"text":"<script>alert(1)</script> Δx"}]});
-        let svg=String::from_utf8(generate("svg",&value).unwrap()).unwrap();
-        assert!(svg.starts_with("<svg"));assert!(svg.contains("&lt;script&gt;"));assert!(!svg.contains("<script>"));
-        assert!(generate("svg",&json!({"title":"No","elements":[{"type":"script"}]})).is_err());
-        assert!(generate("svg",&json!({"title":"No","elements":[{"type":"rect","fill":"url(https://evil.test/x)"}]})).is_err());
-        assert!(generate("svg",&json!({"title":"No","width":999999,"elements":[{"type":"line"}]})).is_err());
+        let value = json!({"title":"Movimiento <seguro>","width":800,"height":500,"elements":[{"type":"rect","x":10,"y":20,"width":100,"height":80,"fill":"#dfeaff"},{"type":"text","x":30,"y":60,"text":"<script>alert(1)</script> Δx"}]});
+        let svg = String::from_utf8(generate("svg", &value).unwrap()).unwrap();
+        assert!(svg.starts_with("<svg"));
+        assert!(svg.contains("&lt;script&gt;"));
+        assert!(!svg.contains("<script>"));
+        assert!(generate("svg", &json!({"title":"No","elements":[{"type":"script"}]})).is_err());
+        assert!(generate(
+            "svg",
+            &json!({"title":"No","elements":[{"type":"rect","fill":"url(https://evil.test/x)"}]})
+        )
+        .is_err());
+        assert!(generate(
+            "svg",
+            &json!({"title":"No","width":999999,"elements":[{"type":"line"}]})
+        )
+        .is_err());
+    }
+    #[test]
+    fn docx_preserves_formatting_and_layout() {
+        use std::io::Read;
+        let spec = json!({"title":"Informe de Física","blocks":[{"type":"heading","text":"Energía y medición"},{"type":"paragraph","text":"**Energía cinética** y `E = ½mv²`\nUnidades: J = kg·m²·s⁻²; α, Δx."},{"type":"numbered","items":["Medir la masa","Registrar la velocidad"]},{"type":"table","rows":[["Magnitud","Unidad"],["Energía","J"],["Masa"]]}]});
+        let bytes = generate("docx", &spec).unwrap();
+        let folder = std::path::Path::new("target/qa-artifacts");
+        std::fs::create_dir_all(folder).unwrap();
+        std::fs::write(folder.join("formato.docx"), &bytes).unwrap();
+        let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
+        let mut document = String::new();
+        archive
+            .by_name("word/document.xml")
+            .unwrap()
+            .read_to_string(&mut document)
+            .unwrap();
+        assert!(
+            document.contains("<w:b/>")
+                && document.contains("<w:br/>")
+                && document.contains("<w:tblHeader/>")
+                && document.contains("w:numId w:val=\"2\"")
+        );
+        assert!(
+            document.contains("½mv²")
+                && !document.contains("**Energía")
+                && !document.contains("`E =")
+        );
+        assert!(
+            document.contains("w:footerReference") && archive.by_name("word/footer1.xml").is_ok()
+        );
     }
     #[test]
     fn rejects_invalid_sheet_names() {

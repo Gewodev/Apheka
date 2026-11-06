@@ -7,7 +7,7 @@ import {useAppSnapshot} from '../../store/AppContext';
 import {TaskBoard,TaskUrgencyMatrix,TaskOverview,TaskStateButton} from './tasks/TaskPriorityViews';
 import TaskStudyPicker from './tasks/TaskStudyPicker';
 import './tasks/taskWorkspace.css';
-import {useAppSlice} from "../../store/AppContext";
+import {useAppSlice,useTaskPresentationSlice} from "../../store/AppContext";
 import TimeControl from '../ui/TimeControl';
 import {usePanelWidth,PanelResizeHandle} from '../../hooks/usePanelWidth';
 import PlanSelectDropdown from '../ui/PlanSelectDropdown';
@@ -144,7 +144,7 @@ function SortableCalendarTask({ task, children }: { task: Task; children: (dragP
 
 export default function Tareas() {
   const inspectorWidth=usePanelWidth('task-inspector',600,500,860,'left',32);
-  const { tasks, courses, notes, addTask, updateTask, toggleTaskStatus, deleteTask, addSubTask, toggleSubTask, deleteSubTask, addTaskFile, removeTaskFile, clearAllTasks, addNotification, setNavigateTo, focusedTaskId, setFocusedTaskId, settings, addNote, updateNote, activePlannedSessionId, activeTaskId, linkTaskToTimer, startSubtaskStudy } = useAppSlice(["tasks","courses","notes","addTask","updateTask","toggleTaskStatus","deleteTask","addSubTask","toggleSubTask","deleteSubTask","addTaskFile","removeTaskFile","clearAllTasks","addNotification","setNavigateTo","focusedTaskId","setFocusedTaskId","settings","addNote","updateNote","activePlannedSessionId","activeTaskId","linkTaskToTimer","startSubtaskStudy"]);
+  const { tasks, courses, notes, addTask, updateTask, toggleTaskStatus, deleteTask, addSubTask, toggleSubTask, deleteSubTask, addTaskFile, removeTaskFile, clearAllTasks, addNotification, setNavigateTo, focusedTaskId, setFocusedTaskId, settings, addNote, updateNote, activePlannedSessionId, activeTaskId, linkTaskToTimer, startSubtaskStudy } = useTaskPresentationSlice(["tasks","courses","notes","addTask","updateTask","toggleTaskStatus","deleteTask","addSubTask","toggleSubTask","deleteSubTask","addTaskFile","removeTaskFile","clearAllTasks","addNotification","setNavigateTo","focusedTaskId","setFocusedTaskId","settings","addNote","updateNote","activePlannedSessionId","activeTaskId","linkTaskToTimer","startSubtaskStudy"],true);
   const th = document.documentElement.getAttribute('data-theme');
   const isDarkSelect = !th || th === 'oscuro' || th === 'vibrante';
   const selectBorder = isDarkSelect ? '1px solid rgba(255,255,255,0.12)' : '1px solid rgba(0,0,0,0.12)';
@@ -335,6 +335,7 @@ export default function Tareas() {
     return { total, completadas, pendientes, progreso, vencidas, completadasPct: total ? Math.round((completadas / total) * 100) : 0 };
   }, [tasks]);
 
+  const overviewTasks=useMemo(()=>tasks.filter(task=>!(task as Task&{deletedAt?:string}).deletedAt),[tasks]);
   const scopedTasks=useMemo(()=>tasks.filter(task=>!(task as Task&{deletedAt?:string}).deletedAt&&(!courseFilter||task.course===courseFilter)&&(!searchQuery||fuzzyMatch(task.title,searchQuery))),[tasks,courseFilter,searchQuery]);
   const filteredTasks = useMemo(() => {
     let filtered = scopedTasks;
@@ -811,7 +812,7 @@ export default function Tareas() {
           {viewMode==='board'&&<TaskBoard tasks={filteredTasks} assessments={assessments} onOpen={handleOpenDetail} onStatus={changeStatus} onAdd={()=>setShowNewModal(true)}/>}
           {viewMode==='urgency'&&<TaskUrgencyMatrix tasks={filteredTasks} assessments={assessments} onOpen={handleOpenDetail} onStatus={changeStatus}/>}
         </div>
-        <TaskOverview courses={courses} tasks={scopedTasks} assessments={assessments} courseFilter={courseFilter} onCourse={setCourseFilter} onOpen={handleOpenDetail}/>
+        <TaskOverview courses={courses} tasks={overviewTasks}/>
       </div>
       {showPicker&&<TaskStudyPicker tasks={tasks} assessments={assessments} onClose={()=>setShowPicker(false)} onOpen={id=>{setShowPicker(false);handleOpenDetail(id);}} onStudy={id=>beginRecommendedStudy(id)} hasCourse={task=>courses.some(course=>course.name===task.course)} onCourse={task=>{const course=courses.find(course=>course.name===task.course);if(course){setShowPicker(false);intelligence.navigateToCourse(course.id);}}}/>}
 

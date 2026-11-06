@@ -1,6 +1,6 @@
 [package]
 name = "owa-studio"
-version = "6.25.2"
+version = "6.26.0"
 description = "A premium study workspace"
 authors = ["Gewodev"]
 edition = "2021"
@@ -33,6 +33,7 @@ uuid = { version = "1", features = ["v4"] }
 tauri-plugin-single-instance = "2"
 
 [target.'cfg(windows)'.dependencies]
+tauri-winrt-notification = "=0.7.3"
 webview2-com = "0.38.2"
 windows-core = "0.61"
 windows-sys = { version = "0.61", features = ["Win32_UI_WindowsAndMessaging", "Win32_Foundation", "Win32_Security_Credentials", "Win32_Security_Cryptography"] }

@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod local_asr;
+mod native_notifications;
 mod charvis_stream;
 mod music_network;
 mod jev;
@@ -812,6 +813,7 @@ fn main() {
             path: Mutex::new(default_download_path),
         })
         .invoke_handler(tauri::generate_handler![
+            native_notifications::send_workspace_notification,
             retire_legacy_media_windows,
             music_network::music_catalog_request, music_network::cancel_music_catalog_request,
             jev::jev_status, jev::jev_connect, jev::jev_disconnect, jev::jev_decide,

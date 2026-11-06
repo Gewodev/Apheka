@@ -5,7 +5,7 @@ import { es } from 'date-fns/locale';
 import { useApp, fmtClock } from '../../store/AppContext';
 import LiveClock from './LiveClock';
 
-export default function WorkspaceClock({now,className=''}:{now?:Date;className?:string}) {
+function WorkspaceClock({now,className=''}:{now?:Date;className?:string}) {
  const {settings}=useAppSlice(["settings"]);
  const face=(date:Date)=>{
   const formatted=fmtClock(format(date,'HH:mm'),settings.timeFormat);
@@ -14,3 +14,5 @@ export default function WorkspaceClock({now,className=''}:{now?:Date;className?:
  };
  return <div className={`workspace-clock ${className}`}>{now?face(now):<LiveClock>{face}</LiveClock>}</div>;
 }
+
+export default React.memo(WorkspaceClock);

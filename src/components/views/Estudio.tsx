@@ -147,6 +147,7 @@ export default function Estudio() {
 
   const [showAllActivity, setShowAllActivity] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
+  const toggleAnalytics=useCallback(()=>setShowAnalytics(value=>!value),[]);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showSessionEval, setShowSessionEval] = useState(false);
   const [showFreeStudyPrompt, setShowFreeStudyPrompt] = useState(false);
@@ -2007,7 +2008,7 @@ export default function Estudio() {
       {/* Analytics Drawer */}
       <AnalyticsDrawer
         isOpen={showAnalytics}
-        onClose={() => setShowAnalytics(!showAnalytics)}
+        onClose={toggleAnalytics}
         studySessions={studySessions as any}
         tasks={tasks as any}
         settings={settings}

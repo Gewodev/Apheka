@@ -42,3 +42,14 @@
 .music-artists .artist-library-open>.music-identity-artist,.music-discover .discover-artists-grid>button>.music-identity-artist{flex:0 0 auto;inline-size:min(160px,100%);block-size:auto;min-block-size:0;aspect-ratio:1/1}
 
 .artist-catalog-status{font:12px/1.6 var(--font-primary);color:var(--text-secondary);margin:12px 0}.artist-catalog-more{margin:16px 0 24px}
+
+/* Scope above the legacy discovery img rule: both the slot and pixels are square. */
+.music-studio :is(.music-discover,.music-artists) .music-identity-image>img{width:100%!important;height:100%!important;inline-size:100%!important;block-size:100%!important;min-width:0!important;max-width:none!important;max-height:none!important;aspect-ratio:auto!important;object-fit:cover!important;object-position:center!important;margin:0!important;border-radius:inherit}
+.music-studio :is(.music-discover,.music-artists) .artist-profile{grid-template-columns:144px minmax(0,1fr) auto;column-gap:26px}
+.music-studio .artist-profile>.music-identity-artist{width:144px!important;height:144px!important;inline-size:144px!important;block-size:144px!important}
+.music-studio .artist-profile>.artist-profile-identity{min-width:0;position:relative;z-index:1;flex:none}
+.music-studio .artist-profile>.artist-profile-actions{min-width:0;flex:none}
+@container music-content (max-width:850px){.music-studio :is(.music-discover,.music-artists) .artist-profile{grid-template-columns:120px minmax(0,1fr)}.music-studio .artist-profile>.music-identity-artist{width:120px!important;height:120px!important;inline-size:120px!important;block-size:120px!important}}
+@container music-content (max-width:560px){.music-studio :is(.music-discover,.music-artists) .artist-profile{grid-template-columns:88px minmax(0,1fr)}.music-studio .artist-profile>.music-identity-artist{width:88px!important;height:88px!important;inline-size:88px!important;block-size:88px!important}}
+
+.artist-track-identity{display:grid;gap:4px;min-width:0}.artist-track-identity strong{font:500 14px/1.5 var(--font-primary);overflow-wrap:anywhere}.artist-track-identity small{font:11px/1.5 var(--font-primary);color:var(--text-secondary);overflow-wrap:anywhere}

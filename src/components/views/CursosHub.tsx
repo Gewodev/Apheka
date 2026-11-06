@@ -1,5 +1,5 @@
 import type {BannerCrop} from '../../lib/bannerCrop';
-import {useAppSlice} from "../../store/AppContext";
+import {useTaskPresentationSlice} from "../../store/AppContext";
 import {courseStudySeconds} from '../../lib/courseStudy';
 import BannerField from '../ui/BannerField';
 import WorkspaceHeader from '../ui/WorkspaceHeader';
@@ -27,7 +27,7 @@ interface CursosHubProps {
 }
 
 export default function CursosHub({ onSelectCourse, onTabSelect }: CursosHubProps) {
-  const { courses = [], tasks, studySessions, addCourse, updateCourse, reorderCourses } = useAppSlice(["courses","tasks","studySessions","addCourse","updateCourse","reorderCourses"]);
+  const { courses = [], tasks, studySessions, addCourse, updateCourse, reorderCourses } = useTaskPresentationSlice(["courses","tasks","studySessions","addCourse","updateCourse","reorderCourses"]);
   const studyTotals=useMemo(()=>courseStudySeconds(courses,tasks,studySessions),[courses,tasks,studySessions]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);

@@ -1,12 +1,12 @@
-import React,{useEffect,useRef,useState} from 'react';
+import React,{useRef,useSyncExternalStore} from 'react';
+import {wallClock} from '../../lib/wallClock';
 import {clockAngles,clockValue,timeAtDial} from '../../lib/analogClock';
 import {deadlineForClock} from '../../lib/timerSchedule';
 
 export default function PomodoroClock({value,minutes,onChange}:{value:string;minutes:number;onChange:(time:string)=>void}) {
- const [now,setNow]=useState(()=>new Date());
+ const now=new Date(useSyncExternalStore(wallClock.subscribe,wallClock.getSnapshot,wallClock.getSnapshot));
  const svgRef=useRef<SVGSVGElement>(null);
  const drag=useRef<'hour'|'minute'|null>(null);
- useEffect(()=>{const id=setInterval(()=>setNow(new Date()),1000);return()=>clearInterval(id);},[]);
  const result=deadlineForClock(value,now);
  const target=result.deadline?new Date(result.deadline):new Date(now.getTime()+minutes*60000);
  const current=clockAngles(now),end=clockAngles(target);

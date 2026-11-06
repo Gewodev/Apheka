@@ -1,5 +1,6 @@
+import './toolRunner.css';
 import { readDeckData } from '../../../lib/deckData';
-import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback, createContext, useContext } from 'react';
 import { parseLines, shuffle, analyzeExplanation, adaptiveOrder, loadStats, saveStats, type DeckStat } from '../../../lib/deckParse';
 import { createPortal } from 'react-dom';
 import {
@@ -322,6 +323,7 @@ interface DeckRunnerProps {
   onClose: () => void;
 }
 
+const ToolExit=createContext<(()=>void)|null>(null);
 export function DeckRunner({ mat, accent, onClose }: DeckRunnerProps) {
   const mode = (Object.prototype.hasOwnProperty.call(DECK_META, mat.toolMode || '') ? mat.toolMode : 'flashcardsDeck') as ToolDeckMode;
   const meta = DECK_META[mode];
@@ -338,16 +340,11 @@ export function DeckRunner({ mat, accent, onClose }: DeckRunnerProps) {
     mode === 'catDeck' ? <CatRun items={(data.items || []) as DeckCat[]} matId={mat.id} color={blockColor} accent={accent} /> :
     <FeynmanRun concepts={(data.concepts || []) as DeckFeynman[]} matId={mat.id} color={blockColor} accent={accent} />;
 
-  // ── Dentro del panel: fondo con el icono difuminado + nombre gigante tenue ──
+  // Each tool shares a quiet frame and readable result layout.
   return (
     <div className="course-tool-runner" data-tool-mode={mode} style={{ position: 'relative', height: '100%', minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-      {/* Fondo: icono grande difuminado + nombre gigante tenue */}
-      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <meta.icon size={360} style={{ color: blockColor, opacity: 0.025, filter: 'none', position: 'absolute' }} />
-        <span style={{ position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)', fontSize: 92, fontWeight: 700, letterSpacing: '0.04em', color: blockColor, opacity: 0.02, whiteSpace: 'nowrap', fontFamily: "'Inter Tight', sans-serif", textTransform: 'uppercase' }}>{meta.label}</span>
-      </div>
       <div style={{ position: 'relative', flex: 1, minHeight: 0, overflowY: 'auto', padding: '10px 16px 26px', display: 'flex', flexDirection: 'column' }} className="no-scrollbar">
-        {body}
+        <ToolExit.Provider value={onClose}>{body}</ToolExit.Provider>
       </div>
     </div>
   );
@@ -355,81 +352,10 @@ export function DeckRunner({ mat, accent, onClose }: DeckRunnerProps) {
 
 
 // ── Panel de estadísticas final (compartido) ─────────────────────────────────
-function StatsPanel({ right, wrong, weakest, color, onAgain, onWrongOnly, onClose }: {
-  right: number; wrong: number; weakest: string[]; color: string;
-  onAgain: () => void; onWrongOnly?: () => void; onClose: () => void;
-}) {
-  const total = right + wrong;
-  const pctRound = total > 0 ? Math.round((right / total) * 100) : 0;
-  const ringColor = pctRound >= 70 ? '#10B981' : pctRound >= 40 ? color : '#EF4444';
-  const C = 2 * Math.PI * 52;
-  const verdict = pctRound >= 70 ? 'Excelente dominio' : pctRound >= 40 ? 'Vas por buen camino' : 'Necesitas repasar';
-  return (
-    <div style={{ width: '100%', maxWidth: 880, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 22 }}>
-      {/* Resumen: anillo + veredicto a la izquierda, contadores a la derecha */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 26, alignItems: 'center', width: '100%' }}>
-        <div style={{ position: 'relative', width: 150, height: 150, flexShrink: 0 }}>
-          <svg viewBox="0 0 120 120" style={{ width: '100%', height: '100%', transform: 'rotate(-90deg)' }}>
-            <circle cx="60" cy="60" r="52" fill="none" stroke="var(--border-subtle)" strokeWidth="7" />
-            <circle cx="60" cy="60" r="52" fill="none" stroke={ringColor} strokeWidth="7" strokeLinecap="round"
-              strokeDasharray={`${(pctRound / 100) * C} ${C}`} style={{ transition: 'stroke-dasharray 700ms ' + EASE }} />
-          </svg>
-          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ fontSize: 32, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.03em', lineHeight: 1 }}>{pctRound}%</span>
-            <span style={{ fontSize: 8.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--text-tertiary)', marginTop: 6 }}>aciertos</span>
-          </div>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
-          <div>
-            <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.16em', color: 'var(--text-tertiary)', marginBottom: 6 }}>Resultado de la sesión</div>
-            <div style={{ fontSize: 24, fontWeight: 700, color: ringColor, fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.02em', lineHeight: 1.15 }}>{verdict}</div>
-          </div>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <div style={{ flex: '1 1 130px', padding: '13px 18px', borderRadius: 14, border: '1px solid rgba(16,185,129,0.28)', background: 'rgba(16,185,129,0.06)' }}>
-              <div style={{ fontSize: 26, fontWeight: 700, color: '#10B981', fontFamily: "'Inter Tight', sans-serif", lineHeight: 1, letterSpacing: '-0.02em' }}>{right}</div>
-              <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--text-tertiary)', marginTop: 5 }}>Conseguidas</div>
-            </div>
-            <div style={{ flex: '1 1 130px', padding: '13px 18px', borderRadius: 14, border: '1px solid rgba(239,68,68,0.25)', background: 'rgba(239,68,68,0.05)' }}>
-              <div style={{ fontSize: 26, fontWeight: 700, color: '#EF4444', fontFamily: "'Inter Tight', sans-serif", lineHeight: 1, letterSpacing: '-0.02em' }}>{wrong}</div>
-              <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--text-tertiary)', marginTop: 5 }}>Falladas</div>
-            </div>
-          </div>
-        </div>
-      </div>
-      {/* Para reforzar: lista a ancho completo */}
-      {weakest.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-          <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.16em', color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <TrendingUp size={11} /> Para reforzar
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 7 }}>
-            {weakest.map((w, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '11px 14px', borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }}>
-                <span style={{ width: 22, height: 22, borderRadius: 7, background: 'rgba(239,68,68,0.1)', color: '#EF4444', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</span>
-                <span style={{ fontSize: 12, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}><MT t={w} /></span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-      {/* Acciones a ancho completo */}
-      <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap' }}>
-        <button data-ui-control="" onClick={onAgain} style={{ flex: '1 1 190px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '13px 18px', borderRadius: 12, border: `1px solid ${color}40`, background: `${color}12`, color, cursor: 'pointer', fontSize: 12.5, fontWeight: 700, fontFamily: "'Inter Tight', sans-serif", transition: `all 160ms ${EASE}` }}
-          onMouseEnter={e => { e.currentTarget.style.background = `${color}20`; e.currentTarget.style.transform = 'translateY(-1px)'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = `${color}12`; e.currentTarget.style.transform = 'none'; }}>
-          <RotateCcw size={14} /> Repetir (adaptativo)
-        </button>
-        {onWrongOnly && wrong > 0 && (
-          <button data-ui-control="" onClick={onWrongOnly} style={{ flex: '1 1 160px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '13px 18px', borderRadius: 12, border: '1px solid rgba(239,68,68,0.35)', background: 'rgba(239,68,68,0.07)', color: '#EF4444', cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }}>
-            Solo las falladas
-          </button>
-        )}
-        <button data-ui-control="" onClick={onClose} style={{ flex: '1 1 130px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '13px 18px', borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12.5, fontWeight: 600 }}>
-          Terminar
-        </button>
-      </div>
-    </div>
-  );
+function StatsPanel({right,wrong,weakest,color,onAgain,onWrongOnly,onClose}:{right:number;wrong:number;weakest:string[];color:string;onAgain:()=>void;onWrongOnly?:()=>void;onClose:()=>void}){
+ const exit=useContext(ToolExit)||onClose;
+ const total=right+wrong,pct=total?Math.round(right/total*100):0,circumference=2*Math.PI*46;
+ return <section className="tool-session-result" aria-label="Resultado de la práctica" style={{'--tool-color':color} as React.CSSProperties}><header><div className="tool-result-ring"><svg viewBox="0 0 110 110" aria-hidden="true"><circle cx="55" cy="55" r="46"/><circle cx="55" cy="55" r="46" strokeDasharray={circumference} strokeDashoffset={circumference*(1-pct/100)} transform="rotate(-90 55 55)"/></svg><strong>{pct}%<small>Aciertos</small></strong></div><div><p>Resultado de la sesión</p><h2>{pct>=85?'Conceptos consolidados':pct>=60?'Sigue reforzando lo aprendido':'Hay conceptos por reforzar'}</h2><span>{total} respuestas revisadas</span></div></header><div className="tool-result-counts"><div><strong>{right}</strong><span>Correctas</span></div><div><strong>{wrong}</strong><span>Para repasar</span></div></div>{weakest.length>0&&<div className="tool-result-review"><h3>Tu siguiente repaso</h3><ol>{weakest.map((text,index)=><li key={index}><span>{String(index+1).padStart(2,'0')}</span><div><MT t={text}/></div></li>)}</ol></div>}<footer><button type="button" className="btn-secondary" onClick={exit}>Terminar</button>{onWrongOnly&&wrong>0&&<button type="button" className="btn-secondary" onClick={onWrongOnly}>Repasar las falladas</button>}<button type="button" className="btn-primary" onClick={onAgain}><RotateCcw size={14}/>Repetir práctica</button></footer></section>;
 }
 
 function EmptyRun({ label, color }: { label: string; color: string }) {
@@ -451,7 +377,6 @@ function FlashcardsRun({ cards, matId, color, accent }: { cards: DeckCard[]; mat
   const [done, setDone] = useState(false);
   const [wrongList, setWrongList] = useState<number[]>([]);
   const card = cards[queue[pos]];
-  if (!card) return <EmptyRun label="Este bloque no tiene tarjetas" color={color} />;
 
   const grade = (ok: boolean) => {
     const idx = queue[pos];
@@ -478,6 +403,7 @@ function FlashcardsRun({ cards, matId, color, accent }: { cards: DeckCard[]; mat
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   });
+  if (!card) return <EmptyRun label="Este bloque no tiene tarjetas" color={color} />;
   const weakest = wrongList.slice(0, 4).map(i => cards[i]?.q || '').filter(Boolean);
 
   if (done) {

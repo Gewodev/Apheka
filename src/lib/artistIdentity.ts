@@ -5,7 +5,7 @@ export function creditedArtist(credits:string,name:string){
  const whole=artistKey(credits);if(whole===key)return true;
  return credits.split(/[,;]/).some(credit=>artistKey(credit)===key||credit.split(/\s*(?:\bfeat\.?|\bft\.?|\bfeaturing\b|\bwith\b|\bcon\b|\band\b|\bx\b|&|\by\b)\s*/i).some(part=>artistKey(part)===key));
 }
-export type SavedMusicArtist={id:string;name:string;profileImage?:string;catalogId?:string;origin?:'catalog';trackIds?:string[]};
+export type SavedMusicArtist={id:string;name:string;profileImage?:string;catalogId?:string;origin?:'catalog';trackIds?:string[];catalogSelection?:'all'|'selected'};
 export function pinnedArtists(artists:SavedMusicArtist[]){
  const names=new Set<string>();return artists.filter(artist=>{const key=artist.catalogId||artistKey(artist.name);if(!key||names.has(key)||(!artist.origin&&!artist.profileImage&&!artist.catalogId))return false;names.add(key);return true;});
 }

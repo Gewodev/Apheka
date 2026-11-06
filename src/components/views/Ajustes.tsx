@@ -1420,7 +1420,7 @@ export default function Ajustes() {
                     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                       <button data-app-action="primary" data-ui-control="" onClick={async () => {
                         const { sendNativeNotification } = await import('../../lib/notifications');
-                        sendNativeNotification('APHEKA', 'Notificación nativa de prueba enviada');
+                        sendNativeNotification('APHEKA', 'Notificación nativa de prueba enviada',{kind:'settings'});
                       }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'var(--accent)', border: 'none', color: '#fff', transition: 'all 200ms' }}>
                         <Bell size={14} /> Probar Nativa
                       </button>

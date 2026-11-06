@@ -1,4 +1,5 @@
-import {useAppSlice} from "../../../store/AppContext";
+import {SessionTimeStepper} from '../../ui/StudySessionControls';
+import {useTaskPresentationSlice} from "../../../store/AppContext";
 import PlanSelectDropdown from '../../ui/PlanSelectDropdown';
 import { taskLinkUnavailable, eventLinkUnavailable } from '../../../lib/linkEligibility';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
@@ -431,7 +432,7 @@ export default function EventModal({
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <CalendarClock size={19} style={{ color }} />
             <h2 style={{ fontSize: 20, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight',sans-serif", letterSpacing: '-0.02em' }}>
-              {event ? 'Editar Evento' : 'Nuevo Evento'}
+              {event ? 'Editar evento' : 'Nuevo evento'}
             </h2>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -476,15 +477,7 @@ export default function EventModal({
               </label>
               {!allDay && <>
                 <div className="apheka-field">Inicio
-                  <div className="apheka-time-control">
-                    <EventNumber label="Hora de inicio" className="apheka-time-input" min={0} max={23} value={start.split(':')[0]} onCommit={h => setStart(`${String(h).padStart(2,'0')}:${start.split(':')[1]}`)} />
-                    <span aria-hidden="true">:</span>
-                    <EventNumber label="Minuto de inicio" className="apheka-time-input" min={0} max={59} value={start.split(':')[1]} onCommit={m => setStart(`${start.split(':')[0]}:${String(m).padStart(2,'0')}`)} />
-                    <div className="apheka-time-arrows">
-                      <button type="button" aria-label="Adelantar cinco minutos" onClick={() => shiftStart('m',1)}><ChevronUp size={13} /></button>
-                      <button type="button" aria-label="Retroceder cinco minutos" onClick={() => shiftStart('m',-1)}><ChevronDown size={13} /></button>
-                    </div>
-                  </div>
+                  <SessionTimeStepper value={start} onChange={setStart}/>
                 </div>
                 <div className="apheka-field">Duración
                   <div className="apheka-duration-control">
@@ -736,7 +729,7 @@ export default function EventModal({
           </button>
           <button onClick={handleSave} style={{ flex: 2, height: 48, borderRadius: 10, border: 'none', background: 'var(--accent)', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 4px 20px var(--accent-glow)', transition: 'transform 200ms, box-shadow 200ms' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 6px 24px var(--accent-glow)' }} onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 4px 20px var(--accent-glow)' }}>
             <Check size={16} />
-            {event ? 'Guardar Cambios' : 'Crear Evento'}
+            {event ? 'Guardar cambios' : 'Crear evento'}
           </button>
         </div>
       </div>

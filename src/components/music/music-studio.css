@@ -35,3 +35,7 @@
 /* Keep long artist collections scrollable while the player stays available. */
 .music-studio.music-unified{overflow:hidden!important}.music-studio .music-studio-body{min-height:0;align-items:stretch;overflow:hidden}.music-studio .music-studio-content{min-height:0;overflow-y:auto;overflow-x:hidden;padding-right:8px;overscroll-behavior:contain;scrollbar-width:thin}.music-studio .music-studio-inspector{position:relative;top:auto;max-height:none;min-height:0;overflow-y:auto}
 @media(max-width:800px){.music-studio.music-unified{overflow-y:auto!important}.music-studio .music-studio-body{overflow:visible;flex:none}.music-studio .music-studio-content{overflow:visible;padding-right:0}.music-studio .music-studio-inspector{max-height:550px}}
+
+/* Cover ambience belongs to the viewport, independently of lyric scroll height. */
+.music-listening-room.quiet-room[role=dialog]>.room-artwork-background{position:fixed;inset:-2dvh -2vw;width:104vw;height:104dvh;max-width:none;max-height:none;object-fit:cover;opacity:.38;pointer-events:none;user-select:none}
+.music-listening-room.quiet-room[role=dialog]>.room-artwork-shade{position:fixed;inset:0;pointer-events:none}

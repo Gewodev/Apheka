@@ -1,3 +1,6 @@
+import {lazyJsonSnapshot} from '../lib/lazySnapshot';
+import {sameTaskPresentation} from '../lib/viewSnapshots';
+import {ViewActivity} from '../lib/viewActivity';
 import type {SavedMusicArtist} from '../lib/artistIdentity';
 import {artistKey} from '../lib/artistIdentity';
 import {readQueueIntent,rememberQueueSource,resumeLibraryQueue} from '../lib/queueResume';
@@ -485,7 +488,7 @@ interface AppState {
 
 export type ViewId = 'inicio' | 'tareas' | 'apuntes' | 'estudio' | 'cursos' | 'ia' | 'analiticas' | 'chat' | 'ajustes' | 'musica' | 'flujo' | 'canvas';
 
-interface AppContextType extends AppState {
+export interface AppContextType extends AppState {
   persistWorkspace: () => Promise<void>;
   setSessionType: (val: 'pomodoro' | 'chrono') => void;
   addTask: (task: Omit<Task, 'id' | 'createdAt' | 'status' | 'subtasks' | 'files' | 'notes' | 'apuntes' | 'studyTime'> & { notes?: string; apuntes?: string; files?: TaskFile[]; subtasks?: SubTask[] }) => void;
@@ -578,7 +581,7 @@ interface AppContextType extends AppState {
   exportMusicLibrary: (destDir: string) => Promise<number>;
   importMusicLibrary: (srcDir: string) => Promise<number>;
   addArtist: (name: string, profileImage?: string, catalogId?:string) => void;
-  updateArtist: (id: string, updates: Partial<Pick<SavedMusicArtist,'name'|'profileImage'|'trackIds'>>) => void;
+  updateArtist: (id: string, updates: Partial<Pick<SavedMusicArtist,'name'|'profileImage'|'trackIds'|'catalogSelection'>>) => void;
   deleteArtist: (id: string) => void;
   playlists: Playlist[];
   addPlaylist: (name: string, trackIds: string[], coverImage?: string, isPublic?: boolean) => void;
@@ -1492,25 +1495,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
             sessionTimeRef.current = next;
             const isRestNow = isRestRef.current;
             const typeNow = sessionTypeRef.current;
-            emit('timer:sync', JSON.stringify({
-              sessionTime: next,
-              isTimerActive: true,
-              activeTaskId: activeTaskIdRef.current,
-              activeTaskTitle: linkedStudyTitle(tasksRef.current.find(t=>t.id===activeTaskIdRef.current),activeSubtaskIdRef.current),
-              isRest: isRestNow,
-              sessionType: typeNow,
-              pomodoroTime: settings.pomodoroTime,
-              shortBreakTime: settings.shortBreakTime,
-              longBreakTime: settings.longBreakTime,
-              accumulatedPauseTime: accumulatedPauseTimeRef.current,
-              pauseStartTime: pauseStartTimeRef.current,
-              distractionCount: distractionCountRef.current,
-              pomodoroSessions: pomodoroSessionsRef.current,
-              pomodoroGoal: settings.pomodoroGoal,
-              sessionsCount: sessionsCountRef.current,
-              restStartTime: isRestNow ? restStartTimeRef.current : 0,
-              pomodoroComplete: !isRestNow && typeNow === 'pomodoro' && next >= settings.pomodoroTime,
-            }));
           return next;
         });
 
@@ -1725,8 +1709,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Regla vigente: pausa manual + reanudar tras >10 min a mitad de sesión.
 
   // Large collections are serialized only when they change, not on every timer tick.
-  const structuralJson=useMemo(()=>JSON.stringify({tasks,habits,notes,noteFolders,courses,events,studySessions,plannedSessions,settings,artists,playlists,downloadPath,youtubeVideoUrl}),[tasks,habits,notes,noteFolders,courses,events,studySessions,plannedSessions,settings,artists,playlists,downloadPath,youtubeVideoUrl]);
-  const savedStructureRef=useRef(''),lastCounterMirrorRef=useRef(0),lastCounterStoreRef=useRef(0);
+  const taskPresentationRef=useRef(tasks);
+  if(!sameTaskPresentation(taskPresentationRef.current,tasks))taskPresentationRef.current=tasks;
+  const collectionStructure=useMemo(()=>({tasks:taskPresentationRef.current,habits,notes,noteFolders,courses,events,studySessions,plannedSessions,settings,artists,playlists,downloadPath,youtubeVideoUrl}),[taskPresentationRef.current,habits,notes,noteFolders,courses,events,studySessions,plannedSessions,settings,artists,playlists,downloadPath,youtubeVideoUrl]);
+  const stableCollectionsJson=useMemo(()=>JSON.stringify({habits,notes,noteFolders,courses,events,studySessions,plannedSessions,settings,artists,playlists,downloadPath,youtubeVideoUrl}),[habits,notes,noteFolders,courses,events,studySessions,plannedSessions,settings,artists,playlists,downloadPath,youtubeVideoUrl]);
+  const savedStructureRef=useRef<typeof collectionStructure|null>(null),lastCounterMirrorRef=useRef(0),lastCounterStoreRef=useRef(0);
   // Debounced save
   useEffect(() => {
     if (!hydrated) return;
@@ -1744,17 +1731,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
         focusPomodoroTime, focusChronoTime, breakTime, dailyBreakTime,
         dailyFocusPomodoro, dailyFocusChrono, dailyPerformances,
     });
-    const json=runtimeJson.slice(0,-1)+','+structuralJson.slice(1);
-    const structureChanged=savedStructureRef.current!==structuralJson;savedStructureRef.current=structuralJson;
+    latestJsonRef.defer(()=>runtimeJson.slice(0,-1)+',"tasks":'+JSON.stringify(tasks)+','+stableCollectionsJson.slice(1));
+    const structureChanged=savedStructureRef.current!==collectionStructure;savedStructureRef.current=collectionStructure;
     // El último estado queda disponible AL INSTANTE para el flush síncrono de cierre
     // (beforeunload/pagehide). Antes se asignaba DENTRO del debounce de 300ms: si la
     // app se cerraba antes, el flush no tenía nada que escribir y la sesión recién
     // creada se perdía al reiniciar.
-    latestJsonRef.current = json;
     // Espejo síncrono en localStorage: el dato sobrevive a un cierre instantáneo
     // (IDB y backup/disco siguen en el debounce, como capas secundarias).
+    if(structureChanged||Date.now()-lastCounterMirrorRef.current>=10000){
+    lastCounterMirrorRef.current=Date.now();
+    const json=latestJsonRef.current!;
     try {
-      if (json.length <= 5_000_000 && (structureChanged||Date.now()-lastCounterMirrorRef.current>=10000)) {
+      if (json.length <= 5_000_000) {
         lastCounterMirrorRef.current=Date.now();
         localStorage.setItem(STORAGE_KEY, json);
       } else if (json.length>5_000_000&&!mirrorQuotaWarnedRef.current) {
@@ -1767,9 +1756,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         mirrorQuotaWarnedRef.current = true;
       }
     }
+    }
     if(!structureChanged&&Date.now()-lastCounterStoreRef.current<5000)return;
-    lastCounterStoreRef.current=Date.now();
+    if(debounceTimerRef.current){if(!structureChanged)return;clearTimeout(debounceTimerRef.current);}
     const t = setTimeout(() => {
+      debounceTimerRef.current=null;
+      lastCounterStoreRef.current=Date.now();
+      const json=latestJsonRef.current;if(!json)return;
       try { if (sessionStorage.getItem('owa_restore_pending')) return; } catch {}
       set(STORAGE_KEY, json).catch((e: any) => console.error("Error saving data:", e));
       // Backup throttled en localStorage (copia de seguridad adicional).
@@ -1804,9 +1797,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       })).catch((e: any) => console.error("Error saving music stats:", e));
     }, 300);
     debounceTimerRef.current = t;
-    return () => { if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current); debounceTimerRef.current = null; };
   }, [
     tasks, habits, notes, noteFolders, courses, events, studySessions, plannedSessions, settings,
+    sessionTime, musicProgress, musicDuration, musicListeningTime, dailyMusicTime, dailyPerformances,
     weeklyStudyTime, dailyStudyTime, dailyStudyDate, pomodoroSessions, trackHistory, playCounts, musicQueue,
     musicVolume, artists, playlists, currentTrackId, isPlayingMusic, musicListeningDate,
     downloadPath, youtubeVideoUrl,
@@ -1932,7 +1925,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           else if (diff > 0 && diff <= 30 * 60_000) notifyUpcomingEvent(ev.title, evStart, ev.id);
         }
         for (const ps of plannedSessions) {
-          if (!ps.startTime || !ps.date) continue;
+          if (ps.completed || !ps.startTime || !ps.date) continue;
           const psStart = new Date(`${ps.date}T${ps.startTime}`).getTime();
           if (isNaN(psStart)) continue;
           const diff = psStart - nowMs;
@@ -1941,7 +1934,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if ((settings as any).event_task !== false) {
           for (const t of tasks) {
             if ((t as any).status === 'completado' || !t.dueDate) continue;
-            const due = new Date(t.dueDate).getTime();
+            const due = new Date(/^\d{4}-\d{2}-\d{2}$/.test(t.dueDate)?t.dueDate+'T23:59:00':t.dueDate).getTime();
             if (isNaN(due)) continue;
             const diff = due - nowMs;
             if (diff > 0 && diff <= DAY) notifyTaskDueSoon(t.title, due, t.id);
@@ -1953,7 +1946,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     checkReminders();
     const timer = setInterval(checkReminders, 60000);
     return () => clearInterval(timer);
-  }, [hydrated, settings.notifications, (settings as any).event_task, events, plannedSessions, tasks]);
+  }, [hydrated, settings.notifications, (settings as any).event_task, events, plannedSessions, taskPresentationRef.current]);
 
   // Pause audio when closing window
   useEffect(() => {
@@ -1969,7 +1962,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const saveBeforeUnloadRef = useRef<((overrideIsPlaying?: boolean, keepTimerActive?: boolean) => Promise<void>) | null>(null);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const latestJsonRef = useRef<string | null>(null);
+  const [latestJsonRef]=useState(lazyJsonSnapshot);
+  useEffect(()=>()=>{if(debounceTimerRef.current)clearTimeout(debounceTimerRef.current);},[]);
   // Flush síncrono al cerrar/ocultar: si la app se cierra antes del debounce de 300ms
   // (o IDB falla por cuota), el localStorage queda con el ÚLTIMO estado y la carga
   // por "frescura" lo restaura — así las sesiones de estudio nunca se pierden.
@@ -4262,7 +4256,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return [...prev, { id: crypto.randomUUID(), name, origin:'catalog' as const, catalogId, ...(profileImage ? { profileImage } : {}) }];
       });
     }, []),
-    updateArtist: useCallback((id: string, updates: Partial<Pick<SavedMusicArtist,'name'|'profileImage'|'trackIds'>>) => {
+    updateArtist: useCallback((id: string, updates: Partial<Pick<SavedMusicArtist,'name'|'profileImage'|'trackIds'|'catalogSelection'>>) => {
       setArtists(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
     }, []),
     deleteArtist: useCallback((id: string) => {
@@ -4335,13 +4329,28 @@ export function useAppSnapshot(){
 export function useAppSlice<K extends keyof AppContextType>(keys:readonly K[]):Pick<AppContextType,K>{
   const store=useContext(AppSliceContext);
   if(!store)throw new Error('useAppSlice must be used within AppProvider');
+  const active=useContext(ViewActivity),activeRef=useRef(active);activeRef.current=active;
   const signature=keys.join('|');
   const selected=useMemo(()=>{
     let previous:Pick<AppContextType,K>|undefined;
-    return()=>{const snapshot=store.getSnapshot();if(previous&&keys.every(key=>Object.is(previous![key],snapshot[key])))return previous;previous=Object.fromEntries(keys.map(key=>[key,snapshot[key]])) as Pick<AppContextType,K>;return previous;};
+    return()=>{if(!activeRef.current&&previous)return previous;const snapshot=store.getSnapshot();if(previous&&keys.every(key=>Object.is(previous![key],snapshot[key])))return previous;previous=Object.fromEntries(keys.map(key=>[key,snapshot[key]])) as Pick<AppContextType,K>;return previous;};
   },[store,signature]);
-  return useSyncExternalStore(store.subscribe,selected,selected);
+  const subscribe=useCallback((listener:()=>void)=>active?store.subscribe(listener):()=>{},[store,active]);
+  return useSyncExternalStore(subscribe,selected,selected);
 }
 
 
 
+
+/** Derived views can ignore second-level counters while preserving exact timer state. */
+export function useAppSelector<T>(select:(state:AppContextType)=>T,equal:(a:T,b:T)=>boolean=Object.is):T{
+ const store=useContext(AppSliceContext);if(!store)throw Error('useAppSelector requires AppProvider');
+ const selector=useRef(select),comparison=useRef(equal);selector.current=select;comparison.current=equal;
+ const snapshot=useMemo(()=>{let previous:T,hasPrevious=false;return()=>{const next=selector.current(store.getSnapshot());if(hasPrevious&&comparison.current(previous,next))return previous;previous=next;hasPrevious=true;return next;};},[store]);
+ return useSyncExternalStore(store.subscribe,snapshot,snapshot);
+}
+
+/** Calendar/course layouts do not depend on second-by-second task counters. */
+export function useTaskPresentationSlice<K extends keyof AppContextType>(keys:readonly K[],includeMinutes=false):Pick<AppContextType,K>{
+ return useAppSelector(state=>Object.fromEntries(keys.map(key=>[key,state[key]])) as Pick<AppContextType,K>,(a,b)=>keys.every(key=>key==='tasks'?sameTaskPresentation(a[key] as Task[],b[key] as Task[])&&(!includeMinutes||(a[key] as Task[]).every((task,i)=>Math.round((task.studyTime||0)/60)===Math.round(((b[key] as Task[])[i].studyTime||0)/60))):Object.is(a[key],b[key])));
+}

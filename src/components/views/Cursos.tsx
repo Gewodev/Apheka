@@ -4,7 +4,7 @@ import {applyEditorHighlight} from '../../lib/editorHighlight';
 import type {BannerCrop} from '../../lib/bannerCrop';
 import 'katex/dist/katex.min.css';
 import {useCoverPalette} from '../../hooks/useCoverPalette';
-import {useAppSlice} from "../../store/AppContext";
+import {useTaskPresentationSlice} from "../../store/AppContext";
 import {courseStudySeconds} from '../../lib/courseStudy';
 import {productiveSessions} from '../../lib/studyAnalytics';
 import { localPathFromUrl } from '../../lib/externalTarget';
@@ -1449,7 +1449,7 @@ function NoteEditor({ note, courseColor, onSave, editable, toolbarEnd, hideToolb
 
 // --- Main Component ---
 export default function Cursos({ initialCourseId, initialTab = 'overview', onNavigate }: { initialCourseId?: string; initialTab?: 'overview' | 'tareas' | 'notas' | 'archivos'; onNavigate?: (view: string) => void }) {
-  const { hydrated, courses = [], tasks = [], notes = [], noteFolders = [], updateCourse, deleteCourse, setNavigateTo, setFocusedTaskId, addTask, updateTask, deleteTask, addNote, updateNote, deleteNote, reorderNotes, reorderTasks, plannedSessions, addPlannedSession, updatePlannedSession, deletePlannedSession, reorderPlannedSessions, studySessions, activePlannedSessionId, linkPlannedSessionToTimer, unlinkPlannedSessionFromTimer, courseDeepLink, setCourseDeepLink, navigateToCourse, activeTaskId, addNotification, flushNoteContent } = useAppSlice(["hydrated","courses","tasks","notes","noteFolders","updateCourse","deleteCourse","setNavigateTo","setFocusedTaskId","addTask","updateTask","deleteTask","addNote","updateNote","deleteNote","reorderNotes","reorderTasks","plannedSessions","addPlannedSession","updatePlannedSession","deletePlannedSession","reorderPlannedSessions","studySessions","activePlannedSessionId","linkPlannedSessionToTimer","unlinkPlannedSessionFromTimer","courseDeepLink","setCourseDeepLink","navigateToCourse","activeTaskId","addNotification","flushNoteContent"]);
+  const { hydrated, courses = [], tasks = [], notes = [], noteFolders = [], updateCourse, deleteCourse, setNavigateTo, setFocusedTaskId, addTask, updateTask, deleteTask, addNote, updateNote, deleteNote, reorderNotes, reorderTasks, plannedSessions, addPlannedSession, updatePlannedSession, deletePlannedSession, reorderPlannedSessions, studySessions, activePlannedSessionId, linkPlannedSessionToTimer, unlinkPlannedSessionFromTimer, courseDeepLink, setCourseDeepLink, navigateToCourse, activeTaskId, addNotification, flushNoteContent } = useTaskPresentationSlice(["hydrated","courses","tasks","notes","noteFolders","updateCourse","deleteCourse","setNavigateTo","setFocusedTaskId","addTask","updateTask","deleteTask","addNote","updateNote","deleteNote","reorderNotes","reorderTasks","plannedSessions","addPlannedSession","updatePlannedSession","deletePlannedSession","reorderPlannedSessions","studySessions","activePlannedSessionId","linkPlannedSessionToTimer","unlinkPlannedSessionFromTimer","courseDeepLink","setCourseDeepLink","navigateToCourse","activeTaskId","addNotification","flushNoteContent"]);
   const courseTimeTotals=useMemo(()=>courseStudySeconds(courses,tasks,studySessions),[courses,tasks,studySessions]);
   const th = document.documentElement.getAttribute('data-theme');
   const isDarkSelect = !th || th === 'oscuro' || th === 'vibrante';

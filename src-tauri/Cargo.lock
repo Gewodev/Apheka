@@ -2810,7 +2810,7 @@ dependencies = [
 
 [[package]]
 name = "owa-studio"
-version = "6.25.2"
+version = "6.26.0"
 dependencies = [
  "axum",
  "base64 0.22.1",
@@ -2831,6 +2831,7 @@ dependencies = [
  "tauri-plugin-opener",
  "tauri-plugin-shell",
  "tauri-plugin-single-instance",
+ "tauri-winrt-notification",
  "tokio",
  "uuid",
  "webview2-com",

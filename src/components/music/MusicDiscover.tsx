@@ -1,3 +1,6 @@
+import ArtistSaveDialog from './ArtistSaveDialog';
+import {uniqueArtistRecordings} from '../../lib/recordingIdentity';
+import {useAppSnapshot} from '../../store/AppContext';
 import MusicIdentityImage from './MusicIdentityImage';
 import './music-artists.css';
 import {filterArtistCatalog} from '../../lib/artistCatalog';
@@ -21,9 +24,10 @@ type Song=DiscoverSong;
 const DISCOVER_PAGE_SIZE=10;
 const empty:MusicResult={songs:[],artists:[],albums:[]};
 export default function MusicDiscover(){
- const a=useAppSlice(['hydrated','tracks','trackHistory','playCounts','settings','addTrack','playTrack','toggleTrackFavorite','playlists','updatePlaylist','addToDownloadQueue','updateTrack','setQueueSource','setMusicQueue','shuffleMode','artists','addArtist']);
+ const a=useAppSlice(['hydrated','tracks','trackHistory','playCounts','settings','addTrack','playTrack','toggleTrackFavorite','playlists','updatePlaylist','addToDownloadQueue','updateTrack','setQueueSource','setMusicQueue','shuffleMode','artists','addArtist','updateArtist']);
  const [query,setQuery]=useState(''),[search,setSearch]=useState(''),[page,setPage]=useState(0),[result,setResult]=useState<MusicResult>(empty),[items,setItems]=useState<Song[]>([]),[busy,setBusy]=useState(false),[error,setError]=useState(''),[retry,setRetry]=useState(0),[confirm,setConfirm]=useState<Song|null>(null),[listSong,setListSong]=useState<Song|null>(null),[saveSong,setSaveSong]=useState<Song|null>(null);
  const [mode,setMode]=useState<'song'|'artist'>('song'),[artist,setArtist]=useState<MusicEntity|null>(null),[artistSongs,setArtistSongs]=useState<MusicSong[]>([]),[artistBusy,setArtistBusy]=useState(false),[artistError,setArtistError]=useState(''),[artistQuery,setArtistQuery]=useState(''),[artistContinuation,setArtistContinuation]=useState<string|undefined>(),[savingArtist,setSavingArtist]=useState(false);
+ const snapshot=useAppSnapshot(),[artistSaveOpen,setArtistSaveOpen]=useState(false);
  const artistSave=useRef<AbortController|null>(null),artistGeneration=useRef(0);
  useEffect(()=>{artistGeneration.current++;return()=>{artistGeneration.current++;artistSave.current?.abort();};},[artist]);
  useEffect(()=>{setPage(0);},[artistQuery]);
@@ -38,18 +42,20 @@ export default function MusicDiscover(){
  const visibleItems=artist?artistSongs.filter(song=>artistKey(song.title+' '+song.artist).includes(artistKey(artistQuery))):items;
  const saved=(item:Song)=>a.tracks.find(t=>t.url===('provider'in item?'https://www.youtube.com/watch?v='+item.id:item.url));
  const save=(item:Song,keep=true)=>{const existing=saved(item);let id=existing?.id||'';if(!id)flushSync(()=>{id=a.addTrack({...('provider'in item?songTrack(item):catalogTrack(item)),librarySaved:keep});});else {const cover=item.cover||existing!.coverUrl,creditIds='provider'in item?(item.artistIds?.length?item.artistIds:item.artistId?[item.artistId]:undefined):undefined;void a.updateTrack(id,{...(creditIds?{artistCatalogIds:creditIds}:{}),...(keep?{librarySaved:true}:{}),...(cover&&!existing!.coverImage?{coverUrl:cover}:{})},true);}return id;};
- const saveArtist=async()=>{
+ const saveArtist=async(selectedIds:string[]|null)=>{
+  setArtistSaveOpen(false);
   if(!artist||savingArtist)return;const controller=new AbortController();artistSave.current=controller;setSavingArtist(true);setArtistError('');
   const found=new Map(artistSongs.map(song=>[song.id,song]));let continuation=artistContinuation;const initialCount=found.size;
   try{
-   for(let page=0;continuation&&page<50&&found.size-initialCount<2000;page++){
+   for(let page=0;!selectedIds&&continuation&&page<50&&found.size-initialCount<2000;page++){
     controller.signal.throwIfAborted();const next=await moreMusicCatalog(continuation);controller.signal.throwIfAborted();
     for(const song of await filterArtistCatalog(artist,next.songs,controller.signal))found.set(song.id,song);
     continuation=next.continuation;setArtistSongs([...found.values()]);setArtistContinuation(continuation);
    }
    controller.signal.throwIfAborted();let count=0;
-   for(const song of found.values()){controller.signal.throwIfAborted();save(song);if(++count%20===0)await new Promise(resolve=>setTimeout(resolve,0));}
-   controller.signal.throwIfAborted();if(!a.artists.some(item=>(item.catalogId?item.catalogId===artist.id:artistKey(item.name)===artistKey(artist.name))))a.addArtist(artist.name,artist.cover,artist.id);
+   for(const song of uniqueArtistRecordings([...found.values()]).filter(song=>!selectedIds||selectedIds.includes(song.id))){controller.signal.throwIfAborted();save(song);if(++count%20===0)await new Promise(resolve=>setTimeout(resolve,0));}
+   controller.signal.throwIfAborted();if(!a.artists.some(item=>(item.catalogId?item.catalogId===artist.id:artistKey(item.name)===artistKey(artist.name))))flushSync(()=>a.addArtist(artist.name,artist.cover,artist.id));
+   const savedArtist=snapshot().artists.find(item=>item.catalogId===artist.id);if(savedArtist)snapshot().updateArtist(savedArtist.id,{catalogSelection:selectedIds?'selected':'all'});
    toast.success('Artista guardado · '+count+' canciones');
    if(continuation)setArtistError('Se guardaron las canciones cargadas. Quedan más resultados: pulsa Actualizar canciones para continuar.');
   }catch(cause){if(!controller.signal.aborted)setArtistError(musicConnectionError(cause));}
@@ -62,7 +68,7 @@ export default function MusicDiscover(){
  const catalogSearch=(<form className={'music-catalog-search'+(artist?' music-artist-song-search':'')} onSubmit={e=>{e.preventDefault();if(artist)return;if(search===query.trim())setRetry(v=>v+1);else setSearch(query.trim());}}><Search size={18}/><input aria-label={artist?"Buscar canciones de "+artist.name:"Buscar en el catálogo musical"} value={artist?artistQuery:query} maxLength={200} onChange={e=>artist?setArtistQuery(e.target.value):setQuery(e.target.value)} placeholder={artist?"Buscar en las canciones de "+artist.name:mode==='artist'?"Buscar artistas":"Canción, artista o fragmento de letra"}/>{!artist&&<button className="btn-secondary" type="submit" disabled={a.settings.musicOffline}>Buscar</button>}</form>);
  return <section className="music-discover" aria-label="Descubrir música">{!artist&&<div className="music-discover-toolbar">{catalogSearch}
  {!artist&&<nav className="discover-kind" aria-label="Tipo de búsqueda musical">{(['song','artist'] as const).map(value=><button type="button" key={value} aria-pressed={mode===value} onClick={()=>{setMode(value);setArtist(null);}}>{value==='song'?'Canciones':'Artistas'}</button>)}</nav>}</div>}
- {artist&&<><div className="artist-profile-navigation"><button type="button" className="btn-ghost" aria-label="Volver a artistas de Descubrir" onClick={()=>{artistSave.current?.abort();setArtist(null);setArtistQuery('');}}><ChevronLeft size={17}/>Artistas</button></div><header className="discover-artist-hero artist-profile"><MusicIdentityImage src={artist.cover} name={artist.name}/><div className="artist-profile-identity"><h2>{artist.name}</h2><span>{artistBusy?'Consultando canciones…':artistSongs.length+' canciones'}</span></div><div className="artist-profile-actions"><button className="btn-primary" disabled={artistBusy||savingArtist||!artistSongs.length} onClick={()=>void saveArtist()}>{savingArtist?'Guardando catálogo…':a.artists.some(item=>(item.catalogId?item.catalogId===artist.id:artistKey(item.name)===artistKey(artist.name)))?'Actualizar canciones':'Guardar artista y canciones'}</button></div></header></>}{artist&&catalogSearch}
+ {artist&&<><div className="artist-profile-navigation"><button type="button" className="btn-ghost" aria-label="Volver a artistas de Descubrir" onClick={()=>{artistSave.current?.abort();setArtist(null);setArtistQuery('');}}><ChevronLeft size={17}/>Artistas</button></div><header className="discover-artist-hero artist-profile"><MusicIdentityImage src={artist.cover} name={artist.name}/><div className="artist-profile-identity"><h2>{artist.name}</h2><span>{artistBusy?'Consultando canciones…':artistSongs.length+' canciones'}</span></div><div className="artist-profile-actions"><button className="btn-primary" disabled={artistBusy||savingArtist||!artistSongs.length} onClick={()=>setArtistSaveOpen(true)}>{savingArtist?'Guardando catálogo…':a.artists.some(item=>(item.catalogId?item.catalogId===artist.id:artistKey(item.name)===artistKey(artist.name)))?'Actualizar canciones':'Guardar artista y canciones'}</button></div></header></>}{artist&&catalogSearch}{artist&&artistSaveOpen&&<ArtistSaveDialog name={artist.name} songs={artistSongs} hasMore={!!artistContinuation} onClose={()=>setArtistSaveOpen(false)} onSave={ids=>void saveArtist(ids)}/>}
  {artistError&&artist&&<p role="alert" className="music-service-message">{artistError}</p>}
  {mode==='artist'&&!artist&&!search&&<p className="artist-discovery-context">Artistas para explorar</p>}
  {mode==='artist'&&!artist&&<div className="discover-artists-grid">{result.artists.map(item=><button type="button" key={item.id} onClick={()=>setArtist(item)}><MusicIdentityImage src={item.cover} name={item.name}/><strong>{item.name}</strong><small>{item.listeners===undefined?'Artista':new Intl.NumberFormat('es',{notation:'compact',maximumFractionDigits:1}).format(item.listeners)+' oyentes mensuales'}</small></button>)}{!busy&&!error&&!result.artists.length&&<p className="music-service-message">{search?'No encontramos ese artista. Prueba su nombre completo.':'No pudimos cargar recomendaciones. Vuelve a intentarlo.'}</p>}</div>}

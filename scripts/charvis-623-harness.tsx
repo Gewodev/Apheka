@@ -1,3 +1,4 @@
+import '../src/session-polish.css';
 import '../src/scroll-surfaces.css';
 import Musica from '../src/components/views/Musica';import Tareas from '../src/components/views/Tareas';import Notas from '../src/components/views/Notas';
 import React,{useEffect,useLayoutEffect,useState} from 'react';import {createRoot} from 'react-dom/client';

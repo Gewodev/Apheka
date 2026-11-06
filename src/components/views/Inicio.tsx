@@ -1,3 +1,5 @@
+import {homeSnapshot,sameHomeSnapshot} from '../../lib/viewSnapshots';
+import {useAppSelector} from '../../store/AppContext';
 import LiveClock from '../ui/LiveClock';
 import WorkspaceClock from '../ui/WorkspaceClock';
 import { calculateStreak, getGoalForDay } from '../../lib/studyStreak';
@@ -163,7 +165,7 @@ export default function Inicio() {
     setFocusedTaskId,
     plannedSessions = [],
     courses = [],
-  } = useAppSlice(["tasks","notes","settings","dailyStudyTime","weeklyStudyTime","tracks","trackHistory","updateSettings","setNavigateTo","setFocusedEventId","setFocusedTaskId","plannedSessions","courses"]);
+  } = useAppSelector(homeSnapshot,sameHomeSnapshot);
   const [ct, setCt] = useState(new Date());
 
   const [goalEvent, setGoalEvent] = useState<GoalEvent | null>(() => loadGoalEvent());
@@ -181,14 +183,14 @@ export default function Inicio() {
         const all = [...events, ...sessions];
         const selection = readFeatured();
         const upcoming = all.filter(e => e.id !== selection.id).map(e => nextOccurrence(e)).filter(Boolean) as GoalEvent[];
-        setUpcomingEvents(upcoming.sort((a,b) => a.date.localeCompare(b.date) || (a.startTime || '').localeCompare(b.startTime || '')).slice(0,5));
+        const sorted=upcoming.sort((a,b) => a.date.localeCompare(b.date) || (a.startTime || '').localeCompare(b.startTime || '')).slice(0,5);setUpcomingEvents(old=>JSON.stringify(old)===JSON.stringify(sorted)?old:sorted);
         const source = all.find(e => e.id === selection.id) || selection.event;
-        setGoalEvent(selection.id && source ? (nextOccurrence(source) || source) as GoalEvent : null);
+        const chosen=selection.id && source ? (nextOccurrence(source) || source) as GoalEvent : null;setGoalEvent(old=>JSON.stringify(old)===JSON.stringify(chosen)?old:chosen);
       } catch { /* A read failure must never erase the pin or last displayed data. */ }
     };
     void hydrateFeatured().then(refresh);
     void refresh();
-    const timer = setInterval(() => { void refresh(); }, 30000);
+    const timer = setInterval(() => { void refresh(); }, 60000);
     window.addEventListener(FEATURED_CHANGED, refresh);
     window.addEventListener(PLANNER_CHANGED, refresh);
     return () => {

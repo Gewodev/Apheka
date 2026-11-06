@@ -1,3 +1,4 @@
+import {invoke,isTauri} from '@tauri-apps/api/core';
 import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
 
 let cachedPermission: boolean | null = null;
@@ -81,11 +82,13 @@ export async function claimSharedSlot(key: string, cooldownMs: number = 3_600_00
   }
 }
 
-export async function sendNativeNotification(title: string, body: string): Promise<void> {
+export type NotificationTarget={kind:'task'|'event'|'session'|'study'|'tasks'|'settings'|'music'|'downloads';id?:string;date?:string};
+export async function sendNativeNotification(title: string, body: string,target:NotificationTarget={kind:'study'}): Promise<void> {
   try {
     const ok = await requestNativePermission();
     if (!ok) return;
-    sendNotification({ title, body });
+    if(isTauri())await invoke('send_workspace_notification',{title,body,target});
+    else sendNotification({ title, body });
   } catch {
     // fallback silencioso
   }
@@ -206,7 +209,8 @@ function occurrenceKey(prefix: string, id: string, targetMs: number): string {
 export function notifyAllTasksComplete(): void {
   sendNativeNotification(
     'Todas las tareas listas',
-    'Has completado la lista de pendientes. Disfruta tu tiempo libre.'
+    'Has completado la lista de pendientes. Disfruta tu tiempo libre.',
+    {kind:'tasks'}
   );
 }
 
@@ -224,7 +228,8 @@ export async function notifyTaskDueSoon(title: string, dueMs: number, taskId: st
     urgent ? `Tarea por vencer: ${title}` : `Recordatorio: ${title}`,
     urgent
       ? `Vence ${fmtWhenFuture(dueMs, now)} (${fmtCountdown(diff)}). ${pick(TASK_PHRASES)}`
-      : `Vence ${fmtWhenFuture(dueMs, now)}. ${pick(TASK_PHRASES)}`
+      : `Vence ${fmtWhenFuture(dueMs, now)}. ${pick(TASK_PHRASES)}`,
+    {kind:'task',id:taskId,date:new Date(dueMs).toLocaleDateString('en-CA')}
   );
 }
 
@@ -241,7 +246,8 @@ export async function notifyTaskOverdue(title: string, dueMs: number, taskId: st
 
   sendNativeNotification(
     'Tarea vencida',
-    `"${title}" venció ${fmtOverdue(ago)}. ${pick(TASK_PHRASES)}`
+    `"${title}" venció ${fmtOverdue(ago)}. ${pick(TASK_PHRASES)}`,
+    {kind:'task',id:taskId,date:new Date(dueMs).toLocaleDateString('en-CA')}
   );
 }
 
@@ -254,7 +260,8 @@ export async function notifyEventReminder1h(title: string, eventMs: number, even
   if (!(await claimSharedSlot(key))) return;
   sendNativeNotification(
     `Evento en una hora: ${title}`,
-    `Empieza a las ${fmtHour(eventMs)}. ${pick(EVENT_PHRASES)}`
+    `Empieza a las ${fmtHour(eventMs)}. ${pick(EVENT_PHRASES)}`,
+    {kind:'event',id:eventId,date:new Date(eventMs).toLocaleDateString('en-CA')}
   );
 }
 
@@ -268,7 +275,8 @@ export async function notifyUpcomingEvent(title: string, eventMs: number, eventI
 
   sendNativeNotification(
     `Próximo evento: ${title}`,
-    `Hoy a las ${fmtHour(eventMs)} (${fmtCountdown(diff)}). ${pick(EVENT_PHRASES)}`
+    `Hoy a las ${fmtHour(eventMs)} (${fmtCountdown(diff)}). ${pick(EVENT_PHRASES)}`,
+    {kind:'event',id:eventId,date:new Date(eventMs).toLocaleDateString('en-CA')}
   );
 }
 
@@ -283,7 +291,8 @@ export async function notifyStudySessionSoon(title: string, sessionMs: number, s
 
   sendNativeNotification(
     'Sesión de estudio en 10 minutos',
-    `"${title}" empieza a las ${fmtHour(sessionMs)}. Prepara tu espacio y tu mente.`
+    `"${title}" empieza a las ${fmtHour(sessionMs)}. Prepara tu espacio y tu mente.`,
+    {kind:'session',id:sessionId,date:new Date(sessionMs).toLocaleDateString('en-CA')}
   );
 }
 

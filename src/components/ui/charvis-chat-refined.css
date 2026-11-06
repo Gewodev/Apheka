@@ -144,3 +144,5 @@
 .charvis-chat-refined :is(.charvis-composer-v2,.charvis-thread-row>button,.charvis-project-tabs>button){transition:background-color 180ms ease-out,border-color 180ms ease-out,color 180ms ease-out}
 .charvis-chat-refined .charvis-inspector-dock{animation:charvis-inspector-in 190ms cubic-bezier(.16,1,.3,1)}
 @media(prefers-reduced-motion:reduce){.charvis-chat-refined :is(.charvis-composer-v2,.charvis-thread-row>button,.charvis-project-tabs>button){transition:none}.charvis-chat-refined .charvis-inspector-dock{animation:none}}
+
+.charvis-editing-message{display:flex;align-items:center;gap:9px;padding:9px 6px 12px;flex:1 0 100%;font:12px var(--font-charvis,var(--font-primary));color:var(--text-secondary)}.charvis-editing-message>span{flex:1}.charvis-editing-message>button{display:grid;place-items:center;width:26px;height:26px;padding:0;background:transparent;border:0;color:inherit;cursor:pointer}
