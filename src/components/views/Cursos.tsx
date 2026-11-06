@@ -3812,26 +3812,20 @@ const saveCourseNoteContent = (id: string, html: string) => {
                   {/* Task Creator Card */}
                   <div className="bento-card course-task-creator" style={{ borderRadius: 12, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', overflow: 'hidden', padding: 0, boxShadow: '0 1px 8px rgba(0,0,0,0.04)' }}>
                       <div className="course-task-creator-body" style={{ padding: '24px 28px' }}>
-                      <input value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} placeholder="Nombre de la tarea"
+                      <input aria-label="Nombre de la tarea del curso" value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} placeholder="Nombre de la tarea"
                         style={{ width: '100%', border: 'none', borderBottom: 'none', height: 'auto', padding: '4px 0', fontSize: 18, fontWeight: 600, background: 'transparent', color: 'var(--text-primary)', outline: 'none', fontFamily: "'Inter Tight', sans-serif", borderRadius: 0, letterSpacing: '-0.02em' }}
                         onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) handleAddTask(); }} />
                       <div style={{ padding: '0 0', margin: '6px 0' }}>
                         <div style={{ height: 1, background: `linear-gradient(to right, transparent, ${course.color}30, transparent)` }} />
                       </div>
-                      <textarea value={newTaskDescription} onChange={e => setNewTaskDescription(e.target.value)} placeholder="Descripción (opcional)"
+                      <textarea aria-label="Descripción de la tarea del curso" value={newTaskDescription} onChange={e => setNewTaskDescription(e.target.value)} placeholder="Descripción (opcional)"
                         rows={1} style={{ width: '100%', border: 'none', padding: 0, fontSize: 12, color: 'var(--text-tertiary)', background: 'transparent', outline: 'none', resize: 'none', fontFamily: "'Inter', sans-serif", overflow: 'hidden', lineHeight: 1.6 }}
                         onInput={e => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }} />
 
                       <div className="course-task-create-fields" style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 12 }}>
                         <input aria-label="Fecha de entrega de la tarea del curso" type="date" value={newTaskDueDate} onChange={e => setNewTaskDueDate(e.target.value)}
                           style={{ height: 42, borderRadius: 8, border: selectBorder, background: newTaskDueDate ? `${course.color}08` : 'var(--bg-surface)', color: newTaskDueDate ? course.color : 'var(--text-tertiary)', padding: '0 14px', cursor: 'pointer', fontSize: 13, fontWeight: 500, fontFamily: "'Inter Tight', sans-serif", outline: 'none', width: 170, minWidth: 170, boxSizing: 'border-box' }} />
-                        <select aria-label="Prioridad de la tarea del curso" value={newTaskPriority} onChange={e => setNewTaskPriority(e.target.value as any)}
-                          style={{ height: 40, borderRadius: 8, border: selectBorder, background: newTaskPriority !== 'none' ? `${({ high: '#EF4444', medium: '#F59E0B', low: '#10B981' })[newTaskPriority]}18` : 'var(--bg-surface)', color: newTaskPriority !== 'none' ? ({ high: '#EF4444', medium: '#F59E0B', low: '#10B981' })[newTaskPriority] : 'var(--text-tertiary)', padding: '0 28px 0 12px', cursor: 'pointer', fontSize: 12, fontWeight: 500, fontFamily: "'Inter Tight', sans-serif", outline: 'none', width: 120, minWidth: 120, boxSizing: 'border-box' }}>
-                          <option value="none">Sin prioridad</option>
-                          <option value="high">Alta</option>
-                          <option value="medium">Media</option>
-                          <option value="low">Baja</option>
-                        </select>
+                        <PlanSelectDropdown label="Prioridad de la tarea del curso" value={newTaskPriority==='none'?'':newTaskPriority} onChange={value=>setNewTaskPriority((value||'none') as typeof newTaskPriority)} options={[{id:'high',label:'Alta',color:'#EF4444'},{id:'medium',label:'Media',color:'#F59E0B'},{id:'low',label:'Baja',color:'#10B981'}]} noneLabel="Sin prioridad" color={course.color} searchable={false}/>
                         <div style={{ flex: 1 }} />
                         <button data-ui-control="" onClick={handleAddTask} disabled={!newTaskTitle.trim()}
                           style={{ width: 40, height: 40, borderRadius: 10, border: `1.5px solid ${newTaskTitle.trim() ? course.color : 'var(--border-subtle)'}`, background: 'transparent', color: newTaskTitle.trim() ? course.color : 'var(--text-muted)', cursor: newTaskTitle.trim() ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms ' + EASE }}
@@ -4066,6 +4060,7 @@ const saveCourseNoteContent = (id: string, html: string) => {
                                       </>
                                     ) : (
                                       <>
+                                        <div className="course-note-summary"><NotebookPen size={15}/><span>{n.title?.trim() || 'Apunte sin título'}</span><ChevronRight size={14}/></div>
                                         {/* Date display */}
                                         {showOverviewNoteDates && (
                                           <div style={{ padding: '8px 16px 0', fontSize: 11, fontWeight: 600, color: dateContrast(course.color, th), fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.03em', opacity: 0.8 }}>
@@ -4073,7 +4068,7 @@ const saveCourseNoteContent = (id: string, html: string) => {
                            </div>
                                          )}
                                          {/* -- COLLAPSED (preview) -- */}
-                                        <div style={{ padding: showOverviewNoteDates ? '6px 16px 12px' : '12px 16px' }}>
+                                        <div className="course-note-excerpt" style={{ padding: showOverviewNoteDates ? '6px 16px 12px' : '12px 16px' }}>
                                           <div style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text-primary)', fontFamily: "'Atkinson Hyperlegible', system-ui, serif", wordBreak: 'break-word', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical' }}
                                             dangerouslySetInnerHTML={{ __html: n.content?.replace(/<img[^>]+style="([^"]*)"/g, (m: string, s: string) => m.replace(s, s + ';max-height:100px;width:auto') ) || '<span style="color:var(--text-muted);font-style:italic;font-size:12px">Vacío</span>' }} />
                                         </div>
@@ -5655,27 +5650,21 @@ const saveCourseNoteContent = (id: string, html: string) => {
           /* --- TAREAS TAB --- */
             <div style={{ maxWidth: 800, margin: '0 auto', padding: '20px 24px 60px' }}>
             {/* Create task card */}
-            <div className="bento-card" style={{ borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', overflow: 'hidden', marginBottom: 20, padding: 0, boxShadow: '0 1px 8px rgba(0,0,0,0.04)' }}>
+            <div className="bento-card course-task-creator" style={{ borderRadius: 10, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', overflow: 'hidden', marginBottom: 20, padding: 0, boxShadow: '0 1px 8px rgba(0,0,0,0.04)' }}>
               <div style={{ padding: '14px 16px' }}>
-                <input value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} placeholder="Nombre de la tarea"
+                <input aria-label="Nombre de la tarea del curso" value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} placeholder="Nombre de la tarea"
                   style={{ width: '100%', border: 'none', borderBottom: 'none', height: 'auto', padding: '2px 0', fontSize: 16, fontWeight: 600, background: 'transparent', color: 'var(--text-primary)', outline: 'none', fontFamily: "'Inter Tight', sans-serif", borderRadius: 0, letterSpacing: '-0.02em' }}
                   onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) handleAddTask(); }} />
                 <div style={{ padding: '0 0', margin: '6px 0' }}>
                   <div style={{ height: 1, background: `linear-gradient(to right, transparent, ${course.color}30, transparent)` }} />
                 </div>
-                <textarea value={newTaskDescription} onChange={e => setNewTaskDescription(e.target.value)} placeholder="Descripción (opcional)"
+                <textarea aria-label="Descripción de la tarea del curso" value={newTaskDescription} onChange={e => setNewTaskDescription(e.target.value)} placeholder="Descripción (opcional)"
                   rows={1} style={{ width: '100%', border: 'none', padding: 0, fontSize: 12, color: 'var(--text-tertiary)', background: 'transparent', outline: 'none', resize: 'none', fontFamily: "'Inter', sans-serif", overflow: 'hidden', lineHeight: 1.6 }}
                   onInput={e => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }} />
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 12 }}>
-                  <input type="date" value={newTaskDueDate} onChange={e => setNewTaskDueDate(e.target.value)}
+                <div className="course-task-create-fields" style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 12 }}>
+                  <input aria-label="Fecha de entrega de la tarea del curso" type="date" value={newTaskDueDate} onChange={e => setNewTaskDueDate(e.target.value)}
                     style={{ height: 42, borderRadius: 8, border: selectBorder, background: newTaskDueDate ? `${course.color}08` : 'var(--bg-surface)', color: newTaskDueDate ? course.color : 'var(--text-tertiary)', padding: '0 14px', cursor: 'pointer', fontSize: 13, fontWeight: 500, fontFamily: "'Inter Tight', sans-serif", outline: 'none', width: 170, minWidth: 170, boxSizing: 'border-box' }} />
-                  <select value={newTaskPriority} onChange={e => setNewTaskPriority(e.target.value as any)}
-                    style={{ height: 40, borderRadius: 8, border: selectBorder, background: newTaskPriority !== 'none' ? `${({ high: '#EF4444', medium: '#F59E0B', low: '#10B981' })[newTaskPriority]}18` : 'var(--bg-surface)', color: newTaskPriority !== 'none' ? ({ high: '#EF4444', medium: '#F59E0B', low: '#10B981' })[newTaskPriority] : 'var(--text-tertiary)', padding: '0 28px 0 12px', cursor: 'pointer', fontSize: 12, fontWeight: 500, fontFamily: "'Inter Tight', sans-serif", outline: 'none', width: 120, minWidth: 120, boxSizing: 'border-box' }}>
-                    <option value="none">Sin prioridad</option>
-                    <option value="high">Alta</option>
-                    <option value="medium">Media</option>
-                    <option value="low">Baja</option>
-                  </select>
+                  <PlanSelectDropdown label="Prioridad de la tarea del curso" value={newTaskPriority==='none'?'':newTaskPriority} onChange={value=>setNewTaskPriority((value||'none') as typeof newTaskPriority)} options={[{id:'high',label:'Alta',color:'#EF4444'},{id:'medium',label:'Media',color:'#F59E0B'},{id:'low',label:'Baja',color:'#10B981'}]} noneLabel="Sin prioridad" color={course.color} searchable={false}/>
                   <div style={{ flex: 1 }} />
                   <button data-ui-control="" onClick={handleAddTask} disabled={!newTaskTitle.trim()}
                     style={{ width: 40, height: 40, borderRadius: 10, border: `1.5px solid ${newTaskTitle.trim() ? course.color : 'var(--border-subtle)'}`, background: 'transparent', color: newTaskTitle.trim() ? course.color : 'var(--text-muted)', cursor: newTaskTitle.trim() ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 200ms ' + EASE }}

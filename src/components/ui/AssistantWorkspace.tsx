@@ -1,6 +1,7 @@
 import React,{useRef,useState} from 'react';
 import {flushSync} from 'react-dom';
-import {Copy,NotebookPen,Check,ChevronRight} from 'lucide-react';
+import {Copy,NotebookPen,Check,ChevronRight,Bot} from 'lucide-react';
+import {useCharvisEnabled,setCharvisEnabled} from '../../lib/charvisAvailability';
 import {useApp} from '../../store/AppContext';
 import {ASSISTANT_SKILLS,assistantNoteHtml,buildAssistantSkillPrompt,parseAssistantPack} from '../../lib/assistantPack';
 import type {AssistantPack,AssistantSkill} from '../../lib/assistantPack';
@@ -11,7 +12,13 @@ import './mcp.css';
 
 export default function AssistantWorkspace(){
   const [importOpen,setImportOpen]=useState(false);
-  return <div className="assistant-workspace"><CharvisSettings/><McpSettings/><JevSettings/><details className="assistant-direct" onToggle={e=>setImportOpen(e.currentTarget.open)}><summary>Traer una respuesta de IA sin conexión <span>Opcional</span></summary>{importOpen&&<AssistantStudyImport/>}</details></div>;
+  const enabled=useCharvisEnabled();
+  return <div className="assistant-workspace">
+    <section className="bento-card charvis-availability" aria-labelledby="charvis-availability-title">
+      <div className="charvis-availability-copy"><Bot size={20}/><div><h3 id="charvis-availability-title">Charvis</h3><p id="charvis-availability-help">{enabled?'Disponible en la barra lateral. El clic derecho en IA lo desactiva.':'Desactivado. Su panel y sus consultas permanecen detenidos; tus chats se conservan.'}</p></div></div>
+      <button type="button" role="switch" aria-label="Habilitar Charvis" aria-describedby="charvis-availability-help" aria-checked={enabled} className="charvis-availability-switch" onClick={()=>setCharvisEnabled(!enabled)}><span/></button>
+    </section>
+    {enabled&&<CharvisSettings/>}<McpSettings/><JevSettings/><details className="assistant-direct" onToggle={e=>setImportOpen(e.currentTarget.open)}><summary>Traer una respuesta de IA sin conexión <span>Opcional</span></summary>{importOpen&&<AssistantStudyImport/>}</details></div>;
 }
 function AssistantStudyImport(){
   const app=useApp(),latest=useRef(app);latest.current=app;

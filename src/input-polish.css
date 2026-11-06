@@ -1,0 +1,81 @@
+/* Writing surfaces keep their own boundary; focus never adds an inner frame. */
+body :is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]),textarea,select,[contenteditable=true]):is(:focus,:focus-visible) {
+  outline: none !important;
+  box-shadow: none !important;
+}
+body :is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]),textarea):focus:not([aria-invalid=true]) {
+  border-color: var(--border-default) !important;
+}
+body .music-link-import form:focus-within {outline: none;}
+body .workspace-select-trigger:focus {outline: none;box-shadow: none;border-color: var(--border-default);}
+body .workspace-select-trigger:focus-visible {background: var(--bg-hover);}
+body .workspace-select-popup {border-radius: 10px;box-shadow: 0 8px 24px #0002;animation: field-menu-in 140ms ease-out;}
+body .workspace-select-options [role=option] {min-height: 38px;border-radius: 6px;}
+@keyframes field-menu-in {from {opacity: 0;transform: translateY(-3px);} to {opacity: 1;transform: translateY(0);}}
+
+.charvis-availability {display: flex;align-items: center;justify-content: space-between;gap: 24px;padding: 22px 24px;}
+.charvis-availability-copy {display: flex;align-items: flex-start;gap: 14px;min-width: 0;}
+.charvis-availability-copy>svg {flex: none;margin-top: 2px;color: var(--text-secondary);}
+.charvis-availability h3 {margin: 0 0 6px;font: 550 16px/1.4 var(--font-primary);color: var(--text-primary);}
+.charvis-availability p {margin: 0;max-width: 55ch;font: 13px/1.6 var(--font-primary);color: var(--text-secondary);}
+body .charvis-availability-switch {flex: none;display: flex;align-items: center;width: 40px;height: 24px;padding: 3px;border: 1px solid var(--border-strong);border-radius: 20px !important;background: var(--bg-hover);cursor: pointer;transition: background-color 160ms ease;}
+.charvis-availability-switch span {width: 16px;height: 16px;border-radius: 50%;background: var(--text-secondary);transition: transform 160ms ease;}
+.charvis-availability-switch[aria-checked=true] {background: var(--accent);border-color: var(--accent);}
+.charvis-availability-switch[aria-checked=true] span {transform: translateX(16px);background: #fff;}
+
+body .course-task-creator .course-task-creator-body {padding: 20px 22px !important;}
+body .course-task-creator .course-task-create-fields {display: grid !important;grid-template-columns: minmax(0,1fr) minmax(0,1fr) 40px;gap: 10px !important;}
+.course-task-create-fields>div:empty {display: none;}
+body .course-task-create-fields>input {width: 100% !important;min-width: 0 !important;height: 40px !important;padding-inline: 10px !important;}
+body .course-task-create-fields>button {width: 40px !important;min-width: 40px !important;height: 40px !important;}
+.course-task-create-fields .workspace-select {min-width: 0;}
+body .course-task-create-fields .workspace-select-trigger {min-height: 40px;height: 40px;padding: 8px 10px;font-size: 12px;gap: 7px;}
+body .course-task-creator :is(input,textarea) {font-family: var(--font-primary) !important;}
+body .course-task-creator textarea {font-size: 13px !important;line-height: 1.7 !important;}
+.single-environment .course-note-section .course-notes-scroll {padding: 0 0 8px !important;gap: 10px !important;}
+body .single-environment .course-note-block {border: 1px solid var(--border-default) !important;border-radius: 12px !important;background: var(--bg-elevated) !important;box-shadow: none !important;transition: background-color 140ms ease !important;}
+body .single-environment .course-note-block:focus-within {border-color: var(--border-default) !important;}
+.course-note-summary {display: flex;align-items: center;gap: 10px;padding: 15px 18px 0;font: 550 14px/1.5 var(--font-primary);color: var(--text-primary);}
+.course-note-summary>svg {flex: none;color: var(--text-tertiary);}
+.course-note-summary>svg:last-child {margin-left: auto;}
+.course-note-summary>span {min-width: 0;overflow: hidden;text-overflow: ellipsis;white-space: nowrap;}
+body .course-note-block .course-note-excerpt {padding: 10px 18px 16px !important;}
+.course-note-excerpt>div {font: 13px/1.75 var(--font-primary) !important;color: var(--text-secondary) !important;}
+body .course-note-block .course-writing-toolbar {padding: 9px 12px !important;gap: 6px !important;}
+body .course-note-block .note-editor-toolbar {padding: 9px 12px;}
+
+/* The existing event editor uses the same compact rhythm as the session editor. */
+body .apheka-event-dialog {width: min(500px,calc(100vw - 32px)) !important;border-radius: 12px !important;}
+body .apheka-event-dialog .event-form-body {padding: 18px 24px !important;gap: 18px !important;}
+.event-date-row {display: flex;align-items: flex-end;justify-content: space-between;gap: 18px;margin-bottom: 16px;}
+.event-date-row>.apheka-field {min-width: 0;flex: 1;max-width: 210px;}
+.event-end-time {display: grid;justify-items: end;gap: 5px;flex: none;font: 11px/1.5 var(--font-primary);color: var(--text-tertiary);}
+.event-end-time output {font: 500 22px/1.3 var(--font-primary);letter-spacing: -.04em;color: var(--text-primary);}
+body .apheka-event-dialog .apheka-schedule-fields {gap: 14px !important;}
+body .apheka-event-dialog .apheka-schedule-fields>.apheka-field {grid-column: auto !important;width: auto !important;padding: 14px;border: 1px solid var(--border-subtle);border-radius: 9px;background: var(--bg-base);gap: 8px;min-width: 0;}
+body .apheka-event-dialog .session-time-steppers {justify-content: center;min-height: 86px;border: 0 !important;background: transparent !important;}
+body .apheka-event-dialog .apheka-duration-control {border: 0 !important;min-height: 62px;border-radius: 0 !important;}
+.event-duration-presets {display: flex;gap: 4px;}
+.event-duration-presets button {flex: 1;min-width: 0;padding: 5px 2px;border: 1px solid var(--border-default);border-radius: 5px;background: transparent;color: var(--text-secondary);font: 10px/1.3 var(--font-primary);cursor: pointer;}
+.event-duration-presets button[aria-pressed=true] {background: var(--bg-hover);border-color: var(--text-tertiary);color: var(--text-primary);}
+body .apheka-event-dialog .event-form-body>.event-recurrence {padding: 0 !important;border: 0;background: transparent !important;}
+body .apheka-event-dialog .event-recurrence>div:first-child {gap: 16px;}
+.event-recurrence .workspace-select {min-width: 0;flex: 1;}
+body .apheka-event-dialog .event-recurrence span {font-size: 12px !important;}
+@media(max-width: 520px) {
+  .charvis-availability {padding: 18px;gap: 16px;}
+  body .apheka-event-dialog .event-form-body {padding: 16px 18px !important;}
+  body .apheka-event-dialog .apheka-schedule-fields>.apheka-field {padding: 10px;}
+  body .course-task-creator .course-task-creator-body {padding: 16px !important;}
+}
+@media(max-width: 650px) {
+  body .course-task-creator .course-task-create-fields {grid-template-columns: minmax(0,1fr) 40px;}
+  body .course-task-create-fields>input {grid-column: 1/-1;}
+}
+@media(prefers-reduced-motion: reduce) {
+  .charvis-availability-switch,.charvis-availability-switch span {transition: none;}
+  body .workspace-select-popup {animation: none;}
+}
+@media(forced-colors: active) {
+  body :is(input,textarea,select,[contenteditable=true]):focus-visible {outline: 1px solid Highlight !important;outline-offset: 2px;}
+}

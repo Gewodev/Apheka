@@ -428,7 +428,7 @@ export default function EventModal({
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div style={{ flexShrink: 0, padding: '20px 32px', borderBottom: '1px solid var(--border-soft)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: 'var(--surface)', zIndex: 10 }}>
+        <div className="event-editor-header" style={{ flexShrink: 0, padding: '20px 32px', borderBottom: '1px solid var(--border-soft)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: 'var(--surface)', zIndex: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <CalendarClock size={19} style={{ color }} />
             <h2 style={{ fontSize: 20, fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter Tight',sans-serif", letterSpacing: '-0.02em' }}>
@@ -461,8 +461,6 @@ export default function EventModal({
               onKeyDown={e => e.key === 'Enter' && handleSave()}
               placeholder="Ej: Reunión de proyecto, Examen final..."
               style={{ width: '100%', fontSize: 16, height: 48, background: 'var(--surface-elevated)', border: '1px solid var(--border-soft)', borderRadius: 10, padding: '0 16px', color: 'var(--text-primary)', outline: 'none', transition: 'border-color 200ms' }}
-              onFocus={e => e.currentTarget.style.borderColor = 'var(--text-secondary)'}
-              onBlur={e => e.currentTarget.style.borderColor = 'var(--border-soft)'}
             />
           </div>
 
@@ -471,12 +469,15 @@ export default function EventModal({
               <span>Cuándo</span>
               <label className="apheka-inline-check"><input type="checkbox" checked={allDay} onChange={e => setAllDay(e.target.checked)} /> Todo el día</label>
             </div>
-            <div className={`apheka-schedule-fields${allDay ? ' all-day' : ''}`}>
+            <div className="event-date-row">
               <label className="apheka-field">Fecha
                 <input aria-label="Fecha del evento" type="date" value={date} onChange={e => setDate(e.target.value)} />
               </label>
+              {!allDay && <div className="event-end-time"><span>Finaliza{start >= end ? ' al día siguiente' : ''}</span><output>{end}</output></div>}
+            </div>
+            <div className={`apheka-schedule-fields${allDay ? ' all-day' : ''}`}>
               {!allDay && <>
-                <div className="apheka-field">Inicio
+                <div className="apheka-field">Hora de inicio
                   <SessionTimeStepper value={start} onChange={setStart}/>
                 </div>
                 <div className="apheka-field">Duración
@@ -486,17 +487,14 @@ export default function EventModal({
                     <span>min</span>
                     <button type="button" aria-label="Aumentar duración cinco minutos" disabled={duration >= 720} onClick={() => setDuration(Math.min(720,duration+5))}><Plus size={14} /></button>
                   </div>
+                  <div className="event-duration-presets" role="group" aria-label="Duraciones habituales">{[15,30,60,90].map(mins => <button type="button" key={mins} aria-pressed={duration===mins} onClick={() => setDuration(mins)}>{mins} min</button>)}</div>
                 </div>
               </>}
             </div>
-            {!allDay && <div className="apheka-schedule-summary">
-              <span>Termina a las <strong>{end}</strong>{start >= end ? ' del día siguiente' : ''}</span>
-              <div role="group" aria-label="Duraciones habituales">{[15,30,60,90].map(mins => <button type="button" key={mins} aria-pressed={duration===mins} onClick={() => setDuration(mins)}>{mins} min</button>)}</div>
-            </div>}
           </section>
 
           {/* Repeat */}
-          <div style={{ padding: '16px', background: 'var(--surface-elevated)', borderRadius: 12, border: '1px solid var(--border-soft)' }}>
+          <div className="event-recurrence" style={{ padding: '16px', background: 'var(--surface-elevated)', borderRadius: 12, border: '1px solid var(--border-soft)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: repeat === 'custom_days' || repeat !== 'none' ? 16 : 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <Repeat size={15} style={{ color: 'var(--text-muted)' }} />

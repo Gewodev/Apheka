@@ -1,4 +1,5 @@
 import NotificationNavigation from './components/NotificationNavigation';
+import {useCharvisEnabled, setCharvisEnabled} from './lib/charvisAvailability';
 import {ViewActivity} from './lib/viewActivity';
 import {nextMusicSelection} from './lib/musicRadio';
 import {useYouTubeRecovery} from './hooks/useYouTubeRecovery';
@@ -59,14 +60,13 @@ export function AppContent() {
   const { hydrated, settings, courses, addCourse, navigateTo, setNavigateTo, importState, updateSettings, toastMessage, deleteOldCompletedTasks, youtubeVideoUrl, setYoutubeVideoUrl, isPlayingMusic, musicVolume, setMusicDuration, setMusicProgressRaw, setIsPlayingMusic, playTrack, musicQueue, setMusicQueue, shuffleMode, repeatMode, tracks, currentTrackId, setRepeatMode, coverModalTrackId, showRestPrompt, handlePomodoroBannerClick, queueSource, trackHistory, playCounts, courseDeepLink, setCourseDeepLink, addNotification } = useAppSlice(["hydrated","settings","courses","addCourse","navigateTo","setNavigateTo","importState","updateSettings","toastMessage","deleteOldCompletedTasks","youtubeVideoUrl","setYoutubeVideoUrl","isPlayingMusic","musicVolume","setMusicDuration","setMusicProgressRaw","setIsPlayingMusic","playTrack","musicQueue","setMusicQueue","shuffleMode","repeatMode","tracks","currentTrackId","setRepeatMode","coverModalTrackId","showRestPrompt","handlePomodoroBannerClick","queueSource","trackHistory","playCounts","courseDeepLink","setCourseDeepLink","addNotification"]);
   useEffect(()=>{if(!toastMessage)return;const options={id:"apheka-system-notice"};if(toastMessage.type==='success')toast.success(toastMessage.message,options);else if(toastMessage.type==='error')toast.error(toastMessage.message,options);else toast(toastMessage.message,{...options,className:"apheka-toast-info"});},[toastMessage]);
   // Suspender Música: oculta el apartado sin borrar nada; el click derecho en la barra la devuelve
-  const [aiSuspended,setAiSuspended]=useState(()=>localStorage.getItem('apheka_ai_suspended')==='1');
-  useEffect(()=>{localStorage.setItem('apheka_ai_suspended',aiSuspended?'1':'0');},[aiSuspended]);
-  const toggleAiSuspension=()=>{if(!aiSuspended){window.dispatchEvent(new Event('apheka:charvis-suspend'));if(activeView==='ia')setNavigateTo('inicio');}setAiSuspended(value=>!value);};
+  const aiSuspended = !useCharvisEnabled();
   const [musicSuspended, setMusicSuspended] = useState<boolean>(() => { try { return localStorage.getItem('owa_music_suspended') === '1'; } catch { return false; } });
   useEffect(() => { try { localStorage.setItem('owa_music_suspended', musicSuspended ? '1' : '0'); } catch { } }, [musicSuspended]);
   // Ventanas: la gestión vive íntegramente en la extensión v2.0 (independiente
   // de la app). El servidor local y la barra lateral de la app se retiraron.
   const workspace=useWorkspaceNavigation(),activeView=workspace.view,setActiveView=workspace.setView;
+  useEffect(() => { if (aiSuspended && activeView === 'ia') setNavigateTo('inicio'); }, [aiSuspended, activeView, setNavigateTo]);
   const timerState=useAppSlice(['isTimerActive']);
   const [studyMounted,setStudyMounted]=useState(activeView==='estudio');
   useEffect(()=>{if(activeView==='estudio'||timerState.isTimerActive)setStudyMounted(true);},[activeView,timerState.isTimerActive]);
@@ -568,9 +568,9 @@ export function AppContent() {
           // Si Música está suspendida, el click derecho en la barra la devuelve
           if (musicSuspended) { setMusicSuspended(false); return; }
         }}>
-          {NAV_ITEMS.filter(item => !(musicSuspended && item.id === 'musica')).map(item => (
+          {NAV_ITEMS.filter(item => !(musicSuspended && item.id === 'musica') && !(aiSuspended && item.id === 'ia')).map(item => (
             <div key={item.id} style={{ position: 'relative' }}
-              data-suspended={item.id==='ia'&&aiSuspended} onContextMenu={item.id==='ia'?(e=>{e.preventDefault();e.stopPropagation();toggleAiSuspension();}):item.id === 'musica' ? (e => { e.preventDefault(); e.stopPropagation(); setMusicSuspended(true); if (activeView === 'musica') setNavigateTo('inicio'); }) : undefined}>
+              onContextMenu={item.id==='ia'?(e=>{e.preventDefault();e.stopPropagation();setCharvisEnabled(false);}):item.id === 'musica' ? (e => { e.preventDefault(); e.stopPropagation(); setMusicSuspended(true); if (activeView === 'musica') setNavigateTo('inicio'); }) : undefined}>
               {item.id === 'cursos' && isCollapsed ? (
                 <button
                   onPointerDown={handleCoursesPointerDown}
@@ -590,7 +590,6 @@ export function AppContent() {
               ) : (
                 <button
                   onClick={() => {
-                    if(item.id==='ia'&&aiSuspended)setAiSuspended(false);
                     if (item.id === 'cursos') {
                       setShowCoursesPopup(false);
                       setActiveView('cursos');
@@ -600,7 +599,7 @@ export function AppContent() {
                     }
                   }}
                   className={`sidebar-nav-btn ${activeView === item.id ? 'active' : ''}`}
-                  aria-label={item.id==='ia'&&aiSuspended?'IA suspendida':item.label} title={item.id==='ia'?'IA · clic derecho para '+(aiSuspended?'reactivar':'suspender'):isCollapsed?item.label:undefined}
+                  aria-label={item.label} title={item.id==='ia'?'IA · clic derecho para desactivar. Se habilita en Sistema.':isCollapsed?item.label:undefined}
                 >
                   <item.icon size={20} strokeWidth={1.5} />
                   {!isCollapsed && <span className="sidebar-nav-label">{item.label}</span>}

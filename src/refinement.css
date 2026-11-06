@@ -549,7 +549,7 @@
 .course-task-creator {padding:0 !important;}
 .course-task-create-fields {display:grid !important;grid-template-columns:minmax(150px,1fr) minmax(130px,1fr) 44px;gap:10px !important;padding-top:18px !important;}
 .course-task-create-fields > :is(input,select) {width:100% !important;min-width:0 !important;height:44px !important;}
-.course-task-create-fields > div {display:none;}
+.course-task-create-fields > div:empty {display:none;}
 .course-task-create-fields > button {width:44px !important;height:44px !important;min-width:44px;border-radius:6px !important;}
 .course-task-section {gap:24px !important;}
 .course-note-section {min-width:0;}
