@@ -3,6 +3,13 @@
 
 # Summary
 
+## Sesión 2026-11-08 — APHEKA 6.26.3: cursor al regresar del contador emergente
+- Revisión puntual sobre 6.26.2: el retorno del foco y la visibilidad recupera el contenido WebView y el cursor nativo aunque el estado de pantalla completa no haya cambiado. Ocultar el contador desde Estudio devuelve expresamente el foco a la ventana principal sin destruirlo ni alterar el temporizador.
+- Recuperación agrupada y acotada, sin sondeo continuo ni llamadas por movimiento del cursor. Se conserva la comprobación de foco para no interferir con otras aplicaciones.
+- TypeScript correcto; controlador de pantalla completa y recuperación acotada correctos. Siete comprobaciones del flujo React en Edge con IPC de Tauri simulado: foco, ocultación explícita, visibilidad, no interferencia, treinta avisos agrupados sin bucle, Escape/F11 y rechazo nativo. Sin errores de ejecución. No se ha comprobado físicamente el cursor de Windows/GPU en esta revisión ni se ha sustituido la instalación personal.
+- Detalles y límites en docs/APHEKA-6.26.3.md; informe release/qa-6263-pointer-resume.json. Se preservan los cambios ajenos de extension/* y scripts/test-latex.ts.
+- Instalador NSIS 6.26.3 verificado: 115470567 bytes, SHA-256 BED2CA9C83166E88E7760820F3D7EDC939A04B752A9D7290C3AE5C7866FD06C4. Compilación completa 12 min 31 s (frontend 47,40 s; Rust 7 min 17 s), fuentes y recursos estables. Entrega release/APHEKA_6.26.3_Instalador_x64.exe; metadatos docs/APHEKA-release-6.26.3.json. Sin push.
+
 ## Sesión 2026-11-08 — APHEKA 6.26.2: separación de artistas, Bruno Mars y reutilización
 - Guardar/actualizar artistas conserva sus canciones fuera de Mis canciones, con pertenencia independiente y metadatos compartidos para reproducción. Se preserva lo guardado expresamente; selección manual persistente, sin anclar colaboradores. Hasta 24 destacadas por metadatos reales (umbral de 10 000 si hay recuento; sin inventarlo cuando falta), búsqueda interna de otros títulos y deduplicación de etiquetas de colaboración.
 - Corrección de Bruno Mars autorizada explícitamente: al abrir la actualización se retiran de Mis canciones los registros vinculados no favoritos ni locales/descargados. No se borran audios/metadatos; se limpian vínculos incorrectos y la cola de biblioteca. Ejecución única tras hidratación correcta, persistencia en lotes con cesión del hilo y marcador después de las escrituras; guardados manuales posteriores se conservan. Prueba aislada: cuatro retirados, favorita/local/descargada/otro artista intactos, ocho registros conservados y recarga correcta. No se ha modificado la instalación personal durante la preparación.

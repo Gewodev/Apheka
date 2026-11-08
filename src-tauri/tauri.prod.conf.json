@@ -1,7 +1,7 @@
 {
   "identifier": "com.owa.studio",
   "productName": "APHEKA",
-  "version": "6.26.2",
+  "version": "6.26.3",
   "bundle": {
     "resources": {
       "resources/asr/": "asr/"

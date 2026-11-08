@@ -1,7 +1,7 @@
 import {playStudyAlarm} from '../../lib/studyAlarm';
 import {useAppSlice} from "../../store/AppContext";
 import SessionFinishControl from '../ui/SessionFinishControl';
-import { useWindowFullscreen, windowFullscreen } from '../../hooks/useWindowFullscreen';
+import { useWindowFullscreen, windowFullscreen, resumeFullscreenInput } from '../../hooks/useWindowFullscreen';
 import {clockValue} from '../../lib/analogClock';
 import WorkspaceClock from '../ui/WorkspaceClock';
 import { deadlineForClock } from '../../lib/timerSchedule';
@@ -760,7 +760,7 @@ export default function Estudio() {
               if (existing) {
                 const visible = await existing.isVisible();
                 await existing.setSkipTaskbar(true);
-                if (visible) { await existing.hide(); } else { await existing.show(); await existing.setFocus(); }
+                if (visible) { await existing.hide(); await getCurrentWebviewWindow().setFocus(); await resumeFullscreenInput(true); } else { await existing.show(); await existing.setFocus(); }
                 return;
               }
               const win = new WebviewWindow('floating-timer', {

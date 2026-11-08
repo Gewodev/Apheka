@@ -1,6 +1,6 @@
 [package]
 name = "owa-studio"
-version = "6.26.2"
+version = "6.26.3"
 description = "A premium study workspace"
 authors = ["Gewodev"]
 edition = "2021"

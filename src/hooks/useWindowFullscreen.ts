@@ -30,6 +30,17 @@ export const windowFullscreen = createFullscreenController(port, () => {
   window.dispatchEvent(new Event('apheka:cancel-interaction'));
 });
 
+const recoverFocusedContent = createPointerRecovery(async () => {
+  await windowFullscreen.refresh();
+  const state = windowFullscreen.getSnapshot();
+  if (state.active || state.busy) await port.focusContent();
+});
+
+/** A hidden auxiliary window can leave native input stale without changing fullscreen. */
+export function resumeFullscreenInput(force = false) {
+  return native && document.visibilityState === 'visible' ? recoverFocusedContent(force) : Promise.resolve();
+}
+
 function hasOpenLayer() {
   return [...document.querySelectorAll<HTMLElement>('[role="dialog"],[role="menu"],[role="listbox"],.pomodoro-options-menu,.notification-panel')]
     .some(el => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden' && getComputedStyle(el).pointerEvents !== 'none');
@@ -47,6 +58,8 @@ export function useFullscreenLifecycle(onError: (message: string) => void) {
       void promise.then(stop => disposed ? stop() : unlisten.push(stop)).catch(() => {});
     };
     const sync = () => { void windowFullscreen.refresh(); };
+    const resume = () => { if (native) void resumeFullscreenInput(); else sync(); };
+    const visible = () => { if (document.visibilityState === 'visible') { if (native) void resumeFullscreenInput(true); else sync(); } };
     const recover = () => {
       const state = windowFullscreen.getSnapshot();
       if (native && !compatiblePointer?.isEnabled() && (state.active || state.busy) && document.visibilityState === 'visible') void recoverPointer();
@@ -76,11 +89,12 @@ export function useFullscreenLifecycle(onError: (message: string) => void) {
     });
     window.addEventListener('keydown', keyboard);
     document.addEventListener('keydown', captureEscape, true);
-    window.addEventListener('focus', sync);
+    window.addEventListener('focus', resume);
+    document.addEventListener('visibilitychange', visible);
     document.addEventListener('fullscreenchange', sync);
     if (native) {
       attach(getCurrentWindow().onResized(sync));
-      attach(getCurrentWindow().onFocusChanged(({ payload }) => { if (payload) sync(); }));
+      attach(getCurrentWindow().onFocusChanged(({ payload }) => { if (payload) void resumeFullscreenInput(true); }));
     }
     sync();
     syncPointer();
@@ -89,7 +103,8 @@ export function useFullscreenLifecycle(onError: (message: string) => void) {
       unlisten.forEach(stop => stop()); errors();
       window.removeEventListener('keydown', keyboard);
       document.removeEventListener('keydown', captureEscape, true);
-      window.removeEventListener('focus', sync);
+      window.removeEventListener('focus', resume);
+      document.removeEventListener('visibilitychange', visible);
       document.removeEventListener('fullscreenchange', sync);
       document.removeEventListener('play', recover, true);
       window.removeEventListener('resize', recover);
