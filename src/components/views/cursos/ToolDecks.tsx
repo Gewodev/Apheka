@@ -35,7 +35,7 @@ export const DECK_META: Record<ToolDeckMode, { icon: any; label: string; color: 
   },
   matchDeck: {
     icon: Shuffle, label: 'Emparejar', color: '#10B981',
-    hint: 'Una pareja por línea: término - definición, fecha - evento, identidad - fórmula… (4 a 10 parejas).',
+    hint: 'Una pareja por línea: término - definición, fecha - evento, identidad - fórmula… Mínimo 2 parejas.',
     placeholder: '1492 - Descubrimiento de América\nF = m·a - Segunda ley de Newton\nFotosíntesis - Conversión de luz en energía química',
   },
   clozeDeck: {
@@ -299,7 +299,8 @@ export function DeckEditorModal({ mode, accent, initialName, initialColor, initi
                 <PromptPanel mode={mode} accent={color} defaults={{ tema: name }} exclude={existingNames} />
               </div>
             )}
-            <textarea aria-label="Contenido de la herramienta" value={text} onChange={e => setText(e.target.value)} rows={11} placeholder={meta.placeholder}
+            <p className="tool-editor-hint" id="tool-editor-format">{meta.hint}</p>
+            <textarea aria-describedby="tool-editor-format" aria-label="Contenido de la herramienta" value={text} onChange={e => setText(e.target.value)} rows={11} placeholder={meta.placeholder}
               style={{ width: '100%', boxSizing: 'border-box', background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', borderRadius: 12, padding: 14, color: 'var(--text-primary)', fontSize: 12.5, lineHeight: 1.7, fontFamily: 'inherit', resize: 'vertical', outline: 'none' }} />
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
               <button data-ui-control="" data-tool-action="" onClick={() => { if (!valid) { toast.error(parsed.ok.length === 0 ? 'Añade al menos una entrada' : `Mínimo ${minCount} parejas para emparejar`); return; } onSave(name.trim() || meta.label, color, JSON.stringify(mode === 'flashcardsDeck' ? { cards: parsed.ok } : mode === 'quizDeck' ? { questions: parsed.ok } : mode === 'matchDeck' ? { pairs: parsed.ok } : mode === 'clozeDeck' ? { items: parsed.ok } : mode === 'vfDeck' ? { items: parsed.ok } : mode === 'seqDeck' ? { seqs: parsed.ok } : mode === 'catDeck' ? { items: parsed.ok } : { concepts: parsed.ok })); }}

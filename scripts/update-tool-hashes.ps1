@@ -10,3 +10,30 @@ foreach($taskEntry in @(@('FFMPEG','ffmpeg'),@('FFPROBE','ffprobe'),@('YTDLP','y
 $taskDestination=Join-Path $taskRoot 'src-tauri/installer-assets/tool-hashes.nsh'
 $taskText=[string]::Join("`r`n",$taskLines)+"`r`n"
 if(!(Test-Path -LiteralPath $taskDestination) -or [IO.File]::ReadAllText($taskDestination) -ne $taskText){[IO.File]::WriteAllText($taskDestination,$taskText,[Text.UTF8Encoding]::new($false))}
+
+# Include every shipped dictation resource, including its license notices.
+$taskManifest=Get-Content -LiteralPath (Join-Path $taskRoot 'src-tauri/asr-manifest.json') -Raw | ConvertFrom-Json
+$taskEntries=@($taskManifest.files)
+$taskNotice=Join-Path $taskRoot 'src-tauri/resources/asr/NOTICE.txt'
+if(Test-Path -LiteralPath $taskNotice){$taskEntries+=[pscustomobject]@{file='NOTICE.txt';sha256=(Get-FileHash -LiteralPath $taskNotice -Algorithm SHA256).Hash.ToLowerInvariant()}}
+$taskAsrRoot=[IO.Path]::GetFullPath((Join-Path $taskRoot 'src-tauri/resources/asr'))
+foreach($taskFound in Get-ChildItem -LiteralPath $taskAsrRoot -Recurse -File){
+  $taskRelative=$taskFound.FullName.Substring($taskAsrRoot.Length+1).Replace('\','/')
+  if($taskRelative -notin $taskEntries.file){throw "Unexpected ASR resource: $taskRelative"}
+}
+$taskResourceLines=@('; Generated from the verified ASR manifest and local notice. Do not edit.','!macro APHEKA_ASR_FILE SOURCE TARGET')
+$taskFirst=$true
+foreach($taskResource in $taskEntries){
+  if($taskResource.file -notmatch '^[a-zA-Z0-9_./-]+$' -or $taskResource.file -match '(^|/)\.\.(/|$)'){throw 'Invalid ASR resource path'}
+  $taskPath=Join-Path $taskRoot ('src-tauri/resources/asr/'+$taskResource.file)
+  if((Get-FileHash -LiteralPath $taskPath -Algorithm SHA256).Hash.ToLowerInvariant() -ne $taskResource.sha256.ToLowerInvariant()){throw "ASR resource does not match manifest: $($taskResource.file)"}
+  $taskTarget='asr\'+$taskResource.file.Replace('/','\')
+  $taskBranch=if($taskFirst){'  !if'}else{'  !else if'}
+  $taskResourceLines+=$taskBranch+' "${TARGET}" == "'+$taskTarget+'"'
+  $taskResourceLines+='    !insertmacro APHEKA_TOOL_FILE "${SOURCE}" "${TARGET}" "'+$taskResource.sha256.ToLowerInvariant()+'"'
+  $taskFirst=$false
+}
+$taskResourceLines+=@('  !else','    File /a "/oname=${TARGET}" "${SOURCE}"','  !endif','!macroend')
+$taskDestination=Join-Path $taskRoot 'src-tauri/installer-assets/asr-files.nsh'
+$taskText=[string]::Join("`r`n",$taskResourceLines)+"`r`n"
+if(!(Test-Path -LiteralPath $taskDestination) -or [IO.File]::ReadAllText($taskDestination) -ne $taskText){[IO.File]::WriteAllText($taskDestination,$taskText,[Text.UTF8Encoding]::new($false))}

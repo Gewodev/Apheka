@@ -1,0 +1,40 @@
+﻿{
+    "product":  "APHEKA",
+    "version":  "6.26.2",
+    "identifier":  "com.owa.studio",
+    "file":  "APHEKA_6.26.2_Instalador_x64.exe",
+    "bytes":  115433509,
+    "sha256":  "C030B13AF1F028B963FB7F67A8F28B473DC7014B5C8054D353C2D6420856A201",
+    "modifiedAtUtc":  "2026-11-08T13:19:27.0985883Z",
+    "sourceLatestEditUtc":  "2026-11-08T13:07:31.6161126Z",
+    "manifestRewrittenBeforeFrontend":  false,
+    "buildCommand":  "pnpm tauri build --config src-tauri/tauri.prod.conf.json --bundles nsis",
+    "embeddedFrontendAssets":  [
+                                   "assets/index-DiSnO6J0.js",
+                                   "assets/charts-DQ4Dkqgr.js",
+                                   "assets/anim-DmwEpK7h.js",
+                                   "assets/tauri-Du2YxjyO.js",
+                                   "assets/storage-DwnyWBFG.js",
+                                   "assets/audio-meta-CT9Hv6Ta.js",
+                                   "assets/date-COeAPjBE.js",
+                                   "assets/index-qmYidQW4.css"
+                               ],
+    "legacyUpgrade":  "Exact NSIS product identities and MSI upgrade GUIDs; /UPDATE preserves AppData",
+    "dataDirectory":  "com.owa.studio (existing desktop data directory retained)",
+    "build":  {
+                  "exitCode":  0,
+                  "startedAtUtc":  "2026-11-08T13:07:31.1211997Z",
+                  "processId":  12480,
+                  "finishedAtUtc":  "2026-11-08T13:19:31.4522317Z",
+                  "state":  "complete",
+                  "mode":  "build"
+              },
+    "qaReports":  [
+                      "qa-6262-installer-reuse.json",
+                      "qa-6262-installer-routing.json",
+                      "qa-6262-artist-separation.json",
+                      "qa-6262-bruno-cleanup.json",
+                      "qa-6262-tools-wallpaper.json",
+                      "qa-6262-sections.json"
+                  ]
+}

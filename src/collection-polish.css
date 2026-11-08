@@ -1,0 +1,26 @@
+/* The wallpaper belongs to the workspace, not to another opaque chat layer. */
+body .charvis-chat-app.charvis-chat-refined,
+body .charvis-workspace-page,
+body #charvis-workspace-outlet {background: transparent !important;}
+[data-has-bg] body .app-layout [data-apheka-view="ia"] {background: transparent !important;backdrop-filter: none !important;}
+[data-has-bg] body .app-layout .charvis-sidebar.charvis-page-host {background: transparent !important;backdrop-filter: none !important;-webkit-backdrop-filter: none !important;}
+[data-has-bg] body .charvis-chat-app.charvis-chat-refined :is(.charvis-chat-rail,.charvis-chat-main,.charvis-chat-topbar,.charvis-chat-header,.charvis-chat-body,.charvis-chat-feed,.charvis-inspector-dock,.charvis-evidence-panel,.charvis-document-panel) {background: transparent !important;backdrop-filter: none !important;-webkit-backdrop-filter: none !important;}
+[data-has-bg] body .charvis-chat-app.charvis-chat-refined {backdrop-filter: none !important;-webkit-backdrop-filter: none !important;}
+.artist-catalog-status {max-width: 72ch;line-height: 1.65;}
+.artist-discovery-context {padding-inline: 2px;}
+body .course-tool-editor {width: min(600px,calc(100vw - 32px)) !important;border-radius: 12px !important;box-shadow: 0 12px 36px #10151830 !important;}
+body .course-tool-editor>div:first-of-type {padding: 20px 22px 16px !important;background: transparent !important;gap: 12px !important;}
+body .course-tool-editor input[aria-label="Nombre de la herramienta"] {font: 550 20px/1.4 var(--font-primary) !important;text-transform: none !important;letter-spacing: -.025em !important;border: 0 !important;padding: 3px 0 !important;}
+.course-tool-editor .tool-editor-hint {margin: 0 0 14px;font: 12px/1.7 var(--font-primary);color: var(--text-secondary);max-width: 70ch;}
+body .course-tool-editor textarea {min-height: 220px;max-height: 42dvh;font: 14px/1.8 var(--font-primary) !important;border-radius: 8px !important;background: var(--bg-base) !important;padding: 16px !important;tab-size: 2;}
+body .course-tool-editor .tool-color-options {padding: 12px 22px;gap: 8px;flex-wrap: wrap;}
+body .course-tool-editor .tool-color-options>button {width: 23px;height: 23px;min-height: 23px;border-radius: 50%;}
+.course-tool-editor button:disabled {opacity: .45;cursor: default;}
+body .course-tool-editor [data-tool-action] {min-height: 38px;border-radius: 7px !important;font: 500 13px var(--font-primary) !important;box-shadow: none !important;}
+.course-tool-runner {overflow-wrap: anywhere;}
+.course-tool-runner .tool-session-result {max-width: 960px;width: 100%;margin-inline: auto;}
+.course-tool-runner :is(input,textarea) {min-width: 0;max-width: 100%;box-sizing: border-box;}
+@media(max-width: 620px) {
+ body .course-tool-editor>div:first-of-type {padding: 16px !important;}
+ body .course-tool-editor textarea {min-height: 180px;font-size: 13px !important;}
+}

@@ -33,6 +33,8 @@ ${StrStr}
   Pop $0
 !macroend
 
+!include "${__FILEDIR__}\installer-assets\asr-files.nsh"
+
 !macro APHEKA_RESOURCE_FILE SOURCE TARGET
   !if "${TARGET}" == "bin\ffmpeg.exe"
     !insertmacro APHEKA_TOOL_FILE "${SOURCE}" "${TARGET}" "${APHEKA_FFMPEG_SHA256}"
@@ -41,6 +43,6 @@ ${StrStr}
   !else if "${TARGET}" == "bin\yt-dlp.exe"
     !insertmacro APHEKA_TOOL_FILE "${SOURCE}" "${TARGET}" "${APHEKA_YTDLP_SHA256}"
   !else
-    File /a "/oname=${TARGET}" "${SOURCE}"
+    !insertmacro APHEKA_ASR_FILE "${SOURCE}" "${TARGET}"
   !endif
 !macroend

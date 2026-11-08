@@ -31,3 +31,16 @@ export async function filterArtistCatalog(artist:MusicEntity,songs:MusicSong[],s
  const titles=await corroboratedTitles(artist,anchors,signal);
  return uniqueArtistRecordings(songs.filter(song=>artistSongMatches(song,artist,titles))).sort((a,b)=>(b.playCount||0)-(a.playCount||0));
 }
+
+/** A bounded default selection; unknown popularity keeps provider order, never fabricated counts. */
+export function featuredArtistSongs<T extends {title:string;duration:number;playCount?:number;catalogPlayCount?:number}>(songs:T[],limit=24):T[]{
+ const count=(song:T)=>song.playCount??song.catalogPlayCount;
+ return uniqueArtistRecordings(songs).filter(song=>(count(song)??Infinity)>=10000)
+  .map((song,index)=>({song,index})).sort((a,b)=>(count(b.song)??0)-(count(a.song)??0)||a.index-b.index).slice(0,limit).map(row=>row.song);
+}
+
+export async function searchArtistSongs(artist:MusicEntity,query:string,signal:AbortSignal){
+ const {searchMusicCatalog}=await import('./youtubeMusic');
+ const result=await searchMusicCatalog(artist.name+' '+query,'song',signal);
+ signal.throwIfAborted();return filterArtistCatalog(artist,result.songs,signal);
+}

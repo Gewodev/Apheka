@@ -19,6 +19,7 @@ import "./interface.css";
 import "./interaction-refinement.css";
 import "./workspace-622.css";
 import './input-polish.css';
+import './collection-polish.css';
 import ErrorBoundary from "./components/ErrorBoundary";
 
 // Parche global anti-cuota: NINGÚN localStorage.setItem de la app puede volver

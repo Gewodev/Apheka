@@ -13,7 +13,7 @@ SetFont "Segoe UI" 10
 !define MUI_WELCOMEPAGE_TEXT "APHEKA ${VERSION} · Windows 64 bits$\r$\n$\r$\nEstudio, materiales, tareas y música, en un mismo espacio.$\r$\n$\r$\nIncluye Charvis con dictado local en español y una biblioteca musical más clara.$\r$\n$\r$\nTus notas, cursos, archivos y conversaciones se conservan.$\r$\n$\r$\nPulsa Continuar para revisar la instalación."
 !define MUI_DIRECTORYPAGE_TEXT_TOP "Elige la carpeta de la aplicación. Tus materiales y conversaciones permanecen en su ubicación habitual."
 !define MUI_INSTFILESPAGE_HEADER_TEXT "Preparando APHEKA"
-!define MUI_INSTFILESPAGE_HEADER_SUBTEXT "Instalando los archivos de la aplicación y el dictado local."
+!define MUI_INSTFILESPAGE_HEADER_SUBTEXT "Actualizando la aplicación y reutilizando los componentes ya verificados."
 !define MUI_FINISHPAGE_TITLE "Tu espacio está listo"
 !define MUI_FINISHPAGE_TEXT "APHEKA ${VERSION} ya está preparada.$\r$\n$\r$\nPuedes continuar con tus cursos, conversaciones y música. Los datos existentes permanecen en su carpeta habitual."
 !define MUI_FINISHPAGE_RUN_TEXT "Abrir APHEKA"

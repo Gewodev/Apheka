@@ -1,4 +1,5 @@
 import {lazyJsonSnapshot} from '../lib/lazySnapshot';
+import {brunoLibrarySeparation,BRUNO_SEPARATION_KEY} from '../lib/brunoLibrarySeparation';
 import {sameTaskPresentation} from '../lib/viewSnapshots';
 import {ViewActivity} from '../lib/viewActivity';
 import type {SavedMusicArtist} from '../lib/artistIdentity';
@@ -269,7 +270,9 @@ export interface PlanEventBridge {
 
 export interface Track {
   genre?: string;
-  librarySaved?: boolean; // false only for a preview not explicitly saved to the library
+  librarySaved?: boolean; // false for previews and artist collections not explicitly saved to the library
+  artistCollectionIds?: string[];
+  catalogPlayCount?: number;
   localAudioPath?: string;
   catalogId?: string;
   artistCatalogIds?: string[];
@@ -581,7 +584,7 @@ export interface AppContextType extends AppState {
   exportMusicLibrary: (destDir: string) => Promise<number>;
   importMusicLibrary: (srcDir: string) => Promise<number>;
   addArtist: (name: string, profileImage?: string, catalogId?:string) => void;
-  updateArtist: (id: string, updates: Partial<Pick<SavedMusicArtist,'name'|'profileImage'|'trackIds'|'catalogSelection'>>) => void;
+  updateArtist: (id: string, updates: Partial<Pick<SavedMusicArtist,'name'|'profileImage'|'trackIds'|'catalogSelection'|'catalogTrackIds'>>) => void;
   deleteArtist: (id: string) => void;
   playlists: Playlist[];
   addPlaylist: (name: string, trackIds: string[], coverImage?: string, isPublic?: boolean) => void;
@@ -832,6 +835,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [studySessions, setStudySessions] = useState<StudySession[]>([]);
   const [plannedSessions, setPlannedSessions] = useState<PlannedSession[]>([]);
   const [hydrated, setHydrated] = useState(false);
+  const musicMetadataLoadedRef=useRef(false);
   const lastBackupTsRef = useRef(0);
   const lastDiskBackupTsRef = useRef(0);
   const diskWritesRef=useRef<Promise<void>>(Promise.resolve());
@@ -1372,6 +1376,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             }
           }
         }
+        musicMetadataLoadedRef.current=true;
       } catch (e) {
         console.error('Error loading music tracks:', e);
       }
@@ -2452,6 +2457,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
     for(const track of next)if(ids.has(track.id))void saveTrackMetadata(track).catch(()=>{});
   },[hydrated]);
 
+  const brunoSeparationStartedRef=useRef(false);
+  useEffect(()=>{
+    if(!hydrated||!musicMetadataLoadedRef.current||brunoSeparationStartedRef.current)return;
+    brunoSeparationStartedRef.current=true;let disposed=false;
+    void(async()=>{
+      if(await get(BRUNO_SEPARATION_KEY)||disposed)return;
+      const candidates=brunoLibrarySeparation(tracksRef.current,artists);let removed=0;const removedIds=new Set<string>();
+      for(const candidate of candidates){
+        if(disposed)return;
+        // Recheck current user choices before each write; do not overwrite a new favorite or local file.
+        const current=tracksRef.current.find(track=>track.id===candidate.id);
+        const updated=current&&brunoLibrarySeparation([current],artists)[0];if(!updated)continue;
+        tracksRef.current=tracksRef.current.map(track=>track.id===updated.id?updated:track);
+        try{await saveTrackMetadata(updated);}catch(cause){
+          tracksRef.current=tracksRef.current.map(track=>track===updated?current!:track);
+          setTracks([...tracksRef.current]);throw cause;
+        }
+        removed++;removedIds.add(updated.id);
+        if(removed%20===0){setTracks([...tracksRef.current]);await new Promise<void>(resolve=>setTimeout(resolve,0));}
+      }
+      if(disposed)return;
+      if(removed%20!==0)setTracks([...tracksRef.current]);
+      const source=queueSourceRef.current;
+      if(source&&['Mis canciones','Tu biblioteca'].includes(source.name||'')){
+        const next={...source,pool:source.pool.filter(id=>!removedIds.has(id))};queueSourceRef.current=next;setQueueSource(next);
+        const queue=musicQueueRef.current.filter(id=>!removedIds.has(id));musicQueueRef.current=queue;setMusicQueue(queue);
+      }
+      await set(BRUNO_SEPARATION_KEY,{version:'6.26.2',completedAt:Date.now(),removed,kept:'favorites-and-local'});
+      if(removed)addNotification(`Se retiraron ${removed} canciones vinculadas a Bruno Mars de Mis canciones. Tus favoritas y archivos locales se conservaron.`,'success');
+    })().catch(()=>{if(!disposed)addNotification('No se completó la separación de Bruno Mars. Se reintentará al volver a abrir la aplicación.','error');});
+    return()=>{disposed=true;};
+  },[hydrated]);
+
   const clearAllMusicData = useCallback(() => {
     setTracks([]);
     setMusicQueue([]);
@@ -3208,7 +3246,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     // Refill queue to always have 5 upcoming tracks, excluding recently played
     setMusicQueue(prev => {
-      const after = prev.filter(tid => tid !== id&&(!shuffleModeRef.current||tracksRef.current.some(t=>t.id===tid&&isLibraryTrack(t))));
+      const after = prev.filter(tid => tid !== id&&(!shuffleModeRef.current||tracksRef.current.some(t=>t.id===tid&&(isLibraryTrack(t)||queueSourceRef.current?.pool.includes(tid)))));
       if (preserveQueue || after.length >= 5) return after;
       const history = trackHistoryRef.current;
       const pool = shuffleModeRef.current?radioTracks(tracksRef.current,queueSourceRef.current?.pool).map(t=>t.id):(queueSourceRef.current?.pool ?? tracksRef.current.filter(isLibraryTrack).map(t => t.id));
@@ -4256,7 +4294,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return [...prev, { id: crypto.randomUUID(), name, origin:'catalog' as const, catalogId, ...(profileImage ? { profileImage } : {}) }];
       });
     }, []),
-    updateArtist: useCallback((id: string, updates: Partial<Pick<SavedMusicArtist,'name'|'profileImage'|'trackIds'|'catalogSelection'>>) => {
+    updateArtist: useCallback((id: string, updates: Partial<Pick<SavedMusicArtist,'name'|'profileImage'|'trackIds'|'catalogSelection'|'catalogTrackIds'>>) => {
       setArtists(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
     }, []),
     deleteArtist: useCallback((id: string) => {

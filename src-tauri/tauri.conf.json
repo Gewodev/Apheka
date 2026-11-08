@@ -1,6 +1,6 @@
 {
   "productName": "APHEKA",
-  "version": "6.26.1",
+  "version": "6.26.2",
   "identifier": "com.owa.studio",
   "build": {
     "beforeDevCommand": "pnpm run dev",
