@@ -32,8 +32,8 @@ export const windowFullscreen = createFullscreenController(port, () => {
 
 const recoverFocusedContent = createPointerRecovery(async () => {
   await windowFullscreen.refresh();
-  const state = windowFullscreen.getSnapshot();
-  if (state.active || state.busy) await port.focusContent();
+  // Maximized and restored windows can lose their native cursor too.
+  await port.focusContent();
 });
 
 /** A hidden auxiliary window can leave native input stale without changing fullscreen. */

@@ -843,6 +843,9 @@ fn main() {
             download_yt_dlp,
         ])
         .on_window_event(|window,event| {
+            if window.label()=="floating-timer" && matches!(event,tauri::WindowEvent::Destroyed) {
+                workspace_pointer::recover_after_timer_close(window.app_handle());
+            }
             // Auxiliary windows cannot keep a headless main instance alive.
             // Main's close-requested handler flushes the editors before this event.
             if window.label()=="main" && matches!(event,tauri::WindowEvent::Destroyed) {

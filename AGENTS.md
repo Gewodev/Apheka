@@ -3,6 +3,13 @@
 
 # Summary
 
+## Sesión 2026-11-09 — APHEKA 6.26.4: cursor tras cerrar el contador con la X
+- La recuperación de foco también cubre ventanas maximizadas/restauradas. Destruir floating-timer activa dos recuperaciones nativas diferidas a 80/320 ms, agrupadas y limitadas a la ventana principal visible y enfocada, sin sondeo ni movimiento del puntero. WM_SETCURSOR solicita redibujado al control bajo el cursor, conservando texto/enlaces; se respeta la supresión táctil y la recuperación acotada de visibilidad.
+- TypeScript y pruebas del controlador correctos. Ocho comprobaciones React/IPC controlado correctas, sin errores. Nueve cierres reales con la X en Windows/Tauri/WebView2 bajo com.apheka.qa: tres maximizado, tres pantalla completa y tres restaurado, con controles funcionales y sin errores de ejecución.
+- En las seis muestras maximizado/pantalla completa, Win32 confirmó cursor visible y válido sobre la app en primer plano, y se comprobó el foco WebView. En las tres restauradas otra aplicación tenía el primer plano: comprobación física omitida explícitamente, sin afirmar visibilidad sobre la app. No se garantiza el dibujo físico en todos los controladores GPU. Instancia QA cerrada; instalación personal 6.26.3 conservada.
+- Informes release/qa-6264-pointer-resume.json y release/qa-6264-native-timer-close.json; detalles docs/APHEKA-6.26.4.md. Cambios ajenos de extension/* y scripts/test-latex.ts preservados.
+- Instalador NSIS 6.26.4 verificado: 115447147 bytes, SHA-256 D1BAF1A3C698A8584A44AE8C371E70CFD57B0E9753C9E1C670AD9C3E0F30E6CA. Compilación completa 11 min 43 s (frontend 37,74 s; Rust 6 min 39 s); fuentes, recursos y herramientas estables. Entrega release/APHEKA_6.26.4_Instalador_x64.exe; metadatos docs/APHEKA-release-6.26.4.json. Sin push.
+
 ## Sesión 2026-11-08 — APHEKA 6.26.3: cursor al regresar del contador emergente
 - Revisión puntual sobre 6.26.2: el retorno del foco y la visibilidad recupera el contenido WebView y el cursor nativo aunque el estado de pantalla completa no haya cambiado. Ocultar el contador desde Estudio devuelve expresamente el foco a la ventana principal sin destruirlo ni alterar el temporizador.
 - Recuperación agrupada y acotada, sin sondeo continuo ni llamadas por movimiento del cursor. Se conserva la comprobación de foco para no interferir con otras aplicaciones.
